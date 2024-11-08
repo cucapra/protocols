@@ -1,0 +1,7 @@
+fn add(in a: u32, in b: u32, out s: u32) {
+  dut.a := a;
+  dut.b := b;
+  step();
+  fork();
+  s := dut.s;
+}

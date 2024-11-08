@@ -1,0 +1,10 @@
+fn mul(in a: u32, in b: u32, out s: u32) {
+  dut.a := a;
+  dut.b := b;
+  step();
+  step();
+  // can apply a new input after two cycles
+  fork();
+  step();
+  s := dut.s;
+}
