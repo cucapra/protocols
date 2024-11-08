@@ -1,0 +1,10 @@
+fn calyx_go_done(in ii: u32, out oo: u32) {
+  dut.ii := ii;
+  dut.go := 1;
+  while dut.done != 1 {
+    dut.step();
+  }
+  dut.go := 0;
+  dut.ii := X;
+  oo := dut.oo;
+}
