@@ -1,6 +1,8 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use pest::Parser;
+
+#[derive(pest_derive::Parser)]
+#[grammar = "protocols.pest"]
+struct ProtocolParser;
 
 #[cfg(test)]
 mod tests {
@@ -8,7 +10,14 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        let a = ProtocolParser::parse(Rule::id, "test")
+            .expect("failed to parse")
+            .next()
+            .unwrap();
+        let name = a.as_str().to_string();
+        let b = ProtocolParser::parse(Rule::id, "test.a 543")
+            .expect("failed to parse")
+            .next()
+            .unwrap();
     }
 }

@@ -1,0 +1,10 @@
+WHITESPACE = _{ " " }
+id = { ASCII_ALPHA  ~ ASCII_ALPHANUMERIC* }
+path_id = { id ~ ("." ~ id)* }
+tpe = {"u32"}
+assign = {path_id ~ ":=" ~ path_id }
+stmt = { assign }
+arg = { id ~ ":" ~ tpe }
+arglist = { arg | (arg ~ "," ~ arglist) }
+fun = { "fn" ~ id ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
+file = { SOI ~ fun* ~ EOI }
