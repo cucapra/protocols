@@ -8,16 +8,13 @@ struct ProtocolParser;
 mod tests {
     use super::*;
 
+    fn parse_file(filename: impl AsRef<std::path::Path>) {
+        let input = std::fs::read_to_string(filename).expect("failed to load");
+        let _ = ProtocolParser::parse(Rule::file, &input).expect("failed to parse");
+    }
+
     #[test]
     fn it_works() {
-        let a = ProtocolParser::parse(Rule::id, "test")
-            .expect("failed to parse")
-            .next()
-            .unwrap();
-        let name = a.as_str().to_string();
-        let b = ProtocolParser::parse(Rule::id, "test.a 543")
-            .expect("failed to parse")
-            .next()
-            .unwrap();
+        parse_file("tests/add.prot")
     }
 }
