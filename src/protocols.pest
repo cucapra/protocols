@@ -1,12 +1,22 @@
 WHITESPACE = _{ " " | NEWLINE }
+integer = @{ (ASCII_DIGIT)+ }
+primary = _{ integer | bool | "(" ~ expr ~ ")" | path_id }
+atom = _{primary | unary_op? ~ primary}
+unary_op = _ { negate }
+    negate = { "-" }
+bin_op = _{ ne }
+    ne = { "!=" }
+bool = {"true" | "false"}
 id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
-tpe = {"u32"}
-assign = {path_id ~ ":=" ~ path_id }
-cmd = { id ~ "(" ~ ")" }
-stmt = _{ (assign | cmd) ~ ";" }
+tpe = { "u32" | "bool" }
+expr = { atom ~ (bin_op ~ atom)* }
+assign = {path_id ~ ":=" ~ (path_id | expr) ~ ";" }
+cmd = { path_id ~ "(" ~ ")" ~ ";"}
+stmt = _{ (assign | cmd | while) }
 dir = _{"in" | "out" }
 arg = { dir ~ id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg }
+while = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
 fun = { "fn" ~ id ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
 file = { SOI ~ fun* ~ EOI }
