@@ -14,10 +14,22 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn test_add_prot() {
         parse_file("tests/add.prot");
+    }
+
+    #[test]
+    fn test_calyx_go_done_prot() {
         parse_file("tests/calyx_go_done.prot");
+    }
+
+    #[test]
+    fn test_mul_prot() {
         parse_file("tests/mul.prot");
+    }
+
+    #[test]
+    fn test_cond_prot() {
         parse_file("tests/cond.prot");
     }
 }
