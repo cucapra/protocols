@@ -18,7 +18,7 @@ unary_op = _ { negate | not }
 bin_op = _{ neq | leq | eq | log_and | log_or | shift_left | shift_right | add | subtract | multiply | divide | mod }
     neq = { "!=" }
     leq = { "<= "}
-    eq = { "<= "}
+    eq = { "== "}
     add = { "+" }
     log_and = { "&&" }
     log_or = { "||" }
@@ -33,7 +33,7 @@ expr = { atom ~ (bin_op ~ atom)* }
 
 id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
-tpe = { "u32" | "bool" }
+tpe = { "u32" | "u1" }
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 cmd = { path_id ~ "(" ~ ")" ~ ";"}
 stmt = _{ (assign | cmd | while | cond) }

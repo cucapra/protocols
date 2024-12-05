@@ -15,7 +15,7 @@ fn mul(in a: u32, in b: u32, out s: u32) {
   if true {
     step();
   }
-  else if true != false {
+  else if (2+3) * 5 <= 7 {
     step();
     step();
   } 
