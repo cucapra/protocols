@@ -15,6 +15,8 @@ mod tests {
 
     #[test]
     fn it_works() {
-        parse_file("tests/add.prot")
+        parse_file("tests/add.prot");
+        parse_file("tests/calyx_go_done.prot");
+        parse_file("tests/mul.prot");
     }
 }
