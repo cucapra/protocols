@@ -12,10 +12,17 @@ bool = @{ "true" | "false"}
 // Expressions
 primary = _{ integer | bool | "(" ~ expr ~ ")" | path_id }
 atom = _{primary | unary_op? ~ primary}
-unary_op = _ { negate }
+unary_op = _ { negate | not }
     negate = { "-" }
-bin_op = _{ ne }
-    ne = { "!=" }
+    not = { "!" }
+bin_op = _{ neq | leq | eq | add | subtract | multiply | divide }
+    neq = { "!=" }
+    leq = { "<= "}
+    eq = { "<= "}
+    add = { "+" }
+    subtract = { "-" }
+    multiply = { "*" }
+    divide = { "/" }
 expr = { atom ~ (bin_op ~ atom)* }
 
 id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
