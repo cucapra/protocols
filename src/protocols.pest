@@ -3,8 +3,8 @@ id = @{ ASCII_ALPHA  ~ ASCII_ALPHANUMERIC* }
 path_id = @{ id ~ ("." ~ id)* }
 tpe = {"u32"}
 assign = {path_id ~ ":=" ~ path_id }
-cmd = { id ~ "(" ~ ")" }
-stmt = { (assign | cmd) ~ ";" }
+cmd = _{ id ~ "(" ~ ")" }
+stmt = _{ (assign | cmd) ~ ";" }
 dir = _{"in" | "out" }
 arg = { dir ~ id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg }
