@@ -48,17 +48,6 @@ mod tests {
             Ok(parsed) => println!("Parsing successful: {:?}", parsed),
             Err(err) => {
                 eprintln!("Parsing failed: {}", err);
-                
-                // Extract error location and line-column details
-                if let pest::error::LineColLocation::Span(start, end) = err.line_col {
-                    eprintln!(
-                        "Error spans from line {}, column {} to line {}, column {}",
-                        start.0, start.1, end.0, end.1
-                    );
-                } else if let pest::error::LineColLocation::Pos((line, col)) = err.line_col {
-                    eprintln!("Error occurred at line {}, column {}", line, col);
-                }
-
                 panic!("failed to parse");
             }
 
