@@ -1,9 +1,9 @@
 WHITESPACE = _{ " " | NEWLINE }
-id = @{ ASCII_ALPHA  ~ ASCII_ALPHANUMERIC* }
+id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
 tpe = {"u32"}
 assign = {path_id ~ ":=" ~ path_id }
-cmd = _{ id ~ "(" ~ ")" }
+cmd = { id ~ "(" ~ ")" }
 stmt = _{ (assign | cmd) ~ ";" }
 dir = _{"in" | "out" }
 arg = { dir ~ id ~ ":" ~ tpe }
