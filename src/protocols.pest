@@ -1,4 +1,5 @@
 WHITESPACE = _{ " " | NEWLINE }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
 integer = @{ (ASCII_DIGIT)+ }
 primary = _{ integer | bool | "(" ~ expr ~ ")" | path_id }
 atom = _{primary | unary_op? ~ primary}
