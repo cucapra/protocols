@@ -15,14 +15,20 @@ atom = _{primary | unary_op? ~ primary}
 unary_op = _ { negate | not }
     negate = { "-" }
     not = { "!" }
-bin_op = _{ neq | leq | eq | add | subtract | multiply | divide }
+bin_op = _{ neq | leq | eq | log_and | log_or | shift_left | shift_right | add | subtract | multiply | divide | mod }
     neq = { "!=" }
     leq = { "<= "}
     eq = { "<= "}
     add = { "+" }
+    log_and = { "&&" }
+    log_or = { "||" }
     subtract = { "-" }
     multiply = { "*" }
     divide = { "/" }
+    mod = { "%" }
+    shift_left = { "<<" }
+    shift_right = { ">>" }
+
 expr = { atom ~ (bin_op ~ atom)* }
 
 id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
