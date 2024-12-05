@@ -1,23 +1,37 @@
 WHITESPACE = _{ " " | NEWLINE }
 COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
+
+// Literals
 integer = @{ (ASCII_DIGIT)+ }
+bool = @{ "true" | "false"}
+
+// Expressions
 primary = _{ integer | bool | "(" ~ expr ~ ")" | path_id }
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { negate }
     negate = { "-" }
 bin_op = _{ ne }
     ne = { "!=" }
-bool = {"true" | "false"}
+expr = { atom ~ (bin_op ~ atom)* }
+
 id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
 tpe = { "u32" | "bool" }
-expr = { atom ~ (bin_op ~ atom)* }
-assign = {path_id ~ ":=" ~ (path_id | expr) ~ ";" }
+assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 cmd = { path_id ~ "(" ~ ")" ~ ";"}
-stmt = _{ (assign | cmd | while) }
+stmt = _{ (assign | cmd | while | cond) }
 dir = _{"in" | "out" }
 arg = { dir ~ id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg }
+
+// Loops
 while = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
+
+// Conditionals
+if = { "if" ~ expr ~ "{" ~ stmt* ~ "}" }
+else_if = { "else" ~ "if" ~ expr ~ "{" ~ stmt* ~ "}"}
+else = { "else" ~ "{" ~ stmt* ~ "}" }
+cond = { if ~ else_if* ~ else? }
+
 fun = { "fn" ~ id ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
 file = { SOI ~ fun* ~ EOI }

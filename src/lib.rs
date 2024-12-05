@@ -18,5 +18,6 @@ mod tests {
         parse_file("tests/add.prot");
         parse_file("tests/calyx_go_done.prot");
         parse_file("tests/mul.prot");
+        parse_file("tests/cond.prot");
     }
 }

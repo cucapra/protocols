@@ -1,0 +1,28 @@
+fn mul(in a: u32, in b: u32, out s: u32) {
+  dut.a := a;
+  dut.b := b;
+  // hold a and b stable for two cycles
+  step();
+  step();
+  // can apply a new input after two cycles
+  fork();
+  // after, it does not matter what we apply to these ports
+  dut.a := X;
+  dut.b := X;
+  step();
+
+  // stupid conditional test
+  if true {
+    step();
+  }
+  else if true != false {
+    step();
+    step();
+  } 
+  else {
+    fork();
+  }
+  dut.c := true;
+
+  s := dut.s;
+}
