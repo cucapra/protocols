@@ -1,6 +1,6 @@
+use pest::error::Error;
 use pest::Parser;
 use std::fmt;
-use pest::error::Error;
 
 #[derive(pest_derive::Parser)]
 #[grammar = "protocols.pest"]
@@ -43,14 +43,13 @@ mod tests {
 
     fn parse_file(filename: impl AsRef<std::path::Path>) {
         let input = std::fs::read_to_string(filename).expect("failed to load");
-    
+
         match ProtocolParser::parse(Rule::file, &input) {
             Ok(parsed) => println!("Parsing successful: {:?}", parsed),
             Err(err) => {
                 eprintln!("Parsing failed: {}", err);
                 panic!("failed to parse");
             }
-
         }
     }
 
