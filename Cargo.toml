@@ -5,6 +5,7 @@ edition = "2021"
 rust-version = "1.73.0"
 
 [dependencies]
-cranelift-entity = "0.111.2"
+patronus = "0.28.1"
 pest = "2.7.14"
 pest_derive = "2.7.14"
+rustc-hash = "2.1.0"
