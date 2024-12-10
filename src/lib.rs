@@ -3,4 +3,5 @@
 // author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+pub mod ir;
 pub mod parser;
