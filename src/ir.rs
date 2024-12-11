@@ -62,6 +62,14 @@ impl Index<ExprId> for Transaction {
     }
 }
 
+impl Index<&ExprId> for Transaction {
+    type Output = Expr;
+
+    fn index(&self, index: &ExprId) -> &Self::Output {
+        &self.exprs[*index]
+    }
+}
+
 impl Index<StmtId> for Transaction {
     type Output = Stmt;
 
@@ -183,10 +191,26 @@ impl Index<SymbolId> for SymbolTable {
     }
 }
 
+impl Index<&SymbolId> for SymbolTable {
+    type Output = SymbolTableEntry;
+
+    fn index(&self, index: &SymbolId) -> &Self::Output {
+        &self.entries[*index]
+    }
+}
+
 impl Index<Arg> for SymbolTable {
     type Output = SymbolTableEntry;
 
     fn index(&self, index: Arg) -> &Self::Output {
+        &self.entries[index.symbol]
+    }
+}
+
+impl Index<&Arg> for SymbolTable {
+    type Output = SymbolTableEntry;
+
+    fn index(&self, index: &Arg) -> &Self::Output {
         &self.entries[index.symbol]
     }
 }
