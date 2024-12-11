@@ -11,23 +11,46 @@ use std::ops::Index;
 pub struct Transaction {
     pub name: String,
     pub args: Vec<Arg>,
-    pub body: Vec<Stmt>,
+    pub body: StmtId,
     exprs: PrimaryMap<ExprId, Expr>,
+    dont_care_id: ExprId,
+    stmts: PrimaryMap<StmtId, Stmt>,
+    skip_id: StmtId,
 }
 
 impl Transaction {
     pub fn new(name: String) -> Self {
+        let mut exprs = PrimaryMap::new();
+        let dont_care_id = exprs.push(Expr::DontCare);
+        let mut stmts = PrimaryMap::new();
+        let skip_id = stmts.push(Stmt::Skip);
         Self {
             name,
             args: Vec::default(),
-            body: Vec::default(),
-            exprs: PrimaryMap::default(),
+            body: skip_id,
+            exprs,
+            dont_care_id,
+            stmts,
+            skip_id,
         }
     }
 
     /// add a new expression to the transaction
     pub fn e(&mut self, expr: Expr) -> ExprId {
         self.exprs.push(expr)
+    }
+
+    /// add a new statement to the transaction
+    pub fn s(&mut self, expr: Stmt) -> StmtId {
+        self.stmts.push(expr)
+    }
+
+    pub fn expr_dont_care(&self) -> ExprId {
+        self.dont_care_id
+    }
+
+    pub fn stmt_skip(&self) -> StmtId {
+        self.skip_id
     }
 }
 
@@ -36,6 +59,14 @@ impl Index<ExprId> for Transaction {
 
     fn index(&self, index: ExprId) -> &Self::Output {
         &self.exprs[index]
+    }
+}
+
+impl Index<StmtId> for Transaction {
+    type Output = Stmt;
+
+    fn index(&self, index: StmtId) -> &Self::Output {
+        &self.stmts[index]
     }
 }
 
@@ -70,13 +101,19 @@ pub enum Type {
     Unknown,
 }
 
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct StmtId(u32);
+entity_impl!(StmtId, "stmt");
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Stmt {
+    Skip,
+    Block(Vec<StmtId>),
     Assign(SymbolId, ExprId),
     Step,
     Fork,
-    While(ExprId, Vec<Stmt>),
-    IfElse(ExprId, Vec<Stmt>, Vec<Stmt>),
+    While(ExprId, StmtId),
+    IfElse(ExprId, StmtId, StmtId),
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -214,15 +251,21 @@ mod tests {
             Arg::new(s, Dir::Out),
         ];
 
-        // 3) create statements
-        add.body = vec![
-            Stmt::Assign(dut_a, add.e(Expr::Sym(a))),
-            Stmt::Assign(dut_b, add.e(Expr::Sym(b))),
-            Stmt::Step,
-            Stmt::Fork,
-            Stmt::Assign(dut_a, add.e(Expr::DontCare)),
-            Stmt::Assign(dut_b, add.e(Expr::DontCare)),
-            Stmt::Assign(s, add.e(Expr::Sym(dut_s))),
+        // 3) create expressions
+        let a_expr = add.e(Expr::Sym(a));
+        let b_expr = add.e(Expr::Sym(b));
+        let dut_s_expr = add.e(Expr::Sym(dut_s));
+
+        // 4) create statements
+        let body = vec![
+            add.s(Stmt::Assign(dut_a, a_expr)),
+            add.s(Stmt::Assign(dut_b, b_expr)),
+            add.s(Stmt::Step),
+            add.s(Stmt::Fork),
+            add.s(Stmt::Assign(dut_a, add.expr_dont_care())),
+            add.s(Stmt::Assign(dut_b, add.expr_dont_care())),
+            add.s(Stmt::Assign(s, dut_s_expr)),
         ];
+        add.body = add.s(Stmt::Block(body));
     }
 }
