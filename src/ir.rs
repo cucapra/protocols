@@ -139,6 +139,7 @@ pub enum Expr {
     Not(ExprId),
     // binary
     And(ExprId, ExprId),
+    Equal(ExprId, ExprId),
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]

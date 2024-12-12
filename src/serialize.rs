@@ -1,5 +1,7 @@
 use std::{any::Any, io::Write};
 
+use baa::BitVecOps;
+
 use crate::ir::{
     Arg,
     Dir::*,
@@ -35,10 +37,12 @@ pub fn find_dir(el: &Arg) -> String {
 
 pub fn find_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String {
     match expr {
+        Const(val) => val.to_bit_str(),
         Sym(symid) => st[symid].full_name(st),
         DontCare => "X".to_owned(),
-        Not(expid) => "!".to_owned() + &find_expr(tr, st, &tr[expid]),
-        And(expid1, expid2) => find_expr(tr, st, &tr[expid1]) + " && " + &find_expr(tr, st, &tr[expid2]),
+        Not(exprid) => "!(".to_owned() + &find_expr(tr, st, &tr[exprid]) + ")",
+        And(lhs, rhs) => find_expr(tr, st, &tr[lhs]) + " && " + &find_expr(tr, st, &tr[rhs]),
+        Equal(lhs, rhs) => find_expr(tr, st, &tr[lhs]) + " == " + &find_expr(tr, st, &tr[rhs]),
     }
 }
 
@@ -53,14 +57,40 @@ pub fn build_statements(
         Skip => writeln!(out, "{}skip()", "  ".repeat(index))?,
         Block(t) => {
             for stmt_id in t.iter() {
-                build_statements(out, tr, st, *stmt_id, index+1)?;
+                build_statements(out, tr, st, *stmt_id, index)?;
             }
         }
-        Assign(a, b) => writeln!(out, "{}{} := {};", "  ".repeat(index), st[a].full_name(st), find_expr(tr, st, &tr[b]))?,
+        Assign(lhs, rhs) => writeln!(
+            out,
+            "{}{} := {};",
+            "  ".repeat(index),
+            st[lhs].full_name(st),
+            find_expr(tr, st, &tr[rhs])
+        )?,
         Step => writeln!(out, "{}step();", "  ".repeat(index))?,
         Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
-        While(a, b) => writeln!(out, "while")?,
-        IfElse(a, b, c) => writeln!(out, "ifelse")?,
+        While(cond, bodyid) => {
+            writeln!(
+                out,
+                "{}while {} {{",
+                "  ".repeat(index),
+                find_expr(tr, st, &tr[cond])
+            )?;
+            build_statements(out, tr, st, *bodyid, index + 1)?;
+            writeln!(out, "{}}}", "  ".repeat(index))?;
+        }
+        IfElse(cond, ifbody, elsebody) => {
+            writeln!(
+                out,
+                "{}if {} {{",
+                "  ".repeat(index),
+                find_expr(tr, st, &tr[cond])
+            )?;
+            build_statements(out, tr, st, *ifbody, index + 1)?;
+            writeln!(out, "{}}} else {{", "  ".repeat(index))?;
+            build_statements(out, tr, st, *elsebody, index + 1)?;
+            writeln!(out, "{}}}", "  ".repeat(index))?;
+        }
     }
 
     Ok(())
@@ -100,6 +130,8 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
 
 #[cfg(test)]
 mod tests {
+    use baa::BitVecValue;
+
     use super::*;
     use crate::ir::*;
 
@@ -111,7 +143,7 @@ mod tests {
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
         let a = symbols.add("a".to_string(), Type::BitVec(32), None);
-        let b = symbols.add("b".to_string(), Type::BitVec(32), None);
+        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32), None);
         let s = symbols.add("s".to_string(), Type::BitVec(32), None);
         assert_eq!(symbols["s"], symbols[s]);
         let dut = symbols.add("dut".to_string(), Type::Dut, None);
@@ -147,5 +179,94 @@ mod tests {
         add.body = add.s(Stmt::Block(body));
 
         println!("{}", serialize_to_string(&add, &symbols).unwrap());
+    }
+
+    #[test]
+    fn serialize_calyx_go_down_transaction() {
+        // Manually create the expected result of parsing `calyx_go_down`.
+        // Note that the order in which things are created will be different in the parser.
+
+        // 1) declare symbols
+        let mut symbols = SymbolTable::default();
+        let ii = symbols.add("ii".to_string(), Type::BitVec(32), None);
+        let oo = symbols.add("oo".to_string(), Type::BitVec(32), None);
+        assert_eq!(symbols["oo"], symbols[oo]);
+        let dut = symbols.add("dut".to_string(), Type::Dut, None);
+        let dut_ii = symbols.add("ii".to_string(), Type::Unknown, Some(dut));
+        let dut_go = symbols.add("go".to_string(), Type::Unknown, Some(dut));
+        let dut_done = symbols.add("done".to_string(), Type::Unknown, Some(dut));
+        let dut_oo = symbols.add("oo".to_string(), Type::Unknown, Some(dut));
+        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
+        assert_eq!(symbols["oo"], symbols[oo]);
+
+        // 2) create transaction
+        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
+        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
+
+        // 3) create expressions
+        let ii_expr = calyx_go_done.e(Expr::Sym(ii));
+        let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
+        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
+        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
+        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+
+        // 4) create statements
+        let while_body = vec![calyx_go_done.s(Stmt::Step)];
+        let wbody = calyx_go_done.s(Stmt::Block(while_body));
+
+        let body = vec![
+            calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr)),
+            calyx_go_done.s(Stmt::Assign(dut_go, one_expr)),
+            calyx_go_done.s(Stmt::While(not_expr, wbody)),
+            calyx_go_done.s(Stmt::Assign(dut_done, one_expr)),
+            calyx_go_done.s(Stmt::Assign(dut_go, zero_expr)),
+            calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care())),
+            calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr)),
+        ];
+
+        calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+        println!("{}", serialize_to_string(&calyx_go_done, &symbols).unwrap());
+    }
+
+    #[test]
+    fn serialize_easycond_transaction() {
+        // Manually create the expected result of parsing `add.prot`.
+        // Note that the order in which things are created will be different in the parser.
+
+        // 1) declare symbols
+        let mut symbols = SymbolTable::default();
+        let a = symbols.add("a".to_string(), Type::BitVec(32), None);
+        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32), None);
+        assert_eq!(symbols["b"], symbols[b]);
+        let dut = symbols.add("dut".to_string(), Type::Dut, None);
+        let dut_a = symbols.add("a".to_string(), Type::Unknown, Some(dut));
+        assert_eq!(symbols["dut.a"], symbols[dut_a]);
+
+        // 2) create transaction
+        let mut easycond = Transaction::new("easycond".to_string());
+        easycond.args = vec![Arg::new(a, Dir::In), Arg::new(b, Dir::Out)];
+
+        // 3) create expressions
+        let a_expr = easycond.e(Expr::Sym(a));
+        let dut_a_expr = easycond.e(Expr::Sym(dut_a));
+        let one_expr = easycond.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        let cond_expr = easycond.e(Expr::Equal(dut_a_expr, one_expr));
+
+        // 4) create statements
+        let if_body = vec![easycond.s(Stmt::Step)];
+        let ifbody = easycond.s(Stmt::Block(if_body));
+
+        let else_body = vec![easycond.s(Stmt::Fork)];
+        let elsebody = easycond.s(Stmt::Block(else_body));
+
+        let body = vec![
+            easycond.s(Stmt::Assign(dut_a, a_expr)),
+            easycond.s(Stmt::IfElse(cond_expr, ifbody, elsebody)),
+            easycond.s(Stmt::Assign(b, one_expr)),
+        ];
+        easycond.body = easycond.s(Stmt::Block(body));
+        println!("{}", serialize_to_string(&easycond, &symbols).unwrap());
     }
 }
