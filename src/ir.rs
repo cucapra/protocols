@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use baa::BitVecValue;
 use cranelift_entity::{entity_impl, PrimaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
@@ -131,6 +132,7 @@ entity_impl!(ExprId, "expr");
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expr {
     // nullary
+    Const(BitVecValue),
     Sym(SymbolId),
     DontCare,
     // unary
