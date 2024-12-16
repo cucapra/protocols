@@ -2,15 +2,7 @@ use std::{any::Any, io::Write};
 
 use baa::BitVecOps;
 
-use crate::ir::{
-    Arg,
-    Dir::*,
-    Expr,
-    Expr::*,
-    Stmt::*,
-    StmtId, SymbolTable, Transaction,
-    Type::{self, *},
-};
+use crate::ir::*;
 
 pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Result<String> {
     let mut out = Vec::new();
@@ -20,29 +12,33 @@ pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Resul
 }
 
 // TODO need to fix for other types
-pub fn find_type(tpe: Type) -> String {
+pub fn serialize_type(tpe: Type) -> String {
     match tpe {
-        BitVec(t) => "u".to_owned() + &t.to_string(),
-        Dut => "dut".to_string(),
-        Unknown => "unknown".to_string(),
+        Type::BitVec(t) => "u".to_owned() + &t.to_string(),
+        Type::Dut => "dut".to_string(),
+        Type::Unknown => "unknown".to_string(),
     }
 }
 
-pub fn find_dir(el: &Arg) -> String {
+pub fn serialize_dir(el: &Arg) -> String {
     match el.dir() {
-        In => "in".to_string(),
-        Out => "out".to_string(),
+        Dir::In => "in".to_string(),
+        Dir::Out => "out".to_string(),
     }
 }
 
-pub fn find_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String {
+pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String {
     match expr {
-        Const(val) => val.to_bit_str(),
-        Sym(symid) => st[symid].full_name(st),
-        DontCare => "X".to_owned(),
-        Not(exprid) => "!(".to_owned() + &find_expr(tr, st, &tr[exprid]) + ")",
-        And(lhs, rhs) => find_expr(tr, st, &tr[lhs]) + " && " + &find_expr(tr, st, &tr[rhs]),
-        Equal(lhs, rhs) => find_expr(tr, st, &tr[lhs]) + " == " + &find_expr(tr, st, &tr[rhs]),
+        Expr::Const(val) => val.to_bit_str(),
+        Expr::Sym(symid) => st[symid].full_name(st),
+        Expr::DontCare => "X".to_owned(),
+        Expr::Not(exprid) => "!(".to_owned() + &serialize_expr(tr, st, &tr[exprid]) + ")",
+        Expr::And(lhs, rhs) => {
+            serialize_expr(tr, st, &tr[lhs]) + " && " + &serialize_expr(tr, st, &tr[rhs])
+        }
+        Expr::Equal(lhs, rhs) => {
+            serialize_expr(tr, st, &tr[lhs]) + " == " + &serialize_expr(tr, st, &tr[rhs])
+        }
     }
 }
 
@@ -54,37 +50,37 @@ pub fn build_statements(
     index: usize,
 ) -> std::io::Result<()> {
     match &tr[stmtid] {
-        Skip => writeln!(out, "{}skip()", "  ".repeat(index))?,
-        Block(t) => {
+        Stmt::Skip => writeln!(out, "{}skip()", "  ".repeat(index))?,
+        Stmt::Block(t) => {
             for stmt_id in t.iter() {
                 build_statements(out, tr, st, *stmt_id, index)?;
             }
         }
-        Assign(lhs, rhs) => writeln!(
+        Stmt::Assign(lhs, rhs) => writeln!(
             out,
             "{}{} := {};",
             "  ".repeat(index),
             st[lhs].full_name(st),
-            find_expr(tr, st, &tr[rhs])
+            serialize_expr(tr, st, &tr[rhs])
         )?,
-        Step => writeln!(out, "{}step();", "  ".repeat(index))?,
-        Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
-        While(cond, bodyid) => {
+        Stmt::Step => writeln!(out, "{}step();", "  ".repeat(index))?,
+        Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
+        Stmt::While(cond, bodyid) => {
             writeln!(
                 out,
                 "{}while {} {{",
                 "  ".repeat(index),
-                find_expr(tr, st, &tr[cond])
+                serialize_expr(tr, st, &tr[cond])
             )?;
             build_statements(out, tr, st, *bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
-        IfElse(cond, ifbody, elsebody) => {
+        Stmt::IfElse(cond, ifbody, elsebody) => {
             writeln!(
                 out,
                 "{}if {} {{",
                 "  ".repeat(index),
-                find_expr(tr, st, &tr[cond])
+                serialize_expr(tr, st, &tr[cond])
             )?;
             build_statements(out, tr, st, *ifbody, index + 1)?;
             writeln!(out, "{}}} else {{", "  ".repeat(index))?;
@@ -99,24 +95,24 @@ pub fn build_statements(
 pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
     write!(out, "fn {}(", tr.name)?;
 
-    let mut arguments = tr.args.iter().peekable();
+    for (ii, arg) in tr.args.iter().enumerate() {
+        let last_index = ii == tr.args.len() - 1;
 
-    while let Some(arg) = arguments.next() {
-        if arguments.peek().is_none() {
+        if last_index {
             write!(
                 out,
                 "{} {}: {}) {{\n",
-                find_dir(arg),
+                serialize_dir(arg),
                 st[arg].name(),
-                find_type(st[arg].tpe())
+                serialize_type(st[arg].tpe())
             )?;
         } else {
             write!(
                 out,
                 "{} {}: {}, ",
-                find_dir(arg),
+                serialize_dir(arg),
                 st[arg].name(),
-                find_type(st[arg].tpe())
+                serialize_type(st[arg].tpe())
             )?;
         }
     }
