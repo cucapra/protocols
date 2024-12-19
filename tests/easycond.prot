@@ -1,0 +1,9 @@
+fn easycond(in a: u32, out b: u32) {
+  dut.a := a;
+  if (dut.a == 1) {
+    step();
+  } else {
+    fork();
+  }
+  b := 1;
+}

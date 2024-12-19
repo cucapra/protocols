@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use baa::BitVecValue;
 use cranelift_entity::{entity_impl, PrimaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
@@ -59,6 +60,14 @@ impl Index<ExprId> for Transaction {
 
     fn index(&self, index: ExprId) -> &Self::Output {
         &self.exprs[index]
+    }
+}
+
+impl Index<&ExprId> for Transaction {
+    type Output = Expr;
+
+    fn index(&self, index: &ExprId) -> &Self::Output {
+        &self.exprs[*index]
     }
 }
 
@@ -123,12 +132,14 @@ entity_impl!(ExprId, "expr");
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expr {
     // nullary
+    Const(BitVecValue),
     Sym(SymbolId),
     DontCare,
     // unary
     Not(ExprId),
     // binary
     And(ExprId, ExprId),
+    Equal(ExprId, ExprId),
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -183,10 +194,26 @@ impl Index<SymbolId> for SymbolTable {
     }
 }
 
+impl Index<&SymbolId> for SymbolTable {
+    type Output = SymbolTableEntry;
+
+    fn index(&self, index: &SymbolId) -> &Self::Output {
+        &self.entries[*index]
+    }
+}
+
 impl Index<Arg> for SymbolTable {
     type Output = SymbolTableEntry;
 
     fn index(&self, index: Arg) -> &Self::Output {
+        &self.entries[index.symbol]
+    }
+}
+
+impl Index<&Arg> for SymbolTable {
+    type Output = SymbolTableEntry;
+
+    fn index(&self, index: &Arg) -> &Self::Output {
         &self.entries[index.symbol]
     }
 }
