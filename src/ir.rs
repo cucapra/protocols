@@ -8,11 +8,12 @@ use cranelift_entity::{entity_impl, PrimaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     pub name: String,
     pub args: Vec<Arg>,
     pub body: StmtId,
+    pub type_args: Vec<SymbolId>,
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
@@ -29,6 +30,7 @@ impl Transaction {
             name,
             args: Vec::default(),
             body: skip_id,
+            type_args: Vec::default(),
             exprs,
             dont_care_id,
             stmts,
@@ -104,8 +106,7 @@ pub enum Dir {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Type {
     BitVec(u32),
-    /// Placeholder type for `dut`
-    Dut,
+    Struct(StructId),
     /// Type taken on when we do not know the actual type yet
     Unknown,
 }
@@ -143,6 +144,29 @@ pub enum Expr {
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct StructId(u32);
+entity_impl!(StructId, "struct");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Struct {
+    pub name: String,
+    pub pins: Vec<Field>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Field {
+    pub name: String,
+    dir: Dir,
+    pub tpe: Type,
+}
+
+impl Field {
+    pub fn new(name: String, dir: Dir, tpe: Type) -> Self {
+        Self { name, dir, tpe }
+    }
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct SymbolId(u32);
 entity_impl!(SymbolId, "symbol");
 
@@ -150,6 +174,7 @@ entity_impl!(SymbolId, "symbol");
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
     by_name: FxHashMap<String, SymbolId>,
+    structs: PrimaryMap<StructId, Struct>,
 }
 
 impl SymbolTable {
@@ -175,6 +200,11 @@ impl SymbolTable {
         self.by_name.insert(lookup_name, id);
         id
     }
+
+    pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
+        let s = Struct { name, pins };
+        self.structs.push(s)
+    }
 }
 
 impl Index<&str> for SymbolTable {
@@ -199,6 +229,22 @@ impl Index<&SymbolId> for SymbolTable {
 
     fn index(&self, index: &SymbolId) -> &Self::Output {
         &self.entries[*index]
+    }
+}
+
+impl Index<StructId> for SymbolTable {
+    type Output = Struct;
+
+    fn index(&self, index: StructId) -> &Self::Output {
+        &self.structs[index]
+    }
+}
+
+impl Index<&StructId> for SymbolTable {
+    type Output = Struct;
+
+    fn index(&self, index: &StructId) -> &Self::Output {
+        &self.structs[*index]
     }
 }
 
@@ -263,10 +309,20 @@ mod tests {
         let b = symbols.add("b".to_string(), Type::BitVec(32), None);
         let s = symbols.add("s".to_string(), Type::BitVec(32), None);
         assert_eq!(symbols["s"], symbols[s]);
-        let dut = symbols.add("dut".to_string(), Type::Dut, None);
-        let dut_a = symbols.add("a".to_string(), Type::Unknown, Some(dut));
-        let dut_b = symbols.add("b".to_string(), Type::Unknown, Some(dut));
-        let dut_s = symbols.add("s".to_string(), Type::Unknown, Some(dut));
+
+        // declare DUT struct
+        let dut_struct = symbols.add_struct(
+            "Adder".to_string(),
+            vec![
+                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
+            ],
+        );
+        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct), None);
+        let dut_a = symbols.add("a".to_string(), Type::BitVec(32), Some(dut));
+        let dut_b = symbols.add("b".to_string(), Type::BitVec(32), Some(dut));
+        let dut_s = symbols.add("s".to_string(), Type::BitVec(32), Some(dut));
         assert_eq!(symbols["dut.s"], symbols[dut_s]);
         assert_eq!(symbols["s"], symbols[s]);
 

@@ -15,7 +15,7 @@ pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Resul
 pub fn serialize_type(tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => "u".to_owned() + &t.to_string(),
-        Type::Dut => "dut".to_string(),
+        Type::Struct(_) => todo!(),
         Type::Unknown => "unknown".to_string(),
     }
 }
