@@ -149,20 +149,38 @@ entity_impl!(StructId, "struct");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Struct {
-    pub name: String,
-    pub pins: Vec<Field>,
+    name: String,
+    pins: Vec<Field>,
+}
+
+impl Struct {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn pins(&self) -> &Vec<Field> {
+        &self.pins
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
-    pub name: String,
+    name: String,
     dir: Dir,
-    pub tpe: Type,
+    tpe: Type,
 }
 
 impl Field {
     pub fn new(name: String, dir: Dir, tpe: Type) -> Self {
         Self { name, dir, tpe }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn tpe(&self) -> Type {
+        self.tpe.clone()
     }
 }
 
@@ -178,7 +196,7 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn add(&mut self, name: String, tpe: Type, parent: Option<SymbolId>) -> SymbolId {
+    pub fn add(&mut self, name: String, tpe: Type) -> SymbolId {
         assert!(
             !name.contains('.'),
             "hierarchical names need to be handled externally"
@@ -186,7 +204,31 @@ impl SymbolTable {
         let entry = SymbolTableEntry {
             name,
             tpe,
-            parent,
+            parent: None,
+            next: None,
+        };
+        let lookup_name = entry.full_name(self);
+
+        assert!(
+            !self.by_name.contains_key(&lookup_name),
+            "we already have an entry for {lookup_name}!",
+        );
+
+        let id = self.entries.push(entry);
+        self.by_name.insert(lookup_name, id);
+        id
+    }
+
+    pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
+        assert!(
+            !name.contains('.'),
+            "hierarchical names need to be handled externally"
+        );
+
+        let entry = SymbolTableEntry {
+            name,
+            tpe: self.entries[parent].tpe,
+            parent: Some(parent),
             next: None,
         };
         let lookup_name = entry.full_name(self);
@@ -305,9 +347,9 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add("a".to_string(), Type::BitVec(32), None);
-        let b = symbols.add("b".to_string(), Type::BitVec(32), None);
-        let s = symbols.add("s".to_string(), Type::BitVec(32), None);
+        let a = symbols.add("a".to_string(), Type::BitVec(32));
+        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32));
+        let s = symbols.add("s".to_string(), Type::BitVec(32));
         assert_eq!(symbols["s"], symbols[s]);
 
         // declare DUT struct
@@ -319,10 +361,10 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
-        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct), None);
-        let dut_a = symbols.add("a".to_string(), Type::BitVec(32), Some(dut));
-        let dut_b = symbols.add("b".to_string(), Type::BitVec(32), Some(dut));
-        let dut_s = symbols.add("s".to_string(), Type::BitVec(32), Some(dut));
+        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct));
+        let dut_a = symbols.add_with_parent("a".to_string(), dut);
+        let dut_b = symbols.add_with_parent("b".to_string(), dut);
+        let dut_s = symbols.add_with_parent("s".to_string(), dut);
         assert_eq!(symbols["dut.s"], symbols[dut_s]);
         assert_eq!(symbols["s"], symbols[s]);
 

@@ -1,3 +1,9 @@
+// Copyright 2024 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+
 use std::{any::Any, io::Write};
 
 use baa::BitVecOps;
@@ -11,11 +17,10 @@ pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Resul
     Ok(out)
 }
 
-// TODO need to fix for other types
-pub fn serialize_type(tpe: Type) -> String {
+pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => "u".to_owned() + &t.to_string(),
-        Type::Struct(_) => todo!(),
+        Type::Struct(structid) => st[structid].name().to_owned(),
         Type::Unknown => "unknown".to_string(),
     }
 }
@@ -93,7 +98,33 @@ pub fn build_statements(
 }
 
 pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
-    write!(out, "fn {}(", tr.name)?;
+
+
+    write!(out, "fn {}", tr.name)?;
+    for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
+        let last_index = ii == tr.type_args.len() - 1;
+
+        if ii == 0 {
+            write!(out, "<")?;
+        }
+
+        let strct_type = serialize_type(st, st[tpe_arg].tpe());
+
+        if last_index {
+            write!(
+                out,
+                "{}: {}>", st[tpe_arg].name(), strct_type
+            )?;
+        }
+        else {
+            write!(
+                out, 
+                "{}: {}, ", st[tpe_arg].name(), strct_type
+            )?;
+        }
+    }
+
+    write!(out, "(")?;
 
     for (ii, arg) in tr.args.iter().enumerate() {
         let last_index = ii == tr.args.len() - 1;
@@ -104,7 +135,7 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
                 "{} {}: {}) {{\n",
                 serialize_dir(arg),
                 st[arg].name(),
-                serialize_type(st[arg].tpe())
+                serialize_type(st, st[arg].tpe())
             )?;
         } else {
             write!(
@@ -112,7 +143,7 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
                 "{} {}: {}, ",
                 serialize_dir(arg),
                 st[arg].name(),
-                serialize_type(st[arg].tpe())
+                serialize_type(st, st[arg].tpe())
             )?;
         }
     }
@@ -129,7 +160,6 @@ mod tests {
     use baa::BitVecValue;
 
     use super::*;
-    use crate::ir::*;
 
     #[test]
     fn serialize_add_transaction() {
@@ -138,15 +168,27 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add("a".to_string(), Type::BitVec(32), None);
-        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32), None);
-        let s = symbols.add("s".to_string(), Type::BitVec(32), None);
+        let a = symbols.add("a".to_string(), Type::BitVec(32));
+        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32));
+        let s = symbols.add("s".to_string(), Type::BitVec(32));
         assert_eq!(symbols["s"], symbols[s]);
-        let dut = symbols.add("dut".to_string(), Type::Dut, None);
-        let dut_a = symbols.add("a".to_string(), Type::Unknown, Some(dut));
-        let dut_b = symbols.add("b".to_string(), Type::Unknown, Some(dut));
-        let dut_s = symbols.add("s".to_string(), Type::Unknown, Some(dut));
-        assert_eq!(symbols["dut.s"], symbols[dut_s]);
+
+        // declare DUT struct
+        let dut_struct = symbols.add_struct(
+            "Adder".to_string(),
+            vec![
+                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
+            ],
+        );
+        
+        let dut = symbols.add("DUT".to_string(), Type::Struct(dut_struct));
+
+        let dut_a = symbols.add_with_parent("a".to_string(), dut);
+        let dut_b = symbols.add_with_parent("b".to_string(), dut);
+        let dut_s = symbols.add_with_parent("s".to_string(), dut);
+        assert_eq!(symbols["DUT.s"], symbols[dut_s]);
         assert_eq!(symbols["s"], symbols[s]);
 
         // 2) create transaction
@@ -155,6 +197,9 @@ mod tests {
             Arg::new(a, Dir::In),
             Arg::new(b, Dir::In),
             Arg::new(s, Dir::Out),
+        ];
+        add.type_args = vec![
+            dut,
         ];
 
         // 3) create expressions
@@ -184,14 +229,25 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let ii = symbols.add("ii".to_string(), Type::BitVec(32), None);
-        let oo = symbols.add("oo".to_string(), Type::BitVec(32), None);
+        let ii = symbols.add("ii".to_string(), Type::BitVec(32));
+        let oo = symbols.add("oo".to_string(), Type::BitVec(32));
         assert_eq!(symbols["oo"], symbols[oo]);
-        let dut = symbols.add("dut".to_string(), Type::Dut, None);
-        let dut_ii = symbols.add("ii".to_string(), Type::Unknown, Some(dut));
-        let dut_go = symbols.add("go".to_string(), Type::Unknown, Some(dut));
-        let dut_done = symbols.add("done".to_string(), Type::Unknown, Some(dut));
-        let dut_oo = symbols.add("oo".to_string(), Type::Unknown, Some(dut));
+        
+        // declare DUT struct
+        let dut_struct = symbols.add_struct(
+            "Adder".to_string(),
+            vec![
+                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
+            ],
+        );
+
+        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct));
+        let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
+        let dut_go = symbols.add_with_parent("go".to_string(), dut);
+        let dut_done = symbols.add_with_parent("done".to_string(), dut);
+        let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
         assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
         assert_eq!(symbols["oo"], symbols[oo]);
 
@@ -233,11 +289,21 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add("a".to_string(), Type::BitVec(32), None);
-        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32), None);
+        let a = symbols.add("a".to_string(), Type::BitVec(32));
+        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32));
         assert_eq!(symbols["b"], symbols[b]);
-        let dut = symbols.add("dut".to_string(), Type::Dut, None);
-        let dut_a = symbols.add("a".to_string(), Type::Unknown, Some(dut));
+
+        // declare DUT struct (TODO: Fix struct)
+        let dut_struct = symbols.add_struct(
+            "Adder".to_string(),
+            vec![
+                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
+            ],
+        );
+        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct));
+        let dut_a = symbols.add_with_parent("a".to_string(), dut);
         assert_eq!(symbols["dut.a"], symbols[dut_a]);
 
         // 2) create transaction
