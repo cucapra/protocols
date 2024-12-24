@@ -251,13 +251,14 @@ mod tests {
         let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
         assert_eq!(symbols["oo"], symbols[oo]);
 
-        // declare DUT struct
+        // declare Calyx struct
         let dut_struct = symbols.add_struct(
-            "Adder".to_string(),
+            "Calyx".to_string(),
             vec![
-                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
+                Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("done".to_string(), Dir::Out, Type::BitVec(32)),
+                Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
 
@@ -272,6 +273,7 @@ mod tests {
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
         calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
+        calyx_go_done.type_args = vec![dut];
 
         // 3) create expressions
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));

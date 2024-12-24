@@ -229,9 +229,23 @@ impl SymbolTable {
             "hierarchical names need to be handled externally"
         );
 
+        let existing_pin: Option<&Field>;
+
+        if let Type::Struct(structid) = self.entries[parent].tpe() {
+            let fields = self.structs[structid].pins();
+            existing_pin = fields.iter().find(|field| field.name == name);
+        } else {
+            existing_pin = None;
+        }
+
+        let pin_type = match existing_pin {
+            Some(pin) => pin.tpe(),
+            None => Type::Unknown,
+        };
+
         let entry = SymbolTableEntry {
             name,
-            tpe: self.entries[parent].tpe,
+            tpe: pin_type,
             parent: Some(parent),
             next: None,
         };
@@ -400,5 +414,66 @@ mod tests {
             add.s(Stmt::Assign(s, dut_s_expr)),
         ];
         add.body = add.s(Stmt::Block(body));
+    }
+
+    #[test]
+    fn serialize_calyx_go_down_transaction() {
+        // Manually create the expected result of parsing `calyx_go_down`.
+        // Note that the order in which things are created will be different in the parser.
+
+        // 1) declare symbols
+        let mut symbols = SymbolTable::default();
+        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
+        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
+        assert_eq!(symbols["oo"], symbols[oo]);
+
+        // declare DUT struct
+        let dut_struct = symbols.add_struct(
+            "Calyx".to_string(),
+            vec![
+                Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("done".to_string(), Dir::Out, Type::BitVec(32)),
+                Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
+            ],
+        );
+
+        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
+        let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
+        let dut_go = symbols.add_with_parent("go".to_string(), dut);
+        let dut_done = symbols.add_with_parent("done".to_string(), dut);
+        let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
+        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
+        assert_eq!(symbols["oo"], symbols[oo]);
+
+        // 2) create transaction
+        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
+        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
+        calyx_go_done.type_args = vec![dut];
+
+        // 3) create expressions
+        let ii_expr = calyx_go_done.e(Expr::Sym(ii));
+        let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
+        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
+        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
+        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+
+        // 4) create statements
+        let while_body = vec![calyx_go_done.s(Stmt::Step)];
+        let wbody = calyx_go_done.s(Stmt::Block(while_body));
+
+        let body = vec![
+            calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr)),
+            calyx_go_done.s(Stmt::Assign(dut_go, one_expr)),
+            calyx_go_done.s(Stmt::While(not_expr, wbody)),
+            calyx_go_done.s(Stmt::Assign(dut_done, one_expr)),
+            calyx_go_done.s(Stmt::Assign(dut_go, zero_expr)),
+            calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care())),
+            calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr)),
+        ];
+
+        calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
     }
 }
