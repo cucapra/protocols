@@ -179,6 +179,10 @@ impl Field {
         &self.name
     }
 
+    pub fn dir(&self) -> Dir {
+        self.dir
+    }
+
     pub fn tpe(&self) -> Type {
         self.tpe.clone()
     }
@@ -196,7 +200,7 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn add(&mut self, name: String, tpe: Type) -> SymbolId {
+    pub fn add_without_parent(&mut self, name: String, tpe: Type) -> SymbolId {
         assert!(
             !name.contains('.'),
             "hierarchical names need to be handled externally"
@@ -246,6 +250,10 @@ impl SymbolTable {
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
         let s = Struct { name, pins };
         self.structs.push(s)
+    }
+
+    pub fn struct_ids(&self) -> Vec<StructId> {
+        self.structs.keys().collect()
     }
 }
 
@@ -347,13 +355,13 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32));
-        let s = symbols.add("s".to_string(), Type::BitVec(32));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
+        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
         assert_eq!(symbols["s"], symbols[s]);
 
-        // declare DUT struct
-        let dut_struct = symbols.add_struct(
+        // declare Adder struct
+        let add_struct = symbols.add_struct(
             "Adder".to_string(),
             vec![
                 Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
@@ -361,7 +369,7 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
-        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct));
+        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(add_struct));
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         let dut_b = symbols.add_with_parent("b".to_string(), dut);
         let dut_s = symbols.add_with_parent("s".to_string(), dut);

@@ -25,8 +25,8 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     }
 }
 
-pub fn serialize_dir(el: &Arg) -> String {
-    match el.dir() {
+pub fn serialize_dir(dir: Dir) -> String {
+    match dir {
         Dir::In => "in".to_string(),
         Dir::Out => "out".to_string(),
     }
@@ -97,10 +97,37 @@ pub fn build_statements(
     Ok(())
 }
 
-pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
+pub fn serialize_structs(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    strct_ids: Vec<StructId>,
+) -> std::io::Result<()> {
+    for strct_id in strct_ids {
+        writeln!(out, "struct {} {{", st[strct_id].name())?;
 
+        for field in st[strct_id].pins() {
+            writeln!(
+                out,
+                "{}{} {}: {},",
+                "  ".repeat(1),
+                serialize_dir(field.dir()),
+                field.name(),
+                serialize_type(st, field.tpe())
+            )?;
+        }
+        writeln!(out, "}}\n")?;
+    }
+
+    Ok(())
+}
+
+pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
+    if st.struct_ids().len() > 0 {
+        serialize_structs(out, st, st.struct_ids())?;
+    }
 
     write!(out, "fn {}", tr.name)?;
+
     for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
         let last_index = ii == tr.type_args.len() - 1;
 
@@ -111,16 +138,9 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
         let strct_type = serialize_type(st, st[tpe_arg].tpe());
 
         if last_index {
-            write!(
-                out,
-                "{}: {}>", st[tpe_arg].name(), strct_type
-            )?;
-        }
-        else {
-            write!(
-                out, 
-                "{}: {}, ", st[tpe_arg].name(), strct_type
-            )?;
+            write!(out, "{}: {}>", st[tpe_arg].name(), strct_type)?;
+        } else {
+            write!(out, "{}: {}, ", st[tpe_arg].name(), strct_type)?;
         }
     }
 
@@ -133,7 +153,7 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
             write!(
                 out,
                 "{} {}: {}) {{\n",
-                serialize_dir(arg),
+                serialize_dir(arg.dir()),
                 st[arg].name(),
                 serialize_type(st, st[arg].tpe())
             )?;
@@ -141,7 +161,7 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
             write!(
                 out,
                 "{} {}: {}, ",
-                serialize_dir(arg),
+                serialize_dir(arg.dir()),
                 st[arg].name(),
                 serialize_type(st, st[arg].tpe())
             )?;
@@ -168,13 +188,13 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32));
-        let s = symbols.add("s".to_string(), Type::BitVec(32));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
+        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
         assert_eq!(symbols["s"], symbols[s]);
 
-        // declare DUT struct
-        let dut_struct = symbols.add_struct(
+        // declare Adder struct
+        let add_struct = symbols.add_struct(
             "Adder".to_string(),
             vec![
                 Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
@@ -182,8 +202,8 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
-        
-        let dut = symbols.add("DUT".to_string(), Type::Struct(dut_struct));
+
+        let dut = symbols.add_without_parent("DUT".to_string(), Type::Struct(add_struct));
 
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         let dut_b = symbols.add_with_parent("b".to_string(), dut);
@@ -198,9 +218,7 @@ mod tests {
             Arg::new(b, Dir::In),
             Arg::new(s, Dir::Out),
         ];
-        add.type_args = vec![
-            dut,
-        ];
+        add.type_args = vec![dut];
 
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
@@ -229,10 +247,10 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let ii = symbols.add("ii".to_string(), Type::BitVec(32));
-        let oo = symbols.add("oo".to_string(), Type::BitVec(32));
+        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
+        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
         assert_eq!(symbols["oo"], symbols[oo]);
-        
+
         // declare DUT struct
         let dut_struct = symbols.add_struct(
             "Adder".to_string(),
@@ -243,7 +261,7 @@ mod tests {
             ],
         );
 
-        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct));
+        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
         let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
         let dut_go = symbols.add_with_parent("go".to_string(), dut);
         let dut_done = symbols.add_with_parent("done".to_string(), dut);
@@ -284,13 +302,13 @@ mod tests {
 
     #[test]
     fn serialize_easycond_transaction() {
-        // Manually create the expected result of parsing `add.prot`.
+        // Manually create the expected result of parsing `easycond.prot`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add("b".to_string(), Type::BitVec(32));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
+        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
         assert_eq!(symbols["b"], symbols[b]);
 
         // declare DUT struct (TODO: Fix struct)
@@ -302,7 +320,7 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
-        let dut = symbols.add("dut".to_string(), Type::Struct(dut_struct));
+        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         assert_eq!(symbols["dut.a"], symbols[dut_a]);
 
