@@ -2,6 +2,7 @@
 // released under MIT License
 // author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
 // author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
 use cranelift_entity::{entity_impl, PrimaryMap};
@@ -54,6 +55,10 @@ impl Transaction {
 
     pub fn stmt_skip(&self) -> StmtId {
         self.skip_id
+    }
+
+    pub fn expr_ids(&self) -> Vec<ExprId> {
+        self.exprs.keys().collect()
     }
 }
 

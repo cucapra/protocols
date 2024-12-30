@@ -10,14 +10,14 @@ use baa::BitVecOps;
 
 use crate::ir::*;
 
-pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Result<String> {
+fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Result<String> {
     let mut out = Vec::new();
     serialize(&mut out, tr, st)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
 
-pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
+fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => "u".to_owned() + &t.to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
@@ -25,14 +25,14 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     }
 }
 
-pub fn serialize_dir(dir: Dir) -> String {
+fn serialize_dir(dir: Dir) -> String {
     match dir {
         Dir::In => "in".to_string(),
         Dir::Out => "out".to_string(),
     }
 }
 
-pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String {
+fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String {
     match expr {
         Expr::Const(val) => val.to_bit_str(),
         Expr::Sym(symid) => st[symid].full_name(st),
@@ -47,7 +47,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String
     }
 }
 
-pub fn build_statements(
+fn build_statements(
     out: &mut impl Write,
     tr: &Transaction,
     st: &SymbolTable,
@@ -171,6 +171,44 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
     build_statements(out, tr, st, tr.body, 1)?;
 
     writeln!(out, "}}")?;
+
+    Ok(())
+}
+
+fn check_expr_types(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> Result<Type, String> {
+    match expr {
+        Expr::Const(_) => Ok(Type::BitVec(1)),
+        Expr::Sym(symid) => Ok(st[symid].tpe()),
+        Expr::DontCare => Ok(Type::Unknown),
+        Expr::Not(not_exprid) => {
+            let inner_type = check_expr_types(tr, st, &tr[not_exprid])?;
+            if let Type::BitVec(_) = inner_type {
+                Ok(inner_type)
+            } else {
+                panic!("Invalid type for 'Not' expression {:?}", inner_type)
+                // TODO: create meta data (secondary map) and send error
+            }
+        }
+        Expr::And(lhs, rhs) | Expr::Equal(lhs, rhs) => {
+            let lhs_type = check_expr_types(tr, st, &tr[lhs])?;
+            let rhs_type = check_expr_types(tr, st, &tr[rhs])?;
+            if lhs == rhs {
+                Ok(lhs_type)
+            } else {
+                panic!(
+                    "Type mismatch in binary operation: {:?} and {:?}",
+                    lhs_type, rhs_type
+                )
+                // TODO: create meta data (secondary map) and send error
+            }
+        }
+    }
+}
+
+pub fn type_check(tr: &Transaction, st: &SymbolTable) -> Result<(), String> {
+    for (exprid) in tr.expr_ids() {
+        check_expr_types(tr, st, &tr[exprid])?;
+    }
 
     Ok(())
 }
