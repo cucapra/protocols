@@ -122,7 +122,6 @@ pub fn serialize_structs(
 }
 
 pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
-
     type_check(tr, st).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     if st.struct_ids().len() > 0 {
@@ -217,7 +216,13 @@ fn check_stmt_types(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> Res
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
-                panic!("Type mismatch in assignment: {} : {:?} (lhs) and {} : {:?} (rhs).", st[lhs].full_name(st), lhs_type, serialize_expr(tr, st, &tr[rhs]), rhs_type)
+                panic!(
+                    "Type mismatch in assignment: {} : {:?} (lhs) and {} : {:?} (rhs).",
+                    st[lhs].full_name(st),
+                    lhs_type,
+                    serialize_expr(tr, st, &tr[rhs]),
+                    rhs_type
+                )
             }
         }
         Stmt::While(cond, bodyid) => {

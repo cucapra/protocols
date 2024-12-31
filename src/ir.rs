@@ -136,7 +136,7 @@ impl Type {
             (Type::Unknown, _) | (_, Type::Unknown) => true,
             _ => false,
         }
-    }  
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
