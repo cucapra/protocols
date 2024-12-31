@@ -60,6 +60,10 @@ impl Transaction {
     pub fn expr_ids(&self) -> Vec<ExprId> {
         self.exprs.keys().collect()
     }
+
+    pub fn stmt_ids(&self) -> Vec<StmtId> {
+        self.stmts.keys().collect()
+    }
 }
 
 impl Index<ExprId> for Transaction {
@@ -83,6 +87,14 @@ impl Index<StmtId> for Transaction {
 
     fn index(&self, index: StmtId) -> &Self::Output {
         &self.stmts[index]
+    }
+}
+
+impl Index<&StmtId> for Transaction {
+    type Output = Stmt;
+
+    fn index(&self, index: &StmtId) -> &Self::Output {
+        &self.stmts[*index]
     }
 }
 
@@ -114,6 +126,17 @@ pub enum Type {
     Struct(StructId),
     /// Type taken on when we do not know the actual type yet
     Unknown,
+}
+
+impl Type {
+    pub fn is_equivalent(&self, other: &Type) -> bool {
+        match (self, other) {
+            (Type::BitVec(_), Type::BitVec(_)) => true,
+            (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
+            (Type::Unknown, _) | (_, Type::Unknown) => true,
+            _ => false,
+        }
+    }  
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]

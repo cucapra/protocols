@@ -56,8 +56,8 @@ fn build_statements(
 ) -> std::io::Result<()> {
     match &tr[stmtid] {
         Stmt::Skip => writeln!(out, "{}skip()", "  ".repeat(index))?,
-        Stmt::Block(t) => {
-            for stmt_id in t.iter() {
+        Stmt::Block(stmts) => {
+            for stmt_id in stmts {
                 build_statements(out, tr, st, *stmt_id, index)?;
             }
         }
@@ -122,6 +122,9 @@ pub fn serialize_structs(
 }
 
 pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
+
+    type_check(tr, st).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
     if st.struct_ids().len() > 0 {
         serialize_structs(out, st, st.struct_ids())?;
     }
@@ -175,13 +178,13 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
     Ok(())
 }
 
-fn check_expr_types(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> Result<Type, String> {
-    match expr {
+fn check_expr_types(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> Result<Type, String> {
+    match &tr[expr_id] {
         Expr::Const(_) => Ok(Type::BitVec(1)),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
         Expr::Not(not_exprid) => {
-            let inner_type = check_expr_types(tr, st, &tr[not_exprid])?;
+            let inner_type = check_expr_types(tr, st, not_exprid)?;
             if let Type::BitVec(_) = inner_type {
                 Ok(inner_type)
             } else {
@@ -190,9 +193,9 @@ fn check_expr_types(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> Result<T
             }
         }
         Expr::And(lhs, rhs) | Expr::Equal(lhs, rhs) => {
-            let lhs_type = check_expr_types(tr, st, &tr[lhs])?;
-            let rhs_type = check_expr_types(tr, st, &tr[rhs])?;
-            if lhs == rhs {
+            let lhs_type = check_expr_types(tr, st, lhs)?;
+            let rhs_type = check_expr_types(tr, st, rhs)?;
+            if lhs_type.is_equivalent(&rhs_type) {
                 Ok(lhs_type)
             } else {
                 panic!(
@@ -205,9 +208,52 @@ fn check_expr_types(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> Result<T
     }
 }
 
+fn check_stmt_types(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> Result<(), String> {
+    match &tr[stmt_id] {
+        Stmt::Skip | Stmt::Step | Stmt::Fork => Ok(()),
+        Stmt::Assign(lhs, rhs) => {
+            let lhs_type = st[lhs].tpe();
+            let rhs_type = check_expr_types(tr, st, rhs)?;
+            if lhs_type.is_equivalent(&rhs_type) {
+                Ok(())
+            } else {
+                panic!("Type mismatch in assignment: {} : {:?} (lhs) and {} : {:?} (rhs).", st[lhs].full_name(st), lhs_type, serialize_expr(tr, st, &tr[rhs]), rhs_type)
+            }
+        }
+        Stmt::While(cond, bodyid) => {
+            let cond_type = check_expr_types(tr, st, cond)?;
+            if let Type::BitVec(1) = cond_type {
+                check_stmt_types(tr, st, bodyid)
+            } else {
+                panic!("Invalid type for [while] condition: {:?}", cond_type)
+            }
+        }
+        Stmt::IfElse(cond, ifbody, elsebody) => {
+            let cond_type = check_expr_types(tr, st, cond)?;
+            if let Type::BitVec(_) = cond_type {
+                check_stmt_types(tr, st, ifbody)?;
+                check_stmt_types(tr, st, elsebody)?;
+                Ok(())
+            } else {
+                panic!("Type mistmatch in If/Else condition: {:?}", cond_type)
+            }
+        }
+        Stmt::Block(stmts) => {
+            for stmtid in stmts {
+                check_stmt_types(tr, st, stmtid)?;
+            }
+            Ok(())
+        }
+    }
+}
+
 pub fn type_check(tr: &Transaction, st: &SymbolTable) -> Result<(), String> {
-    for (exprid) in tr.expr_ids() {
-        check_expr_types(tr, st, &tr[exprid])?;
+    for exprid in tr.expr_ids() {
+        check_expr_types(tr, st, &exprid)?;
+    }
+
+    for stmt_id in tr.stmt_ids() {
+        check_stmt_types(tr, st, &stmt_id)?;
     }
 
     Ok(())
@@ -295,7 +341,7 @@ mod tests {
             vec![
                 Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
                 Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("done".to_string(), Dir::Out, Type::BitVec(32)),
+                Field::new("done".to_string(), Dir::Out, Type::BitVec(1)),
                 Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
