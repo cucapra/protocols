@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{entity_impl, PrimaryMap};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -15,6 +15,7 @@ pub struct Transaction {
     pub args: Vec<Arg>,
     pub body: StmtId,
     pub type_args: Vec<SymbolId>,
+    pub metadata: SecondaryMap<StmtId, (usize, usize)>, 
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
@@ -27,6 +28,7 @@ impl Transaction {
         let dont_care_id = exprs.push(Expr::DontCare);
         let mut stmts = PrimaryMap::new();
         let skip_id = stmts.push(Stmt::Skip);
+        let metadata: SecondaryMap<StmtId, (usize, usize)> = SecondaryMap::new();
         Self {
             name,
             args: Vec::default(),
@@ -36,6 +38,7 @@ impl Transaction {
             dont_care_id,
             stmts,
             skip_id,
+            metadata,
         }
     }
 
@@ -64,6 +67,15 @@ impl Transaction {
     pub fn stmt_ids(&self) -> Vec<StmtId> {
         self.stmts.keys().collect()
     }
+
+    pub fn add_md(&mut self, stmt_id: StmtId, line: usize, col: usize) {
+        self.metadata[stmt_id] = (line, col);
+    }
+
+    pub fn get_md(&self, stmt_id: StmtId) -> Option<(usize, usize)> {
+        self.metadata.get(stmt_id).copied()
+    }
+
 }
 
 impl Index<ExprId> for Transaction {
