@@ -15,7 +15,7 @@ pub struct Transaction {
     pub args: Vec<Arg>,
     pub body: StmtId,
     pub type_args: Vec<SymbolId>,
-    pub metadata: SecondaryMap<ExprId, (usize, usize)>, 
+    pub metadata: SecondaryMap<ExprId, (usize, usize, usize)>,
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
@@ -28,7 +28,7 @@ impl Transaction {
         let dont_care_id = exprs.push(Expr::DontCare);
         let mut stmts = PrimaryMap::new();
         let skip_id = stmts.push(Stmt::Skip);
-        let metadata: SecondaryMap<ExprId, (usize, usize)> = SecondaryMap::new();
+        let metadata: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
             name,
             args: Vec::default(),
@@ -68,14 +68,13 @@ impl Transaction {
         self.stmts.keys().collect()
     }
 
-    pub fn add_md(&mut self, expr_id: ExprId, line: usize, col: usize) {
-        self.metadata[expr_id] = (line, col);
+    pub fn add_md(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
+        self.metadata[expr_id] = (start, end, fileid);
     }
 
-    pub fn get_md(&self, expr_id: ExprId) -> Option<(usize, usize)> {
+    pub fn get_md(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
         self.metadata.get(expr_id).copied()
     }
-
 }
 
 impl Index<ExprId> for Transaction {

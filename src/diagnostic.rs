@@ -4,12 +4,78 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use codespan_reporting::diagnostic::{Diagnostic as CodespanDiagnostic, Label as CodespanLabel};
+use std::io::Write;
+
+use codespan_reporting::diagnostic::{
+    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
+};
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
+use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
 
 use crate::ir::*;
+
+/// Severity of diagnostic
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Level {
+    Error,
+    Warning,
+}
+
+/// A label representing a part of the source code
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Label {
+    pub message: Option<String>,
+    pub range: (usize, usize),
+}
+
+impl Label {
+    fn to_codespan_label(&self, fileid: usize) -> CodespanLabel<usize> {
+        CodespanLabel::new(LabelStyle::Primary, fileid, self.range.0..self.range.1)
+            .with_message(self.message.clone().unwrap_or_default())
+        // error msg
+    }
+}
+
+/// Diagnostic of a particular part of source code
+pub struct Diagnostic {
+    title: String,
+    message: String,
+    level: Level,
+    location: Option<(usize, Label)>,
+}
+
+impl Diagnostic {
+    pub fn emit(&self, buffer: &mut Buffer, files: &SimpleFiles<String, String>) {
+        if let Some((fileid, label)) = &self.location {
+            let severity = match self.level {
+                Level::Error => Severity::Error,
+                Level::Warning => Severity::Warning,
+            };
+
+            let diagnostic = CodespanDiagnostic::new(severity)
+                .with_message(&self.message) // Severity: (msg)
+                .with_labels(vec![label.to_codespan_label(*fileid)]);
+
+            let config = term::Config::default(); // Change config depending on how error needs to be produced
+            term::emit(buffer, &config, files, &diagnostic).expect("Failed to write diagnostic");
+        } else {
+            let color = match self.level {
+                Level::Error => Color::Red,
+                Level::Warning => Color::Yellow,
+            };
+
+            buffer
+                .set_color(ColorSpec::new().set_bold(true).set_fg(Some(color)))
+                .expect("Failed to set color");
+            writeln!(buffer, "{}", self.title).expect("Failed to write title");
+
+            buffer
+                .set_color(&ColorSpec::new())
+                .expect("Failed to reset color");
+        }
+    }
+}
 
 pub struct DiagnosticHandler {
     files: SimpleFiles<String, String>,
@@ -26,30 +92,31 @@ impl DiagnosticHandler {
         self.files.add(name, content)
     }
 
-    pub fn emit_diagnostic(&self, tr: &Transaction, expr_id: ExprId, message: &str, severity: codespan_reporting::diagnostic::Severity) {
-        if let Some((line, col)) = tr.get_md(expr_id) {
-            let label = CodespanLabel::primary(0, line..(line)) 
-                .with_message(message);
-        
-
-            let diagnostic = CodespanDiagnostic::new(severity).with_message(format!("Error in statement ID: {:?}", expr_id)).with_labels(vec![label]);
-
-            let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
-            
-            let config = term::Config {
-                display_style: term::DisplayStyle::Rich,
-                ..term::Config::default()
+    pub fn emit_diagnostic_expr(
+        &mut self,
+        buffer: &mut Buffer,
+        tr: &Transaction,
+        expr_id: ExprId,
+        message: &str,
+        level: Level,
+    ) {
+        if let Some((start, end, fileid)) = tr.get_md(expr_id) {
+            let label = Label {
+                message: Some(message.to_string()),
+                range: (start, end),
             };
 
-            term::emit(&mut writer.lock(), &config, &self.files, &diagnostic).unwrap();
+            let diagnostic = Diagnostic {
+                title: format!("{:?} in file {}", level, fileid),
+                message: message.to_string(),
+                level,
+                location: Some((fileid, label)),
+            };
 
-        } else {
-            eprintln!("Could not find metadata for statement id: {:?}", expr_id);
+            diagnostic.emit(buffer, &self.files);
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -58,13 +125,6 @@ mod tests {
 
     #[test]
     fn test_emit_diagnostic() {
-        let mut handler = DiagnosticHandler::new();
-
-        let file_id = handler.add_file(
-            "test_file".to_string(),
-            "a=1;\nassert_eq!(x, 20);\n".to_string(),
-        );
-
         let mut symbols = SymbolTable::default();
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
 
@@ -72,13 +132,23 @@ mod tests {
         let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         tr.s(Stmt::Assign(a, one_expr));
 
-        tr.add_md(one_expr, 2, 5);
+        let mut handler = DiagnosticHandler::new();
+        let file_id = handler.add_file(
+            "main.calyx".to_string(),
+            "12345678\nassert_eq!(x, 20);\n".to_string(),
+        );
 
-        handler.emit_diagnostic(
+        tr.add_md(one_expr, 9, 11, file_id);
+
+        let mut buffer = Buffer::ansi();
+        handler.emit_diagnostic_expr(
+            &mut buffer,
             &tr,
             one_expr,
-            "Mismatched types in assertion",
-            codespan_reporting::diagnostic::Severity::Error,
+            "Invalid type for operation",
+            Level::Warning,
         );
+
+        println!("{}", String::from_utf8_lossy(buffer.as_slice()));
     }
 }
