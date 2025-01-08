@@ -68,12 +68,20 @@ impl Transaction {
         self.stmts.keys().collect()
     }
 
-    pub fn add_md(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
+    pub fn add_expr_md(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
         self.metadata[expr_id] = (start, end, fileid);
     }
 
-    pub fn get_md(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
+    pub fn get_expr_md(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
         self.metadata.get(expr_id).copied()
+    }
+
+    pub fn add_stmt_md(&mut self, expr_id: StmtId, start: usize, end: usize, fileid: usize) {
+        todo!()
+    }
+
+    pub fn get_stmt_md(&self, expr_id: StmtId) -> Option<(usize, usize, usize)> {
+        todo!()
     }
 }
 
