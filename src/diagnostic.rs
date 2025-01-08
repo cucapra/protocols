@@ -94,13 +94,13 @@ impl DiagnosticHandler {
 
     pub fn emit_diagnostic_expr(
         &mut self,
-        buffer: &mut Buffer,
         tr: &Transaction,
-        expr_id: ExprId,
+        expr_id: &ExprId,
         message: &str,
         level: Level,
     ) {
-        if let Some((start, end, fileid)) = tr.get_md(expr_id) {
+        let buffer = &mut Buffer::ansi();
+        if let Some((start, end, fileid)) = tr.get_expr_md(*expr_id) {
             let label = Label {
                 message: Some(message.to_string()),
                 range: (start, end),
@@ -114,6 +114,35 @@ impl DiagnosticHandler {
             };
 
             diagnostic.emit(buffer, &self.files);
+
+            print!("{}", String::from_utf8_lossy(buffer.as_slice()));
+        }
+    }
+
+    pub fn emit_diagnostic_stmt(
+        &mut self,
+        tr: &Transaction,
+        stmt_id: &StmtId,
+        message: &str,
+        level: Level,
+    ) {
+        let buffer = &mut Buffer::ansi();
+        if let Some((start, end, fileid)) = tr.get_stmt_md(*stmt_id) {
+            let label = Label {
+                message: Some(message.to_string()),
+                range: (start, end),
+            };
+
+            let diagnostic = Diagnostic {
+                title: format!("{:?} in file {}", level, fileid),
+                message: message.to_string(),
+                level,
+                location: Some((fileid, label)),
+            };
+
+            diagnostic.emit(buffer, &self.files);
+
+            print!("{}", String::from_utf8_lossy(buffer.as_slice()));
         }
     }
 }
@@ -127,10 +156,13 @@ mod tests {
     fn test_emit_diagnostic() {
         let mut symbols = SymbolTable::default();
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
+        let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
 
         let mut tr = Transaction::new("test_transaction".to_string());
         let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         tr.s(Stmt::Assign(a, one_expr));
+        tr.s(Stmt::Assign(b, zero_expr));
 
         let mut handler = DiagnosticHandler::new();
         let file_id = handler.add_file(
@@ -138,17 +170,10 @@ mod tests {
             "12345678\nassert_eq!(x, 20);\n".to_string(),
         );
 
-        tr.add_md(one_expr, 9, 11, file_id);
+        tr.add_expr_md(one_expr, 9, 11, file_id);
+        tr.add_expr_md(zero_expr, 12, 15, file_id);
 
-        let mut buffer = Buffer::ansi();
-        handler.emit_diagnostic_expr(
-            &mut buffer,
-            &tr,
-            one_expr,
-            "Invalid type for operation",
-            Level::Warning,
-        );
-
-        println!("{}", String::from_utf8_lossy(buffer.as_slice()));
+        handler.emit_diagnostic_expr(&tr, &one_expr, "Invalid type for operation", Level::Warning);
+        handler.emit_diagnostic_expr(&tr, &zero_expr, "Divide by zero", Level::Error);
     }
 }
