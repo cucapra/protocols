@@ -4,15 +4,19 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use std::{any::Any, io::Write};
+use std::{any::Any, io::Write, process::exit};
 
 use baa::BitVecOps;
 
-use crate::ir::*;
+use crate::{diagnostic::*, ir::*};
 
-fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Result<String> {
+fn serialize_to_string(
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+) -> std::io::Result<String> {
     let mut out = Vec::new();
-    serialize(&mut out, tr, st)?;
+    serialize(&mut out, tr, st, handler)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
@@ -32,17 +36,22 @@ fn serialize_dir(dir: Dir) -> String {
     }
 }
 
-fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr: &Expr) -> String {
-    match expr {
+fn serialize_expr(
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+    exprid: &ExprId,
+) -> String {
+    match &tr[exprid] {
         Expr::Const(val) => val.to_bit_str(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
-        Expr::Not(exprid) => "!(".to_owned() + &serialize_expr(tr, st, &tr[exprid]) + ")",
+        Expr::Not(exprid) => "!(".to_owned() + &serialize_expr(tr, st, handler, exprid) + ")",
         Expr::And(lhs, rhs) => {
-            serialize_expr(tr, st, &tr[lhs]) + " && " + &serialize_expr(tr, st, &tr[rhs])
+            serialize_expr(tr, st, handler, lhs) + " && " + &serialize_expr(tr, st, handler, rhs)
         }
         Expr::Equal(lhs, rhs) => {
-            serialize_expr(tr, st, &tr[lhs]) + " == " + &serialize_expr(tr, st, &tr[rhs])
+            serialize_expr(tr, st, handler, lhs) + " == " + &serialize_expr(tr, st, handler, rhs)
         }
     }
 }
@@ -51,14 +60,15 @@ fn build_statements(
     out: &mut impl Write,
     tr: &Transaction,
     st: &SymbolTable,
-    stmtid: StmtId,
+    handler: &mut DiagnosticHandler,
+    stmtid: &StmtId,
     index: usize,
 ) -> std::io::Result<()> {
     match &tr[stmtid] {
         Stmt::Skip => writeln!(out, "{}skip()", "  ".repeat(index))?,
         Stmt::Block(stmts) => {
             for stmt_id in stmts {
-                build_statements(out, tr, st, *stmt_id, index)?;
+                build_statements(out, tr, st, handler, stmt_id, index)?;
             }
         }
         Stmt::Assign(lhs, rhs) => writeln!(
@@ -66,7 +76,7 @@ fn build_statements(
             "{}{} := {};",
             "  ".repeat(index),
             st[lhs].full_name(st),
-            serialize_expr(tr, st, &tr[rhs])
+            serialize_expr(tr, st, handler, rhs)
         )?,
         Stmt::Step => writeln!(out, "{}step();", "  ".repeat(index))?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
@@ -75,9 +85,9 @@ fn build_statements(
                 out,
                 "{}while {} {{",
                 "  ".repeat(index),
-                serialize_expr(tr, st, &tr[cond])
+                serialize_expr(tr, st, handler, cond)
             )?;
-            build_statements(out, tr, st, *bodyid, index + 1)?;
+            build_statements(out, tr, st, handler, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
@@ -85,11 +95,11 @@ fn build_statements(
                 out,
                 "{}if {} {{",
                 "  ".repeat(index),
-                serialize_expr(tr, st, &tr[cond])
+                serialize_expr(tr, st, handler, cond)
             )?;
-            build_statements(out, tr, st, *ifbody, index + 1)?;
+            build_statements(out, tr, st, handler, ifbody, index + 1)?;
             writeln!(out, "{}}} else {{", "  ".repeat(index))?;
-            build_statements(out, tr, st, *elsebody, index + 1)?;
+            build_statements(out, tr, st, handler, elsebody, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
     }
@@ -121,8 +131,13 @@ pub fn serialize_structs(
     Ok(())
 }
 
-pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
-    type_check(tr, st).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+pub fn serialize(
+    out: &mut impl Write,
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+) -> std::io::Result<()> {
+    type_check(tr, st, handler);
 
     if st.struct_ids().len() > 0 {
         serialize_structs(out, st, st.struct_ids())?;
@@ -170,49 +185,71 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
         }
     }
 
-    build_statements(out, tr, st, tr.body, 1)?;
+    build_statements(out, tr, st, handler, &tr.body, 1)?;
 
     writeln!(out, "}}")?;
 
     Ok(())
 }
 
-fn check_expr_types(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> Result<Type, String> {
+fn check_expr_types(
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+    expr_id: &ExprId,
+) -> Result<Type, String> {
     match &tr[expr_id] {
         Expr::Const(_) => Ok(Type::BitVec(1)),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
         Expr::Not(not_exprid) => {
-            let inner_type = check_expr_types(tr, st, not_exprid)?;
+            let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(_) = inner_type {
                 Ok(inner_type)
             } else {
-                panic!("Invalid type for 'Not' expression {:?}", inner_type)
+                handler.emit_diagnostic_expr(
+                    tr,
+                    expr_id,
+                    &format!("Invalid type for 'Not' expression {:?}", inner_type).to_string(),
+                    Level::Error,
+                );
+                Ok(inner_type)
                 // TODO: create meta data (secondary map) and send error
             }
         }
         Expr::And(lhs, rhs) | Expr::Equal(lhs, rhs) => {
-            let lhs_type = check_expr_types(tr, st, lhs)?;
-            let rhs_type = check_expr_types(tr, st, rhs)?;
+            let lhs_type = check_expr_types(tr, st, handler, lhs)?;
+            let rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(lhs_type)
             } else {
-                panic!(
-                    "Type mismatch in binary operation: {:?} and {:?}",
-                    lhs_type, rhs_type
-                )
+                handler.emit_diagnostic_expr(
+                    tr,
+                    expr_id,
+                    &format!(
+                        "Type mismatch in binary operation: {:?} and {:?}",
+                        lhs_type, rhs_type
+                    ),
+                    Level::Error,
+                );
+                Ok(lhs_type)
                 // TODO: create meta data (secondary map) and send error
             }
         }
     }
 }
 
-fn check_stmt_types(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> Result<(), String> {
+fn check_stmt_types(
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+    stmt_id: &StmtId,
+) -> Result<(), String> {
     match &tr[stmt_id] {
         Stmt::Skip | Stmt::Step | Stmt::Fork => Ok(()),
         Stmt::Assign(lhs, rhs) => {
             let lhs_type = st[lhs].tpe();
-            let rhs_type = check_expr_types(tr, st, rhs)?;
+            let rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
@@ -220,24 +257,24 @@ fn check_stmt_types(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> Res
                     "Type mismatch in assignment: {} : {:?} (lhs) and {} : {:?} (rhs).",
                     st[lhs].full_name(st),
                     lhs_type,
-                    serialize_expr(tr, st, &tr[rhs]),
+                    serialize_expr(tr, st, handler, rhs),
                     rhs_type
                 )
             }
         }
         Stmt::While(cond, bodyid) => {
-            let cond_type = check_expr_types(tr, st, cond)?;
+            let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
-                check_stmt_types(tr, st, bodyid)
+                check_stmt_types(tr, st, handler, bodyid)
             } else {
                 panic!("Invalid type for [while] condition: {:?}", cond_type)
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
-            let cond_type = check_expr_types(tr, st, cond)?;
+            let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(_) = cond_type {
-                check_stmt_types(tr, st, ifbody)?;
-                check_stmt_types(tr, st, elsebody)?;
+                check_stmt_types(tr, st, handler, ifbody)?;
+                check_stmt_types(tr, st, handler, elsebody)?;
                 Ok(())
             } else {
                 panic!("Type mistmatch in If/Else condition: {:?}", cond_type)
@@ -245,23 +282,21 @@ fn check_stmt_types(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> Res
         }
         Stmt::Block(stmts) => {
             for stmtid in stmts {
-                check_stmt_types(tr, st, stmtid)?;
+                check_stmt_types(tr, st, handler, stmtid)?;
             }
             Ok(())
         }
     }
 }
 
-pub fn type_check(tr: &Transaction, st: &SymbolTable) -> Result<(), String> {
+pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHandler) {
     for exprid in tr.expr_ids() {
-        check_expr_types(tr, st, &exprid)?;
+        check_expr_types(tr, st, handler, &exprid);
     }
 
     for stmt_id in tr.stmt_ids() {
-        check_stmt_types(tr, st, &stmt_id)?;
+        check_stmt_types(tr, st, handler, &stmt_id);
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -277,6 +312,7 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
+        let mut handler = DiagnosticHandler::new();
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
@@ -326,7 +362,10 @@ mod tests {
         ];
         add.body = add.s(Stmt::Block(body));
 
-        println!("{}", serialize_to_string(&add, &symbols).unwrap());
+        println!(
+            "{}",
+            serialize_to_string(&add, &symbols, &mut handler).unwrap()
+        );
     }
 
     #[test]
@@ -336,6 +375,7 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
+        let mut handler = DiagnosticHandler::new();
         let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
         let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
         assert_eq!(symbols["oo"], symbols[oo]);
@@ -359,36 +399,63 @@ mod tests {
         assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
         assert_eq!(symbols["oo"], symbols[oo]);
 
+        // create fileid and read file
+        let input = std::fs::read_to_string("tests/calyx_go_done.prot").expect("failed to load");
+        let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
+
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
         calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
         calyx_go_done.type_args = vec![dut];
 
         // 3) create expressions
+        let test = symbols.add_without_parent("test".to_string(), Type::Unknown);
+        let test_expr = calyx_go_done.e(Expr::Sym(test));
+
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));
+        calyx_go_done.add_expr_md(ii_expr, 153, 155, calyx_fileid);
         let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
+        calyx_go_done.add_expr_md(dut_oo_expr, 260, 266, calyx_fileid);
         let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        calyx_go_done.add_expr_md(one_expr, 170, 171, calyx_fileid);
         let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        calyx_go_done.add_expr_md(zero_expr, 232, 233, calyx_fileid);
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
+        calyx_go_done.add_expr_md(dut_done_expr, 184, 192, calyx_fileid);
+        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, test_expr));
+        calyx_go_done.add_expr_md(cond_expr, 183, 198, calyx_fileid);
         let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        calyx_go_done.add_expr_md(not_expr, 182, 198, calyx_fileid);
 
         // 4) create statements
         let while_body = vec![calyx_go_done.s(Stmt::Step)];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
+        let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
+        calyx_go_done.add_stmt_md(dut_ii_assign, 143, 157, calyx_fileid);
+        let dut_go_assign = calyx_go_done.s(Stmt::Assign(dut_go, one_expr));
+        calyx_go_done.add_stmt_md(dut_go_assign, 160, 172, calyx_fileid);
+        let dut_while = calyx_go_done.s(Stmt::While(not_expr, wbody));
+        calyx_go_done.add_stmt_md(dut_while, 175, 219, calyx_fileid);
+        let dut_go_reassign = calyx_go_done.s(Stmt::Assign(dut_go, zero_expr));
+        calyx_go_done.add_stmt_md(dut_go_reassign, 222, 234, calyx_fileid);
+        let dut_ii_dontcare = calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care()));
+        calyx_go_done.add_stmt_md(dut_ii_dontcare, 238, 250, calyx_fileid);
+        let oo_assign = calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr));
+        calyx_go_done.add_stmt_md(oo_assign, 254, 268, calyx_fileid);
         let body = vec![
-            calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr)),
-            calyx_go_done.s(Stmt::Assign(dut_go, one_expr)),
-            calyx_go_done.s(Stmt::While(not_expr, wbody)),
-            calyx_go_done.s(Stmt::Assign(dut_done, one_expr)),
-            calyx_go_done.s(Stmt::Assign(dut_go, zero_expr)),
-            calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care())),
-            calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr)),
+            dut_ii_assign,
+            dut_go_assign,
+            dut_while,
+            dut_go_reassign,
+            dut_ii_dontcare,
+            oo_assign,
         ];
-
         calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
-        println!("{}", serialize_to_string(&calyx_go_done, &symbols).unwrap());
+        println!(
+            "{}",
+            serialize_to_string(&calyx_go_done, &symbols, &mut handler).unwrap()
+        );
     }
 
     #[test]
@@ -398,6 +465,7 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
+        let mut handler = DiagnosticHandler::new();
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
         assert_eq!(symbols["b"], symbols[b]);
@@ -438,6 +506,9 @@ mod tests {
             easycond.s(Stmt::Assign(b, one_expr)),
         ];
         easycond.body = easycond.s(Stmt::Block(body));
-        println!("{}", serialize_to_string(&easycond, &symbols).unwrap());
+        println!(
+            "{}",
+            serialize_to_string(&easycond, &symbols, &mut handler).unwrap()
+        );
     }
 }
