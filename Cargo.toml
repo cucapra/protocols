@@ -7,6 +7,7 @@ rust-version = "1.73.0"
 [dependencies]
 baa = "0.15.0"
 cranelift-entity = "0.114.0"
+patronus = "0.30.0"
 pest = "2.7.14"
 pest_derive = "2.7.14"
 rustc-hash = "2.1.0"

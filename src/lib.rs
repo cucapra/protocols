@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+pub mod auto;
 pub mod diagnostic;
 pub mod ir;
 pub mod parser;
