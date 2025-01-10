@@ -303,7 +303,6 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 mod tests {
     use super::*;
     use crate::ir::tests::*;
-    use baa::BitVecValue;
 
     #[test]
     fn serialize_add_transaction() {
