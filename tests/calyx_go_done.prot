@@ -1,4 +1,11 @@
-fn calyx_go_done(in ii: u32, out oo: u32) {
+struct Calyx {
+  in ii: u32,
+  in go: u32,
+  out done: u1,
+  out oo: u32,
+}
+
+fn calyx_go_done<dut: Calyx>(in ii: u32, out oo: u32) {
   dut.ii := ii;
   dut.go := 1;
   while !(dut.done == 1) {

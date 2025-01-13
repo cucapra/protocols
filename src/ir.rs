@@ -15,11 +15,12 @@ pub struct Transaction {
     pub args: Vec<Arg>,
     pub body: StmtId,
     pub type_args: Vec<SymbolId>,
-    pub metadata: SecondaryMap<ExprId, (usize, usize, usize)>,
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
     skip_id: StmtId,
+    expr_md: SecondaryMap<ExprId, (usize, usize, usize)>,
+    stmt_md: SecondaryMap<StmtId, (usize, usize, usize)>,
 }
 
 impl Transaction {
@@ -28,7 +29,8 @@ impl Transaction {
         let dont_care_id = exprs.push(Expr::DontCare);
         let mut stmts = PrimaryMap::new();
         let skip_id = stmts.push(Stmt::Skip);
-        let metadata: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
+        let expr_md: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
+        let stmt_md: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
             name,
             args: Vec::default(),
@@ -38,7 +40,8 @@ impl Transaction {
             dont_care_id,
             stmts,
             skip_id,
-            metadata,
+            expr_md,
+            stmt_md,
         }
     }
 
@@ -68,12 +71,20 @@ impl Transaction {
         self.stmts.keys().collect()
     }
 
-    pub fn add_md(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
-        self.metadata[expr_id] = (start, end, fileid);
+    pub fn add_expr_md(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
+        self.expr_md[expr_id] = (start, end, fileid);
     }
 
-    pub fn get_md(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
-        self.metadata.get(expr_id).copied()
+    pub fn get_expr_md(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
+        self.expr_md.get(expr_id).copied()
+    }
+
+    pub fn add_stmt_md(&mut self, stmt_id: StmtId, start: usize, end: usize, fileid: usize) {
+        self.stmt_md[stmt_id] = (start, end, fileid);
+    }
+
+    pub fn get_stmt_md(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
+        self.stmt_md.get(stmt_id).copied()
     }
 }
 
@@ -144,7 +155,7 @@ impl Type {
         match (self, other) {
             (Type::BitVec(_), Type::BitVec(_)) => true,
             (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
-            (Type::Unknown, _) | (_, Type::Unknown) => true,
+            (Type::Unknown, _) | (_, Type::Unknown) => false,
             _ => false,
         }
     }

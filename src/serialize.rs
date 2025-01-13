@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use std::{any::Any, io::Write, process::exit};
+use std::{any::Any, fmt::format, io::Write};
 
 use baa::BitVecOps;
 
@@ -40,13 +40,15 @@ fn serialize_expr(
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
-    exprid: &ExprId,
+    expr_id: &ExprId,
 ) -> String {
-    match &tr[exprid] {
+    match &tr[expr_id] {
         Expr::Const(val) => val.to_bit_str(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
-        Expr::Not(exprid) => "!(".to_owned() + &serialize_expr(tr, st, handler, exprid) + ")",
+        Expr::Not(not_exprid) => {
+            "!(".to_owned() + &serialize_expr(tr, st, handler, not_exprid) + ")"
+        }
         Expr::And(lhs, rhs) => {
             serialize_expr(tr, st, handler, lhs) + " && " + &serialize_expr(tr, st, handler, rhs)
         }
@@ -214,7 +216,6 @@ fn check_expr_types(
                     Level::Error,
                 );
                 Ok(inner_type)
-                // TODO: create meta data (secondary map) and send error
             }
         }
         Expr::And(lhs, rhs) | Expr::Equal(lhs, rhs) => {
@@ -233,7 +234,6 @@ fn check_expr_types(
                     Level::Error,
                 );
                 Ok(lhs_type)
-                // TODO: create meta data (secondary map) and send error
             }
         }
     }
@@ -253,13 +253,20 @@ fn check_stmt_types(
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
-                panic!(
-                    "Type mismatch in assignment: {} : {:?} (lhs) and {} : {:?} (rhs).",
-                    st[lhs].full_name(st),
-                    lhs_type,
-                    serialize_expr(tr, st, handler, rhs),
-                    rhs_type
-                )
+                let expr_name = serialize_expr(tr, st, handler, rhs);
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!(
+                        "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
+                        st[lhs].full_name(st),
+                        lhs_type,
+                        expr_name,
+                        rhs_type
+                    ),
+                    Level::Error,
+                );
+                Ok(())
             }
         }
         Stmt::While(cond, bodyid) => {
@@ -267,7 +274,13 @@ fn check_stmt_types(
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
-                panic!("Invalid type for [while] condition: {:?}", cond_type)
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!("Invalid type for [while] condition: {:?}", cond_type),
+                    Level::Error,
+                );
+                Ok(())
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
@@ -277,7 +290,13 @@ fn check_stmt_types(
                 check_stmt_types(tr, st, handler, elsebody)?;
                 Ok(())
             } else {
-                panic!("Type mistmatch in If/Else condition: {:?}", cond_type)
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!("Type mistmatch in If/Else condition: {:?}", cond_type),
+                    Level::Error,
+                );
+                Ok(())
             }
         }
         Stmt::Block(stmts) => {
@@ -290,12 +309,12 @@ fn check_stmt_types(
 }
 
 pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHandler) {
-    for exprid in tr.expr_ids() {
-        check_expr_types(tr, st, handler, &exprid);
+    for expr_id in tr.expr_ids() {
+        let _ = check_expr_types(tr, st, handler, &expr_id);
     }
 
     for stmt_id in tr.stmt_ids() {
-        check_stmt_types(tr, st, handler, &stmt_id);
+        let _ = check_stmt_types(tr, st, handler, &stmt_id);
     }
 }
 
@@ -409,9 +428,6 @@ mod tests {
         calyx_go_done.type_args = vec![dut];
 
         // 3) create expressions
-        let test = symbols.add_without_parent("test".to_string(), Type::Unknown);
-        let test_expr = calyx_go_done.e(Expr::Sym(test));
-
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));
         calyx_go_done.add_expr_md(ii_expr, 153, 155, calyx_fileid);
         let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
@@ -422,7 +438,7 @@ mod tests {
         calyx_go_done.add_expr_md(zero_expr, 232, 233, calyx_fileid);
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
         calyx_go_done.add_expr_md(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, test_expr));
+        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
         calyx_go_done.add_expr_md(cond_expr, 183, 198, calyx_fileid);
         let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
         calyx_go_done.add_expr_md(not_expr, 182, 198, calyx_fileid);
