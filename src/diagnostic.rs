@@ -164,7 +164,7 @@ impl DiagnosticHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::serialize::type_check;
+    use crate::typecheck::*;
 
     use super::*;
     use baa::BitVecValue;
@@ -190,8 +190,8 @@ mod tests {
         tr.add_expr_md(one_expr, 9, 11, file_id);
         tr.add_expr_md(zero_expr, 12, 15, file_id);
 
-        handler.emit_diagnostic_expr(&tr, &one_expr, "Invalid type for operation", Level::Warning);
-        handler.emit_diagnostic_expr(&tr, &zero_expr, "Divide by zero", Level::Error);
+        handler.emit_diagnostic_expr(&tr, &one_expr, "Random Warning", Level::Warning);
+        handler.emit_diagnostic_expr(&tr, &zero_expr, "Random Error", Level::Error);
     }
 
     #[test]
@@ -201,7 +201,7 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let mut handler = DiagnosticHandler::new();
+        let mut handler: DiagnosticHandler = DiagnosticHandler::new();
         let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
         let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
         assert_eq!(symbols["oo"], symbols[oo]);
@@ -211,7 +211,7 @@ mod tests {
             "Calyx".to_string(),
             vec![
                 Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
+                Field::new("go".to_string(), Dir::In, Type::BitVec(1)),
                 Field::new("done".to_string(), Dir::Out, Type::BitVec(1)),
                 Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
             ],
@@ -226,7 +226,8 @@ mod tests {
         assert_eq!(symbols["oo"], symbols[oo]);
 
         // create fileid and read file
-        let input = std::fs::read_to_string("tests/calyx_go_done.prot").expect("failed to load");
+        let input =
+            std::fs::read_to_string("tests/calyx_go_doneStruct.prot").expect("failed to load");
         let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
 
         // 2) create transaction

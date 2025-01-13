@@ -153,8 +153,10 @@ pub enum Type {
 impl Type {
     pub fn is_equivalent(&self, other: &Type) -> bool {
         match (self, other) {
-            (Type::BitVec(_), Type::BitVec(_)) => true,
+            // be strict, don't see this as equivalent
+            (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
             (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
+            // TODO: type inferencing to infer unknown == LHS
             (Type::Unknown, _) | (_, Type::Unknown) => false,
             _ => false,
         }
