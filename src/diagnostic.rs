@@ -108,6 +108,7 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        // need to check errors to avoid recursive duplication of error message
         if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
             return;
         }
@@ -138,6 +139,7 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        // need to check errors to avoid recursive duplication of error message
         if !self.reported_errs.insert(ErrorKey::StmtKey(*stmt_id)) {
             return;
         }
