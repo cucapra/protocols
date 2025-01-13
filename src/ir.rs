@@ -19,8 +19,8 @@ pub struct Transaction {
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
     skip_id: StmtId,
-    expr_md: SecondaryMap<ExprId, (usize, usize, usize)>,
-    stmt_md: SecondaryMap<StmtId, (usize, usize, usize)>,
+    expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
+    stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
 }
 
 impl Transaction {
@@ -29,8 +29,8 @@ impl Transaction {
         let dont_care_id = exprs.push(Expr::DontCare);
         let mut stmts = PrimaryMap::new();
         let skip_id = stmts.push(Stmt::Skip);
-        let expr_md: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
-        let stmt_md: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
+        let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
+        let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
             name,
             args: Vec::default(),
@@ -40,8 +40,8 @@ impl Transaction {
             dont_care_id,
             stmts,
             skip_id,
-            expr_md,
-            stmt_md,
+            expr_loc,
+            stmt_loc,
         }
     }
 
@@ -71,20 +71,20 @@ impl Transaction {
         self.stmts.keys().collect()
     }
 
-    pub fn add_expr_md(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
-        self.expr_md[expr_id] = (start, end, fileid);
+    pub fn add_expr_loc(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
+        self.expr_loc[expr_id] = (start, end, fileid);
     }
 
-    pub fn get_expr_md(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
-        self.expr_md.get(expr_id).copied()
+    pub fn get_expr_loc(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
+        self.expr_loc.get(expr_id).copied()
     }
 
-    pub fn add_stmt_md(&mut self, stmt_id: StmtId, start: usize, end: usize, fileid: usize) {
-        self.stmt_md[stmt_id] = (start, end, fileid);
+    pub fn add_stmt_loc(&mut self, stmt_id: StmtId, start: usize, end: usize, fileid: usize) {
+        self.stmt_loc[stmt_id] = (start, end, fileid);
     }
 
-    pub fn get_stmt_md(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
-        self.stmt_md.get(stmt_id).copied()
+    pub fn get_stmt_loc(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
+        self.stmt_loc.get(stmt_id).copied()
     }
 }
 
@@ -153,7 +153,6 @@ pub enum Type {
 impl Type {
     pub fn is_equivalent(&self, other: &Type) -> bool {
         match (self, other) {
-            // be strict, don't see this as equivalent
             (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
             (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
             // TODO: type inferencing to infer unknown == LHS

@@ -181,36 +181,36 @@ mod tests {
 
         // 3) create expressions
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));
-        calyx_go_done.add_expr_md(ii_expr, 153, 155, calyx_fileid);
+        calyx_go_done.add_expr_loc(ii_expr, 153, 155, calyx_fileid);
         let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
-        calyx_go_done.add_expr_md(dut_oo_expr, 260, 266, calyx_fileid);
+        calyx_go_done.add_expr_loc(dut_oo_expr, 260, 266, calyx_fileid);
         let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        calyx_go_done.add_expr_md(one_expr, 170, 171, calyx_fileid);
+        calyx_go_done.add_expr_loc(one_expr, 170, 171, calyx_fileid);
         let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
-        calyx_go_done.add_expr_md(zero_expr, 232, 233, calyx_fileid);
+        calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        calyx_go_done.add_expr_md(dut_done_expr, 184, 192, calyx_fileid);
+        calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
         let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        calyx_go_done.add_expr_md(cond_expr, 183, 198, calyx_fileid);
+        calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
         let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
-        calyx_go_done.add_expr_md(not_expr, 182, 198, calyx_fileid);
+        calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
 
         // 4) create statements
         let while_body = vec![calyx_go_done.s(Stmt::Step)];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
-        calyx_go_done.add_stmt_md(dut_ii_assign, 143, 157, calyx_fileid);
+        calyx_go_done.add_stmt_loc(dut_ii_assign, 143, 157, calyx_fileid);
         let dut_go_assign = calyx_go_done.s(Stmt::Assign(dut_go, one_expr));
-        calyx_go_done.add_stmt_md(dut_go_assign, 160, 172, calyx_fileid);
+        calyx_go_done.add_stmt_loc(dut_go_assign, 160, 172, calyx_fileid);
         let dut_while = calyx_go_done.s(Stmt::While(not_expr, wbody));
-        calyx_go_done.add_stmt_md(dut_while, 175, 219, calyx_fileid);
+        calyx_go_done.add_stmt_loc(dut_while, 175, 219, calyx_fileid);
         let dut_go_reassign = calyx_go_done.s(Stmt::Assign(dut_go, zero_expr));
-        calyx_go_done.add_stmt_md(dut_go_reassign, 222, 234, calyx_fileid);
+        calyx_go_done.add_stmt_loc(dut_go_reassign, 222, 234, calyx_fileid);
         let dut_ii_dontcare = calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care()));
-        calyx_go_done.add_stmt_md(dut_ii_dontcare, 238, 250, calyx_fileid);
+        calyx_go_done.add_stmt_loc(dut_ii_dontcare, 238, 250, calyx_fileid);
         let oo_assign = calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr));
-        calyx_go_done.add_stmt_md(oo_assign, 254, 268, calyx_fileid);
+        calyx_go_done.add_stmt_loc(oo_assign, 254, 268, calyx_fileid);
         let body = vec![
             dut_ii_assign,
             dut_go_assign,
