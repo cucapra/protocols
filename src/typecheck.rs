@@ -61,7 +61,19 @@ fn check_stmt_types(
         Stmt::Skip | Stmt::Step | Stmt::Fork => Ok(()),
         Stmt::Assign(lhs, rhs) => {
             let lhs_type = st[lhs].tpe();
-            let rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            if rhs_type == Type::Unknown {
+                rhs_type = lhs_type.clone();
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!(
+                        "Inferred RHS type as {:?} from LHS type {:?}.",
+                        rhs_type, lhs_type
+                    ),
+                    Level::Warning,
+                );
+            }
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
