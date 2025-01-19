@@ -146,6 +146,7 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
     }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::serialize::tests::{create_add_transaction, create_calyx_go_down_transaction};
     use baa::BitVecValue;
