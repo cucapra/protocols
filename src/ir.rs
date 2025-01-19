@@ -131,6 +131,10 @@ impl Arg {
         self.dir
     }
 
+    pub fn symbol(&self) -> SymbolId {
+        self.symbol
+    }
+
     pub fn new(symbol: SymbolId, dir: Dir) -> Self {
         Self { dir, symbol }
     }
