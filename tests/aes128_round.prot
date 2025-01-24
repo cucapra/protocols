@@ -1,0 +1,18 @@
+// src: https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/aes/TinyAESSpec.scala#L164
+
+struct RoundIO {
+  in state: u128,
+  in key: u128,
+  out state_next: u128,
+}
+
+fn aes128<dut : RoundIO>(in key: u128, in state: u128, out output: u128) {
+  dut.state := state;
+  step();
+  fork();
+  dut.state := X;
+  dut.key := key;
+  step();
+  dut.key := X;
+  assert_eq(dut.state_next, output);
+}
