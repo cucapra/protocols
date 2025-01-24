@@ -1,4 +1,3 @@
-// need to implement parsing for struct + input type
 fn calyx_go_done(in ii: u32, out oo: u32) {
   dut.ii := ii;
   dut.go := 1;

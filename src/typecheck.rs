@@ -136,8 +136,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
-        // Manually create the expected result of parsing `calyx_go_down`.
+    fn serialize_calyx_go_done_transaction() {
+        // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
         // TODO: create this into function that factors our the code to put src code into IR
