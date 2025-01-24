@@ -44,7 +44,8 @@ cmd = { path_id ~ "(" ~ ")" ~ ";"}
 stmt = _{ (assign | cmd | while | cond) }
 dir = _{"in" | "out" }
 arg = { dir ~ id ~ ":" ~ tpe }
-arglist = { (arg ~ "," ~ arglist) | arg }
+arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
+type_param = { "<" ~ id ~ ":" ~ id ~ ">" }
 
 // Loops
 while = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
@@ -55,5 +56,8 @@ else_if = { "else" ~ "if" ~ expr ~ "{" ~ stmt* ~ "}"}
 else = { "else" ~ "{" ~ stmt* ~ "}" }
 cond = { if ~ else_if* ~ else? }
 
-fun = { "fn" ~ id ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
-file = { SOI ~ fun* ~ EOI }
+// Structs
+struct = { "struct" ~ id ~ "{" ~ arglist? ~ "}" }
+
+fun = { "fn" ~ id ~ type_param? ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
+file = { SOI ~ (fun | struct)* ~ EOI }

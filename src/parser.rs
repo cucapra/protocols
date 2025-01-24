@@ -73,7 +73,17 @@ mod tests {
     }
 
     #[test]
+    fn test_easycond_prot() {
+        parse_file("tests/cond.prot");
+    }
+
+    #[test]
     fn test_cond_prot() {
         parse_file("tests/cond.prot");
+    }
+
+    #[test]
+    fn test_calyx_go_done_struct_prot() {
+        parse_file("tests/calyx_go_done_struct.prot");
     }
 }

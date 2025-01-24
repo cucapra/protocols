@@ -229,7 +229,7 @@ mod tests {
 
         // create fileid and read file
         let input =
-            std::fs::read_to_string("tests/calyx_go_doneStruct.prot").expect("failed to load");
+            std::fs::read_to_string("tests/calyx_go_done_struct.prot").expect("failed to load");
         let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
 
         // 2) create transaction
