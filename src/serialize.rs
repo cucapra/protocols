@@ -37,9 +37,9 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         Expr::Const(val) => val.to_bit_str(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
-        Expr::Not(not_exprid) => "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")",
-        Expr::And(lhs, rhs) => serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs),
-        Expr::Equal(lhs, rhs) => {
+        Expr::Unary(UnaryOp::Not, not_exprid) => "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")",
+        Expr::Binary(BinOp::And,lhs, rhs) => serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs),
+        Expr::Binary(BinOp::Equal, lhs, rhs) => {
             serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
         }
     }
@@ -239,8 +239,8 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
-        // Manually create the expected result of parsing `calyx_go_down`.
+    fn serialize_calyx_go_done_transaction() {
+        // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
         // TODO: create this into function that factors our the code to put src code into IR
@@ -281,8 +281,8 @@ pub mod tests {
         let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
+        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
 
         // 4) create statements
         let while_body = vec![calyx_go_done.s(Stmt::Step)];
@@ -338,7 +338,7 @@ pub mod tests {
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
         let one_expr = easycond.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let cond_expr = easycond.e(Expr::Equal(dut_a_expr, one_expr));
+        let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
         let if_body = vec![easycond.s(Stmt::Step)];

@@ -182,17 +182,31 @@ pub struct ExprId(u32);
 entity_impl!(ExprId, "expr");
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum BinOp {
+    Equal,
+    And,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum UnaryOp {
+    Not,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expr {
     // nullary
     Const(BitVecValue),
     Sym(SymbolId),
     DontCare,
     // unary
-    Not(ExprId),
+    Binary(BinOp, ExprId, ExprId),
     // binary
-    And(ExprId, ExprId),
-    Equal(ExprId, ExprId),
+    Unary(UnaryOp, ExprId),
 }
+
+
+
+// add further bin ops
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct StructId(u32);
@@ -337,7 +351,7 @@ impl Index<SymbolId> for SymbolTable {
     fn index(&self, index: SymbolId) -> &Self::Output {
         &self.entries[index]
     }
-}
+} 
 
 impl Index<&SymbolId> for SymbolTable {
     type Output = SymbolTableEntry;
@@ -468,8 +482,8 @@ mod tests {
     }
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
-        // Manually create the expected result of parsing `calyx_go_down`.
+    fn serialize_calyx_go_done_transaction() {
+        // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
@@ -508,8 +522,8 @@ mod tests {
         let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
+        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
 
         // 4) create statements
         let while_body = vec![calyx_go_done.s(Stmt::Step)];

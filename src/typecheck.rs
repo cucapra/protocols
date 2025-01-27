@@ -16,7 +16,7 @@ fn check_expr_types(
         Expr::Const(_) => Ok(Type::BitVec(1)),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
-        Expr::Not(not_exprid) => {
+        Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(_) = inner_type {
                 Ok(inner_type)
@@ -30,7 +30,7 @@ fn check_expr_types(
                 Ok(inner_type)
             }
         }
-        Expr::And(lhs, rhs) | Expr::Equal(lhs, rhs) => {
+        Expr::Binary(BinOp::And, lhs, rhs) | Expr::Binary(BinOp::Equal, lhs, rhs) => {
             let lhs_type = check_expr_types(tr, st, handler, lhs)?;
             let rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if lhs_type.is_equivalent(&rhs_type) {
@@ -190,9 +190,9 @@ mod tests {
         calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
         calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
+        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
         calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
 
         // 4) create statements
