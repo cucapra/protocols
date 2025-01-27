@@ -64,6 +64,27 @@ fn check_stmt_types(
             if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
                 handler.emit_diagnostic_stmt(tr, stmt_id, "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.", Level::Error);
             }
+            // DUT output cannot be assigned
+            if let Some(parent) = st[lhs].parent() {
+                if let Type::Struct(structid) = st[parent].tpe() {
+                    let fields = st[structid].pins();
+                    if fields
+                        .iter()
+                        .find(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
+                        .is_some()
+                    {
+                        handler.emit_diagnostic_stmt(
+                            tr,
+                            stmt_id,
+                            &format!(
+                                "{} is an output and thus cannot be assigned.",
+                                st[lhs].full_name(st)
+                            ),
+                            Level::Error,
+                        );
+                    }
+                }
+            }
             let lhs_type = st[lhs].tpe();
             let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if rhs_type == Type::Unknown {

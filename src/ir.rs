@@ -400,6 +400,10 @@ impl SymbolTableEntry {
         self.tpe.clone()
     }
 
+    pub fn parent(&self) -> Option<SymbolId> {
+        self.parent
+    }
+
     /// full hierarchical name
     pub fn full_name(&self, symbols: &SymbolTable) -> String {
         let mut name = self.name.clone();
