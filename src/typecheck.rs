@@ -148,6 +148,26 @@ fn check_stmt_types(
                 Ok(())
             }
         }
+        Stmt::AssertEq(exprid1, exprid2) => {
+            let expr1_type = check_expr_types(tr, st, handler, exprid1)?;
+            let expr2_type = check_expr_types(tr, st, handler, exprid2)?;
+            if expr1_type.is_equivalent(&expr2_type) {
+                Ok(())
+            } else {
+                let expr1_name = serialize_expr(tr, st, exprid1);
+                let expr2_name = serialize_expr(tr, st, exprid2);
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!(
+                        "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
+                        expr1_name, expr1_type, expr2_name, expr2_type,
+                    ),
+                    Level::Error,
+                );
+                Ok(())
+            }
+        }
         Stmt::Block(stmts) => {
             for stmtid in stmts {
                 check_stmt_types(tr, st, handler, stmtid)?;

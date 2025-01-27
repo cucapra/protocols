@@ -90,6 +90,15 @@ fn build_statements(
             build_statements(out, tr, st, elsebody, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
+        Stmt::AssertEq(exprid1, exprid2) => {
+            writeln!(
+                out,
+                "{}assert_eq({}, {});",
+                "  ".repeat(index),
+                serialize_expr(tr, st, exprid1),
+                serialize_expr(tr, st, exprid2)
+            )?;
+        }
     }
 
     Ok(())
@@ -228,6 +237,7 @@ pub mod tests {
         add.add_expr_loc(b_expr, 208, 209, add_fileid);
         let dut_s_expr = add.e(Expr::Sym(dut_s));
         add.add_expr_loc(dut_s_expr, 271, 276, add_fileid);
+        let s_expr = add.e(Expr::Sym(s));
 
         // 4) create statements
         let a_assign = add.s(Stmt::Assign(dut_a, a_expr));
@@ -246,6 +256,8 @@ pub mod tests {
         add.add_stmt_loc(s_assign, 266, 277, add_fileid);
         let dut_s_assign = add.s(Stmt::Assign(dut_s, a_expr));
         add.add_stmt_loc(dut_s_assign, 281, 292, add_fileid);
+        let assert = add.s(Stmt::AssertEq(s_expr, dut_s_expr));
+        add.add_stmt_loc(assert, 296, 316, add_fileid);
         let body = vec![
             a_assign,
             b_assign,
@@ -255,6 +267,7 @@ pub mod tests {
             dut_b_assign,
             s_assign,
             dut_s_assign,
+            assert,
         ];
         add.body = add.s(Stmt::Block(body));
 

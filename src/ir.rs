@@ -179,6 +179,7 @@ pub enum Stmt {
     Fork,
     While(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
+    AssertEq(ExprId, ExprId),
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
