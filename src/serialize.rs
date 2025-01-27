@@ -244,6 +244,8 @@ pub mod tests {
         add.add_stmt_loc(dut_b_assign, 251, 262, add_fileid);
         let s_assign = add.s(Stmt::Assign(s, dut_s_expr));
         add.add_stmt_loc(s_assign, 266, 277, add_fileid);
+        let dut_s_assign = add.s(Stmt::Assign(dut_s, a_expr));
+        add.add_stmt_loc(dut_s_assign, 281, 292, add_fileid);
         let body = vec![
             a_assign,
             b_assign,
@@ -252,6 +254,7 @@ pub mod tests {
             dut_a_assign,
             dut_b_assign,
             s_assign,
+            dut_s_assign,
         ];
         add.body = add.s(Stmt::Block(body));
 
