@@ -12,10 +12,10 @@ fn mul(in a: u32, in b: u32, out s: u32) {
   step();
 
   // stupid conditional test
-  if true {
+  if 1 <= 0 {
     step();
   }
-  else if (2+3) * 5 <= 7 {
+  else if 2 <= 3 {
     step();
     step();
   } 

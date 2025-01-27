@@ -181,7 +181,7 @@ pub mod tests {
 
     #[test]
     fn serialize_add_transaction() {
-        // Manually create the expected result of parsing `add.prot`.
+        // Manually create the expected result of parsing `addStruct.prot`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
