@@ -60,8 +60,45 @@ fn check_stmt_types(
     match &tr[stmt_id] {
         Stmt::Skip | Stmt::Step | Stmt::Fork => Ok(()),
         Stmt::Assign(lhs, rhs) => {
+            // Function argument cannot be assigned
+            if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
+                handler.emit_diagnostic_stmt(tr, stmt_id, "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.", Level::Error);
+            }
+            // DUT output cannot be assigned
+            if let Some(parent) = st[lhs].parent() {
+                if let Type::Struct(structid) = st[parent].tpe() {
+                    let fields = st[structid].pins();
+                    if fields
+                        .iter()
+                        .find(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
+                        .is_some()
+                    {
+                        handler.emit_diagnostic_stmt(
+                            tr,
+                            stmt_id,
+                            &format!(
+                                "{} is an output and thus cannot be assigned.",
+                                st[lhs].full_name(st)
+                            ),
+                            Level::Error,
+                        );
+                    }
+                }
+            }
             let lhs_type = st[lhs].tpe();
-            let rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            if rhs_type == Type::Unknown {
+                rhs_type = lhs_type.clone();
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!(
+                        "Inferred RHS type as {:?} from LHS type {:?}.",
+                        rhs_type, lhs_type
+                    ),
+                    Level::Warning,
+                );
+            }
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
@@ -111,6 +148,26 @@ fn check_stmt_types(
                 Ok(())
             }
         }
+        Stmt::AssertEq(exprid1, exprid2) => {
+            let expr1_type = check_expr_types(tr, st, handler, exprid1)?;
+            let expr2_type = check_expr_types(tr, st, handler, exprid2)?;
+            if expr1_type.is_equivalent(&expr2_type) {
+                Ok(())
+            } else {
+                let expr1_name = serialize_expr(tr, st, exprid1);
+                let expr2_name = serialize_expr(tr, st, exprid2);
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!(
+                        "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
+                        expr1_name, expr1_type, expr2_name, expr2_type,
+                    ),
+                    Level::Error,
+                );
+                Ok(())
+            }
+        }
         Stmt::Block(stmts) => {
             for stmtid in stmts {
                 check_stmt_types(tr, st, handler, stmtid)?;
@@ -130,96 +187,63 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use crate::serialize::tests::{create_add_transaction, create_calyx_go_down_transaction};
     use baa::BitVecValue;
 
     use super::*;
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
-        // Manually create the expected result of parsing `calyx_go_down`.
-        // Note that the order in which things are created will be different in the parser.
+    fn typecheck_add_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (add, symbols) = create_add_transaction(&mut handler);
+        type_check(&add, &symbols, &mut handler);
+    }
 
-        // TODO: create this into function that factors our the code to put src code into IR
-
-        // 1) declare symbols
-        let mut symbols = SymbolTable::default();
-        let mut handler: DiagnosticHandler = DiagnosticHandler::new();
-
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // declare Calyx struct
-        let dut_struct = symbols.add_struct(
-            "Calyx".to_string(),
-            vec![
-                Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("done".to_string(), Dir::Out, Type::BitVec(1)),
-                Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
-            ],
-        );
-
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
-        let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
-        let dut_go = symbols.add_with_parent("go".to_string(), dut);
-        let dut_done = symbols.add_with_parent("done".to_string(), dut);
-        let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
-        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // create fileid and read file
-        let input =
-            std::fs::read_to_string("tests/calyx_go_doneStruct.prot").expect("failed to load");
-        let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
-
-        // 2) create transaction
-        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
-        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
-        calyx_go_done.type_args = vec![dut];
-
-        // 3) create expressions
-        let ii_expr = calyx_go_done.e(Expr::Sym(ii));
-        calyx_go_done.add_expr_loc(ii_expr, 153, 155, calyx_fileid);
-        let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
-        calyx_go_done.add_expr_loc(dut_oo_expr, 260, 266, calyx_fileid);
-        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        calyx_go_done.add_expr_loc(one_expr, 170, 171, calyx_fileid);
-        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
-        calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
-        let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
-        calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
-
-        // 4) create statements
-        let while_body = vec![calyx_go_done.s(Stmt::Step)];
-        let wbody = calyx_go_done.s(Stmt::Block(while_body));
-
-        let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
-        calyx_go_done.add_stmt_loc(dut_ii_assign, 143, 157, calyx_fileid);
-        let dut_go_assign = calyx_go_done.s(Stmt::Assign(dut_go, one_expr));
-        calyx_go_done.add_stmt_loc(dut_go_assign, 160, 172, calyx_fileid);
-        let dut_while = calyx_go_done.s(Stmt::While(not_expr, wbody));
-        calyx_go_done.add_stmt_loc(dut_while, 175, 219, calyx_fileid);
-        let dut_go_reassign = calyx_go_done.s(Stmt::Assign(dut_go, zero_expr));
-        calyx_go_done.add_stmt_loc(dut_go_reassign, 222, 234, calyx_fileid);
-        let dut_ii_dontcare = calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care()));
-        calyx_go_done.add_stmt_loc(dut_ii_dontcare, 238, 250, calyx_fileid);
-        let oo_assign = calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr));
-        calyx_go_done.add_stmt_loc(oo_assign, 254, 268, calyx_fileid);
-        let body = vec![
-            dut_ii_assign,
-            dut_go_assign,
-            dut_while,
-            dut_go_reassign,
-            dut_ii_dontcare,
-            oo_assign,
-        ];
-        calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+    #[test]
+    fn typecheck_calyx_go_down_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
+    }
+
+    // Specific Tests
+    #[test]
+    fn function_argument_test() {
+        let mut handler = DiagnosticHandler::new();
+        let mut symbols = SymbolTable::default();
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1));
+        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(1));
+        let c: SymbolId = symbols.add_without_parent("c".to_string(), Type::BitVec(1));
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1));
+        assert_eq!(symbols["s"], symbols[s]);
+        let input = std::fs::read_to_string("tests/func_arg_invalid.prot").expect("failed to load");
+        let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
+        let mut tr = Transaction::new("func_arg_invalid".to_string());
+        tr.args = vec![
+            Arg::new(a, Dir::In),
+            Arg::new(b, Dir::In),
+            Arg::new(s, Dir::Out),
+        ];
+        let b_expr = tr.e(Expr::Sym(b));
+        tr.add_expr_loc(b_expr, 62, 63, fileid);
+        let b_expr2 = tr.e(Expr::Sym(b));
+        tr.add_expr_loc(b_expr2, 84, 85, fileid);
+        let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        tr.add_expr_loc(zero_expr, 106, 107, fileid);
+        let a_assign = tr.s(Stmt::Assign(a, b_expr));
+        tr.add_stmt_loc(a_assign, 57, 64, fileid);
+        let fork = tr.s(Stmt::Fork);
+        tr.add_stmt_loc(fork, 68, 75, fileid);
+        let c_assign = tr.s(Stmt::Assign(c, b_expr));
+        tr.add_stmt_loc(c_assign, 79, 86, fileid);
+        let step = tr.s(Stmt::Step);
+        tr.add_stmt_loc(step, 90, 97, fileid);
+        let s_assign = tr.s(Stmt::Assign(s, zero_expr));
+        tr.add_stmt_loc(s_assign, 101, 108, fileid);
+        let body = vec![a_assign, fork, c_assign, step, s_assign];
+        tr.body = tr.s(Stmt::Block(body));
+        type_check(&tr, &symbols, &mut handler);
     }
 }

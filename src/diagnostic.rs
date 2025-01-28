@@ -166,7 +166,7 @@ impl DiagnosticHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::typecheck::*;
+    use crate::{serialize::tests::create_calyx_go_down_transaction, typecheck::*};
 
     use super::*;
     use baa::BitVecValue;
@@ -198,86 +198,8 @@ mod tests {
 
     #[test]
     fn serialize_calyx_go_down_transaction() {
-        // Manually create the expected result of parsing `calyx_go_down`.
-        // Note that the order in which things are created will be different in the parser.
-
-        // 1) declare symbols
-        let mut symbols = SymbolTable::default();
-        let mut handler: DiagnosticHandler = DiagnosticHandler::new();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // declare Calyx struct
-        let dut_struct = symbols.add_struct(
-            "Calyx".to_string(),
-            vec![
-                Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("go".to_string(), Dir::In, Type::BitVec(1)),
-                Field::new("done".to_string(), Dir::Out, Type::BitVec(1)),
-                Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
-            ],
-        );
-
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
-        let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
-        let dut_go = symbols.add_with_parent("go".to_string(), dut);
-        let dut_done = symbols.add_with_parent("done".to_string(), dut);
-        let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
-        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // create fileid and read file
-        let input =
-            std::fs::read_to_string("tests/calyx_go_doneStruct.prot").expect("failed to load");
-        let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
-
-        // 2) create transaction
-        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
-        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
-        calyx_go_done.type_args = vec![dut];
-
-        // 3) create expressions
-        let ii_expr = calyx_go_done.e(Expr::Sym(ii));
-        calyx_go_done.add_expr_loc(ii_expr, 153, 155, calyx_fileid);
-        let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
-        calyx_go_done.add_expr_loc(dut_oo_expr, 260, 266, calyx_fileid);
-        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        calyx_go_done.add_expr_loc(one_expr, 170, 171, calyx_fileid);
-        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
-        calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
-        let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
-        calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
-
-        // 4) create statements
-        let while_body = vec![calyx_go_done.s(Stmt::Step)];
-        let wbody = calyx_go_done.s(Stmt::Block(while_body));
-
-        let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
-        calyx_go_done.add_stmt_loc(dut_ii_assign, 143, 157, calyx_fileid);
-        let dut_go_assign = calyx_go_done.s(Stmt::Assign(dut_go, one_expr));
-        calyx_go_done.add_stmt_loc(dut_go_assign, 160, 172, calyx_fileid);
-        let dut_while = calyx_go_done.s(Stmt::While(not_expr, wbody));
-        calyx_go_done.add_stmt_loc(dut_while, 175, 219, calyx_fileid);
-        let dut_go_reassign = calyx_go_done.s(Stmt::Assign(dut_go, zero_expr));
-        calyx_go_done.add_stmt_loc(dut_go_reassign, 222, 234, calyx_fileid);
-        let dut_ii_dontcare = calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care()));
-        calyx_go_done.add_stmt_loc(dut_ii_dontcare, 238, 250, calyx_fileid);
-        let oo_assign = calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr));
-        calyx_go_done.add_stmt_loc(oo_assign, 254, 268, calyx_fileid);
-        let body = vec![
-            dut_ii_assign,
-            dut_go_assign,
-            dut_while,
-            dut_go_reassign,
-            dut_ii_dontcare,
-            oo_assign,
-        ];
-        calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+        let mut handler = DiagnosticHandler::new();
+        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
     }
 }

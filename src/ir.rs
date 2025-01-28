@@ -131,6 +131,10 @@ impl Arg {
         self.dir
     }
 
+    pub fn symbol(&self) -> SymbolId {
+        self.symbol
+    }
+
     pub fn new(symbol: SymbolId, dir: Dir) -> Self {
         Self { dir, symbol }
     }
@@ -175,6 +179,7 @@ pub enum Stmt {
     Fork,
     While(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
+    AssertEq(ExprId, ExprId),
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -394,6 +399,10 @@ impl SymbolTableEntry {
 
     pub fn tpe(&self) -> Type {
         self.tpe.clone()
+    }
+
+    pub fn parent(&self) -> Option<SymbolId> {
+        self.parent
     }
 
     /// full hierarchical name
