@@ -285,7 +285,7 @@ pub mod tests {
         let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
 
         // 4) create statements
-        let while_body = vec![calyx_go_done.s(Stmt::Step)];
+        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step)];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));

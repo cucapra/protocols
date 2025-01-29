@@ -51,8 +51,8 @@ impl Transaction {
     }
 
     /// add a new statement to the transaction
-    pub fn s(&mut self, expr: Stmt) -> StmtId {
-        self.stmts.push(expr)
+    pub fn s(&mut self, stmt: Stmt) -> StmtId {
+        self.stmts.push(stmt)
     }
 
     pub fn expr_dont_care(&self) -> ExprId {
@@ -286,6 +286,16 @@ impl SymbolTable {
         let id = self.entries.push(entry);
         self.by_name.insert(lookup_name, id);
         id
+    }
+
+    pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
+        self.entries.iter().find_map(|(id, entry)| {
+            if entry.name == name {
+                Some(id)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {

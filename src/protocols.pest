@@ -19,10 +19,10 @@ atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     // negate = { "-" }
     not = { "!" }
-bin_op = _{ leq | eq | log_and }
+bin_op = _{ eq | log_and }
 // bin_op = _{ neq | leq | eq | log_and | log_or | shift_left | shift_right | add | subtract | multiply | divide | mod }
 //    neq = { "!=" }
-    leq = { "<= "}
+//   leq = { "<= "}
     eq = { "== "}
 //    add = { "+" }
     log_and = { "&&" }
@@ -41,23 +41,22 @@ path_id = @{ id ~ ("." ~ id)* }
 tpe = { "u32" | "u1" }
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 cmd = { path_id ~ "(" ~ ")" ~ ";"}
-stmt = _{ (assign | cmd | while | cond) }
-dir = {"in" | "out" }
+stmt = _{ (assign | cmd | while_loop | cond) }
+dir = { "in" | "out" }
 arg = { dir ~ id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
 type_param = { "<" ~ id ~ ":" ~ id ~ ">" }
 
 // Loops
-while = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
+while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
 
 // Conditionals
 if = { "if" ~ expr ~ "{" ~ stmt* ~ "}" }
-else_if = { "else" ~ "if" ~ expr ~ "{" ~ stmt* ~ "}"}
 else = { "else" ~ "{" ~ stmt* ~ "}" }
-cond = { if ~ else_if* ~ else? }
+cond = { if ~ else? }
 
 // Structs
-struct = { "struct" ~ id ~ "{" ~ arglist? ~ "}" }
+struct_def = { "struct" ~ id ~ "{" ~ arglist? ~ "}" }
 
 fun = { "fn" ~ id ~ type_param? ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
-file = { SOI ~ (fun | struct)* ~ EOI }
+file = { SOI ~ (fun | struct_def)* ~ EOI }
