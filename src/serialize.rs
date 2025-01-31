@@ -326,9 +326,9 @@ pub mod tests {
         calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
         calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
+        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
         calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
 
         // 4) create statements
