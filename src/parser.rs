@@ -104,18 +104,18 @@ fn boxed_expr_to_expr_id(expr: BoxedExpr, tr: &mut Transaction, st: &mut SymbolT
     }
 }
 
-fn build_struct(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> StructId {
+fn parse_struct(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> StructId {
     let mut inner_rules = pair.into_inner();
     let struct_name = inner_rules.next().unwrap().as_str();
 
-    let (pins, symbols) = build_fields(inner_rules.next().unwrap(), st);
+    let (pins, symbols) = parse_fields(inner_rules.next().unwrap(), st);
     let struct_id = st.add_struct(struct_name.to_string(), pins);
 
     struct_id
 }
 
 // TODO: Add line numbers and character loc. 
-fn build_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) -> Transaction {
+fn parse_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) -> Transaction {
     match pair.as_rule() {
         Rule::fun => {
             let mut inner_rules = pair.into_inner();
@@ -155,7 +155,7 @@ fn build_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) 
                 }
             }
 
-            tr.args = build_arglist(inner_rules.next().unwrap(), st);
+            tr.args = parse_arglist(inner_rules.next().unwrap(), st);
 
             // Process the body of statements, adding them to the block as we go
             tr.body = parse_stmt_block(inner_rules, &mut tr, st);
@@ -178,7 +178,7 @@ fn parse_assign(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mu
     let expr_rule = inner_rules.next().unwrap();
 
     let path_id = path_id_rule.as_str();
-    // TODO: Error handling
+
     let symbol_id = match st.symbol_id_from_name(path_id) {
         Some(id) => id,
         None => panic!("Assigning to undeclared symbol: {}", path_id),
@@ -217,25 +217,14 @@ fn parse_stmt_block(mut stmt_pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut 
     // Process the body of statements, adding them to the block as we go
     let mut stmts = Vec::new();
     while let Some(inner_pair) = stmt_pairs.next() {
-        match inner_pair.as_rule() {
-            Rule::assign => {
-                let stmt = parse_assign(inner_pair, tr, st);
-                stmts.push(tr.s(stmt));
-            }
-            Rule::cmd => {
-                let stmt = parse_cmd(inner_pair,tr, st);
-                stmts.push(tr.s(stmt));
-            }
-            Rule::while_loop => {
-                let stmt = parse_while(inner_pair,tr, st);
-                stmts.push(tr.s(stmt));
-            }
-            Rule::cond => {
-                let stmt = parse_cond(inner_pair, tr, st);
-                stmts.push(tr.s(stmt));
-            }
+        let stmt = match inner_pair.as_rule() {
+            Rule::assign => parse_assign(inner_pair, tr, st),
+            Rule::cmd => parse_cmd(inner_pair, tr, st),
+            Rule::while_loop => parse_while(inner_pair, tr, st),
+            Rule::cond => parse_cond(inner_pair, tr, st),
             _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
-        }
+        };
+        stmts.push(tr.s(stmt));
     }
     tr.s(Stmt::Block(stmts))
 }
@@ -258,7 +247,7 @@ fn parse_cond(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut 
     
 }
 
-fn build_arglist(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> Vec<Arg> {
+fn parse_arglist(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> Vec<Arg> {
     let mut args = Vec::new();
     for inner_pair in pair.into_inner() {
         match inner_pair.as_rule() {
@@ -277,16 +266,16 @@ fn build_arglist(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> V
                 args.push(arg);
             }
             Rule::arglist => {
-                let mut nested_args = build_arglist(inner_pair, st);
+                let mut nested_args = parse_arglist(inner_pair, st);
                 args.append(&mut nested_args);
             }
-            _ => panic!("In build_arglist. Unexpected rule: {:?}", inner_pair.as_rule()),
+            _ => panic!("In parse_arglist. Unexpected rule: {:?}", inner_pair.as_rule()),
         }
     }
     args
 }
 
-fn build_fields(pair: pest::iterators::Pair<Rule>, st: &mut SymbolTable) -> (Vec<Field>, Vec<String>) {
+fn parse_fields(pair: pest::iterators::Pair<Rule>, st: &mut SymbolTable) -> (Vec<Field>, Vec<String>) {
     let mut fields = Vec::new();
     let mut symbols = Vec::new();
     for inner_pair in pair.into_inner() {
@@ -306,7 +295,7 @@ fn build_fields(pair: pest::iterators::Pair<Rule>, st: &mut SymbolTable) -> (Vec
                 symbols.push(id.to_string());
             }
             Rule::arglist => {
-                let (nested_fields, nested_symbols) = build_fields(inner_pair, st);
+                let (nested_fields, nested_symbols) = parse_fields(inner_pair, st);
                 fields.extend(nested_fields);
                 symbols.extend(nested_symbols);
             }
@@ -333,12 +322,10 @@ fn parse_dir(pair : pest::iterators::Pair<Rule>) -> Dir {
 fn parse_type(pair: pest::iterators::Pair<Rule>) -> Type {
     match pair.as_rule() {
         Rule::tpe => {
-            let type_str = pair.as_str();
-            match type_str {
-                "u32" => Type::BitVec(32),
-                "u1" => Type::BitVec(1),
-                _ => panic!("Unexpected type string: {:?}", type_str),
-            }
+            let mut inner_rules = pair.into_inner();
+            let type_str = inner_rules.next().unwrap().as_str();
+            let size = type_str.parse::<u32>().unwrap();
+            Type::BitVec(size)
         }
         _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
     }
@@ -380,16 +367,16 @@ impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
 mod tests {
     use super::*;
 
-    fn parse_file(filename: impl AsRef<std::path::Path>) {
+    fn parse_file(filename: impl AsRef<std::path::Path>) -> (Transaction, SymbolTable) {
         let input = std::fs::read_to_string(filename).expect("failed to load");
         let res = ProtocolParser::parse(Rule::file, &input);
         match res {
-            Ok(parsed) => {
+            Ok(_parsed) => {
                 //println!("Parsing successful: {:?}", parsed); 
             },
             Err(err) => {
                 eprintln!("Parsing failed: {}", err);
-                panic!("failed to parse");
+                panic!("Invalid file: Failed to parse.");
             }
         }
 
@@ -404,48 +391,78 @@ mod tests {
         let mut tr =  Transaction::new("dummy".to_string());
         for pair in inner {
             if pair.as_rule() == Rule::struct_def {
-                let _parsed_struct = build_struct(pair, st);
+                let _parsed_struct = parse_struct(pair, st);
                 // println!("Struct: {:?}", struct.name);
             }
             else if pair.as_rule() == Rule::fun {
-                tr = build_transaction(pair, st);
+                tr = parse_transaction(pair, st);
             }
         }
+
+        (tr, st.clone())
+    }
+
+    fn test_re_serialize(tr: Transaction, st : SymbolTable, filename: &str) {
         println!("Transaction {:?}: {:?}", tr.name, tr);
-        // let pair = pairs.into_inner();
-        // let (transaction, symbol_table) = build_ir(pair);
-        println!("=========== addStruct.prot ===========");
-        serialize(&mut stdout(), &tr, &st).unwrap();
+        println!("============= {} =============", filename);
+
+        // Serialize into a string first, and then use println macro; 
+        // else, cargo test seems to display in the wrong order
+        let mut out = Vec::new();
+        serialize(&mut out, &tr, &st).unwrap();
+        let out_str = String::from_utf8(out).unwrap();
+        println!("{}", out_str);
+
         println!("======================================");
     }
 
     #[test]
     fn test_add_prot() {
-        parse_file("tests/addStruct.prot");
+        let filename = "tests/add_struct.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
     }
 
-    // #[test]
-    // fn test_calyx_go_done_prot() {
-    //     parse_file("tests/calyx_go_done.prot");
-    // }
+    #[test]
+    fn test_aes128_prot() {
+        let filename = "tests/aes128.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
+    }
 
-    // #[test]
-    // fn test_mul_prot() {
-    //     parse_file("tests/mul.prot");
-    // }
+    #[test]
+    fn test_mul_prot() {
+        let filename = "tests/mul.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
+    }
 
-    // #[test]
-    // fn test_easycond_prot() {
-    //     parse_file("tests/cond.prot");
-    // }
+    #[test]
+    fn test_easycond_prot() {
+        let filename = "tests/cond.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
+    }
 
-    // #[test]
-    // fn test_cond_prot() {
-    //     parse_file("tests/cond.prot");
-    // }
+    #[test]
+    fn test_cond_prot() {
+        let filename = "tests/cond.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
+    }
 
     #[test]
     fn test_calyx_go_done_struct_prot() {
-        parse_file("tests/calyx_go_done_struct.prot");
+        let filename  = "tests/calyx_go_done_struct.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
     }
+
+    // Guaranteed to fail
+    // #[test]
+    // fn test_func_arg_invalid_prot() {
+    //     let filename  = "tests/func_arg_invalid.prot";
+    //     let (tr, st) = parse_file(filename);
+    //     test_re_serialize(tr, st, filename)
+    // }
 }
