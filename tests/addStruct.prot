@@ -13,4 +13,6 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := X;
   DUT.b := X;
   s := DUT.s;
+  DUT.s := a;
+  assert_eq(s, DUT.s);
 }

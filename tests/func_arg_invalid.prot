@@ -1,0 +1,7 @@
+fn func_arg_invalid(in a: u1, in b: u1, out s: u1) { 
+  a := b;
+  fork();
+  c := b;
+  step();
+  s := 0;
+}

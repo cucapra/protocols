@@ -1,0 +1,17 @@
+// src: https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/aes/TinyAESSpec.scala#L179
+
+struct ExpandKey128 {
+  in input: u128,
+  out output: u128,
+  out output_delayed: u128,
+}
+
+fn aes128<dut : ExpandKey128>(in input: u128, out output: u128) {
+  dut.input := input;
+  step();
+  fork();
+  dut.input := X;
+  assert_eq(dut.output, output);
+  step();
+  assert_eq(dut.output_delayed, output);
+}
