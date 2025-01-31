@@ -7,10 +7,10 @@ use pest::Parser;
 use pest_derive::Parser;
 use pest::pratt_parser::PrattParser;
 use pest::iterators::Pairs;
-use std::{fmt, process::id, vec};
+use std::{fmt, process::id, vec, io::stdout};
 use baa::BitVecValue;
 
-use crate::{ir::*};
+use crate::{ir::*, serialize::serialize};
 
 #[derive(Parser)]
 #[grammar = "protocols.pest"]
@@ -29,7 +29,8 @@ lazy_static::lazy_static! {
     };
 }
 
-pub fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st : &mut SymbolTable) ->  ExprId {
+
+pub fn parse_boxed_expr(pairs: Pairs<Rule>, _tr: &mut Transaction, st : &mut SymbolTable) ->  BoxedExpr {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
 
@@ -38,26 +39,29 @@ pub fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st : &mut SymbolTabl
                 let int_str = primary.as_str();
                 let int_value = int_str.parse::<i32>().unwrap();
                 // FIXME: Is this the correct way to convert?
-                let bitvec = BitVecValue::from_u64(int_value as u64, 32);
-                tr.e(Expr::Const(bitvec))
+                let bitvec = BitVecValue::from_u64(int_value as u64, 1);
+                BoxedExpr::Const(bitvec)
             }
 
             // parse path identifiers
             Rule::path_id => {
                 let path_id = primary.as_str();
+                // FIXME: Use 
                 let symbol_id = SymbolTable::symbol_id_from_name(st, path_id);
                 match symbol_id {
-                    Some(id) => tr.e(Expr::Sym(id)),
+                    Some(id) => BoxedExpr::Sym(id),
                     None => panic!("Referencing undefined symbol: {}", path_id),
                 }
             }
 
+            // parse don't care
+            Rule::dont_care => BoxedExpr::DontCare,
+
             // if primary is an expression (due to parens), recursively parse its inner constituents
-            Rule::expr => parse_expr(primary.into_inner(), tr, st),
+            Rule::expr => parse_boxed_expr(primary.into_inner(), _tr, st),
             rule => unreachable!("Expr::parse expected atom, found {:?}", rule)
         })
 
-        // FIXME: two closures require unique access to `*tr` at the same time
         // Parse binary expressions
         .map_infix(|lhs, op, rhs| {
             let op = match op.as_rule() {
@@ -65,12 +69,11 @@ pub fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st : &mut SymbolTabl
                 Rule::log_and => BinOp::And,
                 rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
             };
-            let bin_expression = Expr::Binary(
+            BoxedExpr::Binary(
                 op,
-                lhs,
-                rhs
-            );
-            tr.e(bin_expression)
+                Box::new(lhs),
+                Box::new(rhs)
+            )
         })
 
         // Parse unary expressions
@@ -79,92 +82,100 @@ pub fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st : &mut SymbolTabl
                 Rule::not => UnaryOp::Not,
                 rule => unreachable!("Expr::parse expected prefix operation, found {:?}", rule),
             };
-            let unary_expression = Expr::Unary(op, arg);
-            tr.e(unary_expression)
+            BoxedExpr::Unary(op, Box::new(arg))
         })
         .parse(pairs)
 }
 
-
-// fn build_ir(pair: pest::iterators::Pair<Rule>) -> (Transaction, SymbolTable) {
-//     match pair.as_rule() {
-//         Rule::file => {
-//             let mut inner_rules = pair.into_inner();
-//             let mut symbol_table = SymbolTable::default();
-//             let mut transactions = Vec::new();
-
-//             while let Some(inner_pair) = inner_rules.next() {
-//                 match inner_pair.as_rule() {
-//                     Rule::fun => {
-//                         let transaction = build_transaction(inner_pair);
-//                         transactions.push(transaction);
-//                     }
-//                     _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
-//                 }
-//             }
-
-//             let transaction = if transactions.len() == 1 {
-//                 transactions.into_iter().next().unwrap()
-//             } else {
-//                 panic!("Expected exactly one transaction, found {}", transactions.len());
-//             };
-
-//             (transaction, symbol_table)
-//         }
-//         _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
-//     }
-// }
+fn boxed_expr_to_expr_id(expr: BoxedExpr, tr: &mut Transaction, st: &mut SymbolTable) -> ExprId {
+    match expr {
+        BoxedExpr::Const(value) => tr.e(Expr::Const(value)),
+        BoxedExpr::Sym(symbol_id) => tr.e(Expr::Sym(symbol_id)),
+        BoxedExpr::DontCare => tr.e(Expr::DontCare),
+        BoxedExpr::Binary(op, lhs, rhs) => {
+            let lhs_id = boxed_expr_to_expr_id(*lhs, tr, st);
+            let rhs_id = boxed_expr_to_expr_id(*rhs, tr, st);
+            tr.e(Expr::Binary(op, lhs_id, rhs_id))
+        }
+        BoxedExpr::Unary(op, arg) => {
+            let arg_id = boxed_expr_to_expr_id(*arg, tr, st);
+            tr.e(Expr::Unary(op, arg_id))
+        }
+    }
+}
 
 fn build_struct(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> StructId {
     let mut inner_rules = pair.into_inner();
-    let struct_id = inner_rules.next().unwrap().as_str();
+    let struct_name = inner_rules.next().unwrap().as_str();
 
-    let pins = build_fields(inner_rules.next().unwrap(), st);
+    let (pins, symbols) = build_fields(inner_rules.next().unwrap(), st);
+    let struct_id = st.add_struct(struct_name.to_string(), pins);
 
-    st.add_struct(struct_id.to_string(), pins)
+    struct_id
 }
 
-fn build_transaction(pair: pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> Transaction {
+// TODO: Add line numbers and character loc. 
+fn build_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) -> Transaction {
     match pair.as_rule() {
         Rule::fun => {
             let mut inner_rules = pair.into_inner();
             let id_pair = inner_rules.next().unwrap();
             let id = id_pair.as_str();
             let mut tr = Transaction::new(id.to_string());
+            
+
+            // Parse the DUT definiton
+            if let Some(inner_pair) = inner_rules.next() {
+                match inner_pair.as_rule() {
+                    Rule::type_param => {
+                        let mut type_param_rules = inner_pair.into_inner();
+                        let path_id_1 = type_param_rules.next().unwrap().as_str();
+                        let path_id_2 = type_param_rules.next().unwrap().as_str();
+                        
+                            let adder_struct_id = {
+                                let struct_id = st.struct_id_from_name(path_id_2)
+                                    .expect(&format!("Undefined struct: {}", path_id_2));
+                                struct_id
+                            };
+    
+                            let adder_struct = {
+                                let struct_ref = st.struct_from_struct_id(adder_struct_id);
+                                struct_ref.clone() // Clone if necessary to avoid borrowing issues
+                            };
+    
+                            let dut_symbol_id = st.add_without_parent(path_id_1.to_string(), Type::Struct(adder_struct_id));
+    
+                            for pin in adder_struct.pins() {
+                                let pin_name = pin.name().to_string();
+                                st.add_with_parent(pin_name, dut_symbol_id);
+                            }
+
+                    }
+                    _ => panic!("Attempted to parse DUT type param. Unexpected rule: {:?}", inner_pair.as_rule()),
+                }
+            }
+
             tr.args = build_arglist(inner_rules.next().unwrap(), st);
 
             // Process the body of statements, adding them to the block as we go
-            while let Some(inner_pair) = inner_rules.next() {
-                match inner_pair.as_rule() {
-                    Rule::assign => {
-                        let stmt = parse_assign(inner_pair, tr, st);
-                        tr.s(stmt);
-                    }
-                    Rule::cmd => {
-                        let stmt = parse_cmd(inner_pair, tr, st);
-                        tr.s(stmt);
-                    }
-                    Rule::while_loop => {
-                        let stmt = parse_while(inner_pair, tr, st);
-                        tr.s(stmt);
-                    }
-                    Rule::cond => {
-                        let stmt = parse_cond(inner_pair, tr, st);
-                        tr.s(stmt);
-                    }
-                    _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
-                }
-            }
-            println!("Transaction: {:?}", tr);
+            tr.body = parse_stmt_block(inner_rules, &mut tr, st);
             tr
         }
         _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
     }
 }
 
+fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> ExprId {
+    let boxed_expr = parse_boxed_expr(pairs, tr, st);
+    let expr_id = boxed_expr_to_expr_id(boxed_expr, tr, st);
+    expr_id
+    // tr.e(Expr::Const(BitVecValue::from_u64(0, 32)))
+}  
+
 fn parse_assign(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> Stmt {
-    let path_id_rule = pair.into_inner().next().unwrap();
-    let expr_rule = pair.into_inner().next().unwrap();
+    let mut inner_rules = pair.into_inner();
+    let path_id_rule = inner_rules.next().unwrap();
+    let expr_rule = inner_rules.next().unwrap();
 
     let path_id = path_id_rule.as_str();
     // TODO: Error handling
@@ -175,12 +186,13 @@ fn parse_assign(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mu
 
     let expr_id = parse_expr(expr_rule.into_inner(), tr, st);
 
-    // Dummy implementation
     Stmt::Assign(symbol_id, expr_id)
 }
 
-fn parse_cmd(pair: pest::iterators::Pair<Rule>, st: &mut SymbolTable) -> Stmt {
-    let cmd=  pair.as_str();
+fn parse_cmd(pair: pest::iterators::Pair<Rule>, _tr: &mut Transaction, st: &mut SymbolTable) -> Stmt {
+    let mut inner_rules = pair.into_inner();
+    let cmd_rule = inner_rules.next().unwrap();
+    let cmd = cmd_rule.as_str();
     match cmd {
         "step" => Stmt::Step,
         "fork" => Stmt::Fork,
@@ -200,10 +212,10 @@ fn parse_while(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut
     Stmt::While(guard, body)
 }
 
-fn parse_stmt_block(stmt_pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> StmtId {
+fn parse_stmt_block(mut stmt_pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> StmtId {
     // Parse Statement Block. FIXME: Duplicate code.
     // Process the body of statements, adding them to the block as we go
-    let stmts = Vec::new();
+    let mut stmts = Vec::new();
     while let Some(inner_pair) = stmt_pairs.next() {
         match inner_pair.as_rule() {
             Rule::assign => {
@@ -233,7 +245,7 @@ fn parse_cond(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut 
     let mut inner_rules = pair.into_inner();
 
     let if_rule = inner_rules.next().unwrap();
-    let inner_if = if_rule.into_inner();
+    let mut inner_if = if_rule.into_inner();
     let expr_rule = inner_if.next().unwrap();
     let expr_id = parse_expr(expr_rule.into_inner(), tr, st);
     let if_block = parse_stmt_block(inner_if, tr, st);
@@ -268,14 +280,15 @@ fn build_arglist(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> V
                 let mut nested_args = build_arglist(inner_pair, st);
                 args.append(&mut nested_args);
             }
-            _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
+            _ => panic!("In build_arglist. Unexpected rule: {:?}", inner_pair.as_rule()),
         }
     }
     args
 }
 
-fn build_fields(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> Vec<Field> {
+fn build_fields(pair: pest::iterators::Pair<Rule>, st: &mut SymbolTable) -> (Vec<Field>, Vec<String>) {
     let mut fields = Vec::new();
+    let mut symbols = Vec::new();
     for inner_pair in pair.into_inner() {
         match inner_pair.as_rule() {
             Rule::arg => {
@@ -290,15 +303,17 @@ fn build_fields(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> Ve
 
                 let field = Field::new(id.to_string(), dir, tpe);
                 fields.push(field);
+                symbols.push(id.to_string());
             }
             Rule::arglist => {
-                let mut nested_fields = build_fields(inner_pair, st);
-                fields.append(&mut nested_fields);
+                let (nested_fields, nested_symbols) = build_fields(inner_pair, st);
+                fields.extend(nested_fields);
+                symbols.extend(nested_symbols);
             }
             _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
         }
     }
-    fields
+    (fields, symbols)
 }
 
 fn parse_dir(pair : pest::iterators::Pair<Rule>) -> Dir {
@@ -370,7 +385,7 @@ mod tests {
         let res = ProtocolParser::parse(Rule::file, &input);
         match res {
             Ok(parsed) => {
-                println!("Parsing successful: {:?}", parsed); 
+                //println!("Parsing successful: {:?}", parsed); 
             },
             Err(err) => {
                 eprintln!("Parsing failed: {}", err);
@@ -380,50 +395,54 @@ mod tests {
 
         let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
         // first (and only) pair in pairs is always file
-        if let Some(first_pair) = pairs.clone().next() {
+        if let Some(_first_pair) = pairs.clone().next() {
             // println!("First pair rule: {:?}", first_pair.as_rule());
         }
         // println!("Length of pairs: {}", pairs.clone().count());
         let inner = pairs.clone().next().unwrap().into_inner();
-        let mut st: &mut SymbolTable = &mut SymbolTable::default();
+        let st: &mut SymbolTable = &mut SymbolTable::default();
+        let mut tr =  Transaction::new("dummy".to_string());
         for pair in inner {
             if pair.as_rule() == Rule::struct_def {
                 let _parsed_struct = build_struct(pair, st);
                 // println!("Struct: {:?}", struct.name);
             }
             else if pair.as_rule() == Rule::fun {
-                let _tr = build_transaction(pair, st);
-                // println!("Transaction: {:?}", transaction.name);
+                tr = build_transaction(pair, st);
             }
         }
+        println!("Transaction {:?}: {:?}", tr.name, tr);
         // let pair = pairs.into_inner();
         // let (transaction, symbol_table) = build_ir(pair);
+        println!("=========== addStruct.prot ===========");
+        serialize(&mut stdout(), &tr, &st).unwrap();
+        println!("======================================");
     }
 
     #[test]
     fn test_add_prot() {
-        parse_file("tests/add.prot");
+        parse_file("tests/addStruct.prot");
     }
 
-    #[test]
-    fn test_calyx_go_done_prot() {
-        parse_file("tests/calyx_go_done.prot");
-    }
+    // #[test]
+    // fn test_calyx_go_done_prot() {
+    //     parse_file("tests/calyx_go_done.prot");
+    // }
 
-    #[test]
-    fn test_mul_prot() {
-        parse_file("tests/mul.prot");
-    }
+    // #[test]
+    // fn test_mul_prot() {
+    //     parse_file("tests/mul.prot");
+    // }
 
-    #[test]
-    fn test_easycond_prot() {
-        parse_file("tests/cond.prot");
-    }
+    // #[test]
+    // fn test_easycond_prot() {
+    //     parse_file("tests/cond.prot");
+    // }
 
-    #[test]
-    fn test_cond_prot() {
-        parse_file("tests/cond.prot");
-    }
+    // #[test]
+    // fn test_cond_prot() {
+    //     parse_file("tests/cond.prot");
+    // }
 
     #[test]
     fn test_calyx_go_done_struct_prot() {

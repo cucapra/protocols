@@ -204,7 +204,17 @@ pub enum Expr {
     Unary(UnaryOp, ExprId),
 }
 
-
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum BoxedExpr {
+    // nullary
+    Const(BitVecValue),
+    Sym(SymbolId),
+    DontCare,
+    // unary
+    Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>),
+    // binary
+    Unary(UnaryOp, Box<BoxedExpr>),
+}
 
 // add further bin ops
 
@@ -260,6 +270,7 @@ entity_impl!(SymbolId, "symbol");
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
+    // FIXME: Use by_name map 
     by_name: FxHashMap<String, SymbolId>,
     structs: PrimaryMap<StructId, Struct>,
 }
@@ -289,13 +300,7 @@ impl SymbolTable {
     }
 
     pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
-        self.entries.iter().find_map(|(id, entry)| {
-            if entry.name == name {
-                Some(id)
-            } else {
-                None
-            }
-        })
+        self.by_name.get(name).copied()
     }
 
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
@@ -339,6 +344,20 @@ impl SymbolTable {
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
         let s = Struct { name, pins };
         self.structs.push(s)
+    }
+
+    pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
+        self.structs.iter().find_map(|(id, s)| {
+            if s.name() == name {
+                Some(id)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn struct_from_struct_id(&mut self, struct_id: StructId) -> &Struct {
+        &self.structs[struct_id]
     }
 
     pub fn struct_ids(&self) -> Vec<StructId> {

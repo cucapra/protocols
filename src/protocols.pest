@@ -12,9 +12,10 @@ COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
 //  oct_integer = ${ "0" ~ ("o" | "O") ~ ("_"? ~ ASCII_OCT_DIGIT)+ }
 //  hex_integer = ${ "0" ~ ("x" | "X") ~ ("_"? ~ ASCII_HEX_DIGIT)+ }
 integer = ${ ASCII_DIGIT ~ ("_"? ~ ASCII_DIGIT)* }
+dont_care = { "X" }
 
 // Expressions
-primary = _{ integer | "(" ~ expr ~ ")" | path_id }
+primary = _{ integer | "(" ~ expr ~ ")" | dont_care | path_id }
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     // negate = { "-" }
@@ -36,16 +37,16 @@ bin_op = _{ eq | log_and }
 
 expr = { atom ~ (bin_op ~ atom)* }
 
-id = @{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
+id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
 tpe = { "u32" | "u1" }
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 cmd = { path_id ~ "(" ~ ")" ~ ";"}
 stmt = _{ (assign | cmd | while_loop | cond) }
 dir = { "in" | "out" }
-arg = { dir ~ id ~ ":" ~ tpe }
+arg = { dir ~ path_id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
-type_param = { "<" ~ id ~ ":" ~ id ~ ">" }
+type_param = { "<" ~ path_id ~ ":" ~ path_id ~ ">" }
 
 // Loops
 while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
@@ -56,7 +57,7 @@ else = { "else" ~ "{" ~ stmt* ~ "}" }
 cond = { if ~ else? }
 
 // Structs
-struct_def = { "struct" ~ id ~ "{" ~ arglist? ~ "}" }
+struct_def = { "struct" ~ path_id ~ "{" ~ arglist? ~ "}" }
 
-fun = { "fn" ~ id ~ type_param? ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
+fun = { "fn" ~ path_id ~ type_param ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
 file = { SOI ~ (fun | struct_def)* ~ EOI }
