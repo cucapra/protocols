@@ -34,14 +34,14 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_bit_str(),
+        Expr::Const(val) => val.to_i64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
         Expr::Unary(UnaryOp::Not, not_exprid) => "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")",
         Expr::Binary(BinOp::And,lhs, rhs) => serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs),
         Expr::Binary(BinOp::Equal, lhs, rhs) => {
             serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
-        }
+        } 
     }
 }
 
@@ -218,7 +218,7 @@ pub mod tests {
         assert_eq!(symbols["s"], symbols[s]);
 
         // create fileid and read file
-        let input = std::fs::read_to_string("tests/addStruct.prot").expect("failed to load");
+        let input = std::fs::read_to_string("tests/add_struct.prot").expect("failed to load");
         let add_fileid = handler.add_file("add.prot".to_string(), input);
 
         // 2) create transaction
@@ -232,7 +232,8 @@ pub mod tests {
 
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
-        add.add_expr_loc(a_expr, 193, 194, add_fileid);
+        add.add_expr_loc(a_expr, 152, 153, add_fileid);
+        handler.emit_diagnostic_expr(&add, &a_expr, "test", Level::Error);
         let b_expr = add.e(Expr::Sym(b));
         add.add_expr_loc(b_expr, 208, 209, add_fileid);
         let dut_s_expr = add.e(Expr::Sym(dut_s));
@@ -307,7 +308,7 @@ pub mod tests {
 
         // create fileid and read file
         let input =
-            std::fs::read_to_string("tests/calyx_go_doneStruct.prot").expect("failed to load");
+            std::fs::read_to_string("tests/calyx_go_done_struct.prot").expect("failed to load");
         let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
 
         // 2) create transaction

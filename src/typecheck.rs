@@ -226,6 +226,7 @@ mod tests {
             Arg::new(b, Dir::In),
             Arg::new(s, Dir::Out),
         ];
+
         let b_expr = tr.e(Expr::Sym(b));
         tr.add_expr_loc(b_expr, 62, 63, fileid);
         let b_expr2 = tr.e(Expr::Sym(b));

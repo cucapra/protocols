@@ -19,7 +19,7 @@ fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   step();
 
   // stupid conditional test
-  if 1 == 0 {
+  if 8 == 0 {
     step();
   }
   else {

@@ -10,7 +10,8 @@ use pest::iterators::Pairs;
 use std::{fmt, process::id, vec, io::stdout};
 use baa::BitVecValue;
 
-use crate::{ir::*, serialize::serialize};
+use crate::serialize::*;
+use crate::{ir::*, diagnostic::*};
 
 #[derive(Parser)]
 #[grammar = "protocols.pest"]
@@ -32,38 +33,49 @@ lazy_static::lazy_static! {
 
 pub fn parse_boxed_expr(pairs: Pairs<Rule>, _tr: &mut Transaction, st : &mut SymbolTable) ->  BoxedExpr {
     PRATT_PARSER
-        .map_primary(|primary| match primary.as_rule() {
+        .map_primary(|primary| {
+            let start = primary.as_span().start();
+            let end = primary.as_span().end();
 
-            // parse integer literals
-            Rule::integer => {
-                let int_str = primary.as_str();
-                let int_value = int_str.parse::<i32>().unwrap();
-                // FIXME: Is this the correct way to convert?
-                let bitvec = BitVecValue::from_u64(int_value as u64, 1);
-                BoxedExpr::Const(bitvec)
-            }
 
-            // parse path identifiers
-            Rule::path_id => {
-                let path_id = primary.as_str();
-                // FIXME: Use 
-                let symbol_id = SymbolTable::symbol_id_from_name(st, path_id);
-                match symbol_id {
-                    Some(id) => BoxedExpr::Sym(id),
-                    None => panic!("Referencing undefined symbol: {}", path_id),
+            match primary.as_rule() {
+
+                // parse integer literals
+                Rule::integer => {
+                    let int_str = primary.as_str();
+                    let int_value = int_str.parse::<i32>().unwrap();
+
+                    let bitvec = BitVecValue::from_u64(int_value as u64, 64);
+                    BoxedExpr::Const(bitvec, start, end)
                 }
+
+                // parse path identifiers
+                Rule::path_id => {
+                    let path_id = primary.as_str();
+
+                    let symbol_id = SymbolTable::symbol_id_from_name(st, path_id);
+                    match symbol_id {
+                        Some(id) => BoxedExpr::Sym(id, start, end),
+                        None => panic!("Referencing undefined symbol: {}", path_id),
+                    }
+                }
+
+                // parse don't care
+                Rule::dont_care => BoxedExpr::DontCare(start, end),
+
+                // if primary is an expression (due to parens), recursively parse its inner constituents
+                Rule::expr => parse_boxed_expr(primary.into_inner(), _tr, st),
+                rule => unreachable!("Expr::parse expected atom, found {:?}", rule)
             }
-
-            // parse don't care
-            Rule::dont_care => BoxedExpr::DontCare,
-
-            // if primary is an expression (due to parens), recursively parse its inner constituents
-            Rule::expr => parse_boxed_expr(primary.into_inner(), _tr, st),
-            rule => unreachable!("Expr::parse expected atom, found {:?}", rule)
         })
 
         // Parse binary expressions
         .map_infix(|lhs, op, rhs| {
+            // the start and end of the expression is the start of the LHS and the end of the RHS
+            let start = lhs.start();
+            let end = rhs.end();
+
+
             let op = match op.as_rule() {
                 Rule::eq => BinOp::Equal,
                 Rule::log_and => BinOp::And,
@@ -72,34 +84,56 @@ pub fn parse_boxed_expr(pairs: Pairs<Rule>, _tr: &mut Transaction, st : &mut Sym
             BoxedExpr::Binary(
                 op,
                 Box::new(lhs),
-                Box::new(rhs)
+                Box::new(rhs),
+                start,
+                end
             )
         })
 
         // Parse unary expressions
         .map_prefix(|op, arg| {
+            // the position of the expression is the start of the prefix operator and the end of the argument
+            let start = op.as_span().start();
+            let end = arg.end();
+
             let op = match op.as_rule() {
                 Rule::not => UnaryOp::Not,
                 rule => unreachable!("Expr::parse expected prefix operation, found {:?}", rule),
             };
-            BoxedExpr::Unary(op, Box::new(arg))
+            BoxedExpr::Unary(op, Box::new(arg), start, end)
         })
         .parse(pairs)
 }
 
-fn boxed_expr_to_expr_id(expr: BoxedExpr, tr: &mut Transaction, st: &mut SymbolTable) -> ExprId {
+fn boxed_expr_to_expr_id(expr: BoxedExpr, tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> ExprId {
     match expr {
-        BoxedExpr::Const(value) => tr.e(Expr::Const(value)),
-        BoxedExpr::Sym(symbol_id) => tr.e(Expr::Sym(symbol_id)),
-        BoxedExpr::DontCare => tr.e(Expr::DontCare),
-        BoxedExpr::Binary(op, lhs, rhs) => {
-            let lhs_id = boxed_expr_to_expr_id(*lhs, tr, st);
-            let rhs_id = boxed_expr_to_expr_id(*rhs, tr, st);
-            tr.e(Expr::Binary(op, lhs_id, rhs_id))
+        BoxedExpr::Const(value, start, end) => {
+            let expr_id = tr.e(Expr::Const(value)); 
+            tr.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        },
+        BoxedExpr::Sym(symbol_id, start, end) => {
+            let expr_id = tr.e(Expr::Sym(symbol_id));
+            tr.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        },
+        BoxedExpr::DontCare(start, end) => {
+            let expr_id = tr.e(Expr::DontCare);
+            tr.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        },
+        BoxedExpr::Binary(op, lhs, rhs, start, end) => {
+            let lhs_id = boxed_expr_to_expr_id(*lhs, tr, st, fileid);
+            let rhs_id = boxed_expr_to_expr_id(*rhs, tr, st, fileid);
+            let expr_id = tr.e(Expr::Binary(op, lhs_id, rhs_id));
+            tr.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
         }
-        BoxedExpr::Unary(op, arg) => {
-            let arg_id = boxed_expr_to_expr_id(*arg, tr, st);
-            tr.e(Expr::Unary(op, arg_id))
+        BoxedExpr::Unary(op, arg, start, end) => {
+            let arg_id = boxed_expr_to_expr_id(*arg, tr, st, fileid);
+            let expr_id = tr.e(Expr::Unary(op, arg_id));
+            tr.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
         }
     }
 }
@@ -115,7 +149,7 @@ fn parse_struct(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> St
 }
 
 // TODO: Add line numbers and character loc. 
-fn parse_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) -> Transaction {
+fn parse_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable, fileid : usize) -> Transaction {
     match pair.as_rule() {
         Rule::fun => {
             let mut inner_rules = pair.into_inner();
@@ -132,20 +166,20 @@ fn parse_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) 
                         let path_id_1 = type_param_rules.next().unwrap().as_str();
                         let path_id_2 = type_param_rules.next().unwrap().as_str();
                         
-                            let adder_struct_id = {
+                            let struct_id = {
                                 let struct_id = st.struct_id_from_name(path_id_2)
                                     .expect(&format!("Undefined struct: {}", path_id_2));
                                 struct_id
                             };
     
-                            let adder_struct = {
-                                let struct_ref = st.struct_from_struct_id(adder_struct_id);
+                            let dut_struct = {
+                                let struct_ref = st.struct_from_struct_id(struct_id);
                                 struct_ref.clone() // Clone if necessary to avoid borrowing issues
                             };
     
-                            let dut_symbol_id = st.add_without_parent(path_id_1.to_string(), Type::Struct(adder_struct_id));
+                            let dut_symbol_id = st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
     
-                            for pin in adder_struct.pins() {
+                            for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 st.add_with_parent(pin_name, dut_symbol_id);
                             }
@@ -158,21 +192,48 @@ fn parse_transaction(pair: pest::iterators::Pair<Rule>, st :  &mut SymbolTable) 
             tr.args = parse_arglist(inner_rules.next().unwrap(), st);
 
             // Process the body of statements, adding them to the block as we go
-            tr.body = parse_stmt_block(inner_rules, &mut tr, st);
+            tr.body = parse_stmt_block(inner_rules, &mut tr, st, fileid);
             tr
         }
         _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
     }
 }
 
-fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> ExprId {
+fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> ExprId {
     let boxed_expr = parse_boxed_expr(pairs, tr, st);
-    let expr_id = boxed_expr_to_expr_id(boxed_expr, tr, st);
+    let expr_id = boxed_expr_to_expr_id(boxed_expr, tr, st, fileid);
+    
+    // print out expr loc for testing
+    println!("Expr: {:?}, Expr loc: {:?}", serialize_expr(tr, st, &expr_id), tr.get_expr_loc(expr_id));
+
     expr_id
-    // tr.e(Expr::Const(BitVecValue::from_u64(0, 32)))
 }  
 
-fn parse_assign(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> Stmt {
+fn parse_stmt_block(mut stmt_pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> StmtId {
+    // Process the body of statements, adding them to the block as we go
+    let mut stmts = Vec::new();
+    while let Some(inner_pair) = stmt_pairs.next() {
+        let start = inner_pair.as_span().start();
+        let end = inner_pair.as_span().end();
+        let stmt = match inner_pair.as_rule() {
+            Rule::assign => parse_assign(inner_pair, tr, st, fileid),
+            Rule::cmd => parse_cmd(inner_pair, tr, st, fileid),
+            Rule::while_loop => parse_while(inner_pair, tr, st, fileid),
+            Rule::cond => parse_cond(inner_pair, tr, st, fileid),
+            Rule::assert_eq => parse_assert_eq(inner_pair, tr, st, fileid),
+            _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
+        };
+
+        let stmt_id =tr.s(stmt);
+        // Add the statement location to the transaction
+        tr.add_stmt_loc(stmt_id, start, end, fileid);
+        stmts.push(stmt_id);
+    }
+    tr.s(Stmt::Block(stmts))
+}
+
+
+fn parse_assign(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> Stmt {
     let mut inner_rules = pair.into_inner();
     let path_id_rule = inner_rules.next().unwrap();
     let expr_rule = inner_rules.next().unwrap();
@@ -184,12 +245,12 @@ fn parse_assign(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mu
         None => panic!("Assigning to undeclared symbol: {}", path_id),
     };
 
-    let expr_id = parse_expr(expr_rule.into_inner(), tr, st);
+    let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
 
     Stmt::Assign(symbol_id, expr_id)
 }
 
-fn parse_cmd(pair: pest::iterators::Pair<Rule>, _tr: &mut Transaction, st: &mut SymbolTable) -> Stmt {
+fn parse_cmd(pair: pest::iterators::Pair<Rule>, _tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> Stmt {
     let mut inner_rules = pair.into_inner();
     let cmd_rule = inner_rules.next().unwrap();
     let cmd = cmd_rule.as_str();
@@ -200,51 +261,43 @@ fn parse_cmd(pair: pest::iterators::Pair<Rule>, _tr: &mut Transaction, st: &mut 
     }
 }
 
-fn parse_while(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> Stmt {
+fn parse_while(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> Stmt {
     // Parse Expression
     let mut inner_rules = pair.into_inner();
     let expr_rule = inner_rules.next().unwrap();
-    let guard: ExprId = parse_expr(expr_rule.into_inner(), tr, st);
+    let guard: ExprId = parse_expr(expr_rule.into_inner(), tr, st, fileid);
 
     // Parse Statement Block
-    let body = parse_stmt_block(inner_rules, tr, st);
+    let body = parse_stmt_block(inner_rules, tr, st, fileid);
 
     Stmt::While(guard, body)
 }
 
-fn parse_stmt_block(mut stmt_pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> StmtId {
-    // Parse Statement Block. FIXME: Duplicate code.
-    // Process the body of statements, adding them to the block as we go
-    let mut stmts = Vec::new();
-    while let Some(inner_pair) = stmt_pairs.next() {
-        let stmt = match inner_pair.as_rule() {
-            Rule::assign => parse_assign(inner_pair, tr, st),
-            Rule::cmd => parse_cmd(inner_pair, tr, st),
-            Rule::while_loop => parse_while(inner_pair, tr, st),
-            Rule::cond => parse_cond(inner_pair, tr, st),
-            _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
-        };
-        stmts.push(tr.s(stmt));
-    }
-    tr.s(Stmt::Block(stmts))
+fn parse_assert_eq(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable, fileid : usize) -> Stmt {
+    let mut inner_rules = pair.into_inner();
+    let lhs_rule = inner_rules.next().unwrap();
+    let rhs_rule = inner_rules.next().unwrap();
+
+    let lhs_id = parse_expr(lhs_rule.into_inner(), tr, st, fileid);
+    let rhs_id = parse_expr(rhs_rule.into_inner(), tr, st, fileid);
+
+    Stmt::AssertEq(lhs_id, rhs_id)
 }
 
-fn parse_cond(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable) -> Stmt {
-    // Dummy implementation
+fn parse_cond(pair: pest::iterators::Pair<Rule>, tr: &mut Transaction, st: &mut SymbolTable,  fileid : usize) -> Stmt {
     let mut inner_rules = pair.into_inner();
 
     let if_rule = inner_rules.next().unwrap();
     let mut inner_if = if_rule.into_inner();
     let expr_rule = inner_if.next().unwrap();
-    let expr_id = parse_expr(expr_rule.into_inner(), tr, st);
-    let if_block = parse_stmt_block(inner_if, tr, st);
+    let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
+    let if_block = parse_stmt_block(inner_if, tr, st, fileid);
 
     let else_rule = inner_rules.next().unwrap();
     let inner_else = else_rule.into_inner();
-    let else_block = parse_stmt_block(inner_else, tr, st);
+    let else_block = parse_stmt_block(inner_else, tr, st, fileid);
 
     Stmt::IfElse(expr_id, if_block, else_block)
-    
 }
 
 fn parse_arglist(pair : pest::iterators::Pair<Rule>, st : &mut SymbolTable) -> Vec<Arg> {
@@ -319,7 +372,7 @@ fn parse_dir(pair : pest::iterators::Pair<Rule>) -> Dir {
     }
 }
 
-fn parse_type(pair: pest::iterators::Pair<Rule>) -> Type {
+fn  parse_type(pair: pest::iterators::Pair<Rule>) -> Type {
     match pair.as_rule() {
         Rule::tpe => {
             let mut inner_rules = pair.into_inner();
@@ -331,6 +384,38 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Type {
     }
 }
 
+
+fn parse_file(filename: impl AsRef<std::path::Path>) -> (Transaction, SymbolTable) {
+    let mut handler = DiagnosticHandler::new();
+    let input = std::fs::read_to_string(filename).expect("failed to load");
+    let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input.clone());
+
+    let res = ProtocolParser::parse(Rule::file, &input);
+    match res {
+        Ok(_parsed) => {
+            //println!("Parsing successful: {:?}", parsed); 
+        },
+        Err(err) => {
+            eprintln!("Parsing failed: {}", err);
+            panic!("Invalid file: Failed to parse.");
+        }
+    }
+
+    let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
+    let inner = pairs.clone().next().unwrap().into_inner();
+    let st: &mut SymbolTable = &mut SymbolTable::default();
+    let mut tr =  Transaction::new("dummy".to_string());
+    for pair in inner {
+        if pair.as_rule() == Rule::struct_def {
+            parse_struct(pair, st); // we don't need the struct id
+        }
+        else if pair.as_rule() == Rule::fun {
+            tr = parse_transaction(pair, st, fileid);
+        }
+    }
+
+    (tr, st.clone())
+}
 
 // Wrapper struct for custom display of pest pairs
 struct DisplayPair<'i, R: pest::RuleType>(pest::iterators::Pair<'i, R>);
@@ -367,41 +452,6 @@ impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
 mod tests {
     use super::*;
 
-    fn parse_file(filename: impl AsRef<std::path::Path>) -> (Transaction, SymbolTable) {
-        let input = std::fs::read_to_string(filename).expect("failed to load");
-        let res = ProtocolParser::parse(Rule::file, &input);
-        match res {
-            Ok(_parsed) => {
-                //println!("Parsing successful: {:?}", parsed); 
-            },
-            Err(err) => {
-                eprintln!("Parsing failed: {}", err);
-                panic!("Invalid file: Failed to parse.");
-            }
-        }
-
-        let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
-        // first (and only) pair in pairs is always file
-        if let Some(_first_pair) = pairs.clone().next() {
-            // println!("First pair rule: {:?}", first_pair.as_rule());
-        }
-        // println!("Length of pairs: {}", pairs.clone().count());
-        let inner = pairs.clone().next().unwrap().into_inner();
-        let st: &mut SymbolTable = &mut SymbolTable::default();
-        let mut tr =  Transaction::new("dummy".to_string());
-        for pair in inner {
-            if pair.as_rule() == Rule::struct_def {
-                let _parsed_struct = parse_struct(pair, st);
-                // println!("Struct: {:?}", struct.name);
-            }
-            else if pair.as_rule() == Rule::fun {
-                tr = parse_transaction(pair, st);
-            }
-        }
-
-        (tr, st.clone())
-    }
-
     fn test_re_serialize(tr: Transaction, st : SymbolTable, filename: &str) {
         println!("Transaction {:?}: {:?}", tr.name, tr);
         println!("============= {} =============", filename);
@@ -426,6 +476,21 @@ mod tests {
     #[test]
     fn test_aes128_prot() {
         let filename = "tests/aes128.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
+    }
+
+    #[test]
+    fn test_aes128_round_prot() {
+        let filename = "tests/aes128_round.prot";
+        let (tr, st) = parse_file(filename);
+        test_re_serialize(tr, st, filename)
+    }
+
+
+    #[test]
+    fn test_aes128_expand_key_prot() {
+        let filename = "tests/aes128_expand_key.prot";
         let (tr, st) = parse_file(filename);
         test_re_serialize(tr, st, filename)
     }

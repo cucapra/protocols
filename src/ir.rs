@@ -211,14 +211,37 @@ pub enum Expr {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BoxedExpr {
+    // (have start and end as usize in each variant)
     // nullary
-    Const(BitVecValue),
-    Sym(SymbolId),
-    DontCare,
+    Const(BitVecValue, usize, usize),
+    Sym(SymbolId, usize, usize),
+    DontCare(usize, usize),
     // unary
-    Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>),
+    Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
     // binary
-    Unary(UnaryOp, Box<BoxedExpr>),
+    Unary(UnaryOp, Box<BoxedExpr>, usize, usize),
+}
+
+impl BoxedExpr {
+    pub fn start(&self) -> usize {
+        match self {
+            BoxedExpr::Const(_, start, _) => *start,
+            BoxedExpr::Sym(_, start, _) => *start,
+            BoxedExpr::DontCare(start, _) => *start,
+            BoxedExpr::Binary(_, _, _, start, _) => *start,
+            BoxedExpr::Unary(_, _, start, _) => *start,
+        }
+    }
+
+    pub fn end(&self) -> usize {
+        match self {
+            BoxedExpr::Const(_, _, end) => *end,
+            BoxedExpr::Sym(_, _, end) => *end,
+            BoxedExpr::DontCare(_, end) => *end,
+            BoxedExpr::Binary(_, _, _, _, end) => *end,
+            BoxedExpr::Unary(_, _, _, end) => *end,
+        }
+    }
 }
 
 // add further bin ops
@@ -275,7 +298,6 @@ entity_impl!(SymbolId, "symbol");
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
-    // FIXME: Use by_name map 
     by_name: FxHashMap<String, SymbolId>,
     structs: PrimaryMap<StructId, Struct>,
 }
