@@ -37,11 +37,15 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         Expr::Const(val) => val.to_i64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
-        Expr::Unary(UnaryOp::Not, not_exprid) => "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")",
-        Expr::Binary(BinOp::And,lhs, rhs) => serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs),
+        Expr::Unary(UnaryOp::Not, not_exprid) => {
+            "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")"
+        }
+        Expr::Binary(BinOp::And, lhs, rhs) => {
+            serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs)
+        }
         Expr::Binary(BinOp::Equal, lhs, rhs) => {
             serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
-        } 
+        }
     }
 }
 

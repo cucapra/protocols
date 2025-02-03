@@ -374,13 +374,9 @@ impl SymbolTable {
     }
 
     pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
-        self.structs.iter().find_map(|(id, s)| {
-            if s.name() == name {
-                Some(id)
-            } else {
-                None
-            }
-        })
+        self.structs
+            .iter()
+            .find_map(|(id, s)| if s.name() == name { Some(id) } else { None })
     }
 
     pub fn struct_from_struct_id(&mut self, struct_id: StructId) -> &Struct {
@@ -407,7 +403,7 @@ impl Index<SymbolId> for SymbolTable {
     fn index(&self, index: SymbolId) -> &Self::Output {
         &self.entries[index]
     }
-} 
+}
 
 impl Index<&SymbolId> for SymbolTable {
     type Output = SymbolTableEntry;
