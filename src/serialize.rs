@@ -279,10 +279,10 @@ pub mod tests {
         (add, symbols)
     }
 
-    pub fn create_calyx_go_down_transaction(
+    pub fn create_calyx_go_done_transaction(
         handler: &mut DiagnosticHandler,
     ) -> (Transaction, SymbolTable) {
-        // Manually create the expected result of parsing `calyx_go_down`.
+        // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
@@ -313,7 +313,7 @@ pub mod tests {
         // create fileid and read file
         let input =
             std::fs::read_to_string("tests/calyx_go_done_struct.prot").expect("failed to load");
-        let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
+        let calyx_fileid = handler.add_file("calyx_go_done_struct.prot".to_string(), input);
 
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
@@ -374,9 +374,9 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
+    fn serialize_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
+        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
         println!("{}", serialize_to_string(&calyx_go_done, &symbols).unwrap());
     }
 
