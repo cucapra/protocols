@@ -19,3 +19,9 @@ error: Cannot assign to function argument. Try using assert_eq if you want to ch
    │
 15 │   s := DUT.s;
    │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+
+error: DUT.s is an output and thus cannot be assigned.
+   ┌─ add.prot:16:3
+   │
+16 │   DUT.s := a;
+   │   ^^^^^^^^^^^ DUT.s is an output and thus cannot be assigned.
