@@ -237,7 +237,6 @@ pub mod tests {
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
         add.add_expr_loc(a_expr, 152, 153, add_fileid);
-        handler.emit_diagnostic_expr(&add, &a_expr, "test", Level::Error);
         let b_expr = add.e(Expr::Sym(b));
         add.add_expr_loc(b_expr, 208, 209, add_fileid);
         let dut_s_expr = add.e(Expr::Sym(dut_s));
@@ -332,7 +331,7 @@ pub mod tests {
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
         calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
         let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
-        calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
+        calyx_go_done.add_expr_loc(cond_expr, 172, 187, calyx_fileid);
         let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
 
