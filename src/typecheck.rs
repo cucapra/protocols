@@ -85,7 +85,7 @@ fn check_stmt_types(
                     let fields = st[structid].pins();
                     if fields
                         .iter()
-                        .find(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
+                        .find(|field| field.dir() == Dir::Out && st[field.name()] == st[lhs])
                         .is_some()
                     {
                         handler.emit_diagnostic_stmt(
