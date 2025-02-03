@@ -85,7 +85,7 @@ fn check_stmt_types(
                     let fields = st[structid].pins();
                     if fields
                         .iter()
-                        .find(|field| field.dir() == Dir::Out && st[field.name()] == st[lhs])
+                        .find(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                         .is_some()
                     {
                         handler.emit_diagnostic_stmt(
@@ -233,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn typecheck_invalid_step_arg_transaction() {
+    fn test_invalid_step_arg_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (invalid_step_arg, symbols) =
             parser::parse_file("tests/invalid_step_arg.prot", &mut handler);

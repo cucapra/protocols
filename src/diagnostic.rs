@@ -181,7 +181,7 @@ mod tests {
     use std::path::Path;
     use strip_ansi_escapes::strip_str;
 
-    use crate::{serialize::tests::create_calyx_go_done_transaction, typecheck::*};
+    use crate::{serialize::tests::create_calyx_go_down_transaction, typecheck::*};
 
     use super::*;
 
