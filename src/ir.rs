@@ -223,6 +223,7 @@ pub enum BoxedExpr {
 }
 
 impl BoxedExpr {
+    // starting character of the expression
     pub fn start(&self) -> usize {
         match self {
             BoxedExpr::Const(_, start, _) => *start,
@@ -233,6 +234,7 @@ impl BoxedExpr {
         }
     }
 
+    // ending character of the expression
     pub fn end(&self) -> usize {
         match self {
             BoxedExpr::Const(_, _, end) => *end,
@@ -243,8 +245,6 @@ impl BoxedExpr {
         }
     }
 }
-
-// add further bin ops
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct StructId(u32);

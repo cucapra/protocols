@@ -204,7 +204,7 @@ fn parse_expr(pairs: Pairs<Rule>, tr: &mut Transaction, st: &mut SymbolTable, fi
     let expr_id = boxed_expr_to_expr_id(boxed_expr, tr, st, fileid);
     
     // print out expr loc for testing
-    println!("Expr: {:?}, Expr loc: {:?}", serialize_expr(tr, st, &expr_id), tr.get_expr_loc(expr_id));
+    // println!("Expr: {:?}, Expr loc: {:?}", serialize_expr(tr, st, &expr_id), tr.get_expr_loc(expr_id));
 
     expr_id
 }  
@@ -453,7 +453,7 @@ mod tests {
     use super::*;
 
     fn test_re_serialize(tr: Transaction, st : SymbolTable, filename: &str) {
-        println!("Transaction {:?}: {:?}", tr.name, tr);
+        // println!("Transaction {:?}: {:?}", tr.name, tr);
         println!("============= {} =============", filename);
 
         // Serialize into a string first, and then use println macro; 
