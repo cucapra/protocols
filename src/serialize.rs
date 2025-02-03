@@ -393,7 +393,7 @@ pub mod tests {
     #[test]
     fn test_serialize_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
+        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
 
         let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
         let mut settings = Settings::clone_current();
