@@ -17,7 +17,7 @@ use crate::ir::*;
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]
-enum ErrorKey {
+pub enum ErrorKey {
     ExprKey(ExprId),
     StmtKey(StmtId),
 }
@@ -87,6 +87,7 @@ impl Diagnostic {
 pub struct DiagnosticHandler {
     files: SimpleFiles<String, String>,
     reported_errs: HashSet<ErrorKey>,
+    error_string: String,
 }
 
 impl DiagnosticHandler {
@@ -94,11 +95,16 @@ impl DiagnosticHandler {
         Self {
             files: SimpleFiles::new(),
             reported_errs: HashSet::new(),
+            error_string: String::new(),
         }
     }
 
     pub fn add_file(&mut self, name: String, content: String) -> usize {
         self.files.add(name, content)
+    }
+
+    pub fn error_string(&self) -> &str {
+        &self.error_string
     }
 
     pub fn emit_diagnostic_expr(
@@ -128,7 +134,9 @@ impl DiagnosticHandler {
 
             diagnostic.emit(buffer, &self.files);
 
-            print!("{}", String::from_utf8_lossy(buffer.as_slice()));
+            let error_msg = String::from_utf8_lossy(buffer.as_slice());
+            self.error_string.push_str(&error_msg);
+            print!("{}", error_msg);
         }
     }
 
@@ -159,17 +167,23 @@ impl DiagnosticHandler {
 
             diagnostic.emit(buffer, &self.files);
 
-            print!("{}", String::from_utf8_lossy(buffer.as_slice()));
+            let error_msg = String::from_utf8_lossy(buffer.as_slice());
+            self.error_string.push_str(&error_msg);
+            print!("{}", error_msg);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use baa::BitVecValue;
+    use insta::Settings;
+    use std::path::Path;
+    use strip_ansi_escapes::strip_str;
+
     use crate::{serialize::tests::create_calyx_go_down_transaction, typecheck::*};
 
     use super::*;
-    use baa::BitVecValue;
 
     #[test]
     fn test_emit_diagnostic() {
@@ -194,6 +208,14 @@ mod tests {
 
         handler.emit_diagnostic_expr(&tr, &one_expr, "Random Warning", Level::Warning);
         handler.emit_diagnostic_expr(&tr, &zero_expr, "Random Error", Level::Error);
+
+        let content = strip_str(handler.error_string());
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
     }
 
     #[test]

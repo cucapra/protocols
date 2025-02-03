@@ -70,7 +70,7 @@ fn check_stmt_types(
                     let fields = st[structid].pins();
                     if fields
                         .iter()
-                        .find(|field| field.dir() == Dir::Out && st[field.name()] == st[lhs])
+                        .find(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                         .is_some()
                     {
                         handler.emit_diagnostic_stmt(
@@ -189,23 +189,43 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use crate::serialize::tests::{create_add_transaction, create_calyx_go_down_transaction};
     use baa::BitVecValue;
+    use insta::Settings;
+    use strip_ansi_escapes::strip_str;
 
     use super::*;
 
     #[test]
-    fn typecheck_add_transaction() {
+    fn test_add_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (add, symbols) = create_add_transaction(&mut handler);
         type_check(&add, &symbols, &mut handler);
+
+        let content = strip_str(handler.error_string());
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
     }
 
     #[test]
-    fn typecheck_calyx_go_down_transaction() {
+    fn test_calyx_go_down_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
+
+        let content = strip_str(handler.error_string());
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
     }
 
     // Specific Tests
