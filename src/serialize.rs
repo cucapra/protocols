@@ -184,6 +184,9 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
 
 #[cfg(test)]
 pub mod tests {
+    use insta::Settings;
+    use std::path::Path;
+
     use baa::BitVecValue;
 
     use super::*;
@@ -232,32 +235,32 @@ pub mod tests {
 
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
-        add.add_expr_loc(a_expr, 193, 194, add_fileid);
+        add.add_expr_loc(a_expr, 187, 188, add_fileid);
         let b_expr = add.e(Expr::Sym(b));
-        add.add_expr_loc(b_expr, 208, 209, add_fileid);
+        add.add_expr_loc(b_expr, 202, 203, add_fileid);
         let dut_s_expr = add.e(Expr::Sym(dut_s));
-        add.add_expr_loc(dut_s_expr, 271, 276, add_fileid);
+        add.add_expr_loc(dut_s_expr, 265, 270, add_fileid);
         let s_expr = add.e(Expr::Sym(s));
 
         // 4) create statements
         let a_assign = add.s(Stmt::Assign(dut_a, a_expr));
-        add.add_stmt_loc(a_assign, 184, 195, add_fileid);
+        add.add_stmt_loc(a_assign, 178, 189, add_fileid);
         let b_assign = add.s(Stmt::Assign(dut_b, b_expr));
-        add.add_stmt_loc(b_assign, 199, 210, add_fileid);
+        add.add_stmt_loc(b_assign, 193, 204, add_fileid);
         let step = add.s(Stmt::Step);
-        add.add_stmt_loc(step, 214, 221, add_fileid);
+        add.add_stmt_loc(step, 208, 215, add_fileid);
         let fork = add.s(Stmt::Fork);
-        add.add_stmt_loc(fork, 225, 232, add_fileid);
+        add.add_stmt_loc(fork, 219, 226, add_fileid);
         let dut_a_assign = add.s(Stmt::Assign(dut_a, add.expr_dont_care()));
-        add.add_stmt_loc(dut_a_assign, 236, 247, add_fileid);
+        add.add_stmt_loc(dut_a_assign, 230, 241, add_fileid);
         let dut_b_assign = add.s(Stmt::Assign(dut_b, add.expr_dont_care()));
-        add.add_stmt_loc(dut_b_assign, 251, 262, add_fileid);
+        add.add_stmt_loc(dut_b_assign, 245, 256, add_fileid);
         let s_assign = add.s(Stmt::Assign(s, dut_s_expr));
-        add.add_stmt_loc(s_assign, 266, 277, add_fileid);
+        add.add_stmt_loc(s_assign, 260, 271, add_fileid);
         let dut_s_assign = add.s(Stmt::Assign(dut_s, a_expr));
-        add.add_stmt_loc(dut_s_assign, 281, 292, add_fileid);
+        add.add_stmt_loc(dut_s_assign, 275, 286, add_fileid);
         let assert = add.s(Stmt::AssertEq(s_expr, dut_s_expr));
-        add.add_stmt_loc(assert, 296, 316, add_fileid);
+        add.add_stmt_loc(assert, 290, 310, add_fileid);
         let body = vec![
             a_assign,
             b_assign,
@@ -361,18 +364,30 @@ pub mod tests {
     }
 
     #[test]
-    fn serialize_add_transaction() {
+    fn test_serialize_add_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (add, symbols) = create_add_transaction(&mut handler);
 
-        println!("{}", serialize_to_string(&add, &symbols).unwrap());
+        let content = serialize_to_string(&add, &symbols).unwrap();
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
     }
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
+    fn test_serialize_calyx_go_down_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
-        println!("{}", serialize_to_string(&calyx_go_done, &symbols).unwrap());
+
+        let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
     }
 
     #[test]
