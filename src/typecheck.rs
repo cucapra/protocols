@@ -189,7 +189,7 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 
 #[cfg(test)]
 mod tests {
-    use crate::serialize::tests::{create_add_transaction, create_calyx_go_down_transaction};
+    use crate::serialize::tests::{create_add_transaction, create_calyx_go_done_transaction};
     use baa::BitVecValue;
 
     use super::*;
@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn typecheck_calyx_go_down_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
+        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
     }
 
