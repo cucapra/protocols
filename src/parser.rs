@@ -277,19 +277,24 @@ fn parse_cmd(
     let mut inner_rules = pair.into_inner();
     let cmd_rule = inner_rules.next().unwrap();
     let cmd = cmd_rule.as_str();
+
+    let arg = if let Some(expr_rule) = inner_rules.next() {
+        // println!("Parsing step with expr: {}", expr_rule.as_str());
+        let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
+        Some(expr_id)
+    } else {
+        None
+    };
+
     match cmd {
-        "step" => {
-            // check if there is another expression after the cmd string
-            if let Some(expr_rule) = inner_rules.next() {
-                // println!("Parsing step with expr: {}", expr_rule.as_str());
-                let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
-                return Stmt::Step(Some(expr_id));
+        "step" => Stmt::Step(arg),
+        "fork" => {
+            // if there is a passed expression, panic -- this is invalid
+            if arg.is_some() {
+                panic!("Fork command should not have an argument");
             }
-            else {
-                return Stmt::Step(None)
-            }
+            Stmt::Fork
         }
-        "fork" => Stmt::Fork,
         _ => panic!("Unexpected command: {:?}", cmd),
     }
 }

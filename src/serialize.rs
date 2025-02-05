@@ -71,7 +71,12 @@ fn build_statements(
             serialize_expr(tr, st, rhs)
         )?,
         Stmt::Step(None) => writeln!(out, "{}step();", "  ".repeat(index))?,
-        Stmt::Step(Some(expr_id)) => writeln!(out, "{}step({});", "  ".repeat(index), serialize_expr(tr, st, expr_id))?,
+        Stmt::Step(Some(expr_id)) => writeln!(
+            out,
+            "{}step({});",
+            "  ".repeat(index),
+            serialize_expr(tr, st, expr_id)
+        )?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
         Stmt::While(cond, bodyid) => {
             writeln!(
