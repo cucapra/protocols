@@ -217,7 +217,7 @@ mod tests {
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(1));
         let c: SymbolId = symbols.add_without_parent("c".to_string(), Type::BitVec(1));
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1));
-        assert_eq!(symbols[symbols["s"]], symbols[s]);
+        assert_eq!(symbols["s"], symbols[s]);
         let input = std::fs::read_to_string("tests/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
         let mut tr = Transaction::new("func_arg_invalid".to_string());

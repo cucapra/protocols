@@ -201,7 +201,7 @@ pub mod tests {
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
-        assert_eq!(symbols[symbols["s"]], symbols[s]);
+        assert_eq!(symbols["s"], symbols[s]);
 
         // declare Adder struct
         let add_struct = symbols.add_struct(
@@ -218,8 +218,8 @@ pub mod tests {
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         let dut_b = symbols.add_with_parent("b".to_string(), dut);
         let dut_s = symbols.add_with_parent("s".to_string(), dut);
-        assert_eq!(symbols[symbols["DUT.s"]], symbols[dut_s]);
-        assert_eq!(symbols[symbols["s"]], symbols[s]);
+        assert_eq!(symbols["DUT.s"], symbols[dut_s]);
+        assert_eq!(symbols["s"], symbols[s]);
 
         // create fileid and read file
         let input = std::fs::read_to_string("tests/add_struct.prot").expect("failed to load");
@@ -288,7 +288,7 @@ pub mod tests {
         let mut symbols = SymbolTable::default();
         let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
         let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
-        assert_eq!(symbols[symbols["oo"]], symbols[oo]);
+        assert_eq!(symbols["oo"], symbols[oo]);
 
         // declare Calyx struct
         let dut_struct = symbols.add_struct(
@@ -306,8 +306,8 @@ pub mod tests {
         let dut_go = symbols.add_with_parent("go".to_string(), dut);
         let dut_done = symbols.add_with_parent("done".to_string(), dut);
         let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
-        assert_eq!(symbols[symbols["dut.oo"]], symbols[dut_oo]);
-        assert_eq!(symbols[symbols["oo"]], symbols[oo]);
+        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
+        assert_eq!(symbols["oo"], symbols[oo]);
 
         // create fileid and read file
         let input =
@@ -388,7 +388,7 @@ pub mod tests {
         let mut symbols = SymbolTable::default();
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
-        assert_eq!(symbols[symbols["b"]], symbols[b]);
+        assert_eq!(symbols["b"], symbols[b]);
 
         // declare DUT struct (TODO: Fix struct)
         let dut_struct = symbols.add_struct(
@@ -401,7 +401,7 @@ pub mod tests {
         );
         let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
-        assert_eq!(symbols[symbols["dut.a"]], symbols[dut_a]);
+        assert_eq!(symbols["dut.a"], symbols[dut_a]);
 
         // 2) create transaction
         let mut easycond = Transaction::new("easycond".to_string());

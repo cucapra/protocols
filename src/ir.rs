@@ -326,6 +326,10 @@ impl SymbolTable {
         id
     }
 
+    pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
+        self.by_name.get(name).copied()
+    }
+
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
         assert!(
             !name.contains('.'),
@@ -385,10 +389,11 @@ impl SymbolTable {
 }
 
 impl Index<&str> for SymbolTable {
-    type Output = SymbolId;
+    type Output = SymbolTableEntry;
 
     fn index(&self, index: &str) -> &Self::Output {
-        &self.by_name[index]
+        let index = self.by_name[index];
+        &self.entries[index]
     }
 }
 
@@ -488,7 +493,7 @@ mod tests {
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
-        assert_eq!(symbols[symbols["s"]], symbols[s]);
+        assert_eq!(symbols["s"], symbols[s]);
 
         // declare Adder struct
         let add_struct = symbols.add_struct(
@@ -503,8 +508,8 @@ mod tests {
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         let dut_b = symbols.add_with_parent("b".to_string(), dut);
         let dut_s = symbols.add_with_parent("s".to_string(), dut);
-        assert_eq!(symbols[symbols["dut.s"]], symbols[dut_s]);
-        assert_eq!(symbols[symbols["s"]], symbols[s]);
+        assert_eq!(symbols["dut.s"], symbols[dut_s]);
+        assert_eq!(symbols["s"], symbols[s]);
 
         // 2) create transaction
         let mut add = Transaction::new("add".to_string());
@@ -541,7 +546,7 @@ mod tests {
         let mut symbols = SymbolTable::default();
         let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
         let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
-        assert_eq!(symbols[symbols["oo"]], symbols[oo]);
+        assert_eq!(symbols["oo"], symbols[oo]);
 
         // declare DUT struct
         let dut_struct = symbols.add_struct(
@@ -559,8 +564,8 @@ mod tests {
         let dut_go = symbols.add_with_parent("go".to_string(), dut);
         let dut_done = symbols.add_with_parent("done".to_string(), dut);
         let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
-        assert_eq!(symbols[symbols["dut.oo"]], symbols[dut_oo]);
-        assert_eq!(symbols[symbols["oo"]], symbols[oo]);
+        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
+        assert_eq!(symbols["oo"], symbols[oo]);
 
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
