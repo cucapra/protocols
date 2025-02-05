@@ -256,7 +256,7 @@ fn parse_assign(
     let path_id_rule = inner_rules.next().unwrap();
     let expr_rule = inner_rules.next().unwrap();
 
-    let path_id = path_id_rule.as_str();
+    let path_id: &str = path_id_rule.as_str();
 
     let symbol_id = match st.symbol_id_from_name(path_id) {
         Some(id) => id,
@@ -270,7 +270,7 @@ fn parse_assign(
 
 fn parse_cmd(
     pair: pest::iterators::Pair<Rule>,
-    _tr: &mut Transaction,
+    tr: &mut Transaction,
     st: &mut SymbolTable,
     fileid: usize,
 ) -> Stmt {
@@ -278,8 +278,17 @@ fn parse_cmd(
     let cmd_rule = inner_rules.next().unwrap();
     let cmd = cmd_rule.as_str();
     match cmd {
-        // TODO: parse an inner expression for step stmts
-        "step" => Stmt::Step(None),
+        "step" => {
+            // check if there is another expression after the cmd string
+            if let Some(expr_rule) = inner_rules.next() {
+                // println!("Parsing step with expr: {}", expr_rule.as_str());
+                let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
+                return Stmt::Step(Some(expr_id));
+            }
+            else {
+                return Stmt::Step(None)
+            }
+        }
         "fork" => Stmt::Fork,
         _ => panic!("Unexpected command: {:?}", cmd),
     }
