@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn typecheck_calyx_go_down_transaction() {
+    fn typecheck_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
