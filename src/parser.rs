@@ -293,7 +293,7 @@ fn parse_cmd(
                 let one_expr = tr.e(Expr::Const(BitVecValue::from_i64(1, 2)));
                 Stmt::Step(one_expr)
             }
-        }
+        },
         "fork" => {
             // if there is a passed expression, panic -- this is invalid
             if arg.is_some() {

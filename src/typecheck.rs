@@ -205,7 +205,10 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::parse_file, serialize::tests::{create_add_transaction, create_calyx_go_done_transaction}};
+    use crate::{
+        parser::parse_file,
+        serialize::tests::{create_add_transaction, create_calyx_go_done_transaction},
+    };
     use baa::BitVecValue;
 
     use super::*;
