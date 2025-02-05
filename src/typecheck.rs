@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::parser;
 use crate::{diagnostic::*, ir::*, serialize::*};
 
 fn check_expr_types(
@@ -214,6 +215,51 @@ mod tests {
         let mut handler = DiagnosticHandler::new();
         let (add, symbols) = create_add_transaction(&mut handler);
         type_check(&add, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_invalid_step_arg_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_expand_key_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_round_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/aes128_round.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_mul_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_cond_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
     }
 
     #[test]
