@@ -166,7 +166,7 @@ impl DiagnosticHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::{serialize::tests::create_calyx_go_down_transaction, typecheck::*};
+    use crate::{serialize::tests::create_calyx_go_done_transaction, typecheck::*};
 
     use super::*;
     use baa::BitVecValue;
@@ -197,9 +197,9 @@ mod tests {
     }
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
+    fn serialize_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
+        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
     }
 }

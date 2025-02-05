@@ -51,8 +51,8 @@ impl Transaction {
     }
 
     /// add a new statement to the transaction
-    pub fn s(&mut self, expr: Stmt) -> StmtId {
-        self.stmts.push(expr)
+    pub fn s(&mut self, stmt: Stmt) -> StmtId {
+        self.stmts.push(stmt)
     }
 
     pub fn expr_dont_care(&self) -> ExprId {
@@ -187,16 +187,63 @@ pub struct ExprId(u32);
 entity_impl!(ExprId, "expr");
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum BinOp {
+    Equal,
+    And,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum UnaryOp {
+    Not,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expr {
     // nullary
     Const(BitVecValue),
     Sym(SymbolId),
     DontCare,
     // unary
-    Not(ExprId),
+    Binary(BinOp, ExprId, ExprId),
     // binary
-    And(ExprId, ExprId),
-    Equal(ExprId, ExprId),
+    Unary(UnaryOp, ExprId),
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum BoxedExpr {
+    // (have start and end as usize in each variant)
+    // nullary
+    Const(BitVecValue, usize, usize),
+    Sym(SymbolId, usize, usize),
+    DontCare(usize, usize),
+    // unary
+    Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
+    // binary
+    Unary(UnaryOp, Box<BoxedExpr>, usize, usize),
+}
+
+impl BoxedExpr {
+    // starting character of the expression
+    pub fn start(&self) -> usize {
+        match self {
+            BoxedExpr::Const(_, start, _) => *start,
+            BoxedExpr::Sym(_, start, _) => *start,
+            BoxedExpr::DontCare(start, _) => *start,
+            BoxedExpr::Binary(_, _, _, start, _) => *start,
+            BoxedExpr::Unary(_, _, start, _) => *start,
+        }
+    }
+
+    // ending character of the expression
+    pub fn end(&self) -> usize {
+        match self {
+            BoxedExpr::Const(_, _, end) => *end,
+            BoxedExpr::Sym(_, _, end) => *end,
+            BoxedExpr::DontCare(_, end) => *end,
+            BoxedExpr::Binary(_, _, _, _, end) => *end,
+            BoxedExpr::Unary(_, _, _, end) => *end,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -279,6 +326,10 @@ impl SymbolTable {
         id
     }
 
+    pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
+        self.by_name.get(name).copied()
+    }
+
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
         assert!(
             !name.contains('.'),
@@ -320,6 +371,16 @@ impl SymbolTable {
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
         let s = Struct { name, pins };
         self.structs.push(s)
+    }
+
+    pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
+        self.structs
+            .iter()
+            .find_map(|(id, s)| if s.name() == name { Some(id) } else { None })
+    }
+
+    pub fn struct_from_struct_id(&mut self, struct_id: StructId) -> &Struct {
+        &self.structs[struct_id]
     }
 
     pub fn struct_ids(&self) -> Vec<StructId> {
@@ -477,8 +538,8 @@ mod tests {
     }
 
     #[test]
-    fn serialize_calyx_go_down_transaction() {
-        // Manually create the expected result of parsing `calyx_go_down`.
+    fn serialize_calyx_go_done_transaction() {
+        // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
@@ -517,8 +578,8 @@ mod tests {
         let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
+        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
 
         // 4) create statements
         let while_body = vec![calyx_go_done.s(Stmt::Step)];
