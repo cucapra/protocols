@@ -34,7 +34,7 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_bit_str(),
+        Expr::Const(val) => val.to_i64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
         Expr::Unary(UnaryOp::Not, not_exprid) => {

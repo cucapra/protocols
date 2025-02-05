@@ -290,7 +290,7 @@ fn parse_cmd(
         "step" => match arg {
             Some(expr_id) => Stmt::Step(expr_id),
             None => {
-                let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+                let one_expr = tr.e(Expr::Const(BitVecValue::from_i64(1, 2)));
                 Stmt::Step(one_expr)
             }
         }
