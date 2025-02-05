@@ -54,12 +54,11 @@ pub fn parse_boxed_expr(
                 Rule::path_id => {
                     let path_id = primary.as_str();
 
-                    let symbol_id = st[path_id];
-                    BoxedExpr::Sym(symbol_id, start, end)
-                    // match symbol_id {
-                    //     Some(id) => BoxedExpr::Sym(id, start, end),
-                    //     None => panic!("Referencing undefined symbol: {}", path_id),
-                    // }
+                    let symbol_id = st.symbol_id_from_name(path_id);
+                    match symbol_id {
+                        Some(id) => BoxedExpr::Sym(id, start, end),
+                        None => panic!("Referencing undefined symbol: {}", path_id),
+                    }
                 }
 
                 // parse don't care
