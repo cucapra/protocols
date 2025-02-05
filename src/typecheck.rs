@@ -59,9 +59,9 @@ fn check_stmt_types(
     stmt_id: &StmtId,
 ) -> Result<(), String> {
     match &tr[stmt_id] {
-        Stmt::Skip | Stmt::Step(None) | Stmt::Fork => Ok(()),
+        Stmt::Skip | Stmt::Fork => Ok(()),
         // Is this the correct logic?
-        Stmt::Step(Some(exprid)) => {
+        Stmt::Step(exprid) => {
             let expr_type = check_expr_types(tr, st, handler, exprid)?;
             if let Type::BitVec(_) = expr_type {
                 Ok(())
@@ -205,7 +205,7 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 
 #[cfg(test)]
 mod tests {
-    use crate::serialize::tests::{create_add_transaction, create_calyx_go_done_transaction};
+    use crate::{parser::parse_file, serialize::tests::{create_add_transaction, create_calyx_go_done_transaction}};
     use baa::BitVecValue;
 
     use super::*;
@@ -213,7 +213,8 @@ mod tests {
     #[test]
     fn typecheck_add_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (add, symbols) = create_add_transaction(&mut handler);
+        // let (add, symbols) = create_add_transaction(&mut handler);
+        let (add, symbols) = parse_file("tests/add_struct.prot", &mut handler);
         type_check(&add, &symbols, &mut handler);
     }
 
@@ -295,12 +296,14 @@ mod tests {
         let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         tr.add_expr_loc(zero_expr, 106, 107, fileid);
         let a_assign = tr.s(Stmt::Assign(a, b_expr));
+        let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        tr.add_expr_loc(one_expr, 1, 1, fileid); // random location
         tr.add_stmt_loc(a_assign, 57, 64, fileid);
         let fork = tr.s(Stmt::Fork);
         tr.add_stmt_loc(fork, 68, 75, fileid);
         let c_assign = tr.s(Stmt::Assign(c, b_expr));
         tr.add_stmt_loc(c_assign, 79, 86, fileid);
-        let step = tr.s(Stmt::Step(None));
+        let step = tr.s(Stmt::Step(one_expr));
         tr.add_stmt_loc(step, 90, 97, fileid);
         let s_assign = tr.s(Stmt::Assign(s, zero_expr));
         tr.add_stmt_loc(s_assign, 101, 108, fileid);

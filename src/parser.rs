@@ -287,7 +287,13 @@ fn parse_cmd(
     };
 
     match cmd {
-        "step" => Stmt::Step(arg),
+        "step" => match arg {
+            Some(expr_id) => Stmt::Step(expr_id),
+            None => {
+                let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+                Stmt::Step(one_expr)
+            }
+        }
         "fork" => {
             // if there is a passed expression, panic -- this is invalid
             if arg.is_some() {

@@ -34,7 +34,7 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_i64().unwrap().to_string(),
+        Expr::Const(val) => val.to_bit_str(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
@@ -70,8 +70,7 @@ fn build_statements(
             st[lhs].full_name(st),
             serialize_expr(tr, st, rhs)
         )?,
-        Stmt::Step(None) => writeln!(out, "{}step();", "  ".repeat(index))?,
-        Stmt::Step(Some(expr_id)) => writeln!(
+        Stmt::Step(expr_id) => writeln!(
             out,
             "{}step({});",
             "  ".repeat(index),
@@ -248,13 +247,15 @@ pub mod tests {
         let dut_s_expr = add.e(Expr::Sym(dut_s));
         add.add_expr_loc(dut_s_expr, 271, 276, add_fileid);
         let s_expr = add.e(Expr::Sym(s));
+        let one_expr = add.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        add.add_expr_loc(one_expr, 1, 1, add_fileid); // just put in random values here
 
         // 4) create statements
         let a_assign = add.s(Stmt::Assign(dut_a, a_expr));
         add.add_stmt_loc(a_assign, 184, 195, add_fileid);
         let b_assign = add.s(Stmt::Assign(dut_b, b_expr));
         add.add_stmt_loc(b_assign, 199, 210, add_fileid);
-        let step = add.s(Stmt::Step(None));
+        let step = add.s(Stmt::Step(one_expr));
         add.add_stmt_loc(step, 214, 221, add_fileid);
         let fork = add.s(Stmt::Fork);
         add.add_stmt_loc(fork, 225, 232, add_fileid);
@@ -340,9 +341,11 @@ pub mod tests {
         calyx_go_done.add_expr_loc(cond_expr, 172, 187, calyx_fileid);
         let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
+        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        calyx_go_done.add_expr_loc(one_expr, 1, 1, calyx_fileid); // just put in random values here
 
         // 4) create statements
-        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step(None))];
+        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step(one_expr))];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
@@ -420,7 +423,7 @@ pub mod tests {
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
-        let if_body = vec![easycond.s(Stmt::Step(None))];
+        let if_body = vec![easycond.s(Stmt::Step(one_expr))];
         let ifbody = easycond.s(Stmt::Block(if_body));
 
         let else_body = vec![easycond.s(Stmt::Fork)];
