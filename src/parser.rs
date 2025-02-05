@@ -278,7 +278,8 @@ fn parse_cmd(
     let cmd_rule = inner_rules.next().unwrap();
     let cmd = cmd_rule.as_str();
     match cmd {
-        "step" => Stmt::Step,
+        // TODO: parse an inner expression for step stmts
+        "step" => Stmt::Step(None),
         "fork" => Stmt::Fork,
         _ => panic!("Unexpected command: {:?}", cmd),
     }

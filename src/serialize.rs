@@ -70,7 +70,7 @@ fn build_statements(
             st[lhs].full_name(st),
             serialize_expr(tr, st, rhs)
         )?,
-        Stmt::Step => writeln!(out, "{}step();", "  ".repeat(index))?,
+        Stmt::Step(_) => writeln!(out, "{}step();", "  ".repeat(index))?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
         Stmt::While(cond, bodyid) => {
             writeln!(
@@ -248,7 +248,7 @@ pub mod tests {
         add.add_stmt_loc(a_assign, 184, 195, add_fileid);
         let b_assign = add.s(Stmt::Assign(dut_b, b_expr));
         add.add_stmt_loc(b_assign, 199, 210, add_fileid);
-        let step = add.s(Stmt::Step);
+        let step = add.s(Stmt::Step(None));
         add.add_stmt_loc(step, 214, 221, add_fileid);
         let fork = add.s(Stmt::Fork);
         add.add_stmt_loc(fork, 225, 232, add_fileid);
@@ -336,7 +336,7 @@ pub mod tests {
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
 
         // 4) create statements
-        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step)];
+        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step(None))];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
@@ -414,7 +414,7 @@ pub mod tests {
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
-        let if_body = vec![easycond.s(Stmt::Step)];
+        let if_body = vec![easycond.s(Stmt::Step(None))];
         let ifbody = easycond.s(Stmt::Block(if_body));
 
         let else_body = vec![easycond.s(Stmt::Fork)];
