@@ -256,12 +256,14 @@ fn parse_assign(
     let path_id_rule = inner_rules.next().unwrap();
     let expr_rule = inner_rules.next().unwrap();
 
+    // This function panics if the symbol is not found
     let path_id = path_id_rule.as_str();
+    let symbol_id = st[path_id];
 
-    let symbol_id = match st.symbol_id_from_name(path_id) {
-        Some(id) => id,
-        None => panic!("Assigning to undeclared symbol: {}", path_id),
-    };
+    // let symbol_id = match st.symbol_id_from_name(path_id) {
+    //     Some(id) => id,
+    //     None => panic!("Assigning to undeclared symbol: {}", path_id),
+    // };
 
     let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
 
