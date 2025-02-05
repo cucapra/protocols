@@ -175,7 +175,7 @@ pub enum Stmt {
     Skip,
     Block(Vec<StmtId>),
     Assign(SymbolId, ExprId),
-    Step,
+    Step(Option<ExprId>),
     Fork,
     While(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
@@ -528,7 +528,7 @@ mod tests {
         let body = vec![
             add.s(Stmt::Assign(dut_a, a_expr)),
             add.s(Stmt::Assign(dut_b, b_expr)),
-            add.s(Stmt::Step),
+            add.s(Stmt::Step(None)),
             add.s(Stmt::Fork),
             add.s(Stmt::Assign(dut_a, add.expr_dont_care())),
             add.s(Stmt::Assign(dut_b, add.expr_dont_care())),
@@ -582,7 +582,7 @@ mod tests {
         let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
 
         // 4) create statements
-        let while_body = vec![calyx_go_done.s(Stmt::Step)];
+        let while_body = vec![calyx_go_done.s(Stmt::Step(None))];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let body = vec![
