@@ -60,7 +60,6 @@ fn check_stmt_types(
 ) -> Result<(), String> {
     match &tr[stmt_id] {
         Stmt::Skip | Stmt::Fork => Ok(()),
-        // Is this the correct logic?
         Stmt::Step(exprid) => {
             let expr_type = check_expr_types(tr, st, handler, exprid)?;
             if let Type::BitVec(_) = expr_type {
