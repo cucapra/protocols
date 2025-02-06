@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::parser;
 use crate::{diagnostic::*, ir::*, serialize::*};
 
 fn check_expr_types(
@@ -58,7 +59,21 @@ fn check_stmt_types(
     stmt_id: &StmtId,
 ) -> Result<(), String> {
     match &tr[stmt_id] {
-        Stmt::Skip | Stmt::Step | Stmt::Fork => Ok(()),
+        Stmt::Skip | Stmt::Fork => Ok(()),
+        Stmt::Step(exprid) => {
+            let expr_type = check_expr_types(tr, st, handler, exprid)?;
+            if let Type::BitVec(_) = expr_type {
+                Ok(())
+            } else {
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    &format!("Invalid type for [step] statement: {:?}", expr_type),
+                    Level::Error,
+                );
+                Ok(())
+            }
+        }
         Stmt::Assign(lhs, rhs) => {
             // Function argument cannot be assigned
             if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
@@ -191,7 +206,10 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 mod tests {
     use std::path::Path;
 
-    use crate::serialize::tests::{create_add_transaction, create_calyx_go_done_transaction};
+    use crate::{
+        parser::parse_file,
+        serialize::tests::{create_add_transaction, create_calyx_go_done_transaction},
+    };
     use baa::BitVecValue;
     use insta::Settings;
     use strip_ansi_escapes::strip_str;
@@ -201,7 +219,8 @@ mod tests {
     #[test]
     fn test_add_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (add, symbols) = create_add_transaction(&mut handler);
+        // let (add, symbols) = create_add_transaction(&mut handler);
+        let (add, symbols) = parse_file("tests/add_struct.prot", &mut handler);
         type_check(&add, &symbols, &mut handler);
 
         let content = strip_str(handler.error_string());
@@ -211,6 +230,96 @@ mod tests {
         settings.bind(|| {
             insta::assert_snapshot!(content);
         });
+    }
+
+    #[test]
+    fn typecheck_invalid_step_arg_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_expand_key_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_round_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/aes128_round.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_mul_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_cond_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_invalid_step_arg_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_expand_key_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_aes128_round_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) =
+            parser::parse_file("tests/aes128_round.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_mul_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
+    }
+
+    #[test]
+    fn typecheck_cond_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let (invalid_step_arg, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
+        type_check(&invalid_step_arg, &symbols, &mut handler);
     }
 
     #[test]
@@ -254,12 +363,14 @@ mod tests {
         let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         tr.add_expr_loc(zero_expr, 106, 107, fileid);
         let a_assign = tr.s(Stmt::Assign(a, b_expr));
+        let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        tr.add_expr_loc(one_expr, 1, 1, fileid); // random location
         tr.add_stmt_loc(a_assign, 57, 64, fileid);
         let fork = tr.s(Stmt::Fork);
         tr.add_stmt_loc(fork, 68, 75, fileid);
         let c_assign = tr.s(Stmt::Assign(c, b_expr));
         tr.add_stmt_loc(c_assign, 79, 86, fileid);
-        let step = tr.s(Stmt::Step);
+        let step = tr.s(Stmt::Step(one_expr));
         tr.add_stmt_loc(step, 90, 97, fileid);
         let s_assign = tr.s(Stmt::Assign(s, zero_expr));
         tr.add_stmt_loc(s_assign, 101, 108, fileid);

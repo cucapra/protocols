@@ -256,7 +256,7 @@ fn parse_assign(
     let path_id_rule = inner_rules.next().unwrap();
     let expr_rule = inner_rules.next().unwrap();
 
-    let path_id = path_id_rule.as_str();
+    let path_id: &str = path_id_rule.as_str();
 
     let symbol_id = match st.symbol_id_from_name(path_id) {
         Some(id) => id,
@@ -270,16 +270,37 @@ fn parse_assign(
 
 fn parse_cmd(
     pair: pest::iterators::Pair<Rule>,
-    _tr: &mut Transaction,
+    tr: &mut Transaction,
     st: &mut SymbolTable,
     fileid: usize,
 ) -> Stmt {
     let mut inner_rules = pair.into_inner();
     let cmd_rule = inner_rules.next().unwrap();
     let cmd = cmd_rule.as_str();
+
+    let arg = if let Some(expr_rule) = inner_rules.next() {
+        // println!("Parsing step with expr: {}", expr_rule.as_str());
+        let expr_id = parse_expr(expr_rule.into_inner(), tr, st, fileid);
+        Some(expr_id)
+    } else {
+        None
+    };
+
     match cmd {
-        "step" => Stmt::Step,
-        "fork" => Stmt::Fork,
+        "step" => match arg {
+            Some(expr_id) => Stmt::Step(expr_id),
+            None => {
+                let one_expr = tr.e(Expr::Const(BitVecValue::from_i64(1, 2)));
+                Stmt::Step(one_expr)
+            }
+        },
+        "fork" => {
+            // if there is a passed expression, panic -- this is invalid
+            if arg.is_some() {
+                panic!("Fork command should not have an argument");
+            }
+            Stmt::Fork
+        }
         _ => panic!("Unexpected command: {:?}", cmd),
     }
 }
@@ -428,8 +449,10 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Type {
     }
 }
 
-fn parse_file(filename: impl AsRef<std::path::Path>) -> (Transaction, SymbolTable) {
-    let mut handler = DiagnosticHandler::new();
+pub fn parse_file(
+    filename: impl AsRef<std::path::Path>,
+    handler: &mut DiagnosticHandler,
+) -> (Transaction, SymbolTable) {
     let input = std::fs::read_to_string(filename).expect("failed to load");
     let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input.clone());
 
@@ -511,56 +534,64 @@ mod tests {
     #[test]
     fn test_add_prot() {
         let filename = "tests/add_struct.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_aes128_prot() {
         let filename = "tests/aes128.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_aes128_round_prot() {
         let filename = "tests/aes128_round.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_aes128_expand_key_prot() {
         let filename = "tests/aes128_expand_key.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_mul_prot() {
         let filename = "tests/mul.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_easycond_prot() {
         let filename = "tests/cond.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_cond_prot() {
         let filename = "tests/cond.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 
     #[test]
     fn test_calyx_go_done_struct_prot() {
         let filename = "tests/calyx_go_done_struct.prot";
-        let (tr, st) = parse_file(filename);
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        test_re_serialize(tr, st, filename)
+    }
+
+    // passes the parser, but should fail typechecking
+    #[test]
+    fn test_invalid_step_arg() {
+        let filename = "tests/invalid_step_arg.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
 

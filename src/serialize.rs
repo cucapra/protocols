@@ -70,7 +70,12 @@ fn build_statements(
             st[lhs].full_name(st),
             serialize_expr(tr, st, rhs)
         )?,
-        Stmt::Step => writeln!(out, "{}step();", "  ".repeat(index))?,
+        Stmt::Step(expr_id) => writeln!(
+            out,
+            "{}step({});",
+            "  ".repeat(index),
+            serialize_expr(tr, st, expr_id)
+        )?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
         Stmt::While(cond, bodyid) => {
             writeln!(
@@ -245,14 +250,16 @@ pub mod tests {
         let dut_s_expr = add.e(Expr::Sym(dut_s));
         add.add_expr_loc(dut_s_expr, 265, 270, add_fileid);
         let s_expr = add.e(Expr::Sym(s));
+        let one_expr = add.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        add.add_expr_loc(one_expr, 1, 1, add_fileid); // just put in random values here
 
         // 4) create statements
         let a_assign = add.s(Stmt::Assign(dut_a, a_expr));
         add.add_stmt_loc(a_assign, 178, 189, add_fileid);
         let b_assign = add.s(Stmt::Assign(dut_b, b_expr));
-        add.add_stmt_loc(b_assign, 193, 204, add_fileid);
-        let step = add.s(Stmt::Step);
-        add.add_stmt_loc(step, 208, 215, add_fileid);
+        add.add_stmt_loc(b_assign, 199, 210, add_fileid);
+        let step = add.s(Stmt::Step(one_expr));
+        add.add_stmt_loc(step, 214, 221, add_fileid);
         let fork = add.s(Stmt::Fork);
         add.add_stmt_loc(fork, 219, 226, add_fileid);
         let dut_a_assign = add.s(Stmt::Assign(dut_a, add.expr_dont_care()));
@@ -337,9 +344,11 @@ pub mod tests {
         calyx_go_done.add_expr_loc(cond_expr, 172, 187, calyx_fileid);
         let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
+        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        calyx_go_done.add_expr_loc(one_expr, 1, 1, calyx_fileid); // just put in random values here
 
         // 4) create statements
-        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step)];
+        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step(one_expr))];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
@@ -429,7 +438,7 @@ pub mod tests {
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
-        let if_body = vec![easycond.s(Stmt::Step)];
+        let if_body = vec![easycond.s(Stmt::Step(one_expr))];
         let ifbody = easycond.s(Stmt::Block(if_body));
 
         let else_body = vec![easycond.s(Stmt::Fork)];
