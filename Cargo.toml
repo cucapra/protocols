@@ -7,9 +7,10 @@ rust-version = "1.80.1"
 [dependencies]
 baa = "0.15.0"
 cranelift-entity = "0.114.0"
-pest = "2.7.14"
-pest_derive = "2.7.14"
+pest = "2.7.15"
+pest_derive = "2.7.15"
 rustc-hash = "2.1.0"
 thiserror = "2.0.8"
 codespan-reporting = "0.11.1"
 lazy_static = "1.5.0"
+verilog = { git = "https://github.com/ethanuppal/dumbname" }
