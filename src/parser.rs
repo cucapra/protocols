@@ -602,4 +602,11 @@ mod tests {
     //     let (tr, st) = parse_file(filename);
     //     test_re_serialize(tr, st, filename)
     // }
+
+    #[test]
+    fn test_parse_serv_register_file() {
+        let filename = "tests/serv/register_file.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        test_re_serialize(tr, st, filename)
+    }
 }
