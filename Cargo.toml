@@ -14,7 +14,6 @@ thiserror = "2.0.8"
 codespan-reporting = "0.11.1"
 strip-ansi-escapes = "0.2"
 lazy_static = "1.5.0"
-strip-ansi-escapes = "0.2"
 
 [dev-dependencies]
 insta = { version = "1.41.1", features = ["yaml"] }
