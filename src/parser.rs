@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_easycond_prot() {
-        let filename = "tests/easycond.prot";
+        let filename = "tests/easycond.prot";  
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }

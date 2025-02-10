@@ -223,7 +223,7 @@ pub mod tests {
             "tests/calyx_go_done_struct.prot",
             &mut DiagnosticHandler::new(),
         );
-
+      
         let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
         snap("calyx_go_done_struct", content);
     }
@@ -304,6 +304,7 @@ pub mod tests {
         // 3) create expressions
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
+
         let one_expr = easycond.e(Expr::Const(BitVecValue::from_i64(1, 2)));
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
