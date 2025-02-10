@@ -181,8 +181,6 @@ mod tests {
     use std::path::Path;
     use strip_ansi_escapes::strip_str;
 
-    use crate::typecheck::*;
-
     use super::*;
 
     #[test]
