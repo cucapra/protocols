@@ -3,25 +3,25 @@ source: src/typecheck.rs
 expression: content
 ---
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-   ┌─ add.prot:13:3
+   ┌─ tests/add_struct.prot:13:3
    │
 13 │   DUT.a := X;
    │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
 
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-   ┌─ add.prot:14:3
+   ┌─ tests/add_struct.prot:14:3
    │
 14 │   DUT.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
 
 error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
-   ┌─ add.prot:15:3
+   ┌─ tests/add_struct.prot:15:3
    │
 15 │   s := DUT.s;
    │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
 
 error: DUT.s is an output and thus cannot be assigned.
-   ┌─ add.prot:16:3
+   ┌─ tests/add_struct.prot:16:3
    │
 16 │   DUT.s := a;
    │   ^^^^^^^^^^^ DUT.s is an output and thus cannot be assigned.
