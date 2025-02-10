@@ -34,12 +34,16 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_bit_str(),
+        Expr::Const(val) => val.to_i64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
-        Expr::Not(not_exprid) => "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")",
-        Expr::And(lhs, rhs) => serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs),
-        Expr::Equal(lhs, rhs) => {
+        Expr::Unary(UnaryOp::Not, not_exprid) => {
+            "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")"
+        }
+        Expr::Binary(BinOp::And, lhs, rhs) => {
+            serialize_expr(tr, st, lhs) + " && " + &serialize_expr(tr, st, rhs)
+        }
+        Expr::Binary(BinOp::Equal, lhs, rhs) => {
             serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
         }
     }
@@ -221,7 +225,7 @@ pub mod tests {
         assert_eq!(symbols["s"], symbols[s]);
 
         // create fileid and read file
-        let input = std::fs::read_to_string("tests/addStruct.prot").expect("failed to load");
+        let input = std::fs::read_to_string("tests/add_struct.prot").expect("failed to load");
         let add_fileid = handler.add_file("add.prot".to_string(), input);
 
         // 2) create transaction
@@ -235,7 +239,7 @@ pub mod tests {
 
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
-        add.add_expr_loc(a_expr, 187, 188, add_fileid);
+        add.add_expr_loc(a_expr, 152, 153, add_fileid);
         let b_expr = add.e(Expr::Sym(b));
         add.add_expr_loc(b_expr, 202, 203, add_fileid);
         let dut_s_expr = add.e(Expr::Sym(dut_s));
@@ -277,10 +281,10 @@ pub mod tests {
         (add, symbols)
     }
 
-    pub fn create_calyx_go_down_transaction(
+    pub fn create_calyx_go_done_transaction(
         handler: &mut DiagnosticHandler,
     ) -> (Transaction, SymbolTable) {
-        // Manually create the expected result of parsing `calyx_go_down`.
+        // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
@@ -310,8 +314,8 @@ pub mod tests {
 
         // create fileid and read file
         let input =
-            std::fs::read_to_string("tests/calyx_go_doneStruct.prot").expect("failed to load");
-        let calyx_fileid = handler.add_file("calyx_go_done.prot".to_string(), input);
+            std::fs::read_to_string("tests/calyx_go_done_struct.prot").expect("failed to load");
+        let calyx_fileid = handler.add_file("calyx_go_done_struct.prot".to_string(), input);
 
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
@@ -329,13 +333,13 @@ pub mod tests {
         calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
         calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Equal(dut_done_expr, one_expr));
-        calyx_go_done.add_expr_loc(cond_expr, 183, 198, calyx_fileid);
-        let not_expr = calyx_go_done.e(Expr::Not(cond_expr));
+        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
+        calyx_go_done.add_expr_loc(cond_expr, 172, 187, calyx_fileid);
+        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
         calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
 
         // 4) create statements
-        let while_body = vec![calyx_go_done.s(Stmt::Step)];
+        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step)];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
@@ -378,7 +382,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_serialize_calyx_go_down_transaction() {
+    fn test_serialize_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
         let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
 
@@ -422,7 +426,7 @@ pub mod tests {
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
         let one_expr = easycond.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let cond_expr = easycond.e(Expr::Equal(dut_a_expr, one_expr));
+        let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
         let if_body = vec![easycond.s(Stmt::Step)];

@@ -1,4 +1,4 @@
-// maps to a verilog design, need to implement parsing
+// maps to a verilog design
 struct Adder {
   in a: u32,
   in b: u32,

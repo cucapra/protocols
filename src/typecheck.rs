@@ -16,7 +16,7 @@ fn check_expr_types(
         Expr::Const(_) => Ok(Type::BitVec(1)),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
-        Expr::Not(not_exprid) => {
+        Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(_) = inner_type {
                 Ok(inner_type)
@@ -30,7 +30,7 @@ fn check_expr_types(
                 Ok(inner_type)
             }
         }
-        Expr::And(lhs, rhs) | Expr::Equal(lhs, rhs) => {
+        Expr::Binary(BinOp::And, lhs, rhs) | Expr::Binary(BinOp::Equal, lhs, rhs) => {
             let lhs_type = check_expr_types(tr, st, handler, lhs)?;
             let rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if lhs_type.is_equivalent(&rhs_type) {
@@ -191,7 +191,7 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 mod tests {
     use std::path::Path;
 
-    use crate::serialize::tests::{create_add_transaction, create_calyx_go_down_transaction};
+    use crate::serialize::tests::{create_add_transaction, create_calyx_go_done_transaction};
     use baa::BitVecValue;
     use insta::Settings;
     use strip_ansi_escapes::strip_str;
@@ -214,9 +214,9 @@ mod tests {
     }
 
     #[test]
-    fn test_calyx_go_down_transaction() {
+    fn test_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_down_transaction(&mut handler);
+        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
 
         let content = strip_str(handler.error_string());
@@ -246,6 +246,7 @@ mod tests {
             Arg::new(b, Dir::In),
             Arg::new(s, Dir::Out),
         ];
+
         let b_expr = tr.e(Expr::Sym(b));
         tr.add_expr_loc(b_expr, 62, 63, fileid);
         let b_expr2 = tr.e(Expr::Sym(b));
