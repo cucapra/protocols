@@ -1,0 +1,21 @@
+---
+source: src/typecheck.rs
+expression: content
+---
+error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+  ┌─ tests/invalid_step_arg.prot:6:3
+  │
+6 │   a := b;
+  │   ^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+
+error: Invalid type for [step] statement: Struct(struct0)
+  ┌─ tests/invalid_step_arg.prot:8:3
+  │
+8 │   step(dut);
+  │   ^^^^^^^^^^ Invalid type for [step] statement: Struct(struct0)
+
+error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+  ┌─ tests/invalid_step_arg.prot:9:3
+  │
+9 │   s := 0;
+  │   ^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.

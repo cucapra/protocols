@@ -213,6 +213,14 @@ mod tests {
 
     use super::*;
 
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
+    }
+
     #[test]
     fn test_add_transaction() {
         let mut handler = DiagnosticHandler::new();
@@ -221,64 +229,71 @@ mod tests {
 
         let content = strip_str(handler.error_string());
 
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("add_struct", content);
     }
 
     #[test]
     fn test_invalid_step_arg_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
+        let (tr, symbols) =
             parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        type_check(&tr, &symbols, &mut handler);
+
+        let content = strip_str(handler.error_string());
+
+        snap("invalid_step_arg", content);
     }
 
     #[test]
     fn typecheck_aes128_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let (tr, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
+        type_check(&tr, &symbols, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("aes128", content);
     }
 
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
+        let (tr, symbols) =
             parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        type_check(&tr, &symbols, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("aes128_expand_key", content);
     }
 
     #[test]
     fn typecheck_aes128_round_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
+        let (tr, symbols) =
             parser::parse_file("tests/aes128_round.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        type_check(&tr, &symbols, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("aes128_round", content);
     }
 
     #[test]
     fn typecheck_mul_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let (tr, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
+        type_check(&tr, &symbols, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("mul", content);
     }
 
     #[test]
     fn typecheck_cond_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
-    }
+        let (tr, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
+        type_check(&tr, &symbols, &mut handler);
+        let content = strip_str(handler.error_string());
 
-    #[test]
-    fn typecheck_invalid_step_arg_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
-            parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        snap("cond", content);
     }
 
     #[test]
@@ -289,11 +304,7 @@ mod tests {
 
         let content = strip_str(handler.error_string());
 
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("calyx_go_done_struct", content);
     }
 
     // Specific Tests

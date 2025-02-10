@@ -201,17 +201,20 @@ pub mod tests {
 
     use super::*;
 
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
+    }
+
     #[test]
     fn test_add_transaction() {
         let (add, symbols) = parse_file("tests/add_struct.prot", &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&add, &symbols).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("add_struct", content);
     }
 
     #[test]
@@ -222,12 +225,7 @@ pub mod tests {
         );
 
         let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("calyx_go_done_struct", content);
     }
 
     #[test]
@@ -236,12 +234,7 @@ pub mod tests {
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&tr, &st).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("aes128", content);
     }
 
     #[test]
@@ -250,12 +243,7 @@ pub mod tests {
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&tr, &st).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("aes128_round", content);
     }
 
     #[test]
@@ -264,12 +252,7 @@ pub mod tests {
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&tr, &st).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("aes128_expand_key", content);
     }
 
     #[test]
@@ -278,12 +261,7 @@ pub mod tests {
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&tr, &st).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("mul", content);
     }
 
     #[test]
@@ -292,12 +270,7 @@ pub mod tests {
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&tr, &st).unwrap();
-
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(content);
-        });
+        snap("cond", content);
     }
 
     #[test]

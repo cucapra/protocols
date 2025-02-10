@@ -1,0 +1,15 @@
+---
+source: src/typecheck.rs
+expression: content
+---
+warning: Inferred RHS type as BitVec(128) from LHS type BitVec(128).
+   ┌─ tests/aes128.prot:14:3
+   │
+14 │   dut.state := X;
+   │   ^^^^^^^^^^^^^^^ Inferred RHS type as BitVec(128) from LHS type BitVec(128).
+
+warning: Inferred RHS type as BitVec(128) from LHS type BitVec(128).
+   ┌─ tests/aes128.prot:15:3
+   │
+15 │   dut.key := X;
+   │   ^^^^^^^^^^^^^ Inferred RHS type as BitVec(128) from LHS type BitVec(128).
