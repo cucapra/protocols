@@ -193,9 +193,9 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
 
 #[cfg(test)]
 pub mod tests {
+    use crate::parser::parse_file;
     use insta::Settings;
     use std::path::Path;
-    use crate::parser::parse_file;
 
     use baa::BitVecValue;
 
@@ -203,8 +203,7 @@ pub mod tests {
 
     #[test]
     fn test_add_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (add, symbols) = parse_file("tests/add_struct.prot", &mut handler);
+        let (add, symbols) = parse_file("tests/add_struct.prot", &mut DiagnosticHandler::new());
 
         let content = serialize_to_string(&add, &symbols).unwrap();
 
@@ -217,10 +216,83 @@ pub mod tests {
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
+        let (calyx_go_done, symbols) = parse_file(
+            "tests/calyx_go_done_struct.prot",
+            &mut DiagnosticHandler::new(),
+        );
 
         let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
+    }
+
+    #[test]
+    fn test_aes128_prot() {
+        let filename = "tests/aes128.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(&tr, &st).unwrap();
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
+    }
+
+    #[test]
+    fn test_aes128_round_prot() {
+        let filename = "tests/aes128_round.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(&tr, &st).unwrap();
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
+    }
+
+    #[test]
+    fn test_aes128_expand_key_prot() {
+        let filename = "tests/aes128_expand_key.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(&tr, &st).unwrap();
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
+    }
+
+    #[test]
+    fn test_mul_prot() {
+        let filename = "tests/mul.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(&tr, &st).unwrap();
+
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(content);
+        });
+    }
+
+    #[test]
+    fn test_cond_prot() {
+        let filename = "tests/cond.prot";
+        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(&tr, &st).unwrap();
+
         let mut settings = Settings::clone_current();
         settings.set_snapshot_path(Path::new("../tests/snapshots"));
         settings.bind(|| {
@@ -241,11 +313,10 @@ pub mod tests {
 
         // declare DUT struct (TODO: Fix struct)
         let dut_struct = symbols.add_struct(
-            "Adder".to_string(),
+            "UnaryOp".to_string(),
             vec![
                 Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
                 Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
         let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
@@ -255,6 +326,7 @@ pub mod tests {
         // 2) create transaction
         let mut easycond = Transaction::new("easycond".to_string());
         easycond.args = vec![Arg::new(a, Dir::In), Arg::new(b, Dir::Out)];
+        easycond.type_args = vec![dut];
 
         // 3) create expressions
         let a_expr = easycond.e(Expr::Sym(a));

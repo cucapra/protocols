@@ -542,43 +542,8 @@ mod tests {
     }
 
     #[test]
-    fn test_aes128_prot() {
-        let filename = "tests/aes128.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
-    }
-
-    #[test]
-    fn test_aes128_round_prot() {
-        let filename = "tests/aes128_round.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
-    }
-
-    #[test]
-    fn test_aes128_expand_key_prot() {
-        let filename = "tests/aes128_expand_key.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
-    }
-
-    #[test]
-    fn test_mul_prot() {
-        let filename = "tests/mul.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
-    }
-
-    #[test]
     fn test_easycond_prot() {
-        let filename = "tests/cond.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
-    }
-
-    #[test]
-    fn test_cond_prot() {
-        let filename = "tests/cond.prot";
+        let filename = "tests/easycond.prot";
         let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
         test_re_serialize(tr, st, filename)
     }
