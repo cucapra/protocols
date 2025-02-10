@@ -223,7 +223,7 @@ pub mod tests {
             "tests/calyx_go_done_struct.prot",
             &mut DiagnosticHandler::new(),
         );
-      
+
         let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
         snap("calyx_go_done_struct", content);
     }
