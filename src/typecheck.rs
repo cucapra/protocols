@@ -235,8 +235,7 @@ mod tests {
     #[test]
     fn test_invalid_step_arg_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) =
-            parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
+        let (tr, symbols) = parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
         type_check(&tr, &symbols, &mut handler);
 
         let content = strip_str(handler.error_string());
@@ -257,8 +256,7 @@ mod tests {
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) =
-            parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
+        let (tr, symbols) = parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
         type_check(&tr, &symbols, &mut handler);
         let content = strip_str(handler.error_string());
 
@@ -268,8 +266,7 @@ mod tests {
     #[test]
     fn typecheck_aes128_round_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) =
-            parser::parse_file("tests/aes128_round.prot", &mut handler);
+        let (tr, symbols) = parser::parse_file("tests/aes128_round.prot", &mut handler);
         type_check(&tr, &symbols, &mut handler);
         let content = strip_str(handler.error_string());
 
