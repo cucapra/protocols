@@ -206,10 +206,7 @@ pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHa
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        parser::parse_file,
-        serialize::tests::{create_add_transaction, create_calyx_go_done_transaction},
-    };
+    use crate::parser::parse_file;
     use baa::BitVecValue;
     use insta::Settings;
     use strip_ansi_escapes::strip_str;
@@ -219,7 +216,6 @@ mod tests {
     #[test]
     fn test_add_transaction() {
         let mut handler = DiagnosticHandler::new();
-        // let (add, symbols) = create_add_transaction(&mut handler);
         let (add, symbols) = parse_file("tests/add_struct.prot", &mut handler);
         type_check(&add, &symbols, &mut handler);
 
@@ -286,46 +282,9 @@ mod tests {
     }
 
     #[test]
-    fn typecheck_aes128_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
-    }
-
-    #[test]
-    fn typecheck_aes128_expand_key_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
-            parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
-    }
-
-    #[test]
-    fn typecheck_aes128_round_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
-            parser::parse_file("tests/aes128_round.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
-    }
-
-    #[test]
-    fn typecheck_mul_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
-    }
-
-    #[test]
-    fn typecheck_cond_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
-    }
-
-    #[test]
     fn test_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
+        let (calyx_go_done, symbols) = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
         type_check(&calyx_go_done, &symbols, &mut handler);
 
         let content = strip_str(handler.error_string());

@@ -181,6 +181,8 @@ fn parse_transaction(
                         let dut_symbol_id =
                             st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
 
+                        tr.type_args = vec![dut_symbol_id];
+
                         for pin in dut_struct.pins() {
                             let pin_name = pin.name().to_string();
                             st.add_with_parent(pin_name, dut_symbol_id);
@@ -453,8 +455,9 @@ pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
 ) -> (Transaction, SymbolTable) {
+    let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).expect("failed to load");
-    let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input.clone());
+    let fileid = handler.add_file(name, input.clone());
 
     let res = ProtocolParser::parse(Rule::file, &input);
     match res {
