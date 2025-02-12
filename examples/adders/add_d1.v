@@ -5,7 +5,7 @@ module adder_d1 (
     output reg  [31:0] S
 );
     always @(posedge clk) begin
-        sum <= A + B;
+        S <= A + B;
     end
 
 endmodule
