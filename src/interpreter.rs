@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 use marlin_verilator::*;
 
 #[cfg(test)]
@@ -6,17 +5,6 @@ pub mod tests {
     use super::*;
     use baa::{BitVecOps, BitVecValue};
     use patronus::sim::Simulator;
-=======
-use verilog::{verilog, VerilatorRuntime};
-
-
-
-
-#[cfg(test)]
-pub mod tests {
-    use verilog::{PortDirection, VerilatorRuntimeOptions};
-    use super::*;
->>>>>>> 369ccaf (add verilog files and example execution with Verilator)
 
     /// This example is intended to demonstrate how the `verilog` crate can be used
     /// to execute a design with Verilator. This is - of course - not a working
@@ -28,7 +16,6 @@ pub mod tests {
         let options = VerilatorRuntimeOptions::default();
         let mut runtime = VerilatorRuntime::new(
             "test_run".into(),
-<<<<<<< HEAD
             &[
                 "examples/tinyaes128/aes_128.v".as_ref(),
                 "examples/tinyaes128/table.v".as_ref(),
@@ -107,27 +94,3 @@ pub mod tests {
         assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 13);
     }
 }
-=======
-            &["examples/tinyaes128/aes_128.v".as_ref(), "examples/tinyaes128/table.v".as_ref()],
-            [],
-            options,
-            false,
-        ).unwrap();
-
-        let mut dut = runtime.create_dyn_model(
-            "expand_key_128",
-            "examples/tinyaes128/aes_128.v",
-            &[
-                // you should be able to derive these from the struct
-                ("in", 127, 0, PortDirection::Input),
-                ("out_1", 127, 0, PortDirection::Output),
-                ("out_2", 127, 0, PortDirection::Output),
-            ],
-        ).unwrap();
-
-
-
-    }
-
-}
->>>>>>> 369ccaf (add verilog files and example execution with Verilator)
