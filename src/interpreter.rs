@@ -7,7 +7,6 @@ use std::collections::HashMap;
 
 fn mapping(tr: &Transaction, st: &SymbolTable, stmtid: &StmtId, sim: &mut Interpreter) {
     match &tr[stmtid] {
-        Stmt::Skip => sim.step(),
         Stmt::Block(stmts) => {
             for stmt_id in stmts {
                 mapping(tr, st, stmt_id, sim);
