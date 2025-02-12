@@ -1,5 +1,5 @@
 /target
 Cargo.lock
 .idea/
-/tests/snapshots
 test_run/
+/tests/snapshots
