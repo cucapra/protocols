@@ -15,6 +15,7 @@ struct Regfile {
 fn read_write<R: Regfile>(
     in rs1_addr: u5,
     out rs1_data: u32,
+    out rs2_data: u32,
     in rs2_addr: u5,
     in rd_enable: u1,
     in rd_addr: u5,
