@@ -3,7 +3,7 @@ use marlin_verilator::*;
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use baa::BitVecValue;
+    use baa::{BitVecOps, BitVecValue};
     use patronus::sim::Simulator;
 
     /// This example is intended to demonstrate how the `verilog` crate can be used
@@ -87,9 +87,10 @@ pub mod tests {
             .unwrap()
             .expr;
 
-        sim.set(a, &BitVecValue::from_u64(1, 32));
-        sim.set(b, &BitVecValue::from_u64(3, 32));
+        sim.init();
+        sim.set(a, &BitVecValue::from_u64(6, 32));
+        sim.set(b, &BitVecValue::from_u64(7, 32));
         sim.step();
-        assert_eq!(sim.get(s).unwrap(), 4);
+        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 13);
     }
 }
