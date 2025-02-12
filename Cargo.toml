@@ -13,12 +13,8 @@ rustc-hash = "2.1.0"
 thiserror = "2.0.8"
 codespan-reporting = "0.11.1"
 lazy_static = "1.5.0"
-<<<<<<< HEAD
 marlin-verilator = "0.1.0"
 patronus = "0.32.0"
-=======
-verilog = { git = "https://github.com/ethanuppal/dumbname" }
->>>>>>> 6cbae1c (add verilog files and example execution with Verilator)
 
 [dev-dependencies]
 insta = { version = "1.41.1", features = ["yaml"] }
