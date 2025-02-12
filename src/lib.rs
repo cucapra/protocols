@@ -4,8 +4,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 pub mod diagnostic;
+mod interpreter;
 pub mod ir;
 pub mod parser;
 pub mod serialize;
 pub mod typecheck;
-mod interpreter;
