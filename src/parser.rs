@@ -63,7 +63,7 @@ pub fn parse_boxed_expr(
 
                 // parse don't care
                 Rule::dont_care => BoxedExpr::DontCare(start, end),
-                
+
                 // parse slices
                 Rule::slice => {
                     let mut inner_rules = primary.into_inner();
@@ -80,7 +80,7 @@ pub fn parse_boxed_expr(
                         // a[i] is syntactic sugar for a[i:i]
                         None => idx1,
                     };
-                    
+
                     BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end)
                 }
 
@@ -151,7 +151,7 @@ fn boxed_expr_to_expr_id(
             let expr_id = tr.e(Expr::Unary(op, arg_id));
             tr.add_expr_loc(expr_id, start, end, fileid);
             expr_id
-        },
+        }
         BoxedExpr::Slice(expr, idx1, idx2, start, end) => {
             let sym_id = boxed_expr_to_expr_id(*expr, tr, st, fileid);
             let expr_id = tr.e(Expr::Slice(sym_id, idx1, idx2));
@@ -205,7 +205,7 @@ fn parse_transaction(
                         };
 
                         let dut_symbol_id =
-                            st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));                        
+                            st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
 
                         for pin in dut_struct.pins() {
                             let pin_name = pin.name().to_string();
@@ -218,7 +218,6 @@ fn parse_transaction(
                     ),
                 }
             }
-            
 
             if let Some(arglist_pair) = inner_rules.peek() {
                 if arglist_pair.as_rule() == Rule::arglist {
@@ -559,11 +558,11 @@ mod tests {
         println!("============= {} =============", filename);
 
         // for tr in trs {
-            // TODO: Serialization needs to handle multiple transactions
-            let mut out = Vec::new();
-            serialize(&mut out, &tr, &st).unwrap();
-            let out_str = String::from_utf8(out).unwrap();
-            println!("{}", out_str);
+        // TODO: Serialization needs to handle multiple transactions
+        let mut out = Vec::new();
+        serialize(&mut out, &tr, &st).unwrap();
+        let out_str = String::from_utf8(out).unwrap();
+        println!("{}", out_str);
         // }
 
         println!("======================================");
@@ -577,7 +576,6 @@ mod tests {
         for (st, tr) in trs {
             test_re_serialize(tr, st, filename)
         }
-        
     }
 
     #[test]

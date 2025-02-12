@@ -47,7 +47,12 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
             serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
         }
         Expr::Slice(expr, idx1, idx2) => {
-            serialize_expr(tr, st, expr) + "[" + idx1.to_string().as_str() + ":" + idx2.to_string().as_str() + "]"
+            serialize_expr(tr, st, expr)
+                + "["
+                + idx1.to_string().as_str()
+                + ":"
+                + idx2.to_string().as_str()
+                + "]"
         }
     }
 }
@@ -170,7 +175,7 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
     } else {
         for (ii, arg) in tr.args.iter().enumerate() {
             let last_index = ii == tr.args.len() - 1;
-    
+
             if last_index {
                 write!(
                     out,
@@ -190,7 +195,6 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
             }
         }
     }
-    
 
     build_statements(out, tr, st, &tr.body, 1)?;
 
