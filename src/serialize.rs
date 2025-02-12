@@ -46,6 +46,9 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         Expr::Binary(BinOp::Equal, lhs, rhs) => {
             serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
         }
+        Expr::Slice(expr, idx1, idx2) => {
+            serialize_expr(tr, st, expr) + "[" + idx1.to_string().as_str() + ":" + idx2.to_string().as_str() + "]"
+        }
     }
 }
 
@@ -162,27 +165,32 @@ pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> st
 
     write!(out, "(")?;
 
-    for (ii, arg) in tr.args.iter().enumerate() {
-        let last_index = ii == tr.args.len() - 1;
-
-        if last_index {
-            write!(
-                out,
-                "{} {}: {}) {{\n",
-                serialize_dir(arg.dir()),
-                st[arg].name(),
-                serialize_type(st, st[arg].tpe())
-            )?;
-        } else {
-            write!(
-                out,
-                "{} {}: {}, ",
-                serialize_dir(arg.dir()),
-                st[arg].name(),
-                serialize_type(st, st[arg].tpe())
-            )?;
+    if tr.args.len() == 0 {
+        write!(out, ") {{\n")?;
+    } else {
+        for (ii, arg) in tr.args.iter().enumerate() {
+            let last_index = ii == tr.args.len() - 1;
+    
+            if last_index {
+                write!(
+                    out,
+                    "{} {}: {}) {{\n",
+                    serialize_dir(arg.dir()),
+                    st[arg].name(),
+                    serialize_type(st, st[arg].tpe())
+                )?;
+            } else {
+                write!(
+                    out,
+                    "{} {}: {}, ",
+                    serialize_dir(arg.dir()),
+                    st[arg].name(),
+                    serialize_type(st, st[arg].tpe())
+                )?;
+            }
         }
     }
+    
 
     build_statements(out, tr, st, &tr.body, 1)?;
 

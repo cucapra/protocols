@@ -63,6 +63,26 @@ pub fn parse_boxed_expr(
 
                 // parse don't care
                 Rule::dont_care => BoxedExpr::DontCare(start, end),
+                
+                // parse slices
+                Rule::slice => {
+                    let mut inner_rules = primary.into_inner();
+
+                    let path_rule = inner_rules.next().unwrap();
+                    let path_id = parse_boxed_expr(Pairs::single(path_rule), _tr, st);
+
+                    let idx1_rule: pest::iterators::Pair<'_, Rule> = inner_rules.next().unwrap();
+                    let idx1 = idx1_rule.as_str().parse::<u32>().unwrap();
+
+                    let idx2_rule = inner_rules.next();
+                    let idx2 = match idx2_rule {
+                        Some(rule) => rule.as_str().parse::<u32>().unwrap(),
+                        // a[i] is syntactic sugar for a[i:i]
+                        None => idx1,
+                    };
+                    
+                    BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end)
+                }
 
                 // if primary is an expression (due to parens), recursively parse its inner constituents
                 Rule::expr => parse_boxed_expr(primary.into_inner(), _tr, st),
@@ -131,6 +151,12 @@ fn boxed_expr_to_expr_id(
             let expr_id = tr.e(Expr::Unary(op, arg_id));
             tr.add_expr_loc(expr_id, start, end, fileid);
             expr_id
+        },
+        BoxedExpr::Slice(expr, idx1, idx2, start, end) => {
+            let sym_id = boxed_expr_to_expr_id(*expr, tr, st, fileid);
+            let expr_id = tr.e(Expr::Slice(sym_id, idx1, idx2));
+            tr.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
         }
     }
 }
@@ -139,7 +165,7 @@ fn parse_struct(pair: pest::iterators::Pair<Rule>, st: &mut SymbolTable) -> Stru
     let mut inner_rules = pair.into_inner();
     let struct_name = inner_rules.next().unwrap().as_str();
 
-    let (pins, symbols) = parse_fields(inner_rules.next().unwrap(), st);
+    let (pins, _symbols) = parse_fields(inner_rules.next().unwrap(), st);
     let struct_id = st.add_struct(struct_name.to_string(), pins);
 
     struct_id
@@ -179,7 +205,7 @@ fn parse_transaction(
                         };
 
                         let dut_symbol_id =
-                            st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
+                            st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));                        
 
                         for pin in dut_struct.pins() {
                             let pin_name = pin.name().to_string();
@@ -192,8 +218,17 @@ fn parse_transaction(
                     ),
                 }
             }
+            
 
-            tr.args = parse_arglist(inner_rules.next().unwrap(), st);
+            if let Some(arglist_pair) = inner_rules.peek() {
+                if arglist_pair.as_rule() == Rule::arglist {
+                    tr.args = parse_arglist(inner_rules.next().unwrap(), st);
+                } else {
+                    tr.args = Vec::new();
+                }
+            } else {
+                tr.args = Vec::new();
+            }
 
             // Process the body of statements, adding them to the block as we go
             tr.body = parse_stmt_block(inner_rules, &mut tr, st, fileid);
@@ -452,7 +487,7 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Type {
 pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-) -> (Transaction, SymbolTable) {
+) -> Vec<(SymbolTable, Transaction)> {
     let input = std::fs::read_to_string(filename).expect("failed to load");
     let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input.clone());
 
@@ -469,17 +504,20 @@ pub fn parse_file(
 
     let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
     let inner = pairs.clone().next().unwrap().into_inner();
-    let st: &mut SymbolTable = &mut SymbolTable::default();
-    let mut tr = Transaction::new("dummy".to_string());
+    let base_st: &mut SymbolTable = &mut SymbolTable::default();
+    let mut trs = vec![];
+
     for pair in inner {
         if pair.as_rule() == Rule::struct_def {
-            parse_struct(pair, st); // we don't need the struct id
+            parse_struct(pair, base_st); // we don't need the struct id
         } else if pair.as_rule() == Rule::fun {
-            tr = parse_transaction(pair, st, fileid);
+            let st = &mut base_st.clone();
+            let tr = parse_transaction(pair, st, fileid);
+
+            trs.push((st.clone(), tr));
         }
     }
-
-    (tr, st.clone())
+    trs
 }
 
 // Wrapper struct for custom display of pest pairs
@@ -518,15 +556,15 @@ mod tests {
     use super::*;
 
     fn test_re_serialize(tr: Transaction, st: SymbolTable, filename: &str) {
-        // println!("Transaction {:?}: {:?}", tr.name, tr);
         println!("============= {} =============", filename);
 
-        // Serialize into a string first, and then use println macro;
-        // else, cargo test seems to display in the wrong order
-        let mut out = Vec::new();
-        serialize(&mut out, &tr, &st).unwrap();
-        let out_str = String::from_utf8(out).unwrap();
-        println!("{}", out_str);
+        // for tr in trs {
+            // TODO: Serialization needs to handle multiple transactions
+            let mut out = Vec::new();
+            serialize(&mut out, &tr, &st).unwrap();
+            let out_str = String::from_utf8(out).unwrap();
+            println!("{}", out_str);
+        // }
 
         println!("======================================");
     }
@@ -534,65 +572,93 @@ mod tests {
     #[test]
     fn test_add_prot() {
         let filename = "tests/add_struct.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
+        
     }
 
     #[test]
     fn test_aes128_prot() {
         let filename = "tests/aes128.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     #[test]
     fn test_aes128_round_prot() {
         let filename = "tests/aes128_round.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     #[test]
     fn test_aes128_expand_key_prot() {
         let filename = "tests/aes128_expand_key.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     #[test]
     fn test_mul_prot() {
         let filename = "tests/mul.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     #[test]
     fn test_easycond_prot() {
         let filename = "tests/cond.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     #[test]
     fn test_cond_prot() {
         let filename = "tests/cond.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     #[test]
     fn test_calyx_go_done_struct_prot() {
         let filename = "tests/calyx_go_done_struct.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     // passes the parser, but should fail typechecking
     #[test]
     fn test_invalid_step_arg() {
         let filename = "tests/invalid_step_arg.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 
     // Guaranteed to fail
@@ -604,10 +670,23 @@ mod tests {
     // }
 
     #[test]
+    fn test_mul_ignoreprot() {
+        let filename = "tests/mul_ignore.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
+    }
+
+    #[test]
     #[ignore] // TODO: implement features needed to parse this!
     fn test_parse_serv_register_file() {
         let filename = "tests/serv/register_file.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
     }
 }
