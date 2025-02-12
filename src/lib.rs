@@ -9,4 +9,3 @@ pub mod ir;
 pub mod parser;
 pub mod serialize;
 pub mod typecheck;
-mod interpreter;
