@@ -67,7 +67,11 @@ pub fn interpret(btor_path: &str, in_vals: HashMap<&str, u64>, out: (&str, u64),
 #[cfg(test)]
 pub mod tests {
     use super::*;
+<<<<<<< HEAD
     use baa::{BitVecOps, BitVecValue};
+=======
+    use baa::BitVecValue;
+>>>>>>> 456e736 (try to use patronus for simulation)
     use patronus::sim::Simulator;
 
     /// This example is intended to demonstrate how the `verilog` crate can be used
