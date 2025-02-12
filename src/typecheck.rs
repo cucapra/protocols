@@ -17,6 +17,8 @@ fn check_expr_types(
         Expr::Const(_) => Ok(Type::BitVec(1)),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
+        // FIXME: is this the correct typechecking logic?
+        Expr::Slice(sym_expr, _, _) => check_expr_types(tr, st, handler, sym_expr),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(_) = inner_type {
@@ -215,54 +217,64 @@ mod tests {
     #[test]
     fn typecheck_add_transaction() {
         let mut handler = DiagnosticHandler::new();
-        // let (add, symbols) = create_add_transaction(&mut handler);
-        let (add, symbols) = parse_file("tests/add_struct.prot", &mut handler);
-        type_check(&add, &symbols, &mut handler);
+        let trs = parse_file("tests/add_struct.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
     fn typecheck_invalid_step_arg_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
-            parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let trs = parse_file("tests/invalid_step_arg.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
     fn typecheck_aes128_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let trs = parse_file("tests/aes128.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
-            parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let trs = parse_file("tests/aes128_expand_key.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
     fn typecheck_aes128_round_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) =
-            parser::parse_file("tests/aes128_round.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let trs = parse_file("tests/aes128_round.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
     fn typecheck_mul_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let trs = parse_file("tests/mul.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
     fn typecheck_cond_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (invalid_step_arg, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
-        type_check(&invalid_step_arg, &symbols, &mut handler);
+        let trs = parse_file("tests/cond.prot", &mut handler);
+        for (st, tr) in trs {
+            type_check(&tr, &st, &mut handler);
+        }
     }
 
     #[test]
