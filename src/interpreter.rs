@@ -3,6 +3,8 @@ use marlin_verilator::*;
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use baa::BitVecValue;
+    use patronus::sim::Simulator;
 
     /// This example is intended to demonstrate how the `verilog` crate can be used
     /// to execute a design with Verilator. This is - of course - not a working
@@ -62,5 +64,32 @@ pub mod tests {
                 ],
             )
             .unwrap();
+    }
+
+    #[test]
+    fn run_add_d1_with_patronus() {
+        let (ctx, sys) = patronus::btor2::parse_file("examples/adders/add_d1.btor").unwrap();
+        let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
+        let a = *sys
+            .inputs
+            .iter()
+            .find(|i| ctx.get_symbol_name(**i).unwrap() == "A")
+            .unwrap();
+        let b = *sys
+            .inputs
+            .iter()
+            .find(|i| ctx.get_symbol_name(**i).unwrap() == "B")
+            .unwrap();
+        let s = sys
+            .outputs
+            .iter()
+            .find(|o| ctx[o.name] == "S")
+            .unwrap()
+            .expr;
+
+        sim.set(a, &BitVecValue::from_u64(1, 32));
+        sim.set(b, &BitVecValue::from_u64(3, 32));
+        sim.step();
+        assert_eq!(sim.get(s).unwrap(), 4);
     }
 }
