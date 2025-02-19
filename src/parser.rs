@@ -590,6 +590,17 @@ mod tests {
     }
 
     #[test]
+    fn test_illegal_fork_prot() {
+        // expect this to fail parsing
+        let filename = "tests/illegal_fork.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
+    }
+
+    #[test]
     fn test_aes128_prot() {
         let filename = "tests/aes128.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
