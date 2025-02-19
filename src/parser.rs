@@ -61,7 +61,12 @@ impl<'a> ParserContext<'a> {
                         let symbol_id = self.st.symbol_id_from_name(path_id);
                         match symbol_id {
                             Some(id) => BoxedExpr::Sym(id, start, end),
-                            None => panic!("Referencing undefined symbol: {}", path_id),
+                            None => {
+                                // FIXME: better message
+                                self.handler.emit_diagnostic_parsing(&format!("Referencing undefined symbol: {}", path_id), self.fileid, primary, Level::Error);
+                                panic!();
+                                // std::process::exit(1);
+                            },
                         }
                     }
 
@@ -207,10 +212,15 @@ impl<'a> ParserContext<'a> {
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
                             }
                         }
-                        _ => panic!(
-                            "Attempted to parse DUT type param. Unexpected rule: {:?}",
-                            inner_pair.as_rule()
-                        ),
+                        _ => {
+                            self.handler.emit_diagnostic_parsing(
+                                &format!("Attempted to parse DUT type param. Unexpected rule: {:?}", inner_pair.as_rule()),
+                                self.fileid,
+                                inner_pair,
+                                Level::Error,
+                            );
+                            panic!();
+                        },
                     }
                 }
 
@@ -227,7 +237,15 @@ impl<'a> ParserContext<'a> {
                 // Process the body of statements, adding them to the block as we go
                 self.tr.body = self.parse_stmt_block(inner_rules);
             }
-            _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
+            _ => {
+                self.handler.emit_diagnostic_parsing(
+                    &format!("Unexpected rule while parsing transaction: {:?}", pair.as_rule()),
+                    self.fileid,
+                    pair,
+                    Level::Error,
+                );
+                panic!();
+            },
         };
     }
 
@@ -253,7 +271,15 @@ impl<'a> ParserContext<'a> {
                 Rule::while_loop => self.parse_while(inner_pair),
                 Rule::cond => self.parse_cond(inner_pair),
                 Rule::assert_eq => self.parse_assert_eq(inner_pair),
-                _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
+                _ => {
+                    self.handler.emit_diagnostic_parsing(
+                        &format!("Unexpected rule while parsing statement block: {:?}", inner_pair.as_rule()),
+                        self.fileid,
+                        inner_pair,
+                        Level::Error,
+                    );
+                    panic!();
+                },
             };
 
             let stmt_id = self.tr.s(stmt);
@@ -273,7 +299,10 @@ impl<'a> ParserContext<'a> {
 
         let symbol_id = match self.st.symbol_id_from_name(path_id) {
             Some(id) => id,
-            None => panic!("Assigning to undeclared symbol: {}", path_id),
+            None => {
+                self.handler.emit_diagnostic_parsing(&format!("Assigning to undeclared symbol: {}", path_id), self.fileid, path_id_rule, Level::Error);
+                panic!();
+            },
         };
 
         let expr_id = self.parse_expr(expr_rule.into_inner());
@@ -305,11 +334,25 @@ impl<'a> ParserContext<'a> {
             "fork" => {
                 // if there is a passed expression, panic -- this is invalid
                 if arg.is_some() {
-                    panic!("Fork command should not have an argument");
+                    self.handler.emit_diagnostic_parsing(
+                        "Fork command should have no arguments.",
+                        self.fileid,
+                        cmd_rule,
+                        Level::Error,
+                    );
+                    panic!();
                 }
                 Stmt::Fork
             }
-            _ => panic!("Unexpected command: {:?}", cmd),
+            _ => {
+                self.handler.emit_diagnostic_parsing(
+                    &format!("Unexpected command: {:?}", cmd),
+                    self.fileid,
+                    cmd_rule,
+                    Level::Error,
+                );
+                panic!();
+            }
         }
     }
 
@@ -374,10 +417,16 @@ impl<'a> ParserContext<'a> {
                     let mut nested_args = self.parse_arglist(inner_pair);
                     args.append(&mut nested_args);
                 }
-                _ => panic!(
-                    "In parse_arglist. Unexpected rule: {:?}",
-                    inner_pair.as_rule()
-                ),
+                _ => {
+                    self.handler.emit_diagnostic_parsing(
+                        &format!("Received nexpected rule while parsing arglist: {:?}", inner_pair.as_rule()),
+                        self.fileid,
+                        inner_pair,
+                        Level::Error,
+                    );
+                    // FIXME: Get rid of all of these panics
+                    panic!();
+                },
             }
         }
         args
@@ -407,7 +456,15 @@ impl<'a> ParserContext<'a> {
                     fields.extend(nested_fields);
                     symbols.extend(nested_symbols);
                 }
-                _ => panic!("Unexpected rule: {:?}", inner_pair.as_rule()),
+                _ => {
+                        self.handler.emit_diagnostic_parsing(
+                        &format!("Unexpected rule while parsing fields: {:?}", inner_pair.as_rule()),
+                        self.fileid,
+                        inner_pair,
+                        Level::Error,
+                    );
+                    panic!();
+                },
             }
         }
         (fields, symbols)
@@ -420,10 +477,27 @@ impl<'a> ParserContext<'a> {
                 match dir_str {
                     "in" => Dir::In,
                     "out" => Dir::Out,
-                    _ => panic!("Unexpected direction string: {:?}", dir_str),
+                    _ => {
+                        
+                        self.handler.emit_diagnostic_parsing(
+                            &format!("Unexpected direction string: {:?}", dir_str),
+                            self.fileid,
+                            pair,
+                            Level::Error,
+                        );
+                        panic!();
+                    }
                 }
             }
-            _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
+            _ => {
+                self.handler.emit_diagnostic_parsing(
+                    &format!("Unexpected rule while parsing direction: {:?}", pair.as_rule()),
+                    self.fileid,
+                    pair,
+                    Level::Error,
+                );
+                panic!();
+            }
         }
     }
 
@@ -435,7 +509,15 @@ impl<'a> ParserContext<'a> {
                 let size = type_str.parse::<u32>().unwrap();
                 Type::BitVec(size)
             }
-            _ => panic!("Unexpected rule: {:?}", pair.as_rule()),
+            _ => {
+                self.handler.emit_diagnostic_parsing(
+                    &format!("Unexpected rule while parsing type: {:?}", pair.as_rule()),
+                    self.fileid,
+                    pair,
+                    Level::Error,
+                );
+                panic!();
+            }
         }
     }
 }
@@ -518,15 +600,10 @@ mod tests {
 
     fn test_re_serialize(tr: Transaction, st: SymbolTable, filename: &str) {
         println!("============= {} =============", filename);
-
-        // for tr in trs {
-        // TODO: Serialization needs to handle multiple transactions
         let mut out = Vec::new();
         serialize(&mut out, &tr, &st).unwrap();
         let out_str = String::from_utf8(out).unwrap();
         println!("{}", out_str);
-        // }
-
         println!("======================================");
     }
 
@@ -644,7 +721,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: implement features needed to parse this!
     fn test_parse_serv_register_file() {
         let filename = "tests/serv/register_file.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
