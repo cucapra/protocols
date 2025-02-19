@@ -34,6 +34,7 @@ pub struct ParserContext<'a> {
     pub st: &'a mut SymbolTable,
     pub fileid: usize,
     pub tr: &'a mut Transaction,
+    pub handler: &'a mut DiagnosticHandler,
 }
 
 impl<'a> ParserContext<'a> {
@@ -464,12 +465,14 @@ pub fn parse_file(
 
     for pair in inner {
         if pair.as_rule() == Rule::struct_def {
-            let mut context = ParserContext { st: base_st, fileid, tr: &mut Transaction::new("".to_string()) };
+            // dummy context to set up the symbol table with the struct; the transaction here is irrelevant
+            let mut context = ParserContext { st: base_st, fileid, tr: &mut Transaction::new("".to_string()), handler };
             context.parse_struct(pair); // we don't need the struct id
         } else if pair.as_rule() == Rule::fun {
+            // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
             let st = &mut base_st.clone();
             let mut tr = Transaction::new("".to_string());
-            let mut context: ParserContext<'_> = ParserContext { st, fileid, tr: &mut tr };
+            let mut context: ParserContext<'_> = ParserContext { st, fileid, tr: &mut tr, handler };
             context.parse_transaction(pair);
 
             trs.push((context.st.clone(), context.tr.clone()));
@@ -619,12 +622,16 @@ mod tests {
     }
 
     // Guaranteed to fail
-    // #[test]
-    // fn test_func_arg_invalid_prot() {
-    //     let filename  = "tests/func_arg_invalid.prot";
-    //     let (tr, st) = parse_file(filename);
-    //     test_re_serialize(tr, st, filename)
-    // }
+    #[test]
+    fn test_func_arg_invalid_prot() {
+        let filename  = "tests/func_arg_invalid.prot";
+
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        for (st, tr) in trs {
+            test_re_serialize(tr, st, filename)
+        }
+    }
 
     #[test]
     fn test_mul_ignoreprot() {
