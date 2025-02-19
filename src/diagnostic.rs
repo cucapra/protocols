@@ -6,6 +6,7 @@
 
 use std::{collections::HashSet, io::Write};
 
+use crate::parser::Rule;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
 };
@@ -13,7 +14,6 @@ use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
 use pest::iterators::Pair;
-use crate::parser::Rule;
 
 use crate::ir::*;
 

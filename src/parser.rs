@@ -38,96 +38,87 @@ pub struct ParserContext<'a> {
 }
 
 impl<'a> ParserContext<'a> {
-    pub fn parse_boxed_expr(&mut self, pairs: Pairs<Rule>) -> BoxedExpr {
+    pub fn parse_boxed_expr(&mut self, pairs: Pairs<Rule>) -> Result<BoxedExpr, String> {
         PRATT_PARSER
             .map_primary(|primary| {
                 let start = primary.as_span().start();
                 let end = primary.as_span().end();
 
                 match primary.as_rule() {
-                    // parse integer literals
                     Rule::integer => {
                         let int_str = primary.as_str();
                         let int_value = int_str.parse::<i32>().unwrap();
-
                         let bitvec = BitVecValue::from_u64(int_value as u64, 64);
-                        BoxedExpr::Const(bitvec, start, end)
+                        Ok(BoxedExpr::Const(bitvec, start, end))
                     }
-
-                    // parse path identifiers
                     Rule::path_id => {
                         let path_id = primary.as_str();
-
                         let symbol_id = self.st.symbol_id_from_name(path_id);
                         match symbol_id {
-                            Some(id) => BoxedExpr::Sym(id, start, end),
+                            Some(id) => Ok(BoxedExpr::Sym(id, start, end)),
                             None => {
-                                // FIXME: better message
-                                self.handler.emit_diagnostic_parsing(&format!("Referencing undefined symbol: {}", path_id), self.fileid, primary, Level::Error);
-                                panic!();
-                                // std::process::exit(1);
-                            },
+                                let msg = format!("Referencing undefined symbol: {}", path_id);
+                                self.handler.emit_diagnostic_parsing(
+                                    &msg,
+                                    self.fileid,
+                                    primary,
+                                    Level::Error,
+                                );
+                                Err(msg)
+                            }
                         }
                     }
-
-                    // parse don't care
-                    Rule::dont_care => BoxedExpr::DontCare(start, end),
-
-                    // parse slices
+                    Rule::dont_care => Ok(BoxedExpr::DontCare(start, end)),
                     Rule::slice => {
                         let mut inner_rules = primary.into_inner();
-
                         let path_rule = inner_rules.next().unwrap();
-                        let path_id = self.parse_boxed_expr(Pairs::single(path_rule));
-
-                        let idx1_rule: pest::iterators::Pair<'_, Rule> = inner_rules.next().unwrap();
+                        let path_id = self.parse_boxed_expr(Pairs::single(path_rule))?;
+                        let idx1_rule = inner_rules.next().unwrap();
                         let idx1 = idx1_rule.as_str().parse::<u32>().unwrap();
-
                         let idx2_rule = inner_rules.next();
                         let idx2 = match idx2_rule {
                             Some(rule) => rule.as_str().parse::<u32>().unwrap(),
-                            // a[i] is syntactic sugar for a[i:i]
                             None => idx1,
                         };
-
-                        BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end)
+                        Ok(BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end))
                     }
-
-                    // if primary is an expression (due to parens), recursively parse its inner constituents
                     Rule::expr => self.parse_boxed_expr(primary.into_inner()),
                     rule => unreachable!("Expr::parse expected atom, found {:?}", rule),
                 }
             })
-            // Parse binary expressions
             .map_infix(|lhs, op, rhs| {
-                // the start and end of the expression is the start of the LHS and the end of the RHS
-                let start = lhs.start();
-                let end = rhs.end();
-
+                let lhs_unwrap = lhs?;
+                let rhs_unwrap = rhs?;
+                let start = lhs_unwrap.start();
+                let end = lhs_unwrap.end();
                 let op = match op.as_rule() {
                     Rule::eq => BinOp::Equal,
                     Rule::log_and => BinOp::And,
                     rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
                 };
-                BoxedExpr::Binary(op, Box::new(lhs), Box::new(rhs), start, end)
+                Ok(BoxedExpr::Binary(
+                    op,
+                    Box::new(lhs_unwrap),
+                    Box::new(rhs_unwrap),
+                    start,
+                    end,
+                ))
             })
-            // Parse unary expressions
             .map_prefix(|op, arg| {
-                // the position of the expression is the start of the prefix operator and the end of the argument
+                let arg_unwrapped = arg?;
                 let start = op.as_span().start();
-                let end = arg.end();
-
+                let end = arg_unwrapped.end();
                 let op = match op.as_rule() {
                     Rule::not => UnaryOp::Not,
                     rule => unreachable!("Expr::parse expected prefix operation, found {:?}", rule),
                 };
-                BoxedExpr::Unary(op, Box::new(arg), start, end)
+                Ok(BoxedExpr::Unary(op, Box::new(arg_unwrapped), start, end))
             })
             .parse(pairs)
     }
 
-    fn boxed_expr_to_expr_id(&mut self, expr: BoxedExpr) -> ExprId {
-        match expr {
+    fn boxed_expr_to_expr_id(&mut self, expr: BoxedExpr) -> Result<ExprId, String> {
+        let expr_id = match expr {
             BoxedExpr::Const(value, start, end) => {
                 let expr_id = self.tr.e(Expr::Const(value));
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
@@ -144,39 +135,37 @@ impl<'a> ParserContext<'a> {
                 expr_id
             }
             BoxedExpr::Binary(op, lhs, rhs, start, end) => {
-                let lhs_id = self.boxed_expr_to_expr_id(*lhs);
-                let rhs_id = self.boxed_expr_to_expr_id(*rhs);
+                let lhs_id = self.boxed_expr_to_expr_id(*lhs)?;
+                let rhs_id = self.boxed_expr_to_expr_id(*rhs)?;
                 let expr_id = self.tr.e(Expr::Binary(op, lhs_id, rhs_id));
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::Unary(op, arg, start, end) => {
-                let arg_id = self.boxed_expr_to_expr_id(*arg);
+                let arg_id = self.boxed_expr_to_expr_id(*arg)?;
                 let expr_id = self.tr.e(Expr::Unary(op, arg_id));
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::Slice(expr, idx1, idx2, start, end) => {
-                let sym_id = self.boxed_expr_to_expr_id(*expr);
+                let sym_id = self.boxed_expr_to_expr_id(*expr)?;
                 let expr_id = self.tr.e(Expr::Slice(sym_id, idx1, idx2));
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
-        }
+        };
+        Ok(expr_id)
     }
 
-    fn parse_struct(&mut self, pair: pest::iterators::Pair<Rule>) -> StructId {
+    fn parse_struct(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<StructId, String> {
         let mut inner_rules = pair.into_inner();
         let struct_name = inner_rules.next().unwrap().as_str();
-
-        let (pins, _symbols) = self.parse_fields(inner_rules.next().unwrap());
+        let (pins, _symbols) = self.parse_fields(inner_rules.next().unwrap())?;
         let struct_id = self.st.add_struct(struct_name.to_string(), pins);
-
-        struct_id
+        Ok(struct_id)
     }
 
-    // TODO: Add line numbers and character loc.
-    fn parse_transaction(&mut self, pair: pest::iterators::Pair<Rule>) {
+    fn parse_transaction(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<(), String> {
         match pair.as_rule() {
             Rule::fun => {
                 let mut inner_rules = pair.into_inner();
@@ -184,49 +173,44 @@ impl<'a> ParserContext<'a> {
                 let id = id_pair.as_str();
                 self.tr.name = id.to_string();
 
-                // Parse the DUT definition
                 if let Some(inner_pair) = inner_rules.next() {
                     match inner_pair.as_rule() {
                         Rule::type_param => {
                             let mut type_param_rules = inner_pair.into_inner();
                             let path_id_1 = type_param_rules.next().unwrap().as_str();
                             let path_id_2 = type_param_rules.next().unwrap().as_str();
-
-                            let struct_id = {
-                                let struct_id = self.st
-                                    .struct_id_from_name(path_id_2)
-                                    .expect(&format!("Undefined struct: {}", path_id_2));
-                                struct_id
-                            };
-
-                            let dut_struct = {
-                                let struct_ref = self.st.struct_from_struct_id(struct_id);
-                                struct_ref.clone() // Clone if necessary to avoid borrowing issues
-                            };
-
-                            let dut_symbol_id =
-                                self.st.add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
-
+                            let struct_id = self
+                                .st
+                                .struct_id_from_name(path_id_2)
+                                .ok_or_else(|| format!("Undefined struct: {}", path_id_2))?;
+                            let dut_struct = self.st.struct_from_struct_id(struct_id).clone();
+                            let dut_symbol_id = self
+                                .st
+                                .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
                             }
                         }
                         _ => {
+                            let msg = format!(
+                                "Attempted to parse DUT type param. Unexpected rule: {:?}",
+                                inner_pair.as_rule()
+                            );
                             self.handler.emit_diagnostic_parsing(
-                                &format!("Attempted to parse DUT type param. Unexpected rule: {:?}", inner_pair.as_rule()),
+                                &msg,
                                 self.fileid,
                                 inner_pair,
                                 Level::Error,
                             );
-                            panic!();
-                        },
+                            return Err(msg);
+                        }
                     }
                 }
 
                 if let Some(arglist_pair) = inner_rules.peek() {
                     if arglist_pair.as_rule() == Rule::arglist {
-                        self.tr.args = self.parse_arglist(inner_rules.next().unwrap());
+                        self.tr.args = self.parse_arglist(inner_rules.next().unwrap())?;
                     } else {
                         self.tr.args = Vec::new();
                     }
@@ -234,168 +218,141 @@ impl<'a> ParserContext<'a> {
                     self.tr.args = Vec::new();
                 }
 
-                // Process the body of statements, adding them to the block as we go
-                self.tr.body = self.parse_stmt_block(inner_rules);
+                self.tr.body = self.parse_stmt_block(inner_rules)?;
+                Ok(())
             }
             _ => {
-                self.handler.emit_diagnostic_parsing(
-                    &format!("Unexpected rule while parsing transaction: {:?}", pair.as_rule()),
-                    self.fileid,
-                    pair,
-                    Level::Error,
+                let msg = format!(
+                    "Unexpected rule while parsing transaction: {:?}",
+                    pair.as_rule()
                 );
-                panic!();
-            },
-        };
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
+                Err(msg)
+            }
+        }
     }
 
-    fn parse_expr(&mut self, pairs: Pairs<Rule>) -> ExprId {
-        let boxed_expr = self.parse_boxed_expr(pairs);
-        let expr_id = self.boxed_expr_to_expr_id(boxed_expr);
-
-        // print out expr loc for testing
-        // println!("Expr: {:?}, Expr loc: {:?}", serialize_expr(tr, st, &expr_id), tr.get_expr_loc(expr_id));
-
-        expr_id
+    fn parse_expr(&mut self, pairs: Pairs<Rule>) -> Result<ExprId, String> {
+        let boxed_expr = self.parse_boxed_expr(pairs)?;
+        let expr_id = self.boxed_expr_to_expr_id(boxed_expr)?;
+        Ok(expr_id)
     }
 
-    fn parse_stmt_block(&mut self, mut stmt_pairs: Pairs<Rule>) -> StmtId {
-        // Process the body of statements, adding them to the block as we go
+    fn parse_stmt_block(&mut self, mut stmt_pairs: Pairs<Rule>) -> Result<StmtId, String> {
         let mut stmts = Vec::new();
         while let Some(inner_pair) = stmt_pairs.next() {
             let start = inner_pair.as_span().start();
             let end = inner_pair.as_span().end();
             let stmt = match inner_pair.as_rule() {
-                Rule::assign => self.parse_assign(inner_pair),
-                Rule::cmd => self.parse_cmd(inner_pair),
-                Rule::while_loop => self.parse_while(inner_pair),
-                Rule::cond => self.parse_cond(inner_pair),
-                Rule::assert_eq => self.parse_assert_eq(inner_pair),
+                Rule::assign => self.parse_assign(inner_pair)?,
+                Rule::cmd => self.parse_cmd(inner_pair)?,
+                Rule::while_loop => self.parse_while(inner_pair)?,
+                Rule::cond => self.parse_cond(inner_pair)?,
+                Rule::assert_eq => self.parse_assert_eq(inner_pair)?,
                 _ => {
+                    let msg = format!(
+                        "Unexpected rule while parsing statement block: {:?}",
+                        inner_pair.as_rule()
+                    );
                     self.handler.emit_diagnostic_parsing(
-                        &format!("Unexpected rule while parsing statement block: {:?}", inner_pair.as_rule()),
+                        &msg,
                         self.fileid,
                         inner_pair,
                         Level::Error,
                     );
-                    panic!();
-                },
+                    return Err(msg);
+                }
             };
-
             let stmt_id = self.tr.s(stmt);
-            // Add the statement location to the transaction
             self.tr.add_stmt_loc(stmt_id, start, end, self.fileid);
             stmts.push(stmt_id);
         }
-        self.tr.s(Stmt::Block(stmts))
+        Ok(self.tr.s(Stmt::Block(stmts)))
     }
 
-    fn parse_assign(&mut self, pair: pest::iterators::Pair<Rule>) -> Stmt {
+    fn parse_assign(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.into_inner();
         let path_id_rule = inner_rules.next().unwrap();
         let expr_rule = inner_rules.next().unwrap();
-
         let path_id: &str = path_id_rule.as_str();
-
-        let symbol_id = match self.st.symbol_id_from_name(path_id) {
-            Some(id) => id,
-            None => {
-                self.handler.emit_diagnostic_parsing(&format!("Assigning to undeclared symbol: {}", path_id), self.fileid, path_id_rule, Level::Error);
-                panic!();
-            },
-        };
-
-        let expr_id = self.parse_expr(expr_rule.into_inner());
-
-        Stmt::Assign(symbol_id, expr_id)
+        let symbol_id = self.st.symbol_id_from_name(path_id).ok_or_else(|| {
+            let msg = format!("Assigning to undeclared symbol: {}", path_id);
+            self.handler
+                .emit_diagnostic_parsing(&msg, self.fileid, path_id_rule, Level::Error);
+            msg
+        })?;
+        let expr_id = self.parse_expr(expr_rule.into_inner())?;
+        Ok(Stmt::Assign(symbol_id, expr_id))
     }
 
-    fn parse_cmd(&mut self, pair: pest::iterators::Pair<Rule>) -> Stmt {
+    fn parse_cmd(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.into_inner();
         let cmd_rule = inner_rules.next().unwrap();
         let cmd = cmd_rule.as_str();
-
         let arg = if let Some(expr_rule) = inner_rules.next() {
-            // println!("Parsing step with expr: {}", expr_rule.as_str());
-            let expr_id = self.parse_expr(expr_rule.into_inner());
+            let expr_id = self.parse_expr(expr_rule.into_inner())?;
             Some(expr_id)
         } else {
             None
         };
-
         match cmd {
             "step" => match arg {
-                Some(expr_id) => Stmt::Step(expr_id),
+                Some(expr_id) => Ok(Stmt::Step(expr_id)),
                 None => {
                     let one_expr = self.tr.e(Expr::Const(BitVecValue::from_i64(1, 2)));
-                    Stmt::Step(one_expr)
+                    Ok(Stmt::Step(one_expr))
                 }
             },
             "fork" => {
-                // if there is a passed expression, panic -- this is invalid
                 if arg.is_some() {
-                    self.handler.emit_diagnostic_parsing(
-                        "Fork command should have no arguments.",
-                        self.fileid,
-                        cmd_rule,
-                        Level::Error,
-                    );
-                    panic!();
+                    let msg = "Fork command should have no arguments.".to_string();
+                    self.handler
+                        .emit_diagnostic_parsing(&msg, self.fileid, cmd_rule, Level::Error);
+                    return Err(msg);
                 }
-                Stmt::Fork
+                Ok(Stmt::Fork)
             }
             _ => {
-                self.handler.emit_diagnostic_parsing(
-                    &format!("Unexpected command: {:?}", cmd),
-                    self.fileid,
-                    cmd_rule,
-                    Level::Error,
-                );
-                panic!();
+                let msg = format!("Unexpected command: {:?}", cmd);
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, cmd_rule, Level::Error);
+                Err(msg)
             }
         }
     }
 
-    fn parse_while(&mut self, pair: pest::iterators::Pair<Rule>) -> Stmt {
-        // Parse Expression
+    fn parse_while(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.into_inner();
         let expr_rule = inner_rules.next().unwrap();
-        let guard: ExprId = self.parse_expr(expr_rule.into_inner());
-
-        // Parse Statement Block
-        let body = self.parse_stmt_block(inner_rules);
-
-        Stmt::While(guard, body)
+        let guard = self.parse_expr(expr_rule.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::While(guard, body))
     }
 
-    fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Stmt {
+    fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.into_inner();
         let lhs_rule = inner_rules.next().unwrap();
         let rhs_rule = inner_rules.next().unwrap();
-
-        let lhs_id = self.parse_expr(lhs_rule.into_inner());
-        let rhs_id = self.parse_expr(rhs_rule.into_inner());
-
-        Stmt::AssertEq(lhs_id, rhs_id)
+        let lhs_id = self.parse_expr(lhs_rule.into_inner())?;
+        let rhs_id = self.parse_expr(rhs_rule.into_inner())?;
+        Ok(Stmt::AssertEq(lhs_id, rhs_id))
     }
 
-    fn parse_cond(&mut self, pair: pest::iterators::Pair<Rule>) -> Stmt {
+    fn parse_cond(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.into_inner();
-
         let if_rule = inner_rules.next().unwrap();
         let mut inner_if = if_rule.into_inner();
         let expr_rule = inner_if.next().unwrap();
-        let expr_id = self.parse_expr(expr_rule.into_inner());
-        let if_block = self.parse_stmt_block(inner_if);
-
+        let expr_id = self.parse_expr(expr_rule.into_inner())?;
+        let if_block = self.parse_stmt_block(inner_if)?;
         let else_rule = inner_rules.next().unwrap();
         let inner_else = else_rule.into_inner();
-        let else_block = self.parse_stmt_block(inner_else);
-
-        Stmt::IfElse(expr_id, if_block, else_block)
+        let else_block = self.parse_stmt_block(inner_else)?;
+        Ok(Stmt::IfElse(expr_id, if_block, else_block))
     }
 
-    fn parse_arglist(&mut self, pair: pest::iterators::Pair<Rule>) -> Vec<Arg> {
+    fn parse_arglist(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Vec<Arg>, String> {
         let mut args = Vec::new();
         for inner_pair in pair.into_inner() {
             match inner_pair.as_rule() {
@@ -404,35 +361,39 @@ impl<'a> ParserContext<'a> {
                     let dir_pair = arg_inner.next().unwrap();
                     let id_pair = arg_inner.next().unwrap();
                     let tpe_pair = arg_inner.next().unwrap();
-
-                    let dir = self.parse_dir(dir_pair);
+                    let dir = self.parse_dir(dir_pair)?;
                     let id = id_pair.as_str();
-                    let tpe = self.parse_type(tpe_pair);
-
+                    let tpe = self.parse_type(tpe_pair)?;
                     let symbol_id = self.st.add_without_parent(id.to_string(), tpe);
                     let arg = Arg::new(symbol_id, dir);
                     args.push(arg);
                 }
                 Rule::arglist => {
-                    let mut nested_args = self.parse_arglist(inner_pair);
+                    let mut nested_args = self.parse_arglist(inner_pair)?;
                     args.append(&mut nested_args);
                 }
                 _ => {
+                    let msg = format!(
+                        "Received unexpected rule while parsing arglist: {:?}",
+                        inner_pair.as_rule()
+                    );
                     self.handler.emit_diagnostic_parsing(
-                        &format!("Received nexpected rule while parsing arglist: {:?}", inner_pair.as_rule()),
+                        &msg,
                         self.fileid,
                         inner_pair,
                         Level::Error,
                     );
-                    // FIXME: Get rid of all of these panics
-                    panic!();
-                },
+                    return Err(msg);
+                }
             }
         }
-        args
+        Ok(args)
     }
 
-    fn parse_fields(&mut self, pair: pest::iterators::Pair<Rule>) -> (Vec<Field>, Vec<String>) {
+    fn parse_fields(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<(Vec<Field>, Vec<String>), String> {
         let mut fields = Vec::new();
         let mut symbols = Vec::new();
         for inner_pair in pair.into_inner() {
@@ -442,81 +403,76 @@ impl<'a> ParserContext<'a> {
                     let dir_pair = arg_inner.next().unwrap();
                     let id_pair = arg_inner.next().unwrap();
                     let tpe_pair = arg_inner.next().unwrap();
-
-                    let dir = self.parse_dir(dir_pair);
+                    let dir = self.parse_dir(dir_pair)?;
                     let id = id_pair.as_str();
-                    let tpe = self.parse_type(tpe_pair);
-
+                    let tpe = self.parse_type(tpe_pair)?;
                     let field = Field::new(id.to_string(), dir, tpe);
                     fields.push(field);
                     symbols.push(id.to_string());
                 }
                 Rule::arglist => {
-                    let (nested_fields, nested_symbols) = self.parse_fields(inner_pair);
+                    let (nested_fields, nested_symbols) = self.parse_fields(inner_pair)?;
                     fields.extend(nested_fields);
                     symbols.extend(nested_symbols);
                 }
                 _ => {
-                        self.handler.emit_diagnostic_parsing(
-                        &format!("Unexpected rule while parsing fields: {:?}", inner_pair.as_rule()),
+                    let msg = format!(
+                        "Unexpected rule while parsing fields: {:?}",
+                        inner_pair.as_rule()
+                    );
+                    self.handler.emit_diagnostic_parsing(
+                        &msg,
                         self.fileid,
                         inner_pair,
                         Level::Error,
                     );
-                    panic!();
-                },
+                    return Err(msg);
+                }
             }
         }
-        (fields, symbols)
+        Ok((fields, symbols))
     }
 
-    fn parse_dir(&mut self, pair: pest::iterators::Pair<Rule>) -> Dir {
+    fn parse_dir(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Dir, String> {
         match pair.as_rule() {
             Rule::dir => {
                 let dir_str = pair.as_str();
                 match dir_str {
-                    "in" => Dir::In,
-                    "out" => Dir::Out,
+                    "in" => Ok(Dir::In),
+                    "out" => Ok(Dir::Out),
                     _ => {
-                        
-                        self.handler.emit_diagnostic_parsing(
-                            &format!("Unexpected direction string: {:?}", dir_str),
-                            self.fileid,
-                            pair,
-                            Level::Error,
-                        );
-                        panic!();
+                        let msg = format!("Unexpected direction string: {:?}", dir_str);
+                        self.handler
+                            .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
+                        Err(msg)
                     }
                 }
             }
             _ => {
-                self.handler.emit_diagnostic_parsing(
-                    &format!("Unexpected rule while parsing direction: {:?}", pair.as_rule()),
-                    self.fileid,
-                    pair,
-                    Level::Error,
+                let msg = format!(
+                    "Unexpected rule while parsing direction: {:?}",
+                    pair.as_rule()
                 );
-                panic!();
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
+                Err(msg)
             }
         }
     }
 
-    fn parse_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Type {
+    fn parse_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Type, String> {
         match pair.as_rule() {
             Rule::tpe => {
                 let mut inner_rules = pair.into_inner();
                 let type_str = inner_rules.next().unwrap().as_str();
                 let size = type_str.parse::<u32>().unwrap();
-                Type::BitVec(size)
+                Ok(Type::BitVec(size))
             }
             _ => {
-                self.handler.emit_diagnostic_parsing(
-                    &format!("Unexpected rule while parsing type: {:?}", pair.as_rule()),
-                    self.fileid,
-                    pair,
-                    Level::Error,
-                );
-                panic!();
+                let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
+                Err(msg)
             }
         }
     }
@@ -548,14 +504,30 @@ pub fn parse_file(
     for pair in inner {
         if pair.as_rule() == Rule::struct_def {
             // dummy context to set up the symbol table with the struct; the transaction here is irrelevant
-            let mut context = ParserContext { st: base_st, fileid, tr: &mut Transaction::new("".to_string()), handler };
-            context.parse_struct(pair); // we don't need the struct id
+            let mut context = ParserContext {
+                st: base_st,
+                fileid,
+                tr: &mut Transaction::new("".to_string()),
+                handler,
+            };
+            if let Err(e) = context.parse_struct(pair) {
+                eprintln!("Error parsing struct: {}", e);
+                return vec![];
+            }
         } else if pair.as_rule() == Rule::fun {
             // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
             let st = &mut base_st.clone();
             let mut tr = Transaction::new("".to_string());
-            let mut context: ParserContext<'_> = ParserContext { st, fileid, tr: &mut tr, handler };
-            context.parse_transaction(pair);
+            let mut context: ParserContext<'_> = ParserContext {
+                st,
+                fileid,
+                tr: &mut tr,
+                handler,
+            };
+            if let Err(e) = context.parse_transaction(pair) {
+                eprintln!("Error parsing transaction: {}", e);
+                return vec![];
+            }
 
             trs.push((context.st.clone(), context.tr.clone()));
         }
@@ -701,7 +673,7 @@ mod tests {
     // Guaranteed to fail
     #[test]
     fn test_func_arg_invalid_prot() {
-        let filename  = "tests/func_arg_invalid.prot";
+        let filename = "tests/func_arg_invalid.prot";
 
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
