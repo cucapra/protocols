@@ -194,13 +194,15 @@ fn check_stmt_types(
     }
 }
 
-pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHandler) {
-    for expr_id in tr.expr_ids() {
-        let _ = check_expr_types(tr, st, handler, &expr_id);
-    }
+pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut DiagnosticHandler) {
+    for (st, tr) in trs {
+        for expr_id in tr.expr_ids() {
+            let _ = check_expr_types(&tr, &st, handler, &expr_id);
+        }
 
-    for stmt_id in tr.stmt_ids() {
-        let _ = check_stmt_types(tr, st, handler, &stmt_id);
+        for stmt_id in tr.stmt_ids() {
+            let _ = check_stmt_types(&tr, &st, handler, &stmt_id);
+        }
     }
 }
 
@@ -226,8 +228,8 @@ mod tests {
     #[test]
     fn test_add_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (add, symbols) = parse_file("tests/add_struct.prot", &mut handler);
-        type_check(&add, &symbols, &mut handler);
+        let trs = parse_file("tests/add_struct.prot", &mut handler);
+        type_check(trs, &mut handler);
 
         let content = strip_str(handler.error_string());
 
@@ -237,8 +239,8 @@ mod tests {
     #[test]
     fn test_invalid_step_arg_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) = parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
-        type_check(&tr, &symbols, &mut handler);
+        let trs = parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
+        type_check(trs, &mut handler);
 
         let content = strip_str(handler.error_string());
 
@@ -248,8 +250,8 @@ mod tests {
     #[test]
     fn typecheck_aes128_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) = parser::parse_file("tests/aes128.prot", &mut handler);
-        type_check(&tr, &symbols, &mut handler);
+        let trs = parser::parse_file("tests/aes128.prot", &mut handler);
+        type_check(trs, &mut handler);
         let content = strip_str(handler.error_string());
 
         snap("aes128", content);
@@ -258,8 +260,8 @@ mod tests {
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) = parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
-        type_check(&tr, &symbols, &mut handler);
+        let trs = parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
+        type_check(trs, &mut handler);
         let content = strip_str(handler.error_string());
 
         snap("aes128_expand_key", content);
@@ -268,8 +270,8 @@ mod tests {
     #[test]
     fn typecheck_aes128_round_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) = parser::parse_file("tests/aes128_round.prot", &mut handler);
-        type_check(&tr, &symbols, &mut handler);
+        let trs = parser::parse_file("tests/aes128_round.prot", &mut handler);
+        type_check(trs, &mut handler);
         let content = strip_str(handler.error_string());
 
         snap("aes128_round", content);
@@ -278,8 +280,8 @@ mod tests {
     #[test]
     fn typecheck_mul_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) = parser::parse_file("tests/mul.prot", &mut handler);
-        type_check(&tr, &symbols, &mut handler);
+        let trs = parser::parse_file("tests/mul.prot", &mut handler);
+        type_check(trs, &mut handler);
         let content = strip_str(handler.error_string());
 
         snap("mul", content);
@@ -288,8 +290,8 @@ mod tests {
     #[test]
     fn typecheck_cond_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (tr, symbols) = parser::parse_file("tests/cond.prot", &mut handler);
-        type_check(&tr, &symbols, &mut handler);
+        let trs = parser::parse_file("tests/cond.prot", &mut handler);
+        type_check(trs, &mut handler);
         let content = strip_str(handler.error_string());
 
         snap("cond", content);
@@ -298,8 +300,8 @@ mod tests {
     #[test]
     fn test_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
-        type_check(&calyx_go_done, &symbols, &mut handler);
+        let trs = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
+        type_check(trs, &mut handler);
 
         let content = strip_str(handler.error_string());
 
@@ -345,6 +347,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        type_check(&tr, &symbols, &mut handler);
+        type_check(vec![(symbols, tr)], &mut handler);
     }
 }

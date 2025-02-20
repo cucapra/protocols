@@ -10,9 +10,9 @@ use baa::BitVecOps;
 
 use crate::{diagnostic::*, ir::*};
 
-pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Result<String> {
+pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
     let mut out = Vec::new();
-    serialize(&mut out, tr, st)?;
+    serialize(&mut out, trs)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
@@ -145,60 +145,67 @@ pub fn serialize_structs(
     Ok(())
 }
 
-pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
+pub fn serialize(
+    out: &mut impl Write,
+    trs: Vec<(SymbolTable, Transaction)>,
+) -> std::io::Result<()> {
+    let (st, _) = &trs[0];
+
     if st.struct_ids().len() > 0 {
-        serialize_structs(out, st, st.struct_ids())?;
+        serialize_structs(out, &st, st.struct_ids())?;
     }
 
-    write!(out, "fn {}", tr.name)?;
+    for (st, tr) in trs {
+        write!(out, "fn {}", tr.name)?;
 
-    for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
-        let last_index = ii == tr.type_args.len() - 1;
+        for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
+            let last_index = ii == tr.type_args.len() - 1;
 
-        if ii == 0 {
-            write!(out, "<")?;
-        }
+            if ii == 0 {
+                write!(out, "<")?;
+            }
 
-        let strct_type = serialize_type(st, st[tpe_arg].tpe());
-
-        if last_index {
-            write!(out, "{}: {}>", st[tpe_arg].name(), strct_type)?;
-        } else {
-            write!(out, "{}: {}, ", st[tpe_arg].name(), strct_type)?;
-        }
-    }
-
-    write!(out, "(")?;
-
-    if tr.args.len() == 0 {
-        write!(out, ") {{\n")?;
-    } else {
-        for (ii, arg) in tr.args.iter().enumerate() {
-            let last_index = ii == tr.args.len() - 1;
+            let strct_type = serialize_type(&st, st[tpe_arg].tpe());
 
             if last_index {
-                write!(
-                    out,
-                    "{} {}: {}) {{\n",
-                    serialize_dir(arg.dir()),
-                    st[arg].name(),
-                    serialize_type(st, st[arg].tpe())
-                )?;
+                write!(out, "{}: {}>", st[tpe_arg].name(), strct_type)?;
             } else {
-                write!(
-                    out,
-                    "{} {}: {}, ",
-                    serialize_dir(arg.dir()),
-                    st[arg].name(),
-                    serialize_type(st, st[arg].tpe())
-                )?;
+                write!(out, "{}: {}, ", st[tpe_arg].name(), strct_type)?;
             }
         }
+
+        write!(out, "(")?;
+
+        if tr.args.len() == 0 {
+            write!(out, ") {{\n")?;
+        } else {
+            for (ii, arg) in tr.args.iter().enumerate() {
+                let last_index = ii == tr.args.len() - 1;
+
+                if last_index {
+                    write!(
+                        out,
+                        "{} {}: {}) {{\n",
+                        serialize_dir(arg.dir()),
+                        st[arg].name(),
+                        serialize_type(&st, st[arg].tpe())
+                    )?;
+                } else {
+                    write!(
+                        out,
+                        "{} {}: {}, ",
+                        serialize_dir(arg.dir()),
+                        st[arg].name(),
+                        serialize_type(&st, st[arg].tpe())
+                    )?;
+                }
+            }
+        }
+
+        build_statements(out, &tr, &st, &tr.body, 1)?;
+
+        writeln!(out, "}}\n")?;
     }
-
-    build_statements(out, tr, st, &tr.body, 1)?;
-
-    writeln!(out, "}}")?;
 
     Ok(())
 }
@@ -223,65 +230,74 @@ pub mod tests {
 
     #[test]
     fn test_add_transaction() {
-        let (add, symbols) = parse_file("tests/add_struct.prot", &mut DiagnosticHandler::new());
+        let trs = parse_file("tests/add_struct.prot", &mut DiagnosticHandler::new());
 
-        let content = serialize_to_string(&add, &symbols).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("add_struct", content);
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        let (calyx_go_done, symbols) = parse_file(
+        let trs = parse_file(
             "tests/calyx_go_done_struct.prot",
             &mut DiagnosticHandler::new(),
         );
 
-        let content = serialize_to_string(&calyx_go_done, &symbols).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("calyx_go_done_struct", content);
     }
 
     #[test]
     fn test_aes128_prot() {
         let filename = "tests/aes128.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        let content = serialize_to_string(&tr, &st).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("aes128", content);
     }
 
     #[test]
     fn test_aes128_round_prot() {
         let filename = "tests/aes128_round.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        let content = serialize_to_string(&tr, &st).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("aes128_round", content);
     }
 
     #[test]
     fn test_aes128_expand_key_prot() {
         let filename = "tests/aes128_expand_key.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        let content = serialize_to_string(&tr, &st).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("aes128_expand_key", content);
     }
 
     #[test]
     fn test_mul_prot() {
         let filename = "tests/mul.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        let content = serialize_to_string(&tr, &st).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("mul", content);
+    }
+
+    #[test]
+    fn test_mul_ignore_prot() {
+        let filename = "tests/mul_ignore.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("mul_ignore", content);
     }
 
     #[test]
     fn test_cond_prot() {
         let filename = "tests/cond.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        let content = serialize_to_string(&tr, &st).unwrap();
+        let content = serialize_to_string(trs).unwrap();
         snap("cond", content);
     }
 
@@ -333,6 +349,9 @@ pub mod tests {
             easycond.s(Stmt::Assign(b, one_expr)),
         ];
         easycond.body = easycond.s(Stmt::Block(body));
-        println!("{}", serialize_to_string(&easycond, &symbols).unwrap());
+        println!(
+            "{}",
+            serialize_to_string(vec![(symbols, easycond)]).unwrap()
+        );
     }
 }

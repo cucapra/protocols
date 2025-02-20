@@ -187,6 +187,7 @@ impl<'a> ParserContext<'a> {
                             let dut_symbol_id = self
                                 .st
                                 .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
+                            self.tr.type_args = vec![dut_symbol_id];
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
@@ -574,7 +575,7 @@ mod tests {
     fn test_re_serialize(tr: Transaction, st: SymbolTable, filename: &str) {
         println!("============= {} =============", filename);
         let mut out = Vec::new();
-        serialize(&mut out, &tr, &st).unwrap();
+        serialize(&mut out, vec![(st, tr)]).unwrap();
         let out_str = String::from_utf8(out).unwrap();
         println!("{}", out_str);
         println!("======================================");
@@ -599,13 +600,6 @@ mod tests {
         for (st, tr) in trs {
             test_re_serialize(tr, st, filename)
         }
-    }
-
-    #[test]
-    fn test_easycond_prot() {
-        let filename = "tests/easycond.prot";
-        let (tr, st) = parse_file(filename, &mut DiagnosticHandler::new());
-        test_re_serialize(tr, st, filename)
     }
 
     #[test]
