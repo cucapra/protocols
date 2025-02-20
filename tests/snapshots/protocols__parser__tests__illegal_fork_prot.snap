@@ -1,0 +1,9 @@
+---
+source: src/parser.rs
+expression: content
+---
+error: Fork command should have no arguments.
+   ┌─ tests/illegal_fork.prot:12:3
+   │
+12 │   fork(1);
+   │   ^^^^ Fork command should have no arguments.

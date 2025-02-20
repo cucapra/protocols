@@ -165,7 +165,8 @@ impl DiagnosticHandler {
         };
 
         diagnostic.emit(buffer, &self.files);
-
+        let error_msg = String::from_utf8_lossy(buffer.as_slice());
+        self.error_string.push_str(&error_msg);
         print!("{}", String::from_utf8_lossy(buffer.as_slice()));
     }
 

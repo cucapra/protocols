@@ -574,6 +574,7 @@ mod tests {
     use crate::serialize::serialize_to_string;
     use insta::Settings;
     use std::path::Path;
+    use strip_ansi_escapes::strip_str;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
@@ -587,10 +588,15 @@ mod tests {
     fn test_illegal_fork_prot() {
         // expect this to fail parsing
         let filename = "tests/illegal_fork.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+        let mut handler = DiagnosticHandler::new();
 
-        let content = serialize_to_string(trs).unwrap();
-        snap("illegal_fork", content);
+        let _ = parse_file(filename, &mut handler);
+
+        let content = strip_str(handler.error_string());
+        snap("illegal_fork_prot", content);
+
+        //let content = serialize_to_string(trs).unwrap();
+        //println!("{}", content);
     }
 
     // passes the parser, but should fail typechecking
@@ -603,15 +609,16 @@ mod tests {
         snap("invalid_step_arg", content);
     }
 
-    // Guaranteed to fail
     #[test]
     fn test_func_arg_invalid_prot() {
+        // Guaranteed to fail
         let filename = "tests/func_arg_invalid.prot";
+        let mut handler = DiagnosticHandler::new();
 
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+        let _ = parse_file(filename, &mut handler);
 
-        let content = serialize_to_string(trs).unwrap();
-        snap("func_arg_invalid", content);
+        let content = strip_str(handler.error_string());
+        snap("func_arg_invalid_prot", content);
     }
 
     #[test]
