@@ -232,7 +232,6 @@ mod tests {
         let content = strip_str(handler.error_string());
 
         snap("add_struct", content);
-
     }
 
     #[test]
