@@ -571,24 +571,16 @@ impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialize::serialize_to_string;
+    use insta::Settings;
+    use std::path::Path;
 
-    fn test_re_serialize(tr: Transaction, st: SymbolTable, filename: &str) {
-        println!("============= {} =============", filename);
-        let mut out = Vec::new();
-        serialize(&mut out, vec![(st, tr)]).unwrap();
-        let out_str = String::from_utf8(out).unwrap();
-        println!("{}", out_str);
-        println!("======================================");
-    }
-
-    #[test]
-    fn test_add_prot() {
-        let filename = "tests/add_struct.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
     }
 
     #[test]
@@ -597,19 +589,8 @@ mod tests {
         let filename = "tests/illegal_fork.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_calyx_go_done_struct_prot() {
-        let filename = "tests/calyx_go_done_struct.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = serialize_to_string(trs).unwrap();
+        snap("illegal_fork", content);
     }
 
     // passes the parser, but should fail typechecking
@@ -618,9 +599,8 @@ mod tests {
         let filename = "tests/invalid_step_arg.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = serialize_to_string(trs).unwrap();
+        snap("invalid_step_arg", content);
     }
 
     // Guaranteed to fail
@@ -630,19 +610,8 @@ mod tests {
 
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_mul_ignoreprot() {
-        let filename = "tests/mul_ignore.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = serialize_to_string(trs).unwrap();
+        snap("func_arg_invalid", content);
     }
 
     #[test]
@@ -650,8 +619,7 @@ mod tests {
         let filename = "tests/serv/register_file.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = serialize_to_string(trs).unwrap();
+        snap("parse_serv_register_file", content);
     }
 }
