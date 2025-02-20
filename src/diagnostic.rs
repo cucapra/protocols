@@ -6,12 +6,14 @@
 
 use std::{collections::HashSet, io::Write};
 
+use crate::parser::Rule;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
 };
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
+use pest::iterators::Pair;
 
 use crate::ir::*;
 
@@ -138,6 +140,33 @@ impl DiagnosticHandler {
             self.error_string.push_str(&error_msg);
             print!("{}", error_msg);
         }
+    }
+
+    pub fn emit_diagnostic_parsing(
+        &mut self,
+        message: &str,
+        fileid: usize,
+        pair: Pair<'_, Rule>,
+        level: Level,
+    ) {
+        let start = pair.as_span().start();
+        let end = pair.as_span().end();
+        let buffer = &mut Buffer::ansi();
+        let label = Label {
+            message: Some(message.to_string()),
+            range: (start, end),
+        };
+
+        let diagnostic = Diagnostic {
+            title: format!("{:?} in file {}", level, fileid),
+            message: message.to_string(),
+            level,
+            location: Some((fileid, label)),
+        };
+
+        diagnostic.emit(buffer, &self.files);
+
+        print!("{}", String::from_utf8_lossy(buffer.as_slice()));
     }
 
     pub fn emit_diagnostic_stmt(

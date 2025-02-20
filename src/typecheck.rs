@@ -17,6 +17,8 @@ fn check_expr_types(
         Expr::Const(_) => Ok(Type::BitVec(1)),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
+        // FIXME: is this the correct typechecking logic?
+        Expr::Slice(sym_expr, _, _) => check_expr_types(tr, st, handler, sym_expr),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(_) = inner_type {
@@ -230,6 +232,7 @@ mod tests {
         let content = strip_str(handler.error_string());
 
         snap("add_struct", content);
+
     }
 
     #[test]

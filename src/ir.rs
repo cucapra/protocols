@@ -207,6 +207,8 @@ pub enum Expr {
     Binary(BinOp, ExprId, ExprId),
     // binary
     Unary(UnaryOp, ExprId),
+    // Slice
+    Slice(ExprId, u32, u32),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -220,6 +222,8 @@ pub enum BoxedExpr {
     Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
     // binary
     Unary(UnaryOp, Box<BoxedExpr>, usize, usize),
+    // indexing
+    Slice(Box<BoxedExpr>, u32, u32, usize, usize),
 }
 
 impl BoxedExpr {
@@ -231,6 +235,7 @@ impl BoxedExpr {
             BoxedExpr::DontCare(start, _) => *start,
             BoxedExpr::Binary(_, _, _, start, _) => *start,
             BoxedExpr::Unary(_, _, start, _) => *start,
+            BoxedExpr::Slice(_, _, _, start, _) => *start,
         }
     }
 
@@ -242,6 +247,7 @@ impl BoxedExpr {
             BoxedExpr::DontCare(_, end) => *end,
             BoxedExpr::Binary(_, _, _, _, end) => *end,
             BoxedExpr::Unary(_, _, _, end) => *end,
+            BoxedExpr::Slice(_, _, _, _, end) => *end,
         }
     }
 }

@@ -15,7 +15,11 @@ integer = ${ ASCII_DIGIT ~ ("_"? ~ ASCII_DIGIT)* }
 dont_care = { "X" }
 
 // Expressions
-primary = _{ integer | "(" ~ expr ~ ")" | dont_care | path_id }
+
+// Slicing
+slice = { path_id ~ "[" ~ integer ~ (":" ~ integer)? ~ "]" }
+
+primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     // negate = { "-" }
@@ -35,7 +39,8 @@ bin_op = _{ eq | log_and }
 //    shift_left = { "<<" }
 //    shift_right = { ">>" }
 
-expr = { atom ~ (bin_op ~ atom)* }
+// handle binary operations and indexing operations
+expr = { atom ~ (bin_op ~ atom)*}
 
 id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
@@ -62,5 +67,5 @@ cond = { if ~ else? }
 // Structs
 struct_def = { "struct" ~ path_id ~ "{" ~ arglist? ~ "}" }
 
-fun = { "fn" ~ path_id ~ type_param ~ "(" ~ arglist ~ ")" ~ "{" ~ stmt* ~ "}" }
+fun = { "fn" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
 file = { SOI ~ (fun | struct_def)* ~ EOI }
