@@ -10,9 +10,9 @@ use baa::BitVecOps;
 
 use crate::{diagnostic::*, ir::*};
 
-pub fn serialize_to_string(tr: &Transaction, st: &SymbolTable) -> std::io::Result<String> {
+pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
     let mut out = Vec::new();
-    serialize(&mut out, tr, st)?;
+    serialize(&mut out, trs)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
@@ -145,259 +145,160 @@ pub fn serialize_structs(
     Ok(())
 }
 
-pub fn serialize(out: &mut impl Write, tr: &Transaction, st: &SymbolTable) -> std::io::Result<()> {
+pub fn serialize(
+    out: &mut impl Write,
+    trs: Vec<(SymbolTable, Transaction)>,
+) -> std::io::Result<()> {
+    let (st, _) = &trs[0];
+
     if st.struct_ids().len() > 0 {
-        serialize_structs(out, st, st.struct_ids())?;
+        serialize_structs(out, &st, st.struct_ids())?;
     }
 
-    write!(out, "fn {}", tr.name)?;
+    for (st, tr) in trs {
+        write!(out, "fn {}", tr.name)?;
 
-    for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
-        let last_index = ii == tr.type_args.len() - 1;
+        for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
+            let last_index = ii == tr.type_args.len() - 1;
 
-        if ii == 0 {
-            write!(out, "<")?;
-        }
+            if ii == 0 {
+                write!(out, "<")?;
+            }
 
-        let strct_type = serialize_type(st, st[tpe_arg].tpe());
-
-        if last_index {
-            write!(out, "{}: {}>", st[tpe_arg].name(), strct_type)?;
-        } else {
-            write!(out, "{}: {}, ", st[tpe_arg].name(), strct_type)?;
-        }
-    }
-
-    write!(out, "(")?;
-
-    if tr.args.len() == 0 {
-        write!(out, ") {{\n")?;
-    } else {
-        for (ii, arg) in tr.args.iter().enumerate() {
-            let last_index = ii == tr.args.len() - 1;
+            let strct_type = serialize_type(&st, st[tpe_arg].tpe());
 
             if last_index {
-                write!(
-                    out,
-                    "{} {}: {}) {{\n",
-                    serialize_dir(arg.dir()),
-                    st[arg].name(),
-                    serialize_type(st, st[arg].tpe())
-                )?;
+                write!(out, "{}: {}>", st[tpe_arg].name(), strct_type)?;
             } else {
-                write!(
-                    out,
-                    "{} {}: {}, ",
-                    serialize_dir(arg.dir()),
-                    st[arg].name(),
-                    serialize_type(st, st[arg].tpe())
-                )?;
+                write!(out, "{}: {}, ", st[tpe_arg].name(), strct_type)?;
             }
         }
+
+        write!(out, "(")?;
+
+        if tr.args.len() == 0 {
+            write!(out, ") {{\n")?;
+        } else {
+            for (ii, arg) in tr.args.iter().enumerate() {
+                let last_index = ii == tr.args.len() - 1;
+
+                if last_index {
+                    write!(
+                        out,
+                        "{} {}: {}) {{\n",
+                        serialize_dir(arg.dir()),
+                        st[arg].name(),
+                        serialize_type(&st, st[arg].tpe())
+                    )?;
+                } else {
+                    write!(
+                        out,
+                        "{} {}: {}, ",
+                        serialize_dir(arg.dir()),
+                        st[arg].name(),
+                        serialize_type(&st, st[arg].tpe())
+                    )?;
+                }
+            }
+        }
+
+        build_statements(out, &tr, &st, &tr.body, 1)?;
+
+        writeln!(out, "}}\n")?;
     }
-
-    build_statements(out, tr, st, &tr.body, 1)?;
-
-    writeln!(out, "}}")?;
 
     Ok(())
 }
 
 #[cfg(test)]
 pub mod tests {
+    use crate::parser::parse_file;
+    use insta::Settings;
+    use std::path::Path;
+
     use baa::BitVecValue;
 
     use super::*;
 
-    pub fn create_add_transaction(handler: &mut DiagnosticHandler) -> (Transaction, SymbolTable) {
-        // Manually create the expected result of parsing `add.prot`.
-        // Note that the order in which things are created will be different in the parser.
-
-        // 1) declare symbols
-        let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
-        assert_eq!(symbols["s"], symbols[s]);
-
-        // declare Adder struct
-        let add_struct = symbols.add_struct(
-            "Adder".to_string(),
-            vec![
-                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
-            ],
-        );
-
-        let dut = symbols.add_without_parent("DUT".to_string(), Type::Struct(add_struct));
-
-        let dut_a = symbols.add_with_parent("a".to_string(), dut);
-        let dut_b = symbols.add_with_parent("b".to_string(), dut);
-        let dut_s = symbols.add_with_parent("s".to_string(), dut);
-        assert_eq!(symbols["DUT.s"], symbols[dut_s]);
-        assert_eq!(symbols["s"], symbols[s]);
-
-        // create fileid and read file
-        let input = std::fs::read_to_string("tests/add_struct.prot").expect("failed to load");
-        let add_fileid = handler.add_file("add.prot".to_string(), input);
-
-        // 2) create transaction
-        let mut add = Transaction::new("add".to_string());
-        add.args = vec![
-            Arg::new(a, Dir::In),
-            Arg::new(b, Dir::In),
-            Arg::new(s, Dir::Out),
-        ];
-        add.type_args = vec![dut];
-
-        // 3) create expressions
-        let a_expr = add.e(Expr::Sym(a));
-        add.add_expr_loc(a_expr, 152, 153, add_fileid);
-        let b_expr = add.e(Expr::Sym(b));
-        add.add_expr_loc(b_expr, 208, 209, add_fileid);
-        let dut_s_expr = add.e(Expr::Sym(dut_s));
-        add.add_expr_loc(dut_s_expr, 271, 276, add_fileid);
-        let s_expr = add.e(Expr::Sym(s));
-        let one_expr = add.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        add.add_expr_loc(one_expr, 1, 1, add_fileid); // just put in random values here
-
-        // 4) create statements
-        let a_assign = add.s(Stmt::Assign(dut_a, a_expr));
-        add.add_stmt_loc(a_assign, 184, 195, add_fileid);
-        let b_assign = add.s(Stmt::Assign(dut_b, b_expr));
-        add.add_stmt_loc(b_assign, 199, 210, add_fileid);
-        let step = add.s(Stmt::Step(one_expr));
-        add.add_stmt_loc(step, 214, 221, add_fileid);
-        let fork = add.s(Stmt::Fork);
-        add.add_stmt_loc(fork, 225, 232, add_fileid);
-        let dut_a_assign = add.s(Stmt::Assign(dut_a, add.expr_dont_care()));
-        add.add_stmt_loc(dut_a_assign, 236, 247, add_fileid);
-        let dut_b_assign = add.s(Stmt::Assign(dut_b, add.expr_dont_care()));
-        add.add_stmt_loc(dut_b_assign, 251, 262, add_fileid);
-        let s_assign = add.s(Stmt::Assign(s, dut_s_expr));
-        add.add_stmt_loc(s_assign, 266, 277, add_fileid);
-        let dut_s_assign = add.s(Stmt::Assign(dut_s, a_expr));
-        add.add_stmt_loc(dut_s_assign, 281, 292, add_fileid);
-        let assert = add.s(Stmt::AssertEq(s_expr, dut_s_expr));
-        add.add_stmt_loc(assert, 296, 316, add_fileid);
-        let body = vec![
-            a_assign,
-            b_assign,
-            step,
-            fork,
-            dut_a_assign,
-            dut_b_assign,
-            s_assign,
-            dut_s_assign,
-            assert,
-        ];
-        add.body = add.s(Stmt::Block(body));
-
-        (add, symbols)
-    }
-
-    pub fn create_calyx_go_done_transaction(
-        handler: &mut DiagnosticHandler,
-    ) -> (Transaction, SymbolTable) {
-        // Manually create the expected result of parsing `calyx_go_done`.
-        // Note that the order in which things are created will be different in the parser.
-
-        // 1) declare symbols
-        let mut symbols = SymbolTable::default();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // declare Calyx struct
-        let dut_struct = symbols.add_struct(
-            "Calyx".to_string(),
-            vec![
-                Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("done".to_string(), Dir::Out, Type::BitVec(1)),
-                Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
-            ],
-        );
-
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
-        let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
-        let dut_go = symbols.add_with_parent("go".to_string(), dut);
-        let dut_done = symbols.add_with_parent("done".to_string(), dut);
-        let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
-        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // create fileid and read file
-        let input =
-            std::fs::read_to_string("tests/calyx_go_done_struct.prot").expect("failed to load");
-        let calyx_fileid = handler.add_file("calyx_go_done_struct.prot".to_string(), input);
-
-        // 2) create transaction
-        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
-        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
-        calyx_go_done.type_args = vec![dut];
-
-        // 3) create expressions
-        let ii_expr = calyx_go_done.e(Expr::Sym(ii));
-        calyx_go_done.add_expr_loc(ii_expr, 153, 155, calyx_fileid);
-        let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
-        calyx_go_done.add_expr_loc(dut_oo_expr, 260, 266, calyx_fileid);
-        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        calyx_go_done.add_expr_loc(one_expr, 170, 171, calyx_fileid);
-        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
-        calyx_go_done.add_expr_loc(zero_expr, 232, 233, calyx_fileid);
-        let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        calyx_go_done.add_expr_loc(dut_done_expr, 184, 192, calyx_fileid);
-        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
-        calyx_go_done.add_expr_loc(cond_expr, 172, 187, calyx_fileid);
-        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
-        calyx_go_done.add_expr_loc(not_expr, 182, 198, calyx_fileid);
-        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        calyx_go_done.add_expr_loc(one_expr, 1, 1, calyx_fileid); // just put in random values here
-
-        // 4) create statements
-        let while_body: Vec<StmtId> = vec![calyx_go_done.s(Stmt::Step(one_expr))];
-        let wbody = calyx_go_done.s(Stmt::Block(while_body));
-
-        let dut_ii_assign = calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr));
-        calyx_go_done.add_stmt_loc(dut_ii_assign, 143, 157, calyx_fileid);
-        let dut_go_assign = calyx_go_done.s(Stmt::Assign(dut_go, one_expr)); // Should cause type mismatch error
-        calyx_go_done.add_stmt_loc(dut_go_assign, 160, 172, calyx_fileid);
-        let dut_while = calyx_go_done.s(Stmt::While(not_expr, wbody));
-        calyx_go_done.add_stmt_loc(dut_while, 175, 219, calyx_fileid);
-        let dut_go_reassign = calyx_go_done.s(Stmt::Assign(dut_go, zero_expr)); // Should cause type mismatch error
-        calyx_go_done.add_stmt_loc(dut_go_reassign, 222, 234, calyx_fileid);
-        let dut_ii_dontcare = calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care()));
-        calyx_go_done.add_stmt_loc(dut_ii_dontcare, 238, 250, calyx_fileid);
-        let oo_assign = calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr));
-        calyx_go_done.add_stmt_loc(oo_assign, 254, 268, calyx_fileid);
-        let body = vec![
-            dut_ii_assign,
-            dut_go_assign,
-            dut_while,
-            dut_go_reassign,
-            dut_ii_dontcare,
-            oo_assign,
-        ];
-        calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
-
-        (calyx_go_done, symbols)
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
     }
 
     #[test]
-    fn serialize_add_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (add, symbols) = create_add_transaction(&mut handler);
+    fn test_add_transaction() {
+        let trs = parse_file("tests/add_struct.prot", &mut DiagnosticHandler::new());
 
-        println!("{}", serialize_to_string(&add, &symbols).unwrap());
+        let content = serialize_to_string(trs).unwrap();
+        snap("add_struct", content);
     }
 
     #[test]
-    fn serialize_calyx_go_done_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
-        println!("{}", serialize_to_string(&calyx_go_done, &symbols).unwrap());
+    fn test_calyx_go_done_transaction() {
+        let trs = parse_file(
+            "tests/calyx_go_done_struct.prot",
+            &mut DiagnosticHandler::new(),
+        );
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("calyx_go_done_struct", content);
+    }
+
+    #[test]
+    fn test_aes128_prot() {
+        let filename = "tests/aes128.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("aes128", content);
+    }
+
+    #[test]
+    fn test_aes128_round_prot() {
+        let filename = "tests/aes128_round.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("aes128_round", content);
+    }
+
+    #[test]
+    fn test_aes128_expand_key_prot() {
+        let filename = "tests/aes128_expand_key.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("aes128_expand_key", content);
+    }
+
+    #[test]
+    fn test_mul_prot() {
+        let filename = "tests/mul.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("mul", content);
+    }
+
+    #[test]
+    fn test_mul_ignore_prot() {
+        let filename = "tests/mul_ignore.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("mul_ignore", content);
+    }
+
+    #[test]
+    fn test_cond_prot() {
+        let filename = "tests/cond.prot";
+        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+
+        let content = serialize_to_string(trs).unwrap();
+        snap("cond", content);
     }
 
     #[test]
@@ -413,11 +314,10 @@ pub mod tests {
 
         // declare DUT struct (TODO: Fix struct)
         let dut_struct = symbols.add_struct(
-            "Adder".to_string(),
+            "UnaryOp".to_string(),
             vec![
                 Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
                 Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
         let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
@@ -427,11 +327,13 @@ pub mod tests {
         // 2) create transaction
         let mut easycond = Transaction::new("easycond".to_string());
         easycond.args = vec![Arg::new(a, Dir::In), Arg::new(b, Dir::Out)];
+        easycond.type_args = vec![dut];
 
         // 3) create expressions
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
-        let one_expr = easycond.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+
+        let one_expr = easycond.e(Expr::Const(BitVecValue::from_i64(1, 2)));
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
@@ -447,6 +349,9 @@ pub mod tests {
             easycond.s(Stmt::Assign(b, one_expr)),
         ];
         easycond.body = easycond.s(Stmt::Block(body));
-        println!("{}", serialize_to_string(&easycond, &symbols).unwrap());
+        println!(
+            "{}",
+            serialize_to_string(vec![(symbols, easycond)]).unwrap()
+        );
     }
 }

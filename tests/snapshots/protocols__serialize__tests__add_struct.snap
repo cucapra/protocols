@@ -1,4 +1,7 @@
-// maps to a verilog design
+---
+source: src/serialize.rs
+expression: content
+---
 struct Adder {
   in a: u32,
   in b: u32,

@@ -194,94 +194,118 @@ fn check_stmt_types(
     }
 }
 
-pub fn type_check(tr: &Transaction, st: &SymbolTable, handler: &mut DiagnosticHandler) {
-    for expr_id in tr.expr_ids() {
-        let _ = check_expr_types(tr, st, handler, &expr_id);
-    }
+pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut DiagnosticHandler) {
+    for (st, tr) in trs {
+        for expr_id in tr.expr_ids() {
+            let _ = check_expr_types(&tr, &st, handler, &expr_id);
+        }
 
-    for stmt_id in tr.stmt_ids() {
-        let _ = check_stmt_types(tr, st, handler, &stmt_id);
+        for stmt_id in tr.stmt_ids() {
+            let _ = check_stmt_types(&tr, &st, handler, &stmt_id);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        parser::parse_file,
-        serialize::tests::{create_add_transaction, create_calyx_go_done_transaction},
-    };
+    use std::path::Path;
+
+    use crate::parser::parse_file;
     use baa::BitVecValue;
+    use insta::Settings;
+    use strip_ansi_escapes::strip_str;
 
     use super::*;
 
-    #[test]
-    fn typecheck_add_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/add_struct.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
     }
 
     #[test]
-    fn typecheck_invalid_step_arg_transaction() {
+    fn test_add_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/invalid_step_arg.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+        let trs = parse_file("tests/add_struct.prot", &mut handler);
+        type_check(trs, &mut handler);
+
+        let content = strip_str(handler.error_string());
+
+        snap("add_struct", content);
+    }
+
+    #[test]
+    fn test_invalid_step_arg_transaction() {
+        let mut handler = DiagnosticHandler::new();
+        let trs = parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
+        type_check(trs, &mut handler);
+
+        let content = strip_str(handler.error_string());
+
+        snap("invalid_step_arg", content);
     }
 
     #[test]
     fn typecheck_aes128_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/aes128.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+        let trs = parser::parse_file("tests/aes128.prot", &mut handler);
+        type_check(trs, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("aes128", content);
     }
 
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/aes128_expand_key.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+        let trs = parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
+        type_check(trs, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("aes128_expand_key", content);
     }
 
     #[test]
     fn typecheck_aes128_round_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/aes128_round.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+        let trs = parser::parse_file("tests/aes128_round.prot", &mut handler);
+        type_check(trs, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("aes128_round", content);
     }
 
     #[test]
     fn typecheck_mul_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/mul.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+        let trs = parser::parse_file("tests/mul.prot", &mut handler);
+        type_check(trs, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("mul", content);
     }
 
     #[test]
     fn typecheck_cond_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/cond.prot", &mut handler);
-        for (st, tr) in trs {
-            type_check(&tr, &st, &mut handler);
-        }
+        let trs = parser::parse_file("tests/cond.prot", &mut handler);
+        type_check(trs, &mut handler);
+        let content = strip_str(handler.error_string());
+
+        snap("cond", content);
     }
 
     #[test]
-    fn typecheck_calyx_go_done_transaction() {
+    fn test_calyx_go_done_transaction() {
         let mut handler = DiagnosticHandler::new();
-        let (calyx_go_done, symbols) = create_calyx_go_done_transaction(&mut handler);
-        type_check(&calyx_go_done, &symbols, &mut handler);
+        let trs = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
+        type_check(trs, &mut handler);
+
+        let content = strip_str(handler.error_string());
+
+        snap("calyx_go_done_struct", content);
     }
 
     // Specific Tests
@@ -323,6 +347,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        type_check(&tr, &symbols, &mut handler);
+        type_check(vec![(symbols, tr)], &mut handler);
     }
 }

@@ -1,3 +1,7 @@
+---
+source: src/serialize.rs
+expression: content
+---
 struct Calyx {
   in ii: u32,
   in go: u32,

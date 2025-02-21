@@ -1,0 +1,15 @@
+---
+source: src/diagnostic.rs
+expression: content
+---
+warning: Random Warning
+  ┌─ main.calyx:2:1
+  │
+2 │ assert_eq!(x, 20);
+  │ ^^ Random Warning
+
+error: Random Error
+  ┌─ main.calyx:2:4
+  │
+2 │ assert_eq!(x, 20);
+  │    ^^^ Random Error

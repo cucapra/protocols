@@ -3,10 +3,10 @@ struct UnaryOp {
     out b: u32,
 }
 
-fn easycond(in a: u32, out b: u32) {
+fn easycond<dut: UnaryOp>(in a: u32, out b: u32) {
   dut.a := a;
   if dut.a == 1 {
-    step();
+    step(1);
   } else {
     fork();
   }

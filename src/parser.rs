@@ -187,6 +187,7 @@ impl<'a> ParserContext<'a> {
                             let dut_symbol_id = self
                                 .st
                                 .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
+                            self.tr.type_args = vec![dut_symbol_id];
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
@@ -482,8 +483,9 @@ pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
 ) -> Vec<(SymbolTable, Transaction)> {
+    let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).expect("failed to load");
-    let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input.clone());
+    let fileid = handler.add_file(name, input.clone());
 
     let res = ProtocolParser::parse(Rule::file, &input);
     match res {
@@ -569,105 +571,32 @@ impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialize::serialize_to_string;
+    use insta::Settings;
+    use std::path::Path;
+    use strip_ansi_escapes::strip_str;
 
-    fn test_re_serialize(tr: Transaction, st: SymbolTable, filename: &str) {
-        println!("============= {} =============", filename);
-        let mut out = Vec::new();
-        serialize(&mut out, &tr, &st).unwrap();
-        let out_str = String::from_utf8(out).unwrap();
-        println!("{}", out_str);
-        println!("======================================");
-    }
-
-    #[test]
-    fn test_add_prot() {
-        let filename = "tests/add_struct.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
     }
 
     #[test]
     fn test_illegal_fork_prot() {
         // expect this to fail parsing
         let filename = "tests/illegal_fork.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+        let mut handler = DiagnosticHandler::new();
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
+        let _ = parse_file(filename, &mut handler);
 
-    #[test]
-    fn test_aes128_prot() {
-        let filename = "tests/aes128.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+        let content = strip_str(handler.error_string());
+        snap("illegal_fork_prot", content);
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_aes128_round_prot() {
-        let filename = "tests/aes128_round.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_aes128_expand_key_prot() {
-        let filename = "tests/aes128_expand_key.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_mul_prot() {
-        let filename = "tests/mul.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_easycond_prot() {
-        let filename = "tests/cond.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_cond_prot() {
-        let filename = "tests/cond.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_calyx_go_done_struct_prot() {
-        let filename = "tests/calyx_go_done_struct.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        //let content = serialize_to_string(trs).unwrap();
+        //println!("{}", content);
     }
 
     // passes the parser, but should fail typechecking
@@ -676,31 +605,20 @@ mod tests {
         let filename = "tests/invalid_step_arg.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = serialize_to_string(trs).unwrap();
+        snap("invalid_step_arg", content);
     }
 
-    // Guaranteed to fail
     #[test]
     fn test_func_arg_invalid_prot() {
+        // Guaranteed to fail
         let filename = "tests/func_arg_invalid.prot";
+        let mut handler = DiagnosticHandler::new();
 
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+        let _ = parse_file(filename, &mut handler);
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
-    }
-
-    #[test]
-    fn test_mul_ignoreprot() {
-        let filename = "tests/mul_ignore.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = strip_str(handler.error_string());
+        snap("func_arg_invalid_prot", content);
     }
 
     #[test]
@@ -708,8 +626,7 @@ mod tests {
         let filename = "tests/serv/register_file.prot";
         let trs = parse_file(filename, &mut DiagnosticHandler::new());
 
-        for (st, tr) in trs {
-            test_re_serialize(tr, st, filename)
-        }
+        let content = serialize_to_string(trs).unwrap();
+        snap("parse_serv_register_file", content);
     }
 }
