@@ -48,10 +48,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         }
         Expr::Slice(expr, idx1, idx2) => {
             if *idx2 == *idx1 {
-                serialize_expr(tr, st, expr)
-                    + "["
-                    + idx1.to_string().as_str()
-                    + "]"
+                serialize_expr(tr, st, expr) + "[" + idx1.to_string().as_str() + "]"
             } else {
                 serialize_expr(tr, st, expr)
                     + "["
