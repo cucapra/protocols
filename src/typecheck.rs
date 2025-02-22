@@ -4,6 +4,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use baa::BitVecOps;
+
 use crate::parser;
 use crate::{diagnostic::*, ir::*, serialize::*};
 
@@ -65,6 +67,17 @@ fn check_stmt_types(
         Stmt::Step(exprid) => {
             let expr_type = check_expr_types(tr, st, handler, exprid)?;
             if let Type::BitVec(_) = expr_type {
+                if let Expr::Const(val) = &tr[exprid] {
+                    if val.to_i64().unwrap() >= 1 {
+                        return Ok(());
+                    }
+                    handler.emit_diagnostic_expr(
+                        tr,
+                        exprid,
+                        &format!("Incorrect value to step"),
+                        Level::Error,
+                    );
+                }
                 Ok(())
             } else {
                 handler.emit_diagnostic_stmt(
