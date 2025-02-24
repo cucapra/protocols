@@ -582,56 +582,5 @@ mod tests {
     use std::path::Path;
     use strip_ansi_escapes::strip_str;
 
-    fn snap(name: &str, content: String) {
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(name, content);
-        });
-    }
 
-    #[test]
-    fn test_illegal_fork_prot() {
-        // expect this to fail parsing
-        let filename = "tests/illegal_fork.prot";
-        let mut handler = DiagnosticHandler::new();
-
-        let result = parse_file(filename, &mut handler);
-
-        let content = match result {
-            Ok(trs) => serialize_to_string(trs).unwrap(),
-            Err(_) => strip_str(handler.error_string()),
-        };
-        snap("illegal_fork_prot", content);
-    }
-
-    #[test]
-    fn test_invalid_step_arg() {
-        // Expect a lex failure
-        let filename = "tests/invalid_step_arg.prot";
-        let mut handler = DiagnosticHandler::new();
-
-        let result = parse_file(filename, &mut handler);
-
-        let content = match result {
-            Ok(trs) => serialize_to_string(trs).unwrap(),
-            Err(_) => strip_str(handler.error_string()),
-        };
-        snap("invalid_step_arg", content);
-    }
-
-    #[test]
-    fn test_func_arg_invalid_prot() {
-        // Guaranteed to fail
-        let filename = "tests/func_arg_invalid.prot";
-        let mut handler = DiagnosticHandler::new();
-
-        let result = parse_file(filename, &mut handler);
-
-        let content = match result {
-            Ok(trs) => serialize_to_string(trs).unwrap(),
-            Err(_) => strip_str(handler.error_string()),
-        };
-        snap("func_arg_invalid_prot", content);
-    }
 }

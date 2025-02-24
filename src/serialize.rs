@@ -287,6 +287,21 @@ pub mod tests {
     }
 
     #[test]
+    fn test_illegal_fork_prot() {
+        test_helper("tests/illegal_fork.prot", "illegal_fork_prot");
+    }
+
+    #[test]
+    fn test_invalid_step_arg() {
+        test_helper("tests/invalid_step_arg.prot", "invalid_step_arg");
+    }
+
+    #[test]
+    fn test_func_arg_invalid_prot() {
+        test_helper("tests/func_arg_invalid.prot", "func_arg_invalid_prot");
+    }
+
+    #[test]
     fn serialize_easycond_transaction() {
         // Manually create the expected result of parsing `easycond.prot`.
         // Note that the order in which things are created will be different in the parser.

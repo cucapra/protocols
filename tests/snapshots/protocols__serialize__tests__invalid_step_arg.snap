@@ -1,0 +1,9 @@
+---
+source: src/serialize.rs
+expression: content
+---
+error: Lexing failed: expected expr
+  ┌─ tests/invalid_step_arg.prot:8:8
+  │
+8 │   step(-1);
+  │        ^ Lexing failed: expected expr
