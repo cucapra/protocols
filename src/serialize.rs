@@ -217,6 +217,7 @@ pub mod tests {
     use std::path::Path;
 
     use baa::BitVecValue;
+    use strip_ansi_escapes::strip_str;
 
     use super::*;
 
@@ -228,77 +229,61 @@ pub mod tests {
         });
     }
 
+
+    fn test_helper(filename: &str, snap_name: &str) {
+        let mut handler = DiagnosticHandler::new();
+        let result = parse_file(filename, &mut handler);
+
+        let content = match result {
+            Ok(trs) => serialize_to_string(trs).unwrap(),
+            Err(_) => strip_str(handler.error_string()),
+        };
+        snap(snap_name, content);
+    }
+
     #[test]
     fn test_add_transaction() {
-        let trs = parse_file("tests/add_struct.prot", &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("add_struct", content);
+        test_helper("tests/add_struct.prot", "add_struct");
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        let trs = parse_file(
-            "tests/calyx_go_done_struct.prot",
-            &mut DiagnosticHandler::new(),
-        );
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("calyx_go_done_struct", content);
+        test_helper("tests/calyx_go_done_struct.prot", "calyx_go_done_struct");
     }
 
     #[test]
     fn test_aes128_prot() {
-        let filename = "tests/aes128.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("aes128", content);
+        test_helper("tests/aes128.prot", "aes128");
     }
 
     #[test]
     fn test_aes128_round_prot() {
-        let filename = "tests/aes128_round.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("aes128_round", content);
+        test_helper("tests/aes128_round.prot", "aes128_round");
     }
 
     #[test]
     fn test_aes128_expand_key_prot() {
-        let filename = "tests/aes128_expand_key.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("aes128_expand_key", content);
+        test_helper("tests/aes128_expand_key.prot", "aes128_expand_key");
     }
 
     #[test]
     fn test_mul_prot() {
-        let filename = "tests/mul.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("mul", content);
+        test_helper("tests/mul.prot", "mul");
     }
 
     #[test]
     fn test_mul_ignore_prot() {
-        let filename = "tests/mul_ignore.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("mul_ignore", content);
+        test_helper("tests/mul_ignore.prot", "mul_ignore");
     }
 
     #[test]
     fn test_cond_prot() {
-        let filename = "tests/cond.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
+        test_helper("tests/cond.prot", "cond");
+    }
 
-        let content = serialize_to_string(trs).unwrap();
-        snap("cond", content);
+    #[test]
+    fn test_parse_serv_register_file_prot() {
+        test_helper("tests/serv/register_file.prot", "parse_serv_register_file");
     }
 
     #[test]
