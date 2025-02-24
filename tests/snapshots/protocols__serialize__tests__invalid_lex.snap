@@ -1,9 +1,9 @@
 ---
-source: src/parser.rs
+source: src/serialize.rs
 expression: content
 ---
 error: Lexing failed: expected expr
-  ┌─ tests/invalid_step_arg.prot:8:8
+  ┌─ tests/invalid_lex.prot:9:8
   │
-8 │   step(-1);
+9 │   step(-1);
   │        ^ Lexing failed: expected expr

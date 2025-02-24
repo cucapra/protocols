@@ -1,10 +1,11 @@
+// this file is to test lexing failures (in this example, due to a negative number)
 struct Dummy {
   in a : u1,
-}
+} 
 
 fn invalid_step<dut: Dummy>(in a: u1, in b: u1, out s: u1) { 
   a := b;
   fork();
-  step(0);
+  step(-1);
   s := 0;
 }

@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::BitVecValue;
+use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use pest::Parser;
@@ -482,9 +483,9 @@ impl<'a> ParserContext<'a> {
 pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-) -> Vec<(SymbolTable, Transaction)> {
+) -> Result<Vec<(SymbolTable, Transaction)>, String> {
     let name = filename.as_ref().to_str().unwrap().to_string();
-    let input = std::fs::read_to_string(filename).expect("failed to load");
+    let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     let fileid = handler.add_file(name, input.clone());
 
     let res = ProtocolParser::parse(Rule::file, &input);
@@ -493,8 +494,13 @@ pub fn parse_file(
             //println!("Parsing successful: {:?}", parsed);
         }
         Err(err) => {
-            eprintln!("Parsing failed: {}", err);
-            panic!("Invalid file: Failed to parse.");
+            let (start, end) = match err.location {
+                InputLocation::Pos(start) => (start, start),
+                InputLocation::Span(span) => span,
+            };
+            let msg: String = format!("Lexing failed: {}", err.variant.message());
+            handler.emit_diagnostic_lexing(&msg, fileid, start, end, Level::Error);
+            return Err(msg);
         }
     }
 
@@ -513,8 +519,9 @@ pub fn parse_file(
                 handler,
             };
             if let Err(e) = context.parse_struct(pair) {
-                eprintln!("Error parsing struct: {}", e);
-                return vec![];
+                let msg = format!("Error parsing struct: {}", e);
+                eprintln!("{}", msg);
+                return Err(msg);
             }
         } else if pair.as_rule() == Rule::fun {
             // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
@@ -527,14 +534,13 @@ pub fn parse_file(
                 handler,
             };
             if let Err(e) = context.parse_transaction(pair) {
-                eprintln!("Error parsing transaction: {}", e);
-                return vec![];
+                return Err(e);
             }
 
             trs.push((context.st.clone(), context.tr.clone()));
         }
     }
-    trs
+    Ok(trs)
 }
 
 // Wrapper struct for custom display of pest pairs
@@ -570,63 +576,5 @@ impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::serialize::serialize_to_string;
-    use insta::Settings;
-    use std::path::Path;
-    use strip_ansi_escapes::strip_str;
-
-    fn snap(name: &str, content: String) {
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(name, content);
-        });
-    }
-
-    #[test]
-    fn test_illegal_fork_prot() {
-        // expect this to fail parsing
-        let filename = "tests/illegal_fork.prot";
-        let mut handler = DiagnosticHandler::new();
-
-        let _ = parse_file(filename, &mut handler);
-
-        let content = strip_str(handler.error_string());
-        snap("illegal_fork_prot", content);
-
-        //let content = serialize_to_string(trs).unwrap();
-        //println!("{}", content);
-    }
-
-    // passes the parser, but should fail typechecking
-    #[test]
-    fn test_invalid_step_arg() {
-        let filename = "tests/invalid_step_arg.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("invalid_step_arg", content);
-    }
-
-    #[test]
-    fn test_func_arg_invalid_prot() {
-        // Guaranteed to fail
-        let filename = "tests/func_arg_invalid.prot";
-        let mut handler = DiagnosticHandler::new();
-
-        let _ = parse_file(filename, &mut handler);
-
-        let content = strip_str(handler.error_string());
-        snap("func_arg_invalid_prot", content);
-    }
-
-    #[test]
-    fn test_parse_serv_register_file() {
-        let filename = "tests/serv/register_file.prot";
-        let trs = parse_file(filename, &mut DiagnosticHandler::new());
-
-        let content = serialize_to_string(trs).unwrap();
-        snap("parse_serv_register_file", content);
-    }
+    // All tests moved to serialize.rs
 }

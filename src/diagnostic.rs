@@ -170,6 +170,33 @@ impl DiagnosticHandler {
         print!("{}", String::from_utf8_lossy(buffer.as_slice()));
     }
 
+    pub fn emit_diagnostic_lexing(
+        &mut self,
+        message: &str,
+        fileid: usize,
+        start: usize,
+        end: usize,
+        level: Level,
+    ) {
+        let buffer = &mut Buffer::ansi();
+        let label = Label {
+            message: Some(message.to_string()),
+            range: (start, end),
+        };
+
+        let diagnostic = Diagnostic {
+            title: format!("{:?} in file {}", level, fileid),
+            message: message.to_string(),
+            level,
+            location: Some((fileid, label)),
+        };
+
+        diagnostic.emit(buffer, &self.files);
+        let error_msg = String::from_utf8_lossy(buffer.as_slice());
+        self.error_string.push_str(&error_msg);
+        print!("{}", error_msg);
+    }
+
     pub fn emit_diagnostic_stmt(
         &mut self,
         tr: &Transaction,
