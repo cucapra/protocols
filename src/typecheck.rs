@@ -225,87 +225,57 @@ mod tests {
         });
     }
 
+    fn test_helper(test_name: &str, file_name: &str) {
+        let mut handler = DiagnosticHandler::new();
+        let result = parser::parse_file(file_name, &mut handler);
+        let content = match result {
+            Ok(trs) => {
+                type_check(trs, &mut handler);
+                strip_str(handler.error_string())
+            }
+            Err(_) => strip_str(handler.error_string()),
+        };
+        snap(test_name, content);
+    }
+
     #[test]
     fn test_add_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/add_struct.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-
-        let content = strip_str(handler.error_string());
-
-        snap("add_struct", content);
+        test_helper("add_struct", "tests/add_struct.prot");
     }
 
     #[test]
     fn test_invalid_step_arg_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parser::parse_file("tests/invalid_step_arg.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-
-        let content = strip_str(handler.error_string());
-
-        snap("invalid_step_arg", content);
+        test_helper("invalid_step_arg", "tests/invalid_step_arg.prot");
     }
 
     #[test]
     fn typecheck_aes128_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parser::parse_file("tests/aes128.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-        let content = strip_str(handler.error_string());
-
-        snap("aes128", content);
+        test_helper("aes128", "tests/aes128.prot");
     }
 
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parser::parse_file("tests/aes128_expand_key.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-        let content = strip_str(handler.error_string());
-
-        snap("aes128_expand_key", content);
+        test_helper("aes128_expand_key", "tests/aes128_expand_key.prot");
     }
 
     #[test]
     fn typecheck_aes128_round_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parser::parse_file("tests/aes128_round.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-        let content = strip_str(handler.error_string());
-
-        snap("aes128_round", content);
+        test_helper("aes128_round", "tests/aes128_round.prot");
     }
 
     #[test]
     fn typecheck_mul_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parser::parse_file("tests/mul.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-        let content = strip_str(handler.error_string());
-
-        snap("mul", content);
+        test_helper("mul", "tests/mul.prot");
     }
 
     #[test]
     fn typecheck_cond_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parser::parse_file("tests/cond.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-        let content = strip_str(handler.error_string());
-
-        snap("cond", content);
+        test_helper("cond", "tests/cond.prot");
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        let mut handler = DiagnosticHandler::new();
-        let trs = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
-        type_check(trs.unwrap(), &mut handler);
-
-        let content = strip_str(handler.error_string());
-
-        snap("calyx_go_done_struct", content);
+        test_helper("calyx_go_done_struct", "tests/calyx_go_done_struct.prot");
     }
 
     // Specific Tests
