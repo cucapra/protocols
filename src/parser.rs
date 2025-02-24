@@ -576,11 +576,5 @@ impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::serialize::serialize_to_string;
-    use insta::Settings;
-    use std::path::Path;
-    use strip_ansi_escapes::strip_str;
-
-
+    // All tests moved to serialize.rs
 }

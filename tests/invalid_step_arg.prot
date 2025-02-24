@@ -5,6 +5,6 @@ struct Dummy {
 fn invalid_step<dut: Dummy>(in a: u1, in b: u1, out s: u1) { 
   a := b;
   fork();
-  step(-1);
+  step(0);
   s := 0;
 }
