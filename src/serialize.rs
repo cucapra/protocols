@@ -251,6 +251,12 @@ pub mod tests {
     }
 
     #[test]
+    fn test_invalid_lex_prot() {
+        test_helper("tests/invalid_lex.prot", "invalid_lex");
+    }
+
+
+    #[test]
     fn test_aes128_prot() {
         test_helper("tests/aes128.prot", "aes128");
     }
