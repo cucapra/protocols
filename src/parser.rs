@@ -4,11 +4,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::BitVecValue;
+use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use pest::Parser;
 use pest_derive::Parser;
-use pest::error::InputLocation;
 use std::{fmt, io::stdout, process::id, vec};
 
 use crate::serialize::*;
@@ -495,8 +495,8 @@ pub fn parse_file(
         }
         Err(err) => {
             let (start, end) = match err.location {
-                InputLocation::Pos(start) => (start, start), 
-                InputLocation::Span(span) => span
+                InputLocation::Pos(start) => (start, start),
+                InputLocation::Span(span) => span,
             };
             let msg: String = format!("Lexing failed: {}", err.variant.message());
             handler.emit_diagnostic_lexing(&msg, fileid, start, end, Level::Error);

@@ -169,7 +169,7 @@ impl DiagnosticHandler {
         self.error_string.push_str(&error_msg);
         print!("{}", String::from_utf8_lossy(buffer.as_slice()));
     }
-    
+
     pub fn emit_diagnostic_lexing(
         &mut self,
         message: &str,

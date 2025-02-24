@@ -229,7 +229,6 @@ pub mod tests {
         });
     }
 
-
     fn test_helper(filename: &str, snap_name: &str) {
         let mut handler = DiagnosticHandler::new();
         let result = parse_file(filename, &mut handler);
