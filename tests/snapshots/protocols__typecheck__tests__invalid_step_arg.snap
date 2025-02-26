@@ -8,11 +8,11 @@ error: Cannot assign to function argument. Try using assert_eq if you want to ch
 6 │   a := b;
   │   ^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
 
-error: Step argument must be a positive, non-zero integeral literal.
+error: Argument to step must be a positive, non-zero integer literal.
   ┌─ tests/invalid_step_arg.prot:8:8
   │
 8 │   step(0);
-  │        ^ Step argument must be a positive, non-zero integeral literal.
+  │        ^ Argument to step must be a positive, non-zero integer literal.
 
 error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
   ┌─ tests/invalid_step_arg.prot:9:3

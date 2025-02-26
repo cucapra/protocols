@@ -74,7 +74,7 @@ fn check_stmt_types(
                     handler.emit_diagnostic_expr(
                         tr,
                         exprid,
-                        &format!("Step argument must be a positive, non-zero integeral literal."),
+                        &format!("Argument to step must be a positive, non-zero integer literal."),
                         Level::Error,
                     );
                 }
