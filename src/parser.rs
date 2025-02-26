@@ -184,7 +184,7 @@ impl<'a> ParserContext<'a> {
                                 .st
                                 .struct_id_from_name(path_id_2)
                                 .ok_or_else(|| format!("Undefined struct: {}", path_id_2))?;
-                            let dut_struct = self.st.struct_from_struct_id(struct_id).clone();
+                            let dut_struct = self.st[struct_id].clone();
                             let dut_symbol_id = self
                                 .st
                                 .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));

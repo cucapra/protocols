@@ -304,8 +304,9 @@ entity_impl!(SymbolId, "symbol");
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
-    by_name: FxHashMap<String, SymbolId>,
+    by_name_sym: FxHashMap<String, SymbolId>,
     structs: PrimaryMap<StructId, Struct>,
+    by_name_struct: FxHashMap<String, StructId>,
 }
 
 impl SymbolTable {
@@ -323,17 +324,17 @@ impl SymbolTable {
         let lookup_name = entry.full_name(self);
 
         assert!(
-            !self.by_name.contains_key(&lookup_name),
+            !self.by_name_sym.contains_key(&lookup_name),
             "we already have an entry for {lookup_name}!",
         );
 
         let id = self.entries.push(entry);
-        self.by_name.insert(lookup_name, id);
+        self.by_name_sym.insert(lookup_name, id);
         id
     }
 
     pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
-        self.by_name.get(name).copied()
+        self.by_name_sym.get(name).copied()
     }
 
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
@@ -365,28 +366,28 @@ impl SymbolTable {
         let lookup_name = entry.full_name(self);
 
         assert!(
-            !self.by_name.contains_key(&lookup_name),
+            !self.by_name_sym.contains_key(&lookup_name),
             "we already have an entry for {lookup_name}!",
         );
 
         let id = self.entries.push(entry);
-        self.by_name.insert(lookup_name, id);
+        self.by_name_sym.insert(lookup_name, id);
         id
     }
 
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
-        let s = Struct { name, pins };
-        self.structs.push(s)
+        let s = Struct {
+            name: name.to_string(),
+            pins,
+        };
+        let id = self.structs.push(s);
+
+        self.by_name_struct.insert(name, id);
+        id
     }
 
     pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
-        self.structs
-            .iter()
-            .find_map(|(id, s)| if s.name() == name { Some(id) } else { None })
-    }
-
-    pub fn struct_from_struct_id(&mut self, struct_id: StructId) -> &Struct {
-        &self.structs[struct_id]
+        self.by_name_struct.get(name).copied()
     }
 
     pub fn struct_ids(&self) -> Vec<StructId> {
@@ -398,7 +399,7 @@ impl Index<&str> for SymbolTable {
     type Output = SymbolTableEntry;
 
     fn index(&self, index: &str) -> &Self::Output {
-        let index = self.by_name[index];
+        let index = self.by_name_sym[index];
         &self.entries[index]
     }
 }
