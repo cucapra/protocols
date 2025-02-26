@@ -376,17 +376,19 @@ impl SymbolTable {
     }
 
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
-        let s = Struct { name : name.to_string(), pins };
+        let s = Struct {
+            name: name.to_string(),
+            pins,
+        };
         let id = self.structs.push(s);
 
-        self.by_name_struct.insert( name, id);
+        self.by_name_struct.insert(name, id);
         id
     }
 
     pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
         self.by_name_struct.get(name).copied()
     }
-
 
     pub fn struct_ids(&self) -> Vec<StructId> {
         self.structs.keys().collect()
