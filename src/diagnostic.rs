@@ -146,7 +146,7 @@ impl DiagnosticHandler {
         &mut self,
         message: &str,
         fileid: usize,
-        pair: Pair<'_, Rule>,
+        pair: &Pair<'_, Rule>,
         level: Level,
     ) {
         let start = pair.as_span().start();
