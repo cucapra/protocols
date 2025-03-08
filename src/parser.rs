@@ -43,26 +43,23 @@ impl<'a> ParserContext<'a> {
     ) -> Result<T, String> {
         option.ok_or_else(|| {
             let msg = message.to_string();
-            self.handler.emit_diagnostic_parsing(
-                &msg,
-                self.fileid,
-                context_pair,
-                Level::Error,
-            );
+            self.handler
+                .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
             msg
         })
     }
 
     // Helper for getting symbol id from name with error handling
-    fn get_symbol_id(&mut self, name: &str, context_pair: &pest::iterators::Pair<Rule>, message: &str) -> Result<SymbolId, String> {
+    fn get_symbol_id(
+        &mut self,
+        name: &str,
+        context_pair: &pest::iterators::Pair<Rule>,
+        message: &str,
+    ) -> Result<SymbolId, String> {
         self.st.symbol_id_from_name(name).ok_or_else(|| {
             let msg = format!("{}: {}", message, name);
-            self.handler.emit_diagnostic_parsing(
-                &msg,
-                self.fileid,
-                context_pair,
-                Level::Error,
-            );
+            self.handler
+                .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
             msg
         })
     }
@@ -100,7 +97,11 @@ impl<'a> ParserContext<'a> {
                     Rule::dont_care => Ok(BoxedExpr::DontCare(start, end)),
                     Rule::slice => {
                         let mut inner_rules = primary.clone().into_inner();
-                        let path_rule = self.expect_rule(inner_rules.next(), &primary, "Expected path rule in slice expression")?;
+                        let path_rule = self.expect_rule(
+                            inner_rules.next(),
+                            &primary,
+                            "Expected path rule in slice expression",
+                        )?;
                         let path_id = self.parse_boxed_expr(Pairs::single(path_rule))?;
                         let idx1_rule = inner_rules.next().unwrap();
                         let idx1 = idx1_rule.as_str().parse::<u32>().unwrap();
@@ -188,7 +189,9 @@ impl<'a> ParserContext<'a> {
 
     fn parse_struct(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<StructId, String> {
         let mut inner_rules = pair.clone().into_inner();
-        let struct_name = self.expect_rule(inner_rules.next(), &pair, "Expected struct name")?.as_str();
+        let struct_name = self
+            .expect_rule(inner_rules.next(), &pair, "Expected struct name")?
+            .as_str();
         let next_rule = self.expect_rule(inner_rules.next(), &pair, "Expected fields in struct")?;
         let (pins, _symbols) = self.parse_fields(next_rule)?;
         let struct_id = self.st.add_struct(struct_name.to_string(), pins);
@@ -199,7 +202,8 @@ impl<'a> ParserContext<'a> {
         match pair.as_rule() {
             Rule::fun => {
                 let mut inner_rules = pair.clone().into_inner();
-                let id_pair = self.expect_rule(inner_rules.next(), &pair, "Expected function identifier")?;
+                let id_pair =
+                    self.expect_rule(inner_rules.next(), &pair, "Expected function identifier")?;
                 let id = id_pair.as_str();
                 self.tr.name = id.to_string();
 
@@ -241,7 +245,11 @@ impl<'a> ParserContext<'a> {
 
                 if let Some(arglist_pair) = inner_rules.peek() {
                     if arglist_pair.as_rule() == Rule::arglist {
-                        let arg_rules = self.expect_rule(inner_rules.next(), &arglist_pair, "Expected argument list")?;
+                        let arg_rules = self.expect_rule(
+                            inner_rules.next(),
+                            &arglist_pair,
+                            "Expected argument list",
+                        )?;
                         self.tr.args = self.parse_arglist(arg_rules)?;
                     } else {
                         self.tr.args = Vec::new();
@@ -258,12 +266,8 @@ impl<'a> ParserContext<'a> {
                     "Unexpected rule while parsing transaction: {:?}",
                     pair.as_rule()
                 );
-                self.handler.emit_diagnostic_parsing(
-                    &msg,
-                    self.fileid,
-                    &pair,
-                    Level::Error,
-                );
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
                 Err(msg)
             }
         }
@@ -309,13 +313,22 @@ impl<'a> ParserContext<'a> {
 
     fn parse_assign(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.clone().into_inner();
-        let path_id_rule = self.expect_rule(inner_rules.next(), &pair, "Expected path identifier in assignment")?;
-        let expr_rule = self.expect_rule(inner_rules.next(), &pair, "Expected expression in assignment")?;
-        
+        let path_id_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected path identifier in assignment",
+        )?;
+        let expr_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected expression in assignment",
+        )?;
+
         let path_id: &str = path_id_rule.as_str();
-        let symbol_id = self.get_symbol_id(path_id, &path_id_rule, "Assigning to undeclared symbol")?;
+        let symbol_id =
+            self.get_symbol_id(path_id, &path_id_rule, "Assigning to undeclared symbol")?;
         let expr_id = self.parse_expr(expr_rule.into_inner())?;
-        
+
         Ok(Stmt::Assign(symbol_id, expr_id))
     }
 
@@ -323,14 +336,14 @@ impl<'a> ParserContext<'a> {
         let mut inner_rules = pair.clone().into_inner();
         let cmd_rule = self.expect_rule(inner_rules.next(), &pair, "Expected command")?;
         let cmd = cmd_rule.as_str();
-        
+
         let arg = if let Some(expr_rule) = inner_rules.next() {
             let expr_id = self.parse_expr(expr_rule.into_inner())?;
             Some(expr_id)
         } else {
             None
         };
-        
+
         match cmd {
             "step" => match arg {
                 Some(expr_id) => Ok(Stmt::Step(expr_id)),
@@ -342,14 +355,20 @@ impl<'a> ParserContext<'a> {
             "fork" => {
                 if arg.is_some() {
                     let msg = "Fork command should have no arguments.".to_string();
-                    self.handler.emit_diagnostic_parsing(&msg, self.fileid, &cmd_rule, Level::Error);
+                    self.handler.emit_diagnostic_parsing(
+                        &msg,
+                        self.fileid,
+                        &cmd_rule,
+                        Level::Error,
+                    );
                     return Err(msg);
                 }
                 Ok(Stmt::Fork)
             }
             _ => {
                 let msg = format!("Unexpected command: {:?}", cmd);
-                self.handler.emit_diagnostic_parsing(&msg, self.fileid, &cmd_rule, Level::Error);
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, &cmd_rule, Level::Error);
                 Err(msg)
             }
         }
@@ -357,7 +376,11 @@ impl<'a> ParserContext<'a> {
 
     fn parse_while(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.clone().into_inner();
-        let expr_rule = self.expect_rule(inner_rules.next(), &pair, "Expected expression in while loop")?;
+        let expr_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected expression in while loop",
+        )?;
         let guard = self.parse_expr(expr_rule.into_inner())?;
         let body = self.parse_stmt_block(inner_rules)?;
         Ok(Stmt::While(guard, body))
@@ -365,8 +388,16 @@ impl<'a> ParserContext<'a> {
 
     fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.clone().into_inner();
-        let lhs_rule = self.expect_rule(inner_rules.next(), &pair, "Expected left-hand side expression in assert_eq")?;
-        let rhs_rule = self.expect_rule(inner_rules.next(), &pair, "Expected right-hand side expression in assert_eq")?;
+        let lhs_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected left-hand side expression in assert_eq",
+        )?;
+        let rhs_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected right-hand side expression in assert_eq",
+        )?;
         let lhs_id = self.parse_expr(lhs_rule.into_inner())?;
         let rhs_id = self.parse_expr(rhs_rule.into_inner())?;
         Ok(Stmt::AssertEq(lhs_id, rhs_id))
@@ -376,7 +407,11 @@ impl<'a> ParserContext<'a> {
         let mut inner_rules = pair.clone().into_inner();
         let if_rule = self.expect_rule(inner_rules.next(), &pair, "Expected if condition")?;
         let mut inner_if = if_rule.into_inner();
-        let expr_rule = self.expect_rule(inner_if.next(), &pair, "Expected expression in if condition")?;
+        let expr_rule = self.expect_rule(
+            inner_if.next(),
+            &pair,
+            "Expected expression in if condition",
+        )?;
         let expr_id = self.parse_expr(expr_rule.into_inner())?;
         let if_block = self.parse_stmt_block(inner_if)?;
         let else_rule = self.expect_rule(inner_rules.next(), &pair, "Expected else block")?;
@@ -391,9 +426,21 @@ impl<'a> ParserContext<'a> {
             match inner_pair.as_rule() {
                 Rule::arg => {
                     let mut arg_inner = inner_pair.clone().into_inner();
-                    let dir_pair = self.expect_rule(arg_inner.next(), &inner_pair, "Expected direction in argument")?;
-                    let id_pair = self.expect_rule(arg_inner.next(), &inner_pair, "Expected identifier in argument")?;
-                    let tpe_pair = self.expect_rule(arg_inner.next(), &inner_pair, "Expected type in argument")?;
+                    let dir_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected direction in argument",
+                    )?;
+                    let id_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected identifier in argument",
+                    )?;
+                    let tpe_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected type in argument",
+                    )?;
                     let dir = self.parse_dir(dir_pair)?;
                     let id = id_pair.as_str();
                     let tpe = self.parse_type(tpe_pair)?;
@@ -433,9 +480,18 @@ impl<'a> ParserContext<'a> {
             match inner_pair.as_rule() {
                 Rule::arg => {
                     let mut arg_inner = inner_pair.clone().into_inner();
-                    let dir_pair = self.expect_rule(arg_inner.next(), &inner_pair, "Expected direction in field")?;
-                    let id_pair = self.expect_rule(arg_inner.next(), &inner_pair, "Expected identifier in field")?;
-                    let tpe_pair = self.expect_rule(arg_inner.next(), &inner_pair, "Expected type in field")?;
+                    let dir_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected direction in field",
+                    )?;
+                    let id_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected identifier in field",
+                    )?;
+                    let tpe_pair =
+                        self.expect_rule(arg_inner.next(), &inner_pair, "Expected type in field")?;
                     let dir = self.parse_dir(dir_pair)?;
                     let id = id_pair.as_str();
                     let tpe = self.parse_type(tpe_pair)?;
@@ -475,8 +531,12 @@ impl<'a> ParserContext<'a> {
                     "out" => Ok(Dir::Out),
                     _ => {
                         let msg = format!("Unexpected direction string: {:?}", dir_str);
-                        self.handler
-                            .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+                        self.handler.emit_diagnostic_parsing(
+                            &msg,
+                            self.fileid,
+                            &pair,
+                            Level::Error,
+                        );
                         Err(msg)
                     }
                 }
