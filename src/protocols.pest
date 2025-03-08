@@ -68,4 +68,4 @@ cond = { if ~ else? }
 struct_def = { "struct" ~ path_id ~ "{" ~ arglist? ~ "}" }
 
 fun = { "fn" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
-file = { SOI ~ struct_def ~ fun* ~ EOI }
+file = { SOI ~ (fun | struct_def)* ~ EOI }
