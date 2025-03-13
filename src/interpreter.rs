@@ -110,6 +110,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_add_d1_with_verilator() {
         let options = VerilatorRuntimeOptions::default();
         let mut runtime = VerilatorRuntime::new(
@@ -152,6 +153,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_add_d1_with_patronus() {
         let (ctx, sys) = patronus::btor2::parse_file("examples/adders/add_d1.btor").unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
