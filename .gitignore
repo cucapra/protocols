@@ -1,8 +1,5 @@
 /target
 Cargo.lock
 .idea/
-test_run/
-<<<<<<< HEAD
 /tests/snapshots
-=======
->>>>>>> 39dc780 (verilator test)
+test_run/
