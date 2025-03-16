@@ -18,7 +18,6 @@ pub struct Transaction {
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
-    block_id: StmtId,
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
     stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
 }
@@ -28,7 +27,7 @@ impl Transaction {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
         let mut stmts = PrimaryMap::new();
-        let block_id = stmts.push(Stmt::Block(vec![]));
+        let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
         let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
         let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
@@ -39,7 +38,6 @@ impl Transaction {
             exprs,
             dont_care_id,
             stmts,
-            block_id,
             expr_loc,
             stmt_loc,
         }
@@ -57,10 +55,6 @@ impl Transaction {
 
     pub fn expr_dont_care(&self) -> ExprId {
         self.dont_care_id
-    }
-
-    pub fn stmt_block(&self) -> StmtId {
-        self.block_id
     }
 
     pub fn expr_ids(&self) -> Vec<ExprId> {
