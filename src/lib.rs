@@ -5,6 +5,7 @@
 
 pub mod diagnostic;
 mod interpreter;
+mod interface;
 pub mod ir;
 pub mod parser;
 pub mod serialize;
