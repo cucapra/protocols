@@ -18,7 +18,6 @@ pub struct Transaction {
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
-    skip_id: StmtId,
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
     stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
 }
@@ -28,18 +27,17 @@ impl Transaction {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
         let mut stmts = PrimaryMap::new();
-        let skip_id = stmts.push(Stmt::Skip);
+        let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
         let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
         let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
             name,
             args: Vec::default(),
-            body: skip_id,
+            body: block_id,
             type_args: Vec::default(),
             exprs,
             dont_care_id,
             stmts,
-            skip_id,
             expr_loc,
             stmt_loc,
         }
@@ -57,10 +55,6 @@ impl Transaction {
 
     pub fn expr_dont_care(&self) -> ExprId {
         self.dont_care_id
-    }
-
-    pub fn stmt_skip(&self) -> StmtId {
-        self.skip_id
     }
 
     pub fn expr_ids(&self) -> Vec<ExprId> {
@@ -172,7 +166,6 @@ entity_impl!(StmtId, "stmt");
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Stmt {
-    Skip,
     Block(Vec<StmtId>),
     Assign(SymbolId, ExprId),
     Step(ExprId),

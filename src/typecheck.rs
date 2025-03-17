@@ -63,7 +63,7 @@ fn check_stmt_types(
     stmt_id: &StmtId,
 ) -> Result<(), String> {
     match &tr[stmt_id] {
-        Stmt::Skip | Stmt::Fork => Ok(()),
+        Stmt::Fork => Ok(()),
         Stmt::Step(exprid) => {
             let expr_type = check_expr_types(tr, st, handler, exprid)?;
             if let Type::BitVec(_) = expr_type {
