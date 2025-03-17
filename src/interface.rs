@@ -2,7 +2,6 @@ use crate::ir::*;
 use marlin_verilator::*;
 use patronus::sim::{Interpreter, Simulator};
 
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -71,9 +70,42 @@ pub mod tests {
     }
 
     #[test]
+    fn run_mult_d0_patronus() {
+        let (ctx, sys) = patronus::btor2::parse_file("examples/multipliers/mult_d0.btor").unwrap();
+        let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
+        let a = *sys
+            .inputs
+            .iter()
+            .find(|i| ctx.get_symbol_name(**i).unwrap() == "a")
+            .unwrap();
+        let b = *sys
+            .inputs
+            .iter()
+            .find(|i| ctx.get_symbol_name(**i).unwrap() == "b")
+            .unwrap();
+        let s = sys
+            .outputs
+            .iter()
+            .find(|o| ctx[o.name] == "s")
+            .unwrap()
+            .expr;
+
+        sim.init();
+        sim.set(a, &BitVecValue::from_u64(6, 32));
+        sim.set(b, &BitVecValue::from_u64(7, 32));
+        sim.step();
+        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 42);
+    }
+
+    #[test]
     fn run_add_d1_with_patronus() {
         let (ctx, sys) = patronus::btor2::parse_file("examples/adders/add_d1.btor").unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        for name in sys.inputs.iter() {
+            println!("{:#?}", name);
+        }
+
         let a = *sys
             .inputs
             .iter()
