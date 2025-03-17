@@ -1,4 +1,4 @@
-module adder_d2 (
+module multiplier_d2 (
     input             clk,
     input [31:0]      a,
     input [31:0]      b,
@@ -7,7 +7,7 @@ module adder_d2 (
     wire [31:0] res;
     reg  [31:0] r1;
 
-    assign res = a + b;
+    assign res = a * b;
 
     always @(posedge clk) begin
         r1 <= res;
