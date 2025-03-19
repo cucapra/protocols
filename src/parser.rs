@@ -1,3 +1,9 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+
 use baa::BitVecValue;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
