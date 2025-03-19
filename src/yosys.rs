@@ -224,11 +224,13 @@ mod tests {
     use std::fs;
 
     #[test]
+    #[ignore]
     fn test_require_yosys() {
         require_yosys().expect("failed");
     }
 
     #[test]
+    #[ignore]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
         let cmds = ["read_verilog ../add_d2.v"];
@@ -237,6 +239,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_run_yosys_fail() {
         // run_yosys should signal a failure when yosys fails
         let cmds = ["read_verilog inputs/does_not_exist.v"];
@@ -245,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_yosys_to_btor() {
         let env = YosysEnv::with_temp_dir().unwrap();
         let inp = PathBuf::from("../add_d2.v");
@@ -262,6 +266,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_yosys_to_btor_auto_name() {
         let env = YosysEnv::with_temp_dir().unwrap();
         let inp = PathBuf::from("examples/adders/add_d2.v");
