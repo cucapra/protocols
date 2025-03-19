@@ -5,8 +5,8 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 pub mod diagnostic;
-mod interpreter;
 mod interface;
+mod interpreter;
 mod yosys;
 pub mod ir;
 pub mod parser;
