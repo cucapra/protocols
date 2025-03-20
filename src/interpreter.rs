@@ -141,9 +141,6 @@ impl<'a> Evaluator<'a> {
                             // execute block
                             self.evaluate_block(stmt_id);
                         }
-                        Stmt::Skip => {
-                            () // do nothing?
-                        }
                         Stmt::AssertEq(expr1_id, expr2_id) => {
                             // execute assert
                             self.evaluate_assert_eq(expr1_id, expr2_id);
@@ -162,10 +159,6 @@ impl<'a> Evaluator<'a> {
 
 fn mapping(tr: &Transaction, st: &SymbolTable, stmtid: &StmtId, sim: &mut Interpreter) {
     match &tr[stmtid] {
-<<<<<<< HEAD
-        Stmt::Skip => (), // TODO: merge from main
-=======
->>>>>>> 0dbdb90f46697499c33552189ab7859038fcba54
         Stmt::Block(stmts) => {
             for stmt_id in stmts {
                 mapping(tr, st, stmt_id, sim);
