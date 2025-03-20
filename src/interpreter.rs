@@ -27,6 +27,7 @@ impl<'a> Evaluator<'a> {
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
                 // FIXME: Wrong way of doing it
+                // return self.sim.get([name]).unwrap();
                 return BitVecValue::from_u64(self.in_vals.get(name).unwrap().clone(), 32);
             }
             Expr::DontCare => {
@@ -56,7 +57,6 @@ impl<'a> Evaluator<'a> {
             }
             // Slice
             Expr::Slice(expr_id, idx1, idx2) => {
-                // FIXME: Should we just be returning the bitvec from evaluate_expr?
                 let expr_val = self.evaluate_expr(&expr_id);
                 return expr_val.slice(*idx1, *idx2);
             }
