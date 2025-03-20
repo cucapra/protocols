@@ -69,7 +69,6 @@ fn build_statements(
     index: usize,
 ) -> std::io::Result<()> {
     match &tr[stmtid] {
-        Stmt::Skip => writeln!(out, "{}skip()", "  ".repeat(index))?,
         Stmt::Block(stmts) => {
             for stmt_id in stmts {
                 build_statements(out, tr, st, stmt_id, index)?;
