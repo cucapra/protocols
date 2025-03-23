@@ -1,6 +1,8 @@
 use baa::{BitVecOps, BitVecValue};
-use crate::{diagnostic::*, ir::*};
+use crate::{diagnostic::*, ir::*, parser::*};
 use patronus::sim::{Interpreter, Simulator};
+use patronus::expr::{self, ExprRef};
+use patronus::system::Output;
 
 use std::collections::HashMap;
 
@@ -9,7 +11,9 @@ struct Evaluator<'a> {
     st: &'a SymbolTable,
     handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
-    in_vals: &'a HashMap<&'a str, u64>,
+    args_mapping: HashMap<SymbolId, BitVecValue>, // FIXME: change to bitvecval
+    input_mapping: HashMap<SymbolId, ExprRef>,
+    output_mapping: HashMap<SymbolId, Output>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -23,10 +27,17 @@ impl<'a> Evaluator<'a> {
                 return bit_vec.clone();
             }
             Expr::Sym(sym_id) => {
+                // a symbol is either in the input mapping, the output mapping, the args mapping, or an error
                 let name = self.st[sym_id].name();
-                // FIXME: Wrong way of doing it
-                // return self.sim.get([name]).unwrap();
-                return BitVecValue::from_u64(self.in_vals.get(name).unwrap().clone(), 32);
+                if let Some(expr_ref) = self.input_mapping.get(sym_id) {
+                    return self.sim.get(*expr_ref).unwrap();
+                } else if let Some(output) = self.output_mapping.get(sym_id) {
+                    return self.sim.get((*output).expr).unwrap();
+                } else if let Some(bvv ) = self.args_mapping.get(sym_id) {
+                    return bvv.clone();
+                } else {
+                    panic!("Symbol {} not found in input or output mapping.", name);
+                }
             }
             Expr::DontCare => {
                 return BitVecValue::new_false(); // TODO: what to do with don't cares?
@@ -79,8 +90,17 @@ impl<'a> Evaluator<'a> {
 
     }
 
-    fn evaluate_assign(&self, assign_stmt: &Stmt) {
-        // TODO: Implement evaluate_if
+    fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) {
+        let expr_val = self.evaluate_expr(expr_id);
+        let name = self.st[symbol_id].name();
+        if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
+            self.sim.set(*expr_ref, &expr_val);
+        } else if let Some(_) = self.output_mapping.get(symbol_id) {
+            // This should be caught at typechecking
+            unreachable!("Attempting to assign to {} an output.", name);
+        } else {
+            panic!("Assigning to symbol {} not yet defined.", name);
+        }
     }
 
     fn evaluate_while(&mut self, loop_guard_id : &ExprId, do_block_id : &StmtId) {
@@ -131,7 +151,7 @@ impl<'a> Evaluator<'a> {
                         }
                         Stmt::Assign(symbol_id, expr_id) => {
                             // execute return
-                            self.evaluate_assign(stmt);
+                            self.evaluate_assign(symbol_id, expr_id);
                         }
                         Stmt::Step(expr) => {
                             // execute expr
@@ -178,8 +198,8 @@ fn mapping(tr: &Transaction, st: &SymbolTable, stmtid: &StmtId, sim: &mut Interp
 
 pub fn interpret(
     btor_path: &str,
-    in_vals: HashMap<&str, u64>,
-    out: (&str, u64),
+    args: HashMap<&str, BitVecValue>,
+    // out: (&str, u64),
     tr: &Transaction,
     st: &SymbolTable,
 ) -> bool {
@@ -193,26 +213,64 @@ pub fn interpret(
 
     let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
 
-    let mut inputs = HashMap::new();
-    for (name, val) in in_vals.clone() {
-        let var = *sys
-            .inputs
-            .iter()
-            .find(|i| ctx.get_symbol_name(**i).unwrap() == name)
-            .unwrap();
-        inputs.insert(var, val);
+    // let mut inputs = HashMap::new();
+    // for (name, val) in args.clone() {
+    //     let var = *sys
+    //         .inputs
+    //         .iter()
+    //         .find(|i| ctx.get_symbol_name(**i).unwrap() == name)
+    //         .unwrap();
+    //     inputs.insert(var, val);
+    // }
+
+    // FIXME: 
+    let mut args_mapping = HashMap::new();
+    for (name, value) in &args {
+        if let Some(symbol_id) = st.symbol_id_from_name(name) {
+            args_mapping.insert(symbol_id, (*value).clone());
+        } else {
+            panic!("Argument {} not found in DUT symbols.", name);
+        }
+    }
+
+    let dut = tr.type_args[0];
+    let dut_symbols = &st.get_children(&dut);
+
+    let mut input_mapping = HashMap::new();
+    let mut output_mapping = HashMap::new();
+
+    for symbol_id in dut_symbols {
+        let symbol_name = st[symbol_id].name();
+
+        if let Some(input_ref) = sys.inputs.iter().find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name) {
+            input_mapping.insert(*symbol_id, *input_ref);
+        }
+
+        if let Some(output_ref) = sys.outputs.iter().find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name) {
+            output_mapping.insert(*symbol_id, *output_ref);
+        }
     }
 
     sim.init();
 
-    let evaluator = &mut Evaluator { tr, st, handler: &mut DiagnosticHandler::new(), sim: &mut sim, in_vals: &in_vals};
+    for (symbol_id, expr_ref) in &input_mapping {
+        if let Some(value) = args_mapping.get(symbol_id) {
+            sim.set(*expr_ref, value);
+        } else {
+            let name = st[symbol_id].name();
+            panic!("Input {} not found in provided arguments.", name);
+        }
+    }
+
+    let evaluator = &mut Evaluator { tr, st, handler: &mut DiagnosticHandler::new(), sim: &mut sim, args_mapping: args_mapping, input_mapping, output_mapping };
     evaluator.evaluate_transaction();
 
     // mapping(&tr, &st, &tr.body, &mut sim);
 
     // sim.init();
 
-    // Fix .unwraps with ok or else and add handler
+
+        // Fix .unwraps with ok or else and add handler
     // for (name, value) in in_vals {
     //     let var = *sys.inputs.iter().find(|i| ctx.get_symbol_name(**i).unwrap() == name).unwrap();
     //     sim.set(var, &BitVecValue::from_u64(value, 32));
@@ -221,27 +279,55 @@ pub fn interpret(
     // Create functionality to simulate protocol line by line
 
     let out = sys.outputs;
-
+    println!("{:?}", out);
     true
 }
 
 #[cfg(test)]
 pub mod tests {
+    use core::panic;
+
     use super::*;
+    fn test_helper(filename: &str, snap_name: &str) {
+        let mut handler = DiagnosticHandler::new();
+        let result = parse_file(filename, &mut handler);
+        let mut trs : Vec<(SymbolTable, Transaction)> = Vec::new();
+        let content = match result {
+            Ok(success_vec) => {
+                trs = success_vec;
+            },
+            Err(_) => panic!("Failed to parse file: {}", filename),
+        };
+
+        let (st, tr) = &trs[0];
+        let mut inputs = HashMap::new();
+        inputs.insert("a", BitVecValue::from_u64(6, 32));
+        inputs.insert("b", BitVecValue::from_u64(7, 32));
+        inputs.insert("s", BitVecValue::from_u64(13, 32));
+
+        let success = interpret(filename, inputs, tr, st);
+        assert!(success);
+    }
 
     #[test]
-    fn run_interpret() {
-        let mut inputs = HashMap::new();
-        inputs.insert("A", 6);
-        inputs.insert("B", 7);
-
-        let mut outputs = HashMap::new();
-        outputs.insert("S", 13);
-        //let success = interpret("examples/adders/add_d1.btor", inputs, outputs);
-        // if success {
-        //     println!("Simulation completed successfully.");
-        // } else {
-        //     println!("Simulation failed.");
-        // }
+    fn qest_add_transaction() {
+        test_helper("tests/add_struct.prot", "add_struct");
     }
+
+
+    // #[test]
+    // fn run_interpret() {
+    //     let mut inputs = HashMap::new();
+    //     inputs.insert("A", 6);
+    //     inputs.insert("B", 7);
+
+    //     let mut outputs = HashMap::new();
+    //     outputs.insert("S", 13);
+    //     //let success = interpret("examples/adders/add_d1.btor", inputs, outputs);
+    //     // if success {
+    //     //     println!("Simulation completed successfully.");
+    //     // } else {
+    //     //     println!("Simulation failed.");
+    //     // }
+    // }
 }
