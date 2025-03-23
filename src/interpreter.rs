@@ -92,7 +92,7 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) {
         let expr_val = self.evaluate_expr(expr_id);
-        let name = self.st[symbol_id].name();
+        let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, &expr_val);
         } else if let Some(_) = self.output_mapping.get(symbol_id) {
@@ -105,7 +105,7 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_while(&mut self, loop_guard_id : &ExprId, do_block_id : &StmtId) {
         let mut res = self.evaluate_expr(loop_guard_id);
-        while (res.is_true()) {
+        while res.is_true() {
             self.evaluate_block(do_block_id);
             res = self.evaluate_expr(loop_guard_id);
         }
@@ -253,14 +253,14 @@ pub fn interpret(
 
     sim.init();
 
-    for (symbol_id, expr_ref) in &input_mapping {
-        if let Some(value) = args_mapping.get(symbol_id) {
-            sim.set(*expr_ref, value);
-        } else {
-            let name = st[symbol_id].name();
-            panic!("Input {} not found in provided arguments.", name);
-        }
-    }
+    // for (symbol_id, expr_ref) in &input_mapping {
+    //     if let Some(value) = args_mapping.get(symbol_id) {
+    //         sim.set(*expr_ref, value);
+    //     } else {
+    //         let name = st[symbol_id].name();
+    //         panic!("Input {} not found in provided arguments.", name);
+    //     }
+    // }
 
     let evaluator = &mut Evaluator { tr, st, handler: &mut DiagnosticHandler::new(), sim: &mut sim, args_mapping: args_mapping, input_mapping, output_mapping };
     evaluator.evaluate_transaction();
@@ -278,8 +278,8 @@ pub fn interpret(
 
     // Create functionality to simulate protocol line by line
 
-    let out = sys.outputs;
-    println!("{:?}", out);
+    // let out = sys.outputs;
+    // println!("{:?}", out);
     true
 }
 
@@ -302,15 +302,15 @@ pub mod tests {
         let (st, tr) = &trs[0];
         let mut inputs = HashMap::new();
         inputs.insert("a", BitVecValue::from_u64(6, 32));
-        inputs.insert("b", BitVecValue::from_u64(7, 32));
-        inputs.insert("s", BitVecValue::from_u64(13, 32));
+        inputs.insert("b", BitVecValue::from_u64(8, 32));
+        inputs.insert("s", BitVecValue::from_u64(14, 32));
 
-        let success = interpret(filename, inputs, tr, st);
+        let success = interpret("examples/adders/add_d1.btor", inputs, tr, st);
         assert!(success);
     }
 
     #[test]
-    fn qest_add_transaction() {
+    fn test_add_execution() {
         test_helper("tests/add_struct.prot", "add_struct");
     }
 
