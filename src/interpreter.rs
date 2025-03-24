@@ -1,7 +1,7 @@
-use baa::{BitVecOps, BitVecValue};
 use crate::{diagnostic::*, ir::*, parser::*};
-use patronus::sim::{Interpreter, Simulator};
+use baa::{BitVecOps, BitVecValue};
 use patronus::expr::{self, ExprRef};
+use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 
 use std::collections::HashMap;
@@ -17,9 +17,8 @@ struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
-
     // eventually we will create a value enum that will store resultant values. for now, only integers exist
-    fn evaluate_expr(&self, expr_id: &ExprId) -> BitVecValue {
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> BitVecValue {
         let expr = &self.tr[expr_id];
         match expr {
             // nullary
@@ -33,10 +32,16 @@ impl<'a> Evaluator<'a> {
                     return self.sim.get(*expr_ref).unwrap();
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
                     return self.sim.get((*output).expr).unwrap();
-                } else if let Some(bvv ) = self.args_mapping.get(sym_id) {
+                } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     return bvv.clone();
                 } else {
-                    panic!("Symbol {} not found in input or output mapping.", name);
+                    self.handler.emit_diagnostic_expr(
+                        self.tr,
+                        expr_id,
+                        "Symbol not found in input or output mapping.",
+                        Level::Error,
+                    );
+                    panic!();
                 }
             }
             Expr::DontCare => {
@@ -48,7 +53,11 @@ impl<'a> Evaluator<'a> {
                 let rhs_val = self.evaluate_expr(&rhs_id);
                 match bin_op {
                     BinOp::Equal => {
-                        return if lhs_val == rhs_val { BitVecValue::new_true() } else { BitVecValue::new_false()};
+                        return if lhs_val == rhs_val {
+                            BitVecValue::new_true()
+                        } else {
+                            BitVecValue::new_false()
+                        };
                     }
                     BinOp::And => {
                         return lhs_val.and(&rhs_val);
@@ -78,16 +87,14 @@ impl<'a> Evaluator<'a> {
         self.evaluate_block(&body_id);
     }
 
-    fn evaluate_if(&mut self, cond_expr_id: &ExprId, then_stmt_id : &StmtId, else_stmt_id : &StmtId) {
+    fn evaluate_if(&mut self, cond_expr_id: &ExprId, then_stmt_id: &StmtId, else_stmt_id: &StmtId) {
         // TODO: Implement evaluate_if
         let res = self.evaluate_expr(cond_expr_id);
         if res.is_true() {
             self.evaluate_block(else_stmt_id);
-        }
-        else {
+        } else {
             self.evaluate_block(then_stmt_id);
         }
-
     }
 
     fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) {
@@ -95,15 +102,19 @@ impl<'a> Evaluator<'a> {
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, &expr_val);
-        } else if let Some(_) = self.output_mapping.get(symbol_id) {
-            // This should be caught at typechecking
-            unreachable!("Attempting to assign to {} an output.", name);
+        }
+        // These should all be caught at typechecking, assuming the verilog lines up with the transaction
+        // TODO: Switch to Diagnostic
+        else if let Some(_) = self.output_mapping.get(symbol_id) {
+            panic!("Attempting to assign to output {}.", name);
+        } else if let Some(_) = self.args_mapping.get(symbol_id) {
+            panic!("Attempting to assign to argument {}.", name);
         } else {
             panic!("Assigning to symbol {} not yet defined.", name);
         }
     }
 
-    fn evaluate_while(&mut self, loop_guard_id : &ExprId, do_block_id : &StmtId) {
+    fn evaluate_while(&mut self, loop_guard_id: &ExprId, do_block_id: &StmtId) {
         let mut res = self.evaluate_expr(loop_guard_id);
         while res.is_true() {
             self.evaluate_block(do_block_id);
@@ -113,6 +124,8 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_step(&mut self, expr: &ExprId) {
         let res = self.evaluate_expr(expr);
+
+        // FIXME: We shouldn't narrow to u64
         let val = res.to_u64().unwrap();
         for _ in 0..val {
             self.sim.step()
@@ -123,15 +136,20 @@ impl<'a> Evaluator<'a> {
         // TODO: Implement evaluate_fork
     }
 
-    fn evaluate_assert_eq(&self, expr1: &ExprId, expr2: &ExprId) {
+    fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> bool {
         let res1 = self.evaluate_expr(expr1);
         let res2 = self.evaluate_expr(expr2);
+        println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
-            panic!("Assertion failed: values are not equal. res1: {:?}, res2: {:?}", res1, res2)
-            // self.handler.error("Assertion failed: values are not equal.");
-        }
-        else {
-            // do nothing !
+            self.handler
+                .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
+            // panic!(
+            //     "Assertion failed: values are not equal. res1: {:?}, res2: {:?}",
+            //     res1, res2
+            // );
+            return true;
+        } else {
+            return false;
         }
     }
 
@@ -163,7 +181,11 @@ impl<'a> Evaluator<'a> {
                         }
                         Stmt::AssertEq(expr1_id, expr2_id) => {
                             // execute assert
-                            self.evaluate_assert_eq(expr1_id, expr2_id);
+                            let res = self.evaluate_assert_eq(expr1_id, expr2_id);
+                            if !res {
+                                // TODO: actually pause interpreting immediately if this occurs
+                                return;
+                            }
                         }
                         Stmt::Fork => {
                             // execute expr
@@ -172,37 +194,19 @@ impl<'a> Evaluator<'a> {
                     }
                 }
             }
-            _ => unreachable!("Expected body to be a block statement."),
+            _ => unreachable!("Expected a block statement as input to evaluate_block."),
         }
     }
 }
-
-fn mapping(tr: &Transaction, st: &SymbolTable, stmtid: &StmtId, sim: &mut Interpreter) {
-    match &tr[stmtid] {
-        Stmt::Block(stmts) => {
-            for stmt_id in stmts {
-                mapping(tr, st, stmt_id, sim);
-            }
-        }
-        Stmt::Assign(lhs, rhs) => todo!(),
-        Stmt::Step(_) => sim.step(),
-        Stmt::Fork => todo!(),
-        Stmt::While(_, _) => todo!(),
-        Stmt::IfElse(_, _, _) => todo!(),
-        Stmt::AssertEq(_, _) => todo!(),
-    }
-}
-
-// Need to simulate protocol given a verilog file of a struct
-// When given inputs, map it to expr ref
 
 pub fn interpret(
     btor_path: &str,
     args: HashMap<&str, BitVecValue>,
-    // out: (&str, u64),
     tr: &Transaction,
     st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
 ) -> bool {
+    // instantiate sim from btor file
     let (ctx, sys) = match patronus::btor2::parse_file(btor_path) {
         Some(result) => result,
         None => {
@@ -210,8 +214,58 @@ pub fn interpret(
             return false;
         }
     };
-
     let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
+
+    // create mapping from each symbolId to corresponding BitVecValue based on input mapping
+    let mut args_mapping = HashMap::new();
+    for (name, value) in &args {
+        if let Some(symbol_id) = st.symbol_id_from_name(name) {
+            args_mapping.insert(symbol_id, (*value).clone());
+        } else {
+            panic!("Argument {} not found in DUT symbols.", name);
+        }
+    }
+
+    // create mapping for each of the DUT's children symbols to the input and output mappings
+    let dut = tr.type_args[0];
+    let dut_symbols = &st.get_children(&dut);
+
+    let mut input_mapping = HashMap::new();
+    let mut output_mapping = HashMap::new();
+
+    for symbol_id in dut_symbols {
+        let symbol_name = st[symbol_id].name();
+
+        if let Some(input_ref) = sys
+            .inputs
+            .iter()
+            .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
+        {
+            input_mapping.insert(*symbol_id, *input_ref);
+        }
+
+        if let Some(output_ref) = sys
+            .outputs
+            .iter()
+            .find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name)
+        {
+            output_mapping.insert(*symbol_id, *output_ref);
+        }
+    }
+
+    // Initialize sim, evaluate the transaction!
+    sim.init();
+
+    let evaluator = &mut Evaluator {
+        tr,
+        st,
+        handler,
+        sim: &mut sim,
+        args_mapping,
+        input_mapping,
+        output_mapping,
+    };
+    evaluator.evaluate_transaction();
 
     // let mut inputs = HashMap::new();
     // for (name, val) in args.clone() {
@@ -223,36 +277,6 @@ pub fn interpret(
     //     inputs.insert(var, val);
     // }
 
-    // FIXME: 
-    let mut args_mapping = HashMap::new();
-    for (name, value) in &args {
-        if let Some(symbol_id) = st.symbol_id_from_name(name) {
-            args_mapping.insert(symbol_id, (*value).clone());
-        } else {
-            panic!("Argument {} not found in DUT symbols.", name);
-        }
-    }
-
-    let dut = tr.type_args[0];
-    let dut_symbols = &st.get_children(&dut);
-
-    let mut input_mapping = HashMap::new();
-    let mut output_mapping = HashMap::new();
-
-    for symbol_id in dut_symbols {
-        let symbol_name = st[symbol_id].name();
-
-        if let Some(input_ref) = sys.inputs.iter().find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name) {
-            input_mapping.insert(*symbol_id, *input_ref);
-        }
-
-        if let Some(output_ref) = sys.outputs.iter().find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name) {
-            output_mapping.insert(*symbol_id, *output_ref);
-        }
-    }
-
-    sim.init();
-
     // for (symbol_id, expr_ref) in &input_mapping {
     //     if let Some(value) = args_mapping.get(symbol_id) {
     //         sim.set(*expr_ref, value);
@@ -261,22 +285,6 @@ pub fn interpret(
     //         panic!("Input {} not found in provided arguments.", name);
     //     }
     // }
-
-    let evaluator = &mut Evaluator { tr, st, handler: &mut DiagnosticHandler::new(), sim: &mut sim, args_mapping: args_mapping, input_mapping, output_mapping };
-    evaluator.evaluate_transaction();
-
-    // mapping(&tr, &st, &tr.body, &mut sim);
-
-    // sim.init();
-
-
-        // Fix .unwraps with ok or else and add handler
-    // for (name, value) in in_vals {
-    //     let var = *sys.inputs.iter().find(|i| ctx.get_symbol_name(**i).unwrap() == name).unwrap();
-    //     sim.set(var, &BitVecValue::from_u64(value, 32));
-    // }
-
-    // Create functionality to simulate protocol line by line
 
     // let out = sys.outputs;
     // println!("{:?}", out);
@@ -288,46 +296,62 @@ pub mod tests {
     use core::panic;
 
     use super::*;
-    fn test_helper(filename: &str, snap_name: &str) {
-        let mut handler = DiagnosticHandler::new();
-        let result = parse_file(filename, &mut handler);
-        let mut trs : Vec<(SymbolTable, Transaction)> = Vec::new();
-        let content = match result {
-            Ok(success_vec) => {
-                trs = success_vec;
-            },
-            Err(_) => panic!("Failed to parse file: {}", filename),
-        };
 
-        let (st, tr) = &trs[0];
-        let mut inputs = HashMap::new();
-        inputs.insert("a", BitVecValue::from_u64(6, 32));
-        inputs.insert("b", BitVecValue::from_u64(8, 32));
-        inputs.insert("s", BitVecValue::from_u64(14, 32));
-
-        let success = interpret("examples/adders/add_d1.btor", inputs, tr, st);
-        assert!(success);
+    fn parsing_helper(
+        transaction_filename: &str,
+        handler: &mut DiagnosticHandler,
+    ) -> Vec<(SymbolTable, Transaction)> {
+        let result = parse_file(transaction_filename, handler);
+        match result {
+            Ok(success_vec) => success_vec,
+            Err(_) => panic!("Failed to parse file: {}", transaction_filename),
+        }
     }
 
     #[test]
     fn test_add_execution() {
-        test_helper("tests/add_struct.prot", "add_struct");
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/add_struct.prot";
+        let btor_path = "examples/adders/add_d1.btor";
+        let trs = parsing_helper(transaction_filename, handler);
+
+        // only one transaction in this file
+        let (st, tr) = &trs[0];
+
+        // set up the args for the Transaction
+        // FIXME: returned values from sim seem to have width 32
+        // These args must also be 32-bit then, else Rust panics on comparison
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(6, 32));
+        args.insert("b", BitVecValue::from_u64(8, 32));
+        args.insert("s", BitVecValue::from_u64(14, 32));
+
+        // FIXME: This always returns true right now
+        let success = interpret(btor_path, args, tr, st, handler);
+        assert!(success);
+
+        // TODO: Snapshots?
     }
 
+    #[test]
+    fn test_mult_execution() {
+        let handler = &mut DiagnosticHandler::new();
 
-    // #[test]
-    // fn run_interpret() {
-    //     let mut inputs = HashMap::new();
-    //     inputs.insert("A", 6);
-    //     inputs.insert("B", 7);
+        let transaction_filename = "tests/mul.prot";
 
-    //     let mut outputs = HashMap::new();
-    //     outputs.insert("S", 13);
-    //     //let success = interpret("examples/adders/add_d1.btor", inputs, outputs);
-    //     // if success {
-    //     //     println!("Simulation completed successfully.");
-    //     // } else {
-    //     //     println!("Simulation failed.");
-    //     // }
-    // }
+        // TODO: Add the btor path
+        let btor_path = "examples/adders/add_d1.btor";
+        let trs = parsing_helper(transaction_filename, handler);
+        let (st, tr) = &trs[0];
+
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(6, 32));
+        args.insert("b", BitVecValue::from_u64(8, 32));
+        args.insert("s", BitVecValue::from_u64(48, 32));
+
+        let success = interpret(btor_path, args, tr, st, handler);
+        assert!(success);
+    }
 }
