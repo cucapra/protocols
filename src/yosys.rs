@@ -224,13 +224,11 @@ mod tests {
     use std::fs;
 
     #[test]
-    #[ignore]
     fn test_require_yosys() {
         require_yosys().expect("failed");
     }
 
     #[test]
-    #[ignore]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
         let cmds = ["read_verilog ../add_d2.v"];
