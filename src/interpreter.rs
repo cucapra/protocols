@@ -11,7 +11,10 @@ struct Evaluator<'a> {
     st: &'a SymbolTable,
     handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
+    // can change to be secondarymaps
     args_mapping: HashMap<SymbolId, BitVecValue>, // FIXME: change to bitvecval
+
+    // combine into port map?
     input_mapping: HashMap<SymbolId, ExprRef>,
     output_mapping: HashMap<SymbolId, Output>,
 }
@@ -45,6 +48,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::DontCare => {
+                // return a 0 of the relevant type's width
                 return BitVecValue::new_false(); // TODO: what to do with don't cares?
             }
             // unary
@@ -53,7 +57,7 @@ impl<'a> Evaluator<'a> {
                 let rhs_val = self.evaluate_expr(&rhs_id);
                 match bin_op {
                     BinOp::Equal => {
-                        return if lhs_val == rhs_val {
+                        return if lhs_val.is_equal(&rhs_val) {
                             BitVecValue::new_true()
                         } else {
                             BitVecValue::new_false()
@@ -141,7 +145,6 @@ impl<'a> Evaluator<'a> {
         let res2 = self.evaluate_expr(expr2);
         println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
-<<<<<<< HEAD
             self.handler
                 .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
             // panic!(
@@ -151,15 +154,6 @@ impl<'a> Evaluator<'a> {
             return true;
         } else {
             return false;
-=======
-            panic!(
-                "Assertion failed: values are not equal. res1: {:?}, res2: {:?}",
-                res1, res2
-            )
-            // self.handler.error("Assertion failed: values are not equal.");
-        } else {
-            // do nothing !
->>>>>>> fc6b57c41c6f61d7953cc01b07215b807bf59717
         }
     }
 
@@ -216,6 +210,10 @@ pub fn interpret(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> bool {
+
+    // TODO: check arguments are all there and of correct types
+
+
     // instantiate sim from btor file
     let (ctx, sys) = match patronus::btor2::parse_file(btor_path) {
         Some(result) => result,
@@ -304,7 +302,8 @@ pub fn interpret(
 #[cfg(test)]
 pub mod tests {
     use core::panic;
-
+    use crate::yosys::*;
+    use std::path::PathBuf;
     use super::*;
 
     fn parsing_helper(
@@ -345,7 +344,6 @@ pub mod tests {
         // TODO: Snapshots?
     }
 
-<<<<<<< HEAD
     #[test]
     fn test_mult_execution() {
         let handler = &mut DiagnosticHandler::new();
@@ -365,21 +363,4 @@ pub mod tests {
         let success = interpret(btor_path, args, tr, st, handler);
         assert!(success);
     }
-=======
-    // #[test]
-    // fn run_interpret() {
-    //     let mut inputs = HashMap::new();
-    //     inputs.insert("A", 6);
-    //     inputs.insert("B", 7);
-
-    //     let mut outputs = HashMap::new();
-    //     outputs.insert("S", 13);
-    //     //let success = interpret("examples/adders/add_d1.btor", inputs, outputs);
-    //     // if success {
-    //     //     println!("Simulation completed successfully.");
-    //     // } else {
-    //     //     println!("Simulation failed.");
-    //     // }
-    // }
->>>>>>> fc6b57c41c6f61d7953cc01b07215b807bf59717
 }
