@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
-        let cmds = ["read_verilog inputs/add_mul_and.v"];
+        let cmds = ["read_verilog examples/adders/add_d1.v"];
         let res = run_yosys(&YosysEnv::default(), &cmds).unwrap();
         assert!(res.contains("Successfully finished Verilog frontend"));
     }
