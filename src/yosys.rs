@@ -47,23 +47,18 @@ impl YosysEnv {
 
 #[derive(Default, Debug)]
 pub struct ProjectConf {
-    src: PathBuf,
-    btor: Option<PathBuf>,
+    sources: Vec<PathBuf>,
     top: Option<String>,
     include_path: Option<PathBuf>,
 }
 
 impl ProjectConf {
     pub fn with_source(source: PathBuf) -> Self {
-        let src = source;
+        let sources = vec![source];
         Self {
-            src,
+            sources,
             ..Default::default()
         }
-    }
-
-    fn add_btor(&mut self, btor_file: PathBuf) {
-        self.btor = Some(btor_file)
     }
 }
 
@@ -103,63 +98,32 @@ const MINIMAL_BTOR_CONVERSION: &[&str] = &[
     "dffunmap",
 ];
 
-fn read_source(project: &ProjectConf) -> Vec<String> {
+fn read_sources(project: &ProjectConf) -> Vec<String> {
     // canonicalize file paths since yosys might use a different output directory
-    let src = match project.btor {
-        Some(_) => fs::canonicalize(project.btor.as_ref().unwrap().as_path()).unwrap(),
-        None => fs::canonicalize(project.src.as_path()).unwrap(),
-    };
+    let sources = project
+        .sources
+        .iter()
+        .map(|s| fs::canonicalize(s.as_path()).unwrap());
 
     let mut out: Vec<_> = if let Some(include) = &project.include_path {
         let ii = include.to_string_lossy().to_string();
-        vec![format!("read_verilog -sv -I{ii} {}", src.to_string_lossy())]
+        sources
+            .map(|s| format!("read_verilog -sv -I{ii} {}", s.to_string_lossy()))
+            .collect()
     } else {
-        vec![format!("read_verilog -sv {}", src.to_string_lossy())]
+        sources
+            .map(|s| format!("read_verilog -sv {}", s.to_string_lossy()))
+            .collect()
     };
-
     if let Some(top) = &project.top {
         out.push(format!("hierarchy -top {}", top));
     }
     out
 }
 
-#[inline]
-fn join<T, S, I>(value: T, separator: S) -> String
-where
-    S: AsRef<str>,
-    T: ExactSizeIterator<Item = I>,
-    I: AsRef<str>,
-{
-    let mut out = String::new();
-    let last_id = value.len() - 1;
-    for (ii, v) in value.enumerate() {
-        out.push_str(v.as_ref());
-        if ii < last_id {
-            out.push_str(separator.as_ref());
-        }
-    }
-    out
-}
-
-fn copy_file(src: PathBuf, dest: PathBuf) -> Result<()> {
-    let mut src_file = fs::File::open(&src)?;
-
-    let mut dest_file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&dest)?;
-
-    let mut buffer = Vec::new();
-    src_file.read_to_end(&mut buffer)?;
-    dest_file.write_all(&buffer)?;
-
-    Ok(())
-}
-
 pub fn yosys_to_btor(
     env: &YosysEnv,
-    project: &mut ProjectConf,
+    project: &ProjectConf,
     btor_name: Option<&Path>,
 ) -> Result<PathBuf> {
     // auto-generate a btor_name if it was not given
@@ -167,23 +131,14 @@ pub fn yosys_to_btor(
         (Some(name), _) => name.to_path_buf(),
         (None, Some(top)) => PathBuf::from(format!("{top}.btor")),
         _ => {
-            let with_btor = project.src.with_extension("btor");
+            let with_btor = project.sources.first().unwrap().with_extension("btor");
             with_btor
         }
     };
 
-    let _ = copy_file(project.src.clone(), btor_name.clone());
-    project.add_btor(btor_name.clone());
-
-    let mut cmd = read_source(project);
+    let mut cmd = read_sources(project);
     cmd.extend(MINIMAL_BTOR_CONVERSION.iter().map(|s| s.to_string()));
-
-    cmd.push(format!(
-        "write_btor {}",
-        fs::canonicalize(project.btor.as_ref().unwrap().as_path())
-            .unwrap()
-            .to_string_lossy()
-    ));
+    cmd.push(format!("write_btor -x {}", btor_name.to_string_lossy()));
     run_yosys(env, &cmd)?;
     let btor_full = if btor_name.is_absolute() {
         fs::canonicalize(btor_name).unwrap()
@@ -218,28 +173,43 @@ pub fn require_yosys() -> Result<()> {
     }
 }
 
+#[inline]
+fn join<T, S, I>(value: T, separator: S) -> String
+where
+    S: AsRef<str>,
+    T: ExactSizeIterator<Item = I>,
+    I: AsRef<str>,
+{
+    let mut out = String::new();
+    let last_id = value.len() - 1;
+    for (ii, v) in value.enumerate() {
+        out.push_str(v.as_ref());
+        if ii < last_id {
+            out.push_str(separator.as_ref());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
 
     #[test]
-    #[ignore]
     fn test_require_yosys() {
         require_yosys().expect("failed");
     }
 
     #[test]
-    #[ignore]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
-        let cmds = ["read_verilog ../add_d2.v"];
+        let cmds = ["read_verilog inputs/add_mul_and.v"];
         let res = run_yosys(&YosysEnv::default(), &cmds).unwrap();
         assert!(res.contains("Successfully finished Verilog frontend"));
     }
 
     #[test]
-    #[ignore]
     fn test_run_yosys_fail() {
         // run_yosys should signal a failure when yosys fails
         let cmds = ["read_verilog inputs/does_not_exist.v"];
@@ -248,37 +218,40 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_yosys_to_btor() {
-        let env = YosysEnv::with_temp_dir().unwrap();
-        let inp = PathBuf::from("../add_d2.v");
-        let mut proj = ProjectConf {
-            src: inp,
-            ..Default::default()
-        };
-        let btor_file =
-            yosys_to_btor(&env, &mut proj, Some(&PathBuf::from("../add_d2.btor"))).unwrap();
-        assert!(btor_file
-            .to_string_lossy()
-            .to_string()
-            .ends_with("add_d23.btor"));
-        let btor = fs::read_to_string(btor_file).unwrap();
-    }
-
-    #[test]
-    #[ignore]
-    fn test_yosys_to_btor_auto_name() {
-        let env = YosysEnv::with_temp_dir().unwrap();
+        let env = YosysEnv::default();
         let inp = PathBuf::from("examples/adders/add_d2.v");
-        let mut proj = ProjectConf {
-            src: inp,
+        let proj = ProjectConf {
+            sources: vec![inp],
             ..Default::default()
         };
-        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
-        // derived from sources
+        let btor_file = yosys_to_btor(
+            &env,
+            &proj,
+            Some(&PathBuf::from("examples/adders/add_d2.btor")),
+        )
+        .unwrap();
         assert!(btor_file
             .to_string_lossy()
             .to_string()
             .ends_with("add_d2.btor"));
+        // let btor = fs::read_to_string(btor_file).unwrap();
+        // assert!(btor.contains("input 1 d"))
+    }
+
+    #[test]
+    fn test_yosys_to_btor_auto_name() {
+        let env = YosysEnv::default();
+        let inp = PathBuf::from("examples/counter/counter.v");
+        let proj = ProjectConf {
+            sources: vec![inp],
+            ..Default::default()
+        };
+        let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
+        // derived from sources
+        assert!(btor_file
+            .to_string_lossy()
+            .to_string()
+            .ends_with("counter.btor"));
     }
 }
