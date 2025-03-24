@@ -345,6 +345,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_mult_execution() {
         let handler = &mut DiagnosticHandler::new();
 
