@@ -7,6 +7,7 @@
 use std::{collections::HashSet, io::Write};
 
 use crate::parser::Rule;
+use baa::BitVecValue;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
 };
@@ -220,6 +221,47 @@ impl DiagnosticHandler {
                 message: message.to_string(),
                 level,
                 location: Some((fileid, label)),
+            };
+
+            diagnostic.emit(buffer, &self.files);
+
+            let error_msg = String::from_utf8_lossy(buffer.as_slice());
+            self.error_string.push_str(&error_msg);
+            print!("{}", error_msg);
+        }
+    }
+
+    pub fn emit_diagnostic_assertion(
+        &mut self,
+        tr: &Transaction,
+        expr1_id: &ExprId,
+        expr2_id: &ExprId,
+        eval1: &BitVecValue,
+        eval2: &BitVecValue,
+    ) {
+        // Check if the error has already been reported for these expressions
+        if !self.reported_errs.insert(ErrorKey::ExprKey(*expr1_id))
+            || !self.reported_errs.insert(ErrorKey::ExprKey(*expr2_id))
+        {
+            return;
+        }
+
+        let buffer = &mut Buffer::ansi();
+
+        if let (Some((start1, end1, fileid1)), Some((start2, end2, fileid2))) =
+            (tr.get_expr_loc(*expr1_id), tr.get_expr_loc(*expr2_id))
+        {
+            let diagnostic = Diagnostic {
+                title: format!("Error in file {}", fileid1),
+                message: "The two expressions did not evaluate to the same value".to_string(),
+                level: Level::Error,
+                location: Some((
+                    fileid1,
+                    Label {
+                        message: Some(format!("LHS Value: {:?}, RHS Value: {:?}", eval1, eval2)),
+                        range: (start1.min(start2), end1.max(end2)),
+                    },
+                )),
             };
 
             diagnostic.emit(buffer, &self.files);

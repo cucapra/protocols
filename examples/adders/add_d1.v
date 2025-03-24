@@ -4,11 +4,8 @@ module adder_d1 (
     input       [31:0] b,
     output reg  [31:0] s
 );  
-    wire [31:0] res;
-
-    assign res = a + b;
 
     always @(posedge clk) begin
-        s <= res;
+        s <= a + b;
     end
 endmodule

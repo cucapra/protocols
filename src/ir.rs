@@ -386,6 +386,16 @@ impl SymbolTable {
     pub fn struct_ids(&self) -> Vec<StructId> {
         self.structs.keys().collect()
     }
+
+    pub fn get_children(&self, parent_name: &SymbolId) -> Vec<SymbolId> {
+        let mut children = vec![];
+        for (id, entry) in self.entries.iter() {
+            if entry.parent() == Some(*parent_name) {
+                children.push(id);
+            }
+        }
+        children
+    }
 }
 
 impl Index<&str> for SymbolTable {
