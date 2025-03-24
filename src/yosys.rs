@@ -231,16 +231,15 @@ mod tests {
     #[test]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
-        let cmds = ["read_verilog ../add_d2.v"];
+        let cmds = ["read_verilog examples/adders/add_d2.v"];
         let res = run_yosys(&YosysEnv::default(), &cmds).unwrap();
         assert!(res.contains("Successfully finished Verilog frontend"));
     }
 
     #[test]
-    #[ignore]
     fn test_run_yosys_fail() {
         // run_yosys should signal a failure when yosys fails
-        let cmds = ["read_verilog inputs/does_not_exist.v"];
+        let cmds = ["read_verilog examples/does_not_exist.v"];
         let res = run_yosys(&YosysEnv::default(), &cmds);
         assert!(res.is_err());
     }
