@@ -1,7 +1,7 @@
-use baa::{BitVecOps, BitVecValue};
 use crate::{diagnostic::*, ir::*, parser::*};
-use patronus::sim::{Interpreter, Simulator};
+use baa::{BitVecOps, BitVecValue};
 use patronus::expr::{self, ExprRef};
+use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 
 use std::collections::HashMap;
@@ -17,7 +17,6 @@ struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
-
     // eventually we will create a value enum that will store resultant values. for now, only integers exist
     fn evaluate_expr(&self, expr_id: &ExprId) -> BitVecValue {
         let expr = &self.tr[expr_id];
@@ -33,7 +32,7 @@ impl<'a> Evaluator<'a> {
                     return self.sim.get(*expr_ref).unwrap();
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
                     return self.sim.get((*output).expr).unwrap();
-                } else if let Some(bvv ) = self.args_mapping.get(sym_id) {
+                } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     return bvv.clone();
                 } else {
                     panic!("Symbol {} not found in input or output mapping.", name);
@@ -48,7 +47,11 @@ impl<'a> Evaluator<'a> {
                 let rhs_val = self.evaluate_expr(&rhs_id);
                 match bin_op {
                     BinOp::Equal => {
-                        return if lhs_val == rhs_val { BitVecValue::new_true() } else { BitVecValue::new_false()};
+                        return if lhs_val == rhs_val {
+                            BitVecValue::new_true()
+                        } else {
+                            BitVecValue::new_false()
+                        };
                     }
                     BinOp::And => {
                         return lhs_val.and(&rhs_val);
@@ -78,16 +81,14 @@ impl<'a> Evaluator<'a> {
         self.evaluate_block(&body_id);
     }
 
-    fn evaluate_if(&mut self, cond_expr_id: &ExprId, then_stmt_id : &StmtId, else_stmt_id : &StmtId) {
+    fn evaluate_if(&mut self, cond_expr_id: &ExprId, then_stmt_id: &StmtId, else_stmt_id: &StmtId) {
         // TODO: Implement evaluate_if
         let res = self.evaluate_expr(cond_expr_id);
         if res.is_true() {
             self.evaluate_block(else_stmt_id);
-        }
-        else {
+        } else {
             self.evaluate_block(then_stmt_id);
         }
-
     }
 
     fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) {
@@ -103,7 +104,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_while(&mut self, loop_guard_id : &ExprId, do_block_id : &StmtId) {
+    fn evaluate_while(&mut self, loop_guard_id: &ExprId, do_block_id: &StmtId) {
         let mut res = self.evaluate_expr(loop_guard_id);
         while res.is_true() {
             self.evaluate_block(do_block_id);
@@ -127,10 +128,12 @@ impl<'a> Evaluator<'a> {
         let res1 = self.evaluate_expr(expr1);
         let res2 = self.evaluate_expr(expr2);
         if res1.is_not_equal(&res2) {
-            panic!("Assertion failed: values are not equal. res1: {:?}, res2: {:?}", res1, res2)
+            panic!(
+                "Assertion failed: values are not equal. res1: {:?}, res2: {:?}",
+                res1, res2
+            )
             // self.handler.error("Assertion failed: values are not equal.");
-        }
-        else {
+        } else {
             // do nothing !
         }
     }
@@ -223,7 +226,7 @@ pub fn interpret(
     //     inputs.insert(var, val);
     // }
 
-    // FIXME: 
+    // FIXME:
     let mut args_mapping = HashMap::new();
     for (name, value) in &args {
         if let Some(symbol_id) = st.symbol_id_from_name(name) {
@@ -242,11 +245,19 @@ pub fn interpret(
     for symbol_id in dut_symbols {
         let symbol_name = st[symbol_id].name();
 
-        if let Some(input_ref) = sys.inputs.iter().find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name) {
+        if let Some(input_ref) = sys
+            .inputs
+            .iter()
+            .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
+        {
             input_mapping.insert(*symbol_id, *input_ref);
         }
 
-        if let Some(output_ref) = sys.outputs.iter().find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name) {
+        if let Some(output_ref) = sys
+            .outputs
+            .iter()
+            .find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name)
+        {
             output_mapping.insert(*symbol_id, *output_ref);
         }
     }
@@ -262,15 +273,22 @@ pub fn interpret(
     //     }
     // }
 
-    let evaluator = &mut Evaluator { tr, st, handler: &mut DiagnosticHandler::new(), sim: &mut sim, args_mapping: args_mapping, input_mapping, output_mapping };
+    let evaluator = &mut Evaluator {
+        tr,
+        st,
+        handler: &mut DiagnosticHandler::new(),
+        sim: &mut sim,
+        args_mapping: args_mapping,
+        input_mapping,
+        output_mapping,
+    };
     evaluator.evaluate_transaction();
 
     // mapping(&tr, &st, &tr.body, &mut sim);
 
     // sim.init();
 
-
-        // Fix .unwraps with ok or else and add handler
+    // Fix .unwraps with ok or else and add handler
     // for (name, value) in in_vals {
     //     let var = *sys.inputs.iter().find(|i| ctx.get_symbol_name(**i).unwrap() == name).unwrap();
     //     sim.set(var, &BitVecValue::from_u64(value, 32));
@@ -291,11 +309,11 @@ pub mod tests {
     fn test_helper(filename: &str, snap_name: &str) {
         let mut handler = DiagnosticHandler::new();
         let result = parse_file(filename, &mut handler);
-        let mut trs : Vec<(SymbolTable, Transaction)> = Vec::new();
+        let mut trs: Vec<(SymbolTable, Transaction)> = Vec::new();
         let content = match result {
             Ok(success_vec) => {
                 trs = success_vec;
-            },
+            }
             Err(_) => panic!("Failed to parse file: {}", filename),
         };
 
@@ -313,7 +331,6 @@ pub mod tests {
     fn test_add_execution() {
         test_helper("tests/add_struct.prot", "add_struct");
     }
-
 
     // #[test]
     // fn run_interpret() {
