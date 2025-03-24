@@ -210,9 +210,7 @@ pub fn interpret(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> bool {
-
     // TODO: check arguments are all there and of correct types
-
 
     // instantiate sim from btor file
     let (ctx, sys) = match patronus::btor2::parse_file(btor_path) {
@@ -301,10 +299,10 @@ pub fn interpret(
 
 #[cfg(test)]
 pub mod tests {
-    use core::panic;
-    use crate::yosys::*;
-    use std::path::PathBuf;
     use super::*;
+    use crate::yosys::*;
+    use core::panic;
+    use std::path::PathBuf;
 
     fn parsing_helper(
         transaction_filename: &str,
