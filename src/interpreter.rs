@@ -11,6 +11,11 @@ use crate::yosys::yosys_to_btor;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
+enum Value {
+    BitVec(BitVecValue),
+    DontCare,
+}
+
 struct Evaluator<'a> {
     tr: &'a Transaction,
     st: &'a SymbolTable,
@@ -25,23 +30,18 @@ struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
-    // eventually we will create a value enum that will store resultant values. for now, only integers exist
-    fn evaluate_expr(&mut self, expr_id: &ExprId) -> BitVecValue {
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
         let expr = &self.tr[expr_id];
         match expr {
-            // nullary
-            Expr::Const(bit_vec) => {
-                return bit_vec.clone();
-            }
+            Expr::Const(bit_vec) => Ok(bit_vec.clone()),
             Expr::Sym(sym_id) => {
-                // a symbol is either in the input mapping, the output mapping, the args mapping, or an error
                 let name = self.st[sym_id].name();
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
-                    return self.sim.get(*expr_ref).unwrap();
+                    Ok(self.sim.get(*expr_ref).unwrap())
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    return self.sim.get((*output).expr).unwrap();
+                    Ok(self.sim.get((*output).expr).unwrap())
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
-                    return bvv.clone();
+                    Ok(bvv.clone())
                 } else {
                     self.handler.emit_diagnostic_expr(
                         self.tr,
@@ -49,158 +49,140 @@ impl<'a> Evaluator<'a> {
                         "Symbol not found in input or output mapping.",
                         Level::Error,
                     );
-                    panic!();
+                    Err(format!("Symbol {} not found in input or output mapping.", name))
                 }
             }
-            Expr::DontCare => {
-                // return a 0 of the relevant type's width
-                return BitVecValue::new_false(); // TODO: what to do with don't cares?
-            }
-            // unary
+            Expr::DontCare => Ok(BitVecValue::new_false()),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
-                let lhs_val = self.evaluate_expr(&lhs_id);
-                let rhs_val = self.evaluate_expr(&rhs_id);
+                let lhs_val = self.evaluate_expr(&lhs_id)?;
+                let rhs_val = self.evaluate_expr(&rhs_id)?;
                 match bin_op {
-                    BinOp::Equal => {
-                        return if lhs_val.is_equal(&rhs_val) {
-                            BitVecValue::new_true()
-                        } else {
-                            BitVecValue::new_false()
-                        };
-                    }
-                    BinOp::And => {
-                        return lhs_val.and(&rhs_val);
-                    }
+                    BinOp::Equal => Ok(if lhs_val.is_equal(&rhs_val) {
+                        BitVecValue::new_true()
+                    } else {
+                        BitVecValue::new_false()
+                    }),
+                    BinOp::And => Ok(lhs_val.and(&rhs_val)),
                 }
             }
-            // binary
             Expr::Unary(unary_op, expr_id) => {
-                let expr_val = self.evaluate_expr(&expr_id);
+                let expr_val = self.evaluate_expr(&expr_id)?;
                 match unary_op {
-                    UnaryOp::Not => {
-                        return expr_val.not();
-                    }
+                    UnaryOp::Not => Ok(expr_val.not()),
                 }
             }
-            // Slice
             Expr::Slice(expr_id, idx1, idx2) => {
-                let expr_val = self.evaluate_expr(&expr_id);
-                return expr_val.slice(*idx1, *idx2);
+                let expr_val = self.evaluate_expr(&expr_id)?;
+                Ok(expr_val.slice(*idx1, *idx2))
             }
         }
     }
 
-    fn evaluate_transaction(&mut self) {
-        // extract body statement from transaction
+    fn evaluate_transaction(&mut self) -> Result<(), String> {
         let body_id: StmtId = self.tr.body;
-        self.evaluate_block(&body_id);
+        self.evaluate_block(&body_id)
     }
 
-    fn evaluate_if(&mut self, cond_expr_id: &ExprId, then_stmt_id: &StmtId, else_stmt_id: &StmtId) {
-        let res = self.evaluate_expr(cond_expr_id);
+    fn evaluate_if(
+        &mut self,
+        cond_expr_id: &ExprId,
+        then_stmt_id: &StmtId,
+        else_stmt_id: &StmtId,
+    ) -> Result<(), String> {
+        let res = self.evaluate_expr(cond_expr_id)?;
         if res.is_true() {
-            self.evaluate_block(else_stmt_id);
+            self.evaluate_block(else_stmt_id)
         } else {
-            self.evaluate_block(then_stmt_id);
+            self.evaluate_block(then_stmt_id)
         }
     }
 
-    fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) {
-        let expr_val = self.evaluate_expr(expr_id);
+    fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) -> Result<(), String> {
+        let expr_val = self.evaluate_expr(expr_id)?;
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, &expr_val);
-        }
-        // These should all be caught at typechecking, assuming the verilog lines up with the transaction
-        // TODO: Switch to Diagnostic
+            Ok(())
+        } 
+        // below statements should be unreachable (assuming type checking works)
         else if let Some(_) = self.output_mapping.get(symbol_id) {
-            panic!("Attempting to assign to output {}.", name);
+            // Err(format!("Attempting to assign to output {}.", name))
+            unreachable!("Attempting to assign to output {}.", name)
         } else if let Some(_) = self.args_mapping.get(symbol_id) {
-            panic!("Attempting to assign to argument {}.", name);
+            // Err(format!("Attempting to assign to argument {}.", name))
+            unreachable!("Attempting to assign to argument {}.", name)
         } else {
-            panic!("Assigning to symbol {} not yet defined.", name);
+            // Err(format!("Assigning to symbol {} not yet defined.", name))
+            unreachable!("Assigning to symbol {} not yet defined.", name)
         }
     }
 
-    fn evaluate_while(&mut self, loop_guard_id: &ExprId, do_block_id: &StmtId) {
-        let mut res = self.evaluate_expr(loop_guard_id);
+    fn evaluate_while(&mut self, loop_guard_id: &ExprId, do_block_id: &StmtId) -> Result<(), String> {
+        let mut res = self.evaluate_expr(loop_guard_id)?;
         while res.is_true() {
-            self.evaluate_block(do_block_id);
-            res = self.evaluate_expr(loop_guard_id);
+            self.evaluate_block(do_block_id)?;
+            res = self.evaluate_expr(loop_guard_id)?;
         }
+        Ok(())
     }
 
-    fn evaluate_step(&mut self, expr: &ExprId) {
-        let res = self.evaluate_expr(expr);
-
-        // FIXME: We shouldn't narrow to u64
+    fn evaluate_step(&mut self, expr: &ExprId) -> Result<(), String> {
+        let res = self.evaluate_expr(expr)?;
         let val = res.to_u64().unwrap();
         for _ in 0..val {
-            self.sim.step()
+            self.sim.step();
         }
+        Ok(())
     }
 
-    fn evaluate_fork(&self) {
+    fn evaluate_fork(&self) -> Result<(), String> {
         // TODO: Implement evaluate_fork
+        Ok(())
     }
 
-    fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> bool {
-        let res1 = self.evaluate_expr(expr1);
-        let res2 = self.evaluate_expr(expr2);
-        println!("{:?}, {:?}", res1, res2);
+    fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
+        let res1 = self.evaluate_expr(expr1)?;
+        let res2 = self.evaluate_expr(expr2)?;
+        // println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
             self.handler
                 .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
-            // panic!(
-            //     "Assertion failed: values are not equal. res1: {:?}, res2: {:?}",
-            //     res1, res2
-            // );
-            return true;
+            Err("Assertion Failed".to_string())
         } else {
-            return false;
+            Ok(())
         }
     }
 
-    fn evaluate_block(&mut self, stmt_id: &StmtId) {
+    fn evaluate_block(&mut self, stmt_id: &StmtId) -> Result<(), String> {
         match &self.tr[stmt_id] {
             Stmt::Block(stmt_ids) => {
                 for stmt_id in stmt_ids {
                     let stmt = &self.tr[stmt_id];
                     match stmt {
                         Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                            // execute if
-                            self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id);
+                            self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id)?;
                         }
                         Stmt::While(loop_guard_id, do_block_id) => {
-                            // execute while
-                            self.evaluate_while(loop_guard_id, do_block_id);
+                            self.evaluate_while(loop_guard_id, do_block_id)?;
                         }
                         Stmt::Assign(symbol_id, expr_id) => {
-                            // execute return
-                            self.evaluate_assign(symbol_id, expr_id);
+                            self.evaluate_assign(symbol_id, expr_id)?;
                         }
                         Stmt::Step(expr) => {
-                            // execute expr
-                            self.evaluate_step(expr);
+                            self.evaluate_step(expr)?;
                         }
                         Stmt::Block(_) => {
-                            // execute block
-                            self.evaluate_block(stmt_id);
+                            self.evaluate_block(stmt_id)?;
                         }
                         Stmt::AssertEq(expr1_id, expr2_id) => {
-                            // execute assert
-                            let res = self.evaluate_assert_eq(expr1_id, expr2_id);
-                            if !res {
-                                // TODO: actually pause interpreting immediately if this occurs
-                                return;
-                            }
+                            self.evaluate_assert_eq(expr1_id, expr2_id)?;
                         }
                         Stmt::Fork => {
-                            // execute expr
-                            self.evaluate_fork();
+                            self.evaluate_fork()?;
                         }
                     }
                 }
+                Ok(())
             }
             _ => unreachable!("Expected a block statement as input to evaluate_block."),
         }
@@ -213,7 +195,7 @@ pub fn interpret(
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
-) -> bool {
+) -> Result<(), String> {
     // Verilog --> Btor via Yosys
     let env = YosysEnv::default();
     let inp = PathBuf::from(verilog_path);
@@ -226,8 +208,9 @@ pub fn interpret(
     let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
         Some(result) => result,
         None => {
-            println!("Failed to parse Verilog file to Btor2: {}", verilog_path);
-            return false;
+            let msg = "Failed to parse Verilog file to Btor2.".to_string();
+            handler.emit_general_message(&msg, Level::Error);
+            return Err(msg);
         }
     };
     let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
@@ -281,8 +264,7 @@ pub fn interpret(
         input_mapping,
         output_mapping,
     };
-    evaluator.evaluate_transaction();
-    true
+    evaluator.evaluate_transaction()
 }
 
 #[cfg(test)]
@@ -322,9 +304,8 @@ pub mod tests {
         args.insert("s", BitVecValue::from_u64(14, 32));
 
         // FIXME: This always returns true right now
-        let success = interpret(btor_path, args, tr, st, handler);
-        assert!(success);
-
+        let res = interpret(btor_path, args, tr, st, handler);
+        assert!(res.is_ok());
         // TODO: Snapshots?
     }
 
@@ -345,7 +326,7 @@ pub mod tests {
         args.insert("b", BitVecValue::from_u64(8, 32));
         args.insert("s", BitVecValue::from_u64(48, 32));
 
-        let success = interpret(btor_path, args, tr, st, handler);
-        assert!(success);
+        let res = interpret(btor_path, args, tr, st, handler);
+        assert!(res.is_ok());
     }
 }
