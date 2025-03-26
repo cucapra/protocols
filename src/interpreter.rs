@@ -4,6 +4,11 @@ use patronus::expr::{self, ExprRef};
 use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 
+use crate::yosys::YosysEnv;
+use crate::yosys::ProjectConf;
+use crate::yosys::yosys_to_btor;
+
+use std::path::PathBuf;
 use std::collections::HashMap;
 
 struct Evaluator<'a> {
@@ -92,7 +97,6 @@ impl<'a> Evaluator<'a> {
     }
 
     fn evaluate_if(&mut self, cond_expr_id: &ExprId, then_stmt_id: &StmtId, else_stmt_id: &StmtId) {
-        // TODO: Implement evaluate_if
         let res = self.evaluate_expr(cond_expr_id);
         if res.is_true() {
             self.evaluate_block(else_stmt_id);
@@ -204,19 +208,25 @@ impl<'a> Evaluator<'a> {
 }
 
 pub fn interpret(
-    btor_path: &str,
+    verilog_path: &str,
     args: HashMap<&str, BitVecValue>,
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> bool {
+    // Verilog --> Btor via Yosys
+    let env = YosysEnv::default();
+    let inp = PathBuf::from(verilog_path);
+    let mut proj = ProjectConf::with_source(inp);
+    let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+
     // TODO: check arguments are all there and of correct types
 
     // instantiate sim from btor file
-    let (ctx, sys) = match patronus::btor2::parse_file(btor_path) {
+    let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
         Some(result) => result,
         None => {
-            println!("Failed to parse protocol file: {}", btor_path);
+            println!("Failed to parse Verilog file to Btor2: {}", verilog_path);
             return false;
         }
     };
@@ -272,28 +282,6 @@ pub fn interpret(
         output_mapping,
     };
     evaluator.evaluate_transaction();
-
-    // let mut inputs = HashMap::new();
-    // for (name, val) in args.clone() {
-    //     let var = *sys
-    //         .inputs
-    //         .iter()
-    //         .find(|i| ctx.get_symbol_name(**i).unwrap() == name)
-    //         .unwrap();
-    //     inputs.insert(var, val);
-    // }
-
-    // for (symbol_id, expr_ref) in &input_mapping {
-    //     if let Some(value) = args_mapping.get(symbol_id) {
-    //         sim.set(*expr_ref, value);
-    //     } else {
-    //         let name = st[symbol_id].name();
-    //         panic!("Input {} not found in provided arguments.", name);
-    //     }
-    // }
-
-    // let out = sys.outputs;
-    // println!("{:?}", out);
     true
 }
 
@@ -321,15 +309,13 @@ pub mod tests {
 
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/add_struct.prot";
-        let btor_path = "examples/adders/add_d1.btor";
+        let btor_path = "examples/adders/add_d1.v";
         let trs = parsing_helper(transaction_filename, handler);
 
         // only one transaction in this file
         let (st, tr) = &trs[0];
 
         // set up the args for the Transaction
-        // FIXME: returned values from sim seem to have width 32
-        // These args must also be 32-bit then, else Rust panics on comparison
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
