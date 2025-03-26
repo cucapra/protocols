@@ -166,10 +166,34 @@ pub fn require_yosys() -> Result<()> {
             if txt.starts_with("Yosys") {
                 Ok(())
             } else {
-                Err(YosysError::YosysNotFound)
+                // Try with `--version` if `-version` fails
+                match std::process::Command::new("yosys").arg("--version").output() {
+                    Ok(res) => {
+                        let txt = String::from_utf8(res.stdout).unwrap();
+                        if txt.starts_with("Yosys") {
+                            Ok(())
+                        } else {
+                            Err(YosysError::YosysNotFound)
+                        }
+                    }
+                    Err(_) => Err(YosysError::YosysNotFound),
+                }
             }
         }
-        Err(_) => Err(YosysError::YosysNotFound),
+        Err(_) => {
+            // Try with `--version` if `-version` fails
+            match std::process::Command::new("yosys").arg("--version").output() {
+                Ok(res) => {
+                    let txt = String::from_utf8(res.stdout).unwrap();
+                    if txt.starts_with("Yosys") {
+                        Ok(())
+                    } else {
+                        Err(YosysError::YosysNotFound)
+                    }
+                }
+                Err(_) => Err(YosysError::YosysNotFound),
+            }
+        }
     }
 }
 
