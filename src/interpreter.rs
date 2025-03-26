@@ -1,6 +1,6 @@
-use crate::{diagnostic::*, ir::*, parser::*};
+use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
-use patronus::expr::{self, ExprRef};
+use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 
@@ -202,8 +202,6 @@ pub fn interpret(
     let mut proj = ProjectConf::with_source(inp);
     let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
 
-    // TODO: check arguments are all there and of correct types
-
     // instantiate sim from btor file
     let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
         Some(result) => result,
@@ -213,7 +211,7 @@ pub fn interpret(
             return Err(msg);
         }
     };
-    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
+    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);    
 
     // create mapping from each symbolId to corresponding BitVecValue based on input mapping
     let mut args_mapping = HashMap::new();
@@ -252,6 +250,9 @@ pub fn interpret(
         }
     }
 
+    // TODO: check that the Transaction DUT matches the Btor2 DUT
+    // TODO: check that every item in the args mapping is a field in the Transaction
+
     // Initialize sim, evaluate the transaction!
     sim.init();
 
@@ -270,9 +271,8 @@ pub fn interpret(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::yosys::*;
+    use crate::parser::parse_file;
     use core::panic;
-    use std::path::PathBuf;
 
     fn parsing_helper(
         transaction_filename: &str,
