@@ -4,11 +4,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use std::{any::Any, fmt::format, io::Write};
+use std::io::Write;
 
 use baa::BitVecOps;
 
-use crate::{diagnostic::*, ir::*};
+use crate::ir::*;
 
 pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
     let mut out = Vec::new();
@@ -61,7 +61,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
     }
 }
 
-fn build_statements(
+pub fn build_statements(
     out: &mut impl Write,
     tr: &Transaction,
     st: &SymbolTable,
@@ -215,6 +215,7 @@ pub fn serialize(
 
 #[cfg(test)]
 pub mod tests {
+    use crate::diagnostic::DiagnosticHandler;
     use crate::parser::parse_file;
     use insta::Settings;
     use std::path::Path;

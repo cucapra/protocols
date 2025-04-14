@@ -80,8 +80,54 @@ impl Transaction {
     pub fn get_stmt_loc(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
         self.stmt_loc.get(stmt_id).copied()
     }
-}
 
+    pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {
+        self.next_stmt_mapping_helper(self.body, None)
+    }
+
+    fn next_stmt_mapping_helper(
+        &self,
+        block_id: StmtId,
+        stmt_after_block: Option<StmtId>,
+    ) -> FxHashMap<StmtId, Option<StmtId>> {
+        // Precondition: input StmtId refers to the a Stmt::Block variant
+        let mut map = FxHashMap::default();
+
+        if let Stmt::Block(stmts) = &self.stmts[block_id] {
+            for (i, &stmt_id) in stmts.iter().enumerate() {
+                let mut new_stmt_after_block = stmt_after_block;
+                if i == stmts.len() - 1 {
+                    // check if we're at the end of the block
+                    map.insert(stmt_id, stmt_after_block);
+                } else {
+                    // println!("mapping {} -> {}", stmt_id, stmts[i + 1]);
+                    map.insert(stmt_id, Some(stmts[i + 1]));
+                    new_stmt_after_block = Some(stmts[i + 1]);
+                }
+
+                match &self.stmts[stmt_id] {
+                    Stmt::Block(_) => {
+                        map.extend(self.next_stmt_mapping_helper(stmt_id, new_stmt_after_block));
+                    }
+                    Stmt::IfElse(_, then_stmt_id, else_stmt_id) => {
+                        map.extend(
+                            self.next_stmt_mapping_helper(*then_stmt_id, new_stmt_after_block),
+                        );
+                        map.extend(
+                            self.next_stmt_mapping_helper(*else_stmt_id, new_stmt_after_block),
+                        );
+                    }
+                    Stmt::While(_, body_id) => {
+                        map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        map
+    }
+}
 impl Index<ExprId> for Transaction {
     type Output = Expr;
 
@@ -491,6 +537,10 @@ impl SymbolTableEntry {
 
 #[cfg(test)]
 mod tests {
+    use crate::diagnostic::DiagnosticHandler;
+    use crate::parser::parse_file;
+    use crate::serialize::build_statements;
+
     use super::*;
 
     #[test]
@@ -608,5 +658,36 @@ mod tests {
         ];
 
         calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+    }
+
+    #[test]
+    fn test_next_stmt_mapping() {
+        // passed when I examined output by eye.
+        let mut handler = DiagnosticHandler::new();
+        let result = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
+        let (st, tr) = &result.unwrap()[0];
+        let map = tr.next_stmt_mapping();
+
+        // visualize the mapping
+        for (stmt_id, next_stmt_id) in map.iter() {
+            match next_stmt_id {
+                Some(next_id) => {
+                    let mut serialized_stmt = Vec::new();
+                    build_statements(&mut serialized_stmt, tr, st, stmt_id, 0).unwrap();
+                    let stmt_str = String::from_utf8(serialized_stmt).unwrap();
+
+                    let mut serialized_next_stmt = Vec::new();
+                    build_statements(&mut serialized_next_stmt, tr, st, next_id, 0).unwrap();
+                    let next_stmt_str = String::from_utf8(serialized_next_stmt).unwrap();
+                    println!("{} -> {}", stmt_str, next_stmt_str);
+                }
+                None => {
+                    let mut serialized_stmt = Vec::new();
+                    build_statements(&mut serialized_stmt, tr, st, stmt_id, 0).unwrap();
+                    let stmt_str = String::from_utf8(serialized_stmt).unwrap();
+                    println!("{} -> END\n", stmt_str);
+                }
+            }
+        }
     }
 }

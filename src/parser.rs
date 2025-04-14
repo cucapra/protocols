@@ -10,9 +10,8 @@ use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use pest::Parser;
 use pest_derive::Parser;
-use std::{fmt, io::stdout, process::id, vec};
+use std::{fmt, vec};
 
-use crate::serialize::*;
 use crate::{diagnostic::*, ir::*};
 
 #[derive(Parser)]

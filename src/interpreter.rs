@@ -3,13 +3,14 @@ use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
+use rustc_hash::FxHashMap;
 
-use crate::yosys::YosysEnv;
-use crate::yosys::ProjectConf;
 use crate::yosys::yosys_to_btor;
+use crate::yosys::ProjectConf;
+use crate::yosys::YosysEnv;
 
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 enum Value {
     BitVec(BitVecValue),
@@ -18,6 +19,7 @@ enum Value {
 
 struct Evaluator<'a> {
     tr: &'a Transaction,
+    next_stmt_mapping: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
     handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
@@ -49,7 +51,10 @@ impl<'a> Evaluator<'a> {
                         "Symbol not found in input or output mapping.",
                         Level::Error,
                     );
-                    Err(format!("Symbol {} not found in input or output mapping.", name))
+                    Err(format!(
+                        "Symbol {} not found in input or output mapping.",
+                        name
+                    ))
                 }
             }
             Expr::DontCare => Ok(BitVecValue::new_false()),
@@ -80,7 +85,54 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_transaction(&mut self) -> Result<(), String> {
         let body_id: StmtId = self.tr.body;
-        self.evaluate_block(&body_id)
+        let next_stmt = self.evlauate_stmt(&body_id)?;
+        let mut current_stmt = next_stmt;
+        while let Some(stmt_id) = current_stmt {
+            current_stmt = self.evlauate_stmt(&stmt_id)?;
+        }
+        return Ok(());
+    }
+
+    fn evlauate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+        match &self.tr[stmt_id] {
+            Stmt::Assign(symbol_id, expr_id) => {
+                println!("Eval Assign.");
+                self.evaluate_assign(&symbol_id, &expr_id)?;
+                Ok(self.next_stmt_mapping[stmt_id])
+            }
+            Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
+                println!("Eval IFElse.");
+                self.evaluate_if(&cond_expr_id, &then_stmt_id, &else_stmt_id)
+            }
+            Stmt::While(loop_guard_id, do_block_id) => {
+                println!("Eval While.");
+                self.evaluate_while(&loop_guard_id, &do_block_id)
+            }
+            Stmt::Step(expr) => {
+                println!("Eval Step.");
+                self.evaluate_step(&expr)?;
+                Ok(self.next_stmt_mapping[stmt_id])
+            }
+            Stmt::Fork => {
+                println!("Eval Fork.");
+                // TODO: Implement evaluate_fork
+                return Ok(self.next_stmt_mapping[stmt_id]);
+                // return Err("Fork not implemented.".to_string());
+            }
+            Stmt::AssertEq(expr1, expr2) => {
+                println!("Eval AssertEq.");
+                self.evaluate_assert_eq(&expr1, &expr2)?;
+                Ok(self.next_stmt_mapping[stmt_id])
+            }
+            Stmt::Block(stmt_ids) => {
+                println!("Eval Block.");
+                if stmt_ids.is_empty() {
+                    return Ok(None);
+                } else {
+                    return Ok(Some(stmt_ids[0]));
+                }
+            }
+        }
     }
 
     fn evaluate_if(
@@ -88,12 +140,12 @@ impl<'a> Evaluator<'a> {
         cond_expr_id: &ExprId,
         then_stmt_id: &StmtId,
         else_stmt_id: &StmtId,
-    ) -> Result<(), String> {
+    ) -> Result<Option<StmtId>, String> {
         let res = self.evaluate_expr(cond_expr_id)?;
-        if res.is_true() {
-            self.evaluate_block(else_stmt_id)
+        if res.is_zero() {
+            Ok(Some(*else_stmt_id))
         } else {
-            self.evaluate_block(then_stmt_id)
+            Ok(Some(*then_stmt_id))
         }
     }
 
@@ -103,7 +155,7 @@ impl<'a> Evaluator<'a> {
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, &expr_val);
             Ok(())
-        } 
+        }
         // below statements should be unreachable (assuming type checking works)
         else if let Some(_) = self.output_mapping.get(symbol_id) {
             // Err(format!("Attempting to assign to output {}.", name))
@@ -117,13 +169,17 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_while(&mut self, loop_guard_id: &ExprId, do_block_id: &StmtId) -> Result<(), String> {
+    fn evaluate_while(
+        &mut self,
+        loop_guard_id: &ExprId,
+        do_block_id: &StmtId,
+    ) -> Result<Option<StmtId>, String> {
         let mut res = self.evaluate_expr(loop_guard_id)?;
-        while res.is_true() {
-            self.evaluate_block(do_block_id)?;
-            res = self.evaluate_expr(loop_guard_id)?;
+        if res.is_true() {
+            return Ok(Some(*do_block_id));
+        } else {
+            Ok(self.next_stmt_mapping[do_block_id])
         }
-        Ok(())
     }
 
     fn evaluate_step(&mut self, expr: &ExprId) -> Result<(), String> {
@@ -153,36 +209,14 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_block(&mut self, stmt_id: &StmtId) -> Result<(), String> {
+    fn evaluate_block(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Block(stmt_ids) => {
-                for stmt_id in stmt_ids {
-                    let stmt = &self.tr[stmt_id];
-                    match stmt {
-                        Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                            self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id)?;
-                        }
-                        Stmt::While(loop_guard_id, do_block_id) => {
-                            self.evaluate_while(loop_guard_id, do_block_id)?;
-                        }
-                        Stmt::Assign(symbol_id, expr_id) => {
-                            self.evaluate_assign(symbol_id, expr_id)?;
-                        }
-                        Stmt::Step(expr) => {
-                            self.evaluate_step(expr)?;
-                        }
-                        Stmt::Block(_) => {
-                            self.evaluate_block(stmt_id)?;
-                        }
-                        Stmt::AssertEq(expr1_id, expr2_id) => {
-                            self.evaluate_assert_eq(expr1_id, expr2_id)?;
-                        }
-                        Stmt::Fork => {
-                            self.evaluate_fork()?;
-                        }
-                    }
+                if stmt_ids.is_empty() {
+                    return Ok(self.next_stmt_mapping[stmt_id]);
+                } else {
+                    return Ok(Some(stmt_ids[0]));
                 }
-                Ok(())
             }
             _ => unreachable!("Expected a block statement as input to evaluate_block."),
         }
@@ -211,7 +245,7 @@ pub fn interpret(
             return Err(msg);
         }
     };
-    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);    
+    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
 
     // create mapping from each symbolId to corresponding BitVecValue based on input mapping
     let mut args_mapping = HashMap::new();
@@ -258,6 +292,7 @@ pub fn interpret(
 
     let evaluator = &mut Evaluator {
         tr,
+        next_stmt_mapping: tr.next_stmt_mapping(),
         st,
         handler,
         sim: &mut sim,
@@ -265,7 +300,8 @@ pub fn interpret(
         input_mapping,
         output_mapping,
     };
-    evaluator.evaluate_transaction()
+
+    return evaluator.evaluate_transaction();
 }
 
 #[cfg(test)]
@@ -305,6 +341,9 @@ pub mod tests {
 
         // FIXME: This always returns true right now
         let res = interpret(btor_path, args, tr, st, handler);
+        if let Err(err) = res.clone() {
+            println!("Error: {}", err);
+        }
         assert!(res.is_ok());
         // TODO: Snapshots?
     }
