@@ -36,7 +36,7 @@ impl<'a> Evaluator<'a> {
         args: HashMap<&str, BitVecValue>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
-        handler:&'a mut DiagnosticHandler,
+        handler: &'a mut DiagnosticHandler,
         ctx: &'a patronus::expr::Context,
         sys: &'a patronus::system::TransitionSystem,
         sim: &'a mut Interpreter<'a>,
@@ -84,7 +84,7 @@ impl<'a> Evaluator<'a> {
         // Initialize sim, return the transaction!
         sim.init();
 
-        let evaluator =  Evaluator {
+        let evaluator = Evaluator {
             tr,
             next_stmt_mapping: tr.next_stmt_mapping(),
             st,
