@@ -32,6 +32,82 @@ struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
+    fn new(
+        args: HashMap<&str, BitVecValue>,
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        handler:&'a mut DiagnosticHandler,
+        ctx: &'a patronus::expr::Context,
+        sys: &'a patronus::system::TransitionSystem,
+        sim: &'a mut Interpreter<'a>,
+    ) -> Self {
+        // create mapping from each symbolId to corresponding BitVecValue based on input mapping
+        let mut args_mapping = HashMap::new();
+        for (name, value) in &args {
+            if let Some(symbol_id) = st.symbol_id_from_name(name) {
+                args_mapping.insert(symbol_id, (*value).clone());
+            } else {
+                panic!("Argument {} not found in DUT symbols.", name);
+            }
+        }
+
+        // create mapping for each of the DUT's children symbols to the input and output mappings
+        let dut = tr.type_args[0];
+        let dut_symbols = &st.get_children(&dut);
+
+        let mut input_mapping = HashMap::new();
+        let mut output_mapping = HashMap::new();
+
+        for symbol_id in dut_symbols {
+            let symbol_name = st[symbol_id].name();
+
+            if let Some(input_ref) = sys
+                .inputs
+                .iter()
+                .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
+            {
+                input_mapping.insert(*symbol_id, *input_ref);
+            }
+
+            if let Some(output_ref) = sys
+                .outputs
+                .iter()
+                .find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name)
+            {
+                output_mapping.insert(*symbol_id, *output_ref);
+            }
+        }
+
+        // TODO: check that the Transaction DUT matches the Btor2 DUT
+        // TODO: check that every item in the args mapping is a field in the Transaction
+
+        // Initialize sim, return the transaction!
+        sim.init();
+
+        let evaluator =  Evaluator {
+            tr,
+            next_stmt_mapping: tr.next_stmt_mapping(),
+            st,
+            handler,
+            sim: sim,
+            args_mapping,
+            input_mapping,
+            output_mapping,
+        };
+        return evaluator;
+    }
+
+    fn evaluate_until_step(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+        let mut current_stmt = Some(*stmt_id);
+        while let Some(stmt_id) = current_stmt {
+            match &self.tr[&stmt_id] {
+                Stmt::Step(_) => return Ok(Some(stmt_id)),
+                _ => current_stmt = self.evlauate_stmt(&stmt_id)?,
+            }
+        }
+        Ok(None)
+    }
+
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
         let expr = &self.tr[expr_id];
         match expr {
@@ -247,61 +323,9 @@ pub fn interpret(
     };
     let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
 
-    // create mapping from each symbolId to corresponding BitVecValue based on input mapping
-    let mut args_mapping = HashMap::new();
-    for (name, value) in &args {
-        if let Some(symbol_id) = st.symbol_id_from_name(name) {
-            args_mapping.insert(symbol_id, (*value).clone());
-        } else {
-            panic!("Argument {} not found in DUT symbols.", name);
-        }
-    }
-
-    // create mapping for each of the DUT's children symbols to the input and output mappings
-    let dut = tr.type_args[0];
-    let dut_symbols = &st.get_children(&dut);
-
-    let mut input_mapping = HashMap::new();
-    let mut output_mapping = HashMap::new();
-
-    for symbol_id in dut_symbols {
-        let symbol_name = st[symbol_id].name();
-
-        if let Some(input_ref) = sys
-            .inputs
-            .iter()
-            .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
-        {
-            input_mapping.insert(*symbol_id, *input_ref);
-        }
-
-        if let Some(output_ref) = sys
-            .outputs
-            .iter()
-            .find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name)
-        {
-            output_mapping.insert(*symbol_id, *output_ref);
-        }
-    }
-
-    // TODO: check that the Transaction DUT matches the Btor2 DUT
-    // TODO: check that every item in the args mapping is a field in the Transaction
-
-    // Initialize sim, evaluate the transaction!
-    sim.init();
-
-    let evaluator = &mut Evaluator {
-        tr,
-        next_stmt_mapping: tr.next_stmt_mapping(),
-        st,
-        handler,
-        sim: &mut sim,
-        args_mapping,
-        input_mapping,
-        output_mapping,
-    };
-
-    return evaluator.evaluate_transaction();
+    // create evaluator
+    let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+    evaluator.evaluate_transaction()
 }
 
 #[cfg(test)]
