@@ -370,8 +370,8 @@ pub mod tests {
 
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/add_struct.prot";
-        let btor_path = "examples/adders/add_d1.v";
-        let (ctx, sys) = Evaluator::create_sim_context(btor_path);
+        let verilog_path = "examples/adders/add_d1.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
         let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
