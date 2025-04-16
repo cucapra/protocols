@@ -97,6 +97,25 @@ impl<'a> Evaluator<'a> {
         return evaluator;
     }
 
+    fn create_sim_context(
+        verilog_path: &str,
+    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
+        // Verilog --> Btor via Yosys
+        let env = YosysEnv::default();
+        let inp = PathBuf::from(verilog_path);
+        let mut proj = ProjectConf::with_source(inp);
+        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+
+        // instantiate sim from btor file
+        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
+            Some(result) => result,
+            None => {
+                panic!("Failed to parse btor file.");
+            }
+        };
+        (ctx, sys)
+    }
+
     fn evaluate_until_step(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         let mut current_stmt = Some(*stmt_id);
         while let Some(stmt_id) = current_stmt {
@@ -172,36 +191,36 @@ impl<'a> Evaluator<'a> {
     fn evlauate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                println!("Eval Assign.");
+                // println!("Eval Assign.");
                 self.evaluate_assign(&symbol_id, &expr_id)?;
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                println!("Eval IFElse.");
+                // println!("Eval IFElse.");
                 self.evaluate_if(&cond_expr_id, &then_stmt_id, &else_stmt_id)
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                println!("Eval While.");
+                // println!("Eval While.");
                 self.evaluate_while(&loop_guard_id, &do_block_id)
             }
             Stmt::Step(expr) => {
-                println!("Eval Step.");
+                // println!("Eval Step.");
                 self.evaluate_step(&expr)?;
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
-                println!("Eval Fork.");
+                // println!("Eval Fork.");
                 // TODO: Implement evaluate_fork
                 return Ok(self.next_stmt_mapping[stmt_id]);
                 // return Err("Fork not implemented.".to_string());
             }
             Stmt::AssertEq(expr1, expr2) => {
-                println!("Eval AssertEq.");
+                // println!("Eval AssertEq.");
                 self.evaluate_assert_eq(&expr1, &expr2)?;
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
-                println!("Eval Block.");
+                // println!("Eval Block.");
                 if stmt_ids.is_empty() {
                     return Ok(None);
                 } else {
@@ -352,7 +371,10 @@ pub mod tests {
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/add_struct.prot";
         let btor_path = "examples/adders/add_d1.v";
-        let trs = parsing_helper(transaction_filename, handler);
+        let (ctx, sys) = Evaluator::create_sim_context(btor_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
 
         // only one transaction in this file
         let (st, tr) = &trs[0];
@@ -363,8 +385,9 @@ pub mod tests {
         args.insert("b", BitVecValue::from_u64(8, 32));
         args.insert("s", BitVecValue::from_u64(14, 32));
 
-        // FIXME: This always returns true right now
-        let res = interpret(btor_path, args, tr, st, handler);
+        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        let res = evaluator.evaluate_transaction();
+
         if let Err(err) = res.clone() {
             println!("Error: {}", err);
         }
