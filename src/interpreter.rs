@@ -42,14 +42,7 @@ impl<'a> Evaluator<'a> {
         sim: &'a mut Interpreter<'a>,
     ) -> Self {
         // create mapping from each symbolId to corresponding BitVecValue based on input mapping
-        let mut args_mapping = HashMap::new();
-        for (name, value) in &args {
-            if let Some(symbol_id) = st.symbol_id_from_name(name) {
-                args_mapping.insert(symbol_id, (*value).clone());
-            } else {
-                panic!("Argument {} not found in DUT symbols.", name);
-            }
-        }
+        let args_mapping = Evaluator::generate_args_mapping(st, args);
 
         // create mapping for each of the DUT's children symbols to the input and output mappings
         let dut = tr.type_args[0];
@@ -97,18 +90,22 @@ impl<'a> Evaluator<'a> {
         return evaluator;
     }
 
-    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
-        // create mapping from each symbolId to corresponding BitVecValue based on input mapping
+    fn generate_args_mapping(
+        st: &'a SymbolTable,
+        args: HashMap<&str, BitVecValue>,
+    ) -> HashMap<SymbolId, BitVecValue> {
         let mut args_mapping = HashMap::new();
         for (name, value) in &args {
-            if let Some(symbol_id) = self.st.symbol_id_from_name(name) {
+            if let Some(symbol_id) = st.symbol_id_from_name(name) {
                 args_mapping.insert(symbol_id, (*value).clone());
             } else {
                 panic!("Argument {} not found in DUT symbols.", name);
             }
         }
-
-        self.args_mapping = args_mapping;
+        args_mapping
+    }
+    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
+        self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
     pub fn create_sim_context(
@@ -128,17 +125,6 @@ impl<'a> Evaluator<'a> {
             }
         };
         (ctx, sys)
-    }
-
-    pub fn evaluate_until_step(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
-        let mut current_stmt = Some(*stmt_id);
-        while let Some(stmt_id) = current_stmt {
-            match &self.tr[&stmt_id] {
-                Stmt::Step(_) => return Ok(Some(stmt_id)),
-                _ => current_stmt = self.evaluate_stmt(&stmt_id)?,
-            }
-        }
-        Ok(None)
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
