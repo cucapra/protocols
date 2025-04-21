@@ -327,9 +327,6 @@ pub mod tests {
         // only one transaction in this file
         let (st, tr) = &trs[0];
 
-        // set up the args for the Transaction
-        // FIXME: returned values from sim seem to have width 32
-        // These args must also be 32-bit then, else Rust panics on comparison
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
