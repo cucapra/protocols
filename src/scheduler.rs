@@ -35,6 +35,7 @@ impl Thread {
     }
 }
 
+// given a list of transaction (and with their own arguments), each thread will run 1
 pub struct Scheduler {
     active_threads: Vec<Thread>,
     next_threads: Vec<Thread>,
