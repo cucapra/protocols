@@ -271,7 +271,7 @@ impl DiagnosticHandler {
             print!("{}", error_msg);
         }
     }
-    
+
     pub fn emit_general_message(&mut self, message: &str, level: Level) {
         let buffer = &mut Buffer::ansi();
         let diagnostic = Diagnostic {
