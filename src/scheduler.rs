@@ -8,53 +8,84 @@ use baa::BitVecValue;
 use std::collections::HashMap;
 
 use crate::ir::*;
+use crate::interpreter::Evaluator;
+use crate::diagnostic::DiagnosticHandler;
+use patronus::sim::Interpreter;
+use patronus::expr::Context;
+use patronus::system::TransitionSystem;
+
 
 #[derive(Debug, Clone)]
-pub struct Thread {
-    pub transaction: Transaction,
+pub struct Thread<'a> {
+    pub transaction: &'a Transaction,
+    pub symbol_table: &'a SymbolTable,
     pub stepid: StmtId,
-    args: HashMap<Arg, BitVecValue>,
+    args: &'a HashMap<&'a str, BitVecValue>,
 }
 
-impl Thread {
+impl <'a>Thread<'a> {
     pub fn initialize_thread(
-        tr: Transaction,
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
         step: StmtId,
-        args: HashMap<Arg, BitVecValue>,
+        args: &'a HashMap<&str, BitVecValue>,
     ) -> Self {
         Self {
             transaction: tr,
+            symbol_table: st,
             stepid: step,
             args,
         }
     }
 
-    pub fn next_step(&self) -> Option<StmtId> {
+    pub fn next_step(&self, evaluator: &mut Evaluator) -> Option<StmtId> {
         // Sends step to next, then gets step and modifies
-        todo!("evaluate next step")
+        evaluator.switch_args_mapping(self.args.clone());
+        let res = evaluator.evaluate_until_step(&self.stepid).unwrap_or_default();
+        res
+        // todo!("evaluate next step")
     }
 }
 
-pub struct Scheduler {
-    active_threads: Vec<Thread>,
-    next_threads: Vec<Thread>,
-    inactive_threads: Vec<Thread>,
+pub struct Scheduler<'a> {
+    active_threads: Vec<Thread<'a>>,
+    next_threads: Vec<Thread<'a>>,
+    inactive_threads: Vec<Thread<'a>>,
     step_count: i32,
+    evaluator: Evaluator<'a>,
 }
 
-impl Scheduler {
-    pub fn new(tr: Transaction, step: StmtId, args: HashMap<Arg, BitVecValue>) -> Self {
-        let first = Thread::initialize_thread(tr, step, args);
+impl<'a> Scheduler<'a> {
+    pub fn new(tr: &'a Transaction, st: &'a SymbolTable, step: StmtId, args: &'a HashMap<&'a str, BitVecValue>,
+ctx: &'a Context, sys: &'a TransitionSystem, sim: &'a mut Interpreter<'a>, handler: &'a mut DiagnosticHandler) -> Self {
+        // Initialize sim
+        // let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        // let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // Initialize evaluator
+        let evaluator = Evaluator::new(
+            args.clone(),
+            &tr,
+            &st,
+            handler,
+            &ctx,
+            &sys,
+            sim,
+        );
+
+
+        let first = Thread::initialize_thread(tr, st, step, args);
         Self {
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
             step_count: 1,
+            evaluator,
         }
     }
 
-    pub fn add_thread(&mut self, tr: Transaction, step: StmtId, args: HashMap<Arg, BitVecValue>) {
-        let new_thread = Thread::initialize_thread(tr, step, args);
+    pub fn add_thread(&mut self, tr: &'a Transaction, st: &'a SymbolTable, step: StmtId, args: &'a HashMap<&str, BitVecValue>) {
+        let new_thread = Thread::initialize_thread(&tr, &st, step, args);
         self.next_threads.push(new_thread);
     }
 
@@ -62,7 +93,7 @@ impl Scheduler {
         while self.active_threads.len() > 0 {
             let mut next_thread = self.active_threads.pop().unwrap();
 
-            let next_step = next_thread.next_step();
+            let next_step = next_thread.next_step(&mut self.evaluator);
             match next_step {
                 Some(stepid) => {
                     next_thread.stepid = stepid;

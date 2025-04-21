@@ -12,12 +12,12 @@ use crate::yosys::YosysEnv;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-enum Value {
+pub enum Value {
     BitVec(BitVecValue),
     DontCare,
 }
 
-struct Evaluator<'a> {
+pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_mapping: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
@@ -32,7 +32,7 @@ struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
-    fn new(
+    pub fn new(
         args: HashMap<&str, BitVecValue>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
@@ -97,7 +97,21 @@ impl<'a> Evaluator<'a> {
         return evaluator;
     }
 
-    fn create_sim_context(
+    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>){
+        // create mapping from each symbolId to corresponding BitVecValue based on input mapping
+        let mut args_mapping = HashMap::new();
+        for (name, value) in &args {
+            if let Some(symbol_id) = self.st.symbol_id_from_name(name) {
+                args_mapping.insert(symbol_id, (*value).clone());
+            } else {
+                panic!("Argument {} not found in DUT symbols.", name);
+            }
+        }
+
+        self.args_mapping = args_mapping;
+    }
+
+    pub fn create_sim_context(
         verilog_path: &str,
     ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
         // Verilog --> Btor via Yosys
@@ -116,7 +130,7 @@ impl<'a> Evaluator<'a> {
         (ctx, sys)
     }
 
-    fn evaluate_until_step(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+    pub fn evaluate_until_step(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         let mut current_stmt = Some(*stmt_id);
         while let Some(stmt_id) = current_stmt {
             match &self.tr[&stmt_id] {
@@ -386,6 +400,7 @@ pub mod tests {
         args.insert("s", BitVecValue::from_u64(14, 32));
 
         let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        // let mut evaluator2 = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
         let res = evaluator.evaluate_transaction();
 
         if let Err(err) = res.clone() {
