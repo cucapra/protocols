@@ -428,7 +428,7 @@ pub mod tests {
     fn test_mult_execution() {
         let handler = &mut DiagnosticHandler::new();
 
-        let transaction_filename = "tests/mul.prot";
+        let transaction_filename = "tests/mult_new.prot";
 
         // TODO: Add the btor path
         let verilog_path = "examples/multipliers/mult_d1.v";
