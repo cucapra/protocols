@@ -135,7 +135,7 @@ impl<'a> Evaluator<'a> {
         while let Some(stmt_id) = current_stmt {
             match &self.tr[&stmt_id] {
                 Stmt::Step(_) => return Ok(Some(stmt_id)),
-                _ => current_stmt = self.evlauate_stmt(&stmt_id)?,
+                _ => current_stmt = self.evaluate_stmt(&stmt_id)?,
             }
         }
         Ok(None)
@@ -194,15 +194,15 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_transaction(&mut self) -> Result<(), String> {
         let body_id: StmtId = self.tr.body;
-        let next_stmt = self.evlauate_stmt(&body_id)?;
+        let next_stmt = self.evaluate_stmt(&body_id)?;
         let mut current_stmt = next_stmt;
         while let Some(stmt_id) = current_stmt {
-            current_stmt = self.evlauate_stmt(&stmt_id)?;
+            current_stmt = self.evaluate_stmt(&stmt_id)?;
         }
         return Ok(());
     }
 
-    fn evlauate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+    fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
