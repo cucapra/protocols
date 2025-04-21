@@ -340,14 +340,13 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_mult_execution() {
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/mul.prot";
 
         // TODO: Add the btor path
-        let btor_path = "examples/adders/add_d1.btor";
+        let btor_path = "examples/multipliers/mult_d1.btor";
         let trs = parsing_helper(transaction_filename, handler);
         let (st, tr) = &trs[0];
 
