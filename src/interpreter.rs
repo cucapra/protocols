@@ -97,7 +97,7 @@ impl<'a> Evaluator<'a> {
         return evaluator;
     }
 
-    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>){
+    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
         // create mapping from each symbolId to corresponding BitVecValue based on input mapping
         let mut args_mapping = HashMap::new();
         for (name, value) in &args {

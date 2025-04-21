@@ -7,13 +7,12 @@
 use baa::BitVecValue;
 use std::collections::HashMap;
 
-use crate::ir::*;
-use crate::interpreter::Evaluator;
 use crate::diagnostic::DiagnosticHandler;
-use patronus::sim::Interpreter;
+use crate::interpreter::Evaluator;
+use crate::ir::*;
 use patronus::expr::Context;
+use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
-
 
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
@@ -23,7 +22,7 @@ pub struct Thread<'a> {
     args: &'a HashMap<&'a str, BitVecValue>,
 }
 
-impl <'a>Thread<'a> {
+impl<'a> Thread<'a> {
     pub fn initialize_thread(
         tr: &'a Transaction,
         st: &'a SymbolTable,
@@ -41,7 +40,9 @@ impl <'a>Thread<'a> {
     pub fn next_step(&self, evaluator: &mut Evaluator) -> Option<StmtId> {
         // Sends step to next, then gets step and modifies
         evaluator.switch_args_mapping(self.args.clone());
-        let res = evaluator.evaluate_until_step(&self.stepid).unwrap_or_default();
+        let res = evaluator
+            .evaluate_until_step(&self.stepid)
+            .unwrap_or_default();
         res
         // todo!("evaluate next step")
     }
@@ -56,23 +57,22 @@ pub struct Scheduler<'a> {
 }
 
 impl<'a> Scheduler<'a> {
-    pub fn new(tr: &'a Transaction, st: &'a SymbolTable, step: StmtId, args: &'a HashMap<&'a str, BitVecValue>,
-ctx: &'a Context, sys: &'a TransitionSystem, sim: &'a mut Interpreter<'a>, handler: &'a mut DiagnosticHandler) -> Self {
+    pub fn new(
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        step: StmtId,
+        args: &'a HashMap<&'a str, BitVecValue>,
+        ctx: &'a Context,
+        sys: &'a TransitionSystem,
+        sim: &'a mut Interpreter<'a>,
+        handler: &'a mut DiagnosticHandler,
+    ) -> Self {
         // Initialize sim
         // let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         // let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
         // Initialize evaluator
-        let evaluator = Evaluator::new(
-            args.clone(),
-            &tr,
-            &st,
-            handler,
-            &ctx,
-            &sys,
-            sim,
-        );
-
+        let evaluator = Evaluator::new(args.clone(), &tr, &st, handler, &ctx, &sys, sim);
 
         let first = Thread::initialize_thread(tr, st, step, args);
         Self {
@@ -84,7 +84,13 @@ ctx: &'a Context, sys: &'a TransitionSystem, sim: &'a mut Interpreter<'a>, handl
         }
     }
 
-    pub fn add_thread(&mut self, tr: &'a Transaction, st: &'a SymbolTable, step: StmtId, args: &'a HashMap<&str, BitVecValue>) {
+    pub fn add_thread(
+        &mut self,
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        step: StmtId,
+        args: &'a HashMap<&str, BitVecValue>,
+    ) {
         let new_thread = Thread::initialize_thread(&tr, &st, step, args);
         self.next_threads.push(new_thread);
     }
