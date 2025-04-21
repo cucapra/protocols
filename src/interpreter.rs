@@ -1,693 +1,433 @@
-// Copyright 2024 Cornell University
-// released under MIT License
-// author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
-// author: Kevin Laeufer <laeufer@cornell.edu>
-// author: Francis Pham <fdp25@cornell.edu>
-
-use baa::BitVecValue;
-use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
+use crate::{diagnostic::*, ir::*};
+use baa::{BitVecOps, BitVecValue};
+use patronus::expr::ExprRef;
+use patronus::sim::{Interpreter, Simulator};
+use patronus::system::Output;
 use rustc_hash::FxHashMap;
-use std::ops::Index;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Transaction {
-    pub name: String,
-    pub args: Vec<Arg>,
-    pub body: StmtId,
-    pub type_args: Vec<SymbolId>,
-    exprs: PrimaryMap<ExprId, Expr>,
-    dont_care_id: ExprId,
-    stmts: PrimaryMap<StmtId, Stmt>,
-    expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
-    stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
-}
+use crate::yosys::yosys_to_btor;
+use crate::yosys::ProjectConf;
+use crate::yosys::YosysEnv;
 
-impl Transaction {
-    pub fn new(name: String) -> Self {
-        let mut exprs = PrimaryMap::new();
-        let dont_care_id = exprs.push(Expr::DontCare);
-        let mut stmts = PrimaryMap::new();
-        let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
-        let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
-        let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
-        Self {
-            name,
-            args: Vec::default(),
-            body: block_id,
-            type_args: Vec::default(),
-            exprs,
-            dont_care_id,
-            stmts,
-            expr_loc,
-            stmt_loc,
-        }
-    }
+use std::collections::HashMap;
+use std::path::PathBuf;
 
-    /// add a new expression to the transaction
-    pub fn e(&mut self, expr: Expr) -> ExprId {
-        self.exprs.push(expr)
-    }
-
-    /// add a new statement to the transaction
-    pub fn s(&mut self, stmt: Stmt) -> StmtId {
-        self.stmts.push(stmt)
-    }
-
-    pub fn expr_dont_care(&self) -> ExprId {
-        self.dont_care_id
-    }
-
-    pub fn expr_ids(&self) -> Vec<ExprId> {
-        self.exprs.keys().collect()
-    }
-
-    pub fn stmt_ids(&self) -> Vec<StmtId> {
-        self.stmts.keys().collect()
-    }
-
-    pub fn add_expr_loc(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
-        self.expr_loc[expr_id] = (start, end, fileid);
-    }
-
-    pub fn get_expr_loc(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
-        self.expr_loc.get(expr_id).copied()
-    }
-
-    pub fn add_stmt_loc(&mut self, stmt_id: StmtId, start: usize, end: usize, fileid: usize) {
-        self.stmt_loc[stmt_id] = (start, end, fileid);
-    }
-
-    pub fn get_stmt_loc(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
-        self.stmt_loc.get(stmt_id).copied()
-    }
-
-    pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {
-        self.next_stmt_mapping_helper(self.body, None)
-    }
-
-    fn next_stmt_mapping_helper(
-        &self,
-        block_id: StmtId,
-        stmt_after_block: Option<StmtId>,
-    ) -> FxHashMap<StmtId, Option<StmtId>> {
-        // Precondition: input StmtId refers to the a Stmt::Block variant
-        let mut map = FxHashMap::default();
-
-        if let Stmt::Block(stmts) = &self.stmts[block_id] {
-            for (i, &stmt_id) in stmts.iter().enumerate() {
-                let mut new_stmt_after_block = stmt_after_block;
-                if i == stmts.len() - 1 {
-                    // check if we're at the end of the block
-                    map.insert(stmt_id, stmt_after_block);
-                } else {
-                    // println!("mapping {} -> {}", stmt_id, stmts[i + 1]);
-                    map.insert(stmt_id, Some(stmts[i + 1]));
-                    new_stmt_after_block = Some(stmts[i + 1]);
-                }
-
-                match &self.stmts[stmt_id] {
-                    Stmt::Block(_) => {
-                        map.extend(self.next_stmt_mapping_helper(stmt_id, new_stmt_after_block));
-                    }
-                    Stmt::IfElse(_, then_stmt_id, else_stmt_id) => {
-                        map.extend(
-                            self.next_stmt_mapping_helper(*then_stmt_id, new_stmt_after_block),
-                        );
-                        map.extend(
-                            self.next_stmt_mapping_helper(*else_stmt_id, new_stmt_after_block),
-                        );
-                    }
-                    Stmt::While(_, body_id) => {
-                        map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        map
-    }
-}
-impl Index<ExprId> for Transaction {
-    type Output = Expr;
-
-    fn index(&self, index: ExprId) -> &Self::Output {
-        &self.exprs[index]
-    }
-}
-
-impl Index<&ExprId> for Transaction {
-    type Output = Expr;
-
-    fn index(&self, index: &ExprId) -> &Self::Output {
-        &self.exprs[*index]
-    }
-}
-
-impl Index<StmtId> for Transaction {
-    type Output = Stmt;
-
-    fn index(&self, index: StmtId) -> &Self::Output {
-        &self.stmts[index]
-    }
-}
-
-impl Index<&StmtId> for Transaction {
-    type Output = Stmt;
-
-    fn index(&self, index: &StmtId) -> &Self::Output {
-        &self.stmts[*index]
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct Arg {
-    dir: Dir,
-    symbol: SymbolId,
-}
-
-impl Arg {
-    pub fn dir(&self) -> Dir {
-        self.dir
-    }
-
-    pub fn symbol(&self) -> SymbolId {
-        self.symbol
-    }
-
-    pub fn new(symbol: SymbolId, dir: Dir) -> Self {
-        Self { dir, symbol }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum Dir {
-    In,
-    Out,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum Type {
-    BitVec(u32),
-    Struct(StructId),
-    /// Type taken on when we do not know the actual type yet
-    Unknown,
-}
-
-impl Type {
-    pub fn is_equivalent(&self, other: &Type) -> bool {
-        match (self, other) {
-            (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
-            (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
-            // TODO: type inferencing to infer unknown == LHS
-            (Type::Unknown, _) | (_, Type::Unknown) => false,
-            _ => false,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct StmtId(u32);
-entity_impl!(StmtId, "stmt");
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum Stmt {
-    Block(Vec<StmtId>),
-    Assign(SymbolId, ExprId),
-    Step(ExprId),
-    Fork,
-    While(ExprId, StmtId),
-    IfElse(ExprId, StmtId, StmtId),
-    AssertEq(ExprId, ExprId),
-}
-
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct ExprId(u32);
-entity_impl!(ExprId, "expr");
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum BinOp {
-    Equal,
-    And,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum UnaryOp {
-    Not,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum Expr {
-    // nullary
-    Const(BitVecValue),
-    Sym(SymbolId),
+pub enum Value {
+    BitVec(BitVecValue),
     DontCare,
-    // unary
-    Binary(BinOp, ExprId, ExprId),
-    // binary
-    Unary(UnaryOp, ExprId),
-    // Slice
-    Slice(ExprId, u32, u32),
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum BoxedExpr {
-    // (have start and end as usize in each variant)
-    // nullary
-    Const(BitVecValue, usize, usize),
-    Sym(SymbolId, usize, usize),
-    DontCare(usize, usize),
-    // unary
-    Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
-    // binary
-    Unary(UnaryOp, Box<BoxedExpr>, usize, usize),
-    // indexing
-    Slice(Box<BoxedExpr>, u32, u32, usize, usize),
+pub struct Evaluator<'a> {
+    tr: &'a Transaction,
+    next_stmt_mapping: FxHashMap<StmtId, Option<StmtId>>,
+    st: &'a SymbolTable,
+    handler: &'a mut DiagnosticHandler,
+    sim: &'a mut Interpreter<'a>,
+    // can change to be secondarymaps
+    args_mapping: HashMap<SymbolId, BitVecValue>, // FIXME: change to bitvecval
+
+    // combine into port map?
+    input_mapping: HashMap<SymbolId, ExprRef>,
+    output_mapping: HashMap<SymbolId, Output>,
 }
 
-impl BoxedExpr {
-    // starting character of the expression
-    pub fn start(&self) -> usize {
-        match self {
-            BoxedExpr::Const(_, start, _) => *start,
-            BoxedExpr::Sym(_, start, _) => *start,
-            BoxedExpr::DontCare(start, _) => *start,
-            BoxedExpr::Binary(_, _, _, start, _) => *start,
-            BoxedExpr::Unary(_, _, start, _) => *start,
-            BoxedExpr::Slice(_, _, _, start, _) => *start,
-        }
-    }
-
-    // ending character of the expression
-    pub fn end(&self) -> usize {
-        match self {
-            BoxedExpr::Const(_, _, end) => *end,
-            BoxedExpr::Sym(_, _, end) => *end,
-            BoxedExpr::DontCare(_, end) => *end,
-            BoxedExpr::Binary(_, _, _, _, end) => *end,
-            BoxedExpr::Unary(_, _, _, end) => *end,
-            BoxedExpr::Slice(_, _, _, _, end) => *end,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct StructId(u32);
-entity_impl!(StructId, "struct");
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Struct {
-    name: String,
-    pins: Vec<Field>,
-}
-
-impl Struct {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn pins(&self) -> &Vec<Field> {
-        &self.pins
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Field {
-    name: String,
-    dir: Dir,
-    tpe: Type,
-}
-
-impl Field {
-    pub fn new(name: String, dir: Dir, tpe: Type) -> Self {
-        Self { name, dir, tpe }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn dir(&self) -> Dir {
-        self.dir
-    }
-
-    pub fn tpe(&self) -> Type {
-        self.tpe.clone()
-    }
-}
-
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct SymbolId(u32);
-entity_impl!(SymbolId, "symbol");
-
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub struct SymbolTable {
-    entries: PrimaryMap<SymbolId, SymbolTableEntry>,
-    by_name_sym: FxHashMap<String, SymbolId>,
-    structs: PrimaryMap<StructId, Struct>,
-    by_name_struct: FxHashMap<String, StructId>,
-}
-
-impl SymbolTable {
-    pub fn add_without_parent(&mut self, name: String, tpe: Type) -> SymbolId {
-        assert!(
-            !name.contains('.'),
-            "hierarchical names need to be handled externally"
-        );
-        let entry = SymbolTableEntry {
-            name,
-            tpe,
-            parent: None,
-            next: None,
-        };
-        let lookup_name = entry.full_name(self);
-
-        assert!(
-            !self.by_name_sym.contains_key(&lookup_name),
-            "we already have an entry for {lookup_name}!",
-        );
-
-        let id = self.entries.push(entry);
-        self.by_name_sym.insert(lookup_name, id);
-        id
-    }
-
-    pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
-        self.by_name_sym.get(name).copied()
-    }
-
-    pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
-        assert!(
-            !name.contains('.'),
-            "hierarchical names need to be handled externally"
-        );
-
-        let existing_pin: Option<&Field>;
-
-        if let Type::Struct(structid) = self.entries[parent].tpe() {
-            let fields = self.structs[structid].pins();
-            existing_pin = fields.iter().find(|field| field.name == name);
-        } else {
-            existing_pin = None;
-        }
-
-        let pin_type = match existing_pin {
-            Some(pin) => pin.tpe(),
-            None => Type::Unknown,
-        };
-
-        let entry = SymbolTableEntry {
-            name,
-            tpe: pin_type,
-            parent: Some(parent),
-            next: None,
-        };
-        let lookup_name = entry.full_name(self);
-
-        assert!(
-            !self.by_name_sym.contains_key(&lookup_name),
-            "we already have an entry for {lookup_name}!",
-        );
-
-        let id = self.entries.push(entry);
-        self.by_name_sym.insert(lookup_name, id);
-        id
-    }
-
-    pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
-        let s = Struct {
-            name: name.to_string(),
-            pins,
-        };
-        let id = self.structs.push(s);
-
-        self.by_name_struct.insert(name, id);
-        id
-    }
-
-    pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
-        self.by_name_struct.get(name).copied()
-    }
-
-    pub fn struct_ids(&self) -> Vec<StructId> {
-        self.structs.keys().collect()
-    }
-
-    pub fn get_children(&self, parent_name: &SymbolId) -> Vec<SymbolId> {
-        let mut children = vec![];
-        for (id, entry) in self.entries.iter() {
-            if entry.parent() == Some(*parent_name) {
-                children.push(id);
+impl<'a> Evaluator<'a> {
+    pub fn new(
+        args: HashMap<&str, BitVecValue>,
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        handler: &'a mut DiagnosticHandler,
+        ctx: &'a patronus::expr::Context,
+        sys: &'a patronus::system::TransitionSystem,
+        sim: &'a mut Interpreter<'a>,
+    ) -> Self {
+        // create mapping from each symbolId to corresponding BitVecValue based on input mapping
+        let mut args_mapping = HashMap::new();
+        for (name, value) in &args {
+            if let Some(symbol_id) = st.symbol_id_from_name(name) {
+                args_mapping.insert(symbol_id, (*value).clone());
+            } else {
+                panic!("Argument {} not found in DUT symbols.", name);
             }
         }
-        children
-    }
-}
 
-impl Index<&str> for SymbolTable {
-    type Output = SymbolTableEntry;
+        // create mapping for each of the DUT's children symbols to the input and output mappings
+        let dut = tr.type_args[0];
+        let dut_symbols = &st.get_children(&dut);
 
-    fn index(&self, index: &str) -> &Self::Output {
-        let index = self.by_name_sym[index];
-        &self.entries[index]
-    }
-}
+        let mut input_mapping = HashMap::new();
+        let mut output_mapping = HashMap::new();
 
-impl Index<SymbolId> for SymbolTable {
-    type Output = SymbolTableEntry;
+        for symbol_id in dut_symbols {
+            let symbol_name = st[symbol_id].name();
 
-    fn index(&self, index: SymbolId) -> &Self::Output {
-        &self.entries[index]
-    }
-}
+            if let Some(input_ref) = sys
+                .inputs
+                .iter()
+                .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
+            {
+                input_mapping.insert(*symbol_id, *input_ref);
+            }
 
-impl Index<&SymbolId> for SymbolTable {
-    type Output = SymbolTableEntry;
-
-    fn index(&self, index: &SymbolId) -> &Self::Output {
-        &self.entries[*index]
-    }
-}
-
-impl Index<StructId> for SymbolTable {
-    type Output = Struct;
-
-    fn index(&self, index: StructId) -> &Self::Output {
-        &self.structs[index]
-    }
-}
-
-impl Index<&StructId> for SymbolTable {
-    type Output = Struct;
-
-    fn index(&self, index: &StructId) -> &Self::Output {
-        &self.structs[*index]
-    }
-}
-
-impl Index<Arg> for SymbolTable {
-    type Output = SymbolTableEntry;
-
-    fn index(&self, index: Arg) -> &Self::Output {
-        &self.entries[index.symbol]
-    }
-}
-
-impl Index<&Arg> for SymbolTable {
-    type Output = SymbolTableEntry;
-
-    fn index(&self, index: &Arg) -> &Self::Output {
-        &self.entries[index.symbol]
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SymbolTableEntry {
-    name: String,
-    tpe: Type,
-    parent: Option<SymbolId>,
-    next: Option<SymbolId>,
-}
-
-impl SymbolTableEntry {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn tpe(&self) -> Type {
-        self.tpe.clone()
-    }
-
-    pub fn parent(&self) -> Option<SymbolId> {
-        self.parent
-    }
-
-    /// full hierarchical name
-    pub fn full_name(&self, symbols: &SymbolTable) -> String {
-        let mut name = self.name.clone();
-        let mut parent = self.parent;
-        while let Some(p) = parent {
-            let parent_entry = &symbols[p];
-            name = format!("{}.{name}", parent_entry.name);
-            parent = parent_entry.parent;
+            if let Some(output_ref) = sys
+                .outputs
+                .iter()
+                .find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name)
+            {
+                output_mapping.insert(*symbol_id, *output_ref);
+            }
         }
-        name
+
+        // TODO: check that the Transaction DUT matches the Btor2 DUT
+        // TODO: check that every item in the args mapping is a field in the Transaction
+
+        // Initialize sim, return the transaction!
+        sim.init();
+
+        let evaluator = Evaluator {
+            tr,
+            next_stmt_mapping: tr.next_stmt_mapping(),
+            st,
+            handler,
+            sim: sim,
+            args_mapping,
+            input_mapping,
+            output_mapping,
+        };
+        return evaluator;
     }
+
+    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
+        // create mapping from each symbolId to corresponding BitVecValue based on input mapping
+        let mut args_mapping = HashMap::new();
+        for (name, value) in &args {
+            if let Some(symbol_id) = self.st.symbol_id_from_name(name) {
+                args_mapping.insert(symbol_id, (*value).clone());
+            } else {
+                panic!("Argument {} not found in DUT symbols.", name);
+            }
+        }
+
+        self.args_mapping = args_mapping;
+    }
+
+    pub fn create_sim_context(
+        verilog_path: &str,
+    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
+        // Verilog --> Btor via Yosys
+        let env = YosysEnv::default();
+        let inp = PathBuf::from(verilog_path);
+        let mut proj = ProjectConf::with_source(inp);
+        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+
+        // instantiate sim from btor file
+        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
+            Some(result) => result,
+            None => {
+                panic!("Failed to parse btor file.");
+            }
+        };
+        (ctx, sys)
+    }
+
+    pub fn evaluate_until_step(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+        let mut current_stmt = Some(*stmt_id);
+        while let Some(stmt_id) = current_stmt {
+            match &self.tr[&stmt_id] {
+                Stmt::Step(_) => return Ok(Some(stmt_id)),
+                _ => current_stmt = self.evaluate_stmt(&stmt_id)?,
+            }
+        }
+        Ok(None)
+    }
+
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
+        let expr = &self.tr[expr_id];
+        match expr {
+            Expr::Const(bit_vec) => Ok(bit_vec.clone()),
+            Expr::Sym(sym_id) => {
+                let name = self.st[sym_id].name();
+                if let Some(expr_ref) = self.input_mapping.get(sym_id) {
+                    Ok(self.sim.get(*expr_ref).unwrap())
+                } else if let Some(output) = self.output_mapping.get(sym_id) {
+                    Ok(self.sim.get((*output).expr).unwrap())
+                } else if let Some(bvv) = self.args_mapping.get(sym_id) {
+                    Ok(bvv.clone())
+                } else {
+                    self.handler.emit_diagnostic_expr(
+                        self.tr,
+                        expr_id,
+                        "Symbol not found in input or output mapping.",
+                        Level::Error,
+                    );
+                    Err(format!(
+                        "Symbol {} not found in input or output mapping.",
+                        name
+                    ))
+                }
+            }
+            Expr::DontCare => Ok(BitVecValue::new_false()),
+            Expr::Binary(bin_op, lhs_id, rhs_id) => {
+                let lhs_val = self.evaluate_expr(&lhs_id)?;
+                let rhs_val = self.evaluate_expr(&rhs_id)?;
+                match bin_op {
+                    BinOp::Equal => Ok(if lhs_val.is_equal(&rhs_val) {
+                        BitVecValue::new_true()
+                    } else {
+                        BitVecValue::new_false()
+                    }),
+                    BinOp::And => Ok(lhs_val.and(&rhs_val)),
+                }
+            }
+            Expr::Unary(unary_op, expr_id) => {
+                let expr_val = self.evaluate_expr(&expr_id)?;
+                match unary_op {
+                    UnaryOp::Not => Ok(expr_val.not()),
+                }
+            }
+            Expr::Slice(expr_id, idx1, idx2) => {
+                let expr_val = self.evaluate_expr(&expr_id)?;
+                Ok(expr_val.slice(*idx1, *idx2))
+            }
+        }
+    }
+
+    fn evaluate_transaction(&mut self) -> Result<(), String> {
+        let body_id: StmtId = self.tr.body;
+        let next_stmt = self.evaluate_stmt(&body_id)?;
+        let mut current_stmt = next_stmt;
+        while let Some(stmt_id) = current_stmt {
+            current_stmt = self.evaluate_stmt(&stmt_id)?;
+        }
+        return Ok(());
+    }
+
+    fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+        match &self.tr[stmt_id] {
+            Stmt::Assign(symbol_id, expr_id) => {
+                // println!("Eval Assign.");
+                self.evaluate_assign(&symbol_id, &expr_id)?;
+                Ok(self.next_stmt_mapping[stmt_id])
+            }
+            Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
+                // println!("Eval IFElse.");
+                self.evaluate_if(&cond_expr_id, &then_stmt_id, &else_stmt_id)
+            }
+            Stmt::While(loop_guard_id, do_block_id) => {
+                // println!("Eval While.");
+                self.evaluate_while(&loop_guard_id, &do_block_id)
+            }
+            Stmt::Step(expr) => {
+                // println!("Eval Step.");
+                self.evaluate_step(&expr)?;
+                Ok(self.next_stmt_mapping[stmt_id])
+            }
+            Stmt::Fork => {
+                // println!("Eval Fork.");
+                // TODO: Implement evaluate_fork
+                return Ok(self.next_stmt_mapping[stmt_id]);
+                // return Err("Fork not implemented.".to_string());
+            }
+            Stmt::AssertEq(expr1, expr2) => {
+                // println!("Eval AssertEq.");
+                self.evaluate_assert_eq(&expr1, &expr2)?;
+                Ok(self.next_stmt_mapping[stmt_id])
+            }
+            Stmt::Block(stmt_ids) => {
+                // println!("Eval Block.");
+                if stmt_ids.is_empty() {
+                    return Ok(None);
+                } else {
+                    return Ok(Some(stmt_ids[0]));
+                }
+            }
+        }
+    }
+
+    fn evaluate_if(
+        &mut self,
+        cond_expr_id: &ExprId,
+        then_stmt_id: &StmtId,
+        else_stmt_id: &StmtId,
+    ) -> Result<Option<StmtId>, String> {
+        let res = self.evaluate_expr(cond_expr_id)?;
+        if res.is_zero() {
+            Ok(Some(*else_stmt_id))
+        } else {
+            Ok(Some(*then_stmt_id))
+        }
+    }
+
+    fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) -> Result<(), String> {
+        let expr_val = self.evaluate_expr(expr_id)?;
+        let name = self.st[symbol_id].full_name(self.st);
+        if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
+            self.sim.set(*expr_ref, &expr_val);
+            Ok(())
+        }
+        // below statements should be unreachable (assuming type checking works)
+        else if let Some(_) = self.output_mapping.get(symbol_id) {
+            // Err(format!("Attempting to assign to output {}.", name))
+            unreachable!("Attempting to assign to output {}.", name)
+        } else if let Some(_) = self.args_mapping.get(symbol_id) {
+            // Err(format!("Attempting to assign to argument {}.", name))
+            unreachable!("Attempting to assign to argument {}.", name)
+        } else {
+            // Err(format!("Assigning to symbol {} not yet defined.", name))
+            unreachable!("Assigning to symbol {} not yet defined.", name)
+        }
+    }
+
+    fn evaluate_while(
+        &mut self,
+        loop_guard_id: &ExprId,
+        do_block_id: &StmtId,
+    ) -> Result<Option<StmtId>, String> {
+        let mut res = self.evaluate_expr(loop_guard_id)?;
+        if res.is_true() {
+            return Ok(Some(*do_block_id));
+        } else {
+            Ok(self.next_stmt_mapping[do_block_id])
+        }
+    }
+
+    fn evaluate_step(&mut self, expr: &ExprId) -> Result<(), String> {
+        let res = self.evaluate_expr(expr)?;
+        let val = res.to_u64().unwrap();
+        for _ in 0..val {
+            self.sim.step();
+        }
+        Ok(())
+    }
+
+    fn evaluate_fork(&self) -> Result<(), String> {
+        // TODO: Implement evaluate_fork
+        Ok(())
+    }
+
+    fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
+        let res1 = self.evaluate_expr(expr1)?;
+        let res2 = self.evaluate_expr(expr2)?;
+        // println!("{:?}, {:?}", res1, res2);
+        if res1.is_not_equal(&res2) {
+            self.handler
+                .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
+            Err("Assertion Failed".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn evaluate_block(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+        match &self.tr[stmt_id] {
+            Stmt::Block(stmt_ids) => {
+                if stmt_ids.is_empty() {
+                    return Ok(self.next_stmt_mapping[stmt_id]);
+                } else {
+                    return Ok(Some(stmt_ids[0]));
+                }
+            }
+            _ => unreachable!("Expected a block statement as input to evaluate_block."),
+        }
+    }
+}
+
+pub fn interpret(
+    verilog_path: &str,
+    args: HashMap<&str, BitVecValue>,
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+) -> Result<(), String> {
+    // Verilog --> Btor via Yosys
+    let env = YosysEnv::default();
+    let inp = PathBuf::from(verilog_path);
+    let mut proj = ProjectConf::with_source(inp);
+    let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+
+    // instantiate sim from btor file
+    let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
+        Some(result) => result,
+        None => {
+            let msg = "Failed to parse Verilog file to Btor2.".to_string();
+            handler.emit_general_message(&msg, Level::Error);
+            return Err(msg);
+        }
+    };
+    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
+
+    // create evaluator
+    let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+    evaluator.evaluate_transaction()
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::diagnostic::DiagnosticHandler;
-    use crate::parser::parse_file;
-    use crate::serialize::build_statements;
-
+pub mod tests {
     use super::*;
+    use crate::parser::parse_file;
+    use core::panic;
 
-    #[test]
-    fn create_add_transaction() {
-        // Manually create the expected result of parsing `add.prot`.
-        // Note that the order in which things are created will be different in the parser.
-
-        // 1) declare symbols
-        let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
-        assert_eq!(symbols["s"], symbols[s]);
-
-        // declare Adder struct
-        let add_struct = symbols.add_struct(
-            "Adder".to_string(),
-            vec![
-                Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
-            ],
-        );
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(add_struct));
-        let dut_a = symbols.add_with_parent("a".to_string(), dut);
-        let dut_b = symbols.add_with_parent("b".to_string(), dut);
-        let dut_s = symbols.add_with_parent("s".to_string(), dut);
-        assert_eq!(symbols["dut.s"], symbols[dut_s]);
-        assert_eq!(symbols["s"], symbols[s]);
-
-        // 2) create transaction
-        let mut add = Transaction::new("add".to_string());
-        add.args = vec![
-            Arg::new(a, Dir::In),
-            Arg::new(b, Dir::In),
-            Arg::new(s, Dir::Out),
-        ];
-
-        // 3) create expressions
-        let a_expr = add.e(Expr::Sym(a));
-        let b_expr = add.e(Expr::Sym(b));
-        let one_expr = add.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let dut_s_expr = add.e(Expr::Sym(dut_s));
-
-        // 4) create statements
-        let body = vec![
-            add.s(Stmt::Assign(dut_a, a_expr)),
-            add.s(Stmt::Assign(dut_b, b_expr)),
-            add.s(Stmt::Step(one_expr)),
-            add.s(Stmt::Fork),
-            add.s(Stmt::Assign(dut_a, add.expr_dont_care())),
-            add.s(Stmt::Assign(dut_b, add.expr_dont_care())),
-            add.s(Stmt::Assign(s, dut_s_expr)),
-        ];
-        add.body = add.s(Stmt::Block(body));
-    }
-
-    #[test]
-    fn serialize_calyx_go_done_transaction() {
-        // Manually create the expected result of parsing `calyx_go_done`.
-        // Note that the order in which things are created will be different in the parser.
-
-        // 1) declare symbols
-        let mut symbols = SymbolTable::default();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // declare DUT struct
-        let dut_struct = symbols.add_struct(
-            "Calyx".to_string(),
-            vec![
-                Field::new("ii".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("go".to_string(), Dir::In, Type::BitVec(32)),
-                Field::new("done".to_string(), Dir::Out, Type::BitVec(32)),
-                Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
-            ],
-        );
-
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
-        let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
-        let dut_go = symbols.add_with_parent("go".to_string(), dut);
-        let dut_done = symbols.add_with_parent("done".to_string(), dut);
-        let dut_oo = symbols.add_with_parent("oo".to_string(), dut);
-        assert_eq!(symbols["dut.oo"], symbols[dut_oo]);
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // 2) create transaction
-        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
-        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
-        calyx_go_done.type_args = vec![dut];
-
-        // 3) create expressions
-        let ii_expr = calyx_go_done.e(Expr::Sym(ii));
-        let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
-        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
-        let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
-        let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
-        let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
-
-        // 4) create statements
-        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let while_body = vec![calyx_go_done.s(Stmt::Step(one_expr))];
-        let wbody = calyx_go_done.s(Stmt::Block(while_body));
-
-        let body = vec![
-            calyx_go_done.s(Stmt::Assign(dut_ii, ii_expr)),
-            calyx_go_done.s(Stmt::Assign(dut_go, one_expr)),
-            calyx_go_done.s(Stmt::While(not_expr, wbody)),
-            calyx_go_done.s(Stmt::Assign(dut_done, one_expr)),
-            calyx_go_done.s(Stmt::Assign(dut_go, zero_expr)),
-            calyx_go_done.s(Stmt::Assign(dut_ii, calyx_go_done.expr_dont_care())),
-            calyx_go_done.s(Stmt::Assign(oo, dut_oo_expr)),
-        ];
-
-        calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
-    }
-
-    #[test]
-    fn test_next_stmt_mapping() {
-        // passed when I examined output by eye.
-        let mut handler = DiagnosticHandler::new();
-        let result = parse_file("tests/calyx_go_done_struct.prot", &mut handler);
-        let (st, tr) = &result.unwrap()[0];
-        let map = tr.next_stmt_mapping();
-
-        // visualize the mapping
-        for (stmt_id, next_stmt_id) in map.iter() {
-            match next_stmt_id {
-                Some(next_id) => {
-                    let mut serialized_stmt = Vec::new();
-                    build_statements(&mut serialized_stmt, tr, st, stmt_id, 0).unwrap();
-                    let stmt_str = String::from_utf8(serialized_stmt).unwrap();
-
-                    let mut serialized_next_stmt = Vec::new();
-                    build_statements(&mut serialized_next_stmt, tr, st, next_id, 0).unwrap();
-                    let next_stmt_str = String::from_utf8(serialized_next_stmt).unwrap();
-                    println!("{} -> {}", stmt_str, next_stmt_str);
-                }
-                None => {
-                    let mut serialized_stmt = Vec::new();
-                    build_statements(&mut serialized_stmt, tr, st, stmt_id, 0).unwrap();
-                    let stmt_str = String::from_utf8(serialized_stmt).unwrap();
-                    println!("{} -> END\n", stmt_str);
-                }
-            }
+    fn parsing_helper(
+        transaction_filename: &str,
+        handler: &mut DiagnosticHandler,
+    ) -> Vec<(SymbolTable, Transaction)> {
+        let result = parse_file(transaction_filename, handler);
+        match result {
+            Ok(success_vec) => success_vec,
+            Err(_) => panic!("Failed to parse file: {}", transaction_filename),
         }
+    }
+
+    #[test]
+    fn test_add_execution() {
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/add_struct.prot";
+        let verilog_path = "examples/adders/add_d1.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+
+        // only one transaction in this file
+        let (st, tr) = &trs[0];
+
+        // set up the args for the Transaction
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(6, 32));
+        args.insert("b", BitVecValue::from_u64(8, 32));
+        args.insert("s", BitVecValue::from_u64(14, 32));
+
+        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        // let mut evaluator2 = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        let res = evaluator.evaluate_transaction();
+
+        if let Err(err) = res.clone() {
+            println!("Error: {}", err);
+        }
+        assert!(res.is_ok());
+        // TODO: Snapshots?
+    }
+
+    #[test]
+    #[ignore]
+    fn test_mult_execution() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/mul.prot";
+
+        // TODO: Add the btor path
+        let btor_path = "examples/adders/add_d1.btor";
+        let trs = parsing_helper(transaction_filename, handler);
+        let (st, tr) = &trs[0];
+
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(6, 32));
+        args.insert("b", BitVecValue::from_u64(8, 32));
+        args.insert("s", BitVecValue::from_u64(48, 32));
+
+        let res = interpret(btor_path, args, tr, st, handler);
+        assert!(res.is_ok());
     }
 }
