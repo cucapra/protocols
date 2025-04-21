@@ -5,10 +5,12 @@ module multiplier_d1 (
     output reg  [31:0] s     
 );
     wire [31:0] res;
+    reg  [31:0] s0;
 
     assign res = a * b;
 
     always @(posedge clk) begin
-        s <= res;
+        s0 <= res;
+        s <= s0;
     end
 endmodule
