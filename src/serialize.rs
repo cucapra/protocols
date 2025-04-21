@@ -61,7 +61,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
     }
 }
 
-fn build_statements(
+pub fn build_statements(
     out: &mut impl Write,
     tr: &Transaction,
     st: &SymbolTable,
