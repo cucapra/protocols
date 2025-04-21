@@ -365,7 +365,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_add_execution() {
+    fn test_add_ok() {
         let handler = &mut DiagnosticHandler::new();
 
         // test_helper("tests/add_struct.prot", "add_struct");
@@ -393,6 +393,35 @@ pub mod tests {
             println!("Error: {}", err);
         }
         assert!(res.is_ok());
+        // TODO: Snapshots?
+    }
+
+    #[test]
+    fn test_add_err() {
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/add_struct.prot";
+        let verilog_path = "examples/adders/add_d1.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+
+        // only one transaction in this file
+        let (st, tr) = &trs[0];
+
+        // set up the args for the Transaction
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(6, 32));
+        args.insert("b", BitVecValue::from_u64(8, 32));
+        args.insert("s", BitVecValue::from_u64(13, 32));
+
+        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        // let mut evaluator2 = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        let res = evaluator.evaluate_transaction();
+
+        assert!(res.is_err());
         // TODO: Snapshots?
     }
 
