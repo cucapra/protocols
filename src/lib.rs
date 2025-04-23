@@ -12,3 +12,4 @@ pub mod parser;
 pub mod serialize;
 pub mod typecheck;
 mod yosys;
+pub mod scheduler;
