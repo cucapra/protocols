@@ -105,18 +105,9 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-
-    pub fn context_switch(
-        &mut self,
-        tr: &'a Transaction,
-        st: &'a SymbolTable,
-        args: HashMap<&str, BitVecValue>,
-    ) {
+    pub fn context_switch(&mut self, tr: &'a Transaction, st: &'a SymbolTable, args: HashMap<&str, BitVecValue>) {
         self.tr = tr;
         self.st = st;
-
-        // TODO: this is inefficient because the map is generated every time there is a context switch
-        self.next_stmt_mapping = tr.next_stmt_mapping();
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
