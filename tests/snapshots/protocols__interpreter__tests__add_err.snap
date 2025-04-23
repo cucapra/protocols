@@ -1,0 +1,18 @@
+---
+source: src/interpreter.rs
+expression: content
+snapshot_kind: text
+---
+Assertion Failed
+
+warning: Inferring step value to be 1.
+   ┌─ tests/add_struct.prot:11:3
+   │
+11 │   step();
+   │   ^^^^^^^ Inferring step value to be 1.
+
+error: The two expressions did not evaluate to the same value
+   ┌─ tests/add_struct.prot:17:13
+   │
+17 │   assert_eq(s, DUT.s);
+   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000001101), RHS Value: ValueOwned(00000000000000000000000000001110)
