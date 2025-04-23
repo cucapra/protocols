@@ -294,7 +294,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
-        // println!("{:?}, {:?}", res1, res2);
+        println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
             self.handler
                 .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
@@ -442,6 +442,33 @@ pub mod tests {
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
         args.insert("s", BitVecValue::from_u64(48, 32));
+
+        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        let res = evaluator.evaluate_transaction();
+
+        if let Err(err) = res.clone() {
+            println!("Error: {}", err);
+        }
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_simple_if_execution() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/simple_if.prot";
+
+        // TODO: Add the btor path
+        let verilog_path = "examples/counter/counter.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs = parsing_helper(transaction_filename, handler);
+        let (st, tr) = &trs[0];
+
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(32, 64));
+        args.insert("s", BitVecValue::from_u64(7, 64));
 
         let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
         let res = evaluator.evaluate_transaction();

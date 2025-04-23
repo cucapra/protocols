@@ -16,7 +16,7 @@ fn check_expr_types(
     expr_id: &ExprId,
 ) -> Result<Type, String> {
     match &tr[expr_id] {
-        Expr::Const(_) => Ok(Type::BitVec(1)),
+        Expr::Const(_) => Ok(Type::BitVec(32)), // TODO: need to determine how to check type size
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
         // FIXME: is this the correct typechecking logic?
@@ -294,6 +294,11 @@ mod tests {
     #[test]
     fn test_calyx_go_done_transaction() {
         test_helper("calyx_go_done_struct", "tests/calyx_go_done_struct.prot");
+    }
+
+    #[test]
+    fn test_simple_if_transaction() {
+        test_helper("simple_if", "tests/simple_if.prot");
     }
 
     // Specific Tests
