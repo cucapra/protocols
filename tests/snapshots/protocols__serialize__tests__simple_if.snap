@@ -8,7 +8,7 @@ struct Counter {
   out s: u64,
 }
 
-fn simple_if<dut: Counter>(in a: u64, in b: u64, in c: u64, out s: u64) {
+fn simple_if<dut: Counter>(in a: u64, out s: u64) {
   dut.a := a;
   step(2);
   if dut.s == 3 {

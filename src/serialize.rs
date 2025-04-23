@@ -320,6 +320,11 @@ pub mod tests {
     }
 
     #[test]
+    fn test_simple_while_transaction() {
+        test_helper("tests/simple_while.prot", "simple_while");
+    }
+
+    #[test]
     fn serialize_easycond_transaction() {
         // Manually create the expected result of parsing `easycond.prot`.
         // Note that the order in which things are created will be different in the parser.

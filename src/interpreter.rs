@@ -273,6 +273,7 @@ impl<'a> Evaluator<'a> {
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
+            println!("{:#?}", do_block_id); // FAILING HERE
             Ok(self.next_stmt_mapping[do_block_id])
         }
     }
@@ -469,6 +470,34 @@ pub mod tests {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(32, 64));
         args.insert("s", BitVecValue::from_u64(7, 64));
+
+        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        let res = evaluator.evaluate_transaction();
+
+        if let Err(err) = res.clone() {
+            println!("Error: {}", err);
+        }
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_simple_while_execution() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/simple_while.prot";
+
+        // TODO: Add the btor path
+        let verilog_path = "examples/counter/counter.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs = parsing_helper(transaction_filename, handler);
+        let (st, tr) = &trs[0];
+
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(32, 64));
+        args.insert("b", BitVecValue::from_u64(15, 64));
+        args.insert("s", BitVecValue::from_u64(17, 64));
 
         let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
         let res = evaluator.evaluate_transaction();
