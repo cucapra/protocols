@@ -294,7 +294,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
-        println!("{:?}, {:?}", res1, res2);
+        // println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
             self.handler
                 .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
@@ -431,7 +431,7 @@ pub mod tests {
         let transaction_filename = "tests/mult_new.prot";
 
         // TODO: Add the btor path
-        let verilog_path = "examples/multipliers/mult_d1.v";
+        let verilog_path = "examples/multipliers/mult_d2.v";
         let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
