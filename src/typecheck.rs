@@ -277,7 +277,12 @@ mod tests {
     }
 
     #[test]
-    fn typecheck_mul_transaction() {
+    fn typecheck_mul_invalid_transaction() {
+        test_helper("mul_invalid", "tests/mul_invalid.prot");
+    }
+
+    #[test]
+    fn test_mul_prot() {
         test_helper("mul", "tests/mul.prot");
     }
 

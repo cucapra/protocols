@@ -274,6 +274,11 @@ pub mod tests {
     }
 
     #[test]
+    fn test_mul_invalid_prot() {
+        test_helper("tests/mul_invalid.prot", "mul_invalid");
+    }
+
+    #[test]
     fn test_mul_prot() {
         test_helper("tests/mul.prot", "mul");
     }
