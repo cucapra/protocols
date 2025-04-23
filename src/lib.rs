@@ -13,4 +13,3 @@ pub mod scheduler;
 pub mod serialize;
 pub mod typecheck;
 mod yosys;
-pub mod scheduler;
