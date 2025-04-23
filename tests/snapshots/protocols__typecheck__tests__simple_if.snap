@@ -1,0 +1,10 @@
+---
+source: src/typecheck.rs
+expression: content
+snapshot_kind: text
+---
+warning: Inferring step value to be 1.
+   ┌─ tests/simple_if.prot:12:5
+   │
+12 │     step();
+   │     ^^^^^^^ Inferring step value to be 1.

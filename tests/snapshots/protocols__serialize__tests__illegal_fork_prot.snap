@@ -1,7 +1,14 @@
 ---
 source: src/serialize.rs
 expression: content
+snapshot_kind: text
 ---
+warning: Inferring step value to be 1.
+   ┌─ tests/illegal_fork.prot:11:3
+   │
+11 │   step();
+   │   ^^^^^^^ Inferring step value to be 1.
+
 error: Fork command should have no arguments.
    ┌─ tests/illegal_fork.prot:12:3
    │

@@ -1,7 +1,14 @@
 ---
 source: src/typecheck.rs
 expression: content
+snapshot_kind: text
 ---
+warning: Inferring step value to be 1.
+   ┌─ tests/aes128.prot:12:3
+   │
+12 │   step();
+   │   ^^^^^^^ Inferring step value to be 1.
+
 warning: Inferred RHS type as BitVec(128) from LHS type BitVec(128).
    ┌─ tests/aes128.prot:14:3
    │

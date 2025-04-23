@@ -240,6 +240,7 @@ pub mod tests {
             Ok(trs) => serialize_to_string(trs).unwrap(),
             Err(_) => strip_str(handler.error_string()),
         };
+        println!("{}", content);
         snap(snap_name, content);
     }
 

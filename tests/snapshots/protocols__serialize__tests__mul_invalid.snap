@@ -1,0 +1,22 @@
+---
+source: src/serialize.rs
+expression: content
+snapshot_kind: text
+---
+struct Multiplier {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
+  dut.a := a;
+  dut.b := b;
+  step(1);
+  step(1);
+  fork();
+  dut.a := X;
+  dut.b := X;
+  step(1);
+  s := dut.s;
+}
