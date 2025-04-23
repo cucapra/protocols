@@ -271,6 +271,22 @@ impl DiagnosticHandler {
             print!("{}", error_msg);
         }
     }
+
+    pub fn emit_general_message(&mut self, message: &str, level: Level) {
+        let buffer = &mut Buffer::ansi();
+        let diagnostic = Diagnostic {
+            title: format!("{:?}", level),
+            message: message.to_string(),
+            level,
+            location: None,
+        };
+
+        diagnostic.emit(buffer, &self.files);
+
+        let error_msg = String::from_utf8_lossy(buffer.as_slice());
+        self.error_string.push_str(&error_msg);
+        print!("{}", error_msg);
+    }
 }
 
 #[cfg(test)]

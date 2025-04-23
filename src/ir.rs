@@ -80,6 +80,53 @@ impl Transaction {
     pub fn get_stmt_loc(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
         self.stmt_loc.get(stmt_id).copied()
     }
+
+    pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {
+        self.next_stmt_mapping_helper(self.body, None)
+    }
+
+    fn next_stmt_mapping_helper(
+        &self,
+        block_id: StmtId,
+        stmt_after_block: Option<StmtId>,
+    ) -> FxHashMap<StmtId, Option<StmtId>> {
+        // Precondition: input StmtId refers to the a Stmt::Block variant
+        let mut map = FxHashMap::default();
+
+        if let Stmt::Block(stmts) = &self.stmts[block_id] {
+            for (i, &stmt_id) in stmts.iter().enumerate() {
+                let mut new_stmt_after_block = stmt_after_block;
+                if i == stmts.len() - 1 {
+                    // check if we're at the end of the block
+                    map.insert(stmt_id, stmt_after_block);
+                } else {
+                    // println!("mapping {} -> {}", stmt_id, stmts[i + 1]);
+                    map.insert(stmt_id, Some(stmts[i + 1]));
+                    new_stmt_after_block = Some(stmts[i + 1]);
+                }
+
+                match &self.stmts[stmt_id] {
+                    Stmt::Block(_) => {
+                        map.extend(self.next_stmt_mapping_helper(stmt_id, new_stmt_after_block));
+                    }
+                    Stmt::IfElse(_, then_stmt_id, else_stmt_id) => {
+                        map.extend(
+                            self.next_stmt_mapping_helper(*then_stmt_id, new_stmt_after_block),
+                        );
+                        map.extend(
+                            self.next_stmt_mapping_helper(*else_stmt_id, new_stmt_after_block),
+                        );
+                    }
+                    Stmt::While(_, body_id) => {
+                        map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        map
+    }
 }
 
 impl Index<ExprId> for Transaction {
