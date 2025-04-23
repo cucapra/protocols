@@ -126,6 +126,12 @@ impl<'a> Scheduler<'a> {
                     match next_stmt_option {
                         Some(next_stmt_id) => {
                             match thread.tr[next_stmt_id] {
+                                // if a step, stop execution
+                                Stmt::Step(_) => {
+                                    return Some(next_stmt_id);
+                                }
+
+                                // if a fork, fork and continue execution
                                 Stmt::Fork => {
                                     // Forking creates a new thread, so we need to add it to the next threads
                                     if (self.fork_idx >= self.transactions.len()){
@@ -142,9 +148,11 @@ impl<'a> Scheduler<'a> {
                                             thread.args,
                                         );
                                         self.next_threads.push(next_thread);
+                                        current_step = Some(next_stmt_id); // this thread keeps running 
                                     }
                                 }
-                                Stmt::Step(_) => return Some(next_stmt_id),
+
+                                // if anything else, continue execution
                                 _ => current_step = Some(next_stmt_id),
                             }
                         }
