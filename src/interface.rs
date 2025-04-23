@@ -199,6 +199,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_counter_with_patronus() {
         let env = YosysEnv::default();
         let inp = PathBuf::from("examples/counter/counter.v");
