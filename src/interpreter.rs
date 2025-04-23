@@ -201,7 +201,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::While(loop_guard_id, do_block_id) => {
                 // println!("Eval While.");
-                self.evaluate_while(&loop_guard_id, &do_block_id)
+                self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
             Stmt::Step(expr) => {
                 // println!("Eval Step.");
@@ -267,6 +267,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_while(
         &mut self,
         loop_guard_id: &ExprId,
+        while_id: &StmtId,
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
         let mut res = self.evaluate_expr(loop_guard_id)?;
@@ -274,7 +275,7 @@ impl<'a> Evaluator<'a> {
             return Ok(Some(*do_block_id));
         } else {
             println!("{:#?}", do_block_id); // FAILING HERE
-            Ok(self.next_stmt_mapping[do_block_id])
+            Ok(self.next_stmt_mapping[while_id])
         }
     }
 
