@@ -104,7 +104,9 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
+    pub fn context_switch(&mut self, tr: &'a Transaction, st: &'a SymbolTable, args: HashMap<&str, BitVecValue>) {
+        self.tr = tr;
+        self.st = st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
@@ -188,7 +190,7 @@ impl<'a> Evaluator<'a> {
         return Ok(());
     }
 
-    fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
