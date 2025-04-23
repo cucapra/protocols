@@ -40,7 +40,7 @@ impl<'a> Thread<'a> {
 
 pub struct Scheduler<'a> {
     transactions: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
-    fork_idx : usize,
+    fork_idx: usize,
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
     inactive_threads: Vec<Thread<'a>>,
@@ -61,13 +61,21 @@ impl<'a> Scheduler<'a> {
         // Initialize sim
         // let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         // let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-        if (transactions.len() == 0){
+        if (transactions.len() == 0) {
             panic!("No transactions found in the system");
         }
         let (initial_tr, initial_st) = transactions[0];
 
         // Initialize evaluator with first transaction
-        let evaluator = Evaluator::new(args.clone(), initial_tr, initial_st, handler, &ctx, &sys, sim);
+        let evaluator = Evaluator::new(
+            args.clone(),
+            initial_tr,
+            initial_st,
+            handler,
+            &ctx,
+            &sys,
+            sim,
+        );
 
         let first = Thread::initialize_thread(initial_tr, initial_st, step, args);
         Self {
@@ -114,8 +122,9 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn run_thread_until_step(&mut self, thread : &Thread<'a>) -> Option<StmtId> {
-        self.evaluator.context_switch(thread.tr, thread.st, thread.args.clone());
+    pub fn run_thread_until_step(&mut self, thread: &Thread<'a>) -> Option<StmtId> {
+        self.evaluator
+            .context_switch(thread.tr, thread.st, thread.args.clone());
         let mut current_step = Some(thread.stepid);
 
         while let Some(stepid) = current_step {
@@ -134,10 +143,9 @@ impl<'a> Scheduler<'a> {
                                 // if a fork, fork and continue execution
                                 Stmt::Fork => {
                                     // Forking creates a new thread, so we need to add it to the next threads
-                                    if (self.fork_idx >= self.transactions.len()){
+                                    if (self.fork_idx >= self.transactions.len()) {
                                         panic!("No more transactions to fork from");
-                                    }
-                                    else {
+                                    } else {
                                         self.fork_idx += 1;
                                         let tr = self.transactions[self.fork_idx].0;
                                         let st = self.transactions[self.fork_idx].1;
@@ -148,7 +156,7 @@ impl<'a> Scheduler<'a> {
                                             thread.args,
                                         );
                                         self.next_threads.push(next_thread);
-                                        current_step = Some(next_stmt_id); // this thread keeps running 
+                                        current_step = Some(next_stmt_id); // this thread keeps running
                                     }
                                 }
 
@@ -167,5 +175,4 @@ impl<'a> Scheduler<'a> {
 
         None
     }
-
 }
