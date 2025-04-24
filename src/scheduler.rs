@@ -144,15 +144,14 @@ impl<'a> Scheduler<'a> {
                                 Stmt::Fork => {
                                     // Forking creates a new thread, so we need to add it to the next threads
                                     if (self.fork_idx >= self.transactions.len()) {
-                                        panic!("No more transactions to fork from");
+                                        // if we are at the end of the transactions, just continue
                                     } else {
                                         self.fork_idx += 1;
-                                        let tr = self.transactions[self.fork_idx].0;
-                                        let st = self.transactions[self.fork_idx].1;
+                                        let (tr, st) = self.transactions[self.fork_idx];
                                         let next_thread = Thread::initialize_thread(
                                             tr,
                                             st,
-                                            next_stmt_id, // FIXME: this doesn't make sense if the fork goes to a new transaction
+                                            tr.body, // FIXME: this doesn't make sense if the fork goes to a new transaction
                                             thread.args,
                                         );
                                         self.next_threads.push(next_thread);
