@@ -29,7 +29,10 @@ impl<'a> Thread<'a> {
         step: StmtId,
         args: &'a HashMap<&str, BitVecValue>,
     ) -> Self {
-        println!("Thread initialized with transaction: {:?}, step: {:?}", tr.name, step);
+        println!(
+            "Thread initialized with transaction: {:?}, step: {:?}",
+            tr.name, step
+        );
         Self {
             tr,
             st,
@@ -59,7 +62,10 @@ impl<'a> Scheduler<'a> {
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
-        println!("Initializing scheduler with {} transactions", transactions.len());
+        println!(
+            "Initializing scheduler with {} transactions",
+            transactions.len()
+        );
         // Initialize sim
         // let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         // let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
@@ -100,19 +106,30 @@ impl<'a> Scheduler<'a> {
         step: StmtId,
         args: &'a HashMap<&str, BitVecValue>,
     ) {
-        println!("Adding new thread with transaction: {:?}, step: {:?}", tr.name, step);
+        println!(
+            "Adding new thread with transaction: {:?}, step: {:?}",
+            tr.name, step
+        );
         let new_thread = Thread::initialize_thread(&tr, &st, step, args);
         self.next_threads.push(new_thread);
-        println!("Thread added to next_threads queue. Queue size: {}", self.next_threads.len());
+        println!(
+            "Thread added to next_threads queue. Queue size: {}",
+            self.next_threads.len()
+        );
     }
 
     pub fn schedule_threads(&mut self) {
-        println!("\n==== Starting scheduling cycle {}, active threads: {} ====", 
-                self.step_count, self.active_threads.len());
+        println!(
+            "\n==== Starting scheduling cycle {}, active threads: {} ====",
+            self.step_count,
+            self.active_threads.len()
+        );
         while self.active_threads.len() > 0 {
             let mut next_thread = self.active_threads.pop().unwrap();
-            println!("Processing thread with transaction: {:?}, step: {:?}", 
-                    next_thread.tr.name, next_thread.stepid);
+            println!(
+                "Processing thread with transaction: {:?}, step: {:?}",
+                next_thread.tr.name, next_thread.stepid
+            );
 
             let next_step = self.run_thread_until_step(&next_thread);
             match next_step {
@@ -126,13 +143,15 @@ impl<'a> Scheduler<'a> {
                     println!("Thread with transaction {:?} finished execution, moving to inactive_threads", 
                             next_thread.tr.name);
                     self.inactive_threads.push(next_thread)
-                },
+                }
             }
         }
 
         if self.next_threads.len() > 0 {
-            println!("Moving {} threads from next_threads to active_threads for next cycle", 
-                    self.next_threads.len());
+            println!(
+                "Moving {} threads from next_threads to active_threads for next cycle",
+                self.next_threads.len()
+            );
             self.active_threads = std::mem::take(&mut self.next_threads);
             self.step_count += 1;
             println!("Advancing to scheduling cycle: {}", self.step_count);
@@ -143,8 +162,10 @@ impl<'a> Scheduler<'a> {
     }
 
     pub fn run_thread_until_step(&mut self, thread: &Thread<'a>) -> Option<StmtId> {
-        println!("Running thread with transaction: {:?} from step: {:?}", 
-                thread.tr.name, thread.stepid);
+        println!(
+            "Running thread with transaction: {:?} from step: {:?}",
+            thread.tr.name, thread.stepid
+        );
         self.evaluator
             .context_switch(thread.tr, thread.st, thread.args.clone());
         let mut current_step = Some(thread.stepid);
@@ -157,12 +178,17 @@ impl<'a> Scheduler<'a> {
                 Ok(next_stmt_option) => {
                     match next_stmt_option {
                         Some(next_stmt_id) => {
-                            println!("  Next statement: {:?}, type: {:?}", 
-                                    next_stmt_id, &thread.tr[next_stmt_id]);
+                            println!(
+                                "  Next statement: {:?}, type: {:?}",
+                                next_stmt_id, &thread.tr[next_stmt_id]
+                            );
                             match thread.tr[next_stmt_id] {
                                 // if a step, stop execution
                                 Stmt::Step(_) => {
-                                    println!("  Step reached, thread will pause at: {:?}", next_stmt_id);
+                                    println!(
+                                        "  Step reached, thread will pause at: {:?}",
+                                        next_stmt_id
+                                    );
                                     return Some(next_stmt_id);
                                 }
 
@@ -171,18 +197,19 @@ impl<'a> Scheduler<'a> {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
                                     // Forking creates a new thread, so we need to add it to the next threads
                                     if (self.fork_idx >= self.transactions.len()) {
-                                        println!("  No more transactions to fork, continuing execution");
+                                        println!(
+                                            "  No more transactions to fork, continuing execution"
+                                        );
                                         // if we are at the end of the transactions, just continue
                                     } else {
                                         self.fork_idx += 1;
                                         let (tr, st) = self.transactions[self.fork_idx];
-                                        println!("  Forking new thread with transaction: {:?}", tr.name);
-                                        let next_thread = Thread::initialize_thread(
-                                            tr,
-                                            st,
-                                            tr.body,
-                                            thread.args,
+                                        println!(
+                                            "  Forking new thread with transaction: {:?}",
+                                            tr.name
                                         );
+                                        let next_thread =
+                                            Thread::initialize_thread(tr, st, tr.body, thread.args);
                                         self.next_threads.push(next_thread);
                                         println!("  Forked thread added to next_threads queue. Queue size: {}", 
                                                 self.next_threads.len());
@@ -192,9 +219,12 @@ impl<'a> Scheduler<'a> {
 
                                 // if anything else, continue execution
                                 _ => {
-                                    println!("  Continuing execution to next statement: {:?}", next_stmt_id);
+                                    println!(
+                                        "  Continuing execution to next statement: {:?}",
+                                        next_stmt_id
+                                    );
                                     current_step = Some(next_stmt_id)
-                                },
+                                }
                             }
                         }
                         None => {
