@@ -12,6 +12,7 @@ use crate::yosys::YosysEnv;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+// TODO: this is relevant for proper don't care handling in the future
 pub enum Value {
     BitVec(BitVecValue),
     DontCare,
@@ -357,19 +358,8 @@ pub fn interpret(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::parser::parse_file;
+    use crate::parser::parsing_helper;
     use core::panic;
-
-    fn parsing_helper(
-        transaction_filename: &str,
-        handler: &mut DiagnosticHandler,
-    ) -> Vec<(SymbolTable, Transaction)> {
-        let result = parse_file(transaction_filename, handler);
-        match result {
-            Ok(success_vec) => success_vec,
-            Err(_) => panic!("Failed to parse file: {}", transaction_filename),
-        }
-    }
 
     #[test]
     fn test_add_ok() {
@@ -381,10 +371,10 @@ pub mod tests {
         let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
 
         // only one transaction in this file
-        let (st, tr) = &trs[0];
+        let (tr, st) = &trs[0];
 
         // set up the args for the Transaction
         let mut args = HashMap::new();
@@ -412,10 +402,10 @@ pub mod tests {
         let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
 
         // only one transaction in this file
-        let (st, tr) = &trs[0];
+        let (tr, st) = &trs[0];
 
         // set up the args for the Transaction
         let mut args = HashMap::new();
@@ -443,7 +433,7 @@ pub mod tests {
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
         let trs = parsing_helper(transaction_filename, handler);
-        let (st, tr) = &trs[0];
+        let (tr, st) = &trs[0];
 
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
