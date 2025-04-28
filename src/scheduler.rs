@@ -236,13 +236,11 @@ impl<'a> Scheduler<'a> {
                     }
                 }
                 Err(e) => {
-                    println!("ERROR evaluating step: {:?}", e);
-                    panic!("Error evaluating step: {:?}", e);
+                    println!("ERROR evaluating step, ending threead execution: {:?}", e);
+                    return None;
                 }
             }
         }
-
-        println!("Execution complete");
         None
     }
 }
@@ -283,7 +281,7 @@ pub mod tests {
                 vec![
                     BitVecValue::from_u64(4, 32),
                     BitVecValue::from_u64(5, 32),
-                    BitVecValue::from_u64(9, 32),
+                    BitVecValue::from_u64(10, 32),
                 ],
             ),
         ];
