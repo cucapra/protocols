@@ -355,6 +355,12 @@ impl<'a> ParserContext<'a> {
                 Some(expr_id) => Ok(Stmt::Step(expr_id)),
                 None => {
                     let one_expr = self.tr.e(Expr::Const(BitVecValue::from_i64(1, 2)));
+                    self.handler.emit_diagnostic_parsing(
+                        "Inferring step value to be 1.",
+                        self.fileid,
+                        &pair,
+                        Level::Warning,
+                    );
                     Ok(Stmt::Step(one_expr))
                 }
             },

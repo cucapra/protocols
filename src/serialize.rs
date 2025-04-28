@@ -240,6 +240,7 @@ pub mod tests {
             Ok(trs) => serialize_to_string(trs).unwrap(),
             Err(_) => strip_str(handler.error_string()),
         };
+        println!("{}", content);
         snap(snap_name, content);
     }
 
@@ -271,6 +272,11 @@ pub mod tests {
     #[test]
     fn test_aes128_expand_key_prot() {
         test_helper("tests/aes128_expand_key.prot", "aes128_expand_key");
+    }
+
+    #[test]
+    fn test_mul_invalid_prot() {
+        test_helper("tests/mul_invalid.prot", "mul_invalid");
     }
 
     #[test]
@@ -306,6 +312,16 @@ pub mod tests {
     #[test]
     fn test_func_arg_invalid_prot() {
         test_helper("tests/func_arg_invalid.prot", "func_arg_invalid_prot");
+    }
+
+    #[test]
+    fn test_simple_if_transaction() {
+        test_helper("tests/simple_if.prot", "simple_if");
+    }
+
+    #[test]
+    fn test_simple_while_transaction() {
+        test_helper("tests/simple_while.prot", "simple_while");
     }
 
     #[test]

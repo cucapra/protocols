@@ -1,13 +1,13 @@
-module counter(
-    input clk,        
-    output reg [6:0] c
+module counter (
+    input             clk,  
+    input      [63:0] a,
+    output reg [63:0] s
 );
-
     always @(posedge clk) begin
-        if (c == 10) begin
-            c <= 7'b0; 
+        if (s > a) begin
+            s <= 0; 
         end else begin
-            c <= c + 1;
+            s <= s + 1;
         end
     end
 endmodule

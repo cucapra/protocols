@@ -16,14 +16,14 @@ fn check_expr_types(
     expr_id: &ExprId,
 ) -> Result<Type, String> {
     match &tr[expr_id] {
-        Expr::Const(_) => Ok(Type::BitVec(1)),
+        Expr::Const(_) => Ok(Type::BitVec(32)), // TODO: need to determine how to check type size
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
         // FIXME: is this the correct typechecking logic?
         Expr::Slice(sym_expr, _, _) => check_expr_types(tr, st, handler, sym_expr),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
-            if let Type::BitVec(_) = inner_type {
+            if let Type::BitVec(1) = inner_type {
                 Ok(inner_type)
             } else {
                 handler.emit_diagnostic_expr(
@@ -39,7 +39,7 @@ fn check_expr_types(
             let lhs_type = check_expr_types(tr, st, handler, lhs)?;
             let rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if lhs_type.is_equivalent(&rhs_type) {
-                Ok(lhs_type)
+                Ok(Type::BitVec(1))
             } else {
                 handler.emit_diagnostic_expr(
                     tr,
@@ -50,7 +50,7 @@ fn check_expr_types(
                     ),
                     Level::Error,
                 );
-                Ok(lhs_type)
+                Ok(Type::BitVec(1))
             }
         }
     }
@@ -153,9 +153,9 @@ fn check_stmt_types(
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
-                handler.emit_diagnostic_stmt(
+                handler.emit_diagnostic_expr(
                     tr,
-                    stmt_id,
+                    cond,
                     &format!("Invalid type for [while] condition: {:?}", cond_type),
                     Level::Error,
                 );
@@ -277,7 +277,12 @@ mod tests {
     }
 
     #[test]
-    fn typecheck_mul_transaction() {
+    fn typecheck_mul_invalid_transaction() {
+        test_helper("mul_invalid", "tests/mul_invalid.prot");
+    }
+
+    #[test]
+    fn test_mul_prot() {
         test_helper("mul", "tests/mul.prot");
     }
 
@@ -289,6 +294,16 @@ mod tests {
     #[test]
     fn test_calyx_go_done_transaction() {
         test_helper("calyx_go_done_struct", "tests/calyx_go_done_struct.prot");
+    }
+
+    #[test]
+    fn test_simple_if_transaction() {
+        test_helper("simple_if", "tests/simple_if.prot");
+    }
+
+    #[test]
+    fn test_simple_while_transaction() {
+        test_helper("simple_while", "tests/simple_while.prot");
     }
 
     // Specific Tests

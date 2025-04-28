@@ -201,7 +201,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::While(loop_guard_id, do_block_id) => {
                 // println!("Eval While.");
-                self.evaluate_while(&loop_guard_id, &do_block_id)
+                self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
             Stmt::Step(expr) => {
                 // println!("Eval Step.");
@@ -267,13 +267,14 @@ impl<'a> Evaluator<'a> {
     fn evaluate_while(
         &mut self,
         loop_guard_id: &ExprId,
+        while_id: &StmtId,
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
         let mut res = self.evaluate_expr(loop_guard_id)?;
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
-            Ok(self.next_stmt_mapping[do_block_id])
+            Ok(self.next_stmt_mapping[while_id])
         }
     }
 
@@ -294,7 +295,6 @@ impl<'a> Evaluator<'a> {
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
-        // println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
             self.handler
                 .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
@@ -352,6 +352,52 @@ pub mod tests {
     use super::*;
     use crate::parser::parse_file;
     use core::panic;
+    use insta::Settings;
+    use std::path::Path;
+    use strip_ansi_escapes::strip_str;
+
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
+    }
+
+    fn test_helper(
+        filename: &str,
+        snap_name: &str,
+        verilog_path: &str,
+        args: HashMap<&str, BitVecValue>,
+    ) {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = filename;
+        let verilog_path = verilog_path;
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+
+        // only one transaction in this file
+        let (st, tr) = &trs[0];
+
+        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
+        let res = evaluator.evaluate_transaction();
+
+        let mut content = {
+            if let Err(err) = res.clone() {
+                err + "\n\n"
+            } else {
+                "Assertion Passed\n\n".to_string()
+            }
+        };
+
+        content = content + &strip_str(handler.error_string());
+
+        println!("{}", content);
+        snap(snap_name, content);
+    }
 
     fn parsing_helper(
         transaction_filename: &str,
@@ -366,89 +412,77 @@ pub mod tests {
 
     #[test]
     fn test_add_ok() {
-        let handler = &mut DiagnosticHandler::new();
-
-        // test_helper("tests/add_struct.prot", "add_struct");
-        let transaction_filename = "tests/add_struct.prot";
-        let verilog_path = "examples/adders/add_d1.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
-
-        // only one transaction in this file
-        let (st, tr) = &trs[0];
-
         // set up the args for the Transaction
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
         args.insert("s", BitVecValue::from_u64(14, 32));
 
-        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-        let res = evaluator.evaluate_transaction();
-
-        if let Err(err) = res.clone() {
-            println!("Error: {}", err);
-        }
-        assert!(res.is_ok());
-        // TODO: Snapshots?
+        test_helper(
+            "tests/add_struct.prot",
+            "add_ok",
+            "examples/adders/add_d1.v",
+            args,
+        );
     }
 
     #[test]
     fn test_add_err() {
-        let handler = &mut DiagnosticHandler::new();
-
-        // test_helper("tests/add_struct.prot", "add_struct");
-        let transaction_filename = "tests/add_struct.prot";
-        let verilog_path = "examples/adders/add_d1.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
-
-        // only one transaction in this file
-        let (st, tr) = &trs[0];
-
         // set up the args for the Transaction
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
         args.insert("s", BitVecValue::from_u64(13, 32));
 
-        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-        // let mut evaluator2 = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-        let res = evaluator.evaluate_transaction();
-
-        assert!(res.is_err());
-        // TODO: Snapshots?
+        test_helper(
+            "tests/add_struct.prot",
+            "add_err",
+            "examples/adders/add_d1.v",
+            args,
+        );
     }
 
     #[test]
     fn test_mult_execution() {
-        let handler = &mut DiagnosticHandler::new();
-
-        let transaction_filename = "tests/mult_new.prot";
-
-        // TODO: Add the btor path
-        let verilog_path = "examples/multipliers/mult_d2.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-
-        let trs = parsing_helper(transaction_filename, handler);
-        let (st, tr) = &trs[0];
-
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
         args.insert("s", BitVecValue::from_u64(48, 32));
 
-        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-        let res = evaluator.evaluate_transaction();
+        test_helper(
+            "tests/mul.prot",
+            "mult_execution",
+            "examples/multipliers/mult_d2.v",
+            args,
+        );
+    }
 
-        if let Err(err) = res.clone() {
-            println!("Error: {}", err);
-        }
-        assert!(res.is_ok());
+    #[test]
+    fn test_simple_if_execution() {
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(32, 64));
+        args.insert("s", BitVecValue::from_u64(7, 64));
+
+        test_helper(
+            "tests/simple_if.prot",
+            "simple_if_execution",
+            "examples/counter/counter.v",
+            args,
+        );
+    }
+
+    #[test]
+    fn test_simple_while_execution() {
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(32, 64));
+        args.insert("b", BitVecValue::from_u64(15, 64));
+        args.insert("s", BitVecValue::from_u64(17, 64));
+
+        test_helper(
+            "tests/simple_while.prot",
+            "simple_while_execution",
+            "examples/counter/counter.v",
+            args,
+        );
     }
 }

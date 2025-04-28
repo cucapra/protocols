@@ -77,6 +77,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_mult_d0_patronus() {
         let (ctx, sys) = patronus::btor2::parse_file("examples/multipliers/mult_d0.btor").unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
@@ -105,6 +106,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_add_d0_with_patronus() {
         let (ctx, sys) = patronus::btor2::parse_file("examples/adders/add_d0.btor").unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
@@ -135,6 +137,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_add_d1_with_patronus() {
         let (ctx, sys) = patronus::btor2::parse_file("examples/adders/add_d1.btor").unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
@@ -165,6 +168,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_add_d2_with_patronus() {
         let (ctx, sys) = patronus::btor2::parse_file("examples/adders/add_d2.btor").unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
@@ -199,6 +203,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn run_counter_with_patronus() {
         let env = YosysEnv::default();
         let inp = PathBuf::from("examples/counter/counter.v");

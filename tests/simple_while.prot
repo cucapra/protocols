@@ -1,0 +1,17 @@
+struct Counter {
+    in a: u64,
+    out s: u64,
+}
+
+fn simple_while<dut: Counter>(in a: u64, in b: u64, out s: u64) {
+    // Loading dut with values
+    dut.a := a;
+
+    while !(dut.s == b) {
+        step(1);
+    }
+
+    step(2);
+
+    assert_eq(dut.s, s);
+}
