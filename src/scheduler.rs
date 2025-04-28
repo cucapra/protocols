@@ -199,9 +199,11 @@ impl<'a> Scheduler<'a> {
                                     // Forking creates a new thread, so we need to add it to the next threads
 
                                     self.fork_idx += 1;
-                                    if let Some((tr, st, args)) =
-                                        Self::next_ir(self.todos.clone(), self.fork_idx, self.irs.clone())
-                                    {
+                                    if let Some((tr, st, args)) = Self::next_ir(
+                                        self.todos.clone(),
+                                        self.fork_idx,
+                                        self.irs.clone(),
+                                    ) {
                                         println!(
                                             "  Forking new thread with transaction: {:?}",
                                             tr.name
