@@ -39,7 +39,7 @@ impl<'a> Thread<'a> {
 }
 
 pub struct Scheduler<'a> {
-    irs: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+    irs: Vec<(&'a Transaction, &'a SymbolTable)>,
     todos: Vec<(usize, Vec<BitVecValue>)>,
     fork_idx: usize,
     active_threads: Vec<Thread<'a>>,
@@ -51,14 +51,14 @@ pub struct Scheduler<'a> {
 
 impl<'a> Scheduler<'a> {
     pub fn new(
-        irs: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+        irs: Vec<(&'a Transaction, &'a SymbolTable)>,
         todos: Vec<(usize, Vec<BitVecValue>)>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
-        let res = Self::next_ir(todos.clone(), 0, irs);
+        let res = Self::next_ir(todos.clone(), 0, irs.clone());
         if res.is_none() {
             panic!("No transactions found in the system");
         }
@@ -94,7 +94,7 @@ impl<'a> Scheduler<'a> {
     fn next_ir(
         todos: Vec<(usize, Vec<BitVecValue>)>,
         idx: usize,
-        irs: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+        irs: Vec<(&'a Transaction, &'a SymbolTable)>,
     ) -> Option<(
         &'a Transaction,
         &'a SymbolTable,
@@ -200,7 +200,7 @@ impl<'a> Scheduler<'a> {
 
                                     self.fork_idx += 1;
                                     if let Some((tr, st, args)) =
-                                        Self::next_ir(self.todos.clone(), self.fork_idx, self.irs)
+                                        Self::next_ir(self.todos.clone(), self.fork_idx, self.irs.clone())
                                     {
                                         println!(
                                             "  Forking new thread with transaction: {:?}",
