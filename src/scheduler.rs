@@ -1,6 +1,6 @@
 // Copyright 2024 Cornell University
 // released under MIT License
-// author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
+// author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
@@ -19,31 +19,28 @@ pub struct Thread<'a> {
     pub tr: &'a Transaction,
     pub st: &'a SymbolTable,
     pub stepid: StmtId,
-    args: &'a HashMap<&'a str, BitVecValue>,
+    args: HashMap<&'a str, BitVecValue>,
 }
 
 impl<'a> Thread<'a> {
     pub fn initialize_thread(
         tr: &'a Transaction,
         st: &'a SymbolTable,
-        step: StmtId,
-        args: &'a HashMap<&str, BitVecValue>,
+        args: HashMap<&'a str, BitVecValue>,
     ) -> Self {
-        println!(
-            "Thread initialized with transaction: {:?}, step: {:?}",
-            tr.name, step
-        );
+        println!("Thread initialized with transaction: {:?}", tr.name);
         Self {
             tr,
             st,
-            stepid: step,
+            stepid: tr.body,
             args,
         }
     }
 }
 
 pub struct Scheduler<'a> {
-    transactions: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+    irs: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+    todos: Vec<(usize, Vec<BitVecValue>)>,
     fork_idx: usize,
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
@@ -54,42 +51,37 @@ pub struct Scheduler<'a> {
 
 impl<'a> Scheduler<'a> {
     pub fn new(
-        transactions: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
-        step: StmtId,
-        args: &'a HashMap<&'a str, BitVecValue>,
+        irs: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+        todos: Vec<(usize, Vec<BitVecValue>)>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
-        println!(
-            "Initializing scheduler with {} transactions",
-            transactions.len()
-        );
-        // Initialize sim
-        // let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        // let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-        if (transactions.len() == 0) {
+        let res = Self::next_ir(todos.clone(), 0, irs);
+        if res.is_none() {
             panic!("No transactions found in the system");
         }
-        let (initial_tr, initial_st) = transactions[0];
+        let (initial_tr, initial_st, initial_args) = res.unwrap();
+
         println!("Starting with initial transaction: {:?}", initial_tr.name);
 
         // Initialize evaluator with first transaction
         let evaluator = Evaluator::new(
-            args.clone(),
-            initial_tr,
-            initial_st,
+            initial_args.clone(),
+            &initial_tr,
+            &initial_st,
             handler,
             &ctx,
             &sys,
             sim,
         );
 
-        let first = Thread::initialize_thread(initial_tr, initial_st, step, args);
+        let first = Thread::initialize_thread(initial_tr, initial_st, initial_args);
         println!("Added first thread to active_threads");
         Self {
-            transactions,
+            irs,
+            todos,
             fork_idx: 0,
             active_threads: vec![first],
             next_threads: vec![],
@@ -99,23 +91,32 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn add_thread(
-        &mut self,
-        tr: &'a Transaction,
-        st: &'a SymbolTable,
-        step: StmtId,
-        args: &'a HashMap<&str, BitVecValue>,
-    ) {
-        println!(
-            "Adding new thread with transaction: {:?}, step: {:?}",
-            tr.name, step
-        );
-        let new_thread = Thread::initialize_thread(&tr, &st, step, args);
-        self.next_threads.push(new_thread);
-        println!(
-            "Thread added to next_threads queue. Queue size: {}",
-            self.next_threads.len()
-        );
+    fn next_ir(
+        todos: Vec<(usize, Vec<BitVecValue>)>,
+        idx: usize,
+        irs: &'a Vec<(&'a Transaction, &'a SymbolTable)>,
+    ) -> Option<(
+        &'a Transaction,
+        &'a SymbolTable,
+        HashMap<&'a str, BitVecValue>,
+    )> {
+        if idx < irs.len() {
+            // get the corresponding transaction and symbol table
+            let (tr, st) = irs[todos[idx].0];
+
+            // setup the arguments for the transaction
+            let args = todos[idx].1.clone();
+            let mut args_map = HashMap::new();
+
+            for (i, arg) in args.iter().enumerate() {
+                let identifier = st[tr.args[i].symbol()].name();
+                args_map.insert(identifier, arg.clone());
+            }
+
+            Some((tr, st, args_map))
+        } else {
+            None
+        }
     }
 
     pub fn schedule_threads(&mut self) {
@@ -196,25 +197,24 @@ impl<'a> Scheduler<'a> {
                                 Stmt::Fork => {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
                                     // Forking creates a new thread, so we need to add it to the next threads
-                                    if (self.fork_idx >= self.transactions.len()) {
-                                        println!(
-                                            "  No more transactions to fork, continuing execution"
-                                        );
-                                        // if we are at the end of the transactions, just continue
-                                    } else {
-                                        self.fork_idx += 1;
-                                        let (tr, st) = self.transactions[self.fork_idx];
+
+                                    self.fork_idx += 1;
+                                    if let Some((tr, st, args)) =
+                                        Self::next_ir(self.todos.clone(), self.fork_idx, self.irs)
+                                    {
                                         println!(
                                             "  Forking new thread with transaction: {:?}",
                                             tr.name
                                         );
-                                        let next_thread =
-                                            Thread::initialize_thread(tr, st, tr.body, thread.args);
+                                        let next_thread = Thread::initialize_thread(tr, st, args);
                                         self.next_threads.push(next_thread);
                                         println!("  Forked thread added to next_threads queue. Queue size: {}", 
-                                                self.next_threads.len());
-                                        current_step = Some(next_stmt_id); // this thread keeps running
+                                        self.next_threads.len());
+                                    } else {
+                                        println!("  No more irs to fork, continuing execution");
                                     }
+
+                                    current_step = Some(next_stmt_id); // this thread keeps running
                                 }
 
                                 // if anything else, continue execution
