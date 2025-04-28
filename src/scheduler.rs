@@ -18,7 +18,7 @@ use patronus::system::TransitionSystem;
 pub struct Thread<'a> {
     pub tr: &'a Transaction,
     pub st: &'a SymbolTable,
-    pub stepid: StmtId,
+    pub current_stmt: StmtId,
     args: HashMap<&'a str, BitVecValue>,
 }
 
@@ -32,7 +32,7 @@ impl<'a> Thread<'a> {
         Self {
             tr,
             st,
-            stepid: tr.body,
+            current_stmt: tr.body,
             args,
         }
     }
@@ -100,7 +100,7 @@ impl<'a> Scheduler<'a> {
         &'a SymbolTable,
         HashMap<&'a str, BitVecValue>,
     )> {
-        if idx < irs.len() {
+        if idx < todos.len() {
             // get the corresponding transaction and symbol table
             let (tr, st) = irs[todos[idx].0];
 
@@ -129,13 +129,13 @@ impl<'a> Scheduler<'a> {
             let mut next_thread = self.active_threads.pop().unwrap();
             println!(
                 "Processing thread with transaction: {:?}, step: {:?}",
-                next_thread.tr.name, next_thread.stepid
+                next_thread.tr.name, next_thread.current_stmt
             );
 
             let next_step = self.run_thread_until_step(&next_thread);
             match next_step {
                 Some(stepid) => {
-                    next_thread.stepid = stepid;
+                    next_thread.current_stmt = stepid;
                     println!("Thread with transaction {:?} reached step, moving to next_threads with step: {:?}", 
                             next_thread.tr.name, stepid);
                     self.next_threads.push(next_thread)
@@ -146,30 +146,30 @@ impl<'a> Scheduler<'a> {
                     self.inactive_threads.push(next_thread)
                 }
             }
-        }
 
-        if self.next_threads.len() > 0 {
-            println!(
-                "Moving {} threads from next_threads to active_threads for next cycle",
-                self.next_threads.len()
-            );
-            self.active_threads = std::mem::take(&mut self.next_threads);
-            self.step_count += 1;
-            println!("Advancing to scheduling cycle: {}", self.step_count);
-        } else {
-            println!("No more threads to schedule. Protocol execution complete.");
-            println!("Total inactive threads: {}", self.inactive_threads.len());
+            if self.next_threads.len() > 0 {
+                println!(
+                    "Moving {} threads from next_threads to active_threads for next cycle",
+                    self.next_threads.len()
+                );
+                self.active_threads = std::mem::take(&mut self.next_threads);
+                self.step_count += 1;
+                println!("Advancing to scheduling cycle: {}", self.step_count);
+            } else {
+                println!("No more threads to schedule. Protocol execution complete.");
+                println!("Total inactive threads: {}", self.inactive_threads.len());
+            }
         }
     }
 
     pub fn run_thread_until_step(&mut self, thread: &Thread<'a>) -> Option<StmtId> {
         println!(
-            "Running thread with transaction: {:?} from step: {:?}",
-            thread.tr.name, thread.stepid
+            "Running thread with transaction: {:?} from current_stmt: {:?}",
+            thread.tr.name, thread.current_stmt
         );
         self.evaluator
             .context_switch(thread.tr, thread.st, thread.args.clone());
-        let mut current_step = Some(thread.stepid);
+        let mut current_step = Some(thread.current_stmt);
 
         while let Some(stepid) = current_step {
             println!("  Evaluating statement: {:?}", stepid);
@@ -197,7 +197,7 @@ impl<'a> Scheduler<'a> {
                                 Stmt::Fork => {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
                                     // Forking creates a new thread, so we need to add it to the next threads
-
+                                    
                                     self.fork_idx += 1;
                                     if let Some((tr, st, args)) = Self::next_ir(
                                         self.todos.clone(),
@@ -242,7 +242,7 @@ impl<'a> Scheduler<'a> {
             }
         }
 
-        println!("Thread execution complete");
+        println!("Execution complete");
         None
     }
 }
@@ -251,9 +251,7 @@ impl<'a> Scheduler<'a> {
 pub mod tests {
     use super::*;
     use crate::parser::parsing_helper;
-    use patronus::expr::Context;
     use patronus::sim::Interpreter;
-    use patronus::system::TransitionSystem;
 
     #[test]
     fn test_scheduler() {
@@ -271,7 +269,7 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
             (
                 0,
                 vec![
@@ -289,11 +287,8 @@ pub mod tests {
                 ],
             ),
         ];
-        let mut sim = Interpreter::new(&ctx, &sys);
 
-        let mut handler = DiagnosticHandler::new();
-
-        let mut scheduler = Scheduler::new(irs, todos, &ctx, &sys, &mut sim, &mut handler);
+        let mut scheduler = Scheduler::new(irs, todos, &ctx, &sys, &mut sim, handler);
         scheduler.schedule_threads();
     }
 }
