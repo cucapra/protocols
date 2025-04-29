@@ -20,6 +20,7 @@ pub struct Thread<'a> {
     pub st: &'a SymbolTable,
     pub current_stmt: StmtId,
     args: HashMap<&'a str, BitVecValue>,
+    fork_idx: usize,
 }
 
 impl<'a> Thread<'a> {
@@ -27,6 +28,7 @@ impl<'a> Thread<'a> {
         tr: &'a Transaction,
         st: &'a SymbolTable,
         args: HashMap<&'a str, BitVecValue>,
+        fork_idx: usize,
     ) -> Self {
         println!("Thread initialized with transaction: {:?}", tr.name);
         Self {
@@ -34,6 +36,7 @@ impl<'a> Thread<'a> {
             st,
             current_stmt: tr.body,
             args,
+            fork_idx,
         }
     }
 }
@@ -47,6 +50,7 @@ pub struct Scheduler<'a> {
     inactive_threads: Vec<Thread<'a>>,
     step_count: i32,
     evaluator: Evaluator<'a>,
+    results: Vec<Result<(), String>>,
 }
 
 impl<'a> Scheduler<'a> {
@@ -58,9 +62,9 @@ impl<'a> Scheduler<'a> {
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
-        let res = Self::next_ir(todos.clone(), 0, irs.clone());
+        let res = Self::next_ir(&todos, 0, irs.clone());
         if res.is_none() {
-            panic!("No transactions found in the system");
+            panic!("No transactions passed.");
         }
         let (initial_tr, initial_st, initial_args) = res.unwrap();
 
@@ -77,22 +81,25 @@ impl<'a> Scheduler<'a> {
             sim,
         );
 
-        let first = Thread::initialize_thread(initial_tr, initial_st, initial_args);
+        let fork_idx = 0;
+        let results_size = todos.len();
+        let first = Thread::initialize_thread(initial_tr, initial_st, initial_args, fork_idx);
         println!("Added first thread to active_threads");
         Self {
             irs,
             todos,
-            fork_idx: 0,
+            fork_idx,
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
             step_count: 1,
             evaluator,
+            results: vec![Ok(()); results_size],
         }
     }
 
     fn next_ir(
-        todos: Vec<(usize, Vec<BitVecValue>)>,
+        todos: &Vec<(usize, Vec<BitVecValue>)>,
         idx: usize,
         irs: Vec<(&'a Transaction, &'a SymbolTable)>,
     ) -> Option<(
@@ -119,7 +126,7 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn schedule_threads(&mut self) {
+    pub fn execute_threads(&mut self) -> Vec<Result<(), String>> {
         println!(
             "\n==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count,
@@ -160,6 +167,8 @@ impl<'a> Scheduler<'a> {
                 println!("Total inactive threads: {}", self.inactive_threads.len());
             }
         }
+
+        return self.results.clone();
     }
 
     pub fn run_thread_until_step(&mut self, thread: &Thread<'a>) -> Option<StmtId> {
@@ -199,16 +208,15 @@ impl<'a> Scheduler<'a> {
                                     // Forking creates a new thread, so we need to add it to the next threads
 
                                     self.fork_idx += 1;
-                                    if let Some((tr, st, args)) = Self::next_ir(
-                                        self.todos.clone(),
-                                        self.fork_idx,
-                                        self.irs.clone(),
-                                    ) {
+                                    if let Some((tr, st, args)) =
+                                        Self::next_ir(&self.todos, self.fork_idx, self.irs.clone())
+                                    {
                                         println!(
                                             "  Forking new thread with transaction: {:?}",
                                             tr.name
                                         );
-                                        let next_thread = Thread::initialize_thread(tr, st, args);
+                                        let next_thread =
+                                            Thread::initialize_thread(tr, st, args, self.fork_idx);
                                         self.next_threads.push(next_thread);
                                         println!("  Forked thread added to next_threads queue. Queue size: {}", 
                                         self.next_threads.len());
@@ -236,7 +244,11 @@ impl<'a> Scheduler<'a> {
                     }
                 }
                 Err(e) => {
-                    println!("ERROR evaluating step, ending threead execution: {:?}", e);
+                    println!(
+                        "ERROR evaluating statement, ending threead execution: {:?}",
+                        e
+                    );
+                    self.results[thread.fork_idx] = Err(e);
                     return None;
                 }
             }
@@ -259,7 +271,7 @@ pub mod tests {
         let transaction_filename = "tests/add_struct.prot";
         let verilog_path = "examples/adders/add_d1.v";
         let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -267,7 +279,8 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+        // CASE 1: BOTH THREADS PASS
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
             (
                 0,
                 vec![
@@ -281,12 +294,42 @@ pub mod tests {
                 vec![
                     BitVecValue::from_u64(4, 32),
                     BitVecValue::from_u64(5, 32),
-                    BitVecValue::from_u64(10, 32),
+                    BitVecValue::from_u64(9, 32),
                 ],
             ),
         ];
 
-        let mut scheduler = Scheduler::new(irs, todos, &ctx, &sys, &mut sim, handler);
-        scheduler.schedule_threads();
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+
+        // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
+        todos[1].1[2] = BitVecValue::from_u64(10, 32);
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+
+        // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
+        todos[0].1[2] = BitVecValue::from_u64(4, 32);
+        todos[1].1[2] = BitVecValue::from_u64(9, 32);
+        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_err());
+        assert!(results[1].is_ok());
+
+        // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
+        todos[1].1[2] = BitVecValue::from_u64(10, 32);
+        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        scheduler = Scheduler::new(irs, todos.clone(), &ctx, &sys, sim3, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_err());
+        assert!(results[1].is_err());
     }
 }
