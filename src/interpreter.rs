@@ -216,9 +216,9 @@ impl<'a> Evaluator<'a> {
                 // println!("Eval While.");
                 self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
-            Stmt::Step => {
-                // println!("Eval Step.");
-                // self.evaluate_step()?;
+            Stmt::Step(expr) => {
+                // TODO: how do we deal with steps when n > 1?
+                // the scheduler will handle the step. simple return the next statement to run
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
@@ -289,16 +289,6 @@ impl<'a> Evaluator<'a> {
         } else {
             Ok(self.next_stmt_mapping[while_id])
         }
-    }
-
-    fn evaluate_step(&mut self) -> Result<(), String> {
-        self.sim.step();
-        Ok(())
-    }
-
-    fn evaluate_fork(&self) -> Result<(), String> {
-        // TODO: Implement evaluate_fork
-        Ok(())
     }
 
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
