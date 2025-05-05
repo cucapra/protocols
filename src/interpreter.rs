@@ -135,6 +135,11 @@ impl<'a> Evaluator<'a> {
         (ctx, sys)
     }
 
+    // step the simulator
+    pub fn sim_step(&mut self) {
+        self.sim.step();
+    }
+
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
         let expr = &self.tr[expr_id];
         match expr {
@@ -211,14 +216,14 @@ impl<'a> Evaluator<'a> {
                 // println!("Eval While.");
                 self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
-            Stmt::Step => {
-                // println!("Eval Step.");
-                self.evaluate_step()?;
+            Stmt::Step(expr) => {
+                // TODO: how do we deal with steps when n > 1?
+                // the scheduler will handle the step. simple return the next statement to run
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
                 // println!("Eval Fork.");
-                // TODO: Implement evaluate_fork
+                // the scheduler will handle the fork. simple return the next statement to run
                 return Ok(self.next_stmt_mapping[stmt_id]);
                 // return Err("Fork not implemented.".to_string());
             }
@@ -278,22 +283,12 @@ impl<'a> Evaluator<'a> {
         while_id: &StmtId,
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
-        let mut res = self.evaluate_expr(loop_guard_id)?;
+        let res = self.evaluate_expr(loop_guard_id)?;
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
             Ok(self.next_stmt_mapping[while_id])
         }
-    }
-
-    fn evaluate_step(&mut self) -> Result<(), String> {
-        self.sim.step();
-        Ok(())
-    }
-
-    fn evaluate_fork(&self) -> Result<(), String> {
-        // TODO: Implement evaluate_fork
-        Ok(())
     }
 
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
