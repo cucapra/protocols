@@ -20,7 +20,7 @@ pub struct Thread<'a> {
     pub st: &'a SymbolTable,
     pub current_stmt: StmtId,
     args: HashMap<&'a str, BitVecValue>,
-    /// The current index of the most recent todo that has been forked 
+    /// The current index of the most recent todo that has been forked
     /// (a thread is or was running it).
     fork_idx: usize,
 }
