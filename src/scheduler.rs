@@ -246,3 +246,54 @@ impl<'a> Scheduler<'a> {
         None
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::parser::parsing_helper;
+    use patronus::expr::Context;
+    use patronus::sim::Interpreter;
+    use patronus::system::TransitionSystem;
+
+    #[test]
+    fn test_scheduler() {
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/add_struct.prot";
+        let verilog_path = "examples/adders/add_d1.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(1, 32),
+                    BitVecValue::from_u64(2, 32),
+                    BitVecValue::from_u64(3, 32),
+                ],
+            ),
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(4, 32),
+                    BitVecValue::from_u64(5, 32),
+                    BitVecValue::from_u64(9, 32),
+                ],
+            ),
+        ];
+        let mut sim = Interpreter::new(&ctx, &sys);
+
+        let mut handler = DiagnosticHandler::new();
+
+        let mut scheduler = Scheduler::new(irs, todos, &ctx, &sys, &mut sim, &mut handler);
+        scheduler.schedule_threads();
+    }
+}
