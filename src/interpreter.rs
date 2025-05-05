@@ -12,6 +12,7 @@ use crate::yosys::YosysEnv;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+// TODO: this is relevant for proper don't care handling in the future
 pub enum Value {
     BitVec(BitVecValue),
     DontCare,
@@ -104,7 +105,17 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
+    pub fn context_switch(
+        &mut self,
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        args: HashMap<&str, BitVecValue>,
+    ) {
+        self.tr = tr;
+        self.st = st;
+
+        // TODO: this is inefficient because the map is generated every time there is a context switch
+        self.next_stmt_mapping = tr.next_stmt_mapping();
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
@@ -125,6 +136,11 @@ impl<'a> Evaluator<'a> {
             }
         };
         (ctx, sys)
+    }
+
+    // step the simulator
+    pub fn sim_step(&mut self) {
+        self.sim.step();
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
@@ -188,7 +204,7 @@ impl<'a> Evaluator<'a> {
         return Ok(());
     }
 
-    fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
@@ -204,13 +220,13 @@ impl<'a> Evaluator<'a> {
                 self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
             Stmt::Step(expr) => {
-                // println!("Eval Step.");
-                self.evaluate_step(&expr)?;
+                // TODO: how do we deal with steps when n > 1?
+                // the scheduler will handle the step. simple return the next statement to run
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
                 // println!("Eval Fork.");
-                // TODO: Implement evaluate_fork
+                // the scheduler will handle the fork. simple return the next statement to run
                 return Ok(self.next_stmt_mapping[stmt_id]);
                 // return Err("Fork not implemented.".to_string());
             }
@@ -270,26 +286,12 @@ impl<'a> Evaluator<'a> {
         while_id: &StmtId,
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
-        let mut res = self.evaluate_expr(loop_guard_id)?;
+        let res = self.evaluate_expr(loop_guard_id)?;
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
             Ok(self.next_stmt_mapping[while_id])
         }
-    }
-
-    fn evaluate_step(&mut self, expr: &ExprId) -> Result<(), String> {
-        let res = self.evaluate_expr(expr)?;
-        let val = res.to_u64().unwrap();
-        for _ in 0..val {
-            self.sim.step();
-        }
-        Ok(())
-    }
-
-    fn evaluate_fork(&self) -> Result<(), String> {
-        // TODO: Implement evaluate_fork
-        Ok(())
     }
 
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
