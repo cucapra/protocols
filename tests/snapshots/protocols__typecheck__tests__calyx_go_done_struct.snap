@@ -1,18 +1,13 @@
 ---
 source: src/typecheck.rs
 expression: content
+snapshot_kind: text
 ---
-error: Type mismatch in assignment: dut.go : BitVec(32) and 1 : BitVec(1).
-   ┌─ tests/calyx_go_done_struct.prot:10:3
+error: Type mismatch in binary operation: BitVec(1) and BitVec(32)
+   ┌─ tests/calyx_go_done_struct.prot:11:11
    │
-10 │   dut.go := 1;
-   │   ^^^^^^^^^^^^ Type mismatch in assignment: dut.go : BitVec(32) and 1 : BitVec(1).
-
-error: Type mismatch in assignment: dut.go : BitVec(32) and 0 : BitVec(1).
-   ┌─ tests/calyx_go_done_struct.prot:14:3
-   │
-14 │   dut.go := 0;
-   │   ^^^^^^^^^^^^ Type mismatch in assignment: dut.go : BitVec(32) and 0 : BitVec(1).
+11 │   while !(dut.done == 1) {
+   │           ^^^^^^^^ Type mismatch in binary operation: BitVec(1) and BitVec(32)
 
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
    ┌─ tests/calyx_go_done_struct.prot:15:3

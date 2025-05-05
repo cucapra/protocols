@@ -1,8 +1,10 @@
 ---
-source: src/typecheck.rs
+source: src/interpreter.rs
 expression: content
 snapshot_kind: text
 ---
+Assertion Passed
+
 warning: Inferring step value to be 1.
    ┌─ tests/mul.prot:11:3
    │
@@ -20,15 +22,3 @@ warning: Inferring step value to be 1.
    │
 18 │   step();
    │   ^^^^^^^ Inferring step value to be 1.
-
-warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-   ┌─ tests/mul.prot:16:3
-   │
-16 │   dut.a := X;
-   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-
-warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-   ┌─ tests/mul.prot:17:3
-   │
-17 │   dut.b := X;
-   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).

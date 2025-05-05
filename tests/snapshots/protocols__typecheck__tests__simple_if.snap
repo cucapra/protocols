@@ -1,0 +1,28 @@
+---
+source: src/typecheck.rs
+expression: content
+snapshot_kind: text
+---
+error: Type mismatch in binary operation: BitVec(64) and BitVec(32)
+   ┌─ tests/simple_if.prot:11:8
+   │
+11 │     if dut.s == 3 {
+   │        ^^^^^ Type mismatch in binary operation: BitVec(64) and BitVec(32)
+
+error: Type mismatch in binary operation: BitVec(64) and BitVec(32)
+   ┌─ tests/simple_if.prot:18:8
+   │
+18 │     if dut.s == 7 {
+   │        ^^^^^ Type mismatch in binary operation: BitVec(64) and BitVec(32)
+
+error: Type mismatch in assert_eq: dut.s : BitVec(64) and 0 : BitVec(32).
+   ┌─ tests/simple_if.prot:12:9
+   │
+12 │         assert_eq(dut.s, 0);
+   │         ^^^^^^^^^^^^^^^^^^^^ Type mismatch in assert_eq: dut.s : BitVec(64) and 0 : BitVec(32).
+
+error: Type mismatch in assert_eq: dut.s : BitVec(64) and 0 : BitVec(32).
+   ┌─ tests/simple_if.prot:21:9
+   │
+21 │         assert_eq(dut.s, 0);
+   │         ^^^^^^^^^^^^^^^^^^^^ Type mismatch in assert_eq: dut.s : BitVec(64) and 0 : BitVec(32).

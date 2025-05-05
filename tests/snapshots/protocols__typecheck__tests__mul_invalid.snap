@@ -4,31 +4,37 @@ expression: content
 snapshot_kind: text
 ---
 warning: Inferring step value to be 1.
-   ┌─ tests/mul.prot:11:3
+   ┌─ tests/mul_invalid.prot:11:3
    │
 11 │   step();
    │   ^^^^^^^ Inferring step value to be 1.
 
 warning: Inferring step value to be 1.
-   ┌─ tests/mul.prot:12:3
+   ┌─ tests/mul_invalid.prot:12:3
    │
 12 │   step();
    │   ^^^^^^^ Inferring step value to be 1.
 
 warning: Inferring step value to be 1.
-   ┌─ tests/mul.prot:18:3
+   ┌─ tests/mul_invalid.prot:18:3
    │
 18 │   step();
    │   ^^^^^^^ Inferring step value to be 1.
 
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-   ┌─ tests/mul.prot:16:3
+   ┌─ tests/mul_invalid.prot:16:3
    │
 16 │   dut.a := X;
    │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
 
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
-   ┌─ tests/mul.prot:17:3
+   ┌─ tests/mul_invalid.prot:17:3
    │
 17 │   dut.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+
+error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+   ┌─ tests/mul_invalid.prot:19:3
+   │
+19 │   s := dut.s;
+   │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.

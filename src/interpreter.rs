@@ -209,7 +209,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::While(loop_guard_id, do_block_id) => {
                 // println!("Eval While.");
-                self.evaluate_while(&loop_guard_id, &do_block_id)
+                self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
             Stmt::Step(expr) => {
                 // println!("Eval Step.");
@@ -275,13 +275,14 @@ impl<'a> Evaluator<'a> {
     fn evaluate_while(
         &mut self,
         loop_guard_id: &ExprId,
+        while_id: &StmtId,
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
         let mut res = self.evaluate_expr(loop_guard_id)?;
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
-            Ok(self.next_stmt_mapping[do_block_id])
+            Ok(self.next_stmt_mapping[while_id])
         }
     }
 
@@ -302,7 +303,6 @@ impl<'a> Evaluator<'a> {
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
-        // println!("{:?}, {:?}", res1, res2);
         if res1.is_not_equal(&res2) {
             self.handler
                 .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
@@ -474,6 +474,21 @@ pub mod tests {
         test_helper(
             "tests/simple_if.prot",
             "simple_if_execution",
+            "examples/counter/counter.v",
+            args,
+        );
+    }
+
+    #[test]
+    fn test_simple_while_execution() {
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(32, 64));
+        args.insert("b", BitVecValue::from_u64(15, 64));
+        args.insert("s", BitVecValue::from_u64(17, 64));
+
+        test_helper(
+            "tests/simple_while.prot",
+            "simple_while_execution",
             "examples/counter/counter.v",
             args,
         );

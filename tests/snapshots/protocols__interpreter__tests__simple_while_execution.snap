@@ -1,0 +1,6 @@
+---
+source: src/interpreter.rs
+expression: content
+snapshot_kind: text
+---
+Assertion Passed
