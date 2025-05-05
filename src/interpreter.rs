@@ -410,6 +410,19 @@ pub mod tests {
 
     #[test]
     fn test_add_ok() {
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/add_struct.prot";
+        let verilog_path = "examples/adders/add_d1.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
+
+        // only one transaction in this file
+        let (tr, st) = &trs[0];
+
         // set up the args for the Transaction
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
@@ -427,6 +440,19 @@ pub mod tests {
     #[test]
     #[ignore]
     fn test_add_err() {
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/add_struct.prot";
+        let verilog_path = "examples/adders/add_d1.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
+
+        // only one transaction in this file
+        let (tr, st) = &trs[0];
+
         // set up the args for the Transaction
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
@@ -444,6 +470,18 @@ pub mod tests {
     #[test]
     #[ignore]
     fn test_mult_execution() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/mult_new.prot";
+
+        // TODO: Add the btor path
+        let verilog_path = "examples/multipliers/mult_d2.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let trs = parsing_helper(transaction_filename, handler);
+        let (tr, st) = &trs[0];
+
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
         args.insert("b", BitVecValue::from_u64(8, 32));
