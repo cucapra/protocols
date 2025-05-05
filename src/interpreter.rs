@@ -525,4 +525,19 @@ pub mod tests {
             args,
         );
     }
+
+    #[test]
+    fn test_simple_while_execution() {
+        let mut args = HashMap::new();
+        args.insert("a", BitVecValue::from_u64(32, 64));
+        args.insert("b", BitVecValue::from_u64(15, 64));
+        args.insert("s", BitVecValue::from_u64(17, 64));
+
+        test_helper(
+            "tests/simple_while.prot",
+            "simple_while_execution",
+            "examples/counter/counter.v",
+            args,
+        );
+    }
 }
