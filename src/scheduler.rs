@@ -266,7 +266,7 @@ pub mod tests {
     use patronus::sim::Interpreter;
 
     #[test]
-    fn test_scheduler() {
+    fn test_scheduler_add() {
         let handler = &mut DiagnosticHandler::new();
 
         // test_helper("tests/add_struct.prot", "add_struct");
@@ -327,6 +327,76 @@ pub mod tests {
 
         // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = BitVecValue::from_u64(10, 32);
+        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        scheduler = Scheduler::new(irs, todos.clone(), &ctx, &sys, sim3, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_err());
+        assert!(results[1].is_err());
+    }
+
+    #[test]
+    fn test_scheduler_mult() {
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/mult_new.prot";
+        let verilog_path = "examples/multipliers/mult_d2.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        // CASE 1: BOTH THREADS PASS
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(1, 32),
+                    BitVecValue::from_u64(2, 32),
+                    BitVecValue::from_u64(2, 32),
+                ],
+            ),
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(6, 32),
+                    BitVecValue::from_u64(8, 32),
+                    BitVecValue::from_u64(48, 32),
+                ],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+
+        // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
+        todos[1].1[2] = BitVecValue::from_u64(47, 32);
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+
+        // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
+        todos[0].1[2] = BitVecValue::from_u64(3, 32);
+        todos[1].1[2] = BitVecValue::from_u64(48, 32);
+        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_err());
+        assert!(results[1].is_ok());
+
+        // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
+        todos[1].1[2] = BitVecValue::from_u64(47, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         scheduler = Scheduler::new(irs, todos.clone(), &ctx, &sys, sim3, handler);
