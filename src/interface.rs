@@ -4,13 +4,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-
-
 #[cfg(test)]
 pub mod tests {
-    use marlin_verilator::*;
     use crate::yosys::*;
     use baa::{BitVecOps, BitVecValue};
+    use marlin_verilator::*;
     use patronus::sim::Simulator;
     use std::path::PathBuf;
 
