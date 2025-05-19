@@ -74,11 +74,9 @@ impl<'a> Scheduler<'a> {
             irs.iter().map(|(tr, _)| tr.next_stmt_mapping()).collect();
 
         // setup the Evaluator and first Thread
-        let res = Self::next_ir(&todos, 0, irs.clone(), next_stmt_maps.clone());
-        if res.is_none() {
-            panic!("No transactions passed.");
-        }
-        let (initial_tr, initial_st, initial_args, initial_next_stmt_map) = res.unwrap();
+        let (initial_tr, initial_st, initial_args, initial_next_stmt_map) =
+            Self::next_ir(&todos, 0, irs.clone(), next_stmt_maps.clone())
+                .expect("No transactions passed.");
 
         println!("Starting with initial transaction: {:?}", initial_tr.name);
 
