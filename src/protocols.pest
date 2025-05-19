@@ -46,8 +46,10 @@ id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
 tpe = { "u" ~ integer }
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
-cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
-stmt = _{ (assign | cmd | while_loop | cond | assert_eq ) }
+// cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
+step = { "step" ~ "(" ~ integer? ~ ")" ~ ";"}
+fork = { "fork" ~ "()" ~ ";"}
+stmt = _{ (assign | step | fork | while_loop | cond | assert_eq ) }
 dir = { "in" | "out" }
 arg = { dir ~ path_id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }

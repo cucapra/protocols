@@ -1,26 +1,7 @@
 ---
 source: src/typecheck.rs
 expression: content
-snapshot_kind: text
 ---
-warning: Inferring step value to be 1.
-   ┌─ tests/mul_invalid.prot:11:3
-   │
-11 │   step();
-   │   ^^^^^^^ Inferring step value to be 1.
-
-warning: Inferring step value to be 1.
-   ┌─ tests/mul_invalid.prot:12:3
-   │
-12 │   step();
-   │   ^^^^^^^ Inferring step value to be 1.
-
-warning: Inferring step value to be 1.
-   ┌─ tests/mul_invalid.prot:18:3
-   │
-18 │   step();
-   │   ^^^^^^^ Inferring step value to be 1.
-
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
    ┌─ tests/mul_invalid.prot:16:3
    │

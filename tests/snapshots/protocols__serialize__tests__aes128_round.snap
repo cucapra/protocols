@@ -10,11 +10,11 @@ struct RoundIO {
 
 fn aes128<dut: RoundIO>(in key: u128, in state: u128, out output: u128) {
   dut.state := state;
-  step(1);
+  step();
   fork();
   dut.state := X;
   dut.key := key;
-  step(1);
+  step();
   dut.key := X;
   assert_eq(dut.state_next, output);
 }

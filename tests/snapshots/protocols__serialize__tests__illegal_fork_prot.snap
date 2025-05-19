@@ -1,16 +1,9 @@
 ---
 source: src/serialize.rs
 expression: content
-snapshot_kind: text
 ---
-warning: Inferring step value to be 1.
-   ┌─ tests/illegal_fork.prot:11:3
-   │
-11 │   step();
-   │   ^^^^^^^ Inferring step value to be 1.
-
-error: Fork command should have no arguments.
+error: Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if
    ┌─ tests/illegal_fork.prot:12:3
    │
 12 │   fork(1);
-   │   ^^^^ Fork command should have no arguments.
+   │   ^ Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if

@@ -203,9 +203,9 @@ impl<'a> Evaluator<'a> {
                 // println!("Eval While.");
                 self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
             }
-            Stmt::Step(expr) => {
+            Stmt::Step => {
                 // println!("Eval Step.");
-                self.evaluate_step(&expr)?;
+                self.evaluate_step()?;
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
@@ -278,12 +278,12 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_step(&mut self, expr: &ExprId) -> Result<(), String> {
-        let res = self.evaluate_expr(expr)?;
-        let val = res.to_u64().unwrap();
-        for _ in 0..val {
-            self.sim.step();
-        }
+    fn evaluate_step(&mut self) -> Result<(), String> {
+        // let res = self.evaluate_expr(expr)?;
+        // let val = res.to_u64().unwrap();
+        // for _ in 0..val {
+        self.sim.step();
+        // }
         Ok(())
     }
 

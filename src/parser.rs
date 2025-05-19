@@ -78,10 +78,10 @@ impl<'a> ParserContext<'a> {
 
                 match primary.as_rule() {
                     Rule::integer => {
-                        let int_str = primary.as_str();
-                        let int_value = int_str.parse::<i32>().unwrap();
-                        let bitvec = BitVecValue::from_u64(int_value as u64, 64);
-                        Ok(BoxedExpr::Const(bitvec, start, end))
+                        let int_value = primary.as_str().parse::<u64>().unwrap();
+                        let bvv = BitVecValue::from_u64(int_value as u64, 64);
+
+                        Ok(BoxedExpr::Const(bvv, start, end))
                     }
                     Rule::path_id => {
                         let path_id = primary.as_str();
@@ -290,9 +290,25 @@ impl<'a> ParserContext<'a> {
         while let Some(inner_pair) = stmt_pairs.next() {
             let start = inner_pair.as_span().start();
             let end = inner_pair.as_span().end();
+
+            // special case for step() --  will return a vector of statements
+            if inner_pair.as_rule() == Rule::step {
+                let step_stmt = self.parse_step(inner_pair)?;
+
+                // push each step statement into the transaction
+                for step in step_stmt {
+                    let step_id = self.tr.s(step);
+                    self.tr.add_stmt_loc(step_id, start, end, self.fileid);
+                    stmts.push(step_id);
+                }
+
+                continue;
+            } 
+
+            // Handle other statement types
             let stmt = match inner_pair.as_rule() {
                 Rule::assign => self.parse_assign(inner_pair)?,
-                Rule::cmd => self.parse_cmd(inner_pair)?,
+                Rule::fork => self.parse_fork(inner_pair)?,
                 Rule::while_loop => self.parse_while(inner_pair)?,
                 Rule::cond => self.parse_cond(inner_pair)?,
                 Rule::assert_eq => self.parse_assert_eq(inner_pair)?,
@@ -310,6 +326,7 @@ impl<'a> ParserContext<'a> {
                     return Err(msg);
                 }
             };
+            
             let stmt_id = self.tr.s(stmt);
             self.tr.add_stmt_loc(stmt_id, start, end, self.fileid);
             stmts.push(stmt_id);
@@ -338,52 +355,35 @@ impl<'a> ParserContext<'a> {
         Ok(Stmt::Assign(symbol_id, expr_id))
     }
 
-    fn parse_cmd(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+    fn parse_step(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Vec<Stmt>, String> {
         let mut inner_rules = pair.clone().into_inner();
-        let cmd_rule = self.expect_rule(inner_rules.next(), &pair, "Expected command")?;
-        let cmd = cmd_rule.as_str();
-
-        let arg = if let Some(expr_rule) = inner_rules.next() {
-            let expr_id = self.parse_expr(expr_rule.into_inner())?;
-            Some(expr_id)
-        } else {
-            None
+        let integer_rule = inner_rules.next();
+        let num_steps = match integer_rule {
+            Some(rule) => rule.as_str().parse::<u64>().unwrap(),
+            None => 1, // Implicit 1 if no integer is passed
         };
 
-        match cmd {
-            "step" => match arg {
-                Some(expr_id) => Ok(Stmt::Step(expr_id)),
-                None => {
-                    let one_expr = self.tr.e(Expr::Const(BitVecValue::from_i64(1, 2)));
-                    self.handler.emit_diagnostic_parsing(
-                        "Inferring step value to be 1.",
-                        self.fileid,
-                        &pair,
-                        Level::Warning,
-                    );
-                    Ok(Stmt::Step(one_expr))
-                }
-            },
-            "fork" => {
-                if arg.is_some() {
-                    let msg = "Fork command should have no arguments.".to_string();
-                    self.handler.emit_diagnostic_parsing(
-                        &msg,
-                        self.fileid,
-                        &cmd_rule,
-                        Level::Error,
-                    );
-                    return Err(msg);
-                }
-                Ok(Stmt::Fork)
-            }
-            _ => {
-                let msg = format!("Unexpected command: {:?}", cmd);
-                self.handler
-                    .emit_diagnostic_parsing(&msg, self.fileid, &cmd_rule, Level::Error);
-                Err(msg)
-            }
+        // error if num_steps is 0 (note that the integer_rule is already unsigned, preventing negatives)
+        if num_steps == 0 {
+            let msg = format!("Step call expected single positive integer as argument, got {}.", num_steps);
+            self.handler
+                .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+            return Err(msg)
         }
+
+        // return a vector of steps based on num_steps
+        let mut steps = Vec::new();
+        for _ in 0..num_steps {
+            let step_stmt = Stmt::Step;
+            steps.push(step_stmt);
+        }
+
+        Ok(steps)
+    }
+
+    fn parse_fork(&mut self, _pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        // Fork is a special case, it doesn't have any arguments (enforced by the grammar)
+        Ok(Stmt::Fork)
     }
 
     fn parse_while(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {

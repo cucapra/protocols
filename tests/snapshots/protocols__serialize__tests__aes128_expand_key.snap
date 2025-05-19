@@ -10,10 +10,10 @@ struct ExpandKey128 {
 
 fn aes128<dut: ExpandKey128>(in input: u128, out output: u128) {
   dut.input := input;
-  step(1);
+  step();
   fork();
   dut.input := X;
   assert_eq(dut.output, output);
-  step(1);
+  step();
   assert_eq(dut.output_delayed, output);
 }

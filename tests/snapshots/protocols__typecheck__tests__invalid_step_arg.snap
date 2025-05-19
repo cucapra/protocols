@@ -2,20 +2,8 @@
 source: src/typecheck.rs
 expression: content
 ---
-error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
-  ┌─ tests/invalid_step_arg.prot:6:3
-  │
-6 │   a := b;
-  │   ^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
-
-error: Argument to step must be a positive, non-zero integer literal.
-  ┌─ tests/invalid_step_arg.prot:8:8
+error: Step call expected single positive integer as argument, got 0.
+  ┌─ tests/invalid_step_arg.prot:8:3
   │
 8 │   step(0);
-  │        ^ Argument to step must be a positive, non-zero integer literal.
-
-error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
-  ┌─ tests/invalid_step_arg.prot:9:3
-  │
-9 │   s := 0;
-  │   ^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+  │   ^^^^^^^^ Step call expected single positive integer as argument, got 0.
