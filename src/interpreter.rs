@@ -294,16 +294,6 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_step(&mut self) -> Result<(), String> {
-        self.sim.step();
-        Ok(())
-    }
-
-    fn evaluate_fork(&self) -> Result<(), String> {
-        // TODO: Implement evaluate_fork
-        Ok(())
-    }
-
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;

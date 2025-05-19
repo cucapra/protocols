@@ -1,5 +1,4 @@
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempfile;
 use thiserror::Error;

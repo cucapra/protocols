@@ -4,9 +4,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecOps;
-
-use crate::parser;
 use crate::{diagnostic::*, ir::*, serialize::*};
 
 fn check_expr_types(
@@ -216,7 +213,7 @@ mod tests {
 
     fn test_helper(test_name: &str, file_name: &str) {
         let mut handler = DiagnosticHandler::new();
-        let result = parser::parse_file(file_name, &mut handler);
+        let result = parse_file(file_name, &mut handler);
         let content = match result {
             Ok(trs) => {
                 type_check(trs, &mut handler);

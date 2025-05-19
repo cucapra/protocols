@@ -4,12 +4,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::*;
-use marlin_verilator::*;
+
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    use marlin_verilator::*;
     use crate::yosys::*;
     use baa::{BitVecOps, BitVecValue};
     use patronus::sim::Simulator;
@@ -35,7 +34,7 @@ pub mod tests {
         )
         .unwrap();
 
-        let mut dut = runtime
+        let _dut = runtime
             .create_dyn_model(
                 "expand_key_128",
                 "examples/tinyaes128/aes_128.v",
@@ -62,7 +61,7 @@ pub mod tests {
         )
         .unwrap();
 
-        let mut dut = runtime
+        let _dut = runtime
             .create_dyn_model(
                 "adder_d1",
                 "examples/adders/add_d1.v",
