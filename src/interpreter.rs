@@ -9,14 +9,16 @@ use crate::yosys::yosys_to_btor;
 use crate::yosys::ProjectConf;
 use crate::yosys::YosysEnv;
 
+use rand::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 // TODO: this is relevant for proper don't care handling in the future
-// pub enum Value {
-//     BitVec(BitVecValue),
-//     DontCare,
-// }
+pub enum Value {
+    OldValue(BitVecValue),
+    NewValue(BitVecValue),
+    DontCare(BitVecValue),
+}
 
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
@@ -24,12 +26,16 @@ pub struct Evaluator<'a> {
     st: &'a SymbolTable,
     handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
-    // can change to be secondarymaps
-    args_mapping: HashMap<SymbolId, BitVecValue>, // FIXME: change to bitvecval
 
-    // combine into port map?
+    // TODO: can change to be secondarymaps for efficiency
+    args_mapping: HashMap<SymbolId, BitVecValue>,
     input_mapping: HashMap<SymbolId, ExprRef>,
     output_mapping: HashMap<SymbolId, Output>,
+
+    // tracks the input pins and their values
+    input_vals: HashMap<SymbolId, Value>,
+
+    assertions_enabled: bool,
 }
 
 impl<'a> Evaluator<'a> {
@@ -75,6 +81,24 @@ impl<'a> Evaluator<'a> {
         // TODO: check that the Transaction DUT matches the Btor2 DUT
         // TODO: check that every item in the args mapping is a field in the Transaction
 
+        // Initialize the input pins with DontCares that are randomly assigned
+        let mut input_vals = HashMap::new();
+        for (symbol_id, _) in &input_mapping {
+            // get the width from the type of the symbol
+            match st[symbol_id].tpe() {
+                Type::BitVec(width) => {
+                    // TODO: make this value random
+                    // let random_value = BitVecValue::random(, width);
+                    input_vals.insert(*symbol_id, Value::DontCare(BitVecValue::zero(width)));
+                }
+                _ => panic!(
+                    "Expected a BitVec type for symbol {}, but found {:?}",
+                    symbol_id,
+                    st[symbol_id].tpe()
+                ),
+            }
+        }
+
         // Initialize sim, return the transaction!
         sim.init();
 
@@ -87,6 +111,8 @@ impl<'a> Evaluator<'a> {
             args_mapping,
             input_mapping,
             output_mapping,
+            input_vals,
+            assertions_enabled: false,
         };
         return evaluator;
     }
@@ -232,7 +258,10 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::AssertEq(expr1, expr2) => {
                 // println!("Eval AssertEq.");
-                self.evaluate_assert_eq(&expr1, &expr2)?;
+                if self.assertions_enabled {
+                    self.evaluate_assert_eq(&expr1, &expr2)?;
+                }
+
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
@@ -262,6 +291,29 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) -> Result<(), String> {
         let expr_val = self.evaluate_expr(expr_id)?;
+
+        // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
+        // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
+        if let Some(value) = self.input_vals.get_mut(symbol_id) {
+            match value {
+                Value::DontCare(_) | Value::OldValue(_) => {
+                    *value = Value::NewValue(expr_val.clone());
+                }
+                Value::NewValue(_) => {
+                    return Err(format!(
+                        "Multiple threads attempting to assign to the same input: {}",
+                        self.st[symbol_id].name()
+                    ));
+                }
+            }
+        } else {
+            return Err(format!(
+                "Symbol {} not found in input_vals.",
+                self.st[symbol_id].name()
+            ));
+        }
+
+        // assign to the sim
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, &expr_val);

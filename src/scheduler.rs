@@ -298,7 +298,6 @@ impl<'a> Scheduler<'a> {
     }
 }
 
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
