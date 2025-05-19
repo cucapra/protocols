@@ -13,10 +13,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 // TODO: this is relevant for proper don't care handling in the future
-pub enum Value {
-    BitVec(BitVecValue),
-    DontCare,
-}
+// pub enum Value {
+//     BitVec(BitVecValue),
+//     DontCare,
+// }
 
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
