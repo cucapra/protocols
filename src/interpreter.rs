@@ -279,11 +279,7 @@ impl<'a> Evaluator<'a> {
     }
 
     fn evaluate_step(&mut self) -> Result<(), String> {
-        // let res = self.evaluate_expr(expr)?;
-        // let val = res.to_u64().unwrap();
-        // for _ in 0..val {
         self.sim.step();
-        // }
         Ok(())
     }
 
