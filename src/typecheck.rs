@@ -65,6 +65,31 @@ fn check_stmt_types(
     match &tr[stmt_id] {
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
+        // Stmt::Step(exprid) => {
+        //     let expr_type = check_expr_types(tr, st, handler, exprid)?;
+        //     if let Type::BitVec(_) = expr_type {
+        //         if let Expr::Const(val) = &tr[exprid] {
+        //             if val.to_i64().unwrap() >= 1 {
+        //                 return Ok(());
+        //             }
+        //             handler.emit_diagnostic_expr(
+        //                 tr,
+        //                 exprid,
+        //                 &format!("Argument to step must be a positive, non-zero integer literal."),
+        //                 Level::Error,
+        //             );
+        //         }
+        //         Ok(())
+        //     } else {
+        //         handler.emit_diagnostic_stmt(
+        //             tr,
+        //             stmt_id,
+        //             &format!("Invalid type for [step] statement: {:?}", expr_type),
+        //             Level::Error,
+        //         );
+        //         Ok(())
+        //     }
+        // }
         Stmt::Assign(lhs, rhs) => {
             // Function argument cannot be assigned
             if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
