@@ -22,9 +22,8 @@ pub struct Thread<'a> {
     pub current_stmt: StmtId,
     args: HashMap<&'a str, BitVecValue>,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
-    /// The current index of the most recent todo that has been forked
-    /// (a thread is or was running it).
-    fork_idx: usize,
+    /// Index into the original `todos` (used to store this thread’s result)
+    thread_id: usize,
 }
 
 impl<'a> Thread<'a> {
@@ -33,16 +32,19 @@ impl<'a> Thread<'a> {
         st: &'a SymbolTable,
         args: HashMap<&'a str, BitVecValue>,
         next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
-        fork_idx: usize,
+        thread_id: usize,
     ) -> Self {
-        println!("Thread initialized with transaction: {:?}", tr.name);
+        println!(
+            "Thread initialized with transaction: {:?}, thread_id={}",
+            tr.name, thread_id
+        );
         Self {
             tr,
             st,
             current_stmt: tr.body,
             args,
             next_stmt_map,
-            fork_idx,
+            thread_id,
         }
     }
 }
@@ -51,7 +53,8 @@ pub struct Scheduler<'a> {
     irs: Vec<(&'a Transaction, &'a SymbolTable)>,
     todos: Vec<(usize, Vec<BitVecValue>)>,
     next_stmt_maps: Vec<FxHashMap<StmtId, Option<StmtId>>>,
-    fork_idx: usize,
+    /// Next index into `todos` to pull when we fork
+    next_todo_idx: usize,
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
     inactive_threads: Vec<Thread<'a>>,
@@ -74,9 +77,10 @@ impl<'a> Scheduler<'a> {
             irs.iter().map(|(tr, _)| tr.next_stmt_mapping()).collect();
 
         // setup the Evaluator and first Thread
+        let next_todo_idx = 0;
+        let res = Self::next_ir(&todos, next_todo_idx, irs.clone(), next_stmt_maps.clone());
         let (initial_tr, initial_st, initial_args, initial_next_stmt_map) =
-            Self::next_ir(&todos, 0, irs.clone(), next_stmt_maps.clone())
-                .expect("No transactions passed.");
+            res.expect("No transactions passed.");
 
         println!("Starting with initial transaction: {:?}", initial_tr.name);
 
@@ -91,21 +95,20 @@ impl<'a> Scheduler<'a> {
             sim,
         );
 
-        let fork_idx = 0;
         let results_size = todos.len();
         let first = Thread::initialize_thread(
             initial_tr,
             initial_st,
             initial_args,
             initial_next_stmt_map,
-            fork_idx,
+            next_todo_idx,
         );
         println!("Added first thread to active_threads");
         Self {
             irs,
             todos,
             next_stmt_maps,
-            fork_idx,
+            next_todo_idx,
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
@@ -166,13 +169,17 @@ impl<'a> Scheduler<'a> {
             match next_step {
                 Some(stepid) => {
                     next_thread.current_stmt = stepid;
-                    println!("Thread with transaction {:?} reached step, moving to next_threads with step: {:?}", 
-                            next_thread.tr.name, stepid);
+                    println!(
+                        "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
+                        next_thread.tr.name, stepid
+                    );
                     self.next_threads.push(next_thread)
                 }
                 None => {
-                    println!("Thread with transaction {:?} finished execution, moving to inactive_threads", 
-                            next_thread.tr.name);
+                    println!(
+                        "Thread with transaction {:?} finished execution, moving to inactive_threads",
+                        next_thread.tr.name
+                    );
                     self.inactive_threads.push(next_thread)
                 }
             }
@@ -194,7 +201,7 @@ impl<'a> Scheduler<'a> {
             self.evaluator.sim_step();
         }
 
-        return self.results.clone();
+        self.results.clone()
     }
 
     pub fn run_thread_until_step(&mut self, thread: &Thread<'a>) -> Option<StmtId> {
@@ -223,24 +230,20 @@ impl<'a> Scheduler<'a> {
                                 next_stmt_id, &thread.tr[next_stmt_id]
                             );
                             match thread.tr[next_stmt_id] {
-                                // if a step, stop execution
-                                Stmt::Step(_) => {
+                                Stmt::Step => {
                                     println!(
                                         "  Step reached, thread will pause at: {:?}",
                                         next_stmt_id
                                     );
                                     return Some(next_stmt_id);
                                 }
-
-                                // if a fork, fork and continue execution
                                 Stmt::Fork => {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
-                                    // Forking creates a new thread, so we need to add it to the next threads
-
-                                    self.fork_idx += 1;
+                                    // advance to the next todo index
+                                    self.next_todo_idx += 1;
                                     if let Some((tr, st, args, next_stmt_map)) = Self::next_ir(
                                         &self.todos,
-                                        self.fork_idx,
+                                        self.next_todo_idx,
                                         self.irs.clone(),
                                         self.next_stmt_maps.clone(),
                                     ) {
@@ -253,19 +256,18 @@ impl<'a> Scheduler<'a> {
                                             st,
                                             args,
                                             next_stmt_map,
-                                            self.fork_idx,
+                                            self.next_todo_idx,
                                         );
                                         self.next_threads.push(next_thread);
-                                        println!("  Forked thread added to next_threads queue. Queue size: {}", 
-                                        self.next_threads.len());
+                                        println!(
+                                            "  Forked thread added to next_threads queue. Queue size: {}",
+                                            self.next_threads.len()
+                                        );
                                     } else {
                                         println!("  No more irs to fork, continuing execution");
                                     }
-
-                                    current_step = Some(next_stmt_id); // this thread keeps running
+                                    current_step = Some(next_stmt_id);
                                 }
-
-                                // if anything else, continue execution
                                 _ => {
                                     println!(
                                         "  Continuing execution to next statement: {:?}",
@@ -283,10 +285,11 @@ impl<'a> Scheduler<'a> {
                 }
                 Err(e) => {
                     println!(
-                        "ERROR evaluating statement, ending threead execution: {:?}",
+                        "ERROR evaluating statement, ending thread execution: {:?}",
                         e
                     );
-                    self.results[thread.fork_idx] = Err(e);
+                    // store error at this thread's original todo index
+                    self.results[thread.thread_id] = Err(e);
                     return None;
                 }
             }
@@ -294,6 +297,7 @@ impl<'a> Scheduler<'a> {
         None
     }
 }
+
 
 #[cfg(test)]
 pub mod tests {
