@@ -640,6 +640,9 @@ pub fn parse_file(
                 return Err(e);
             }
 
+            // implicit fork at the end of every transaction
+            context.tr.s(Stmt::Fork);
+
             trs.push((context.st.clone(), context.tr.clone()));
         }
     }
