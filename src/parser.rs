@@ -303,7 +303,7 @@ impl<'a> ParserContext<'a> {
                 }
 
                 continue;
-            } 
+            }
 
             // Handle other statement types
             let stmt = match inner_pair.as_rule() {
@@ -326,7 +326,7 @@ impl<'a> ParserContext<'a> {
                     return Err(msg);
                 }
             };
-            
+
             let stmt_id = self.tr.s(stmt);
             self.tr.add_stmt_loc(stmt_id, start, end, self.fileid);
             stmts.push(stmt_id);
@@ -365,10 +365,13 @@ impl<'a> ParserContext<'a> {
 
         // error if num_steps is 0 (note that the integer_rule is already unsigned, preventing negatives)
         if num_steps == 0 {
-            let msg = format!("Step call expected single positive integer as argument, got {}.", num_steps);
+            let msg = format!(
+                "Step call expected single positive integer as argument, got {}.",
+                num_steps
+            );
             self.handler
                 .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
-            return Err(msg)
+            return Err(msg);
         }
 
         // return a vector of steps based on num_steps
