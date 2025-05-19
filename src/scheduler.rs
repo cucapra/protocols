@@ -6,6 +6,7 @@
 
 use baa::BitVecValue;
 use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::interpreter::Evaluator;
@@ -20,6 +21,7 @@ pub struct Thread<'a> {
     pub st: &'a SymbolTable,
     pub current_stmt: StmtId,
     args: HashMap<&'a str, BitVecValue>,
+    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     /// The current index of the most recent todo that has been forked
     /// (a thread is or was running it).
     fork_idx: usize,
@@ -30,6 +32,7 @@ impl<'a> Thread<'a> {
         tr: &'a Transaction,
         st: &'a SymbolTable,
         args: HashMap<&'a str, BitVecValue>,
+        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
         fork_idx: usize,
     ) -> Self {
         println!("Thread initialized with transaction: {:?}", tr.name);
@@ -38,6 +41,7 @@ impl<'a> Thread<'a> {
             st,
             current_stmt: tr.body,
             args,
+            next_stmt_map,
             fork_idx,
         }
     }
@@ -46,6 +50,7 @@ impl<'a> Thread<'a> {
 pub struct Scheduler<'a> {
     irs: Vec<(&'a Transaction, &'a SymbolTable)>,
     todos: Vec<(usize, Vec<BitVecValue>)>,
+    next_stmt_maps: Vec<FxHashMap<StmtId, Option<StmtId>>>,
     fork_idx: usize,
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
@@ -64,11 +69,15 @@ impl<'a> Scheduler<'a> {
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
-        let res = Self::next_ir(&todos, 0, irs.clone());
+        // pre-compute next statement mappings in a parallel array
+        let next_stmt_maps : Vec<FxHashMap<StmtId, Option<StmtId>>> = irs.iter().map(|(tr, _)| tr.next_stmt_mapping()).collect();
+        
+        // setup the Evaluator and first Thread
+        let res = Self::next_ir(&todos, 0, irs.clone(), next_stmt_maps.clone());
         if res.is_none() {
             panic!("No transactions passed.");
         }
-        let (initial_tr, initial_st, initial_args) = res.unwrap();
+        let (initial_tr, initial_st, initial_args, initial_next_stmt_map) = res.unwrap();
 
         println!("Starting with initial transaction: {:?}", initial_tr.name);
 
@@ -85,11 +94,12 @@ impl<'a> Scheduler<'a> {
 
         let fork_idx = 0;
         let results_size = todos.len();
-        let first = Thread::initialize_thread(initial_tr, initial_st, initial_args, fork_idx);
+        let first = Thread::initialize_thread(initial_tr, initial_st, initial_args, initial_next_stmt_map, fork_idx);
         println!("Added first thread to active_threads");
         Self {
             irs,
             todos,
+            next_stmt_maps,
             fork_idx,
             active_threads: vec![first],
             next_threads: vec![],
@@ -104,25 +114,32 @@ impl<'a> Scheduler<'a> {
         todos: &Vec<(usize, Vec<BitVecValue>)>,
         idx: usize,
         irs: Vec<(&'a Transaction, &'a SymbolTable)>,
+        next_stmt_mappings: Vec<FxHashMap<StmtId, Option<StmtId>>>,
     ) -> Option<(
         &'a Transaction,
         &'a SymbolTable,
         HashMap<&'a str, BitVecValue>,
+        FxHashMap<StmtId, Option<StmtId>>,
     )> {
         if idx < todos.len() {
             // get the corresponding transaction and symbol table
-            let (tr, st) = irs[todos[idx].0];
+            let ir_idx = todos[idx].0;
+            let (tr, st) = irs[ir_idx];
 
             // setup the arguments for the transaction
             let args = todos[idx].1.clone();
             let mut args_map = HashMap::new();
+
+
+            // setup the next_stmt_mapping from the parallel vector
+            let next_stmt_mapping = next_stmt_mappings[ir_idx].clone();
 
             for (i, arg) in args.iter().enumerate() {
                 let identifier = st[tr.args[i].symbol()].name();
                 args_map.insert(identifier, arg.clone());
             }
 
-            Some((tr, st, args_map))
+            Some((tr, st, args_map, next_stmt_mapping))
         } else {
             None
         }
@@ -182,7 +199,7 @@ impl<'a> Scheduler<'a> {
             thread.tr.name, thread.current_stmt
         );
         self.evaluator
-            .context_switch(thread.tr, thread.st, thread.args.clone());
+            .context_switch(thread.tr, thread.st, thread.args.clone(), thread.next_stmt_map.clone());
         let mut current_step = Some(thread.current_stmt);
 
         while let Some(stepid) = current_step {
@@ -213,15 +230,15 @@ impl<'a> Scheduler<'a> {
                                     // Forking creates a new thread, so we need to add it to the next threads
 
                                     self.fork_idx += 1;
-                                    if let Some((tr, st, args)) =
-                                        Self::next_ir(&self.todos, self.fork_idx, self.irs.clone())
+                                    if let Some((tr, st, args, next_stmt_map)) =
+                                        Self::next_ir(&self.todos, self.fork_idx, self.irs.clone(), self.next_stmt_maps.clone(),)
                                     {
                                         println!(
                                             "  Forking new thread with transaction: {:?}",
                                             tr.name
                                         );
                                         let next_thread =
-                                            Thread::initialize_thread(tr, st, args, self.fork_idx);
+                                            Thread::initialize_thread(tr, st, args, next_stmt_map, self.fork_idx);
                                         self.next_threads.push(next_thread);
                                         println!("  Forked thread added to next_threads queue. Queue size: {}", 
                                         self.next_threads.len());

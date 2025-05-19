@@ -20,7 +20,7 @@ pub enum Value {
 
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
-    next_stmt_mapping: FxHashMap<StmtId, Option<StmtId>>,
+    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
     handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
@@ -80,7 +80,7 @@ impl<'a> Evaluator<'a> {
 
         let evaluator = Evaluator {
             tr,
-            next_stmt_mapping: tr.next_stmt_mapping(),
+            next_stmt_map: tr.next_stmt_mapping(),
             st,
             handler,
             sim: sim,
@@ -110,12 +110,13 @@ impl<'a> Evaluator<'a> {
         tr: &'a Transaction,
         st: &'a SymbolTable,
         args: HashMap<&str, BitVecValue>,
+        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     ) {
         self.tr = tr;
         self.st = st;
 
         // TODO: this is inefficient because the map is generated every time there is a context switch
-        self.next_stmt_mapping = tr.next_stmt_mapping();
+        self.next_stmt_map = next_stmt_map;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
@@ -209,7 +210,7 @@ impl<'a> Evaluator<'a> {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
                 self.evaluate_assign(&symbol_id, &expr_id)?;
-                Ok(self.next_stmt_mapping[stmt_id])
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
                 // println!("Eval IFElse.");
@@ -221,19 +222,18 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::Step => {
                 // println!("Eval Step.");
-                self.evaluate_step()?;
-                Ok(self.next_stmt_mapping[stmt_id])
+                // the scheduler will handle the step. simply return the next statement to run
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
                 // println!("Eval Fork.");
-                // the scheduler will handle the fork. simple return the next statement to run
-                return Ok(self.next_stmt_mapping[stmt_id]);
-                // return Err("Fork not implemented.".to_string());
+                // the scheduler will handle the fork. simply return the next statement to run
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr1, expr2) => {
                 // println!("Eval AssertEq.");
                 self.evaluate_assert_eq(&expr1, &expr2)?;
-                Ok(self.next_stmt_mapping[stmt_id])
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
                 // println!("Eval Block.");
@@ -290,7 +290,7 @@ impl<'a> Evaluator<'a> {
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
-            Ok(self.next_stmt_mapping[while_id])
+            Ok(self.next_stmt_map[while_id])
         }
     }
 
@@ -310,7 +310,7 @@ impl<'a> Evaluator<'a> {
         match &self.tr[stmt_id] {
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    return Ok(self.next_stmt_mapping[stmt_id]);
+                    return Ok(self.next_stmt_map[stmt_id]);
                 } else {
                     return Ok(Some(stmt_ids[0]));
                 }
