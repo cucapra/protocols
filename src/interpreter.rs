@@ -362,7 +362,7 @@ pub fn interpret(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::parser::parse_file;
+    use crate::parser::parsing_helper;
     use core::panic;
     use insta::Settings;
     use std::path::Path;
@@ -389,10 +389,10 @@ pub mod tests {
         let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
 
         // only one transaction in this file
-        let (st, tr) = &trs[0];
+        let (tr, st) = &trs[0];
 
         let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
         let res = evaluator.evaluate_transaction();
@@ -409,17 +409,6 @@ pub mod tests {
 
         println!("{}", content);
         snap(snap_name, content);
-    }
-
-    fn parsing_helper(
-        transaction_filename: &str,
-        handler: &mut DiagnosticHandler,
-    ) -> Vec<(SymbolTable, Transaction)> {
-        let result = parse_file(transaction_filename, handler);
-        match result {
-            Ok(success_vec) => success_vec,
-            Err(_) => panic!("Failed to parse file: {}", transaction_filename),
-        }
     }
 
     #[test]
