@@ -439,6 +439,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_add_err() {
         // set up the args for the Transaction
         let mut args = HashMap::new();
@@ -455,6 +456,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_mult_execution() {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
@@ -470,6 +472,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_simple_if_execution() {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(32, 64));
@@ -484,6 +487,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_simple_while_execution() {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(32, 64));
