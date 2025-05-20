@@ -1,14 +1,7 @@
 ---
 source: src/typecheck.rs
 expression: content
-snapshot_kind: text
 ---
-warning: Inferring step value to be 1.
-   ┌─ tests/add_struct.prot:11:3
-   │
-11 │   step();
-   │   ^^^^^^^ Inferring step value to be 1.
-
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
    ┌─ tests/add_struct.prot:13:3
    │

@@ -64,31 +64,7 @@ fn check_stmt_types(
 ) -> Result<(), String> {
     match &tr[stmt_id] {
         Stmt::Fork => Ok(()),
-        Stmt::Step(exprid) => {
-            let expr_type = check_expr_types(tr, st, handler, exprid)?;
-            if let Type::BitVec(_) = expr_type {
-                if let Expr::Const(val) = &tr[exprid] {
-                    if val.to_i64().unwrap() >= 1 {
-                        return Ok(());
-                    }
-                    handler.emit_diagnostic_expr(
-                        tr,
-                        exprid,
-                        &format!("Argument to step must be a positive, non-zero integer literal."),
-                        Level::Error,
-                    );
-                }
-                Ok(())
-            } else {
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!("Invalid type for [step] statement: {:?}", expr_type),
-                    Level::Error,
-                );
-                Ok(())
-            }
-        }
+        Stmt::Step => Ok(()),
         Stmt::Assign(lhs, rhs) => {
             // Function argument cannot be assigned
             if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
@@ -339,7 +315,7 @@ mod tests {
         tr.add_stmt_loc(fork, 68, 75, fileid);
         let c_assign = tr.s(Stmt::Assign(c, b_expr));
         tr.add_stmt_loc(c_assign, 79, 86, fileid);
-        let step = tr.s(Stmt::Step(one_expr));
+        let step = tr.s(Stmt::Step);
         tr.add_stmt_loc(step, 90, 97, fileid);
         let s_assign = tr.s(Stmt::Assign(s, zero_expr));
         tr.add_stmt_loc(s_assign, 101, 108, fileid);

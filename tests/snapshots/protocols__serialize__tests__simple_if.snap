@@ -1,7 +1,6 @@
 ---
 source: src/serialize.rs
 expression: content
-snapshot_kind: text
 ---
 struct Counter {
   in a: u64,
@@ -10,11 +9,16 @@ struct Counter {
 
 fn simple_if<dut: Counter>(in a: u64, out s: u64) {
   dut.a := a;
-  step(2);
+  step();
+  step();
   if dut.s == 3 {
     assert_eq(dut.s, 0);
   } else {
-    step(5);
+    step();
+    step();
+    step();
+    step();
+    step();
   }
   if dut.s == 7 {
     assert_eq(dut.s, s);

@@ -81,11 +81,11 @@ pub fn build_statements(
             st[lhs].full_name(st),
             serialize_expr(tr, st, rhs)
         )?,
-        Stmt::Step(expr_id) => writeln!(
+        Stmt::Step => writeln!(
             out,
-            "{}step({});",
+            "{}step();",
             "  ".repeat(index),
-            serialize_expr(tr, st, expr_id)
+            // serialize_expr(tr, st, expr_id)
         )?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
         Stmt::While(cond, bodyid) => {
@@ -360,7 +360,7 @@ pub mod tests {
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
-        let if_body = vec![easycond.s(Stmt::Step(one_expr))];
+        let if_body = vec![easycond.s(Stmt::Step)];
         let ifbody = easycond.s(Stmt::Block(if_body));
 
         let else_body = vec![easycond.s(Stmt::Fork)];

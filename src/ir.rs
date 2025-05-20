@@ -215,7 +215,7 @@ entity_impl!(StmtId, "stmt");
 pub enum Stmt {
     Block(Vec<StmtId>),
     Assign(SymbolId, ExprId),
-    Step(ExprId),
+    Step,
     Fork,
     While(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
@@ -579,14 +579,14 @@ mod tests {
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
         let b_expr = add.e(Expr::Sym(b));
-        let one_expr = add.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        // let one_expr = add.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let dut_s_expr = add.e(Expr::Sym(dut_s));
 
         // 4) create statements
         let body = vec![
             add.s(Stmt::Assign(dut_a, a_expr)),
             add.s(Stmt::Assign(dut_b, b_expr)),
-            add.s(Stmt::Step(one_expr)),
+            add.s(Stmt::Step),
             add.s(Stmt::Fork),
             add.s(Stmt::Assign(dut_a, add.expr_dont_care())),
             add.s(Stmt::Assign(dut_b, add.expr_dont_care())),
@@ -641,7 +641,7 @@ mod tests {
 
         // 4) create statements
         let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let while_body = vec![calyx_go_done.s(Stmt::Step(one_expr))];
+        let while_body = vec![calyx_go_done.s(Stmt::Step)];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 
         let body = vec![

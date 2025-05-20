@@ -1,7 +1,6 @@
 ---
 source: src/serialize.rs
 expression: content
-snapshot_kind: text
 ---
 struct Multiplier {
   in a: u32,
@@ -12,11 +11,11 @@ struct Multiplier {
 fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   dut.a := a;
   dut.b := b;
-  step(1);
-  step(1);
+  step();
+  step();
   fork();
   dut.a := X;
   dut.b := X;
-  step(1);
+  step();
   assert_eq(s, dut.s);
 }
