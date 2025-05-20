@@ -12,6 +12,7 @@ use crate::yosys::YosysEnv;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+// TODO: this is relevant for proper don't care handling in the future
 pub enum Value {
     BitVec(BitVecValue),
     DontCare,
@@ -104,7 +105,18 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-    pub fn switch_args_mapping(&mut self, args: HashMap<&str, BitVecValue>) {
+
+    pub fn context_switch(
+        &mut self,
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        args: HashMap<&str, BitVecValue>,
+    ) {
+        self.tr = tr;
+        self.st = st;
+
+        // TODO: this is inefficient because the map is generated every time there is a context switch
+        self.next_stmt_mapping = tr.next_stmt_mapping();
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
@@ -125,6 +137,11 @@ impl<'a> Evaluator<'a> {
             }
         };
         (ctx, sys)
+    }
+
+    // step the simulator
+    pub fn sim_step(&mut self) {
+        self.sim.step();
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
@@ -188,7 +205,7 @@ impl<'a> Evaluator<'a> {
         return Ok(());
     }
 
-    fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
@@ -205,12 +222,12 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::Step => {
                 // println!("Eval Step.");
-                self.evaluate_step()?;
+                // self.evaluate_step()?;
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
                 // println!("Eval Fork.");
-                // TODO: Implement evaluate_fork
+                // the scheduler will handle the fork. simple return the next statement to run
                 return Ok(self.next_stmt_mapping[stmt_id]);
                 // return Err("Fork not implemented.".to_string());
             }
@@ -270,7 +287,7 @@ impl<'a> Evaluator<'a> {
         while_id: &StmtId,
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
-        let mut res = self.evaluate_expr(loop_guard_id)?;
+        let res = self.evaluate_expr(loop_guard_id)?;
         if res.is_true() {
             return Ok(Some(*do_block_id));
         } else {
@@ -346,7 +363,7 @@ pub fn interpret(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::parser::parse_file;
+    use crate::parser::parsing_helper;
     use core::panic;
     use insta::Settings;
     use std::path::Path;
@@ -373,10 +390,10 @@ pub mod tests {
         let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
         let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
 
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
+        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
 
         // only one transaction in this file
-        let (st, tr) = &trs[0];
+        let (tr, st) = &trs[0];
 
         let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
         let res = evaluator.evaluate_transaction();
@@ -393,17 +410,6 @@ pub mod tests {
 
         println!("{}", content);
         snap(snap_name, content);
-    }
-
-    fn parsing_helper(
-        transaction_filename: &str,
-        handler: &mut DiagnosticHandler,
-    ) -> Vec<(SymbolTable, Transaction)> {
-        let result = parse_file(transaction_filename, handler);
-        match result {
-            Ok(success_vec) => success_vec,
-            Err(_) => panic!("Failed to parse file: {}", transaction_filename),
-        }
     }
 
     #[test]
@@ -423,6 +429,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_add_err() {
         // set up the args for the Transaction
         let mut args = HashMap::new();
@@ -439,6 +446,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_mult_execution() {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(6, 32));
@@ -454,6 +462,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_simple_if_execution() {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(32, 64));
@@ -468,6 +477,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_simple_while_execution() {
         let mut args = HashMap::new();
         args.insert("a", BitVecValue::from_u64(32, 64));

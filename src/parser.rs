@@ -1,6 +1,6 @@
 // Copyright 2025 Cornell University
 // released under MIT License
-// author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
+// author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
@@ -647,6 +647,17 @@ pub fn parse_file(
         }
     }
     Ok(trs)
+}
+
+pub fn parsing_helper(
+    transaction_filename: &str,
+    handler: &mut DiagnosticHandler,
+) -> Vec<(Transaction, SymbolTable)> {
+    let result = parse_file(transaction_filename, handler);
+    match result {
+        Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
+        Err(_) => panic!("Failed to parse file: {}", transaction_filename),
+    }
 }
 
 // Wrapper struct for custom display of pest pairs

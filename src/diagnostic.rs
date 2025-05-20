@@ -1,6 +1,6 @@
 // Copyright 2024 Cornell University
 // released under MIT License
-// author: Nikil Shyamunder <nikil.shyamsunder@gmail.com>
+// author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
@@ -251,6 +251,10 @@ impl DiagnosticHandler {
         if let (Some((start1, end1, fileid1)), Some((start2, end2, fileid2))) =
             (tr.get_expr_loc(*expr1_id), tr.get_expr_loc(*expr2_id))
         {
+            assert!(
+                fileid1 == fileid2,
+                "Expressions must be in the same file for assertion error"
+            );
             let diagnostic = Diagnostic {
                 title: format!("Error in file {}", fileid1),
                 message: "The two expressions did not evaluate to the same value".to_string(),

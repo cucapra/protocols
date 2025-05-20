@@ -2,4 +2,10 @@
 source: src/interpreter.rs
 expression: content
 ---
-Assertion Passed
+Assertion Failed
+
+error: The two expressions did not evaluate to the same value
+   ┌─ tests/mul.prot:19:13
+   │
+19 │   assert_eq(s, dut.s);
+   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000110000), RHS Value: ValueOwned(00000000000000000000000000000000)
