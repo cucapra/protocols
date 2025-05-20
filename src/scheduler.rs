@@ -50,7 +50,7 @@ pub struct Scheduler<'a> {
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
     inactive_threads: Vec<Thread<'a>>,
-    step_count: i32,
+    step_count: usize,
     evaluator: Evaluator<'a>,
     results: Vec<Result<(), String>>,
 }
