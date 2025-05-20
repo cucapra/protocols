@@ -105,7 +105,7 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-    
+
     pub fn context_switch(
         &mut self,
         tr: &'a Transaction,
