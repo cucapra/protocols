@@ -199,7 +199,7 @@ impl<'a> Scheduler<'a> {
                             );
                             match thread.tr[next_stmt_id] {
                                 // if a step, stop execution
-                                Stmt::Step(_) => {
+                                Stmt::Step => {
                                     println!(
                                         "  Step reached, thread will pause at: {:?}",
                                         next_stmt_id

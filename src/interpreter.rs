@@ -221,7 +221,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::Step => {
                 // println!("Eval Step.");
-                self.evaluate_step()?;
+                // self.evaluate_step()?;
                 Ok(self.next_stmt_mapping[stmt_id])
             }
             Stmt::Fork => {
