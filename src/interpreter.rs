@@ -5,15 +5,17 @@ use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 use rustc_hash::FxHashMap;
 
+use rand::prelude::*;
+
 use crate::yosys::yosys_to_btor;
 use crate::yosys::ProjectConf;
 use crate::yosys::YosysEnv;
 
-use rand::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 // TODO: this is relevant for proper don't care handling in the future
+#[derive(PartialEq, Clone)]
 pub enum Value {
     OldValue(BitVecValue),
     NewValue(BitVecValue),
@@ -33,9 +35,9 @@ pub struct Evaluator<'a> {
     output_mapping: HashMap<SymbolId, Output>,
 
     // tracks the input pins and their values
-    input_vals: HashMap<SymbolId, Value>,
+    pub input_vals: HashMap<SymbolId, Value>,
 
-    assertions_enabled: bool,
+    pub assertions_enabled: bool,
 }
 
 impl<'a> Evaluator<'a> {
@@ -88,8 +90,8 @@ impl<'a> Evaluator<'a> {
             match st[symbol_id].tpe() {
                 Type::BitVec(width) => {
                     // TODO: make this value random
-                    // let random_value = BitVecValue::random(, width);
-                    input_vals.insert(*symbol_id, Value::DontCare(BitVecValue::zero(width)));
+                    let mut rng = rand::thread_rng();
+                    input_vals.insert(*symbol_id, Value::DontCare(BitVecValue::random(&mut rng, width)));
                 }
                 _ => panic!(
                     "Expected a BitVec type for symbol {}, but found {:?}",
@@ -235,7 +237,7 @@ impl<'a> Evaluator<'a> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
-                self.evaluate_assign(&symbol_id, &expr_id)?;
+                self.evaluate_assign(&stmt_id, &symbol_id, &expr_id)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
@@ -289,7 +291,13 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) -> Result<(), String> {
+    fn evaluate_assign(
+        &mut self,
+        stmt_id: &StmtId,
+        symbol_id: &SymbolId,
+        expr_id: &ExprId,
+    ) -> Result<(), String> {
+        // FIXME: This should return a DontCare or a NewValue
         let expr_val = self.evaluate_expr(expr_id)?;
 
         // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
@@ -300,10 +308,15 @@ impl<'a> Evaluator<'a> {
                     *value = Value::NewValue(expr_val.clone());
                 }
                 Value::NewValue(_) => {
-                    return Err(format!(
+                    // TODO: Can include more
+                    let msg = format!(
                         "Multiple threads attempting to assign to the same input: {}",
                         self.st[symbol_id].name()
-                    ));
+                    );
+                    self.handler
+                        .emit_diagnostic_stmt(self.tr, stmt_id, &msg, Level::Error);
+
+                    return Err(msg);
                 }
             }
         } else {

@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::interpreter::Evaluator;
+use crate::interpreter::Value;
 use crate::ir::*;
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
@@ -19,7 +20,8 @@ use patronus::system::TransitionSystem;
 pub struct Thread<'a> {
     pub tr: &'a Transaction,
     pub st: &'a SymbolTable,
-    pub current_stmt: StmtId,
+    pub current_step: StmtId,
+    pub next_step: Option<StmtId>,
     args: HashMap<&'a str, BitVecValue>,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     /// Index into the original `todos` (used to store this thread’s result)
@@ -41,7 +43,8 @@ impl<'a> Thread<'a> {
         Self {
             tr,
             st,
-            current_stmt: tr.body,
+            current_step: tr.body,
+            next_step: None,
             args,
             next_stmt_map,
             thread_id,
@@ -158,32 +161,66 @@ impl<'a> Scheduler<'a> {
             self.step_count,
             self.active_threads.len()
         );
-        while self.active_threads.len() > 0 {
-            let mut next_thread = self.active_threads.pop().unwrap();
-            println!(
-                "Processing thread with transaction: {:?}, step: {:?}",
-                next_thread.tr.name, next_thread.current_stmt
-            );
 
-            let next_step = self.run_thread_until_step(&next_thread);
-            match next_step {
-                Some(stepid) => {
-                    next_thread.current_stmt = stepid;
-                    println!(
-                        "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
-                        next_thread.tr.name, stepid
-                    );
-                    self.next_threads.push(next_thread)
+        while self.active_threads.len() > 0 {
+            // parallel vector of active threads and their Value maps, previous values
+            // initially set to the randomized values of the Evaluator
+            let mut previous_input_vals: HashMap<SymbolId, Value> =
+                self.evaluator.input_vals.clone();
+            let mut active_input_vals: HashMap<SymbolId, Value>;
+
+            // fixed point iteration with assertions off
+            self.evaluator.assertions_enabled = false;
+            // FIXME: valid equality check ?
+            loop {
+                // run every active thread up to the next step to synchronize on
+                self.run_all_active_until_next_step();
+
+                // update the active input vals to reflect the current state
+                // for each thread, get its current input_vals
+                active_input_vals = self.evaluator.input_vals.clone();
+                if previous_input_vals != active_input_vals {
+                    break;
                 }
-                None => {
-                    println!(
-                        "Thread with transaction {:?} finished execution, moving to inactive_threads",
-                        next_thread.tr.name
-                    );
-                    self.inactive_threads.push(next_thread)
+
+                // change the previous input vals to equal the active input vals
+                previous_input_vals = active_input_vals;
+            }
+
+            // achieved convergence, run one more time with assertions on
+            self.evaluator.assertions_enabled = true;
+            self.run_all_active_until_next_step();
+
+            // now that all threads are synchronized on the step, we can run step() on the sim
+            println!("Stepping...");
+            self.evaluator.sim_step();
+
+            // Move each active thread into inactive or next
+            for mut active_thread in self.active_threads.clone() {
+                let next_step: Option<StmtId> = active_thread.next_step;
+                match next_step {
+                    Some(next_step_id) => {
+                        println!(
+                            "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
+                            active_thread.tr.name, next_step_id
+                        );
+
+                        // if the thread is moving to next_threads, its current_step becomes its next_step and next_step becomes None
+                        active_thread.current_step = next_step_id;
+                        active_thread.next_step = None;
+                        self.next_threads.push(active_thread)
+                    }
+                    None => {
+                        println!(
+                            "Thread with transaction {:?} finished execution, moving to inactive_threads",
+                            active_thread.tr.name
+                        );
+                        self.inactive_threads.push(active_thread)
+                    }
                 }
             }
 
+            // setup the threads for the next cycle
             if self.next_threads.len() > 0 {
                 println!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
@@ -197,17 +234,36 @@ impl<'a> Scheduler<'a> {
                 println!("Total inactive threads: {}", self.inactive_threads.len());
             }
 
-            // now that all threads are synchronized on the step, we can run step() on the sim
-            self.evaluator.sim_step();
+            // modify the input_vals to all be OldValues or DontCares
+            self.evaluator.input_vals = self
+                .evaluator
+                .input_vals
+                .iter()
+                .map(|(k, v)| {
+                    let new_v = match v {
+                        Value::NewValue(bvv) => Value::OldValue(bvv.clone()),
+                        Value::OldValue(bvv) => Value::OldValue(bvv.clone()),
+                        Value::DontCare(bvv) => Value::DontCare(bvv.clone()),
+                    };
+                    (*k, new_v)
+                })
+                .collect();
         }
 
         self.results.clone()
     }
 
-    pub fn run_thread_until_step(&mut self, thread: &Thread<'a>) -> Option<StmtId> {
+    pub fn run_all_active_until_next_step(&mut self) {
+        for i in 0..self.active_threads.len() {
+            self.run_thread_until_next_step(i);
+        }
+    }
+
+    pub fn run_thread_until_next_step(&mut self, thread_idx: usize) -> () {
+        let thread = &mut self.active_threads[thread_idx];
         println!(
-            "Running thread with transaction: {:?} from current_stmt: {:?}",
-            thread.tr.name, thread.current_stmt
+            "Running thread with transaction: {:?} from current_step: {:?}",
+            thread.tr.name, thread.current_step
         );
         self.evaluator.context_switch(
             thread.tr,
@@ -215,11 +271,14 @@ impl<'a> Scheduler<'a> {
             thread.args.clone(),
             thread.next_stmt_map.clone(),
         );
-        let mut current_step = Some(thread.current_stmt);
 
-        while let Some(stepid) = current_step {
-            println!("  Evaluating statement: {:?}", stepid);
-            let res = self.evaluator.evaluate_stmt(&stepid);
+        // TODO: I think we can get rid of one of these vars all together
+        let mut current_stmt = Some(thread.current_step);
+        let mut next_stmt = None;
+
+        while let Some(current_stmt_id) = current_stmt {
+            println!("  Evaluating statement: {:?}", current_stmt_id);
+            let res = self.evaluator.evaluate_stmt(&current_stmt_id);
 
             match res {
                 Ok(next_stmt_option) => {
@@ -235,7 +294,8 @@ impl<'a> Scheduler<'a> {
                                         "  Step reached, thread will pause at: {:?}",
                                         next_stmt_id
                                     );
-                                    return Some(next_stmt_id);
+                                    next_stmt = Some(next_stmt_id);
+                                    current_stmt = None; // Exit the loop
                                 }
                                 Stmt::Fork => {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
@@ -260,26 +320,27 @@ impl<'a> Scheduler<'a> {
                                         );
                                         self.next_threads.push(next_thread);
                                         println!(
-                                            "  Forked thread added to next_threads queue. Queue size: {}",
-                                            self.next_threads.len()
-                                        );
+                                        "  Forked thread added to next_threads queue. Queue size: {}",
+                                        self.next_threads.len()
+                                    );
                                     } else {
                                         println!("  No more irs to fork, continuing execution");
                                     }
-                                    current_step = Some(next_stmt_id);
+                                    current_stmt = Some(next_stmt_id);
                                 }
                                 _ => {
                                     println!(
                                         "  Continuing execution to next statement: {:?}",
                                         next_stmt_id
                                     );
-                                    current_step = Some(next_stmt_id)
+                                    current_stmt = Some(next_stmt_id)
                                 }
                             }
                         }
                         None => {
                             println!("  Thread execution complete, no more statements");
-                            return None;
+                            next_stmt = None;
+                            current_stmt = None; // Exit the loop
                         }
                     }
                 }
@@ -290,11 +351,14 @@ impl<'a> Scheduler<'a> {
                     );
                     // store error at this thread's original todo index
                     self.results[thread.thread_id] = Err(e);
-                    return None;
+                    next_stmt = None;
+                    current_stmt = None; // Exit the loop
                 }
             }
         }
-        None
+
+        // Update thread's next_step before returning
+        thread.next_step = next_stmt;
     }
 }
 
