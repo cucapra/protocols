@@ -229,11 +229,21 @@ impl<'a> Evaluator<'a> {
                 let lhs_val = self.evaluate_expr(&lhs_id)?;
                 let rhs_val = self.evaluate_expr(&rhs_id)?;
                 match bin_op {
-                    BinOp::Equal => Ok(if lhs_val == rhs_val {
-                        ExprValue::Concrete(BitVecValue::new_true())
-                    } else {
-                        ExprValue::Concrete(BitVecValue::new_false())
-                    }),
+                    BinOp::Equal => {
+                        match (&lhs_val, &rhs_val) {
+                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                                return Err("Cannot perform equality on DontCare value".to_string());
+                            }
+                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                                // println!("Comparing BitVecs: lhs = {:?}, rhs = {:?}", lhs, rhs);
+                                if lhs.is_equal(rhs) {
+                                    Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                                } else {
+                                    Ok(ExprValue::Concrete(BitVecValue::new_false()))
+                                }
+                            }
+                        }
+                    }
                     BinOp::And => {
                         // match out of ExprValue::Concrete(bvv) if either one is a DontCare, return an error
                         match (&lhs_val, &rhs_val) {

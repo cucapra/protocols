@@ -165,10 +165,8 @@ impl<'a> Scheduler<'a> {
         );
 
         while self.active_threads.len() > 0 {
-            // parallel vector of active threads and their Value maps, previous values
-            // initially set to the randomized values of the Evaluator
-            let mut previous_input_vals: HashMap<SymbolId, InputValue> =
-                self.evaluator.input_vals.clone();
+            // initially there are no previous values. we always need to cycle at least twice to check convergence, and the first time we will get a previous input val.
+            let mut previous_input_vals: Option<HashMap<SymbolId, InputValue>> = None;
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
             // fixed point iteration with assertions off
@@ -185,12 +183,16 @@ impl<'a> Scheduler<'a> {
                 // println!("Current active_input_vals {:?}", active_input_vals);
                 // println!("previous_input_vals != active_input_vals ? {}", previous_input_vals != active_input_vals);
 
-                if previous_input_vals == active_input_vals {
-                    break;
+                if let Some(prev_vals) = previous_input_vals {
+                    if prev_vals == active_input_vals {
+                        break;
+                    }
                 }
 
+                print!("Active Input Vals {:?}", active_input_vals);
+
                 // change the previous input vals to equal the active input vals
-                previous_input_vals = active_input_vals;
+                previous_input_vals = Some(active_input_vals);
             }
 
             // achieved convergence, run one more time with assertions on
@@ -596,6 +598,41 @@ pub mod tests {
     }
 
     #[test]
+    fn test_scheduler_dual_identity() {
+        // we expect this to fail due to the value being reassigned multiple times
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/identities/dual_identity_d1.prot";
+        let verilog_path = "examples/identity/dual_identity_d1.v";
+        let (ctx, sys) = create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        // whether this converges after one or two iterations is dependent on the scheduling order, but it should converge nonetheless
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+            ),
+            (
+                1,
+                vec![BitVecValue::from_u64(3, 32), BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+            ),
+        ];
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+
+    }
+
+    #[test]
     #[ignore]
     fn test_scheduler_inverter() {
         // we expect this to fail due to the value being reassigned multiple times
@@ -621,70 +658,5 @@ pub mod tests {
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
-    }
-
-    // TODO: Run two different transactions on the same DUT
-
-    #[ignore]
-    #[test]
-    fn test_scheduler_simple_if() {
-        let handler = &mut DiagnosticHandler::new();
-
-        // test_helper("tests/add_struct.prot", "add_struct");
-        let transaction_filename = "tests/simple_if.prot";
-        let verilog_path = "examples/counter/counter.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-
-        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
-        let parsed_data: Vec<(Transaction, SymbolTable)> =
-            parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // CASE 1: BOTH THREADS PASS
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (
-                0,
-                vec![BitVecValue::from_u64(32, 64), BitVecValue::from_u64(7, 64)],
-            ),
-            (
-                0,
-                vec![BitVecValue::from_u64(31, 32), BitVecValue::from_u64(1, 32)],
-            ),
-        ];
-
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
-        assert!(results[0].is_ok());
-        assert!(results[1].is_ok());
-
-        // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
-        // todos[1].1[2] = BitVecValue::from_u64(47, 32);
-        // let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-
-        // scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        // let results = scheduler.execute_threads();
-        // assert!(results[0].is_ok());
-        // assert!(results[1].is_err());
-
-        // // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
-        // todos[0].1[2] = BitVecValue::from_u64(3, 32);
-        // todos[1].1[2] = BitVecValue::from_u64(48, 32);
-        // let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-
-        // scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
-        // let results = scheduler.execute_threads();
-        // assert!(results[0].is_err());
-        // assert!(results[1].is_ok());
-
-        // // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
-        // todos[1].1[2] = BitVecValue::from_u64(47, 32);
-        // let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-
-        // scheduler = Scheduler::new(irs, todos.clone(), &ctx, &sys, sim3, handler);
-        // let results = scheduler.execute_threads();
-        // assert!(results[0].is_err());
-        // assert!(results[1].is_err());
     }
 }

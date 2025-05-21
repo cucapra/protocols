@@ -1,0 +1,42 @@
+struct DualIdentity {
+  in a: u32,
+  in b: u32,
+  out s1: u32,
+  out s2: u32,
+}
+
+fn one<dut: DualIdentity>(in a: u32, out s1: u32, out s2 : u32) {
+    dut.a := 1;
+    dut.b := X;
+    fork();
+
+    step();
+
+    if (dut.a == a) {
+        dut.b := 3;
+    }
+    else {
+        fork();
+    }
+
+    step();
+
+    assert_eq(dut.s1, s1);
+    assert_eq(dut.s2, s2);
+}
+
+
+fn two<dut: DualIdentity>(in b: u32, out s1: u32, out s2 : u32) {
+    if (dut.b == b) {
+        dut.a := 2;
+    }
+    else {
+        fork();
+    }
+
+    step();
+
+    assert_eq(dut.s1, s1);
+    assert_eq(dut.s2, s2);
+}
+
