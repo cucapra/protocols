@@ -170,7 +170,7 @@ impl<'a> Scheduler<'a> {
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
             // fixed point iteration with assertions off
-            self.evaluator.assertions_enabled = false;
+            self.evaluator.assertions_forks_enabled = false;
             // FIXME: valid equality check ?
             loop {
                 // run every active thread up to the next step to synchronize on
@@ -197,7 +197,7 @@ impl<'a> Scheduler<'a> {
 
             // achieved convergence, run one more time with assertions on
             println!("Achieved Convergence. Running once more with assertions enabled...");
-            self.evaluator.assertions_enabled = true;
+            self.evaluator.assertions_forks_enabled = true;
             self.run_all_active_until_next_step();
 
             // now that all threads are synchronized on the step, we can run step() on the sim
@@ -312,34 +312,38 @@ impl<'a> Scheduler<'a> {
                                 }
                                 Stmt::Fork => {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
-                                    // advance to the next todo index
-                                    self.next_todo_idx += 1;
-                                    if let Some((tr, st, args, next_stmt_map)) = Self::next_ir(
-                                        &self.todos,
-                                        self.next_todo_idx,
-                                        self.irs.clone(),
-                                        self.next_stmt_maps.clone(),
-                                    ) {
-                                        println!(
-                                            "  Forking new thread with transaction: {:?}",
-                                            tr.name
-                                        );
-                                        let next_thread = Thread::initialize_thread(
-                                            tr,
-                                            st,
-                                            args,
-                                            next_stmt_map,
+                                    if self.evaluator.assertions_forks_enabled {
+                                        // advance to the next todo index
+                                        self.next_todo_idx += 1;
+                                        if let Some((tr, st, args, next_stmt_map)) = Self::next_ir(
+                                            &self.todos,
                                             self.next_todo_idx,
-                                        );
-                                        self.next_threads.push(next_thread);
-                                        println!(
-                                        "  Forked thread added to next_threads queue. Queue size: {}",
-                                        self.next_threads.len()
-                                    );
+                                            self.irs.clone(),
+                                            self.next_stmt_maps.clone(),
+                                        ) {
+                                            println!(
+                                                "  Forking new thread with transaction: {:?}",
+                                                tr.name
+                                            );
+                                            let next_thread = Thread::initialize_thread(
+                                                tr,
+                                                st,
+                                                args,
+                                                next_stmt_map,
+                                                self.next_todo_idx,
+                                            );
+                                            self.next_threads.push(next_thread);
+                                            println!(
+                                                "  Forked thread added to next_threads queue. Queue size: {}",
+                                                self.next_threads.len()
+                                            );
+                                        } else {
+                                            println!("  No more irs to fork, continuing execution");
+                                        }
                                     } else {
-                                        println!("  No more irs to fork, continuing execution");
+                                        println!("  Fork encountered, but assertions_forks_enabled is false. Not forking.");
                                     }
-                                    current_stmt = Some(next_stmt_id);
+                                    current_stmt = Some(next_stmt_id)
                                 }
                                 _ => {
                                     println!(

@@ -59,7 +59,7 @@ pub struct Evaluator<'a> {
     // tracks the input pins and their values
     pub input_vals: HashMap<SymbolId, InputValue>,
 
-    pub assertions_enabled: bool,
+    pub assertions_forks_enabled: bool,
 }
 
 impl<'a> Evaluator<'a> {
@@ -160,7 +160,7 @@ impl<'a> Evaluator<'a> {
             input_mapping,
             output_mapping,
             input_vals,
-            assertions_enabled: false,
+            assertions_forks_enabled: false,
         };
         return evaluator;
     }
@@ -305,7 +305,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::AssertEq(expr1, expr2) => {
                 // println!("Eval AssertEq.");
-                if self.assertions_enabled {
+                if self.assertions_forks_enabled {
                     self.evaluate_assert_eq(&expr1, &expr2)?;
                 }
 
