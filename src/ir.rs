@@ -333,7 +333,7 @@ impl Field {
     }
 
     pub fn tpe(&self) -> Type {
-        self.tpe.clone()
+        self.tpe
     }
 }
 
@@ -516,7 +516,7 @@ impl SymbolTableEntry {
     }
 
     pub fn tpe(&self) -> Type {
-        self.tpe.clone()
+        self.tpe
     }
 
     pub fn parent(&self) -> Option<SymbolId> {

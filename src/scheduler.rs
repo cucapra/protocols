@@ -92,11 +92,11 @@ impl<'a> Scheduler<'a> {
         // Initialize evaluator with first transaction
         let evaluator = Evaluator::new(
             initial_args.clone(),
-            &initial_tr,
-            &initial_st,
+            initial_tr,
+            initial_st,
             handler,
-            &ctx,
-            &sys,
+            ctx,
+            sys,
             sim,
         );
 
@@ -124,7 +124,7 @@ impl<'a> Scheduler<'a> {
     }
 
     fn next_ir(
-        todos: &Vec<(usize, Vec<BitVecValue>)>,
+        todos: &[(usize, Vec<BitVecValue>)],
         idx: usize,
         irs: Vec<(&'a Transaction, &'a SymbolTable)>,
         next_stmt_mappings: Vec<FxHashMap<StmtId, Option<StmtId>>>,
@@ -164,7 +164,7 @@ impl<'a> Scheduler<'a> {
             self.active_threads.len()
         );
 
-        while self.active_threads.len() > 0 {
+        while !self.active_threads.is_empty() {
             // initially there are no previous values. we always need to cycle at least twice to check convergence, and the first time we will get a previous input val.
             let mut previous_input_vals: Option<HashMap<SymbolId, InputValue>> = None;
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
@@ -230,7 +230,7 @@ impl<'a> Scheduler<'a> {
             }
 
             // setup the threads for the next cycle
-            if self.next_threads.len() > 0 {
+            if !self.next_threads.is_empty() {
                 println!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
                     self.next_threads.len()
@@ -272,7 +272,7 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn run_thread_until_next_step(&mut self, thread_idx: usize) -> () {
+    pub fn run_thread_until_next_step(&mut self, thread_idx: usize) {
         let thread = &mut self.active_threads[thread_idx];
         println!(
             "Running thread with transaction: {:?} from current_step: {:?}",

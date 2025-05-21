@@ -133,8 +133,7 @@ pub fn serialize_structs(
         for field in st[strct_id].pins() {
             writeln!(
                 out,
-                "{}{} {}: {},",
-                "  ".repeat(1),
+                "  {} {}: {},",
                 serialize_dir(field.dir()),
                 field.name(),
                 serialize_type(st, field.tpe())
@@ -152,8 +151,8 @@ pub fn serialize(
 ) -> std::io::Result<()> {
     let (st, _) = &trs[0];
 
-    if st.struct_ids().len() > 0 {
-        serialize_structs(out, &st, st.struct_ids())?;
+    if !st.struct_ids().is_empty() {
+        serialize_structs(out, st, st.struct_ids())?;
     }
 
     for (st, tr) in trs {
@@ -177,16 +176,16 @@ pub fn serialize(
 
         write!(out, "(")?;
 
-        if tr.args.len() == 0 {
-            write!(out, ") {{\n")?;
+        if tr.args.is_empty() {
+            writeln!(out, ") {{")?;
         } else {
             for (ii, arg) in tr.args.iter().enumerate() {
                 let last_index = ii == tr.args.len() - 1;
 
                 if last_index {
-                    write!(
+                    writeln!(
                         out,
-                        "{} {}: {}) {{\n",
+                        "{} {}: {}) {{",
                         serialize_dir(arg.dir()),
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
