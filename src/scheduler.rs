@@ -123,6 +123,7 @@ impl<'a> Scheduler<'a> {
         }
     }
 
+    // TODO: simplify this ugly return type and I think this should just take &self as an argument.
     fn next_ir(
         todos: &[(usize, Vec<BitVecValue>)],
         idx: usize,
