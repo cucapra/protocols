@@ -5,14 +5,7 @@ use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 use rustc_hash::FxHashMap;
 
-use rand::prelude::*;
-
-use crate::yosys::yosys_to_btor;
-use crate::yosys::ProjectConf;
-use crate::yosys::YosysEnv;
-
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 // TODO: this is relevant for proper don't care handling in the future
 #[derive(Debug, Clone)]
@@ -201,25 +194,6 @@ impl<'a> Evaluator<'a> {
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
     }
 
-    pub fn create_sim_context(
-        verilog_path: &str,
-    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
-        // Verilog --> Btor via Yosys
-        let env = YosysEnv::default();
-        let inp = PathBuf::from(verilog_path);
-        let mut proj = ProjectConf::with_source(inp);
-        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
-
-        // instantiate sim from btor file
-        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
-            Some(result) => result,
-            None => {
-                panic!("Failed to parse btor file.");
-            }
-        };
-        (ctx, sys)
-    }
-
     // step the simulator
     pub fn sim_step(&mut self) {
         self.sim.step();
@@ -292,16 +266,6 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
-    }
-
-    fn evaluate_transaction(&mut self) -> Result<(), String> {
-        let body_id: StmtId = self.tr.body;
-        let next_stmt = self.evaluate_stmt(&body_id)?;
-        let mut current_stmt = next_stmt;
-        while let Some(stmt_id) = current_stmt {
-            current_stmt = self.evaluate_stmt(&stmt_id)?;
-        }
-        return Ok(());
     }
 
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
@@ -491,142 +455,5 @@ impl<'a> Evaluator<'a> {
         } else {
             Ok(())
         }
-    }
-
-    fn evaluate_block(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
-        match &self.tr[stmt_id] {
-            Stmt::Block(stmt_ids) => {
-                if stmt_ids.is_empty() {
-                    return Ok(self.next_stmt_map[stmt_id]);
-                } else {
-                    return Ok(Some(stmt_ids[0]));
-                }
-            }
-            _ => unreachable!("Expected a block statement as input to evaluate_block."),
-        }
-    }
-}
-
-pub fn interpret(
-    verilog_path: &str,
-    args: HashMap<&str, BitVecValue>,
-    tr: &Transaction,
-    st: &SymbolTable,
-    handler: &mut DiagnosticHandler,
-) -> Result<(), String> {
-    // Verilog --> Btor via Yosys
-    let env = YosysEnv::default();
-    let inp = PathBuf::from(verilog_path);
-    let mut proj = ProjectConf::with_source(inp);
-    let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
-
-    // instantiate sim from btor file
-    let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
-        Some(result) => result,
-        None => {
-            let msg = "Failed to parse Verilog file to Btor2.".to_string();
-            handler.emit_general_message(&msg, Level::Error);
-            return Err(msg);
-        }
-    };
-    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
-
-    // create evaluator
-    let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-    evaluator.evaluate_transaction()
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use crate::parser::parse_file;
-    use core::panic;
-    use insta::Settings;
-    use std::path::Path;
-    use strip_ansi_escapes::strip_str;
-
-    fn snap(name: &str, content: String) {
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(name, content);
-        });
-    }
-
-    fn test_helper(
-        filename: &str,
-        snap_name: &str,
-        verilog_path: &str,
-        args: HashMap<&str, BitVecValue>,
-    ) {
-        let handler = &mut DiagnosticHandler::new();
-
-        let transaction_filename = filename;
-        let verilog_path = verilog_path;
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-
-        let trs: Vec<(SymbolTable, Transaction)> = parsing_helper(transaction_filename, handler);
-
-        // only one transaction in this file
-        let (st, tr) = &trs[0];
-
-        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-        let res = evaluator.evaluate_transaction();
-
-        let mut content = {
-            if let Err(err) = res.clone() {
-                err + "\n\n"
-            } else {
-                "Assertion Passed\n\n".to_string()
-            }
-        };
-
-        content = content + &strip_str(handler.error_string());
-
-        println!("{}", content);
-        snap(snap_name, content);
-    }
-
-    fn parsing_helper(
-        transaction_filename: &str,
-        handler: &mut DiagnosticHandler,
-    ) -> Vec<(SymbolTable, Transaction)> {
-        let result = parse_file(transaction_filename, handler);
-        match result {
-            Ok(success_vec) => success_vec,
-            Err(_) => panic!("Failed to parse file: {}", transaction_filename),
-        }
-    }
-
-    #[test]
-    #[ignore]
-    fn test_simple_if_execution() {
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(32, 64));
-        args.insert("s", BitVecValue::from_u64(7, 64));
-
-        test_helper(
-            "tests/simple_if.prot",
-            "simple_if_execution",
-            "examples/counter/counter.v",
-            args,
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn test_simple_while_execution() {
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(32, 64));
-        args.insert("b", BitVecValue::from_u64(15, 64));
-        args.insert("s", BitVecValue::from_u64(17, 64));
-
-        test_helper(
-            "tests/simple_while.prot",
-            "simple_while_execution",
-            "examples/counter/counter.v",
-            args,
-        );
     }
 }

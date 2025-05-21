@@ -13,6 +13,7 @@ use crate::diagnostic::DiagnosticHandler;
 use crate::interpreter::Evaluator;
 use crate::interpreter::InputValue;
 use crate::ir::*;
+
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
@@ -376,6 +377,29 @@ impl<'a> Scheduler<'a> {
 pub mod tests {
     use super::*;
     use crate::parser::parsing_helper;
+    use crate::yosys::yosys_to_btor;
+    use crate::yosys::ProjectConf;
+    use crate::yosys::YosysEnv;
+    use std::path::PathBuf;
+
+    fn create_sim_context(
+        verilog_path: &str,
+    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
+        // Verilog --> Btor via Yosys
+        let env = YosysEnv::default();
+        let inp = PathBuf::from(verilog_path);
+        let mut proj = ProjectConf::with_source(inp);
+        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+
+        // instantiate sim from btor file
+        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
+            Some(result) => result,
+            None => {
+                panic!("Failed to parse btor file.");
+            }
+        };
+        (ctx, sys)
+    }
 
     #[test]
     fn test_scheduler_add() {
@@ -384,7 +408,7 @@ pub mod tests {
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/add_struct.prot";
         let verilog_path = "examples/adders/add_d1.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -454,7 +478,7 @@ pub mod tests {
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/mult_new.prot";
         let verilog_path = "examples/multipliers/mult_d2.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -525,7 +549,7 @@ pub mod tests {
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/identities/identity_d2.prot";
         let verilog_path = "examples/identity/identity_d2.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -547,7 +571,7 @@ pub mod tests {
 
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_threads();
-        // this should fail due to both threads trying to assign to the input at once
+        // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
     }
 
@@ -560,7 +584,7 @@ pub mod tests {
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/inverter.prot";
         let verilog_path = "examples/inverters/inverter_d0.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -589,7 +613,7 @@ pub mod tests {
         // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/simple_if.prot";
         let verilog_path = "examples/counter/counter.v";
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
