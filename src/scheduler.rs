@@ -618,18 +618,25 @@ pub mod tests {
         let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
             (
                 0,
-                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+                vec![
+                    BitVecValue::from_u64(1, 32),
+                    BitVecValue::from_u64(2, 32),
+                    BitVecValue::from_u64(3, 32),
+                ],
             ),
             (
                 1,
-                vec![BitVecValue::from_u64(3, 32), BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+                vec![
+                    BitVecValue::from_u64(3, 32),
+                    BitVecValue::from_u64(2, 32),
+                    BitVecValue::from_u64(3, 32),
+                ],
             ),
         ];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
-
     }
 
     #[test]
