@@ -95,7 +95,7 @@ pub struct DiagnosticHandler {
 
 impl Default for DiagnosticHandler {
     fn default() -> Self {
-       Self::new()
+        Self::new()
     }
 }
 
