@@ -1,0 +1,13 @@
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn identity<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+  fork();
+  step();
+  DUT.a := a;
+  step();
+  assert_eq(s, DUT.s);
+}

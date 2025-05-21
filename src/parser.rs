@@ -655,6 +655,6 @@ pub fn parsing_helper(
     let result = parse_file(transaction_filename, handler);
     match result {
         Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
-        Err(_) => panic!("Failed to parse file: {}", transaction_filename),
+        Err(err) => panic!("Failed to parse file: {}\nError: {}", transaction_filename, err),
     }
 }

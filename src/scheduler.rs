@@ -4,13 +4,14 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use baa::BitVecOps;
 use baa::BitVecValue;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::interpreter::Evaluator;
-use crate::interpreter::Value;
+use crate::interpreter::InputValue;
 use crate::ir::*;
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
@@ -165,9 +166,9 @@ impl<'a> Scheduler<'a> {
         while self.active_threads.len() > 0 {
             // parallel vector of active threads and their Value maps, previous values
             // initially set to the randomized values of the Evaluator
-            let mut previous_input_vals: HashMap<SymbolId, Value> =
+            let mut previous_input_vals: HashMap<SymbolId, InputValue> =
                 self.evaluator.input_vals.clone();
-            let mut active_input_vals: HashMap<SymbolId, Value>;
+            let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
             // fixed point iteration with assertions off
             self.evaluator.assertions_enabled = false;
@@ -179,7 +180,11 @@ impl<'a> Scheduler<'a> {
                 // update the active input vals to reflect the current state
                 // for each thread, get its current input_vals
                 active_input_vals = self.evaluator.input_vals.clone();
-                if previous_input_vals != active_input_vals {
+                // println!("Current previous_input_vals {:?}", previous_input_vals);
+                // println!("Current active_input_vals {:?}", active_input_vals);
+                // println!("previous_input_vals != active_input_vals ? {}", previous_input_vals != active_input_vals);
+
+                if previous_input_vals == active_input_vals {
                     break;
                 }
 
@@ -188,6 +193,7 @@ impl<'a> Scheduler<'a> {
             }
 
             // achieved convergence, run one more time with assertions on
+            println!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.assertions_enabled = true;
             self.run_all_active_until_next_step();
 
@@ -196,7 +202,7 @@ impl<'a> Scheduler<'a> {
             self.evaluator.sim_step();
 
             // Move each active thread into inactive or next
-            for mut active_thread in self.active_threads.clone() {
+            while let Some(mut active_thread) = self.active_threads.pop() {
                 let next_step: Option<StmtId> = active_thread.next_step;
                 match next_step {
                     Some(next_step_id) => {
@@ -231,19 +237,23 @@ impl<'a> Scheduler<'a> {
                 println!("Advancing to scheduling cycle: {}", self.step_count);
             } else {
                 println!("No more threads to schedule. Protocol execution complete.");
+                println!("Current Active Thread Count: {}", self.active_threads.len());
                 println!("Total inactive threads: {}", self.inactive_threads.len());
             }
 
             // modify the input_vals to all be OldValues or DontCares
+            let mut rng = rand::thread_rng();
             self.evaluator.input_vals = self
                 .evaluator
                 .input_vals
                 .iter()
                 .map(|(k, v)| {
                     let new_v = match v {
-                        Value::NewValue(bvv) => Value::OldValue(bvv.clone()),
-                        Value::OldValue(bvv) => Value::OldValue(bvv.clone()),
-                        Value::DontCare(bvv) => Value::DontCare(bvv.clone()),
+                        InputValue::NewValue(bvv) => InputValue::OldValue(bvv.clone()),
+                        InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
+                        InputValue::DontCare(bvv) => {
+                            InputValue::DontCare(BitVecValue::random(&mut rng, bvv.width()))
+                        } // re-randomuze DontCares
                     };
                     (*k, new_v)
                 })
@@ -505,6 +515,68 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
+    }
+
+    #[test]
+    fn test_scheduler_identity_d2() {
+        // we expect this to fail due to the value being reassigned multiple times
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/identities/identity_d2.prot";
+        let verilog_path = "examples/identity/identity_d2.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        // this should fail due to both threads trying to assign to the input at once
+        assert!(results[0].is_err());
+    }
+
+    #[test]
+    #[ignore]
+    fn test_scheduler_inverter() {
+        // we expect this to fail due to the value being reassigned multiple times
+        let handler = &mut DiagnosticHandler::new();
+
+        // test_helper("tests/add_struct.prot", "add_struct");
+        let transaction_filename = "tests/inverter.prot";
+        let verilog_path = "examples/inverters/inverter_d0.v";
+        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(
+            0,
+            vec![BitVecValue::from_u64(0, 1), BitVecValue::from_u64(1, 1)],
+        )];
+
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_err());
     }
 
     // TODO: Run two different transactions on the same DUT

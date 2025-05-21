@@ -1,0 +1,10 @@
+struct Inverter {
+  in a: u32,
+  out s: u32,
+}
+
+fn invert<DUT: Inverter>(in a: u32, out s: u32) {
+  DUT.a := a;
+  step();
+  assert_eq(s, DUT.s);
+}
