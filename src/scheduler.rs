@@ -542,12 +542,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_identity_d2() {
+    fn test_scheduler_identity_d2_multiple_assign() {
         // we expect this to fail due to the value being reassigned multiple times
         let handler = &mut DiagnosticHandler::new();
 
         // test_helper("tests/add_struct.prot", "add_struct");
-        let transaction_filename = "tests/identities/identity_d2.prot";
+        let transaction_filename = "tests/identities/identity_d2_multiple_assign.prot";
         let verilog_path = "examples/identity/identity_d2.v";
         let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -558,21 +558,41 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (
-                0,
-                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
-            ),
-            (
-                0,
-                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
-            ),
-        ];
-
+        // PASSING CASE: Single thread
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![(
+            0,
+            vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+        )];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+
+        // ERROR CASE: Two different assigments
+        todos.push((
+            0,
+            vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
+        ));
+
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_threads();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
+        if let Err(err_msg) = &results[0] {
+            assert_eq!(
+                err_msg,
+                "Multiple threads attempting to assign to the same input: a"
+            );
+        }
+
+        // PASSING CASE: Two assignments, but of same value (1)
+        todos[1].1 = vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)];
+
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_threads();
+        // this should fail due to both threads trying to assign to the same input
+        assert!(results[0].is_ok());
     }
 
     #[test]
