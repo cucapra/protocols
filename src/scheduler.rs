@@ -355,18 +355,20 @@ impl<'a> Scheduler<'a> {
                     self.results[thread.thread_id] = Err(e);
                     thread.next_step = None;
                     break;
-                 }
+                }
             }
         }
 
         // fork if a thread has completed successfully
         // more specically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
-        if !thread.has_forked && self.evaluator.assertions_forks_enabled() && self.results[thread.thread_id].is_ok() {
+        if !thread.has_forked
+            && self.evaluator.assertions_forks_enabled()
+            && self.results[thread.thread_id].is_ok()
+        {
             self.next_todo_idx += 1;
             match next_todo_option.clone() {
                 Some(todo) => {
-                    let new_thread =
-                        Thread::initialize_thread(todo, self.next_todo_idx);
+                    let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
                     self.next_threads.push(new_thread);
                     println!(
                         "    enqueued forked thread; queue size = {}",
@@ -376,7 +378,7 @@ impl<'a> Scheduler<'a> {
                 None => {
                     println!("    no more todos to fork, skipping fork.");
                 }
-            } 
+            }
         }
     }
 }
@@ -695,6 +697,42 @@ pub mod tests {
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
+    }
+
+    #[test]
+    fn test_scheduler_identity_d1_implicit_fork() {
+        // we expect this to fail due to the value being reassigned multiple times
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/identities/identity_d1.prot";
+        let verilog_path = "examples/identity/identity_d1.v";
+        let (ctx, sys) = create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(2, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+            ),
+        ];
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+        assert!(results[2].is_err());
     }
 
     #[test]
