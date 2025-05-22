@@ -109,17 +109,15 @@ impl<'a> Evaluator<'a> {
                 input_mapping.insert(*symbol_id, *input_ref);
             }
 
-            // Modified code for outputs to handle None cases
-            if let Some(output_ref) = sys
+            // Map outputs by matching symbol name to sys.outputs' names
+            if let Some((idx, _)) = sys
                 .outputs
                 .iter()
-                .filter_map(|o| {
-                    // Only process outputs that have a name
-                    ctx.get_symbol_name((o).expr).map(|name| (o, name))
-                })
-                .find(|(_, name)| *name == symbol_name)
+                .map(|o| ctx[o.name].to_string())
+                .enumerate()
+                .find(|(_, out_name)| out_name == symbol_name)
             {
-                output_mapping.insert(*symbol_id, *output_ref.0);
+                output_mapping.insert(*symbol_id, sys.outputs[idx]);
             }
         }
 

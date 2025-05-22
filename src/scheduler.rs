@@ -644,7 +644,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_scheduler_inverter() {
         // we expect this to fail due to the value being reassigned multiple times
         let handler = &mut DiagnosticHandler::new();
