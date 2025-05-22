@@ -352,8 +352,8 @@ pub mod tests {
         // Verilog --> Btor via Yosys
         let env = YosysEnv::default();
         let inp = PathBuf::from(verilog_path);
-        let mut proj = ProjectConf::with_source(inp);
-        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+        let proj = ProjectConf::with_source(inp);
+        let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
 
         // instantiate sim from btor file
         let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
