@@ -55,10 +55,7 @@ pub struct Thread<'a> {
 }
 
 impl<'a> Thread<'a> {
-    pub fn initialize_thread(
-        todo: Todo<'a>,
-        thread_id: usize,
-    ) -> Self {
+    pub fn initialize_thread(todo: Todo<'a>, thread_id: usize) -> Self {
         println!(
             "Thread initialized with transaction: {:?}, thread_id={}",
             todo.tr.name, thread_id
@@ -76,9 +73,12 @@ impl<'a> Thread<'a> {
 }
 
 pub struct Scheduler<'a> {
-    irs: Vec<(&'a Transaction, &'a SymbolTable)>,
+    irs: Vec<(
+        &'a Transaction,
+        &'a SymbolTable,
+        FxHashMap<StmtId, Option<StmtId>>,
+    )>,
     todos: Vec<(usize, Vec<BitVecValue>)>,
-    next_stmt_maps: Vec<FxHashMap<StmtId, Option<StmtId>>>,
     /// Next index into `todos` to pull when we fork
     next_todo_idx: usize,
     active_threads: Vec<Thread<'a>>,
@@ -94,27 +94,27 @@ impl<'a> Scheduler<'a> {
     fn create_todo_helper(
         todos: &[(usize, Vec<BitVecValue>)],
         idx: usize,
-        irs: &[(&'a Transaction, &'a SymbolTable)],
-        next_stmt_mappings: &[FxHashMap<StmtId, Option<StmtId>>],
+        irs: &[(
+            &'a Transaction,
+            &'a SymbolTable,
+            FxHashMap<StmtId, Option<StmtId>>,
+        )],
     ) -> Option<Todo<'a>> {
         if idx < todos.len() {
-            // get the corresponding transaction and symbol table
+            // get the corresponding transaction, symbol table, and next_stmt_map
             let ir_idx = todos[idx].0;
-            let (tr, st) = irs[ir_idx];
+            let (tr, st, next_stmt_map) = &irs[ir_idx];
 
             // setup the arguments for the transaction
             let args = todos[idx].1.clone();
             let mut args_map = HashMap::new();
-
-            // setup the next_stmt_mapping from the parallel vector
-            let next_stmt_map = next_stmt_mappings[ir_idx].clone();
 
             for (i, arg) in args.iter().enumerate() {
                 let identifier = st[tr.args[i].symbol()].name();
                 args_map.insert(identifier, arg.clone());
             }
 
-            Some(Todo::new(tr, st, args_map, next_stmt_map))
+            Some(Todo::new(tr, st, args_map, next_stmt_map.clone()))
         } else {
             None
         }
@@ -122,27 +122,36 @@ impl<'a> Scheduler<'a> {
 
     // Instance method that uses self fields and returns a Todo
     fn next_todo(&self, idx: usize) -> Option<Todo<'a>> {
-        Self::create_todo_helper(&self.todos, idx, &self.irs, &self.next_stmt_maps)
+        Self::create_todo_helper(&self.todos, idx, &self.irs)
     }
 
     pub fn new(
-        irs: Vec<(&'a Transaction, &'a SymbolTable)>,
+        transactions_and_symbols: Vec<(&'a Transaction, &'a SymbolTable)>,
         todos: Vec<(usize, Vec<BitVecValue>)>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
-        // pre-compute next statement mappings in a parallel array
-        let next_stmt_maps: Vec<FxHashMap<StmtId, Option<StmtId>>> =
-            irs.iter().map(|(tr, _)| tr.next_stmt_mapping()).collect();
+        // Create irs with pre-computed next statement mappings
+        let irs: Vec<(
+            &'a Transaction,
+            &'a SymbolTable,
+            FxHashMap<StmtId, Option<StmtId>>,
+        )> = transactions_and_symbols
+            .into_iter()
+            .map(|(tr, st)| (tr, st, tr.next_stmt_mapping()))
+            .collect();
 
         // setup the Evaluator and first Thread
         let next_todo_idx = 0;
-        let initial_todo = Self::create_todo_helper(&todos, next_todo_idx, &irs, &next_stmt_maps)
-            .expect("No transactions passed.");
+        let initial_todo =
+            Self::create_todo_helper(&todos, next_todo_idx, &irs).expect("No transactions passed.");
 
-        println!("Starting with initial transaction: {:?}", initial_todo.tr.name);
+        println!(
+            "Starting with initial transaction: {:?}",
+            initial_todo.tr.name
+        );
 
         // Initialize evaluator with first transaction
         let evaluator = Evaluator::new(
@@ -161,7 +170,6 @@ impl<'a> Scheduler<'a> {
         Self {
             irs,
             todos,
-            next_stmt_maps,
             next_todo_idx,
             active_threads: vec![first],
             next_threads: vec![],
@@ -301,15 +309,11 @@ impl<'a> Scheduler<'a> {
             thread.next_stmt_map.clone(),
         );
 
-        // TODO: I think we can get rid of one of these vars all together
-        let mut current_stmt = Some(thread.current_step);
-        let mut next_stmt = None;
+        let mut current_stmt_id = thread.current_step;
 
-        while let Some(current_stmt_id) = current_stmt {
+        loop {
             println!("  Evaluating statement: {:?}", current_stmt_id);
-            let res = self.evaluator.evaluate_stmt(&current_stmt_id);
-
-            match res {
+            match self.evaluator.evaluate_stmt(&current_stmt_id) {
                 Ok(next_stmt_option) => {
                     match next_stmt_option {
                         Some(next_stmt_id) => {
@@ -323,8 +327,8 @@ impl<'a> Scheduler<'a> {
                                         "  Step reached, thread will pause at: {:?}",
                                         next_stmt_id
                                     );
-                                    next_stmt = Some(next_stmt_id);
-                                    current_stmt = None; // Exit the loop
+                                    thread.next_step = Some(next_stmt_id);
+                                    break;
                                 }
                                 Stmt::Fork => {
                                     println!("  Fork reached at statement: {:?}", next_stmt_id);
@@ -348,27 +352,29 @@ impl<'a> Scheduler<'a> {
                                                 );
                                             }
                                             None => {
-                                                println!("  No more irs to fork, continuing execution");
+                                                println!(
+                                                    "  No more irs to fork, continuing execution"
+                                                );
                                             }
                                         }
                                     } else {
                                         println!("  Fork encountered, but assertions_forks_enabled is false. Not forking.");
                                     }
-                                    current_stmt = Some(next_stmt_id)
+                                    current_stmt_id = next_stmt_id;
                                 }
                                 _ => {
                                     println!(
                                         "  Continuing execution to next statement: {:?}",
                                         next_stmt_id
                                     );
-                                    current_stmt = Some(next_stmt_id)
+                                    current_stmt_id = next_stmt_id;
                                 }
                             }
                         }
                         None => {
                             println!("  Thread execution complete, no more statements");
-                            next_stmt = None;
-                            current_stmt = None; // Exit the loop
+                            thread.next_step = None;
+                            break;
                         }
                     }
                 }
@@ -379,14 +385,11 @@ impl<'a> Scheduler<'a> {
                     );
                     // store error at this thread's original todo index
                     self.results[thread.thread_id] = Err(e);
-                    next_stmt = None;
-                    current_stmt = None; // Exit the loop
+                    thread.next_step = None;
+                    break;
                 }
             }
         }
-
-        // Update thread's next_step before returning
-        thread.next_step = next_stmt;
     }
 }
 
@@ -431,7 +434,7 @@ pub mod tests {
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // CASE 1: BOTH THREADS PASS
@@ -454,7 +457,14 @@ pub mod tests {
             ),
         ];
 
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
@@ -463,7 +473,14 @@ pub mod tests {
         todos[1].1[2] = BitVecValue::from_u64(10, 32);
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
@@ -473,7 +490,14 @@ pub mod tests {
         todos[1].1[2] = BitVecValue::from_u64(9, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim3,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
@@ -482,7 +506,14 @@ pub mod tests {
         todos[1].1[2] = BitVecValue::from_u64(10, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        scheduler = Scheduler::new(irs, todos.clone(), &ctx, &sys, sim3, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols,
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim3,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
@@ -501,7 +532,7 @@ pub mod tests {
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // CASE 1: BOTH THREADS PASS
@@ -524,7 +555,14 @@ pub mod tests {
             ),
         ];
 
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
@@ -533,7 +571,14 @@ pub mod tests {
         todos[1].1[2] = BitVecValue::from_u64(47, 32);
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
@@ -543,7 +588,14 @@ pub mod tests {
         todos[1].1[2] = BitVecValue::from_u64(48, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim3,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
@@ -552,7 +604,14 @@ pub mod tests {
         todos[1].1[2] = BitVecValue::from_u64(47, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        scheduler = Scheduler::new(irs, todos.clone(), &ctx, &sys, sim3, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols,
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim3,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
@@ -572,7 +631,7 @@ pub mod tests {
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // PASSING CASE: Single thread
@@ -580,7 +639,14 @@ pub mod tests {
             0,
             vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
         )];
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
 
@@ -591,7 +657,14 @@ pub mod tests {
         ));
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+        );
         let results = scheduler.execute_threads();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
@@ -606,7 +679,14 @@ pub mod tests {
         todos[1].1 = vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)];
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+        );
         let results = scheduler.execute_threads();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_ok());
@@ -626,7 +706,7 @@ pub mod tests {
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // whether this converges after one or two iterations is dependent on the scheduling order, but it should converge nonetheless
@@ -648,7 +728,14 @@ pub mod tests {
                 ],
             ),
         ];
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
@@ -669,7 +756,7 @@ pub mod tests {
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(
@@ -677,7 +764,14 @@ pub mod tests {
             vec![BitVecValue::from_u64(0, 1), BitVecValue::from_u64(1, 1)],
         )];
 
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
     }
