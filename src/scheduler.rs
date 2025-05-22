@@ -265,7 +265,10 @@ impl<'a> Scheduler<'a> {
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
 
-        println!("Running thread {} from step {:?}", thread.todo.tr.name, current);
+        println!(
+            "Running thread {} from step {:?}",
+            thread.todo.tr.name, current
+        );
         self.evaluator.context_switch(thread.todo.clone());
 
         // keep evaluating until we hit a Step, hit the end, or error out:
@@ -275,7 +278,10 @@ impl<'a> Scheduler<'a> {
             match self.evaluator.evaluate_stmt(&current) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
-                    println!("  Next statement: {:?} {:?}", next_id, thread.todo.tr[next_id]);
+                    println!(
+                        "  Next statement: {:?} {:?}",
+                        next_id, thread.todo.tr[next_id]
+                    );
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {

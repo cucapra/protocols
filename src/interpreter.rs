@@ -1,5 +1,5 @@
-use crate::{diagnostic::*, ir::*};
 use crate::scheduler::Todo;
+use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
@@ -180,10 +180,7 @@ impl<'a> Evaluator<'a> {
         args_mapping
     }
 
-    pub fn context_switch(
-        &mut self,
-        todo: Todo<'a>
-    ) {
+    pub fn context_switch(&mut self, todo: Todo<'a>) {
         self.tr = todo.tr;
         self.st = todo.st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
@@ -258,30 +255,26 @@ impl<'a> Evaluator<'a> {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
                 let rhs_val = self.evaluate_expr(rhs_id)?;
                 match bin_op {
-                    BinOp::Equal => {
-                        match (&lhs_val, &rhs_val) {
-                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                                Err("Cannot perform equality on DontCare value".to_string())
-                            }
-                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                                if lhs.is_equal(rhs) {
-                                    Ok(ExprValue::Concrete(BitVecValue::new_true()))
-                                } else {
-                                    Ok(ExprValue::Concrete(BitVecValue::new_false()))
-                                }
+                    BinOp::Equal => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err("Cannot perform equality on DontCare value".to_string())
+                        }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            if lhs.is_equal(rhs) {
+                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                            } else {
+                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
                             }
                         }
-                    }
-                    BinOp::And => {
-                        match (&lhs_val, &rhs_val) {
-                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                                Err("Cannot perform AND on DontCare value".to_string())
-                            }
-                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                                Ok(ExprValue::Concrete(lhs.and(rhs)))
-                            }
+                    },
+                    BinOp::And => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err("Cannot perform AND on DontCare value".to_string())
                         }
-                    }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            Ok(ExprValue::Concrete(lhs.and(rhs)))
+                        }
+                    },
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
@@ -435,7 +428,6 @@ impl<'a> Evaluator<'a> {
             self.sim.set(*expr_ref, self.input_vals[symbol_id].value());
             Ok(())
         }
-
         // assuming Type Checking works, these statements are unreachable
         else if self.output_mapping.contains_key(symbol_id) {
             unreachable!("Attempting to assign to output {}.", name)
