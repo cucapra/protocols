@@ -627,8 +627,8 @@ pub mod tests {
         assert!(results[1].is_ok());
 
         // FAILING CASE: values of b disagree
-        todos[1].1 =  vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(5, 64)];
-        let sim2 =  &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        todos[1].1 = vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(5, 64)];
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
