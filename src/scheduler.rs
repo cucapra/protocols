@@ -17,7 +17,6 @@ use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
 
-// Type aliases to simplify complex types
 type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
 type TodoItem = (usize, Vec<BitVecValue>);
@@ -187,7 +186,7 @@ impl<'a> Scheduler<'a> {
 
             // fixed point iteration with assertions off
             self.evaluator.assertions_forks_enabled = false;
-            // FIXME: valid equality check ?
+
             loop {
                 // run every active thread up to the next step to synchronize on
                 self.run_all_active_until_next_step();
@@ -195,9 +194,6 @@ impl<'a> Scheduler<'a> {
                 // update the active input vals to reflect the current state
                 // for each thread, get its current input_vals
                 active_input_vals = self.evaluator.input_vals.clone();
-                // println!("Current previous_input_vals {:?}", previous_input_vals);
-                // println!("Current active_input_vals {:?}", active_input_vals);
-                // println!("previous_input_vals != active_input_vals ? {}", previous_input_vals != active_input_vals);
 
                 if let Some(prev_vals) = previous_input_vals {
                     if prev_vals == active_input_vals {
@@ -273,10 +269,10 @@ impl<'a> Scheduler<'a> {
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize) {
         let next_todo_option = self.next_todo(self.next_todo_idx + 1);
         let thread = &mut self.active_threads[thread_idx];
-        println!(
-            "Running thread with transaction: {:?} from current_step: {:?}",
-            thread.tr.name, thread.current_step
-        );
+        let mut current = thread.current_step;
+
+        // set up context once
+        println!("Running thread {} from step {:?}", thread.tr.name, current);
         self.evaluator.context_switch(
             thread.tr,
             thread.st,
@@ -284,84 +280,63 @@ impl<'a> Scheduler<'a> {
             thread.next_stmt_map.clone(),
         );
 
-        let mut current_stmt_id = thread.current_step;
-
+        // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
-            println!("  Evaluating statement: {:?}", current_stmt_id);
-            match self.evaluator.evaluate_stmt(&current_stmt_id) {
-                Ok(next_stmt_option) => {
-                    match next_stmt_option {
-                        Some(next_stmt_id) => {
-                            println!(
-                                "  Next statement: {:?}, type: {:?}",
-                                next_stmt_id, &thread.tr[next_stmt_id]
-                            );
-                            match thread.tr[next_stmt_id] {
-                                Stmt::Step => {
+            println!("  Evaluating statement: {:?}", current);
+
+            match self.evaluator.evaluate_stmt(&current) {
+                // happy path: got a next statement
+                Ok(Some(next_id)) => {
+                    println!("  Next statement: {:?} {:?}", next_id, thread.tr[next_id]);
+
+                    match thread.tr[next_id] {
+                        Stmt::Step => {
+                            println!("  Step reached at {:?}, pausing.", next_id);
+                            thread.next_step = Some(next_id);
+                            return;
+                        }
+
+                        Stmt::Fork if self.evaluator.assertions_forks_enabled => {
+                            println!("  Fork at {:?}, spawning new thread…", next_id);
+                            self.next_todo_idx += 1;
+                            match next_todo_option.clone() {
+                                Some(todo) => {
+                                    let new_thread =
+                                        Thread::initialize_thread(todo, self.next_todo_idx);
+                                    self.next_threads.push(new_thread);
                                     println!(
-                                        "  Step reached, thread will pause at: {:?}",
-                                        next_stmt_id
+                                        "    enqueued forked thread; queue size = {}",
+                                        self.next_threads.len()
                                     );
-                                    thread.next_step = Some(next_stmt_id);
-                                    break;
                                 }
-                                Stmt::Fork => {
-                                    println!("  Fork reached at statement: {:?}", next_stmt_id);
-                                    if self.evaluator.assertions_forks_enabled {
-                                        // advance to the next todo index
-                                        self.next_todo_idx += 1;
-                                        match next_todo_option.clone() {
-                                            Some(todo) => {
-                                                println!(
-                                                    "  Forking new thread with transaction: {:?}",
-                                                    todo.tr.name
-                                                );
-                                                let next_thread = Thread::initialize_thread(
-                                                    todo,
-                                                    self.next_todo_idx,
-                                                );
-                                                self.next_threads.push(next_thread);
-                                                println!(
-                                                    "  Forked thread added to next_threads queue. Queue size: {}",
-                                                    self.next_threads.len()
-                                                );
-                                            }
-                                            None => {
-                                                println!(
-                                                    "  No more irs to fork, continuing execution"
-                                                );
-                                            }
-                                        }
-                                    } else {
-                                        println!("  Fork encountered, but assertions_forks_enabled is false. Not forking.");
-                                    }
-                                    current_stmt_id = next_stmt_id;
-                                }
-                                _ => {
-                                    println!(
-                                        "  Continuing execution to next statement: {:?}",
-                                        next_stmt_id
-                                    );
-                                    current_stmt_id = next_stmt_id;
+                                None => {
+                                    println!("    no more todos to fork, skipping fork.");
                                 }
                             }
+                            // continue from the fork point
+                            current = next_id;
                         }
-                        None => {
-                            println!("  Thread execution complete, no more statements");
-                            thread.next_step = None;
-                            break;
+
+                        _ => {
+                            // default “just keep going” case
+                            current = next_id;
                         }
                     }
                 }
+
+                // no more statements → done
+                Ok(None) => {
+                    println!("  Execution complete, no more statements.");
+                    thread.next_step = None;
+                    return;
+                }
+
+                // error → record and stop
                 Err(e) => {
-                    println!(
-                        "ERROR evaluating statement, ending thread execution: {:?}",
-                        e
-                    );
-                    // store error at this thread's original todo index
+                    println!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.thread_id] = Err(e);
                     thread.next_step = None;
-                    break;
+                    return;
                 }
             }
         }
