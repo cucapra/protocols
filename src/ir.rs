@@ -94,6 +94,11 @@ impl Transaction {
         let mut map = FxHashMap::default();
 
         if let Stmt::Block(stmts) = &self.stmts[block_id] {
+            // Handle empty blocks by mapping them directly to stmt_after_block
+            if stmts.is_empty() {
+                map.insert(block_id, stmt_after_block);
+            }
+
             for (i, &stmt_id) in stmts.iter().enumerate() {
                 let mut new_stmt_after_block = stmt_after_block;
                 if i == stmts.len() - 1 {
@@ -123,6 +128,8 @@ impl Transaction {
                     _ => {}
                 }
             }
+        } else {
+            panic!("Precondition: input StmtId refers to the a Stmt::Block variant was violated.");
         }
 
         map
