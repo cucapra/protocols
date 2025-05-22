@@ -258,8 +258,6 @@ impl<'a> Scheduler<'a> {
                 println!("Advancing to scheduling cycle: {}", self.step_count);
             } else {
                 println!("No more threads to schedule. Protocol execution complete.");
-                println!("Current Active Thread Count: {}", self.active_threads.len());
-                println!("Total inactive threads: {}", self.inactive_threads.len());
             }
         }
 
@@ -314,7 +312,6 @@ impl<'a> Scheduler<'a> {
                                 );
                                 self.results[thread.thread_id] = Err(msg.to_string());
                                 thread.next_step = None;
-                                return;
                             }
                             println!("  Fork at {:?}, spawning new thread…", next_id);
                             self.next_todo_idx += 1;
@@ -345,21 +342,41 @@ impl<'a> Scheduler<'a> {
                     }
                 }
 
-                // no more statements → done
+                // no more statements -> done
                 Ok(None) => {
                     println!("  Execution complete, no more statements.");
                     thread.next_step = None;
-                    return;
+                    break;
                 }
 
-                // error → record and stop
+                // error -> record and stop
                 Err(e) => {
                     println!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.thread_id] = Err(e);
                     thread.next_step = None;
-                    return;
-                }
+                    break;
+                 }
             }
+        }
+
+        // fork if a thread has completed successfully
+        // more specically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
+        if !thread.has_forked && self.evaluator.assertions_forks_enabled() && self.results[thread.thread_id].is_ok() {
+            self.next_todo_idx += 1;
+            match next_todo_option.clone() {
+                Some(todo) => {
+                    let new_thread =
+                        Thread::initialize_thread(todo, self.next_todo_idx);
+                    self.next_threads.push(new_thread);
+                    println!(
+                        "    enqueued forked thread; queue size = {}",
+                        self.next_threads.len()
+                    );
+                }
+                None => {
+                    println!("    no more todos to fork, skipping fork.");
+                }
+            } 
         }
     }
 }
