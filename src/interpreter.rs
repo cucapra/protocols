@@ -196,6 +196,23 @@ impl<'a> Evaluator<'a> {
     // step the simulator
     pub fn sim_step(&mut self) {
         self.sim.step();
+
+        // modify the input_vals to all be OldValues or DontCares
+        let mut rng = rand::thread_rng();
+        self.input_vals = self
+            .input_vals
+            .iter()
+            .map(|(k, v)| {
+                let new_v = match v {
+                    InputValue::NewValue(bvv) => InputValue::OldValue(bvv.clone()),
+                    InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
+                    InputValue::DontCare(bvv) => {
+                        InputValue::DontCare(BitVecValue::random(&mut rng, bvv.width()))
+                    } // re-randomuze DontCares
+                };
+                (*k, new_v)
+            })
+            .collect();
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<ExprValue, String> {

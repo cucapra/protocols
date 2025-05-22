@@ -4,7 +4,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecOps;
 use baa::BitVecValue;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
@@ -266,24 +265,6 @@ impl<'a> Scheduler<'a> {
                 println!("Current Active Thread Count: {}", self.active_threads.len());
                 println!("Total inactive threads: {}", self.inactive_threads.len());
             }
-
-            // modify the input_vals to all be OldValues or DontCares
-            let mut rng = rand::thread_rng();
-            self.evaluator.input_vals = self
-                .evaluator
-                .input_vals
-                .iter()
-                .map(|(k, v)| {
-                    let new_v = match v {
-                        InputValue::NewValue(bvv) => InputValue::OldValue(bvv.clone()),
-                        InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
-                        InputValue::DontCare(bvv) => {
-                            InputValue::DontCare(BitVecValue::random(&mut rng, bvv.width()))
-                        } // re-randomuze DontCares
-                    };
-                    (*k, new_v)
-                })
-                .collect();
         }
 
         self.results.clone()
