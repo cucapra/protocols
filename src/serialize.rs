@@ -158,20 +158,13 @@ pub fn serialize(
     for (st, tr) in trs {
         write!(out, "fn {}", tr.name)?;
 
-        for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
-            let last_index = ii == tr.type_args.len() - 1;
-
-            if ii == 0 {
-                write!(out, "<")?;
-            }
-
-            let strct_type = serialize_type(&st, st[tpe_arg].tpe());
-
-            if last_index {
-                write!(out, "{}: {}>", st[tpe_arg].name(), strct_type)?;
-            } else {
-                write!(out, "{}: {}, ", st[tpe_arg].name(), strct_type)?;
-            }
+        if let Some(type_param) = tr.type_param {
+            write!(
+                out,
+                "<{}: {}>",
+                st[type_param].name(),
+                serialize_type(&st, st[type_param].tpe())
+            )?;
         }
 
         write!(out, "(")?;
@@ -347,7 +340,7 @@ pub mod tests {
         // 2) create transaction
         let mut easycond = Transaction::new("easycond".to_string());
         easycond.args = vec![Arg::new(a, Dir::In), Arg::new(b, Dir::Out)];
-        easycond.type_args = vec![dut];
+        easycond.type_param = Some(dut);
 
         // 3) create expressions
         let a_expr = easycond.e(Expr::Sym(a));

@@ -79,7 +79,7 @@ impl<'a> Evaluator<'a> {
         let args_mapping = Evaluator::generate_args_mapping(st, args);
 
         // create mapping for each of the DUT's children symbols to the input and output mappings
-        let dut = tr.type_args[0];
+        let dut = tr.type_param.unwrap();
         let dut_symbols = &st.get_children(&dut);
 
         let mut input_mapping = HashMap::new();

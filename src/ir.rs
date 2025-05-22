@@ -14,7 +14,7 @@ pub struct Transaction {
     pub name: String,
     pub args: Vec<Arg>,
     pub body: StmtId,
-    pub type_args: Vec<SymbolId>,
+    pub type_param: Option<SymbolId>,
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
@@ -34,7 +34,7 @@ impl Transaction {
             name,
             args: Vec::default(),
             body: block_id,
-            type_args: Vec::default(),
+            type_param: None, // guranteed to become Some after parsing by grammar constraints
             exprs,
             dont_care_id,
             stmts,
@@ -628,7 +628,7 @@ mod tests {
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
         calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
-        calyx_go_done.type_args = vec![dut];
+        calyx_go_done.type_param = Some(dut);
 
         // 3) create expressions
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));

@@ -226,7 +226,7 @@ impl ParserContext<'_> {
                             let dut_symbol_id = self
                                 .st
                                 .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
-                            self.tr.type_args = vec![dut_symbol_id];
+                            self.tr.type_param = Some(dut_symbol_id);
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
