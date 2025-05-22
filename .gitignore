@@ -2,5 +2,4 @@
 Cargo.lock
 .idea/
 test_run/
-/tests/snapshots
 *.btor

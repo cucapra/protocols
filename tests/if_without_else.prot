@@ -1,0 +1,10 @@
+struct DualIdentity {
+  in a: u64,
+  in b: u64,
+}
+
+fn if_without_else<dut: DualIdentity>(in a: u64, in b: u64) {
+    if (dut.b == b) {
+        dut.a := a;
+    }
+}
