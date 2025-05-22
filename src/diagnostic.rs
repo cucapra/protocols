@@ -93,6 +93,12 @@ pub struct DiagnosticHandler {
     error_string: String,
 }
 
+impl Default for DiagnosticHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DiagnosticHandler {
     pub fn new() -> Self {
         Self {
