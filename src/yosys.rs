@@ -36,7 +36,7 @@ impl YosysEnv {
     pub fn with_temp_dir() -> Result<Self> {
         let dir = tempfile::TempDir::new()?;
         Ok(Self {
-            working_dir: dir.into_path(),
+            working_dir: dir.keep(),
             ..Default::default()
         })
     }
