@@ -110,17 +110,19 @@ impl<'a> Evaluator<'a> {
                 .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
             {
                 input_mapping.insert(*symbol_id, *input_ref);
-            }
-
-            // Map outputs by matching symbol name to sys.outputs' names
-            if let Some((idx, _)) = sys
-                .outputs
-                .iter()
-                .map(|o| ctx[o.name].to_string())
-                .enumerate()
-                .find(|(_, out_name)| out_name == symbol_name)
-            {
-                output_mapping.insert(*symbol_id, sys.outputs[idx]);
+            } else {
+                // check if the DUT symbol is an output
+                let output = sys
+                    .outputs
+                    .iter()
+                    .find(|o| ctx[o.name] == symbol_name)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Failed to find output with name '{}' in system outputs",
+                            symbol_name
+                        )
+                    });
+                output_mapping.insert(*symbol_id, *output);
             }
         }
 
