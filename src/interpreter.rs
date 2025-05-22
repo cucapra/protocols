@@ -312,7 +312,7 @@ impl<'a> Evaluator<'a> {
             Stmt::Block(stmt_ids) => {
                 // println!("Eval Block.");
                 if stmt_ids.is_empty() {
-                    return Ok(None);
+                    return Ok(self.next_stmt_map[stmt_id]);
                 } else {
                     return Ok(Some(stmt_ids[0]));
                 }
