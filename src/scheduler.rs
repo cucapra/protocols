@@ -835,19 +835,20 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(
-            0,
-            vec![BitVecValue::from_u64(0, 32), BitVecValue::from_u64(1, 32)],
-            
-        ),
-        (
-            0,
-            vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
-        ),
-        (
-            0,
-            vec![BitVecValue::from_u64(0, 32), BitVecValue::from_u64(1, 32)],
-        )];
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![BitVecValue::from_u64(0, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(0, 32), BitVecValue::from_u64(1, 32)],
+            ),
+        ];
 
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results: Vec<Result<(), String>> = scheduler.execute_threads();
