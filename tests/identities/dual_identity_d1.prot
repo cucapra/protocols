@@ -37,11 +37,7 @@ fn two<dut: DualIdentity>(in a: u64, in b: u64) {
     if (dut.b == b) {
         dut.a := a;
     }
-    else {
-        // TODO: this is a placeholder statement because currently 
-        // the scheduler cannot handle empty else blocks
-        assert_eq(1, 1);
-    }
+    else {}
 
     step();
 
