@@ -57,9 +57,9 @@ pub struct Evaluator<'a> {
     output_mapping: HashMap<SymbolId, Output>,
 
     // tracks the input pins and their values
-    pub input_vals: HashMap<SymbolId, InputValue>,
+    input_vals: HashMap<SymbolId, InputValue>,
 
-    pub assertions_forks_enabled: bool,
+    assertions_forks_enabled: bool,
 }
 
 impl<'a> Evaluator<'a> {
@@ -178,6 +178,7 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
+
     pub fn context_switch(
         &mut self,
         tr: &'a Transaction,
@@ -191,6 +192,22 @@ impl<'a> Evaluator<'a> {
         // TODO: this is inefficient because the map is generated every time there is a context switch
         self.next_stmt_map = next_stmt_map;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
+    }
+
+    pub fn input_vals(&self) -> HashMap<SymbolId, InputValue> {
+        self.input_vals.clone()
+    }
+
+    pub fn enable_assertions_and_forks(&mut self) {
+        self.assertions_forks_enabled = true;
+    }
+
+    pub fn disable_assertions_and_forks(&mut self) {
+        self.assertions_forks_enabled = false;
+    }
+
+    pub fn assertions_forks_enabled(&self) -> bool {
+        self.assertions_forks_enabled
     }
 
     // step the simulator

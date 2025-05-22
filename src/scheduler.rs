@@ -185,15 +185,15 @@ impl<'a> Scheduler<'a> {
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
             // fixed point iteration with assertions off
-            self.evaluator.assertions_forks_enabled = false;
+            self.evaluator.disable_assertions_and_forks();
 
             loop {
                 // run every active thread up to the next step to synchronize on
                 self.run_all_active_until_next_step();
 
                 // update the active input vals to reflect the current state
-                // for each thread, get its current input_vals
-                active_input_vals = self.evaluator.input_vals.clone();
+                // for each thread, get its current input_vals (read-only clone)
+                active_input_vals = self.evaluator.input_vals();
 
                 if let Some(prev_vals) = previous_input_vals {
                     if prev_vals == active_input_vals {
@@ -209,7 +209,7 @@ impl<'a> Scheduler<'a> {
 
             // achieved convergence, run one more time with assertions on
             println!("Achieved Convergence. Running once more with assertions enabled...");
-            self.evaluator.assertions_forks_enabled = true;
+            self.evaluator.enable_assertions_and_forks();
             self.run_all_active_until_next_step();
 
             // now that all threads are synchronized on the step, we can run step() on the sim
@@ -296,7 +296,7 @@ impl<'a> Scheduler<'a> {
                             return;
                         }
 
-                        Stmt::Fork if self.evaluator.assertions_forks_enabled => {
+                        Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             println!("  Fork at {:?}, spawning new thread…", next_id);
                             self.next_todo_idx += 1;
                             match next_todo_option.clone() {
