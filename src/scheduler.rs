@@ -19,6 +19,30 @@ use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
 
 #[derive(Debug, Clone)]
+pub struct Todo<'a> {
+    pub tr: &'a Transaction,
+    pub st: &'a SymbolTable,
+    pub args: HashMap<&'a str, BitVecValue>,
+    pub next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+}
+
+impl<'a> Todo<'a> {
+    pub fn new(
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        args: HashMap<&'a str, BitVecValue>,
+        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+    ) -> Self {
+        Self {
+            tr,
+            st,
+            args,
+            next_stmt_map,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Thread<'a> {
     pub tr: &'a Transaction,
     pub st: &'a SymbolTable,
@@ -26,29 +50,26 @@ pub struct Thread<'a> {
     pub next_step: Option<StmtId>,
     args: HashMap<&'a str, BitVecValue>,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
-    /// Index into the original `todos` (used to store this thread’s result)
+    /// Index into the original `todos` (used to store this thread's result)
     thread_id: usize,
 }
 
 impl<'a> Thread<'a> {
     pub fn initialize_thread(
-        tr: &'a Transaction,
-        st: &'a SymbolTable,
-        args: HashMap<&'a str, BitVecValue>,
-        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+        todo: Todo<'a>,
         thread_id: usize,
     ) -> Self {
         println!(
             "Thread initialized with transaction: {:?}, thread_id={}",
-            tr.name, thread_id
+            todo.tr.name, thread_id
         );
         Self {
-            tr,
-            st,
-            current_step: tr.body,
+            tr: todo.tr,
+            st: todo.st,
+            current_step: todo.tr.body,
             next_step: None,
-            args,
-            next_stmt_map,
+            args: todo.args,
+            next_stmt_map: todo.next_stmt_map,
             thread_id,
         }
     }
@@ -69,6 +90,41 @@ pub struct Scheduler<'a> {
 }
 
 impl<'a> Scheduler<'a> {
+    // Helper method that creates a Todo struct
+    fn create_todo_helper(
+        todos: &[(usize, Vec<BitVecValue>)],
+        idx: usize,
+        irs: &[(&'a Transaction, &'a SymbolTable)],
+        next_stmt_mappings: &[FxHashMap<StmtId, Option<StmtId>>],
+    ) -> Option<Todo<'a>> {
+        if idx < todos.len() {
+            // get the corresponding transaction and symbol table
+            let ir_idx = todos[idx].0;
+            let (tr, st) = irs[ir_idx];
+
+            // setup the arguments for the transaction
+            let args = todos[idx].1.clone();
+            let mut args_map = HashMap::new();
+
+            // setup the next_stmt_mapping from the parallel vector
+            let next_stmt_map = next_stmt_mappings[ir_idx].clone();
+
+            for (i, arg) in args.iter().enumerate() {
+                let identifier = st[tr.args[i].symbol()].name();
+                args_map.insert(identifier, arg.clone());
+            }
+
+            Some(Todo::new(tr, st, args_map, next_stmt_map))
+        } else {
+            None
+        }
+    }
+
+    // Instance method that uses self fields and returns a Todo
+    fn next_todo(&self, idx: usize) -> Option<Todo<'a>> {
+        Self::create_todo_helper(&self.todos, idx, &self.irs, &self.next_stmt_maps)
+    }
+
     pub fn new(
         irs: Vec<(&'a Transaction, &'a SymbolTable)>,
         todos: Vec<(usize, Vec<BitVecValue>)>,
@@ -83,17 +139,16 @@ impl<'a> Scheduler<'a> {
 
         // setup the Evaluator and first Thread
         let next_todo_idx = 0;
-        let res = Self::next_ir(&todos, next_todo_idx, irs.clone(), next_stmt_maps.clone());
-        let (initial_tr, initial_st, initial_args, initial_next_stmt_map) =
-            res.expect("No transactions passed.");
+        let initial_todo = Self::create_todo_helper(&todos, next_todo_idx, &irs, &next_stmt_maps)
+            .expect("No transactions passed.");
 
-        println!("Starting with initial transaction: {:?}", initial_tr.name);
+        println!("Starting with initial transaction: {:?}", initial_todo.tr.name);
 
         // Initialize evaluator with first transaction
         let evaluator = Evaluator::new(
-            initial_args.clone(),
-            initial_tr,
-            initial_st,
+            initial_todo.args.clone(),
+            initial_todo.tr,
+            initial_todo.st,
             handler,
             ctx,
             sys,
@@ -101,13 +156,7 @@ impl<'a> Scheduler<'a> {
         );
 
         let results_size = todos.len();
-        let first = Thread::initialize_thread(
-            initial_tr,
-            initial_st,
-            initial_args,
-            initial_next_stmt_map,
-            next_todo_idx,
-        );
+        let first = Thread::initialize_thread(initial_todo, next_todo_idx);
         println!("Added first thread to active_threads");
         Self {
             irs,
@@ -120,41 +169,6 @@ impl<'a> Scheduler<'a> {
             step_count: 1,
             evaluator,
             results: vec![Ok(()); results_size],
-        }
-    }
-
-    // TODO: simplify this ugly return type and I think this should just take &self as an argument.
-    fn next_ir(
-        todos: &[(usize, Vec<BitVecValue>)],
-        idx: usize,
-        irs: Vec<(&'a Transaction, &'a SymbolTable)>,
-        next_stmt_mappings: Vec<FxHashMap<StmtId, Option<StmtId>>>,
-    ) -> Option<(
-        &'a Transaction,
-        &'a SymbolTable,
-        HashMap<&'a str, BitVecValue>,
-        FxHashMap<StmtId, Option<StmtId>>,
-    )> {
-        if idx < todos.len() {
-            // get the corresponding transaction and symbol table
-            let ir_idx = todos[idx].0;
-            let (tr, st) = irs[ir_idx];
-
-            // setup the arguments for the transaction
-            let args = todos[idx].1.clone();
-            let mut args_map = HashMap::new();
-
-            // setup the next_stmt_mapping from the parallel vector
-            let next_stmt_mapping = next_stmt_mappings[ir_idx].clone();
-
-            for (i, arg) in args.iter().enumerate() {
-                let identifier = st[tr.args[i].symbol()].name();
-                args_map.insert(identifier, arg.clone());
-            }
-
-            Some((tr, st, args_map, next_stmt_mapping))
-        } else {
-            None
         }
     }
 
@@ -274,6 +288,7 @@ impl<'a> Scheduler<'a> {
     }
 
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize) {
+        let next_todo_option = self.next_todo(self.next_todo_idx + 1);
         let thread = &mut self.active_threads[thread_idx];
         println!(
             "Running thread with transaction: {:?} from current_step: {:?}",
@@ -316,30 +331,25 @@ impl<'a> Scheduler<'a> {
                                     if self.evaluator.assertions_forks_enabled {
                                         // advance to the next todo index
                                         self.next_todo_idx += 1;
-                                        if let Some((tr, st, args, next_stmt_map)) = Self::next_ir(
-                                            &self.todos,
-                                            self.next_todo_idx,
-                                            self.irs.clone(),
-                                            self.next_stmt_maps.clone(),
-                                        ) {
-                                            println!(
-                                                "  Forking new thread with transaction: {:?}",
-                                                tr.name
-                                            );
-                                            let next_thread = Thread::initialize_thread(
-                                                tr,
-                                                st,
-                                                args,
-                                                next_stmt_map,
-                                                self.next_todo_idx,
-                                            );
-                                            self.next_threads.push(next_thread);
-                                            println!(
-                                                "  Forked thread added to next_threads queue. Queue size: {}",
-                                                self.next_threads.len()
-                                            );
-                                        } else {
-                                            println!("  No more irs to fork, continuing execution");
+                                        match next_todo_option.clone() {
+                                            Some(todo) => {
+                                                println!(
+                                                    "  Forking new thread with transaction: {:?}",
+                                                    todo.tr.name
+                                                );
+                                                let next_thread = Thread::initialize_thread(
+                                                    todo,
+                                                    self.next_todo_idx,
+                                                );
+                                                self.next_threads.push(next_thread);
+                                                println!(
+                                                    "  Forked thread added to next_threads queue. Queue size: {}",
+                                                    self.next_threads.len()
+                                                );
+                                            }
+                                            None => {
+                                                println!("  No more irs to fork, continuing execution");
+                                            }
                                         }
                                     } else {
                                         println!("  Fork encountered, but assertions_forks_enabled is false. Not forking.");
