@@ -1,42 +1,51 @@
 struct DualIdentity {
-  in a: u32,
-  in b: u32,
-  out s1: u32,
-  out s2: u32,
+  in a: u64,
+  in b: u64,
+  out s1: u64,
+  out s2: u64,
 }
 
-fn one<dut: DualIdentity>(in a: u32, out s1: u32, out s2 : u32) {
-    dut.a := 1;
+// this pair of protocols works by having each thread assign one of dut.a or dut.b,
+// but assignment of dut.a is conditioned upon correct assignment of dut.b
+// if the threads disagree on the value of b, a remains a DontCare and the assertion fails
+
+// if both threads agree on the value of b:
+// iteration 1:
+// if two is scheduled first, no assignment happens
+// then one is scheduled and dut.b is reassigned NewValue(b)
+
+// iteration 2:
+// a is assigned a NewValue(a)
+// b is reassigned the same NewValue(b); convergence achieved
+
+// if one is scheduled first, convergence occurs in a single iteration
+
+fn one<dut: DualIdentity>(in b: u64) {
+    dut.a := X;
     dut.b := X;
     fork();
 
     step();
 
-    if (dut.a == a) {
-        dut.b := 3;
-    }
-    else {
-        fork();
-    }
+    dut.b := b;
 
     step();
-
-    assert_eq(dut.s1, s1);
-    assert_eq(dut.s2, s2);
 }
 
 
-fn two<dut: DualIdentity>(in b: u32, out s1: u32, out s2 : u32) {
+fn two<dut: DualIdentity>(in a: u64, in b: u64) {
     if (dut.b == b) {
-        dut.a := 2;
+        dut.a := a;
     }
     else {
-        fork();
+        // TODO: this is a placeholder statement because currently 
+        // the scheduler cannot handle empty else blocks
+        assert_eq(1, 1);
     }
 
     step();
 
-    assert_eq(dut.s1, s1);
-    assert_eq(dut.s2, s2);
+    assert_eq(dut.s1, a);
+    assert_eq(dut.s2, b);
 }
 

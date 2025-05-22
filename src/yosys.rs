@@ -165,6 +165,8 @@ pub fn yosys_to_btor(
     }
 }
 
+#[allow(dead_code)]
+
 /// Crashes the program if yosys is not found.
 #[allow(dead_code)]
 pub fn require_yosys() -> Result<()> {
