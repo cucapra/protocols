@@ -315,6 +315,11 @@ pub mod tests {
     }
 
     #[test]
+    fn test_simple_if_without_else_transaction() {
+        test_helper("tests/if_without_else.prot", "if_without_else");
+    }
+
+    #[test]
     fn serialize_easycond_transaction() {
         // Manually create the expected result of parsing `easycond.prot`.
         // Note that the order in which things are created will be different in the parser.
