@@ -4,6 +4,8 @@ struct Identity {
 }
 
 fn identity<DUT: Identity>(in a: u32, out s: u32) {
+  // If multiple instances of this protocol are run, this will pass if and only if
+  // both instances pass the same integer value for parameter a. 
   DUT.a := a;
   fork();
   step();

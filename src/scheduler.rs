@@ -411,7 +411,6 @@ pub mod tests {
     fn test_scheduler_add() {
         let handler = &mut DiagnosticHandler::new();
 
-        // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/add_struct.prot";
         let verilog_path = "examples/adders/add_d1.v";
         let (ctx, sys) = create_sim_context(verilog_path);
@@ -481,7 +480,6 @@ pub mod tests {
     fn test_scheduler_mult() {
         let handler = &mut DiagnosticHandler::new();
 
-        // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/mult_new.prot";
         let verilog_path = "examples/multipliers/mult_d2.v";
         let (ctx, sys) = create_sim_context(verilog_path);
@@ -552,7 +550,6 @@ pub mod tests {
         // we expect this to fail due to the value being reassigned multiple times
         let handler = &mut DiagnosticHandler::new();
 
-        // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/identities/identity_d2_multiple_assign.prot";
         let verilog_path = "examples/identity/identity_d2.v";
         let (ctx, sys) = create_sim_context(verilog_path);
@@ -603,44 +600,39 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_dual_identity() {
-        // we expect this to fail due to the value being reassigned multiple times
         let handler = &mut DiagnosticHandler::new();
 
-        // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/identities/dual_identity_d1.prot";
         let verilog_path = "examples/identity/dual_identity_d1.v";
         let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
-        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
+        // PASSING CASE: values of b agree
         // whether this converges after one or two iterations is dependent on the scheduling order, but it should converge nonetheless
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (
-                0,
-                vec![
-                    BitVecValue::from_u64(1, 32),
-                    BitVecValue::from_u64(2, 32),
-                    BitVecValue::from_u64(3, 32),
-                ],
-            ),
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (0, vec![BitVecValue::from_u64(3, 64)]),
             (
                 1,
-                vec![
-                    BitVecValue::from_u64(3, 32),
-                    BitVecValue::from_u64(2, 32),
-                    BitVecValue::from_u64(3, 32),
-                ],
+                vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(3, 64)],
             ),
         ];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
+
+        // FAILING CASE: values of b disagree
+        todos[1].1 =  vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(5, 64)];
+        let sim2 =  &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
     }
 
     #[test]
