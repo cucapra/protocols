@@ -17,20 +17,26 @@ use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
 
+// Type aliases to simplify complex types
+type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
+type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
+type TodoItem = (usize, Vec<BitVecValue>);
+type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
+
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
     pub tr: &'a Transaction,
     pub st: &'a SymbolTable,
-    pub args: HashMap<&'a str, BitVecValue>,
-    pub next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+    pub args: ArgMap<'a>,
+    pub next_stmt_map: NextStmtMap,
 }
 
 impl<'a> Todo<'a> {
     pub fn new(
         tr: &'a Transaction,
         st: &'a SymbolTable,
-        args: HashMap<&'a str, BitVecValue>,
-        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+        args: ArgMap<'a>,
+        next_stmt_map: NextStmtMap,
     ) -> Self {
         Self {
             tr,
@@ -47,9 +53,9 @@ pub struct Thread<'a> {
     pub st: &'a SymbolTable,
     pub current_step: StmtId,
     pub next_step: Option<StmtId>,
-    args: HashMap<&'a str, BitVecValue>,
-    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
-    /// Index into the original `todos` (used to store this thread's result)
+    args: ArgMap<'a>,
+    next_stmt_map: NextStmtMap,
+    /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     thread_id: usize,
 }
 
@@ -72,12 +78,8 @@ impl<'a> Thread<'a> {
 }
 
 pub struct Scheduler<'a> {
-    irs: Vec<(
-        &'a Transaction,
-        &'a SymbolTable,
-        FxHashMap<StmtId, Option<StmtId>>,
-    )>,
-    todos: Vec<(usize, Vec<BitVecValue>)>,
+    irs: Vec<TransactionInfo<'a>>,
+    todos: Vec<TodoItem>,
     /// Next index into `todos` to pull when we fork
     next_todo_idx: usize,
     active_threads: Vec<Thread<'a>>,
@@ -91,13 +93,9 @@ pub struct Scheduler<'a> {
 impl<'a> Scheduler<'a> {
     // Helper method that creates a Todo struct
     fn create_todo_helper(
-        todos: &[(usize, Vec<BitVecValue>)],
+        todos: &[TodoItem],
         idx: usize,
-        irs: &[(
-            &'a Transaction,
-            &'a SymbolTable,
-            FxHashMap<StmtId, Option<StmtId>>,
-        )],
+        irs: &[TransactionInfo<'a>],
     ) -> Option<Todo<'a>> {
         if idx < todos.len() {
             // get the corresponding transaction, symbol table, and next_stmt_map
@@ -126,18 +124,14 @@ impl<'a> Scheduler<'a> {
 
     pub fn new(
         transactions_and_symbols: Vec<(&'a Transaction, &'a SymbolTable)>,
-        todos: Vec<(usize, Vec<BitVecValue>)>,
+        todos: Vec<TodoItem>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,
         sim: &'a mut Interpreter<'a>,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
-        let irs: Vec<(
-            &'a Transaction,
-            &'a SymbolTable,
-            FxHashMap<StmtId, Option<StmtId>>,
-        )> = transactions_and_symbols
+        let irs: Vec<TransactionInfo<'a>> = transactions_and_symbols
             .into_iter()
             .map(|(tr, st)| (tr, st, tr.next_stmt_mapping()))
             .collect();
