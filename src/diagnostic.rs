@@ -239,13 +239,6 @@ impl DiagnosticHandler {
         eval1: &BitVecValue,
         eval2: &BitVecValue,
     ) {
-        // Check if the error has already been reported for these expressions
-        if !self.reported_errs.insert(ErrorKey::ExprKey(*expr1_id))
-            || !self.reported_errs.insert(ErrorKey::ExprKey(*expr2_id))
-        {
-            return;
-        }
-
         let buffer = &mut Buffer::ansi();
 
         if let (Some((start1, end1, fileid1)), Some((start2, end2, fileid2))) =

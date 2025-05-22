@@ -4,11 +4,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use std::{any::Any, fmt::format, io::Write};
-
+use crate::ir::*;
 use baa::BitVecOps;
-
-use crate::{diagnostic::*, ir::*};
+use std::io::Write;
 
 pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
     let mut out = Vec::new();
@@ -215,14 +213,14 @@ pub fn serialize(
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parser::parse_file;
+    use baa::BitVecValue;
     use insta::Settings;
     use std::path::Path;
-
-    use baa::BitVecValue;
     use strip_ansi_escapes::strip_str;
 
     use super::*;
+    use crate::diagnostic::DiagnosticHandler;
+    use crate::parser::parse_file;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();

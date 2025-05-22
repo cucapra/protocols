@@ -1,9 +1,9 @@
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempfile;
 use thiserror::Error;
 
+#[allow(dead_code)]
 #[derive(Error, Debug)]
 pub enum YosysError {
     #[error("failed to find yosys, make sure it is on your path!")]
@@ -16,6 +16,7 @@ pub enum YosysError {
     IoError(#[from] std::io::Error),
 }
 
+#[allow(dead_code)]
 pub struct YosysEnv {
     working_dir: PathBuf,
     script_out: Option<PathBuf>,
@@ -31,6 +32,7 @@ impl Default for YosysEnv {
     }
 }
 
+#[allow(dead_code)]
 impl YosysEnv {
     pub fn with_temp_dir() -> Result<Self> {
         let dir = tempfile::TempDir::new()?;
@@ -45,12 +47,15 @@ impl YosysEnv {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Default, Debug)]
 pub struct ProjectConf {
     sources: Vec<PathBuf>,
     top: Option<String>,
     include_path: Option<PathBuf>,
 }
+
+#[allow(dead_code)]
 
 impl ProjectConf {
     pub fn with_source(source: PathBuf) -> Self {
@@ -64,13 +69,14 @@ impl ProjectConf {
 
 pub type Result<T> = std::result::Result<T, YosysError>;
 
+#[allow(dead_code)]
 pub fn run_yosys<C>(env: &YosysEnv, commands: &[C]) -> Result<String>
 where
     C: AsRef<str>,
 {
     let cmd_str: String = join(commands.iter(), " ; ");
 
-    if let Some(script_out) = &env.script_out {
+    if let Some(_) = &env.script_out {
         todo!("implement script out");
     }
 
@@ -91,12 +97,16 @@ where
     }
 }
 
+#[allow(dead_code)]
+
 const MINIMAL_BTOR_CONVERSION: &[&str] = &[
     "proc -noopt",
     "async2sync", // required for designs with async reset
     "flatten",
     "dffunmap",
 ];
+
+#[allow(dead_code)]
 
 fn read_sources(project: &ProjectConf) -> Vec<String> {
     // canonicalize file paths since yosys might use a different output directory
@@ -120,6 +130,8 @@ fn read_sources(project: &ProjectConf) -> Vec<String> {
     }
     out
 }
+
+#[allow(dead_code)]
 
 pub fn yosys_to_btor(
     env: &YosysEnv,
@@ -157,6 +169,8 @@ pub fn yosys_to_btor(
         ))
     }
 }
+
+#[allow(dead_code)]
 
 /// Crashes the program if yosys is not found.
 pub fn require_yosys() -> Result<()> {
@@ -224,7 +238,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_require_yosys() {

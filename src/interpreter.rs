@@ -5,31 +5,61 @@ use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 use rustc_hash::FxHashMap;
 
-use crate::yosys::yosys_to_btor;
-use crate::yosys::ProjectConf;
-use crate::yosys::YosysEnv;
-
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 // TODO: this is relevant for proper don't care handling in the future
-pub enum Value {
-    BitVec(BitVecValue),
+#[derive(Debug, Clone)]
+pub enum InputValue {
+    OldValue(BitVecValue),
+    NewValue(BitVecValue),
+    DontCare(BitVecValue),
+}
+
+impl PartialEq for InputValue {
+    fn eq(&self, other: &Self) -> bool {
+        use InputValue::*;
+
+        match (self, other) {
+            (OldValue(a), OldValue(b)) => a.is_equal(b),
+            (NewValue(a), NewValue(b)) => a.is_equal(b),
+            (DontCare(a), DontCare(b)) => a.is_equal(b),
+            _ => false,
+        }
+    }
+}
+
+impl InputValue {
+    pub fn value(&self) -> &BitVecValue {
+        match self {
+            InputValue::OldValue(bvv) => bvv,
+            InputValue::NewValue(bvv) => bvv,
+            InputValue::DontCare(bvv) => bvv,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum ExprValue {
+    Concrete(BitVecValue),
     DontCare,
 }
 
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
-    next_stmt_mapping: FxHashMap<StmtId, Option<StmtId>>,
+    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
     handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
-    // can change to be secondarymaps
-    args_mapping: HashMap<SymbolId, BitVecValue>, // FIXME: change to bitvecval
 
-    // combine into port map?
+    // TODO: can change to be secondarymaps for efficiency
+    args_mapping: HashMap<SymbolId, BitVecValue>,
     input_mapping: HashMap<SymbolId, ExprRef>,
     output_mapping: HashMap<SymbolId, Output>,
+
+    // tracks the input pins and their values
+    pub input_vals: HashMap<SymbolId, InputValue>,
+
+    pub assertions_forks_enabled: bool,
 }
 
 impl<'a> Evaluator<'a> {
@@ -52,6 +82,22 @@ impl<'a> Evaluator<'a> {
         let mut input_mapping = HashMap::new();
         let mut output_mapping = HashMap::new();
 
+        for input in &sys.inputs {
+            println!(
+                "Input expr: {:?}, name: {:?}",
+                (input),
+                ctx.get_symbol_name(*input)
+            );
+        }
+
+        for output in &sys.outputs {
+            println!(
+                "Output expr: {:?}, name: {:?}",
+                (output).expr,
+                ctx.get_symbol_name((output).expr)
+            );
+        }
+
         for symbol_id in dut_symbols {
             let symbol_name = st[symbol_id].name();
 
@@ -63,30 +109,56 @@ impl<'a> Evaluator<'a> {
                 input_mapping.insert(*symbol_id, *input_ref);
             }
 
-            if let Some(output_ref) = sys
+            // Map outputs by matching symbol name to sys.outputs' names
+            if let Some((idx, _)) = sys
                 .outputs
                 .iter()
-                .find(|o| ctx.get_symbol_name((**o).expr).unwrap() == symbol_name)
+                .map(|o| ctx[o.name].to_string())
+                .enumerate()
+                .find(|(_, out_name)| out_name == symbol_name)
             {
-                output_mapping.insert(*symbol_id, *output_ref);
+                output_mapping.insert(*symbol_id, sys.outputs[idx]);
             }
         }
 
         // TODO: check that the Transaction DUT matches the Btor2 DUT
         // TODO: check that every item in the args mapping is a field in the Transaction
 
+        // Initialize the input pins with DontCares that are randomly assigned
+        let mut input_vals = HashMap::new();
+        for (symbol_id, _) in &input_mapping {
+            // get the width from the type of the symbol
+            match st[symbol_id].tpe() {
+                Type::BitVec(width) => {
+                    // TODO: make this value random
+                    let mut rng = rand::thread_rng();
+                    input_vals.insert(
+                        *symbol_id,
+                        InputValue::DontCare(BitVecValue::random(&mut rng, width)),
+                    );
+                }
+                _ => panic!(
+                    "Expected a BitVec type for symbol {}, but found {:?}",
+                    symbol_id,
+                    st[symbol_id].tpe()
+                ),
+            }
+        }
+
         // Initialize sim, return the transaction!
         sim.init();
 
         let evaluator = Evaluator {
             tr,
-            next_stmt_mapping: tr.next_stmt_mapping(),
+            next_stmt_map: tr.next_stmt_mapping(),
             st,
             handler,
             sim: sim,
             args_mapping,
             input_mapping,
             output_mapping,
+            input_vals,
+            assertions_forks_enabled: false,
         };
         return evaluator;
     }
@@ -105,38 +177,19 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-
     pub fn context_switch(
         &mut self,
         tr: &'a Transaction,
         st: &'a SymbolTable,
         args: HashMap<&str, BitVecValue>,
+        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     ) {
         self.tr = tr;
         self.st = st;
 
         // TODO: this is inefficient because the map is generated every time there is a context switch
-        self.next_stmt_mapping = tr.next_stmt_mapping();
+        self.next_stmt_map = next_stmt_map;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
-    }
-
-    pub fn create_sim_context(
-        verilog_path: &str,
-    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
-        // Verilog --> Btor via Yosys
-        let env = YosysEnv::default();
-        let inp = PathBuf::from(verilog_path);
-        let mut proj = ProjectConf::with_source(inp);
-        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
-
-        // instantiate sim from btor file
-        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
-            Some(result) => result,
-            None => {
-                panic!("Failed to parse btor file.");
-            }
-        };
-        (ctx, sys)
     }
 
     // step the simulator
@@ -144,18 +197,18 @@ impl<'a> Evaluator<'a> {
         self.sim.step();
     }
 
-    fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<BitVecValue, String> {
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<ExprValue, String> {
         let expr = &self.tr[expr_id];
         match expr {
-            Expr::Const(bit_vec) => Ok(bit_vec.clone()),
+            Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
-                    Ok(self.sim.get(*expr_ref).unwrap())
+                    Ok(ExprValue::Concrete(self.sim.get(*expr_ref).unwrap()))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    Ok(self.sim.get((*output).expr).unwrap())
+                    Ok(ExprValue::Concrete(self.sim.get((*output).expr).unwrap()))
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
-                    Ok(bvv.clone())
+                    Ok(ExprValue::Concrete(bvv.clone()))
                 } else {
                     self.handler.emit_diagnostic_expr(
                         self.tr,
@@ -169,48 +222,66 @@ impl<'a> Evaluator<'a> {
                     ))
                 }
             }
-            Expr::DontCare => Ok(BitVecValue::new_false()),
+            Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(&lhs_id)?;
                 let rhs_val = self.evaluate_expr(&rhs_id)?;
                 match bin_op {
-                    BinOp::Equal => Ok(if lhs_val.is_equal(&rhs_val) {
-                        BitVecValue::new_true()
-                    } else {
-                        BitVecValue::new_false()
-                    }),
-                    BinOp::And => Ok(lhs_val.and(&rhs_val)),
+                    BinOp::Equal => {
+                        match (&lhs_val, &rhs_val) {
+                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                                return Err("Cannot perform equality on DontCare value".to_string());
+                            }
+                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                                // println!("Comparing BitVecs: lhs = {:?}, rhs = {:?}", lhs, rhs);
+                                if lhs.is_equal(rhs) {
+                                    Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                                } else {
+                                    Ok(ExprValue::Concrete(BitVecValue::new_false()))
+                                }
+                            }
+                        }
+                    }
+                    BinOp::And => {
+                        // match out of ExprValue::Concrete(bvv) if either one is a DontCare, return an error
+                        match (&lhs_val, &rhs_val) {
+                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                                return Err("Cannot perform AND on DontCare value".to_string());
+                            }
+                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                                Ok(ExprValue::Concrete(lhs.and(rhs)))
+                            }
+                        }
+                    }
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
-                let expr_val = self.evaluate_expr(&expr_id)?;
-                match unary_op {
-                    UnaryOp::Not => Ok(expr_val.not()),
+                let expr_val = self.evaluate_expr(expr_id)?;
+                match expr_val {
+                    ExprValue::Concrete(bvv) => match unary_op {
+                        UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
+                    },
+                    ExprValue::DontCare => {
+                        Err("Cannot perform unary operation on DontCare.".to_string())
+                    }
                 }
             }
             Expr::Slice(expr_id, idx1, idx2) => {
                 let expr_val = self.evaluate_expr(&expr_id)?;
-                Ok(expr_val.slice(*idx1, *idx2))
+                match expr_val {
+                    ExprValue::Concrete(bvv) => Ok(ExprValue::Concrete(bvv.slice(*idx1, *idx2))),
+                    ExprValue::DontCare => panic!("Cannot perform slice operation on DontCare."),
+                }
             }
         }
-    }
-
-    fn evaluate_transaction(&mut self) -> Result<(), String> {
-        let body_id: StmtId = self.tr.body;
-        let next_stmt = self.evaluate_stmt(&body_id)?;
-        let mut current_stmt = next_stmt;
-        while let Some(stmt_id) = current_stmt {
-            current_stmt = self.evaluate_stmt(&stmt_id)?;
-        }
-        return Ok(());
     }
 
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // println!("Eval Assign.");
-                self.evaluate_assign(&symbol_id, &expr_id)?;
-                Ok(self.next_stmt_mapping[stmt_id])
+                self.evaluate_assign(&stmt_id, &symbol_id, &expr_id)?;
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
                 // println!("Eval IFElse.");
@@ -222,19 +293,21 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::Step => {
                 // println!("Eval Step.");
-                // self.evaluate_step()?;
-                Ok(self.next_stmt_mapping[stmt_id])
+                // the scheduler will handle the step. simply return the next statement to run
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
                 // println!("Eval Fork.");
-                // the scheduler will handle the fork. simple return the next statement to run
-                return Ok(self.next_stmt_mapping[stmt_id]);
-                // return Err("Fork not implemented.".to_string());
+                // the scheduler will handle the fork. simply return the next statement to run
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr1, expr2) => {
                 // println!("Eval AssertEq.");
-                self.evaluate_assert_eq(&expr1, &expr2)?;
-                Ok(self.next_stmt_mapping[stmt_id])
+                if self.assertions_forks_enabled {
+                    self.evaluate_assert_eq(&expr1, &expr2)?;
+                }
+
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
                 // println!("Eval Block.");
@@ -254,18 +327,90 @@ impl<'a> Evaluator<'a> {
         else_stmt_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
         let res = self.evaluate_expr(cond_expr_id)?;
-        if res.is_zero() {
-            Ok(Some(*else_stmt_id))
-        } else {
-            Ok(Some(*then_stmt_id))
+        match res {
+            ExprValue::DontCare => {
+                Err("Cannot evaluate if condition: value is DontCare.".to_string())
+            }
+            ExprValue::Concrete(bvv) => {
+                if bvv.is_zero() {
+                    Ok(Some(*else_stmt_id))
+                } else {
+                    Ok(Some(*then_stmt_id))
+                }
+            }
         }
     }
 
-    fn evaluate_assign(&mut self, symbol_id: &SymbolId, expr_id: &ExprId) -> Result<(), String> {
+    fn evaluate_assign(
+        &mut self,
+        stmt_id: &StmtId,
+        symbol_id: &SymbolId,
+        expr_id: &ExprId,
+    ) -> Result<(), String> {
+        // FIXME: This should return a DontCare or a NewValue
         let expr_val = self.evaluate_expr(expr_id)?;
+
+        // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
+        // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
+        if let Some(value) = self.input_vals.get_mut(symbol_id) {
+            match value {
+                InputValue::DontCare(_) => {
+                    match expr_val {
+                        ExprValue::DontCare => {
+                            // Do nothing for DontCare
+                            // (we don't want to re-randomize within a cycle because that would prevent convergence)
+                        }
+                        ExprValue::Concrete(bvv) => {
+                            *value = InputValue::NewValue(bvv);
+                        }
+                    }
+                }
+                InputValue::OldValue(old_val) => match expr_val {
+                    ExprValue::DontCare => {
+                        let mut rng = rand::thread_rng();
+                        *value =
+                            InputValue::DontCare(BitVecValue::random(&mut rng, old_val.width()));
+                    }
+                    ExprValue::Concrete(bvv) => {
+                        *value = InputValue::NewValue(bvv);
+                    }
+                },
+                InputValue::NewValue(current_val) => {
+                    match expr_val {
+                        ExprValue::DontCare => {
+                            // do nothing
+                        }
+                        ExprValue::Concrete(new_val) => {
+                            if !current_val.is_equal(&new_val) {
+                                // TODO: Can include more debug info
+                                let msg = format!(
+                                    "Multiple threads attempting to assign to the same input: {}",
+                                    self.st[symbol_id].name()
+                                );
+                                self.handler.emit_diagnostic_stmt(
+                                    self.tr,
+                                    stmt_id,
+                                    &msg,
+                                    Level::Error,
+                                );
+
+                                return Err(msg);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            return Err(format!(
+                "Symbol {} not found in input_vals.",
+                self.st[symbol_id].name()
+            ));
+        }
+
+        // assign to the sim
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
-            self.sim.set(*expr_ref, &expr_val);
+            self.sim.set(*expr_ref, self.input_vals[symbol_id].value());
             Ok(())
         }
         // below statements should be unreachable (assuming type checking works)
@@ -288,207 +433,35 @@ impl<'a> Evaluator<'a> {
         do_block_id: &StmtId,
     ) -> Result<Option<StmtId>, String> {
         let res = self.evaluate_expr(loop_guard_id)?;
-        if res.is_true() {
-            return Ok(Some(*do_block_id));
-        } else {
-            Ok(self.next_stmt_mapping[while_id])
+        match res {
+            ExprValue::DontCare => {
+                return Err("Cannot evaluate while condition: value is DontCare.".to_string());
+            }
+            ExprValue::Concrete(bvv) => {
+                if bvv.is_true() {
+                    return Ok(Some(*do_block_id));
+                } else {
+                    Ok(self.next_stmt_map[while_id])
+                }
+            }
         }
-    }
-
-    fn evaluate_step(&mut self) -> Result<(), String> {
-        self.sim.step();
-        Ok(())
-    }
-
-    fn evaluate_fork(&self) -> Result<(), String> {
-        // TODO: Implement evaluate_fork
-        Ok(())
     }
 
     fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
-        if res1.is_not_equal(&res2) {
+        let (bvv1, bvv2) = match (&res1, &res2) {
+            (ExprValue::Concrete(bvv1), ExprValue::Concrete(bvv2)) => (bvv1, bvv2),
+            _ => {
+                return Err("Assertion Failed: One or both expressions are DontCare".to_string());
+            }
+        };
+        if !bvv1.is_equal(bvv2) {
             self.handler
-                .emit_diagnostic_assertion(self.tr, expr1, expr2, &res1, &res2);
+                .emit_diagnostic_assertion(self.tr, expr1, expr2, bvv1, bvv2);
             Err("Assertion Failed".to_string())
         } else {
             Ok(())
         }
-    }
-
-    fn evaluate_block(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
-        match &self.tr[stmt_id] {
-            Stmt::Block(stmt_ids) => {
-                if stmt_ids.is_empty() {
-                    return Ok(self.next_stmt_mapping[stmt_id]);
-                } else {
-                    return Ok(Some(stmt_ids[0]));
-                }
-            }
-            _ => unreachable!("Expected a block statement as input to evaluate_block."),
-        }
-    }
-}
-
-pub fn interpret(
-    verilog_path: &str,
-    args: HashMap<&str, BitVecValue>,
-    tr: &Transaction,
-    st: &SymbolTable,
-    handler: &mut DiagnosticHandler,
-) -> Result<(), String> {
-    // Verilog --> Btor via Yosys
-    let env = YosysEnv::default();
-    let inp = PathBuf::from(verilog_path);
-    let mut proj = ProjectConf::with_source(inp);
-    let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
-
-    // instantiate sim from btor file
-    let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
-        Some(result) => result,
-        None => {
-            let msg = "Failed to parse Verilog file to Btor2.".to_string();
-            handler.emit_general_message(&msg, Level::Error);
-            return Err(msg);
-        }
-    };
-    let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
-
-    // create evaluator
-    let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-    evaluator.evaluate_transaction()
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use crate::parser::parsing_helper;
-    use core::panic;
-    use insta::Settings;
-    use std::path::Path;
-    use strip_ansi_escapes::strip_str;
-
-    fn snap(name: &str, content: String) {
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        settings.bind(|| {
-            insta::assert_snapshot!(name, content);
-        });
-    }
-
-    fn test_helper(
-        filename: &str,
-        snap_name: &str,
-        verilog_path: &str,
-        args: HashMap<&str, BitVecValue>,
-    ) {
-        let handler = &mut DiagnosticHandler::new();
-
-        let transaction_filename = filename;
-        let verilog_path = verilog_path;
-        let (ctx, sys) = Evaluator::create_sim_context(verilog_path);
-        let mut sim: Interpreter<'_> = patronus::sim::Interpreter::new(&ctx, &sys);
-
-        let trs: Vec<(Transaction, SymbolTable)> = parsing_helper(transaction_filename, handler);
-
-        // only one transaction in this file
-        let (tr, st) = &trs[0];
-
-        let mut evaluator = Evaluator::new(args, tr, st, handler, &ctx, &sys, &mut sim);
-        let res = evaluator.evaluate_transaction();
-
-        let mut content = {
-            if let Err(err) = res.clone() {
-                err + "\n\n"
-            } else {
-                "Assertion Passed\n\n".to_string()
-            }
-        };
-
-        content = content + &strip_str(handler.error_string());
-
-        println!("{}", content);
-        snap(snap_name, content);
-    }
-
-    #[test]
-    fn test_add_ok() {
-        // set up the args for the Transaction
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(6, 32));
-        args.insert("b", BitVecValue::from_u64(8, 32));
-        args.insert("s", BitVecValue::from_u64(14, 32));
-
-        test_helper(
-            "tests/add_struct.prot",
-            "add_ok",
-            "examples/adders/add_d1.v",
-            args,
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn test_add_err() {
-        // set up the args for the Transaction
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(6, 32));
-        args.insert("b", BitVecValue::from_u64(8, 32));
-        args.insert("s", BitVecValue::from_u64(13, 32));
-
-        test_helper(
-            "tests/add_struct.prot",
-            "add_err",
-            "examples/adders/add_d1.v",
-            args,
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn test_mult_execution() {
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(6, 32));
-        args.insert("b", BitVecValue::from_u64(8, 32));
-        args.insert("s", BitVecValue::from_u64(48, 32));
-
-        test_helper(
-            "tests/mul.prot",
-            "mult_execution",
-            "examples/multipliers/mult_d2.v",
-            args,
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn test_simple_if_execution() {
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(32, 64));
-        args.insert("s", BitVecValue::from_u64(7, 64));
-
-        test_helper(
-            "tests/simple_if.prot",
-            "simple_if_execution",
-            "examples/counter/counter.v",
-            args,
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn test_simple_while_execution() {
-        let mut args = HashMap::new();
-        args.insert("a", BitVecValue::from_u64(32, 64));
-        args.insert("b", BitVecValue::from_u64(15, 64));
-        args.insert("s", BitVecValue::from_u64(17, 64));
-
-        test_helper(
-            "tests/simple_while.prot",
-            "simple_while_execution",
-            "examples/counter/counter.v",
-            args,
-        );
     }
 }

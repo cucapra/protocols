@@ -10,9 +10,8 @@ use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use pest::Parser;
 use pest_derive::Parser;
-use std::{fmt, io::stdout, process::id, vec};
+use std::vec;
 
-use crate::serialize::*;
 use crate::{diagnostic::*, ir::*};
 
 #[derive(Parser)]
@@ -656,42 +655,9 @@ pub fn parsing_helper(
     let result = parse_file(transaction_filename, handler);
     match result {
         Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
-        Err(_) => panic!("Failed to parse file: {}", transaction_filename),
+        Err(err) => panic!(
+            "Failed to parse file: {}\nError: {}",
+            transaction_filename, err
+        ),
     }
-}
-
-// Wrapper struct for custom display of pest pairs
-struct DisplayPair<'i, R: pest::RuleType>(pest::iterators::Pair<'i, R>);
-
-impl<'i, R: pest::RuleType> fmt::Display for DisplayPair<'i, R> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display(f, 0)
-    }
-}
-
-impl<'i, R: pest::RuleType> DisplayPair<'i, R> {
-    fn display(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {
-        let rule = self.0.as_rule();
-        let span = self.0.clone().as_span();
-        let text = self.0.clone().as_str();
-        let indent = "  ".repeat(depth);
-
-        // Display the rule and token matched
-        if self.0.clone().into_inner().count() == 0 {
-            // Leaf node (no inner rules)
-            writeln!(f, "{}- {:?}: \"{}\"", indent, rule, text)?;
-        } else {
-            // Non-leaf node with children
-            writeln!(f, "{}- {:?}", indent, rule)?;
-            for pair in self.0.clone().into_inner() {
-                DisplayPair(pair).display(f, depth + 1)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // All tests moved to serialize.rs
 }
