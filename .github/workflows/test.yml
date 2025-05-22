@@ -51,8 +51,21 @@ jobs:
       - run: cargo fmt --check
   
   clippy:
-    name: Run Clippy
+    name: Clippy Lints
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Pin Rust version to prevent new Clippy lints from breaking CI
+      RUST_VERSION: "1.75.0"
+
     steps:
       - uses: actions/checkout@v4
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install ${{ env.RUST_VERSION }} --component clippy
+          rustup default ${{ env.RUST_VERSION }}
+      - uses: YosysHQ/setup-oss-cad-suite@v3
+        with:
+          version: '2024-05-07'
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
