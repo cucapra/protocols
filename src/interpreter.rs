@@ -4,6 +4,7 @@ use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
+use rand::rngs::ThreadRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
@@ -61,6 +62,7 @@ pub struct Evaluator<'a> {
     input_vals: HashMap<SymbolId, InputValue>,
 
     assertions_forks_enabled: bool,
+    rng: ThreadRng,
 }
 
 impl<'a> Evaluator<'a> {
@@ -124,6 +126,7 @@ impl<'a> Evaluator<'a> {
 
         // TODO: check that the Transaction DUT matches the Btor2 DUT
         // TODO: check that every item in the args mapping is a field in the Transaction
+        let mut rng = rand::thread_rng();
 
         // Initialize the input pins with DontCares that are randomly assigned
         let mut input_vals = HashMap::new();
@@ -132,7 +135,6 @@ impl<'a> Evaluator<'a> {
             match st[symbol_id].tpe() {
                 Type::BitVec(width) => {
                     // TODO: make this value random
-                    let mut rng = rand::thread_rng();
                     input_vals.insert(
                         *symbol_id,
                         InputValue::DontCare(BitVecValue::random(&mut rng, width)),
@@ -160,6 +162,7 @@ impl<'a> Evaluator<'a> {
             output_mapping,
             input_vals,
             assertions_forks_enabled: false,
+            rng,
         }
     }
 
@@ -206,7 +209,6 @@ impl<'a> Evaluator<'a> {
         self.sim.step();
 
         // modify the input_vals to all be OldValues or DoxntCares
-        let mut rng = rand::thread_rng();
         self.input_vals = self
             .input_vals
             .iter()
@@ -215,7 +217,7 @@ impl<'a> Evaluator<'a> {
                     InputValue::NewValue(bvv) => InputValue::OldValue(bvv.clone()),
                     InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
                     InputValue::DontCare(bvv) => {
-                        InputValue::DontCare(BitVecValue::random(&mut rng, bvv.width()))
+                        InputValue::DontCare(BitVecValue::random(&mut self.rng, bvv.width()))
                     } // re-randomuze DontCares
                 };
                 (*k, new_v)
@@ -380,9 +382,10 @@ impl<'a> Evaluator<'a> {
                 }
                 InputValue::OldValue(old_val) => match expr_val {
                     ExprValue::DontCare => {
-                        let mut rng = rand::thread_rng();
-                        *value =
-                            InputValue::DontCare(BitVecValue::random(&mut rng, old_val.width()));
+                        *value = InputValue::DontCare(BitVecValue::random(
+                            &mut self.rng,
+                            old_val.width(),
+                        ));
                     }
                     ExprValue::Concrete(bvv) => {
                         *value = InputValue::NewValue(bvv);
