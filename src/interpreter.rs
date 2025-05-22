@@ -50,7 +50,7 @@ pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
-    handler: &'a mut DiagnosticHandler,
+    pub handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
 
     // TODO: can change to be secondarymaps for efficiency

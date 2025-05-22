@@ -9,6 +9,7 @@ use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
+use crate::diagnostic::Level;
 use crate::interpreter::Evaluator;
 use crate::interpreter::InputValue;
 use crate::ir::*;
@@ -51,6 +52,7 @@ pub struct Thread<'a> {
     pub todo: Todo<'a>,
     pub current_step: StmtId,
     pub next_step: Option<StmtId>,
+    pub has_forked: bool,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     thread_id: usize,
 }
@@ -66,8 +68,18 @@ impl<'a> Thread<'a> {
             next_step: None,
             thread_id,
             todo,
+            has_forked: false,
         }
     }
+}
+
+pub enum StepResult<'a> {
+    /// Thread hit a Step and should be re-scheduled
+    Continue(Thread<'a>),
+    /// Thread ran to completion (no more statements)
+    Completed(usize /* thread_id */),
+    /// Thread errored out
+    Error(usize /* thread_id */, String /* message */),
 }
 
 pub struct Scheduler<'a> {
@@ -291,6 +303,19 @@ impl<'a> Scheduler<'a> {
                         }
 
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
+                            if thread.has_forked {
+                                println!("  ERROR: Thread has already forked at this point, terminating thread");
+                                let msg = "Double Fork: Thread attempted to fork more than once";
+                                self.evaluator.handler.emit_diagnostic_stmt(
+                                    thread.todo.tr,
+                                    &current,
+                                    msg,
+                                    Level::Error,
+                                );
+                                self.results[thread.thread_id] = Err(msg.to_string());
+                                thread.next_step = None;
+                                return;
+                            }
                             println!("  Fork at {:?}, spawning new thread…", next_id);
                             self.next_todo_idx += 1;
                             match next_todo_option.clone() {
@@ -307,6 +332,8 @@ impl<'a> Scheduler<'a> {
                                     println!("    no more todos to fork, skipping fork.");
                                 }
                             }
+                            // Mark this thread as having forked
+                            thread.has_forked = true;
                             // continue from the fork point
                             current = next_id;
                         }
@@ -564,7 +591,7 @@ pub mod tests {
         // we expect this to fail due to the value being reassigned multiple times
         let handler = &mut DiagnosticHandler::new();
 
-        let transaction_filename = "tests/identities/identity_d2_multiple_assign.prot";
+        let transaction_filename = "tests/identities/identity_d2.prot";
         let verilog_path = "examples/identity/identity_d2.v";
         let (ctx, sys) = create_sim_context(verilog_path);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -608,6 +635,48 @@ pub mod tests {
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_threads();
         // this should fail due to both threads trying to assign to the same input
+        assert!(results[0].is_ok());
+    }
+
+    #[test]
+    fn test_scheduler_identity_d2_double_fork() {
+        // we expect this to fail due to the value being reassigned multiple times
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/identities/identity_d2.prot";
+        let verilog_path = "examples/identity/identity_d2.v";
+        let (ctx, sys) = create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        // ERROR CASE: two_fork_err protocol
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![(
+            1,
+            vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+        )];
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_threads();
+        assert!(results[0].is_err());
+        if let Err(err_msg) = &results[0] {
+            assert_eq!(
+                err_msg,
+                "Double Fork: Thread attempted to fork more than once"
+            );
+        }
+
+        // PASSING CASE: two_fork_ok protocol
+        todos[0] = (
+            2,
+            vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+        );
+
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
     }
 
