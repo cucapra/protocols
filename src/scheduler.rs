@@ -622,7 +622,7 @@ pub mod tests {
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // PASSING CASE: values of b agree
@@ -634,7 +634,14 @@ pub mod tests {
                 vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(3, 64)],
             ),
         ];
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
@@ -642,7 +649,14 @@ pub mod tests {
         // FAILING CASE: values of b disagree
         todos[1].1 = vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(5, 64)];
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+        );
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
