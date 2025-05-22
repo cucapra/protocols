@@ -128,8 +128,7 @@ impl Transaction {
                     _ => {}
                 }
             }
-        }
-        else {
+        } else {
             panic!("Precondition: input StmtId refers to the a Stmt::Block variant was violated.");
         }
 
