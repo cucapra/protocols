@@ -4,7 +4,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecOps;
 use baa::BitVecValue;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
@@ -560,7 +559,6 @@ pub mod tests {
         assert!(results[1].is_err());
     }
 
-
     #[test]
     fn test_scheduler_identity_d2_multiple_assign() {
         // we expect this to fail due to the value being reassigned multiple times
@@ -573,7 +571,7 @@ pub mod tests {
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+        let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // PASSING CASE: Single thread
@@ -640,7 +638,7 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
-    
+
         // FAILING CASE: values of b disagree
         todos[1].1 = vec![BitVecValue::from_u64(2, 64), BitVecValue::from_u64(5, 64)];
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -664,7 +662,7 @@ pub mod tests {
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
         let parsed_data: Vec<(Transaction, SymbolTable)> =
             parsing_helper(transaction_filename, handler);
-        let irs: Vec<(&Transaction, &SymbolTable)> =
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(
