@@ -1,4 +1,5 @@
 use crate::{diagnostic::*, ir::*};
+use crate::scheduler::Todo;
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
@@ -181,17 +182,12 @@ impl<'a> Evaluator<'a> {
 
     pub fn context_switch(
         &mut self,
-        tr: &'a Transaction,
-        st: &'a SymbolTable,
-        args: HashMap<&str, BitVecValue>,
-        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+        todo: Todo<'a>
     ) {
-        self.tr = tr;
-        self.st = st;
-
-        // TODO: this is inefficient because the map is generated every time there is a context switch
-        self.next_stmt_map = next_stmt_map;
-        self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
+        self.tr = todo.tr;
+        self.st = todo.st;
+        self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
+        self.next_stmt_map = todo.next_stmt_map;
     }
 
     pub fn input_vals(&self) -> HashMap<SymbolId, InputValue> {
@@ -214,7 +210,7 @@ impl<'a> Evaluator<'a> {
     pub fn sim_step(&mut self) {
         self.sim.step();
 
-        // modify the input_vals to all be OldValues or DontCares
+        // modify the input_vals to all be OldValues or DoxntCares
         let mut rng = rand::thread_rng();
         self.input_vals = self
             .input_vals
@@ -268,7 +264,6 @@ impl<'a> Evaluator<'a> {
                                 Err("Cannot perform equality on DontCare value".to_string())
                             }
                             (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                                // println!("Comparing BitVecs: lhs = {:?}, rhs = {:?}", lhs, rhs);
                                 if lhs.is_equal(rhs) {
                                     Ok(ExprValue::Concrete(BitVecValue::new_true()))
                                 } else {
@@ -278,7 +273,6 @@ impl<'a> Evaluator<'a> {
                         }
                     }
                     BinOp::And => {
-                        // match out of ExprValue::Concrete(bvv) if either one is a DontCare, return an error
                         match (&lhs_val, &rhs_val) {
                             (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
                                 Err("Cannot perform AND on DontCare value".to_string())
@@ -314,30 +308,24 @@ impl<'a> Evaluator<'a> {
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                // println!("Eval Assign.");
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                // println!("Eval IFElse.");
                 self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id)
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                // println!("Eval While.");
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                // println!("Eval Step.");
                 // the scheduler will handle the step. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
-                // println!("Eval Fork.");
                 // the scheduler will handle the fork. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr1, expr2) => {
-                // println!("Eval AssertEq.");
                 if self.assertions_forks_enabled {
                     self.evaluate_assert_eq(expr1, expr2)?;
                 }
@@ -345,7 +333,6 @@ impl<'a> Evaluator<'a> {
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
-                // println!("Eval Block.");
                 if stmt_ids.is_empty() {
                     Ok(None)
                 } else {
@@ -442,13 +429,14 @@ impl<'a> Evaluator<'a> {
             ));
         }
 
-        // assign to the sim
+        // Assign into the underlying Patronus sim
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, self.input_vals[symbol_id].value());
             Ok(())
         }
-        // below statements should be unreachable (assuming type checking works)
+
+        // assuming Type Checking works, these statements are unreachable
         else if self.output_mapping.contains_key(symbol_id) {
             unreachable!("Attempting to assign to output {}.", name)
         } else if self.args_mapping.contains_key(symbol_id) {

@@ -48,12 +48,9 @@ impl<'a> Todo<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
-    pub tr: &'a Transaction,
-    pub st: &'a SymbolTable,
+    pub todo: Todo<'a>,
     pub current_step: StmtId,
     pub next_step: Option<StmtId>,
-    args: ArgMap<'a>,
-    next_stmt_map: NextStmtMap,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     thread_id: usize,
 }
@@ -65,13 +62,10 @@ impl<'a> Thread<'a> {
             todo.tr.name, thread_id
         );
         Self {
-            tr: todo.tr,
-            st: todo.st,
             current_step: todo.tr.body,
             next_step: None,
-            args: todo.args,
-            next_stmt_map: todo.next_stmt_map,
             thread_id,
+            todo,
         }
     }
 }
@@ -223,7 +217,7 @@ impl<'a> Scheduler<'a> {
                     Some(next_step_id) => {
                         println!(
                             "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
-                            active_thread.tr.name, next_step_id
+                            active_thread.todo.tr.name, next_step_id
                         );
 
                         // if the thread is moving to next_threads, its current_step becomes its next_step and next_step becomes None
@@ -234,7 +228,7 @@ impl<'a> Scheduler<'a> {
                     None => {
                         println!(
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
-                            active_thread.tr.name
+                            active_thread.todo.tr.name
                         );
                         self.inactive_threads.push(active_thread)
                     }
@@ -271,14 +265,8 @@ impl<'a> Scheduler<'a> {
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
 
-        // set up context once
-        println!("Running thread {} from step {:?}", thread.tr.name, current);
-        self.evaluator.context_switch(
-            thread.tr,
-            thread.st,
-            thread.args.clone(),
-            thread.next_stmt_map.clone(),
-        );
+        println!("Running thread {} from step {:?}", thread.todo.tr.name, current);
+        self.evaluator.context_switch(thread.todo.clone());
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
@@ -287,9 +275,9 @@ impl<'a> Scheduler<'a> {
             match self.evaluator.evaluate_stmt(&current) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
-                    println!("  Next statement: {:?} {:?}", next_id, thread.tr[next_id]);
+                    println!("  Next statement: {:?} {:?}", next_id, thread.todo.tr[next_id]);
 
-                    match thread.tr[next_id] {
+                    match thread.todo.tr[next_id] {
                         Stmt::Step => {
                             println!("  Step reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
@@ -318,7 +306,7 @@ impl<'a> Scheduler<'a> {
                         }
 
                         _ => {
-                            // default “just keep going” case
+                            // default "just keep going" case
                             current = next_id;
                         }
                     }
