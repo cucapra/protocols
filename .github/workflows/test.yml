@@ -49,3 +49,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cargo fmt --check
+  
+  clippy:
+    name: Run Clippy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo clippy --all-targets --all-features -- -D warnings
