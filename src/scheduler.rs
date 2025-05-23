@@ -438,7 +438,7 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::errors::{AssertionError, ExecutionError, ThreadError};
+    use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
     use crate::parser::parsing_helper;
     use crate::yosys::yosys_to_btor;
     use crate::yosys::ProjectConf;
@@ -868,6 +868,45 @@ pub mod tests {
             // Expected assertion failure
         } else {
             panic!("Expected assertion equality failure, got: {:?}", results[2]);
+        }
+    }
+
+    #[test]
+    fn test_scheduler_identity_d1_slicing() {
+        // we expect this to fail due to assertion failures
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/identities/identity_d1.prot";
+        let verilog_path = "examples/identity/identity_d1.v";
+        let (ctx, sys) = create_sim_context(verilog_path, None);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                1, // transaction: slicing_ok
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                //
+                2, // transaction: slicing_err
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+        ];
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+
+        // Check that the failure is InvalidSlice
+        if let Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice { .. })) = &results[1] {
+            // Expected invalid slice failure
+        } else {
+            panic!("Expected invalid slice failure, got: {:?}", results[2]);
         }
     }
 
