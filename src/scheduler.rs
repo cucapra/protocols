@@ -379,6 +379,9 @@ impl<'a> Scheduler<'a> {
                                 }
                             }
                             // Mark this thread as having forked
+                            println!("  Marking thread {} as having forked.", {
+                                thread.thread_id
+                            });
                             thread.has_forked = true;
                             // continue from the fork point
                             current = next_id;
@@ -420,12 +423,12 @@ impl<'a> Scheduler<'a> {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
                     self.next_threads.push(new_thread);
                     println!(
-                        "    enqueued forked thread; queue size = {}",
+                        "    enqueued implicitly forked thread; queue size = {}",
                         self.next_threads.len()
                     );
                 }
                 None => {
-                    println!("    no more todos to fork, skipping fork.");
+                    println!("    no more todos to fork, skipping implicit fork.");
                 }
             }
         }
@@ -842,25 +845,25 @@ pub mod tests {
             ),
             (
                 0,
-                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(2, 32)],
+                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
             ),
             (
                 0,
-                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+                vec![BitVecValue::from_u64(3, 32), BitVecValue::from_u64(4, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(4, 32), BitVecValue::from_u64(5, 32)],
             ),
         ];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
-        assert!(results[1].is_err());
+        assert!(results[1].is_ok());
         assert!(results[2].is_err());
+        assert!(results[3].is_ok()); // this final TODO never runs because the penultimate TODO ends in failure, thus it never forks
 
         // Check that the failures are assertion errors
-        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
-            // Expected assertion failure
-        } else {
-            panic!("Expected assertion equality failure, got: {:?}", results[1]);
-        }
         if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[2] {
             // Expected assertion failure
         } else {

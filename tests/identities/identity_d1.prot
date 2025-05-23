@@ -5,9 +5,12 @@ struct Identity {
 
 fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
-  fork();
-
   step();
+
+  // forking at the end means that threads run one at a time
+  // so assignment of any concrete value should never conflict
+  DUT.a := 66;
   assert_eq(s, DUT.s);
+
   // implicit fork here
 }
