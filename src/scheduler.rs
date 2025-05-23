@@ -3,13 +3,13 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
-
 use baa::BitVecValue;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::diagnostic::Level;
+use crate::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::Evaluator;
 use crate::interpreter::InputValue;
 use crate::ir::*;
@@ -54,7 +54,7 @@ pub struct Thread<'a> {
     pub next_step: Option<StmtId>,
     pub has_forked: bool,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
-    thread_id: usize,
+    pub thread_id: usize,
 }
 
 impl<'a> Thread<'a> {
@@ -79,7 +79,7 @@ pub enum StepResult<'a> {
     /// Thread ran to completion (no more statements)
     Completed(usize /* thread_id */),
     /// Thread errored out
-    Error(usize /* thread_id */, String /* message */),
+    Error(usize /* thread_id */, ExecutionError),
 }
 
 pub struct Scheduler<'a> {
@@ -92,7 +92,7 @@ pub struct Scheduler<'a> {
     inactive_threads: Vec<Thread<'a>>,
     step_count: i32,
     evaluator: Evaluator<'a>,
-    results: Vec<Result<(), String>>,
+    results: Vec<ExecutionResult<()>>,
 }
 
 impl<'a> Scheduler<'a> {
@@ -178,7 +178,7 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn execute_threads(&mut self) -> Vec<Result<(), String>> {
+    pub fn execute_threads(&mut self) -> Vec<ExecutionResult<()>> {
         println!(
             "\n==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count,
@@ -303,15 +303,19 @@ impl<'a> Scheduler<'a> {
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             if thread.has_forked {
                                 println!("  ERROR: Thread has already forked at this point, terminating thread");
-                                let msg = "Double Fork: Thread attempted to fork more than once";
+                                let error = ExecutionError::double_fork(
+                                    thread.thread_id,
+                                    thread.todo.tr.name.clone(),
+                                );
                                 self.evaluator.handler.emit_diagnostic_stmt(
                                     thread.todo.tr,
                                     &current,
-                                    msg,
+                                    &error.to_string(),
                                     Level::Error,
                                 );
-                                self.results[thread.thread_id] = Err(msg.to_string());
+                                self.results[thread.thread_id] = Err(error);
                                 thread.next_step = None;
+                                return;
                             }
                             println!("  Fork at {:?}, spawning new thread…", next_id);
                             self.next_todo_idx += 1;
@@ -360,7 +364,7 @@ impl<'a> Scheduler<'a> {
         }
 
         // fork if a thread has completed successfully
-        // more specically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
+        // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked
             && self.evaluator.assertions_forks_enabled()
             && self.results[thread.thread_id].is_ok()
@@ -386,6 +390,7 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::errors::{ExecutionError, ThreadError, AssertionError};
     use crate::parser::parsing_helper;
     use crate::yosys::yosys_to_btor;
     use crate::yosys::ProjectConf;
@@ -473,6 +478,12 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
 
         // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = BitVecValue::from_u64(4, 32);
@@ -490,6 +501,12 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
 
         // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = BitVecValue::from_u64(10, 32);
@@ -506,6 +523,17 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
+        // Check that both are assertion errors
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
     }
 
     #[test]
@@ -570,6 +598,12 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
 
         // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = BitVecValue::from_u64(3, 32);
@@ -587,6 +621,12 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
 
         // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = BitVecValue::from_u64(47, 32);
@@ -603,6 +643,17 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
+        // Check that both are assertion errors
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
     }
 
     #[test]
@@ -629,7 +680,7 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
 
-        // ERROR CASE: Two different assigments
+        // ERROR CASE: Two different assignments
         todos.push((
             0,
             vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
@@ -640,11 +691,10 @@ pub mod tests {
         let results = scheduler.execute_threads();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
-        if let Err(err_msg) = &results[0] {
-            assert_eq!(
-                err_msg,
-                "Multiple threads attempting to assign to the same input: a"
-            );
+        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { symbol_name, .. })) = &results[0] {
+            assert_eq!(symbol_name, "a");
+        } else {
+            panic!("Expected conflicting assignment error for symbol 'a', got: {:?}", results[0]);
         }
 
         // PASSING CASE: Two assignments, but of same value (1)
@@ -653,13 +703,13 @@ pub mod tests {
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_threads();
-        // this should fail due to both threads trying to assign to the same input
+        // this should pass since both threads assign the same value
         assert!(results[0].is_ok());
     }
 
     #[test]
     fn test_scheduler_identity_d2_double_fork() {
-        // we expect this to fail due to the value being reassigned multiple times
+        // we expect this to fail due to double forking
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/identities/identity_d2.prot";
@@ -680,11 +730,11 @@ pub mod tests {
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
-        if let Err(err_msg) = &results[0] {
-            assert_eq!(
-                err_msg,
-                "Double Fork: Thread attempted to fork more than once"
-            );
+        if let Err(ExecutionError::Thread(ThreadError::DoubleFork { thread_id, transaction_name: _ })) = &results[0] {
+            assert_eq!(*thread_id, 0);
+            // Check that transaction_name contains expected value (might need to adjust based on actual transaction name)
+        } else {
+            panic!("Expected double fork error, got: {:?}", results[0]);
         }
 
         // PASSING CASE: two_fork_ok protocol
@@ -701,7 +751,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d1_implicit_fork() {
-        // we expect this to fail due to the value being reassigned multiple times
+        // we expect this to fail due to assertion failures
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/identities/identity_d1.prot";
@@ -733,6 +783,18 @@ pub mod tests {
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
         assert!(results[2].is_err());
+
+        // Check that the failures are assertion errors
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[2] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[2]);
+        }
     }
 
     #[test]
@@ -784,14 +846,19 @@ pub mod tests {
         let results = scheduler.execute_threads();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
     }
 
     #[test]
     fn test_scheduler_inverter() {
-        // we expect this to fail due to the value being reassigned multiple times
+        // we expect this to fail due to multiple assignment failure
         let handler = &mut DiagnosticHandler::new();
 
-        // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/inverter.prot";
         let verilog_path = "examples/inverters/inverter_d0.v";
         let (ctx, sys) = create_sim_context(verilog_path);
@@ -818,5 +885,9 @@ pub mod tests {
         );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
+        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { .. })) = &results[0] {
+        } else {
+            panic!("Expected conflicting assignment failure, got: {:?}", results[0]);
+        }
     }
 }
