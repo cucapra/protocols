@@ -31,7 +31,7 @@ pub enum EvaluationError {
         context: String,
         expr_id: ExprId,
     },
-    /// Arithmetic errors (e.g., width mismatches in bitvec operations)
+    /// TODO: Arithmetic errors (e.g., width mismatches in bitvec operations)
     ArithmeticError {
         operation: String,
         details: String,
@@ -349,7 +349,6 @@ pub type ExecutionResult<T> = Result<T, ExecutionError>;
 pub struct DiagnosticEmitter;
 
 impl DiagnosticEmitter {
-    /// Emit diagnostic for any ExecutionError
     pub fn emit_execution_error(
         handler: &mut DiagnosticHandler,
         error: &ExecutionError,
@@ -372,7 +371,6 @@ impl DiagnosticEmitter {
         }
     }
 
-    /// Emit diagnostic for evaluation errors
     pub fn emit_evaluation_error(
         handler: &mut DiagnosticHandler,
         error: &EvaluationError,
@@ -434,7 +432,6 @@ impl DiagnosticEmitter {
         }
     }
 
-    /// Emit diagnostic for thread errors
     pub fn emit_thread_error(
         handler: &mut DiagnosticHandler,
         error: &ThreadError,
@@ -486,7 +483,6 @@ impl DiagnosticEmitter {
         }
     }
 
-    /// Emit diagnostic for symbol errors
     pub fn emit_symbol_error(
         handler: &mut DiagnosticHandler,
         error: &SymbolError,
@@ -526,7 +522,6 @@ impl DiagnosticEmitter {
         }
     }
 
-    /// Emit diagnostic for assertion errors
     pub fn emit_assertion_error(
         handler: &mut DiagnosticHandler,
         error: &AssertionError,
@@ -543,8 +538,6 @@ impl DiagnosticEmitter {
                 handler.emit_diagnostic_assertion(transaction, expr1_id, expr2_id, value1, value2);
             }
             AssertionError::DontCareAssertion { stmt_id } => {
-                // We need a version of emit_diagnostic_assertion that handles DontCare cases
-                // For now, emit on the first expression
                 handler.emit_diagnostic_stmt(
                     transaction,
                     stmt_id,
