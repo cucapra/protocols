@@ -13,8 +13,6 @@ pub enum ExecutionError {
     Symbol(SymbolError),
     /// Assertion failures
     Assertion(AssertionError),
-    /// Simulation-related errors
-    Simulation(SimulationError),
 }
 
 /// Errors that occur during expression/statement evaluation
@@ -70,19 +68,11 @@ pub enum SymbolError {
         symbol_name: String,
         context: String,
     },
-    /// Argument symbol not found in symbol table
-    ArgumentNotFound { arg_name: String },
     /// Attempting to assign to read-only symbol
     ReadOnlyAssignment {
         symbol_id: SymbolId,
         symbol_name: String,
         symbol_type: String, // "output", "argument", etc.
-    },
-    /// Type mismatch for symbol
-    TypeMismatch {
-        symbol_id: SymbolId,
-        expected_type: String,
-        actual_type: String,
     },
 }
 
@@ -102,22 +92,6 @@ pub enum AssertionError {
     Custom { message: String, stmt_id: StmtId },
 }
 
-/// Simulation and system-level errors
-#[derive(Debug, Clone, PartialEq)]
-pub enum SimulationError {
-    /// Patronus simulator error
-    SimulatorError { details: String },
-    /// System convergence failure
-    ConvergenceFailure { max_iterations: u32, cycle: i32 },
-    /// Invalid system state
-    InvalidState { description: String },
-    /// Missing system component
-    MissingComponent {
-        component_type: String,
-        name: String,
-    },
-}
-
 // Implement Display for nice error messages
 impl fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -126,7 +100,6 @@ impl fmt::Display for ExecutionError {
             ExecutionError::Thread(e) => write!(f, "Thread error: {}", e),
             ExecutionError::Symbol(e) => write!(f, "Symbol error: {}", e),
             ExecutionError::Assertion(e) => write!(f, "Assertion error: {}", e),
-            ExecutionError::Simulation(e) => write!(f, "Simulation error: {}", e),
         }
     }
 }
@@ -217,9 +190,6 @@ impl fmt::Display for SymbolError {
             } => {
                 write!(f, "Symbol '{}' not found in {}", symbol_name, context)
             }
-            SymbolError::ArgumentNotFound { arg_name } => {
-                write!(f, "Argument '{}' not found in symbol table", arg_name)
-            }
             SymbolError::ReadOnlyAssignment {
                 symbol_name,
                 symbol_type,
@@ -229,17 +199,6 @@ impl fmt::Display for SymbolError {
                     f,
                     "Cannot assign to {} '{}' (read-only)",
                     symbol_type, symbol_name
-                )
-            }
-            SymbolError::TypeMismatch {
-                expected_type,
-                actual_type,
-                ..
-            } => {
-                write!(
-                    f,
-                    "Type mismatch: expected {}, found {}",
-                    expected_type, actual_type
                 )
             }
         }
@@ -264,43 +223,6 @@ impl fmt::Display for AssertionError {
         }
     }
 }
-
-impl fmt::Display for SimulationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SimulationError::SimulatorError { details } => {
-                write!(f, "Simulator error: {}", details)
-            }
-            SimulationError::ConvergenceFailure {
-                max_iterations,
-                cycle,
-            } => {
-                write!(
-                    f,
-                    "Failed to converge after {} iterations in cycle {}",
-                    max_iterations, cycle
-                )
-            }
-            SimulationError::InvalidState { description } => {
-                write!(f, "Invalid simulation state: {}", description)
-            }
-            SimulationError::MissingComponent {
-                component_type,
-                name,
-            } => {
-                write!(f, "Missing {} component: {}", component_type, name)
-            }
-        }
-    }
-}
-
-// Implement Error trait
-impl std::error::Error for ExecutionError {}
-impl std::error::Error for EvaluationError {}
-impl std::error::Error for ThreadError {}
-impl std::error::Error for SymbolError {}
-impl std::error::Error for AssertionError {}
-impl std::error::Error for SimulationError {}
 
 // Convenience constructors
 impl ExecutionError {
@@ -333,10 +255,6 @@ impl ExecutionError {
             symbol_name,
             context,
         })
-    }
-
-    pub fn argument_not_found(arg_name: String) -> Self {
-        ExecutionError::Symbol(SymbolError::ArgumentNotFound { arg_name })
     }
 
     pub fn dont_care_operation(operation: String, context: String) -> Self {
