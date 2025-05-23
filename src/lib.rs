@@ -5,6 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 pub mod diagnostic;
+mod errors;
 mod interface;
 mod interpreter;
 pub mod ir;
@@ -13,4 +14,3 @@ pub mod scheduler;
 pub mod serialize;
 pub mod typecheck;
 mod yosys;
-mod errors;

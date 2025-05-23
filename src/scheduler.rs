@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::diagnostic::Level;
-use crate::errors::{ExecutionError, ExecutionResult};
+use crate::errors::{ExecutionError, ExecutionResult, ThreadError};
 use crate::interpreter::Evaluator;
 use crate::interpreter::InputValue;
 use crate::ir::*;
@@ -22,6 +22,9 @@ type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
 type TodoItem = (usize, Vec<BitVecValue>);
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
+
+/// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
+const MAX_ITERS: usize = 10000;
 
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
@@ -193,6 +196,7 @@ impl<'a> Scheduler<'a> {
             // fixed point iteration with assertions off
             self.evaluator.disable_assertions_and_forks();
 
+            let iters = 0;
             loop {
                 // run every active thread up to the next step to synchronize on
                 self.run_all_active_until_next_step();
@@ -205,6 +209,20 @@ impl<'a> Scheduler<'a> {
                     if prev_vals == active_input_vals {
                         break;
                     }
+                }
+
+                // if we've exceeded the max number of iterations before convergence,
+                // return an ExecutionLimitExceeded error on every thread.
+                if iters > MAX_ITERS {
+                    for thread in &self.active_threads {
+                        self.results[thread.thread_id] = Err(ExecutionError::Thread(
+                            ThreadError::ExecutionLimitExceeded {
+                                thread_id: thread.thread_id,
+                                max_steps: MAX_ITERS,
+                            },
+                        ));
+                    }
+                    return self.results.clone();
                 }
 
                 print!("Active Input Vals {:?}", active_input_vals);
@@ -390,7 +408,7 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::errors::{ExecutionError, ThreadError, AssertionError};
+    use crate::errors::{AssertionError, ExecutionError, ThreadError};
     use crate::parser::parsing_helper;
     use crate::yosys::yosys_to_btor;
     use crate::yosys::ProjectConf;
@@ -691,10 +709,16 @@ pub mod tests {
         let results = scheduler.execute_threads();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
-        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { symbol_name, .. })) = &results[0] {
+        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment {
+            symbol_name, ..
+        })) = &results[0]
+        {
             assert_eq!(symbol_name, "a");
         } else {
-            panic!("Expected conflicting assignment error for symbol 'a', got: {:?}", results[0]);
+            panic!(
+                "Expected conflicting assignment error for symbol 'a', got: {:?}",
+                results[0]
+            );
         }
 
         // PASSING CASE: Two assignments, but of same value (1)
@@ -730,7 +754,11 @@ pub mod tests {
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
-        if let Err(ExecutionError::Thread(ThreadError::DoubleFork { thread_id, transaction_name: _ })) = &results[0] {
+        if let Err(ExecutionError::Thread(ThreadError::DoubleFork {
+            thread_id,
+            transaction_name: _,
+        })) = &results[0]
+        {
             assert_eq!(*thread_id, 0);
             // Check that transaction_name contains expected value (might need to adjust based on actual transaction name)
         } else {
@@ -885,9 +913,13 @@ pub mod tests {
         );
         let results = scheduler.execute_threads();
         assert!(results[0].is_err());
-        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { .. })) = &results[0] {
+        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { .. })) = &results[0]
+        {
         } else {
-            panic!("Expected conflicting assignment failure, got: {:?}", results[0]);
+            panic!(
+                "Expected conflicting assignment failure, got: {:?}",
+                results[0]
+            );
         }
     }
 }

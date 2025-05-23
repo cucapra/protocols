@@ -1,5 +1,5 @@
+use crate::errors::{EvaluationError, ExecutionError, ExecutionResult};
 use crate::scheduler::Todo;
-use crate::errors::{ExecutionError, ExecutionResult};
 use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
@@ -243,13 +243,13 @@ impl<'a> Evaluator<'a> {
                     self.handler.emit_diagnostic_expr(
                         self.tr,
                         expr_id,
-                        "Symbol not found in input or output mapping.",
+                        format!("Symbol {:?} with id {:?} was not found in input, output, or args mapping.", *sym_id, name.to_string()).as_str(),
                         Level::Error,
                     );
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,
                         name.to_string(),
-                        "input or output mapping".to_string(),
+                        "input, output, or args mapping".to_string(),
                     ))
                 }
             }
@@ -292,24 +292,32 @@ impl<'a> Evaluator<'a> {
                     ExprValue::Concrete(bvv) => match unary_op {
                         UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
                     },
-                    ExprValue::DontCare => {
-                        Err(ExecutionError::dont_care_operation(
-                            "unary operation".to_string(),
-                            "unary expression".to_string(),
-                        ))
-                    }
+                    ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
+                        "unary operation".to_string(),
+                        "unary expression".to_string(),
+                    )),
                 }
             }
-            Expr::Slice(expr_id, idx1, idx2) => {
+            Expr::Slice(expr_id, msb, lsb) => {
                 let expr_val = self.evaluate_expr(expr_id)?;
                 match expr_val {
-                    ExprValue::Concrete(bvv) => Ok(ExprValue::Concrete(bvv.slice(*idx1, *idx2))),
-                    ExprValue::DontCare => {
-                        Err(ExecutionError::dont_care_operation(
-                            "slice".to_string(),
-                            "slice expression".to_string(),
-                        ))
+                    ExprValue::Concrete(bvv) => {
+                        let width = bvv.width();
+                        if *msb < width && *lsb <= *msb {
+                            Ok(ExprValue::Concrete(bvv.slice(*msb, *lsb)))
+                        } else {
+                            Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice {
+                                expr_id: *expr_id,
+                                start: *msb,
+                                end: *lsb,
+                                width,
+                            }))
+                        }
                     }
+                    ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
+                        "slice".to_string(),
+                        "slice expression".to_string(),
+                    )),
                 }
             }
         }
@@ -360,12 +368,10 @@ impl<'a> Evaluator<'a> {
     ) -> ExecutionResult<Option<StmtId>> {
         let res = self.evaluate_expr(cond_expr_id)?;
         match res {
-            ExprValue::DontCare => {
-                Err(ExecutionError::invalid_condition(
-                    "if".to_string(),
-                    *cond_expr_id,
-                ))
-            }
+            ExprValue::DontCare => Err(ExecutionError::invalid_condition(
+                "if".to_string(),
+                *cond_expr_id,
+            )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_zero() {
                     Ok(Some(*else_stmt_id))
@@ -439,10 +445,11 @@ impl<'a> Evaluator<'a> {
                 }
             }
         } else {
+            // assuming Type Checking works, unreachable
             return Err(ExecutionError::symbol_not_found(
                 *symbol_id,
                 self.st[symbol_id].name().to_string(),
-                "input_vals".to_string(),
+                "input pins".to_string(),
             ));
         }
 
@@ -457,13 +464,13 @@ impl<'a> Evaluator<'a> {
             Err(ExecutionError::read_only_assignment(
                 *symbol_id,
                 name.to_string(),
-                "output".to_string(),
+                "outputs".to_string(),
             ))
         } else if self.args_mapping.contains_key(symbol_id) {
             Err(ExecutionError::read_only_assignment(
                 *symbol_id,
                 name.to_string(),
-                "argument".to_string(),
+                "arguments".to_string(),
             ))
         } else {
             Err(ExecutionError::symbol_not_found(
@@ -482,12 +489,10 @@ impl<'a> Evaluator<'a> {
     ) -> ExecutionResult<Option<StmtId>> {
         let res = self.evaluate_expr(loop_guard_id)?;
         match res {
-            ExprValue::DontCare => {
-                Err(ExecutionError::invalid_condition(
-                    "while".to_string(),
-                    *loop_guard_id,
-                ))
-            }
+            ExprValue::DontCare => Err(ExecutionError::invalid_condition(
+                "while".to_string(),
+                *loop_guard_id,
+            )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_true() {
                     Ok(Some(*do_block_id))

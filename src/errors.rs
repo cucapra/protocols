@@ -1,6 +1,6 @@
-use std::fmt;
-use crate::ir::{SymbolId, StmtId, ExprId};
+use crate::ir::{ExprId, StmtId, SymbolId};
 use baa::BitVecValue;
+use std::fmt;
 
 /// Main error type for the scheduler and evaluator system
 #[derive(Debug, Clone, PartialEq)]
@@ -21,21 +21,18 @@ pub enum ExecutionError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EvaluationError {
     /// Cannot perform operation on DontCare values
-    DontCareOperation {
-        operation: String,
-        context: String,
-    },
-    /// Division by zero or similar arithmetic errors
-    ArithmeticError {
-        operation: String,
-        details: String,
-    },
+    DontCareOperation { operation: String, context: String },
+    /// TODO: If we implement more complex ops, this may be useful
+    /// Right now, the only error i can think of is if equality checks are attempted between
+    /// different-width bitvecs (thrown by baa)
+    ArithmeticError { operation: String, details: String },
     /// Conditional evaluation with DontCare
     InvalidCondition {
         stmt_type: String, // "if" or "while"
         expr_id: ExprId,
     },
-    /// Invalid slice operation
+    /// Invalid slice operation.
+    /// self.width() >= msb >= lsb >= 0
     InvalidSlice {
         expr_id: ExprId,
         start: u32,
@@ -61,10 +58,7 @@ pub enum ThreadError {
         thread_id: usize,
     },
     /// Thread execution limit exceeded (for infinite loop protection)
-    ExecutionLimitExceeded {
-        thread_id: usize,
-        max_steps: u32,
-    },
+    ExecutionLimitExceeded { thread_id: usize, max_steps: usize },
 }
 
 /// Symbol resolution and mapping errors
@@ -77,9 +71,7 @@ pub enum SymbolError {
         context: String,
     },
     /// Argument symbol not found in symbol table
-    ArgumentNotFound {
-        arg_name: String,
-    },
+    ArgumentNotFound { arg_name: String },
     /// Attempting to assign to read-only symbol
     ReadOnlyAssignment {
         symbol_id: SymbolId,
@@ -105,33 +97,20 @@ pub enum AssertionError {
         value2: BitVecValue,
     },
     /// Assertion with DontCare values
-    DontCareAssertion {
-        expr1_id: ExprId,
-        expr2_id: ExprId,
-    },
+    DontCareAssertion { expr1_id: ExprId, expr2_id: ExprId },
     /// Custom assertion with message
-    Custom {
-        message: String,
-        stmt_id: StmtId,
-    },
+    Custom { message: String, stmt_id: StmtId },
 }
 
 /// Simulation and system-level errors
 #[derive(Debug, Clone, PartialEq)]
 pub enum SimulationError {
     /// Patronus simulator error
-    SimulatorError {
-        details: String,
-    },
+    SimulatorError { details: String },
     /// System convergence failure
-    ConvergenceFailure {
-        max_iterations: u32,
-        cycle: i32,
-    },
+    ConvergenceFailure { max_iterations: u32, cycle: i32 },
     /// Invalid system state
-    InvalidState {
-        description: String,
-    },
+    InvalidState { description: String },
     /// Missing system component
     MissingComponent {
         component_type: String,
@@ -156,16 +135,33 @@ impl fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvaluationError::DontCareOperation { operation, context } => {
-                write!(f, "Cannot perform {} on DontCare value in {}", operation, context)
+                write!(
+                    f,
+                    "Cannot perform {} on DontCare value in {}",
+                    operation, context
+                )
             }
             EvaluationError::ArithmeticError { operation, details } => {
                 write!(f, "Arithmetic error in {}: {}", operation, details)
             }
             EvaluationError::InvalidCondition { stmt_type, expr_id } => {
-                write!(f, "Cannot evaluate {} condition (expr {:?}): value is DontCare", stmt_type, expr_id)
+                write!(
+                    f,
+                    "Cannot evaluate {} condition (expr {:?}): value is DontCare",
+                    stmt_type, expr_id
+                )
             }
-            EvaluationError::InvalidSlice { expr_id, start, end, width } => {
-                write!(f, "Invalid slice operation on expr {:?}: [{}:{}] on width {}", expr_id, start, end, width)
+            EvaluationError::InvalidSlice {
+                expr_id,
+                start,
+                end,
+                width,
+            } => {
+                write!(
+                    f,
+                    "Invalid slice operation on expr {:?}: [{}:{}] on width {}",
+                    expr_id, start, end, width
+                )
             }
         }
     }
@@ -174,15 +170,38 @@ impl fmt::Display for EvaluationError {
 impl fmt::Display for ThreadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ThreadError::DoubleFork { thread_id, transaction_name } => {
-                write!(f, "Thread {} (transaction '{}') attempted to fork more than once", thread_id, transaction_name)
+            ThreadError::DoubleFork {
+                thread_id,
+                transaction_name,
+            } => {
+                write!(
+                    f,
+                    "Thread {} (transaction '{}') attempted to fork more than once",
+                    thread_id, transaction_name
+                )
             }
-            ThreadError::ConflictingAssignment { symbol_name, current_value, new_value, thread_id, .. } => {
-                write!(f, "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}", 
-                       thread_id, symbol_name, current_value, new_value)
+            ThreadError::ConflictingAssignment {
+                symbol_name,
+                current_value,
+                new_value,
+                thread_id,
+                ..
+            } => {
+                write!(
+                    f,
+                    "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
+                    thread_id, symbol_name, current_value, new_value
+                )
             }
-            ThreadError::ExecutionLimitExceeded { thread_id, max_steps } => {
-                write!(f, "Thread {} exceeded execution limit of {} steps", thread_id, max_steps)
+            ThreadError::ExecutionLimitExceeded {
+                thread_id,
+                max_steps,
+            } => {
+                write!(
+                    f,
+                    "Thread {} exceeded execution limit of {} steps",
+                    thread_id, max_steps
+                )
             }
         }
     }
@@ -191,17 +210,37 @@ impl fmt::Display for ThreadError {
 impl fmt::Display for SymbolError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SymbolError::NotFound { symbol_name, context, .. } => {
+            SymbolError::NotFound {
+                symbol_name,
+                context,
+                ..
+            } => {
                 write!(f, "Symbol '{}' not found in {}", symbol_name, context)
             }
             SymbolError::ArgumentNotFound { arg_name } => {
                 write!(f, "Argument '{}' not found in symbol table", arg_name)
             }
-            SymbolError::ReadOnlyAssignment { symbol_name, symbol_type, .. } => {
-                write!(f, "Cannot assign to {} '{}' (read-only)", symbol_type, symbol_name)
+            SymbolError::ReadOnlyAssignment {
+                symbol_name,
+                symbol_type,
+                ..
+            } => {
+                write!(
+                    f,
+                    "Cannot assign to {} '{}' (read-only)",
+                    symbol_type, symbol_name
+                )
             }
-            SymbolError::TypeMismatch { expected_type, actual_type, .. } => {
-                write!(f, "Type mismatch: expected {}, found {}", expected_type, actual_type)
+            SymbolError::TypeMismatch {
+                expected_type,
+                actual_type,
+                ..
+            } => {
+                write!(
+                    f,
+                    "Type mismatch: expected {}, found {}",
+                    expected_type, actual_type
+                )
             }
         }
     }
@@ -214,7 +253,10 @@ impl fmt::Display for AssertionError {
                 write!(f, "Assertion failed: {:?} != {:?}", value1, value2)
             }
             AssertionError::DontCareAssertion { .. } => {
-                write!(f, "Assertion failed: cannot assert equality with DontCare values")
+                write!(
+                    f,
+                    "Assertion failed: cannot assert equality with DontCare values"
+                )
             }
             AssertionError::Custom { message, .. } => {
                 write!(f, "Assertion failed: {}", message)
@@ -229,13 +271,23 @@ impl fmt::Display for SimulationError {
             SimulationError::SimulatorError { details } => {
                 write!(f, "Simulator error: {}", details)
             }
-            SimulationError::ConvergenceFailure { max_iterations, cycle } => {
-                write!(f, "Failed to converge after {} iterations in cycle {}", max_iterations, cycle)
+            SimulationError::ConvergenceFailure {
+                max_iterations,
+                cycle,
+            } => {
+                write!(
+                    f,
+                    "Failed to converge after {} iterations in cycle {}",
+                    max_iterations, cycle
+                )
             }
             SimulationError::InvalidState { description } => {
                 write!(f, "Invalid simulation state: {}", description)
             }
-            SimulationError::MissingComponent { component_type, name } => {
+            SimulationError::MissingComponent {
+                component_type,
+                name,
+            } => {
                 write!(f, "Missing {} component: {}", component_type, name)
             }
         }
@@ -253,12 +305,15 @@ impl std::error::Error for SimulationError {}
 // Convenience constructors
 impl ExecutionError {
     pub fn double_fork(thread_id: usize, transaction_name: String) -> Self {
-        ExecutionError::Thread(ThreadError::DoubleFork { thread_id, transaction_name })
+        ExecutionError::Thread(ThreadError::DoubleFork {
+            thread_id,
+            transaction_name,
+        })
     }
 
     pub fn conflicting_assignment(
         symbol_id: SymbolId,
-        symbol_name: String, 
+        symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_id: usize,
@@ -285,17 +340,11 @@ impl ExecutionError {
     }
 
     pub fn dont_care_operation(operation: String, context: String) -> Self {
-        ExecutionError::Evaluation(EvaluationError::DontCareOperation {
-            operation,
-            context,
-        })
+        ExecutionError::Evaluation(EvaluationError::DontCareOperation { operation, context })
     }
 
     pub fn invalid_condition(stmt_type: String, expr_id: ExprId) -> Self {
-        ExecutionError::Evaluation(EvaluationError::InvalidCondition {
-            stmt_type,
-            expr_id,
-        })
+        ExecutionError::Evaluation(EvaluationError::InvalidCondition { stmt_type, expr_id })
     }
 
     pub fn assertion_failed(
@@ -313,13 +362,14 @@ impl ExecutionError {
     }
 
     pub fn assertion_dont_care(expr1_id: ExprId, expr2_id: ExprId) -> Self {
-        ExecutionError::Assertion(AssertionError::DontCareAssertion {
-            expr1_id,
-            expr2_id,
-        })
+        ExecutionError::Assertion(AssertionError::DontCareAssertion { expr1_id, expr2_id })
     }
 
-    pub fn read_only_assignment(symbol_id: SymbolId, symbol_name: String, symbol_type: String) -> Self {
+    pub fn read_only_assignment(
+        symbol_id: SymbolId,
+        symbol_name: String,
+        symbol_type: String,
+    ) -> Self {
         ExecutionError::Symbol(SymbolError::ReadOnlyAssignment {
             symbol_id,
             symbol_name,
