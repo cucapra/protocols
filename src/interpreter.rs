@@ -4,9 +4,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::errors::{EvaluationError, ExecutionError, ExecutionResult};
+use crate::errors::{ExecutionError, ExecutionResult};
+use crate::ir::*;
 use crate::scheduler::Todo;
-use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
@@ -56,7 +56,6 @@ pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
-    pub handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
 
     // TODO: can change to be secondarymaps for efficiency
@@ -76,7 +75,6 @@ impl<'a> Evaluator<'a> {
         args: HashMap<&str, BitVecValue>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
-        handler: &'a mut DiagnosticHandler,
         ctx: &'a patronus::expr::Context,
         sys: &'a patronus::system::TransitionSystem,
         sim: &'a mut Interpreter<'a>,
@@ -163,7 +161,6 @@ impl<'a> Evaluator<'a> {
             tr,
             next_stmt_map: tr.next_stmt_mapping(),
             st,
-            handler,
             sim,
             args_mapping,
             input_mapping,
@@ -246,16 +243,11 @@ impl<'a> Evaluator<'a> {
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(bvv.clone()))
                 } else {
-                    self.handler.emit_diagnostic_expr(
-                        self.tr,
-                        expr_id,
-                        format!("Symbol {:?} with id {:?} was not found in input, output, or args mapping.", *sym_id, name.to_string()).as_str(),
-                        Level::Error,
-                    );
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,
                         name.to_string(),
                         "input, output, or args mapping".to_string(),
+                        *expr_id,
                     ))
                 }
             }
@@ -269,6 +261,7 @@ impl<'a> Evaluator<'a> {
                             Err(ExecutionError::dont_care_operation(
                                 "equality".to_string(),
                                 "binary expression".to_string(),
+                                *expr_id,
                             ))
                         }
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
@@ -284,6 +277,7 @@ impl<'a> Evaluator<'a> {
                             Err(ExecutionError::dont_care_operation(
                                 "AND".to_string(),
                                 "binary expression".to_string(),
+                                *expr_id,
                             ))
                         }
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
@@ -301,6 +295,7 @@ impl<'a> Evaluator<'a> {
                     ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
                         "unary operation".to_string(),
                         "unary expression".to_string(),
+                        *expr_id,
                     )),
                 }
             }
@@ -312,17 +307,13 @@ impl<'a> Evaluator<'a> {
                         if *msb < width && *lsb <= *msb {
                             Ok(ExprValue::Concrete(bvv.slice(*msb, *lsb)))
                         } else {
-                            Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice {
-                                expr_id: *expr_id,
-                                start: *msb,
-                                end: *lsb,
-                                width,
-                            }))
+                            Err(ExecutionError::invalid_slice(*expr_id, *msb, *lsb, width))
                         }
                     }
                     ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
                         "slice".to_string(),
                         "slice expression".to_string(),
+                        *expr_id,
                     )),
                 }
             }
@@ -351,7 +342,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::AssertEq(expr1, expr2) => {
                 if self.assertions_forks_enabled {
-                    self.evaluate_assert_eq(expr1, expr2)?;
+                    self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 }
 
                 Ok(self.next_stmt_map[stmt_id])
@@ -430,21 +421,14 @@ impl<'a> Evaluator<'a> {
                         }
                         ExprValue::Concrete(new_val) => {
                             if !current_val.is_equal(&new_val) {
-                                let error = ExecutionError::conflicting_assignment(
+                                return Err(ExecutionError::conflicting_assignment(
                                     *symbol_id,
                                     self.st[symbol_id].name().to_string(),
                                     current_val.clone(),
                                     new_val,
                                     0, // TODO: Need to track thread_id in evaluator
-                                );
-                                self.handler.emit_diagnostic_stmt(
-                                    self.tr,
-                                    stmt_id,
-                                    &error.to_string(),
-                                    Level::Error,
-                                );
-
-                                return Err(error);
+                                    *stmt_id,
+                                ));
                             }
                         }
                     }
@@ -456,6 +440,7 @@ impl<'a> Evaluator<'a> {
                 *symbol_id,
                 self.st[symbol_id].name().to_string(),
                 "input pins".to_string(),
+                *expr_id,
             ));
         }
 
@@ -471,18 +456,21 @@ impl<'a> Evaluator<'a> {
                 *symbol_id,
                 name.to_string(),
                 "outputs".to_string(),
+                *stmt_id,
             ))
         } else if self.args_mapping.contains_key(symbol_id) {
             Err(ExecutionError::read_only_assignment(
                 *symbol_id,
                 name.to_string(),
                 "arguments".to_string(),
+                *stmt_id,
             ))
         } else {
             Err(ExecutionError::symbol_not_found(
                 *symbol_id,
                 name.to_string(),
                 "symbol mappings".to_string(),
+                *expr_id,
             ))
         }
     }
@@ -509,18 +497,21 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> ExecutionResult<()> {
+    fn evaluate_assert_eq(
+        &mut self,
+        stmt_id: &StmtId,
+        expr1: &ExprId,
+        expr2: &ExprId,
+    ) -> ExecutionResult<()> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
         let (bvv1, bvv2) = match (&res1, &res2) {
             (ExprValue::Concrete(bvv1), ExprValue::Concrete(bvv2)) => (bvv1, bvv2),
             _ => {
-                return Err(ExecutionError::assertion_dont_care(*expr1, *expr2));
+                return Err(ExecutionError::assertion_dont_care(*stmt_id));
             }
         };
         if !bvv1.is_equal(bvv2) {
-            self.handler
-                .emit_diagnostic_assertion(self.tr, expr1, expr2, bvv1, bvv2);
             Err(ExecutionError::assertion_failed(
                 *expr1,
                 *expr2,

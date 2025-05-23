@@ -4,7 +4,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::{ExprId, SymbolId};
+use crate::diagnostic::{DiagnosticHandler, Level};
+use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
 use baa::BitVecValue;
 use std::fmt;
 
@@ -25,11 +26,17 @@ pub enum ExecutionError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EvaluationError {
     /// Cannot perform operation on DontCare values
-    DontCareOperation { operation: String, context: String },
-    /// TODO: If we implement more complex ops, this may be useful
-    /// Right now, the only error i can think of is if equality checks are attempted between
-    /// different-width bitvecs (thrown by baa)
-    ArithmeticError { operation: String, details: String },
+    DontCareOperation {
+        operation: String,
+        context: String,
+        expr_id: ExprId,
+    },
+    /// Arithmetic errors (e.g., width mismatches in bitvec operations)
+    ArithmeticError {
+        operation: String,
+        details: String,
+        expr_id: ExprId,
+    },
     /// Conditional evaluation with DontCare
     InvalidCondition {
         stmt_type: String, // "if" or "while"
@@ -52,6 +59,7 @@ pub enum ThreadError {
     DoubleFork {
         thread_id: usize,
         transaction_name: String,
+        stmt_id: StmtId,
     },
     /// Multiple threads trying to assign to same input
     ConflictingAssignment {
@@ -60,9 +68,10 @@ pub enum ThreadError {
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_id: usize,
+        stmt_id: StmtId,
     },
     /// Thread execution limit exceeded (for infinite loop protection)
-    ExecutionLimitExceeded { thread_id: usize, max_steps: usize },
+    ExecutionLimitExceeded { max_steps: usize },
 }
 
 /// Symbol resolution and mapping errors
@@ -73,12 +82,14 @@ pub enum SymbolError {
         symbol_id: SymbolId,
         symbol_name: String,
         context: String,
+        expr_id: ExprId,
     },
     /// Attempting to assign to read-only symbol
     ReadOnlyAssignment {
         symbol_id: SymbolId,
         symbol_name: String,
         symbol_type: String, // "output", "argument", etc.
+        stmt_id: StmtId,
     },
 }
 
@@ -93,7 +104,7 @@ pub enum AssertionError {
         value2: BitVecValue,
     },
     /// Assertion with DontCare values
-    DontCareAssertion { expr1_id: ExprId, expr2_id: ExprId },
+    DontCareAssertion { stmt_id: StmtId },
 }
 
 // Implement Display for nice error messages
@@ -111,14 +122,18 @@ impl fmt::Display for ExecutionError {
 impl fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EvaluationError::DontCareOperation { operation, context } => {
+            EvaluationError::DontCareOperation {
+                operation, context, ..
+            } => {
                 write!(
                     f,
                     "Cannot perform {} on DontCare value in {}",
                     operation, context
                 )
             }
-            EvaluationError::ArithmeticError { operation, details } => {
+            EvaluationError::ArithmeticError {
+                operation, details, ..
+            } => {
                 write!(f, "Arithmetic error in {}: {}", operation, details)
             }
             EvaluationError::InvalidCondition { stmt_type, expr_id } => {
@@ -150,6 +165,7 @@ impl fmt::Display for ThreadError {
             ThreadError::DoubleFork {
                 thread_id,
                 transaction_name,
+                ..
             } => {
                 write!(
                     f,
@@ -170,15 +186,8 @@ impl fmt::Display for ThreadError {
                     thread_id, symbol_name, current_value, new_value
                 )
             }
-            ThreadError::ExecutionLimitExceeded {
-                thread_id,
-                max_steps,
-            } => {
-                write!(
-                    f,
-                    "Thread {} exceeded execution limit of {} steps",
-                    thread_id, max_steps
-                )
+            ThreadError::ExecutionLimitExceeded { max_steps } => {
+                write!(f, "Threads exceeded execution limit of {} steps", max_steps,)
             }
         }
     }
@@ -227,10 +236,11 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
-    pub fn double_fork(thread_id: usize, transaction_name: String) -> Self {
+    pub fn double_fork(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
         ExecutionError::Thread(ThreadError::DoubleFork {
             thread_id,
             transaction_name,
+            stmt_id,
         })
     }
 
@@ -240,6 +250,7 @@ impl ExecutionError {
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_id: usize,
+        stmt_id: StmtId,
     ) -> Self {
         ExecutionError::Thread(ThreadError::ConflictingAssignment {
             symbol_id,
@@ -247,23 +258,51 @@ impl ExecutionError {
             current_value,
             new_value,
             thread_id,
+            stmt_id,
         })
     }
 
-    pub fn symbol_not_found(symbol_id: SymbolId, symbol_name: String, context: String) -> Self {
+    pub fn symbol_not_found(
+        symbol_id: SymbolId,
+        symbol_name: String,
+        context: String,
+        expr_id: ExprId,
+    ) -> Self {
         ExecutionError::Symbol(SymbolError::NotFound {
             symbol_id,
             symbol_name,
             context,
+            expr_id,
         })
     }
 
-    pub fn dont_care_operation(operation: String, context: String) -> Self {
-        ExecutionError::Evaluation(EvaluationError::DontCareOperation { operation, context })
+    pub fn dont_care_operation(operation: String, context: String, expr_id: ExprId) -> Self {
+        ExecutionError::Evaluation(EvaluationError::DontCareOperation {
+            operation,
+            context,
+            expr_id,
+        })
+    }
+
+    pub fn arithmetic_error(operation: String, details: String, expr_id: ExprId) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ArithmeticError {
+            operation,
+            details,
+            expr_id,
+        })
     }
 
     pub fn invalid_condition(stmt_type: String, expr_id: ExprId) -> Self {
         ExecutionError::Evaluation(EvaluationError::InvalidCondition { stmt_type, expr_id })
+    }
+
+    pub fn invalid_slice(expr_id: ExprId, start: u32, end: u32, width: u32) -> Self {
+        ExecutionError::Evaluation(EvaluationError::InvalidSlice {
+            expr_id,
+            start,
+            end,
+            width,
+        })
     }
 
     pub fn assertion_failed(
@@ -280,22 +319,239 @@ impl ExecutionError {
         })
     }
 
-    pub fn assertion_dont_care(expr1_id: ExprId, expr2_id: ExprId) -> Self {
-        ExecutionError::Assertion(AssertionError::DontCareAssertion { expr1_id, expr2_id })
+    pub fn assertion_dont_care(stmt_id: StmtId) -> Self {
+        ExecutionError::Assertion(AssertionError::DontCareAssertion { stmt_id })
     }
 
     pub fn read_only_assignment(
         symbol_id: SymbolId,
         symbol_name: String,
         symbol_type: String,
+        stmt_id: StmtId,
     ) -> Self {
         ExecutionError::Symbol(SymbolError::ReadOnlyAssignment {
             symbol_id,
             symbol_name,
             symbol_type,
+            stmt_id,
         })
+    }
+
+    pub fn execution_limit_exceeded(max_steps: usize) -> Self {
+        ExecutionError::Thread(ThreadError::ExecutionLimitExceeded { max_steps })
     }
 }
 
 // Type alias for Results
 pub type ExecutionResult<T> = Result<T, ExecutionError>;
+
+/// Diagnostic emission functions for different error types
+pub struct DiagnosticEmitter;
+
+impl DiagnosticEmitter {
+    /// Emit diagnostic for any ExecutionError
+    pub fn emit_execution_error(
+        handler: &mut DiagnosticHandler,
+        error: &ExecutionError,
+        transaction: &Transaction,
+        symbol_table: &SymbolTable,
+    ) {
+        match error {
+            ExecutionError::Evaluation(eval_err) => {
+                Self::emit_evaluation_error(handler, eval_err, transaction, symbol_table);
+            }
+            ExecutionError::Thread(thread_err) => {
+                Self::emit_thread_error(handler, thread_err, transaction, symbol_table);
+            }
+            ExecutionError::Symbol(symbol_err) => {
+                Self::emit_symbol_error(handler, symbol_err, transaction, symbol_table);
+            }
+            ExecutionError::Assertion(assert_err) => {
+                Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
+            }
+        }
+    }
+
+    /// Emit diagnostic for evaluation errors
+    pub fn emit_evaluation_error(
+        handler: &mut DiagnosticHandler,
+        error: &EvaluationError,
+        transaction: &Transaction,
+        _symbol_table: &SymbolTable,
+    ) {
+        match error {
+            EvaluationError::DontCareOperation {
+                operation,
+                context,
+                expr_id,
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!(
+                        "Cannot perform {} on DontCare value in {}",
+                        operation, context
+                    ),
+                    Level::Error,
+                );
+            }
+            EvaluationError::ArithmeticError {
+                operation,
+                details,
+                expr_id,
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!("Arithmetic error in {}: {}", operation, details),
+                    Level::Error,
+                );
+            }
+            EvaluationError::InvalidCondition { stmt_type, expr_id } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!("Cannot evaluate {} condition: value is DontCare", stmt_type),
+                    Level::Error,
+                );
+            }
+            EvaluationError::InvalidSlice {
+                expr_id,
+                start,
+                end,
+                width,
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!(
+                        "Invalid slice operation: [{}:{}] on width {}",
+                        start, end, width
+                    ),
+                    Level::Error,
+                );
+            }
+        }
+    }
+
+    /// Emit diagnostic for thread errors
+    pub fn emit_thread_error(
+        handler: &mut DiagnosticHandler,
+        error: &ThreadError,
+        transaction: &Transaction,
+        _symbol_table: &SymbolTable,
+    ) {
+        match error {
+            ThreadError::DoubleFork {
+                thread_id,
+                transaction_name,
+                stmt_id,
+            } => {
+                handler.emit_diagnostic_stmt(
+                    transaction,
+                    stmt_id,
+                    &format!(
+                        "Thread {} (transaction '{}') attempted to fork more than once",
+                        thread_id, transaction_name
+                    ),
+                    Level::Error,
+                );
+            }
+            ThreadError::ConflictingAssignment {
+                symbol_name,
+                current_value,
+                new_value,
+                thread_id,
+                stmt_id,
+                ..
+            } => {
+                handler.emit_diagnostic_stmt(
+                    transaction,
+                    stmt_id,
+                    &format!(
+                        "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
+                        thread_id, symbol_name, current_value, new_value
+                    ),
+                    Level::Error,
+                );
+            }
+            ThreadError::ExecutionLimitExceeded { max_steps } => {
+                // For execution limit exceeded, we don't have a specific statement,
+                // so we emit a general diagnostic
+                handler.emit_general_message(
+                    &format!("Threads exceeded execution limit of {} steps", max_steps),
+                    Level::Error,
+                );
+            }
+        }
+    }
+
+    /// Emit diagnostic for symbol errors
+    pub fn emit_symbol_error(
+        handler: &mut DiagnosticHandler,
+        error: &SymbolError,
+        transaction: &Transaction,
+        _symbol_table: &SymbolTable,
+    ) {
+        match error {
+            SymbolError::NotFound {
+                symbol_name,
+                context,
+                expr_id,
+                ..
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!("Symbol '{}' not found in {}", symbol_name, context),
+                    Level::Error,
+                );
+            }
+            SymbolError::ReadOnlyAssignment {
+                symbol_name,
+                symbol_type,
+                stmt_id,
+                ..
+            } => {
+                handler.emit_diagnostic_stmt(
+                    transaction,
+                    stmt_id,
+                    &format!(
+                        "Cannot assign to {} '{}' (read-only)",
+                        symbol_type, symbol_name
+                    ),
+                    Level::Error,
+                );
+            }
+        }
+    }
+
+    /// Emit diagnostic for assertion errors
+    pub fn emit_assertion_error(
+        handler: &mut DiagnosticHandler,
+        error: &AssertionError,
+        transaction: &Transaction,
+        _symbol_table: &SymbolTable,
+    ) {
+        match error {
+            AssertionError::EqualityFailed {
+                expr1_id,
+                expr2_id,
+                value1,
+                value2,
+            } => {
+                handler.emit_diagnostic_assertion(transaction, expr1_id, expr2_id, value1, value2);
+            }
+            AssertionError::DontCareAssertion { stmt_id } => {
+                // We need a version of emit_diagnostic_assertion that handles DontCare cases
+                // For now, emit on the first expression
+                handler.emit_diagnostic_stmt(
+                    transaction,
+                    stmt_id,
+                    "Assertion failed: cannot assert equality with DontCare values",
+                    Level::Error,
+                );
+            }
+        }
+    }
+}

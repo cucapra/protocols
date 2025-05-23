@@ -9,8 +9,8 @@ use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
-use crate::diagnostic::Level;
-use crate::errors::{ExecutionError, ExecutionResult, ThreadError};
+use crate::errors::DiagnosticEmitter;
+use crate::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::Evaluator;
 use crate::interpreter::InputValue;
 use crate::ir::*;
@@ -97,6 +97,7 @@ pub struct Scheduler<'a> {
     step_count: i32,
     evaluator: Evaluator<'a>,
     results: Vec<ExecutionResult<()>>,
+    handler: &'a mut DiagnosticHandler,
 }
 
 impl<'a> Scheduler<'a> {
@@ -160,7 +161,6 @@ impl<'a> Scheduler<'a> {
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
-            handler,
             ctx,
             sys,
             sim,
@@ -179,10 +179,11 @@ impl<'a> Scheduler<'a> {
             step_count: 1,
             evaluator,
             results: vec![Ok(()); results_size],
+            handler,
         }
     }
 
-    pub fn execute_threads(&mut self) -> Vec<ExecutionResult<()>> {
+    pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
         println!(
             "\n==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count,
@@ -216,13 +217,11 @@ impl<'a> Scheduler<'a> {
                 // return an ExecutionLimitExceeded error on every thread.
                 if iters > MAX_ITERS {
                     for thread in &self.active_threads {
-                        self.results[thread.thread_id] = Err(ExecutionError::Thread(
-                            ThreadError::ExecutionLimitExceeded {
-                                thread_id: thread.thread_id,
-                                max_steps: MAX_ITERS,
-                            },
-                        ));
+                        self.results[thread.thread_id] =
+                            Err(ExecutionError::execution_limit_exceeded(MAX_ITERS));
                     }
+                    // Emit diagnostics for all errors before returning
+                    self.emit_all_diagnostics();
                     return self.results.clone();
                 }
 
@@ -280,7 +279,39 @@ impl<'a> Scheduler<'a> {
             }
         }
 
+        // Emit diagnostics for all errors after execution is complete
+        self.emit_all_diagnostics();
         self.results.clone()
+    }
+
+    /// Emit diagnostics for all errors in the results vector
+    fn emit_all_diagnostics(&mut self) {
+        for (thread_id, result) in self.results.iter().enumerate() {
+            if let Err(error) = result {
+                // Find the corresponding transaction and symbol table for this thread
+                let (transaction, symbol_table) = if thread_id < self.irs.len() {
+                    let ir_idx = if thread_id < self.todos.len() {
+                        self.todos[thread_id].0
+                    } else {
+                        // Fallback to first transaction if index is out of bounds
+                        0
+                    };
+                    let (tr, st, _) = &self.irs[ir_idx];
+                    (*tr, *st)
+                } else {
+                    // Fallback to first transaction
+                    let (tr, st, _) = &self.irs[0];
+                    (*tr, *st)
+                };
+
+                DiagnosticEmitter::emit_execution_error(
+                    self.handler,
+                    error,
+                    transaction,
+                    symbol_table,
+                );
+            }
+        }
     }
 
     pub fn run_all_active_until_next_step(&mut self) {
@@ -325,12 +356,7 @@ impl<'a> Scheduler<'a> {
                                 let error = ExecutionError::double_fork(
                                     thread.thread_id,
                                     thread.todo.tr.name.clone(),
-                                );
-                                self.evaluator.handler.emit_diagnostic_stmt(
-                                    thread.todo.tr,
-                                    &current,
-                                    &error.to_string(),
-                                    Level::Error,
+                                    current,
                                 );
                                 self.results[thread.thread_id] = Err(error);
                                 thread.next_step = None;
@@ -478,7 +504,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
 
@@ -494,7 +520,7 @@ pub mod tests {
             sim2,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
         // Check that it's an assertion error
@@ -517,7 +543,7 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
         // Check that it's an assertion error
@@ -539,7 +565,7 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
         // Check that both are assertion errors
@@ -598,7 +624,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
 
@@ -614,7 +640,7 @@ pub mod tests {
             sim2,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
         // Check that it's an assertion error
@@ -637,7 +663,7 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
         // Check that it's an assertion error
@@ -659,7 +685,7 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
         // Check that both are assertion errors
@@ -696,7 +722,7 @@ pub mod tests {
             vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
         )];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
 
         // ERROR CASE: Two different assignments
@@ -707,7 +733,7 @@ pub mod tests {
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
         if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment {
@@ -727,7 +753,7 @@ pub mod tests {
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         // this should pass since both threads assign the same value
         assert!(results[0].is_ok());
     }
@@ -753,9 +779,10 @@ pub mod tests {
             vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
         )];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         if let Err(ExecutionError::Thread(ThreadError::DoubleFork {
+            stmt_id: _,
             thread_id,
             transaction_name: _,
         })) = &results[0]
@@ -774,7 +801,7 @@ pub mod tests {
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
     }
 
@@ -808,7 +835,7 @@ pub mod tests {
             ),
         ];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
         assert!(results[2].is_err());
@@ -857,7 +884,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
 
@@ -872,7 +899,7 @@ pub mod tests {
             sim2,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
         // Check that it's an assertion error
@@ -912,7 +939,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { .. })) = &results[0]
         {
