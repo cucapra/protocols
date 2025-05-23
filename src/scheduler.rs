@@ -886,14 +886,14 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
             (
                 1, // transaction: slicing_ok
                 vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
             ),
             (
                 //
-                2, // transaction: slicing_err
+                3, // transaction: slicing_invalid
                 vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
             ),
         ];
@@ -904,6 +904,21 @@ pub mod tests {
 
         // Check that the failure is InvalidSlice
         if let Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice { .. })) = &results[1] {
+            // Expected invalid slice failure
+        } else {
+            panic!("Expected invalid slice failure, got: {:?}", results[2]);
+        }
+
+        // test slices that will result in an error because the widths of the slices are different
+        todos[1].0 = 2; // switch to running transaction slicing_err
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+
+        // Check that the failure is AssertionError
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
             // Expected invalid slice failure
         } else {
             panic!("Expected invalid slice failure, got: {:?}", results[2]);
