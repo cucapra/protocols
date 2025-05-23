@@ -1,3 +1,9 @@
+// Copyright 2024 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+
 use crate::ir::{ExprId, SymbolId};
 use baa::BitVecValue;
 use std::fmt;
