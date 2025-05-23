@@ -1,4 +1,4 @@
-use crate::ir::{ExprId, StmtId, SymbolId};
+use crate::ir::{ExprId, SymbolId};
 use baa::BitVecValue;
 use std::fmt;
 
@@ -88,8 +88,6 @@ pub enum AssertionError {
     },
     /// Assertion with DontCare values
     DontCareAssertion { expr1_id: ExprId, expr2_id: ExprId },
-    /// Custom assertion with message
-    Custom { message: String, stmt_id: StmtId },
 }
 
 // Implement Display for nice error messages
@@ -216,9 +214,6 @@ impl fmt::Display for AssertionError {
                     f,
                     "Assertion failed: cannot assert equality with DontCare values"
                 )
-            }
-            AssertionError::Custom { message, .. } => {
-                write!(f, "Assertion failed: {}", message)
             }
         }
     }
