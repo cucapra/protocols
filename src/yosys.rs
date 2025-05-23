@@ -56,10 +56,11 @@ pub struct ProjectConf {
 
 #[allow(dead_code)]
 impl ProjectConf {
-    pub fn with_source(source: PathBuf) -> Self {
+    pub fn with_source(source: PathBuf, top: Option<String>) -> Self {
         let sources = vec![source];
         Self {
             sources,
+            top,
             ..Default::default()
         }
     }

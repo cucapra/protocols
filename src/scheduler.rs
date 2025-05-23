@@ -444,20 +444,35 @@ pub mod tests {
 
     fn create_sim_context(
         verilog_path: &str,
+        top_module: Option<String>,
     ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
-        // Verilog --> Btor via Yosys
         let env = YosysEnv::default();
         let inp = PathBuf::from(verilog_path);
-        let proj = ProjectConf::with_source(inp);
-        let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
+        let proj = ProjectConf::with_source(inp, top_module);
 
-        // instantiate sim from btor file
-        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
-            Some(result) => result,
-            None => {
-                panic!("Failed to parse btor file.");
-            }
-        };
+        let btor_file = yosys_to_btor(&env, &proj, None)
+            .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
+
+        // Check if btor file was actually created and has content
+        if !btor_file.exists() {
+            panic!("BTOR file was not created at path: {}", btor_file.display());
+        }
+
+        let metadata = std::fs::metadata(&btor_file)
+            .unwrap_or_else(|e| panic!("Failed to read BTOR file metadata: {}", e));
+
+        if metadata.len() == 0 {
+            panic!("BTOR file is empty - likely synthesis failed. Check Yosys output for errors.");
+        }
+
+        let (ctx, sys) = patronus::btor2::parse_file(btor_file.as_path().as_os_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Failed to parse BTOR file - possibly malformed: {}",
+                    btor_file.display()
+                )
+            });
+
         (ctx, sys)
     }
 
@@ -467,7 +482,7 @@ pub mod tests {
 
         let transaction_filename = "tests/add_struct.prot";
         let verilog_path = "examples/adders/add_d1.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -587,7 +602,7 @@ pub mod tests {
 
         let transaction_filename = "tests/mult_new.prot";
         let verilog_path = "examples/multipliers/mult_d2.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -708,7 +723,7 @@ pub mod tests {
 
         let transaction_filename = "tests/identities/identity_d2.prot";
         let verilog_path = "examples/identity/identity_d2.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -765,7 +780,7 @@ pub mod tests {
 
         let transaction_filename = "tests/identities/identity_d2.prot";
         let verilog_path = "examples/identity/identity_d2.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -812,7 +827,7 @@ pub mod tests {
 
         let transaction_filename = "tests/identities/identity_d1.prot";
         let verilog_path = "examples/identity/identity_d1.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -859,7 +874,7 @@ pub mod tests {
 
         let transaction_filename = "tests/identities/dual_identity_d1.prot";
         let verilog_path = "examples/identity/dual_identity_d1.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -917,7 +932,7 @@ pub mod tests {
 
         let transaction_filename = "tests/inverter.prot";
         let verilog_path = "examples/inverters/inverter_d0.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -952,15 +967,12 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_scheduler_aes128() {
-        // we expect this to fail due to multiple assignment failure
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/aes128.prot";
-        // FIXME: This verilog doesn't seem to parse
         let verilog_path = "examples/tinyaes128/aes_128.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, Some("aes_128".to_string()));
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -969,23 +981,25 @@ pub mod tests {
         let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
+        // Example taken from NIST FIPS 197: https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf
+        // and https://testprotect.com/appendix/AEScalc
         let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            // Test with all zeros
+            // Encrypt
+            ( 
+                0,
+                vec![
+                    BitVecValue::from_u128(0x000102030405060708090a0b0c0d0e0f, 128), // key
+                    BitVecValue::from_u128(0x00112233445566778899aabbccddeeff, 128), // state
+                    BitVecValue::from_u128(0x69c4e0d86a7b0430d8cdb78070b4c55a, 128), // expected output
+                ],
+            ),
+            // Decrypt (swap state and expected output)
             (
                 0,
                 vec![
                     BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // key
                     BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // state
                     BitVecValue::from_u128(0x66e94bd4ef8a2c3b884cfa59ca342b2e, 128), // expected output
-                ],
-            ),
-            // Test with all ones
-            (
-                0,
-                vec![
-                    BitVecValue::from_u128(0xffffffffffffffffffffffffffffffff, 128), // key
-                    BitVecValue::from_u128(0xffffffffffffffffffffffffffffffff, 128), // state
-                    BitVecValue::from_u128(0xbcbf217cb280cf30b2517052193ab979, 128), // expected output
                 ],
             ),
         ];
@@ -999,7 +1013,7 @@ pub mod tests {
             handler,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        // assert!(results[0].is_ok());
+        assert!(results[0].is_ok());
         assert!(results[1].is_ok());
     }
 
@@ -1011,7 +1025,7 @@ pub mod tests {
         let transaction_filename = "tests/register_file.prot";
         // FIXME: This verilog doesn't seem to parse
         let verilog_path = "examples/regfile/serv_regfile.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
