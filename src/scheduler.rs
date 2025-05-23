@@ -985,7 +985,7 @@ pub mod tests {
         // and https://testprotect.com/appendix/AEScalc
         let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
             // Encrypt
-            ( 
+            (
                 0,
                 vec![
                     BitVecValue::from_u128(0x000102030405060708090a0b0c0d0e0f, 128), // key
@@ -1022,7 +1022,7 @@ pub mod tests {
     fn test_scheduler_register_file_write_read() {
         let handler = &mut DiagnosticHandler::new();
 
-        let transaction_filename = "tests/register_file.prot";
+        let transaction_filename = "tests/serv/register_file.prot";
         // FIXME: This verilog doesn't seem to parse
         let verilog_path = "examples/regfile/serv_regfile.v";
         let (ctx, sys) = create_sim_context(verilog_path, None);
@@ -1034,12 +1034,12 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // First, write some known data
-        // read_write(rs1_addr=0, rs2_addr=0, rd_enable=1, rd_addr=5, rd_data=0x12345678,
+        // read_write(rs1_addr=0, rs2_addr=0, rd_enable=1, rd_addr=5, rd_data=0xdeadbeef,
         //       rs1_data=0, rs2_data=0)
 
         // Then read it back
         // read_write(rs1_addr=5, rs2_addr=0, rd_enable=0, rd_addr=0, rd_data=0,
-        //       rs1_data=0x12345678, rs2_data=0)
+        //       rs1_data=0xdeadbeef, rs2_data=0)
 
         let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
             (
@@ -1051,19 +1051,23 @@ pub mod tests {
                     BitVecValue::from_u64(0, 5),           // rs2_addr: u5
                     BitVecValue::from_u64(1, 1),           // rd_enable: u1
                     BitVecValue::from_u64(5, 5),           // rd_addr: u5
-                    BitVecValue::from_u64(0x12345678, 32), // rd_data: u32
+                    BitVecValue::from_u64(0xdeadbeef, 32), // rd_data: u32
+                    BitVecValue::from_u64(0, 1),           // zero: u1
+                    BitVecValue::from_u64(1, 1),           // one: u1
                 ],
             ),
             (
                 0,
                 vec![
                     BitVecValue::from_u64(5, 5),           // rs1_addr: u5
-                    BitVecValue::from_u64(0x12345678, 32), // rs1_data: u32 (output)
+                    BitVecValue::from_u64(0xdeadbeef, 32), // rs1_data: u32 (output)
                     BitVecValue::from_u64(0, 32),          // rs2_data: u32 (output)
                     BitVecValue::from_u64(0, 5),           // rs2_addr: u5
                     BitVecValue::from_u64(0, 1),           // rd_enable: u1
                     BitVecValue::from_u64(0, 5),           // rd_addr: u5
                     BitVecValue::from_u64(0, 32),          // rd_data: u32
+                    BitVecValue::from_u64(0, 1),           // zero: u1
+                    BitVecValue::from_u64(1, 1),           // one: u1
                 ],
             ),
         ];
