@@ -265,7 +265,17 @@ impl<'a> Evaluator<'a> {
                             ))
                         }
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            if lhs.is_equal(rhs) {
+                            if lhs.width() != rhs.width() {
+                                Err(ExecutionError::arithmetic_error(
+                                    "Equal".to_string(),
+                                    format!(
+                                        "Width mismatch in EQUAL operation: lhs width = {}, rhs width = {}",
+                                        lhs.width(),
+                                        rhs.width()
+                                    ),
+                                    *expr_id,
+                                ))
+                            } else if lhs == rhs {
                                 Ok(ExprValue::Concrete(BitVecValue::new_true()))
                             } else {
                                 Ok(ExprValue::Concrete(BitVecValue::new_false()))
@@ -281,7 +291,19 @@ impl<'a> Evaluator<'a> {
                             ))
                         }
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            Ok(ExprValue::Concrete(lhs.and(rhs)))
+                            if lhs.width() != rhs.width() {
+                                Err(ExecutionError::arithmetic_error(
+                                    "And".to_string(),
+                                    format!(
+                                        "Width mismatch in AND operation: lhs width = {}, rhs width = {}",
+                                        lhs.width(),
+                                        rhs.width()
+                                    ),
+                                    *expr_id,
+                                ))
+                            } else {
+                                Ok(ExprValue::Concrete(lhs.and(rhs)))
+                            }
                         }
                     },
                 }
@@ -420,6 +442,7 @@ impl<'a> Evaluator<'a> {
                             // do nothing
                         }
                         ExprValue::Concrete(new_val) => {
+                            // no width check needed; guaranteed to be the same
                             if !current_val.is_equal(&new_val) {
                                 return Err(ExecutionError::conflicting_assignment(
                                     *symbol_id,
@@ -511,7 +534,8 @@ impl<'a> Evaluator<'a> {
                 return Err(ExecutionError::assertion_dont_care(*stmt_id));
             }
         };
-        if !bvv1.is_equal(bvv2) {
+        // short circuit guarantees width equality before is_equal call
+        if bvv1.width() != bvv2.width() || !bvv1.is_equal(bvv2) {
             Err(ExecutionError::assertion_failed(
                 *expr1,
                 *expr2,
