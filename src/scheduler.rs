@@ -356,7 +356,7 @@ impl<'a> Scheduler<'a> {
                                 let error = ExecutionError::double_fork(
                                     thread.thread_id,
                                     thread.todo.tr.name.clone(),
-                                    current,
+                                    next_id,
                                 );
                                 self.results[thread.thread_id] = Err(error);
                                 thread.next_step = None;
@@ -949,5 +949,121 @@ pub mod tests {
                 results[0]
             );
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_scheduler_aes128() {
+        // we expect this to fail due to multiple assignment failure
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/aes128.prot";
+        // FIXME: This verilog doesn't seem to parse
+        let verilog_path = "examples/tinyaes128/aes_128.v";
+        let (ctx, sys) = create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            // Test with all zeros
+            (
+                0,
+                vec![
+                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // key
+                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // state
+                    BitVecValue::from_u128(0x66e94bd4ef8a2c3b884cfa59ca342b2e, 128), // expected output
+                ],
+            ),
+            // Test with all ones
+            (
+                0,
+                vec![
+                    BitVecValue::from_u128(0xffffffffffffffffffffffffffffffff, 128), // key
+                    BitVecValue::from_u128(0xffffffffffffffffffffffffffffffff, 128), // state
+                    BitVecValue::from_u128(0xbcbf217cb280cf30b2517052193ab979, 128), // expected output
+                ],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        // assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+    }
+
+    #[test]
+    #[ignore]
+    fn test_scheduler_register_file_write_read() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/register_file.prot";
+        // FIXME: This verilog doesn't seem to parse
+        let verilog_path = "examples/regfile/serv_regfile.v";
+        let (ctx, sys) = create_sim_context(verilog_path);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        // First, write some known data
+        // read_write(rs1_addr=0, rs2_addr=0, rd_enable=1, rd_addr=5, rd_data=0x12345678,
+        //       rs1_data=0, rs2_data=0)
+
+        // Then read it back
+        // read_write(rs1_addr=5, rs2_addr=0, rd_enable=0, rd_addr=0, rd_data=0,
+        //       rs1_data=0x12345678, rs2_data=0)
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(0, 5),           // rs1_addr: u5
+                    BitVecValue::from_u64(0, 32),          // rs1_data: u32 (output)
+                    BitVecValue::from_u64(0, 32),          // rs2_data: u32 (output)
+                    BitVecValue::from_u64(0, 5),           // rs2_addr: u5
+                    BitVecValue::from_u64(1, 1),           // rd_enable: u1
+                    BitVecValue::from_u64(5, 5),           // rd_addr: u5
+                    BitVecValue::from_u64(0x12345678, 32), // rd_data: u32
+                ],
+            ),
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(5, 5),           // rs1_addr: u5
+                    BitVecValue::from_u64(0x12345678, 32), // rs1_data: u32 (output)
+                    BitVecValue::from_u64(0, 32),          // rs2_data: u32 (output)
+                    BitVecValue::from_u64(0, 5),           // rs2_addr: u5
+                    BitVecValue::from_u64(0, 1),           // rd_enable: u1
+                    BitVecValue::from_u64(0, 5),           // rd_addr: u5
+                    BitVecValue::from_u64(0, 32),          // rd_data: u32
+                ],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
     }
 }
