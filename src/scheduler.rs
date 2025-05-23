@@ -1018,7 +1018,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_scheduler_register_file_write_read() {
         let handler = &mut DiagnosticHandler::new();
 
@@ -1033,6 +1032,7 @@ pub mod tests {
         let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
+        // Here's the idea of the test:
         // First, write some known data
         // read_write(rs1_addr=0, rs2_addr=0, rd_enable=1, rd_addr=5, rd_data=0xdeadbeef,
         //       rs1_data=0, rs2_data=0)
