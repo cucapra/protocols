@@ -11,5 +11,6 @@ pub mod ir;
 pub mod parser;
 pub mod scheduler;
 pub mod serialize;
+mod type_inference;
 pub mod typecheck;
 mod yosys;

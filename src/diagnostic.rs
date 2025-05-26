@@ -302,8 +302,8 @@ mod tests {
         let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
 
         let mut tr = Transaction::new("test_transaction".to_string());
-        let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        let one_expr = tr.e(Expr::Const(1));
+        let zero_expr = tr.e(Expr::Const(0));
         tr.s(Stmt::Assign(a, one_expr));
         tr.s(Stmt::Assign(b, zero_expr));
 

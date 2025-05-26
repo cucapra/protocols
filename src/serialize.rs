@@ -32,7 +32,7 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_i64().unwrap().to_string(),
+        Expr::Const(val) => val.to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
@@ -213,7 +213,6 @@ pub fn serialize(
 
 #[cfg(test)]
 pub mod tests {
-    use baa::BitVecValue;
     use insta::Settings;
     use std::path::Path;
     use strip_ansi_escapes::strip_str;
@@ -324,7 +323,7 @@ pub mod tests {
 
     #[test]
     fn serialize_easycond_transaction() {
-        // Manually create the expected result of parsing `easycond.prot`.
+        // Maqnually create the expected result of parsing `easycond.prot`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
@@ -354,7 +353,7 @@ pub mod tests {
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
 
-        let one_expr = easycond.e(Expr::Const(BitVecValue::from_i64(1, 2)));
+        let one_expr = easycond.e(Expr::Const(1));
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements

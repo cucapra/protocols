@@ -302,10 +302,10 @@ mod tests {
         tr.add_expr_loc(b_expr, 62, 63, fileid);
         let b_expr2 = tr.e(Expr::Sym(b));
         tr.add_expr_loc(b_expr2, 84, 85, fileid);
-        let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        let zero_expr = tr.e(Expr::Const(0));
         tr.add_expr_loc(zero_expr, 106, 107, fileid);
         let a_assign = tr.s(Stmt::Assign(a, b_expr));
-        let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        let one_expr = tr.e(Expr::Const(1));
         tr.add_expr_loc(one_expr, 1, 1, fileid); // random location
         tr.add_stmt_loc(a_assign, 57, 64, fileid);
         let fork = tr.s(Stmt::Fork);

@@ -77,10 +77,10 @@ impl<'a> ParserContext<'a> {
 
                 match primary.as_rule() {
                     Rule::integer => {
-                        let int_value = primary.as_str().parse::<u64>().unwrap();
-                        let bvv = BitVecValue::from_u64(int_value as u64, 64);
+                        let int_value = primary.as_str().parse::<u128>().unwrap();
+                        // let bvv = BitVecValue::from_u64(int_value as u64, 64);
 
-                        Ok(BoxedExpr::Const(bvv, start, end))
+                        Ok(BoxedExpr::Const(int_value, start, end))
                     }
                     Rule::path_id => {
                         let path_id = primary.as_str();
@@ -652,12 +652,12 @@ pub fn parsing_helper(
     transaction_filename: &str,
     handler: &mut DiagnosticHandler,
 ) -> Vec<(Transaction, SymbolTable)> {
-    let result = parse_file(transaction_filename, handler);
-    match result {
+    let res: Vec<(Transaction, SymbolTable)> = match parse_file(transaction_filename, handler) {
         Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
         Err(err) => panic!(
             "Failed to parse file: {}\nError: {}",
             transaction_filename, err
         ),
-    }
+    };
+    res
 }
