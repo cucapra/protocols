@@ -21,7 +21,7 @@ use patronus::system::TransitionSystem;
 
 type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
-type TodoItem = (usize, Vec<BitVecValue>);
+type TodoItem = (String, Vec<BitVecValue>);
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
@@ -102,14 +102,20 @@ pub struct Scheduler<'a> {
 
 impl<'a> Scheduler<'a> {
     // Helper method that creates a Todo struct
-    fn create_todo_helper(
+    fn next_todo_helper(
         todos: &[TodoItem],
         idx: usize,
         irs: &[TransactionInfo<'a>],
     ) -> Option<Todo<'a>> {
         if idx < todos.len() {
             // get the corresponding transaction, symbol table, and next_stmt_map
-            let ir_idx = todos[idx].0;
+            let tr_name = todos[idx].0.clone();
+
+            // find the ir corresponding to the transaction name
+            let ir_idx = irs
+                .iter()
+                .position(|(tr, _, _)| tr.name == tr_name)
+                .expect("Transaction not found in IRs");
             let (tr, st, next_stmt_map) = &irs[ir_idx];
 
             // setup the arguments for the transaction
@@ -129,7 +135,7 @@ impl<'a> Scheduler<'a> {
 
     // Instance method that uses self fields and returns a Todo
     fn next_todo(&self, idx: usize) -> Option<Todo<'a>> {
-        Self::create_todo_helper(&self.todos, idx, &self.irs)
+        Self::next_todo_helper(&self.todos, idx, &self.irs)
     }
 
     pub fn new(
@@ -148,7 +154,7 @@ impl<'a> Scheduler<'a> {
 
         // setup the Evaluator and first Thread
         let initial_todo =
-            Self::create_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
+            Self::next_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
 
         println!(
             "Starting with initial transaction: {:?}",
@@ -287,7 +293,11 @@ impl<'a> Scheduler<'a> {
         // results and todos are parallel arrays, so we can use the same idx
         for (idx, result) in self.results.iter().enumerate() {
             if let Err(error) = result {
-                let ir_idx = self.todos[idx].0;
+                let ir_idx = self
+                    .irs
+                    .iter()
+                    .position(|(tr, _, _)| tr.name == self.todos[idx].0.clone())
+                    .expect("Transaction not found in IRs");
                 let (tr, st, _) = self.irs[ir_idx];
 
                 DiagnosticEmitter::emit_execution_error(self.handler, error, tr, st);
@@ -521,9 +531,9 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // CASE 1: BOTH THREADS PASS
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (0, vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
-            (0, vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
+        let mut todos = vec![
+            (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
+            (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
         ];
 
         let sim: &mut Interpreter<'_> = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -604,9 +614,9 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // CASE 1: BOTH THREADS PASS
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (0, vec![bv(1, 32), bv(2, 32), bv(2, 32)]),
-            (0, vec![bv(6, 32), bv(8, 32), bv(48, 32)]),
+        let mut todos = vec![
+            (String::from("mul"), vec![bv(1, 32), bv(2, 32), bv(2, 32)]),
+            (String::from("mul"), vec![bv(6, 32), bv(8, 32), bv(48, 32)]),
         ];
 
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -687,14 +697,14 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // PASSING CASE: Single thread
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![(0, vec![bv(1, 32), bv(1, 32)])];
+        let mut todos = vec![(String::from("multiple_assign"), vec![bv(1, 32), bv(1, 32)])];
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
 
         // ERROR CASE: Two different assignments
-        todos.push((0, vec![bv(2, 32), bv(2, 32)]));
+        todos.push((String::from("multiple_assign"), vec![bv(2, 32), bv(2, 32)]));
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
@@ -733,7 +743,7 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // ERROR CASE: two_fork_err protocol
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![(1, vec![bv(1, 32), bv(1, 32)])];
+        let mut todos = vec![(String::from("two_fork_err"), vec![bv(1, 32), bv(1, 32)])];
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
@@ -746,7 +756,7 @@ pub mod tests {
         }
 
         // PASSING CASE: two_fork_ok protocol
-        todos[0] = (2, vec![bv(1, 32), bv(1, 32)]);
+        todos[0] = (String::from("two_fork_ok"), vec![bv(1, 32), bv(1, 32)]);
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
@@ -766,11 +776,11 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (0, vec![bv(1, 32), bv(1, 32)]),
-            (0, vec![bv(2, 32), bv(2, 32)]),
-            (0, vec![bv(3, 32), bv(4, 32)]),
-            (0, vec![bv(4, 32), bv(5, 32)]),
+        let todos = vec![
+            (String::from("implicit_fork"), vec![bv(1, 32), bv(1, 32)]),
+            (String::from("implicit_fork"), vec![bv(2, 32), bv(2, 32)]),
+            (String::from("implicit_fork"), vec![bv(3, 32), bv(4, 32)]),
+            (String::from("implicit_fork"), vec![bv(4, 32), bv(5, 32)]),
         ];
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
@@ -795,9 +805,9 @@ pub mod tests {
         let irs: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            (1, vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_ok
-            (3, vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_invalid
+        let mut todos = vec![
+            (String::from("slicing_ok"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_ok
+            (String::from("slicing_invalid"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_invalid
         ];
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
@@ -812,7 +822,7 @@ pub mod tests {
         }
 
         // test slices that will result in an error because the widths of the slices are different
-        todos[1].0 = 2; // switch to running transaction slicing_err
+        todos[1].0 = String::from("slicing_err"); // switch to running transaction slicing_err
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
@@ -835,8 +845,10 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // PASSING CASE: values of b agree
-        let mut todos: Vec<(usize, Vec<BitVecValue>)> =
-            vec![(0, vec![bv(3, 64)]), (1, vec![bv(2, 64), bv(3, 64)])];
+        let mut todos = vec![
+            (String::from("one"), vec![bv(3, 64)]),
+            (String::from("two"), vec![bv(2, 64), bv(3, 64)]),
+        ];
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
@@ -880,7 +892,7 @@ pub mod tests {
         let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(0, vec![bv(0, 1), bv(1, 1)])];
+        let todos = vec![(String::from("invert"), vec![bv(0, 1), bv(1, 1)])];
 
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
@@ -909,7 +921,7 @@ pub mod tests {
         let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(0, vec![bv(10, 64)])];
+        let todos = vec![(String::from("count_up"), vec![bv(10, 64)])];
 
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
@@ -938,19 +950,17 @@ pub mod tests {
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
         // Example taken from NIST FIPS 197
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
-            // Encrypt
+        let todos = vec![
             (
-                0,
+                String::from("aes128"),
                 vec![
                     BitVecValue::from_u128(0x000102030405060708090a0b0c0d0e0f, 128), // key
                     BitVecValue::from_u128(0x00112233445566778899aabbccddeeff, 128), // state
                     BitVecValue::from_u128(0x69c4e0d86a7b0430d8cdb78070b4c55a, 128), // expected output
                 ],
             ),
-            // Decrypt (swap state and expected output)
             (
-                0,
+                String::from("aes128"),
                 vec![
                     BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // key
                     BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // state
@@ -986,9 +996,9 @@ pub mod tests {
         let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
             parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+        let todos = vec![
             (
-                0,
+                String::from("read_write"),
                 vec![
                     bv(0, 5),           // rs1_addr: u5
                     bv(0, 32),          // rs1_data: u32 (output)
@@ -1002,7 +1012,7 @@ pub mod tests {
                 ],
             ),
             (
-                0,
+                String::from("read_write"),
                 vec![
                     bv(5, 5),           // rs1_addr: u5
                     bv(0xdeadbeef, 32), // rs1_data: u32 (output)
