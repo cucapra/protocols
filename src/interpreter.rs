@@ -130,8 +130,6 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        // TODO: check that the Transaction DUT matches the Btor2 DUT
-        // TODO: check that every item in the args mapping is a field in the Transaction
         let mut rng = rand::thread_rng();
 
         // Initialize the input pins with DontCares that are randomly assigned
