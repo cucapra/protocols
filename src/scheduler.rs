@@ -58,7 +58,7 @@ pub struct Thread<'a> {
     pub next_step: Option<StmtId>,
     pub has_forked: bool,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
-    pub thread_id: usize,
+    pub todo_idx: usize,
 }
 
 impl<'a> Thread<'a> {
@@ -70,7 +70,7 @@ impl<'a> Thread<'a> {
         Self {
             current_step: todo.tr.body,
             next_step: None,
-            thread_id,
+            todo_idx: thread_id,
             todo,
             has_forked: false,
         }
@@ -147,9 +147,8 @@ impl<'a> Scheduler<'a> {
             .collect();
 
         // setup the Evaluator and first Thread
-        let next_todo_idx = 0;
         let initial_todo =
-            Self::create_todo_helper(&todos, next_todo_idx, &irs).expect("No transactions passed.");
+            Self::create_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
 
         println!(
             "Starting with initial transaction: {:?}",
@@ -167,12 +166,12 @@ impl<'a> Scheduler<'a> {
         );
 
         let results_size = todos.len();
-        let first = Thread::initialize_thread(initial_todo, next_todo_idx);
+        let first = Thread::initialize_thread(initial_todo, 0);
         println!("Added first thread to active_threads");
         Self {
             irs,
             todos,
-            next_todo_idx,
+            next_todo_idx: 1,
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
@@ -217,7 +216,7 @@ impl<'a> Scheduler<'a> {
                 // return an ExecutionLimitExceeded error on every thread.
                 if iters > MAX_ITERS {
                     for thread in &self.active_threads {
-                        self.results[thread.thread_id] =
+                        self.results[thread.todo_idx] =
                             Err(ExecutionError::execution_limit_exceeded(MAX_ITERS));
                     }
                     // Emit diagnostics for all errors before returning
@@ -284,32 +283,14 @@ impl<'a> Scheduler<'a> {
         self.results.clone()
     }
 
-    /// Emit diagnostics for all errors in the results vector
     fn emit_all_diagnostics(&mut self) {
-        for (thread_id, result) in self.results.iter().enumerate() {
+        // results and todos are parallel arrays, so we can use the same idx
+        for (idx, result) in self.results.iter().enumerate() {
             if let Err(error) = result {
-                // Find the corresponding transaction and symbol table for this thread
-                let (transaction, symbol_table) = if thread_id < self.irs.len() {
-                    let ir_idx = if thread_id < self.todos.len() {
-                        self.todos[thread_id].0
-                    } else {
-                        // Fallback to first transaction if index is out of bounds
-                        0
-                    };
-                    let (tr, st, _) = &self.irs[ir_idx];
-                    (*tr, *st)
-                } else {
-                    // Fallback to first transaction
-                    let (tr, st, _) = &self.irs[0];
-                    (*tr, *st)
-                };
+                let ir_idx = self.todos[idx].0;
+                let (tr, st, _) = self.irs[ir_idx];
 
-                DiagnosticEmitter::emit_execution_error(
-                    self.handler,
-                    error,
-                    transaction,
-                    symbol_table,
-                );
+                DiagnosticEmitter::emit_execution_error(self.handler, error, tr, st);
             }
         }
     }
@@ -321,7 +302,7 @@ impl<'a> Scheduler<'a> {
     }
 
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize) {
-        let next_todo_option = self.next_todo(self.next_todo_idx + 1);
+        let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
 
@@ -354,16 +335,15 @@ impl<'a> Scheduler<'a> {
                             if thread.has_forked {
                                 println!("  ERROR: Thread has already forked at this point, terminating thread");
                                 let error = ExecutionError::double_fork(
-                                    thread.thread_id,
+                                    thread.todo_idx,
                                     thread.todo.tr.name.clone(),
                                     next_id,
                                 );
-                                self.results[thread.thread_id] = Err(error);
+                                self.results[thread.todo_idx] = Err(error);
                                 thread.next_step = None;
                                 return;
                             }
                             println!("  Fork at {:?}, spawning new thread…", next_id);
-                            self.next_todo_idx += 1;
                             match next_todo_option.clone() {
                                 Some(todo) => {
                                     let new_thread =
@@ -378,10 +358,9 @@ impl<'a> Scheduler<'a> {
                                     println!("    no more todos to fork, skipping fork.");
                                 }
                             }
+                            self.next_todo_idx += 1;
                             // Mark this thread as having forked
-                            println!("  Marking thread {} as having forked.", {
-                                thread.thread_id
-                            });
+                            println!("  Marking thread {} as having forked.", { thread.todo_idx });
                             thread.has_forked = true;
                             // continue from the fork point
                             current = next_id;
@@ -404,7 +383,7 @@ impl<'a> Scheduler<'a> {
                 // error -> record and stop
                 Err(e) => {
                     println!("ERROR: {:?}, terminating thread", e);
-                    self.results[thread.thread_id] = Err(e);
+                    self.results[thread.todo_idx] = Err(e);
                     thread.next_step = None;
                     break;
                 }
@@ -415,9 +394,8 @@ impl<'a> Scheduler<'a> {
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked
             && self.evaluator.assertions_forks_enabled()
-            && self.results[thread.thread_id].is_ok()
+            && self.results[thread.todo_idx].is_ok()
         {
-            self.next_todo_idx += 1;
             match next_todo_option.clone() {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
@@ -431,6 +409,7 @@ impl<'a> Scheduler<'a> {
                     println!("    no more todos to fork, skipping implicit fork.");
                 }
             }
+            self.next_todo_idx += 1;
         }
     }
 }
@@ -668,7 +647,7 @@ pub mod tests {
             panic!("Expected assertion equality failure, got: {:?}", results[1]);
         }
 
-        // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
+        // // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = BitVecValue::from_u64(3, 32);
         todos[1].1[2] = BitVecValue::from_u64(48, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -691,7 +670,7 @@ pub mod tests {
             panic!("Expected assertion equality failure, got: {:?}", results[0]);
         }
 
-        // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
+        // // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = BitVecValue::from_u64(47, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
