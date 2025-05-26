@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use tempfile;
 use thiserror::Error;
 
 #[allow(dead_code)]
@@ -37,7 +36,7 @@ impl YosysEnv {
     pub fn with_temp_dir() -> Result<Self> {
         let dir = tempfile::TempDir::new()?;
         Ok(Self {
-            working_dir: dir.into_path(),
+            working_dir: dir.keep(),
             ..Default::default()
         })
     }
@@ -56,12 +55,12 @@ pub struct ProjectConf {
 }
 
 #[allow(dead_code)]
-
 impl ProjectConf {
-    pub fn with_source(source: PathBuf) -> Self {
+    pub fn with_source(source: PathBuf, top: Option<String>) -> Self {
         let sources = vec![source];
         Self {
             sources,
+            top,
             ..Default::default()
         }
     }
@@ -76,7 +75,7 @@ where
 {
     let cmd_str: String = join(commands.iter(), " ; ");
 
-    if let Some(_) = &env.script_out {
+    if env.script_out.is_some() {
         todo!("implement script out");
     }
 
@@ -98,7 +97,6 @@ where
 }
 
 #[allow(dead_code)]
-
 const MINIMAL_BTOR_CONVERSION: &[&str] = &[
     "proc -noopt",
     "async2sync", // required for designs with async reset
@@ -107,7 +105,6 @@ const MINIMAL_BTOR_CONVERSION: &[&str] = &[
 ];
 
 #[allow(dead_code)]
-
 fn read_sources(project: &ProjectConf) -> Vec<String> {
     // canonicalize file paths since yosys might use a different output directory
     let sources = project
@@ -132,7 +129,6 @@ fn read_sources(project: &ProjectConf) -> Vec<String> {
 }
 
 #[allow(dead_code)]
-
 pub fn yosys_to_btor(
     env: &YosysEnv,
     project: &ProjectConf,
@@ -170,9 +166,8 @@ pub fn yosys_to_btor(
     }
 }
 
-#[allow(dead_code)]
-
 /// Crashes the program if yosys is not found.
+#[allow(dead_code)]
 pub fn require_yosys() -> Result<()> {
     match std::process::Command::new("yosys").arg("-version").output() {
         Ok(res) => {
@@ -285,7 +280,7 @@ mod tests {
     #[test]
     fn test_yosys_to_btor_auto_name() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("examples/counter/counter.v");
+        let inp = PathBuf::from("examples/counters/counter.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()

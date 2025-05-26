@@ -1,0 +1,20 @@
+// corresponds with examples/counters/counter.v
+// the Counter increments s up to a, and then sets s to 0 when s > a
+struct Counter {
+    in a: u64,
+    out s: u64,
+}
+
+fn simple_while<dut: Counter>(in a: u64) {
+    // Loading dut with values
+    dut.a := a;
+
+    while !(dut.s == dut.a) {
+        step(1);
+    }
+    // now, dut.s == dut.a. we want s > a (one step), and
+    // then, if we step once more, dut.s should equal 0
+    step(2);
+    assert_eq(dut.s, 0);
+}
+

@@ -3,10 +3,10 @@
 struct TinyAES128 {
   in key: u128,
   in state: u128,
-  out output: u128,
+  out out: u128,
 }
 
-fn aes128<dut : TinyAES128>(in key: u128, in state: u128, out output: u128) {
+fn aes128<dut : TinyAES128>(in key: u128, in state: u128, out out: u128) {
   dut.state := state;
   dut.key := key;
   step();
@@ -15,5 +15,5 @@ fn aes128<dut : TinyAES128>(in key: u128, in state: u128, out output: u128) {
   dut.key := X;
   // twenty cycles to complete
   step(20);
-  assert_eq(dut.output, output);
+  assert_eq(dut.out, out);
 }
