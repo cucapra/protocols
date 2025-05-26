@@ -1,0 +1,47 @@
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
+  // If multiple instances of this protocol are run, this will pass if and only if
+  // both instances pass the same integer value for parameter a. 
+  DUT.a := a;
+  fork();
+  step();
+  DUT.a := a;
+  step();
+  assert_eq(s, DUT.s);
+}
+
+fn two_fork_err<DUT: Identity>(in a: u32, out s: u32) {
+  // guaranteed failure due to two works in executed
+  DUT.a := a;
+  fork();
+  step();
+  DUT.a := a;
+  fork();
+  step();
+  assert_eq(s, DUT.s);
+}
+
+fn two_fork_ok<DUT: Identity>(in a: u32, out s: u32) {
+  // two forks in the protocol, but because
+  // the double fork error is checked dynamically at runtime
+  // this won't error in either case since both forks can never occur in 
+  // a single execution thread
+  DUT.a := a;
+  step();
+
+  if a {
+    fork();
+  }
+  else {
+    fork();
+  }
+
+  DUT.a := a;
+  step();
+  
+  assert_eq(s, DUT.s);
+}

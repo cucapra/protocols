@@ -4,3 +4,4 @@ Cargo.lock
 test_run/
 /tests/snapshots
 *.btor
+**/.DS_Store

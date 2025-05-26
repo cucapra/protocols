@@ -73,8 +73,7 @@ fn check_stmt_types(
                     let fields = st[structid].pins();
                     if fields
                         .iter()
-                        .find(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
-                        .is_some()
+                        .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                     {
                         handler.emit_diagnostic_stmt(
                             tr,
@@ -91,7 +90,7 @@ fn check_stmt_types(
             let lhs_type = st[lhs].tpe();
             let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if rhs_type == Type::Unknown {
-                rhs_type = lhs_type.clone();
+                rhs_type = lhs_type;
                 handler.emit_diagnostic_stmt(
                     tr,
                     stmt_id,
