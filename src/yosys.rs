@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_yosys_to_btor_auto_name() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("examples/counter/counter.v");
+        let inp = PathBuf::from("examples/counters/counter.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()

@@ -1024,6 +1024,36 @@ pub mod tests {
     }
 
     #[test]
+    fn test_scheduler_counter() {
+        // this tests the counter, the while loop, and the not unary operator
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/counters/counter.prot";
+        let verilog_path = "examples/counters/counter.v";
+        let (ctx, sys) = create_sim_context(verilog_path, None);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(0, vec![BitVecValue::from_u64(10, 64)])];
+
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+    }
+
+    #[test]
     fn test_scheduler_aes128() {
         let handler = &mut DiagnosticHandler::new();
 
