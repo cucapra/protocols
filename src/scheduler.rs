@@ -62,15 +62,15 @@ pub struct Thread<'a> {
 }
 
 impl<'a> Thread<'a> {
-    pub fn initialize_thread(todo: Todo<'a>, thread_id: usize) -> Self {
+    pub fn initialize_thread(todo: Todo<'a>, todo_idx: usize) -> Self {
         println!(
             "Thread initialized with transaction: {:?}, thread_id={}",
-            todo.tr.name, thread_id
+            todo.tr.name, todo_idx
         );
         Self {
             current_step: todo.tr.body,
             next_step: None,
-            todo_idx: thread_id,
+            todo_idx,
             todo,
             has_forked: false,
         }
@@ -749,7 +749,10 @@ pub mod tests {
         let results = scheduler.execute_todos();
         assert_err(&results[0]);
         match &results[0] {
-            Err(ExecutionError::Thread(ThreadError::DoubleFork { thread_id, .. })) => {
+            Err(ExecutionError::Thread(ThreadError::DoubleFork {
+                thread_idx: thread_id,
+                ..
+            })) => {
                 assert_eq!(*thread_id, 0);
             }
             other => panic!("Expected DoubleFork error, got: {:?}", other),
