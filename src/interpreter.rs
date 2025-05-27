@@ -1,4 +1,3 @@
-use crate::serialize::serialize_expr;
 use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
@@ -201,7 +200,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<ExprValue, String> {
         let expr = &self.tr[expr_id];
         match expr {
-            Expr::Const(val) => Ok(ExprValue::Concrete(val.clone())),
+            Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {

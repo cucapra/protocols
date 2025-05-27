@@ -1,7 +1,12 @@
-use baa::BitVecOps;
+// Copyright 2024 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
 
 use crate::ir::{Expr, ExprId, Stmt, StmtId};
 use crate::ir::{SymbolTable, Transaction, Type};
+use baa::BitVecOps;
 use std::collections::HashMap;
 
 /// A type‐variable is just an integer ID.

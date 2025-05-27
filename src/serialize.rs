@@ -325,7 +325,7 @@ pub mod tests {
 
     #[test]
     fn serialize_easycond_transaction() {
-        // Maqnually create the expected result of parsing `easycond.prot`.
+        // Manually create the expected result of parsing `easycond.prot`.
         // Note that the order in which things are created will be different in the parser.
 
         // 1) declare symbols
