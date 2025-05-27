@@ -664,7 +664,8 @@ pub fn parsing_helper(
         ),
     };
 
-    // FIXME: This is pretty clunky.
+    // FIXME: This is pretty clunky. Put this directly into the parse_file method.
+    // though, this really should be done before type checking
     let mut ret = vec![];
     // Narrow the constant widths in the transaction
     for (tr, st) in res.iter() {
