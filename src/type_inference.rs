@@ -1,3 +1,5 @@
+use baa::BitVecOps;
+
 use crate::ir::{Expr, ExprId, Stmt, StmtId};
 use crate::ir::{SymbolTable, Transaction, Type};
 use std::collections::HashMap;
@@ -50,21 +52,22 @@ impl TypeContext {
         v
     }
 
-    fn min_width(n: u128) -> usize {
-        if n == 0 {
-            return 1;
-        }
+    // no longer needed if we start with a BitVecValue
+    // fn min_width(n: u128) -> usize {
+    //     if n == 0 {
+    //         return 1;
+    //     }
 
-        let mut bits = 0;
-        let mut temp = n;
+    //     let mut bits = 0;
+    //     let mut temp = n;
 
-        while temp > 0 {
-            bits += 1;
-            temp >>= 1;
-        }
+    //     while temp > 0 {
+    //         bits += 1;
+    //         temp >>= 1;
+    //     }
 
-        bits
-    }
+    //     bits
+    // }
 
     /// entry point: walk the AST and fill `expr_ty` + `constraints`
     pub fn constrain_by_expr(&mut self, expr_id: ExprId) -> TypeVar {
@@ -75,10 +78,10 @@ impl TypeContext {
         let this_tv = self.fresh();
         self.expr_ty.insert(expr_id, this_tv);
 
-        match self.tr[expr_id] {
+        match &self.tr[expr_id].clone() {
             Expr::Const(num) => {
-                let min_bits = Self::min_width(num);
-                println!("lower bound for const {}: {}", num, min_bits);
+                let min_bits = num.min_width() as usize;
+                println!("lower bound for const {:?}: {}", num, min_bits);
                 self.constraints
                     .push(Constraint::LowerBound(this_tv, min_bits));
             }
@@ -102,20 +105,20 @@ impl TypeContext {
 
             Expr::Binary(_, left, right) => {
                 // which binop it is doesn't matter for width inference
-                let l_tv = self.constrain_by_expr(left);
-                let r_tv = self.constrain_by_expr(right);
+                let l_tv = self.constrain_by_expr(left.clone());
+                let r_tv = self.constrain_by_expr(right.clone());
                 self.constraints.push(Constraint::Eq(this_tv, l_tv));
                 self.constraints.push(Constraint::Eq(this_tv, r_tv));
             }
 
             Expr::Unary(_, sub) => {
                 // which unary op it is doesn't matter for width inference
-                let s_tv = self.constrain_by_expr(sub);
+                let s_tv = self.constrain_by_expr(sub.clone());
                 self.constraints.push(Constraint::Eq(this_tv, s_tv));
             }
 
             Expr::Slice(inner, high, low) => {
-                let inner_tv = self.constrain_by_expr(inner);
+                let inner_tv = self.constrain_by_expr(inner.clone());
                 let slice_w = (high - low + 1) as usize;
 
                 // inner must be at least high+1 bits

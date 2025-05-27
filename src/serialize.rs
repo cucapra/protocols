@@ -32,7 +32,8 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_string(),
+        // FIXME: we should be be able to convert to a u128
+        Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
@@ -220,6 +221,7 @@ pub mod tests {
     use super::*;
     use crate::diagnostic::DiagnosticHandler;
     use crate::parser::parse_file;
+    use baa::BitVecValue;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
@@ -353,7 +355,7 @@ pub mod tests {
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
 
-        let one_expr = easycond.e(Expr::Const(1));
+        let one_expr = easycond.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements

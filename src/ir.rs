@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use crate::type_inference::TypeContext;
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
@@ -83,9 +83,22 @@ impl Transaction {
         self.stmt_loc.get(stmt_id).copied()
     }
 
-    pub fn expr_widths(&self, st: SymbolTable) -> HashMap<ExprId, usize> {
+    fn expr_widths(&self, st: SymbolTable) -> HashMap<ExprId, usize> {
         let mut type_ctx = TypeContext::new(st.clone(), self.clone());
         type_ctx.finalize()
+    }
+
+    pub fn narrow_constant_widths(&mut self, st: &SymbolTable) {
+        let expr_widths = self.expr_widths(st.clone());
+        for expr_id in self.exprs.keys() {
+            if let Expr::Const(ref val) = self[expr_id] {
+                let width = expr_widths[&expr_id] as u32;
+
+                // narrow to the lowest significant `width` bits -- type inference should guarantee no information loss
+                let bit_vec = val.slice(width - 1, 0);
+                self.exprs[expr_id] = Expr::Const(bit_vec);
+            }
+        }
     }
 
     pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {
@@ -247,7 +260,7 @@ pub enum UnaryOp {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expr {
     // nullary
-    Const(u128),
+    Const(BitVecValue),
     Sym(SymbolId),
     DontCare,
     // unary
@@ -262,7 +275,7 @@ pub enum Expr {
 pub enum BoxedExpr {
     // (have start and end as usize in each variant)
     // nullary
-    Const(u128, usize, usize),
+    Const(BitVecValue, usize, usize),
     Sym(SymbolId, usize, usize),
     DontCare(usize, usize),
     // unary
@@ -640,14 +653,14 @@ mod tests {
         // 3) create expressions
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));
         let dut_oo_expr = calyx_go_done.e(Expr::Sym(dut_oo));
-        let one_expr = calyx_go_done.e(Expr::Const(1));
-        let zero_expr = calyx_go_done.e(Expr::Const(0));
+        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        let zero_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         let dut_done_expr = calyx_go_done.e(Expr::Sym(dut_done));
         let cond_expr = calyx_go_done.e(Expr::Binary(BinOp::Equal, dut_done_expr, one_expr));
         let not_expr = calyx_go_done.e(Expr::Unary(UnaryOp::Not, cond_expr));
 
         // 4) create statements
-        let one_expr = calyx_go_done.e(Expr::Const(1));
+        let one_expr = calyx_go_done.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let while_body = vec![calyx_go_done.s(Stmt::Step)];
         let wbody = calyx_go_done.s(Stmt::Block(while_body));
 

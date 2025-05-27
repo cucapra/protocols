@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
@@ -78,9 +78,10 @@ impl<'a> ParserContext<'a> {
                 match primary.as_rule() {
                     Rule::integer => {
                         let int_value = primary.as_str().parse::<u128>().unwrap();
-                        // let bvv = BitVecValue::from_u64(int_value as u64, 64);
+                        // start with a wide type, narrow it down in type inferencing later
+                        let bvv = BitVecValue::from_u128(int_value as u128, 128);
 
-                        Ok(BoxedExpr::Const(int_value, start, end))
+                        Ok(BoxedExpr::Const(bvv, start, end))
                     }
                     Rule::path_id => {
                         let path_id = primary.as_str();
@@ -653,11 +654,25 @@ pub fn parsing_helper(
     handler: &mut DiagnosticHandler,
 ) -> Vec<(Transaction, SymbolTable)> {
     let res: Vec<(Transaction, SymbolTable)> = match parse_file(transaction_filename, handler) {
-        Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
+        Ok(success_vec) => success_vec
+            .into_iter()
+            .map(|(st, tr)| (tr.clone(), st))
+            .collect(),
         Err(err) => panic!(
             "Failed to parse file: {}\nError: {}",
             transaction_filename, err
         ),
     };
-    res
+
+    // FIXME: This is pretty clunky.
+    let mut ret = vec![];
+    // Narrow the constant widths in the transaction
+    for (tr, st) in res.iter() {
+        let mut narrowed_tr = tr.clone();
+        narrowed_tr.narrow_constant_widths(st);
+
+        ret.push((narrowed_tr, st.clone()));
+    }
+
+    ret
 }

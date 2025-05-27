@@ -201,19 +201,7 @@ impl<'a> Evaluator<'a> {
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<ExprValue, String> {
         let expr = &self.tr[expr_id];
         match expr {
-            Expr::Const(val) => {
-                // get the width of the bitvec from the expr_widths
-                let expr_widths = self.tr.expr_widths(self.st.clone());
-                let width = expr_widths.get(expr_id).cloned().unwrap();
-                println!(
-                    "Width of {}: {}",
-                    serialize_expr(self.tr, self.st, expr_id),
-                    width
-                );
-                let bit_vec = BitVecValue::from_u128(*val, width as u32);
-
-                Ok(ExprValue::Concrete(bit_vec.clone()))
-            }
+            Expr::Const(val) => Ok(ExprValue::Concrete(val.clone())),
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
