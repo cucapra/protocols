@@ -83,7 +83,7 @@ impl Transaction {
         self.stmt_loc.get(stmt_id).copied()
     }
 
-    fn expr_widths(&self, st: SymbolTable) -> HashMap<ExprId, usize> {
+    fn expr_widths(&self, st: SymbolTable) -> HashMap<ExprId, u32> {
         let mut type_ctx = TypeContext::new(st.clone(), self.clone());
         type_ctx.finalize()
     }

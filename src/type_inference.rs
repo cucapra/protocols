@@ -7,6 +7,8 @@
 use crate::ir::{BinOp, Expr, ExprId, Stmt, StmtId};
 use crate::ir::{SymbolTable, Transaction, Type};
 use baa::BitVecOps;
+use baa::WidthInt;
+use std::cmp;
 use std::collections::HashMap;
 
 /// A type‐variable is just an integer ID.
@@ -19,9 +21,9 @@ pub enum Constraint {
     /// two widths must be equal
     Eq(TypeVar, TypeVar),
     /// a variable must have at least this many bits
-    LowerBound(TypeVar, usize),
+    LowerBound(TypeVar, WidthInt),
     /// a variable must have at most this many bits
-    UpperBound(TypeVar, usize),
+    UpperBound(TypeVar, WidthInt),
 }
 
 /// During inference we accumulate:
@@ -57,7 +59,6 @@ impl TypeContext {
         v
     }
 
-    /// entry point: walk the AST and fill `expr_ty` + `constraints`
     pub fn constrain_by_expr(&mut self, expr_id: ExprId) -> TypeVar {
         if let Some(&tv) = self.expr_ty.get(&expr_id) {
             return tv;
@@ -68,7 +69,8 @@ impl TypeContext {
 
         match &self.tr[expr_id].clone() {
             Expr::Const(num) => {
-                let min_bits = num.min_width() as usize;
+                // take max with 1, in case num is 0
+                let min_bits = cmp::max(num.min_width() as WidthInt, 1);
                 println!("lower bound for const {:?}: {}", num, min_bits);
                 self.constraints
                     .push(Constraint::LowerBound(this_tv, min_bits));
@@ -77,7 +79,7 @@ impl TypeContext {
             Expr::Sym(sym) => {
                 let tpe = self.st[sym].tpe();
                 let width = match tpe {
-                    Type::BitVec(w) => w as usize,
+                    Type::BitVec(w) => w as WidthInt,
                     _ => panic!("symbol {} has non-bitvec type {:?}", sym, tpe),
                 };
                 // exact‐width for symbols:
@@ -119,11 +121,11 @@ impl TypeContext {
 
             Expr::Slice(inner, high, low) => {
                 let inner_tv = self.constrain_by_expr(inner.clone());
-                let slice_w = (high - low + 1) as usize;
+                let slice_w = (high - low + 1) as WidthInt;
 
                 // inner must be at least high+1 bits
                 self.constraints
-                    .push(Constraint::LowerBound(inner_tv, (high + 1) as usize));
+                    .push(Constraint::LowerBound(inner_tv, (high + 1) as WidthInt));
 
                 // slice result is exactly slice_w
                 self.constraints
@@ -140,7 +142,7 @@ impl TypeContext {
         if let Stmt::Assign(lhs, rhs) = self.tr[stmt_id] {
             let tpe = self.st[lhs].tpe();
             let width = match tpe {
-                Type::BitVec(w) => w as usize,
+                Type::BitVec(w) => w as WidthInt,
                 _ => panic!("symbol {} has non-bitvec type {:?}", lhs, tpe),
             };
 
@@ -153,7 +155,7 @@ impl TypeContext {
     }
 
     /// Solve all constraints, erroring on any lower>upper conflict.
-    fn solve(&self) -> Result<HashMap<TypeVar, usize>, String> {
+    fn solve(&self) -> Result<HashMap<TypeVar, WidthInt>, String> {
         // our type vars are just integers, so union find from 1 to next_var
         // which is precisely the number of type vars we have
         let mut uf = UnionFind::new(self.next_var);
@@ -167,8 +169,8 @@ impl TypeContext {
 
         // collect all the bounds per union-find class
         // these map the parent of each class to a vector of lower and upper bound widths
-        let mut lowers: HashMap<usize, Vec<usize>> = HashMap::new();
-        let mut uppers: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut lowers: HashMap<usize, Vec<WidthInt>> = HashMap::new();
+        let mut uppers: HashMap<usize, Vec<WidthInt>> = HashMap::new();
 
         for c in self.constraints.clone() {
             match c {
@@ -198,7 +200,7 @@ impl TypeContext {
             let supremum = uppers
                 .get(&root)
                 .and_then(|v| v.iter().min().cloned())
-                .unwrap_or(usize::MAX);
+                .unwrap_or(WidthInt::MAX);
 
             if infimum > supremum {
                 return Err(format!(
@@ -222,7 +224,7 @@ impl TypeContext {
         Ok(result)
     }
 
-    pub fn finalize(&mut self) -> HashMap<ExprId, usize> {
+    pub fn finalize(&mut self) -> HashMap<ExprId, WidthInt> {
         // calculate all type constraints
         for expr_id in self.tr.expr_ids() {
             self.constrain_by_expr(expr_id);
@@ -242,7 +244,7 @@ impl TypeContext {
 
         // map from expr_id to usize width
         // FIXME: This is kinda inefficient
-        let mut expr_widths: HashMap<ExprId, usize> = HashMap::new();
+        let mut expr_widths: HashMap<ExprId, WidthInt> = HashMap::new();
         for (type_var, width) in solved_constraints {
             // map type_var to expr_id
             if let Some(expr_id) =

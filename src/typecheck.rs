@@ -180,8 +180,8 @@ fn check_stmt_types(
     }
 }
 
-pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut DiagnosticHandler) {
-    for (st, tr) in trs {
+pub fn type_check(irs: Vec<(Transaction, SymbolTable)>, handler: &mut DiagnosticHandler) {
+    for (tr, st) in irs {
         for expr_id in tr.expr_ids() {
             let _ = check_expr_types(&tr, &st, handler, &expr_id);
         }
@@ -318,6 +318,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        type_check(vec![(symbols, tr)], &mut handler);
+        type_check(vec![(tr, symbols)], &mut handler);
     }
 }

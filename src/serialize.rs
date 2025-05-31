@@ -8,7 +8,7 @@ use crate::ir::*;
 use baa::BitVecOps;
 use std::io::Write;
 
-pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
+pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Result<String> {
     let mut out = Vec::new();
     serialize(&mut out, trs)?;
     let out = String::from_utf8(out).unwrap();
@@ -149,15 +149,15 @@ pub fn serialize_structs(
 
 pub fn serialize(
     out: &mut impl Write,
-    trs: Vec<(SymbolTable, Transaction)>,
+    trs: Vec<(Transaction, SymbolTable)>,
 ) -> std::io::Result<()> {
-    let (st, _) = &trs[0];
+    let (_, st) = &trs[0];
 
     if st.struct_ids().len() > 0 {
         serialize_structs(out, &st, st.struct_ids())?;
     }
 
-    for (st, tr) in trs {
+    for (tr, st) in trs {
         write!(out, "fn {}", tr.name)?;
 
         for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
@@ -373,7 +373,7 @@ pub mod tests {
         easycond.body = easycond.s(Stmt::Block(body));
         println!(
             "{}",
-            serialize_to_string(vec![(symbols, easycond)]).unwrap()
+            serialize_to_string(vec![(easycond, symbols)]).unwrap()
         );
     }
 }
