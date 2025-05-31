@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
@@ -12,7 +12,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use std::vec;
 
-use crate::{diagnostic::*, ir::*};
+use crate::{diagnostic::*, ir::*, typecheck::type_check};
 
 #[derive(Parser)]
 #[grammar = "protocols.pest"]
@@ -77,8 +77,9 @@ impl<'a> ParserContext<'a> {
 
                 match primary.as_rule() {
                     Rule::integer => {
-                        let int_value = primary.as_str().parse::<u64>().unwrap();
-                        let bvv = BitVecValue::from_u64(int_value as u64, 64);
+                        let int_value = primary.as_str().parse::<u128>().unwrap();
+                        // start with a wide type, narrow it down in type inferencing later
+                        let bvv = BitVecValue::from_u128(int_value as u128, 128);
 
                         Ok(BoxedExpr::Const(bvv, start, end))
                     }
@@ -588,7 +589,7 @@ impl<'a> ParserContext<'a> {
 pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-) -> Result<Vec<(SymbolTable, Transaction)>, String> {
+) -> Result<Vec<(Transaction, SymbolTable)>, String> {
     let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     let fileid = handler.add_file(name, input.clone());
@@ -612,7 +613,7 @@ pub fn parse_file(
     let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
     let inner = pairs.clone().next().unwrap().into_inner();
     let base_st: &mut SymbolTable = &mut SymbolTable::default();
-    let mut trs = vec![];
+    let mut irs = vec![];
 
     for pair in inner {
         if pair.as_rule() == Rule::struct_def {
@@ -642,22 +643,25 @@ pub fn parse_file(
                 return Err(e);
             }
 
-            trs.push((context.st.clone(), context.tr.clone()));
+            // Perform bit width inferencing and narrowing
+            let mut narrowed_tr = tr.clone();
+            narrowed_tr.narrow_constant_widths(st);
+
+            irs.push((narrowed_tr, st.clone()));
         }
     }
-    Ok(trs)
+    Ok(irs)
 }
 
 pub fn parsing_helper(
     transaction_filename: &str,
     handler: &mut DiagnosticHandler,
 ) -> Vec<(Transaction, SymbolTable)> {
-    let result = parse_file(transaction_filename, handler);
-    match result {
-        Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
-        Err(err) => panic!(
-            "Failed to parse file: {}\nError: {}",
-            transaction_filename, err
-        ),
-    }
+    let res = parse_file(transaction_filename, handler)
+        .expect(&format!("Failed to parse file: {}", transaction_filename));
+
+    // Type check
+    type_check(res.clone(), handler);
+
+    res
 }

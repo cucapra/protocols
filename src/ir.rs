@@ -4,9 +4,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecValue;
+use crate::type_inference::TypeContext;
+use baa::{BitVecOps, BitVecValue};
 use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 use std::ops::Index;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +81,24 @@ impl Transaction {
 
     pub fn get_stmt_loc(&self, stmt_id: StmtId) -> Option<(usize, usize, usize)> {
         self.stmt_loc.get(stmt_id).copied()
+    }
+
+    fn expr_widths(&self, st: SymbolTable) -> HashMap<ExprId, u32> {
+        let mut type_ctx = TypeContext::new(st.clone(), self.clone());
+        type_ctx.finalize()
+    }
+
+    pub fn narrow_constant_widths(&mut self, st: &SymbolTable) {
+        let expr_widths = self.expr_widths(st.clone());
+        for expr_id in self.exprs.keys() {
+            if let Expr::Const(ref val) = self[expr_id] {
+                let width = expr_widths[&expr_id] as u32;
+
+                // narrow to the lowest significant `width` bits -- type inference should guarantee no information loss
+                let bit_vec = val.slice(width - 1, 0);
+                self.exprs[expr_id] = Expr::Const(bit_vec);
+            }
+        }
     }
 
     pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {

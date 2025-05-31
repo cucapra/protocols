@@ -8,7 +8,7 @@ use crate::ir::*;
 use baa::BitVecOps;
 use std::io::Write;
 
-pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
+pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Result<String> {
     let mut out = Vec::new();
     serialize(&mut out, trs)?;
     let out = String::from_utf8(out).unwrap();
@@ -32,7 +32,8 @@ fn serialize_dir(dir: Dir) -> String {
 
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
-        Expr::Const(val) => val.to_i64().unwrap().to_string(),
+        // FIXME: we should be be able to convert to a u128
+        Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_owned(),
         Expr::Unary(UnaryOp::Not, not_exprid) => {
@@ -148,15 +149,15 @@ pub fn serialize_structs(
 
 pub fn serialize(
     out: &mut impl Write,
-    trs: Vec<(SymbolTable, Transaction)>,
+    trs: Vec<(Transaction, SymbolTable)>,
 ) -> std::io::Result<()> {
-    let (st, _) = &trs[0];
+    let (_, st) = &trs[0];
 
     if st.struct_ids().len() > 0 {
         serialize_structs(out, &st, st.struct_ids())?;
     }
 
-    for (st, tr) in trs {
+    for (tr, st) in trs {
         write!(out, "fn {}", tr.name)?;
 
         for (ii, tpe_arg) in tr.type_args.iter().enumerate() {
@@ -213,7 +214,6 @@ pub fn serialize(
 
 #[cfg(test)]
 pub mod tests {
-    use baa::BitVecValue;
     use insta::Settings;
     use std::path::Path;
     use strip_ansi_escapes::strip_str;
@@ -221,6 +221,7 @@ pub mod tests {
     use super::*;
     use crate::diagnostic::DiagnosticHandler;
     use crate::parser::parse_file;
+    use baa::BitVecValue;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
@@ -354,7 +355,7 @@ pub mod tests {
         let a_expr = easycond.e(Expr::Sym(a));
         let dut_a_expr = easycond.e(Expr::Sym(dut_a));
 
-        let one_expr = easycond.e(Expr::Const(BitVecValue::from_i64(1, 2)));
+        let one_expr = easycond.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let cond_expr = easycond.e(Expr::Binary(BinOp::Equal, dut_a_expr, one_expr));
 
         // 4) create statements
@@ -372,7 +373,7 @@ pub mod tests {
         easycond.body = easycond.s(Stmt::Block(body));
         println!(
             "{}",
-            serialize_to_string(vec![(symbols, easycond)]).unwrap()
+            serialize_to_string(vec![(easycond, symbols)]).unwrap()
         );
     }
 }
