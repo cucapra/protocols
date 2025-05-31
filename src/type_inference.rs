@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::{Expr, ExprId, Stmt, StmtId, BinOp};
+use crate::ir::{BinOp, Expr, ExprId, Stmt, StmtId};
 use crate::ir::{SymbolTable, Transaction, Type};
 use baa::BitVecOps;
 use std::collections::HashMap;
