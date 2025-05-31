@@ -233,7 +233,7 @@ impl<'a> Evaluator<'a> {
                                 return Err("Cannot perform equality on DontCare value".to_string());
                             }
                             (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                                // println!("Comparing BitVecs: lhs = {:?}, rhs = {:?}", lhs, rhs);
+                                // baa creates true and false BitVecs with a single bit (as we want)
                                 if lhs.is_equal(rhs) {
                                     Ok(ExprValue::Concrete(BitVecValue::new_true()))
                                 } else {

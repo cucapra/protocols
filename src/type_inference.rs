@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::{Expr, ExprId, Stmt, StmtId};
+use crate::ir::{Expr, ExprId, Stmt, StmtId, BinOp};
 use crate::ir::{SymbolTable, Transaction, Type};
 use baa::BitVecOps;
 use std::collections::HashMap;
@@ -57,23 +57,6 @@ impl TypeContext {
         v
     }
 
-    // no longer needed if we start with a BitVecValue
-    // fn min_width(n: u128) -> usize {
-    //     if n == 0 {
-    //         return 1;
-    //     }
-
-    //     let mut bits = 0;
-    //     let mut temp = n;
-
-    //     while temp > 0 {
-    //         bits += 1;
-    //         temp >>= 1;
-    //     }
-
-    //     bits
-    // }
-
     /// entry point: walk the AST and fill `expr_ty` + `constraints`
     pub fn constrain_by_expr(&mut self, expr_id: ExprId) -> TypeVar {
         if let Some(&tv) = self.expr_ty.get(&expr_id) {
@@ -108,12 +91,24 @@ impl TypeContext {
                 // unconstrained
             }
 
-            Expr::Binary(_, left, right) => {
-                // which binop it is doesn't matter for width inference
+            Expr::Binary(binop, left, right) => {
+                // for a binop, arguments must be equal width
                 let l_tv = self.constrain_by_expr(left.clone());
                 let r_tv = self.constrain_by_expr(right.clone());
-                self.constraints.push(Constraint::Eq(this_tv, l_tv));
-                self.constraints.push(Constraint::Eq(this_tv, r_tv));
+                self.constraints.push(Constraint::Eq(l_tv, r_tv));
+
+                match binop {
+                    BinOp::And => {
+                        // AND is exactly as wide as its arguments
+                        self.constraints.push(Constraint::Eq(this_tv, l_tv));
+                        self.constraints.push(Constraint::Eq(this_tv, r_tv));
+                    }
+                    BinOp::Equal => {
+                        // EQUAL results in a single bit
+                        self.constraints.push(Constraint::LowerBound(this_tv, 1));
+                        self.constraints.push(Constraint::UpperBound(this_tv, 1));
+                    }
+                }
             }
 
             Expr::Unary(_, sub) => {
