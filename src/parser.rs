@@ -38,7 +38,7 @@ pub struct ParserContext<'a> {
     pub handler: &'a mut DiagnosticHandler,
 }
 
-impl<'a> ParserContext<'a> {
+impl ParserContext<'_> {
     // Helper method for expected rule errors
     fn expect_rule<T>(
         &mut self,
@@ -78,7 +78,7 @@ impl<'a> ParserContext<'a> {
                 match primary.as_rule() {
                     Rule::integer => {
                         let int_value = primary.as_str().parse::<u64>().unwrap();
-                        let bvv = BitVecValue::from_u64(int_value as u64, 64);
+                        let bvv = BitVecValue::from_u64(int_value, 64);
 
                         Ok(BoxedExpr::Const(bvv, start, end))
                     }
@@ -226,7 +226,7 @@ impl<'a> ParserContext<'a> {
                             let dut_symbol_id = self
                                 .st
                                 .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
-                            self.tr.type_args = vec![dut_symbol_id];
+                            self.tr.type_param = Some(dut_symbol_id);
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
@@ -284,9 +284,9 @@ impl<'a> ParserContext<'a> {
         Ok(expr_id)
     }
 
-    fn parse_stmt_block(&mut self, mut stmt_pairs: Pairs<Rule>) -> Result<StmtId, String> {
+    fn parse_stmt_block(&mut self, stmt_pairs: Pairs<Rule>) -> Result<StmtId, String> {
         let mut stmts = Vec::new();
-        while let Some(inner_pair) = stmt_pairs.next() {
+        for inner_pair in stmt_pairs {
             let start = inner_pair.as_span().start();
             let end = inner_pair.as_span().end();
 
@@ -638,9 +638,7 @@ pub fn parse_file(
                 tr: &mut tr,
                 handler,
             };
-            if let Err(e) = context.parse_transaction(pair) {
-                return Err(e);
-            }
+            context.parse_transaction(pair)?;
 
             trs.push((context.st.clone(), context.tr.clone()));
         }

@@ -1,8 +1,10 @@
+use crate::scheduler::Todo;
 use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
+use rand::rngs::ThreadRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
@@ -48,7 +50,7 @@ pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
-    handler: &'a mut DiagnosticHandler,
+    pub handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
 
     // TODO: can change to be secondarymaps for efficiency
@@ -57,9 +59,10 @@ pub struct Evaluator<'a> {
     output_mapping: HashMap<SymbolId, Output>,
 
     // tracks the input pins and their values
-    pub input_vals: HashMap<SymbolId, InputValue>,
+    input_vals: HashMap<SymbolId, InputValue>,
 
-    pub assertions_forks_enabled: bool,
+    assertions_forks_enabled: bool,
+    rng: ThreadRng,
 }
 
 impl<'a> Evaluator<'a> {
@@ -76,7 +79,7 @@ impl<'a> Evaluator<'a> {
         let args_mapping = Evaluator::generate_args_mapping(st, args);
 
         // create mapping for each of the DUT's children symbols to the input and output mappings
-        let dut = tr.type_args[0];
+        let dut = tr.type_param.unwrap();
         let dut_symbols = &st.get_children(&dut);
 
         let mut input_mapping = HashMap::new();
@@ -107,31 +110,33 @@ impl<'a> Evaluator<'a> {
                 .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
             {
                 input_mapping.insert(*symbol_id, *input_ref);
-            }
-
-            // Map outputs by matching symbol name to sys.outputs' names
-            if let Some((idx, _)) = sys
-                .outputs
-                .iter()
-                .map(|o| ctx[o.name].to_string())
-                .enumerate()
-                .find(|(_, out_name)| out_name == symbol_name)
-            {
-                output_mapping.insert(*symbol_id, sys.outputs[idx]);
+            } else {
+                // check if the DUT symbol is an output
+                let output = sys
+                    .outputs
+                    .iter()
+                    .find(|o| ctx[o.name] == symbol_name)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Failed to find output with name '{}' in system outputs",
+                            symbol_name
+                        )
+                    });
+                output_mapping.insert(*symbol_id, *output);
             }
         }
 
         // TODO: check that the Transaction DUT matches the Btor2 DUT
         // TODO: check that every item in the args mapping is a field in the Transaction
+        let mut rng = rand::thread_rng();
 
         // Initialize the input pins with DontCares that are randomly assigned
         let mut input_vals = HashMap::new();
-        for (symbol_id, _) in &input_mapping {
+        for symbol_id in input_mapping.keys() {
             // get the width from the type of the symbol
             match st[symbol_id].tpe() {
                 Type::BitVec(width) => {
                     // TODO: make this value random
-                    let mut rng = rand::thread_rng();
                     input_vals.insert(
                         *symbol_id,
                         InputValue::DontCare(BitVecValue::random(&mut rng, width)),
@@ -148,19 +153,19 @@ impl<'a> Evaluator<'a> {
         // Initialize sim, return the transaction!
         sim.init();
 
-        let evaluator = Evaluator {
+        Evaluator {
             tr,
             next_stmt_map: tr.next_stmt_mapping(),
             st,
             handler,
-            sim: sim,
+            sim,
             args_mapping,
             input_mapping,
             output_mapping,
             input_vals,
             assertions_forks_enabled: false,
-        };
-        return evaluator;
+            rng,
+        }
     }
 
     fn generate_args_mapping(
@@ -177,24 +182,49 @@ impl<'a> Evaluator<'a> {
         }
         args_mapping
     }
-    pub fn context_switch(
-        &mut self,
-        tr: &'a Transaction,
-        st: &'a SymbolTable,
-        args: HashMap<&str, BitVecValue>,
-        next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
-    ) {
-        self.tr = tr;
-        self.st = st;
 
-        // TODO: this is inefficient because the map is generated every time there is a context switch
-        self.next_stmt_map = next_stmt_map;
-        self.args_mapping = Evaluator::generate_args_mapping(self.st, args);
+    pub fn context_switch(&mut self, todo: Todo<'a>) {
+        self.tr = todo.tr;
+        self.st = todo.st;
+        self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
+        self.next_stmt_map = todo.next_stmt_map;
+    }
+
+    pub fn input_vals(&self) -> HashMap<SymbolId, InputValue> {
+        self.input_vals.clone()
+    }
+
+    pub fn enable_assertions_and_forks(&mut self) {
+        self.assertions_forks_enabled = true;
+    }
+
+    pub fn disable_assertions_and_forks(&mut self) {
+        self.assertions_forks_enabled = false;
+    }
+
+    pub fn assertions_forks_enabled(&self) -> bool {
+        self.assertions_forks_enabled
     }
 
     // step the simulator
     pub fn sim_step(&mut self) {
         self.sim.step();
+
+        // modify the input_vals to all be OldValues or DoxntCares
+        self.input_vals = self
+            .input_vals
+            .iter()
+            .map(|(k, v)| {
+                let new_v = match v {
+                    InputValue::NewValue(bvv) => InputValue::OldValue(bvv.clone()),
+                    InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
+                    InputValue::DontCare(bvv) => {
+                        InputValue::DontCare(BitVecValue::random(&mut self.rng, bvv.width()))
+                    } // re-randomuze DontCares
+                };
+                (*k, new_v)
+            })
+            .collect();
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<ExprValue, String> {
@@ -206,7 +236,7 @@ impl<'a> Evaluator<'a> {
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(self.sim.get(*expr_ref).unwrap()))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(self.sim.get((*output).expr).unwrap()))
+                    Ok(ExprValue::Concrete(self.sim.get((output).expr).unwrap()))
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(bvv.clone()))
                 } else {
@@ -224,35 +254,29 @@ impl<'a> Evaluator<'a> {
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
-                let lhs_val = self.evaluate_expr(&lhs_id)?;
-                let rhs_val = self.evaluate_expr(&rhs_id)?;
+                let lhs_val = self.evaluate_expr(lhs_id)?;
+                let rhs_val = self.evaluate_expr(rhs_id)?;
                 match bin_op {
-                    BinOp::Equal => {
-                        match (&lhs_val, &rhs_val) {
-                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                                return Err("Cannot perform equality on DontCare value".to_string());
-                            }
-                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                                // println!("Comparing BitVecs: lhs = {:?}, rhs = {:?}", lhs, rhs);
-                                if lhs.is_equal(rhs) {
-                                    Ok(ExprValue::Concrete(BitVecValue::new_true()))
-                                } else {
-                                    Ok(ExprValue::Concrete(BitVecValue::new_false()))
-                                }
+                    BinOp::Equal => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err("Cannot perform equality on DontCare value".to_string())
+                        }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            if lhs.is_equal(rhs) {
+                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                            } else {
+                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
                             }
                         }
-                    }
-                    BinOp::And => {
-                        // match out of ExprValue::Concrete(bvv) if either one is a DontCare, return an error
-                        match (&lhs_val, &rhs_val) {
-                            (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                                return Err("Cannot perform AND on DontCare value".to_string());
-                            }
-                            (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                                Ok(ExprValue::Concrete(lhs.and(rhs)))
-                            }
+                    },
+                    BinOp::And => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err("Cannot perform AND on DontCare value".to_string())
                         }
-                    }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            Ok(ExprValue::Concrete(lhs.and(rhs)))
+                        }
+                    },
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
@@ -267,7 +291,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::Slice(expr_id, idx1, idx2) => {
-                let expr_val = self.evaluate_expr(&expr_id)?;
+                let expr_val = self.evaluate_expr(expr_id)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => Ok(ExprValue::Concrete(bvv.slice(*idx1, *idx2))),
                     ExprValue::DontCare => panic!("Cannot perform slice operation on DontCare."),
@@ -279,42 +303,35 @@ impl<'a> Evaluator<'a> {
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                // println!("Eval Assign.");
-                self.evaluate_assign(&stmt_id, &symbol_id, &expr_id)?;
+                self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                // println!("Eval IFElse.");
-                self.evaluate_if(&cond_expr_id, &then_stmt_id, &else_stmt_id)
+                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id)
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                // println!("Eval While.");
-                self.evaluate_while(&loop_guard_id, stmt_id, &do_block_id)
+                self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                // println!("Eval Step.");
                 // the scheduler will handle the step. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
-                // println!("Eval Fork.");
                 // the scheduler will handle the fork. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr1, expr2) => {
-                // println!("Eval AssertEq.");
                 if self.assertions_forks_enabled {
-                    self.evaluate_assert_eq(&expr1, &expr2)?;
+                    self.evaluate_assert_eq(expr1, expr2)?;
                 }
 
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
-                // println!("Eval Block.");
                 if stmt_ids.is_empty() {
-                    return Ok(None);
+                    Ok(None)
                 } else {
-                    return Ok(Some(stmt_ids[0]));
+                    Ok(Some(stmt_ids[0]))
                 }
             }
         }
@@ -367,9 +384,10 @@ impl<'a> Evaluator<'a> {
                 }
                 InputValue::OldValue(old_val) => match expr_val {
                     ExprValue::DontCare => {
-                        let mut rng = rand::thread_rng();
-                        *value =
-                            InputValue::DontCare(BitVecValue::random(&mut rng, old_val.width()));
+                        *value = InputValue::DontCare(BitVecValue::random(
+                            &mut self.rng,
+                            old_val.width(),
+                        ));
                     }
                     ExprValue::Concrete(bvv) => {
                         *value = InputValue::NewValue(bvv);
@@ -407,21 +425,18 @@ impl<'a> Evaluator<'a> {
             ));
         }
 
-        // assign to the sim
+        // Assign into the underlying Patronus sim
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
             self.sim.set(*expr_ref, self.input_vals[symbol_id].value());
             Ok(())
         }
-        // below statements should be unreachable (assuming type checking works)
-        else if let Some(_) = self.output_mapping.get(symbol_id) {
-            // Err(format!("Attempting to assign to output {}.", name))
+        // assuming Type Checking works, these statements are unreachable
+        else if self.output_mapping.contains_key(symbol_id) {
             unreachable!("Attempting to assign to output {}.", name)
-        } else if let Some(_) = self.args_mapping.get(symbol_id) {
-            // Err(format!("Attempting to assign to argument {}.", name))
+        } else if self.args_mapping.contains_key(symbol_id) {
             unreachable!("Attempting to assign to argument {}.", name)
         } else {
-            // Err(format!("Assigning to symbol {} not yet defined.", name))
             unreachable!("Assigning to symbol {} not yet defined.", name)
         }
     }
@@ -435,11 +450,11 @@ impl<'a> Evaluator<'a> {
         let res = self.evaluate_expr(loop_guard_id)?;
         match res {
             ExprValue::DontCare => {
-                return Err("Cannot evaluate while condition: value is DontCare.".to_string());
+                Err("Cannot evaluate while condition: value is DontCare.".to_string())
             }
             ExprValue::Concrete(bvv) => {
                 if bvv.is_true() {
-                    return Ok(Some(*do_block_id));
+                    Ok(Some(*do_block_id))
                 } else {
                     Ok(self.next_stmt_map[while_id])
                 }

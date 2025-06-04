@@ -204,8 +204,8 @@ pub mod tests {
     fn run_counter_with_patronus() {
         let env = YosysEnv::default();
         let inp = PathBuf::from("examples/counter/counter.v");
-        let mut proj = ProjectConf::with_source(inp);
-        let btor_file = yosys_to_btor(&env, &mut proj, None).unwrap();
+        let proj = ProjectConf::with_source(inp);
+        let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
 
         let (ctx, sys) = patronus::btor2::parse_file(btor_file.as_path().as_os_str()).unwrap();
         let mut sim = patronus::sim::Interpreter::new(&ctx, &sys);
