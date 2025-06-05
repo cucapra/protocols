@@ -804,7 +804,6 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d1_implicit_fork() {
-        // we expect this to fail due to assertion failures
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/identities/identity_d1.prot";
@@ -1149,5 +1148,42 @@ pub mod tests {
         let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
+    }
+
+    #[test]
+    fn test_empty() {
+        // vacuous test where the protocol has no statements in it (just an empty block)
+        // all results should always be ok, regardless of inputs.
+        let handler = &mut DiagnosticHandler::new();
+        let transaction_filename = "tests/identities/empty.prot";
+        let verilog_path = "examples/identity/identity_d0.v";
+        let (ctx, sys) = create_sim_context(verilog_path, None);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![BitVecValue::from_u64(0, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(0, 32), BitVecValue::from_u64(1, 32)],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+        assert!(results[2].is_ok());
     }
 }

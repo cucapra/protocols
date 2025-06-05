@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::ir::Stmt;
 use baa::BitVecValue;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
@@ -428,9 +429,14 @@ impl ParserContext<'_> {
         )?;
         let expr_id = self.parse_expr(expr_rule.into_inner())?;
         let if_block = self.parse_stmt_block(inner_if)?;
-        let else_rule = self.expect_rule(inner_rules.next(), &pair, "Expected else block")?;
-        let inner_else = else_rule.into_inner();
-        let else_block = self.parse_stmt_block(inner_else)?;
+
+        // Parse the optional else block
+        let else_block = inner_rules
+            .next()
+            .map(|else_rule| self.parse_stmt_block(else_rule.into_inner()))
+            .transpose()?
+            .unwrap_or_else(|| self.tr.s(Stmt::Block(vec![])));
+
         Ok(Stmt::IfElse(expr_id, if_block, else_block))
     }
 

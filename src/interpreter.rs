@@ -371,7 +371,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    Ok(None)
+                    Ok(self.next_stmt_map[stmt_id])
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }

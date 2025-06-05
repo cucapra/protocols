@@ -39,3 +39,16 @@ fn slicing_invalid<DUT: Identity>(in a: u32, out s: u32) {
   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
   // implicit fork here
 }
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+  fork();
+
+  step();
+  assert_eq(s, DUT.s);
+  // implicit fork here
+}
