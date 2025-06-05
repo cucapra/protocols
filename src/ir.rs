@@ -254,7 +254,7 @@ pub enum Expr {
     Binary(BinOp, ExprId, ExprId),
     // binary
     Unary(UnaryOp, ExprId),
-    // Slice
+    /// Slice: args are msb first, then lsb
     Slice(ExprId, u32, u32),
 }
 

@@ -56,10 +56,11 @@ pub struct ProjectConf {
 
 #[allow(dead_code)]
 impl ProjectConf {
-    pub fn with_source(source: PathBuf) -> Self {
+    pub fn with_source(source: PathBuf, top: Option<String>) -> Self {
         let sources = vec![source];
         Self {
             sources,
+            top,
             ..Default::default()
         }
     }
@@ -279,7 +280,7 @@ mod tests {
     #[test]
     fn test_yosys_to_btor_auto_name() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("examples/counter/counter.v");
+        let inp = PathBuf::from("examples/counters/counter.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()
