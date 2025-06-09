@@ -5,6 +5,47 @@ struct Identity {
 
 fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
+  step();
+
+  // forking at the end means that threads run one at a time
+  // so assignment of any concrete value should never conflict
+  DUT.a := 66;
+  assert_eq(s, DUT.s);
+
+  // implicit fork here
+}
+
+fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+
+  step();
+
+  assert_eq(s[31:15], DUT.s[31:15]);
+}
+
+fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+
+  step();
+  // will fail, because the widths are different
+  assert_eq(s[31:15], DUT.s[31:16]);
+}
+
+fn slicing_invalid<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+  fork();
+
+  step();
+  assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
+  // implicit fork here
+}
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
   fork();
 
   step();

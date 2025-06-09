@@ -1,5 +1,12 @@
+// Copyright 2024 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+
+use crate::errors::{ExecutionError, ExecutionResult};
+use crate::ir::*;
 use crate::scheduler::Todo;
-use crate::{diagnostic::*, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{Interpreter, Simulator};
@@ -9,7 +16,6 @@ use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
 
-// TODO: this is relevant for proper don't care handling in the future
 #[derive(Debug, Clone)]
 pub enum InputValue {
     OldValue(BitVecValue),
@@ -50,7 +56,6 @@ pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
-    pub handler: &'a mut DiagnosticHandler,
     sim: &'a mut Interpreter<'a>,
 
     // TODO: can change to be secondarymaps for efficiency
@@ -70,7 +75,6 @@ impl<'a> Evaluator<'a> {
         args: HashMap<&str, BitVecValue>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
-        handler: &'a mut DiagnosticHandler,
         ctx: &'a patronus::expr::Context,
         sys: &'a patronus::system::TransitionSystem,
         sim: &'a mut Interpreter<'a>,
@@ -157,7 +161,6 @@ impl<'a> Evaluator<'a> {
             tr,
             next_stmt_map: tr.next_stmt_mapping(),
             st,
-            handler,
             sim,
             args_mapping,
             input_mapping,
@@ -210,7 +213,7 @@ impl<'a> Evaluator<'a> {
     pub fn sim_step(&mut self) {
         self.sim.step();
 
-        // modify the input_vals to all be OldValues or DoxntCares
+        // modify the input_vals to all be OldValues or DontCares
         self.input_vals = self
             .input_vals
             .iter()
@@ -220,14 +223,14 @@ impl<'a> Evaluator<'a> {
                     InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
                     InputValue::DontCare(bvv) => {
                         InputValue::DontCare(BitVecValue::random(&mut self.rng, bvv.width()))
-                    } // re-randomuze DontCares
+                    } // re-randomize DontCares
                 };
                 (*k, new_v)
             })
             .collect();
     }
 
-    fn evaluate_expr(&mut self, expr_id: &ExprId) -> Result<ExprValue, String> {
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
         let expr = &self.tr[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
@@ -240,15 +243,11 @@ impl<'a> Evaluator<'a> {
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(bvv.clone()))
                 } else {
-                    self.handler.emit_diagnostic_expr(
-                        self.tr,
-                        expr_id,
-                        "Symbol not found in input or output mapping.",
-                        Level::Error,
-                    );
-                    Err(format!(
-                        "Symbol {} not found in input or output mapping.",
-                        name
+                    Err(ExecutionError::symbol_not_found(
+                        *sym_id,
+                        name.to_string(),
+                        "input, output, or args mapping".to_string(),
+                        *expr_id,
                     ))
                 }
             }
@@ -259,10 +258,24 @@ impl<'a> Evaluator<'a> {
                 match bin_op {
                     BinOp::Equal => match (&lhs_val, &rhs_val) {
                         (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                            Err("Cannot perform equality on DontCare value".to_string())
+                            Err(ExecutionError::dont_care_operation(
+                                "equality".to_string(),
+                                "binary expression".to_string(),
+                                *expr_id,
+                            ))
                         }
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            if lhs.is_equal(rhs) {
+                            if lhs.width() != rhs.width() {
+                                Err(ExecutionError::arithmetic_error(
+                                    "Equal".to_string(),
+                                    format!(
+                                        "Width mismatch in EQUAL operation: lhs width = {}, rhs width = {}",
+                                        lhs.width(),
+                                        rhs.width()
+                                    ),
+                                    *expr_id,
+                                ))
+                            } else if lhs == rhs {
                                 Ok(ExprValue::Concrete(BitVecValue::new_true()))
                             } else {
                                 Ok(ExprValue::Concrete(BitVecValue::new_false()))
@@ -271,10 +284,26 @@ impl<'a> Evaluator<'a> {
                     },
                     BinOp::And => match (&lhs_val, &rhs_val) {
                         (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                            Err("Cannot perform AND on DontCare value".to_string())
+                            Err(ExecutionError::dont_care_operation(
+                                "AND".to_string(),
+                                "binary expression".to_string(),
+                                *expr_id,
+                            ))
                         }
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            Ok(ExprValue::Concrete(lhs.and(rhs)))
+                            if lhs.width() != rhs.width() {
+                                Err(ExecutionError::arithmetic_error(
+                                    "And".to_string(),
+                                    format!(
+                                        "Width mismatch in AND operation: lhs width = {}, rhs width = {}",
+                                        lhs.width(),
+                                        rhs.width()
+                                    ),
+                                    *expr_id,
+                                ))
+                            } else {
+                                Ok(ExprValue::Concrete(lhs.and(rhs)))
+                            }
                         }
                     },
                 }
@@ -285,22 +314,35 @@ impl<'a> Evaluator<'a> {
                     ExprValue::Concrete(bvv) => match unary_op {
                         UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
                     },
-                    ExprValue::DontCare => {
-                        Err("Cannot perform unary operation on DontCare.".to_string())
-                    }
+                    ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
+                        "unary operation".to_string(),
+                        "unary expression".to_string(),
+                        *expr_id,
+                    )),
                 }
             }
-            Expr::Slice(expr_id, idx1, idx2) => {
+            Expr::Slice(expr_id, msb, lsb) => {
                 let expr_val = self.evaluate_expr(expr_id)?;
                 match expr_val {
-                    ExprValue::Concrete(bvv) => Ok(ExprValue::Concrete(bvv.slice(*idx1, *idx2))),
-                    ExprValue::DontCare => panic!("Cannot perform slice operation on DontCare."),
+                    ExprValue::Concrete(bvv) => {
+                        let width = bvv.width();
+                        if *msb < width && *lsb <= *msb {
+                            Ok(ExprValue::Concrete(bvv.slice(*msb, *lsb)))
+                        } else {
+                            Err(ExecutionError::invalid_slice(*expr_id, *msb, *lsb, width))
+                        }
+                    }
+                    ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
+                        "slice".to_string(),
+                        "slice expression".to_string(),
+                        *expr_id,
+                    )),
                 }
             }
         }
     }
 
-    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> Result<Option<StmtId>, String> {
+    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
@@ -322,7 +364,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::AssertEq(expr1, expr2) => {
                 if self.assertions_forks_enabled {
-                    self.evaluate_assert_eq(expr1, expr2)?;
+                    self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 }
 
                 Ok(self.next_stmt_map[stmt_id])
@@ -342,12 +384,13 @@ impl<'a> Evaluator<'a> {
         cond_expr_id: &ExprId,
         then_stmt_id: &StmtId,
         else_stmt_id: &StmtId,
-    ) -> Result<Option<StmtId>, String> {
+    ) -> ExecutionResult<Option<StmtId>> {
         let res = self.evaluate_expr(cond_expr_id)?;
         match res {
-            ExprValue::DontCare => {
-                Err("Cannot evaluate if condition: value is DontCare.".to_string())
-            }
+            ExprValue::DontCare => Err(ExecutionError::invalid_condition(
+                "if".to_string(),
+                *cond_expr_id,
+            )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_zero() {
                     Ok(Some(*else_stmt_id))
@@ -363,7 +406,7 @@ impl<'a> Evaluator<'a> {
         stmt_id: &StmtId,
         symbol_id: &SymbolId,
         expr_id: &ExprId,
-    ) -> Result<(), String> {
+    ) -> ExecutionResult<()> {
         // FIXME: This should return a DontCare or a NewValue
         let expr_val = self.evaluate_expr(expr_id)?;
 
@@ -399,29 +442,28 @@ impl<'a> Evaluator<'a> {
                             // do nothing
                         }
                         ExprValue::Concrete(new_val) => {
+                            // no width check needed; guaranteed to be the same
                             if !current_val.is_equal(&new_val) {
-                                // TODO: Can include more debug info
-                                let msg = format!(
-                                    "Multiple threads attempting to assign to the same input: {}",
-                                    self.st[symbol_id].name()
-                                );
-                                self.handler.emit_diagnostic_stmt(
-                                    self.tr,
-                                    stmt_id,
-                                    &msg,
-                                    Level::Error,
-                                );
-
-                                return Err(msg);
+                                return Err(ExecutionError::conflicting_assignment(
+                                    *symbol_id,
+                                    self.st[symbol_id].name().to_string(),
+                                    current_val.clone(),
+                                    new_val,
+                                    0, // TODO: Need to track thread_id in evaluator
+                                    *stmt_id,
+                                ));
                             }
                         }
                     }
                 }
             }
         } else {
-            return Err(format!(
-                "Symbol {} not found in input_vals.",
-                self.st[symbol_id].name()
+            // assuming Type Checking works, unreachable
+            return Err(ExecutionError::symbol_not_found(
+                *symbol_id,
+                self.st[symbol_id].name().to_string(),
+                "input pins".to_string(),
+                *expr_id,
             ));
         }
 
@@ -433,11 +475,26 @@ impl<'a> Evaluator<'a> {
         }
         // assuming Type Checking works, these statements are unreachable
         else if self.output_mapping.contains_key(symbol_id) {
-            unreachable!("Attempting to assign to output {}.", name)
+            Err(ExecutionError::read_only_assignment(
+                *symbol_id,
+                name.to_string(),
+                "outputs".to_string(),
+                *stmt_id,
+            ))
         } else if self.args_mapping.contains_key(symbol_id) {
-            unreachable!("Attempting to assign to argument {}.", name)
+            Err(ExecutionError::read_only_assignment(
+                *symbol_id,
+                name.to_string(),
+                "arguments".to_string(),
+                *stmt_id,
+            ))
         } else {
-            unreachable!("Assigning to symbol {} not yet defined.", name)
+            Err(ExecutionError::symbol_not_found(
+                *symbol_id,
+                name.to_string(),
+                "symbol mappings".to_string(),
+                *expr_id,
+            ))
         }
     }
 
@@ -446,12 +503,13 @@ impl<'a> Evaluator<'a> {
         loop_guard_id: &ExprId,
         while_id: &StmtId,
         do_block_id: &StmtId,
-    ) -> Result<Option<StmtId>, String> {
+    ) -> ExecutionResult<Option<StmtId>> {
         let res = self.evaluate_expr(loop_guard_id)?;
         match res {
-            ExprValue::DontCare => {
-                Err("Cannot evaluate while condition: value is DontCare.".to_string())
-            }
+            ExprValue::DontCare => Err(ExecutionError::invalid_condition(
+                "while".to_string(),
+                *loop_guard_id,
+            )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_true() {
                     Ok(Some(*do_block_id))
@@ -462,19 +520,28 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn evaluate_assert_eq(&mut self, expr1: &ExprId, expr2: &ExprId) -> Result<(), String> {
+    fn evaluate_assert_eq(
+        &mut self,
+        stmt_id: &StmtId,
+        expr1: &ExprId,
+        expr2: &ExprId,
+    ) -> ExecutionResult<()> {
         let res1 = self.evaluate_expr(expr1)?;
         let res2 = self.evaluate_expr(expr2)?;
         let (bvv1, bvv2) = match (&res1, &res2) {
             (ExprValue::Concrete(bvv1), ExprValue::Concrete(bvv2)) => (bvv1, bvv2),
             _ => {
-                return Err("Assertion Failed: One or both expressions are DontCare".to_string());
+                return Err(ExecutionError::assertion_dont_care(*stmt_id));
             }
         };
-        if !bvv1.is_equal(bvv2) {
-            self.handler
-                .emit_diagnostic_assertion(self.tr, expr1, expr2, bvv1, bvv2);
-            Err("Assertion Failed".to_string())
+        // short circuit guarantees width equality before is_equal call
+        if bvv1.width() != bvv2.width() || !bvv1.is_equal(bvv2) {
+            Err(ExecutionError::assertion_failed(
+                *expr1,
+                *expr2,
+                bvv1.clone(),
+                bvv2.clone(),
+            ))
         } else {
             Ok(())
         }

@@ -9,7 +9,8 @@ use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
-use crate::diagnostic::Level;
+use crate::errors::DiagnosticEmitter;
+use crate::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::Evaluator;
 use crate::interpreter::InputValue;
 use crate::ir::*;
@@ -22,6 +23,9 @@ type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
 type TodoItem = (usize, Vec<BitVecValue>);
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
+
+/// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
+const MAX_ITERS: usize = 10000;
 
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
@@ -54,7 +58,7 @@ pub struct Thread<'a> {
     pub next_step: Option<StmtId>,
     pub has_forked: bool,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
-    thread_id: usize,
+    pub todo_idx: usize,
 }
 
 impl<'a> Thread<'a> {
@@ -66,7 +70,7 @@ impl<'a> Thread<'a> {
         Self {
             current_step: todo.tr.body,
             next_step: None,
-            thread_id,
+            todo_idx: thread_id,
             todo,
             has_forked: false,
         }
@@ -79,7 +83,7 @@ pub enum StepResult<'a> {
     /// Thread ran to completion (no more statements)
     Completed(usize /* thread_id */),
     /// Thread errored out
-    Error(usize /* thread_id */, String /* message */),
+    Error(usize /* thread_id */, ExecutionError),
 }
 
 pub struct Scheduler<'a> {
@@ -92,7 +96,8 @@ pub struct Scheduler<'a> {
     inactive_threads: Vec<Thread<'a>>,
     step_count: i32,
     evaluator: Evaluator<'a>,
-    results: Vec<Result<(), String>>,
+    results: Vec<ExecutionResult<()>>,
+    handler: &'a mut DiagnosticHandler,
 }
 
 impl<'a> Scheduler<'a> {
@@ -142,9 +147,8 @@ impl<'a> Scheduler<'a> {
             .collect();
 
         // setup the Evaluator and first Thread
-        let next_todo_idx = 0;
         let initial_todo =
-            Self::create_todo_helper(&todos, next_todo_idx, &irs).expect("No transactions passed.");
+            Self::create_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
 
         println!(
             "Starting with initial transaction: {:?}",
@@ -156,29 +160,29 @@ impl<'a> Scheduler<'a> {
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
-            handler,
             ctx,
             sys,
             sim,
         );
 
         let results_size = todos.len();
-        let first = Thread::initialize_thread(initial_todo, next_todo_idx);
+        let first = Thread::initialize_thread(initial_todo, 0);
         println!("Added first thread to active_threads");
         Self {
             irs,
             todos,
-            next_todo_idx,
+            next_todo_idx: 1,
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
             step_count: 1,
             evaluator,
             results: vec![Ok(()); results_size],
+            handler,
         }
     }
 
-    pub fn execute_threads(&mut self) -> Vec<Result<(), String>> {
+    pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
         println!(
             "\n==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count,
@@ -193,6 +197,7 @@ impl<'a> Scheduler<'a> {
             // fixed point iteration with assertions off
             self.evaluator.disable_assertions_and_forks();
 
+            let iters = 0;
             loop {
                 // run every active thread up to the next step to synchronize on
                 self.run_all_active_until_next_step();
@@ -205,6 +210,18 @@ impl<'a> Scheduler<'a> {
                     if prev_vals == active_input_vals {
                         break;
                     }
+                }
+
+                // if we've exceeded the max number of iterations before convergence,
+                // return an ExecutionLimitExceeded error on every thread.
+                if iters > MAX_ITERS {
+                    for thread in &self.active_threads {
+                        self.results[thread.todo_idx] =
+                            Err(ExecutionError::execution_limit_exceeded(MAX_ITERS));
+                    }
+                    // Emit diagnostics for all errors before returning
+                    self.emit_all_diagnostics();
+                    return self.results.clone();
                 }
 
                 print!("Active Input Vals {:?}", active_input_vals);
@@ -261,7 +278,21 @@ impl<'a> Scheduler<'a> {
             }
         }
 
+        // Emit diagnostics for all errors after execution is complete
+        self.emit_all_diagnostics();
         self.results.clone()
+    }
+
+    fn emit_all_diagnostics(&mut self) {
+        // results and todos are parallel arrays, so we can use the same idx
+        for (idx, result) in self.results.iter().enumerate() {
+            if let Err(error) = result {
+                let ir_idx = self.todos[idx].0;
+                let (tr, st, _) = self.irs[ir_idx];
+
+                DiagnosticEmitter::emit_execution_error(self.handler, error, tr, st);
+            }
+        }
     }
 
     pub fn run_all_active_until_next_step(&mut self) {
@@ -271,7 +302,7 @@ impl<'a> Scheduler<'a> {
     }
 
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize) {
-        let next_todo_option = self.next_todo(self.next_todo_idx + 1);
+        let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
 
@@ -303,18 +334,16 @@ impl<'a> Scheduler<'a> {
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             if thread.has_forked {
                                 println!("  ERROR: Thread has already forked at this point, terminating thread");
-                                let msg = "Double Fork: Thread attempted to fork more than once";
-                                self.evaluator.handler.emit_diagnostic_stmt(
-                                    thread.todo.tr,
-                                    &current,
-                                    msg,
-                                    Level::Error,
+                                let error = ExecutionError::double_fork(
+                                    thread.todo_idx,
+                                    thread.todo.tr.name.clone(),
+                                    next_id,
                                 );
-                                self.results[thread.thread_id] = Err(msg.to_string());
+                                self.results[thread.todo_idx] = Err(error);
                                 thread.next_step = None;
+                                return;
                             }
                             println!("  Fork at {:?}, spawning new thread…", next_id);
-                            self.next_todo_idx += 1;
                             match next_todo_option.clone() {
                                 Some(todo) => {
                                     let new_thread =
@@ -329,7 +358,9 @@ impl<'a> Scheduler<'a> {
                                     println!("    no more todos to fork, skipping fork.");
                                 }
                             }
+                            self.next_todo_idx += 1;
                             // Mark this thread as having forked
+                            println!("  Marking thread {} as having forked.", { thread.todo_idx });
                             thread.has_forked = true;
                             // continue from the fork point
                             current = next_id;
@@ -352,7 +383,7 @@ impl<'a> Scheduler<'a> {
                 // error -> record and stop
                 Err(e) => {
                     println!("ERROR: {:?}, terminating thread", e);
-                    self.results[thread.thread_id] = Err(e);
+                    self.results[thread.todo_idx] = Err(e);
                     thread.next_step = None;
                     break;
                 }
@@ -360,25 +391,25 @@ impl<'a> Scheduler<'a> {
         }
 
         // fork if a thread has completed successfully
-        // more specically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
+        // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked
             && self.evaluator.assertions_forks_enabled()
-            && self.results[thread.thread_id].is_ok()
+            && self.results[thread.todo_idx].is_ok()
         {
-            self.next_todo_idx += 1;
             match next_todo_option.clone() {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
                     self.next_threads.push(new_thread);
                     println!(
-                        "    enqueued forked thread; queue size = {}",
+                        "    enqueued implicitly forked thread; queue size = {}",
                         self.next_threads.len()
                     );
                 }
                 None => {
-                    println!("    no more todos to fork, skipping fork.");
+                    println!("    no more todos to fork, skipping implicit fork.");
                 }
             }
+            self.next_todo_idx += 1;
         }
     }
 }
@@ -386,6 +417,7 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
     use crate::parser::parsing_helper;
     use crate::yosys::yosys_to_btor;
     use crate::yosys::ProjectConf;
@@ -394,20 +426,35 @@ pub mod tests {
 
     fn create_sim_context(
         verilog_path: &str,
+        top_module: Option<String>,
     ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
-        // Verilog --> Btor via Yosys
         let env = YosysEnv::default();
         let inp = PathBuf::from(verilog_path);
-        let proj = ProjectConf::with_source(inp);
-        let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
+        let proj = ProjectConf::with_source(inp, top_module);
 
-        // instantiate sim from btor file
-        let (ctx, sys) = match patronus::btor2::parse_file(btor_file.as_path().as_os_str()) {
-            Some(result) => result,
-            None => {
-                panic!("Failed to parse btor file.");
-            }
-        };
+        let btor_file = yosys_to_btor(&env, &proj, None)
+            .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
+
+        // Check if btor file was actually created and has content
+        if !btor_file.exists() {
+            panic!("BTOR file was not created at path: {}", btor_file.display());
+        }
+
+        let metadata = std::fs::metadata(&btor_file)
+            .unwrap_or_else(|e| panic!("Failed to read BTOR file metadata: {}", e));
+
+        if metadata.len() == 0 {
+            panic!("BTOR file is empty - likely synthesis failed. Check Yosys output for errors.");
+        }
+
+        let (ctx, sys) = patronus::btor2::parse_file(btor_file.as_path().as_os_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Failed to parse BTOR file - possibly malformed: {}",
+                    btor_file.display()
+                )
+            });
+
         (ctx, sys)
     }
 
@@ -417,7 +464,7 @@ pub mod tests {
 
         let transaction_filename = "tests/add_struct.prot";
         let verilog_path = "examples/adders/add_d1.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -454,7 +501,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
 
@@ -470,9 +517,15 @@ pub mod tests {
             sim2,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
 
         // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = BitVecValue::from_u64(4, 32);
@@ -487,9 +540,15 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
 
         // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = BitVecValue::from_u64(10, 32);
@@ -503,9 +562,20 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
+        // Check that both are assertion errors
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
     }
 
     #[test]
@@ -514,7 +584,7 @@ pub mod tests {
 
         let transaction_filename = "tests/mult_new.prot";
         let verilog_path = "examples/multipliers/mult_d2.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -551,7 +621,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
 
@@ -567,11 +637,17 @@ pub mod tests {
             sim2,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
 
-        // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
+        // // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = BitVecValue::from_u64(3, 32);
         todos[1].1[2] = BitVecValue::from_u64(48, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
@@ -584,11 +660,17 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
 
-        // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
+        // // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = BitVecValue::from_u64(47, 32);
         let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
@@ -600,9 +682,20 @@ pub mod tests {
             sim3,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
         assert!(results[1].is_err());
+        // Check that both are assertion errors
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[0] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[0]);
+        }
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
     }
 
     #[test]
@@ -612,7 +705,7 @@ pub mod tests {
 
         let transaction_filename = "tests/identities/identity_d2.prot";
         let verilog_path = "examples/identity/identity_d2.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -626,10 +719,10 @@ pub mod tests {
             vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
         )];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
 
-        // ERROR CASE: Two different assigments
+        // ERROR CASE: Two different assignments
         todos.push((
             0,
             vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
@@ -637,13 +730,18 @@ pub mod tests {
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         // this should fail due to both threads trying to assign to the same input
         assert!(results[0].is_err());
-        if let Err(err_msg) = &results[0] {
-            assert_eq!(
-                err_msg,
-                "Multiple threads attempting to assign to the same input: a"
+        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment {
+            symbol_name, ..
+        })) = &results[0]
+        {
+            assert_eq!(symbol_name, "a");
+        } else {
+            panic!(
+                "Expected conflicting assignment error for symbol 'a', got: {:?}",
+                results[0]
             );
         }
 
@@ -652,19 +750,19 @@ pub mod tests {
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_threads();
-        // this should fail due to both threads trying to assign to the same input
+        let results = scheduler.execute_todos();
+        // this should pass since both threads assign the same value
         assert!(results[0].is_ok());
     }
 
     #[test]
     fn test_scheduler_identity_d2_double_fork() {
-        // we expect this to fail due to the value being reassigned multiple times
+        // we expect this to fail due to double forking
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/identities/identity_d2.prot";
         let verilog_path = "examples/identity/identity_d2.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -678,13 +776,18 @@ pub mod tests {
             vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
         )];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
-        if let Err(err_msg) = &results[0] {
-            assert_eq!(
-                err_msg,
-                "Double Fork: Thread attempted to fork more than once"
-            );
+        if let Err(ExecutionError::Thread(ThreadError::DoubleFork {
+            stmt_id: _,
+            thread_id,
+            transaction_name: _,
+        })) = &results[0]
+        {
+            assert_eq!(*thread_id, 0);
+            // Check that transaction_name contains expected value (might need to adjust based on actual transaction name)
+        } else {
+            panic!("Expected double fork error, got: {:?}", results[0]);
         }
 
         // PASSING CASE: two_fork_ok protocol
@@ -695,18 +798,17 @@ pub mod tests {
 
         let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
     }
 
     #[test]
     fn test_scheduler_identity_d1_implicit_fork() {
-        // we expect this to fail due to the value being reassigned multiple times
         let handler = &mut DiagnosticHandler::new();
 
         let transaction_filename = "tests/identities/identity_d1.prot";
         let verilog_path = "examples/identity/identity_d1.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -721,18 +823,84 @@ pub mod tests {
             ),
             (
                 0,
-                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(2, 32)],
+                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(2, 32)],
             ),
             (
                 0,
-                vec![BitVecValue::from_u64(2, 32), BitVecValue::from_u64(3, 32)],
+                vec![BitVecValue::from_u64(3, 32), BitVecValue::from_u64(4, 32)],
+            ),
+            (
+                0,
+                vec![BitVecValue::from_u64(4, 32), BitVecValue::from_u64(5, 32)],
             ),
         ];
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+        assert!(results[2].is_err());
+        assert!(results[3].is_ok()); // this final TODO never runs because the penultimate TODO ends in failure, thus it never forks
+
+        // Check that the failures are assertion errors
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[2] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[2]);
+        }
+    }
+
+    #[test]
+    fn test_scheduler_identity_d1_slicing() {
+        // we expect this to fail due to assertion failures
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/identities/identity_d1.prot";
+        let verilog_path = "examples/identity/identity_d1.v";
+        let (ctx, sys) = create_sim_context(verilog_path, None);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let irs: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let mut todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                1, // transaction: slicing_ok
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+            (
+                //
+                3, // transaction: slicing_invalid
+                vec![BitVecValue::from_u64(1, 32), BitVecValue::from_u64(1, 32)],
+            ),
+        ];
+        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
-        assert!(results[2].is_err());
+
+        // Check that the failure is InvalidSlice
+        if let Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice { .. })) = &results[1] {
+            // Expected invalid slice failure
+        } else {
+            panic!("Expected invalid slice failure, got: {:?}", results[2]);
+        }
+
+        // test slices that will result in an error because the widths of the slices are different
+        todos[1].0 = 2; // switch to running transaction slicing_err
+        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+
+        // Check that the failure is AssertionError
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected invalid slice failure
+        } else {
+            panic!("Expected invalid slice failure, got: {:?}", results[2]);
+        }
     }
 
     #[test]
@@ -741,7 +909,7 @@ pub mod tests {
 
         let transaction_filename = "tests/identities/dual_identity_d1.prot";
         let verilog_path = "examples/identity/dual_identity_d1.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -766,7 +934,7 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
 
@@ -781,20 +949,25 @@ pub mod tests {
             sim2,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_err());
+        // Check that it's an assertion error
+        if let Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) = &results[1] {
+            // Expected assertion failure
+        } else {
+            panic!("Expected assertion equality failure, got: {:?}", results[1]);
+        }
     }
 
     #[test]
     fn test_scheduler_inverter() {
-        // we expect this to fail due to the value being reassigned multiple times
+        // we expect this to fail due to multiple assignment failure
         let handler = &mut DiagnosticHandler::new();
 
-        // test_helper("tests/add_struct.prot", "add_struct");
         let transaction_filename = "tests/inverter.prot";
         let verilog_path = "examples/inverters/inverter_d0.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
@@ -816,8 +989,165 @@ pub mod tests {
             sim,
             handler,
         );
-        let results = scheduler.execute_threads();
+        let results = scheduler.execute_todos();
         assert!(results[0].is_err());
+        if let Err(ExecutionError::Thread(ThreadError::ConflictingAssignment { .. })) = &results[0]
+        {
+        } else {
+            panic!(
+                "Expected conflicting assignment failure, got: {:?}",
+                results[0]
+            );
+        }
+    }
+
+    #[test]
+    fn test_scheduler_counter() {
+        // this tests the counter, the while loop, and the not unary operator
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/counters/counter.prot";
+        let verilog_path = "examples/counters/counter.v";
+        let (ctx, sys) = create_sim_context(verilog_path, None);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![(0, vec![BitVecValue::from_u64(10, 64)])];
+
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+    }
+
+    #[test]
+    fn test_scheduler_aes128() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/aes128.prot";
+        let verilog_path = "examples/tinyaes128/aes_128.v";
+        let (ctx, sys) = create_sim_context(verilog_path, Some("aes_128".to_string()));
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        // FIXME: This is very unweildy, but once we move to owned transactions, we can get rid of this
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        // Example taken from NIST FIPS 197: https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf
+        // and https://testprotect.com/appendix/AEScalc
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            // Encrypt
+            (
+                0,
+                vec![
+                    BitVecValue::from_u128(0x000102030405060708090a0b0c0d0e0f, 128), // key
+                    BitVecValue::from_u128(0x00112233445566778899aabbccddeeff, 128), // state
+                    BitVecValue::from_u128(0x69c4e0d86a7b0430d8cdb78070b4c55a, 128), // expected output
+                ],
+            ),
+            // Decrypt (swap state and expected output)
+            (
+                0,
+                vec![
+                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // key
+                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // state
+                    BitVecValue::from_u128(0x66e94bd4ef8a2c3b884cfa59ca342b2e, 128), // expected output
+                ],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+    }
+
+    #[test]
+    fn test_scheduler_register_file_write_read() {
+        let handler = &mut DiagnosticHandler::new();
+
+        let transaction_filename = "tests/serv/register_file.prot";
+        // FIXME: This verilog doesn't seem to parse
+        let verilog_path = "examples/regfile/serv_regfile.v";
+        let (ctx, sys) = create_sim_context(verilog_path, None);
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+
+        let parsed_data: Vec<(Transaction, SymbolTable)> =
+            parsing_helper(transaction_filename, handler);
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        // Here's the idea of the test:
+        // First, write some known data
+        // read_write(rs1_addr=0, rs2_addr=0, rd_enable=1, rd_addr=5, rd_data=0xdeadbeef,
+        //       rs1_data=0, rs2_data=0)
+
+        // Then read it back
+        // read_write(rs1_addr=5, rs2_addr=0, rd_enable=0, rd_addr=0, rd_data=0,
+        //       rs1_data=0xdeadbeef, rs2_data=0)
+
+        let todos: Vec<(usize, Vec<BitVecValue>)> = vec![
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(0, 5),           // rs1_addr: u5
+                    BitVecValue::from_u64(0, 32),          // rs1_data: u32 (output)
+                    BitVecValue::from_u64(0, 32),          // rs2_data: u32 (output)
+                    BitVecValue::from_u64(0, 5),           // rs2_addr: u5
+                    BitVecValue::from_u64(1, 1),           // rd_enable: u1
+                    BitVecValue::from_u64(5, 5),           // rd_addr: u5
+                    BitVecValue::from_u64(0xdeadbeef, 32), // rd_data: u32
+                    BitVecValue::from_u64(0, 1),           // zero: u1
+                    BitVecValue::from_u64(1, 1),           // one: u1
+                ],
+            ),
+            (
+                0,
+                vec![
+                    BitVecValue::from_u64(5, 5),           // rs1_addr: u5
+                    BitVecValue::from_u64(0xdeadbeef, 32), // rs1_data: u32 (output)
+                    BitVecValue::from_u64(0, 32),          // rs2_data: u32 (output)
+                    BitVecValue::from_u64(0, 5),           // rs2_addr: u5
+                    BitVecValue::from_u64(0, 1),           // rd_enable: u1
+                    BitVecValue::from_u64(0, 5),           // rd_addr: u5
+                    BitVecValue::from_u64(0, 32),          // rd_data: u32
+                    BitVecValue::from_u64(0, 1),           // zero: u1
+                    BitVecValue::from_u64(1, 1),           // one: u1
+                ],
+            ),
+        ];
+
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
     }
 
     #[test]
@@ -827,7 +1157,7 @@ pub mod tests {
         let handler = &mut DiagnosticHandler::new();
         let transaction_filename = "tests/identities/empty.prot";
         let verilog_path = "examples/identity/identity_d0.v";
-        let (ctx, sys) = create_sim_context(verilog_path);
+        let (ctx, sys) = create_sim_context(verilog_path, None);
         let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
 
         let parsed_data: Vec<(Transaction, SymbolTable)> =
@@ -851,7 +1181,7 @@ pub mod tests {
         ];
 
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results: Vec<Result<(), String>> = scheduler.execute_threads();
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert!(results[0].is_ok());
         assert!(results[1].is_ok());
         assert!(results[2].is_ok());

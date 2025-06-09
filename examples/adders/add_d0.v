@@ -5,4 +5,3 @@ module adder_d0 (
 );
     assign s = a + b;
 endmodule
-
