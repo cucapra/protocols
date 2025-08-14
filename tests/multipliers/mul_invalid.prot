@@ -1,9 +1,12 @@
+// This protocol does not correspond to a specific verilog module, as it's never executed.
+
 struct Multiplier {
   in a: u32,
   in b: u32,
   out s: u32
 }
 
+// This protocol will fail on s := dut.s since you cant assign to an output param
 fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   dut.a := a;
   dut.b := b;

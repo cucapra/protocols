@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("add_d1", "tests/adders/add_d1.prot");
+        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot");
     }
 
     #[test]
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_simple_while_transaction() {
-        test_helper("simple_while", "tests/control_flow/simple_while.prot");
+        test_helper("simple_while", "tests/counters/simple_while.prot");
     }
 
     // Specific Tests

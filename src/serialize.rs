@@ -236,7 +236,7 @@ pub mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("tests/adders/add_d1.prot", "add_d1");
+        test_helper("tests/adders/adder_d1/add_d1.prot", "add_d1");
     }
 
     #[test]
@@ -316,7 +316,7 @@ pub mod tests {
 
     #[test]
     fn test_simple_if_without_else_transaction() {
-        test_helper("tests/identities/if_without_else.prot", "if_without_else");
+        test_helper("tests/identities/dual_identity_d1/if_without_else.prot", "if_without_else");
     }
 
     #[test]

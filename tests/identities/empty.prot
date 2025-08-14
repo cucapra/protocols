@@ -1,7 +1,0 @@
-struct Identity {
-  in a: u32,
-  out s: u32,
-}
-
-// the empty protocol. Does nothing, always results in an Ok() Result variant
-fn empty<DUT: Identity>(in a: u32, out s: u32) {}

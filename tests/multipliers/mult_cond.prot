@@ -1,3 +1,5 @@
+// This protocol does not correspond to a specific verilog module, as it's never executed.
+
 struct Multiplier {
   in a: u32,
   in b: u32,
