@@ -1,0 +1,19 @@
+---
+source: src/serialize.rs
+expression: content
+---
+struct ExpandKey128 {
+  in input: u128,
+  out output: u128,
+  out output_delayed: u128,
+}
+
+fn aes128<dut: ExpandKey128>(in input: u128, out output: u128) {
+  dut.input := input;
+  step();
+  fork();
+  dut.input := X;
+  assert_eq(dut.output, output);
+  step();
+  assert_eq(dut.output_delayed, output);
+}

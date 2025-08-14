@@ -1,0 +1,27 @@
+---
+source: src/typecheck.rs
+expression: content
+---
+warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   ┌─ tests/multipliers/mult_cond.prot:17:3
+   │
+17 │   dut.a := X;
+   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+
+warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   ┌─ tests/multipliers/mult_cond.prot:18:3
+   │
+18 │   dut.b := X;
+   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+
+error: dut.c is an output and thus cannot be assigned.
+   ┌─ tests/multipliers/mult_cond.prot:28:3
+   │
+28 │   dut.c := 1;
+   │   ^^^^^^^^^^^ dut.c is an output and thus cannot be assigned.
+
+error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+   ┌─ tests/multipliers/mult_cond.prot:30:3
+   │
+30 │   s := dut.s;
+   │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.

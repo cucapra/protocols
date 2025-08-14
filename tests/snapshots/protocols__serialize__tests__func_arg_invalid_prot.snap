@@ -1,0 +1,9 @@
+---
+source: src/serialize.rs
+expression: content
+---
+error: Assigning to undeclared symbol: c
+  ┌─ tests/misc/func_arg_invalid.prot:9:3
+  │
+9 │   c := b;
+  │   ^ Assigning to undeclared symbol: c
