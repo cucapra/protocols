@@ -241,7 +241,10 @@ pub mod tests {
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        test_helper("tests/calyx_go_done/calyx_go_done_struct.prot", "calyx_go_done_struct");
+        test_helper(
+            "tests/calyx_go_done/calyx_go_done_struct.prot",
+            "calyx_go_done_struct",
+        );
     }
 
     #[test]
@@ -261,7 +264,10 @@ pub mod tests {
 
     #[test]
     fn test_aes128_expand_key_prot() {
-        test_helper("examples/tinyaes128/aes128_expand_key.prot", "aes128_expand_key");
+        test_helper(
+            "examples/tinyaes128/aes128_expand_key.prot",
+            "aes128_expand_key",
+        );
     }
 
     #[test]
@@ -286,7 +292,10 @@ pub mod tests {
 
     #[test]
     fn test_parse_serv_register_file_prot() {
-        test_helper("examples/serv/serv_regfile.prot", "parse_serv_register_file");
+        test_helper(
+            "examples/serv/serv_regfile.prot",
+            "parse_serv_register_file",
+        );
     }
 
     #[test]
@@ -316,7 +325,10 @@ pub mod tests {
 
     #[test]
     fn test_simple_if_without_else_transaction() {
-        test_helper("tests/identities/dual_identity_d1/if_without_else.prot", "if_without_else");
+        test_helper(
+            "tests/identities/dual_identity_d1/if_without_else.prot",
+            "if_without_else",
+        );
     }
 
     #[test]

@@ -240,7 +240,10 @@ mod tests {
 
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
-        test_helper("aes128_expand_key", "examples/tinyaes128/aes128_expand_key.prot");
+        test_helper(
+            "aes128_expand_key",
+            "examples/tinyaes128/aes128_expand_key.prot",
+        );
     }
 
     #[test]
@@ -265,7 +268,10 @@ mod tests {
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        test_helper("calyx_go_done_struct", "tests/calyx_go_done/calyx_go_done_struct.prot");
+        test_helper(
+            "calyx_go_done_struct",
+            "tests/calyx_go_done/calyx_go_done_struct.prot",
+        );
     }
 
     #[test]
@@ -288,7 +294,8 @@ mod tests {
         let c: SymbolId = symbols.add_without_parent("c".to_string(), Type::BitVec(1));
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1));
         assert_eq!(symbols["s"], symbols[s]);
-        let input = std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
+        let input =
+            std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
         let mut tr = Transaction::new("func_arg_invalid".to_string());
         tr.args = vec![
