@@ -57,7 +57,7 @@ pub enum EvaluationError {
 pub enum ThreadError {
     /// Thread attempted to fork more than once
     DoubleFork {
-        thread_id: usize,
+        thread_idx: usize,
         transaction_name: String,
         stmt_id: StmtId,
     },
@@ -67,7 +67,7 @@ pub enum ThreadError {
         symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
-        thread_id: usize,
+        thread_idx: usize,
         stmt_id: StmtId,
     },
     /// Thread execution limit exceeded (for infinite loop protection)
@@ -163,27 +163,27 @@ impl fmt::Display for ThreadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ThreadError::DoubleFork {
-                thread_id,
+                thread_idx,
                 transaction_name,
                 ..
             } => {
                 write!(
                     f,
                     "Thread {} (transaction '{}') attempted to fork more than once",
-                    thread_id, transaction_name
+                    thread_idx, transaction_name
                 )
             }
             ThreadError::ConflictingAssignment {
                 symbol_name,
                 current_value,
                 new_value,
-                thread_id,
+                thread_idx,
                 ..
             } => {
                 write!(
                     f,
                     "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
-                    thread_id, symbol_name, current_value, new_value
+                    thread_idx, symbol_name, current_value, new_value
                 )
             }
             ThreadError::ExecutionLimitExceeded { max_steps } => {
@@ -238,7 +238,7 @@ impl fmt::Display for AssertionError {
 impl ExecutionError {
     pub fn double_fork(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
         ExecutionError::Thread(ThreadError::DoubleFork {
-            thread_id,
+            thread_idx: thread_id,
             transaction_name,
             stmt_id,
         })
@@ -249,7 +249,7 @@ impl ExecutionError {
         symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
-        thread_id: usize,
+        thread_idx: usize,
         stmt_id: StmtId,
     ) -> Self {
         ExecutionError::Thread(ThreadError::ConflictingAssignment {
@@ -257,7 +257,7 @@ impl ExecutionError {
             symbol_name,
             current_value,
             new_value,
-            thread_id,
+            thread_idx,
             stmt_id,
         })
     }
@@ -440,7 +440,7 @@ impl DiagnosticEmitter {
     ) {
         match error {
             ThreadError::DoubleFork {
-                thread_id,
+                thread_idx,
                 transaction_name,
                 stmt_id,
             } => {
@@ -449,7 +449,7 @@ impl DiagnosticEmitter {
                     stmt_id,
                     &format!(
                         "Thread {} (transaction '{}') attempted to fork more than once",
-                        thread_id, transaction_name
+                        thread_idx, transaction_name
                     ),
                     Level::Error,
                 );
@@ -458,7 +458,7 @@ impl DiagnosticEmitter {
                 symbol_name,
                 current_value,
                 new_value,
-                thread_id,
+                thread_idx,
                 stmt_id,
                 ..
             } => {
@@ -467,7 +467,7 @@ impl DiagnosticEmitter {
                     stmt_id,
                     &format!(
                         "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
-                        thread_id, symbol_name, current_value, new_value
+                        thread_idx, symbol_name, current_value, new_value
                     ),
                     Level::Error,
                 );
