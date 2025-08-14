@@ -521,8 +521,8 @@ pub mod tests {
     fn test_scheduler_add() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/adders/add_d1.v",
-            "tests/add_struct.prot",
+            "tests/adders/add_d1.v",
+            "tests/adders/add_d1.prot",
             None,
             handler,
         );
@@ -604,8 +604,8 @@ pub mod tests {
     fn test_scheduler_mult() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/multipliers/mult_d2.v",
-            "tests/mult_new.prot",
+            "tests/multipliers/mult_d2.v",
+            "tests/multipliers/mult_new.prot",
             None,
             handler,
         );
@@ -687,7 +687,7 @@ pub mod tests {
     fn test_scheduler_identity_d2_multiple_assign() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/identity/identity_d2.v",
+            "tests/identities/identity_d2.v",
             "tests/identities/identity_d2.prot",
             None,
             handler,
@@ -733,7 +733,7 @@ pub mod tests {
     fn test_scheduler_identity_d2_double_fork() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/identity/identity_d2.v",
+            "tests/identities/identity_d2.v",
             "tests/identities/identity_d2.prot",
             None,
             handler,
@@ -770,7 +770,7 @@ pub mod tests {
     fn test_scheduler_identity_d1_implicit_fork() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/identity/identity_d1.v",
+            "tests/identities/identity_d1.v",
             "tests/identities/identity_d1.prot",
             None,
             handler,
@@ -799,7 +799,7 @@ pub mod tests {
     fn test_scheduler_identity_d1_slicing() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/identity/identity_d1.v",
+            "tests/identities/identity_d1.v",
             "tests/identities/identity_d1.prot",
             None,
             handler,
@@ -838,7 +838,7 @@ pub mod tests {
     fn test_scheduler_dual_identity() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/identity/dual_identity_d1.v",
+            "tests/identities/dual_identity_d1.v",
             "tests/identities/dual_identity_d1.prot",
             None,
             handler,
@@ -886,8 +886,8 @@ pub mod tests {
     fn test_scheduler_inverter() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/inverters/inverter_d0.v",
-            "tests/inverter.prot",
+            "tests/inverters/inverter_d0.v",
+            "tests/inverters/inverter.prot",
             None,
             handler,
         );
@@ -915,7 +915,7 @@ pub mod tests {
     fn test_scheduler_counter() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/counters/counter.v",
+            "tests/counters/counter.v",
             "tests/counters/counter.prot",
             None,
             handler,
@@ -944,7 +944,7 @@ pub mod tests {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
             "examples/tinyaes128/aes_128.v",
-            "tests/aes128.prot",
+            "examples/tinyaes128/aes128.prot",
             Some("aes_128".to_string()),
             handler,
         );
@@ -990,8 +990,8 @@ pub mod tests {
     fn test_scheduler_register_file_write_read() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            "examples/regfile/serv_regfile.v",
-            "tests/serv/register_file.prot",
+            "examples/serv/serv_regfile.v",
+            "examples/serv/serv_regfile.prot",
             None,
             handler,
         );

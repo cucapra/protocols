@@ -3,7 +3,7 @@ source: src/typecheck.rs
 expression: content
 ---
 warning: Inferred RHS type as BitVec(128) from LHS type BitVec(128).
-   ┌─ tests/aes128_expand_key.prot:13:3
+   ┌─ examples/tinyaes128/aes128_expand_key.prot:13:3
    │
 13 │   dut.input := X;
    │   ^^^^^^^^^^^^^^^ Inferred RHS type as BitVec(128) from LHS type BitVec(128).

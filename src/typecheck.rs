@@ -225,57 +225,57 @@ mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("add_struct", "tests/add_struct.prot");
+        test_helper("add_d1", "tests/adders/add_d1.prot");
     }
 
     #[test]
     fn test_invalid_step_arg_transaction() {
-        test_helper("invalid_step_arg", "tests/invalid_step_arg.prot");
+        test_helper("invalid_step_arg", "tests/misc/invalid_step_arg.prot");
     }
 
     #[test]
     fn typecheck_aes128_transaction() {
-        test_helper("aes128", "tests/aes128.prot");
+        test_helper("aes128", "examples/tinyaes128/aes128.prot");
     }
 
     #[test]
     fn typecheck_aes128_expand_key_transaction() {
-        test_helper("aes128_expand_key", "tests/aes128_expand_key.prot");
+        test_helper("aes128_expand_key", "examples/tinyaes128/aes128_expand_key.prot");
     }
 
     #[test]
     fn typecheck_aes128_round_transaction() {
-        test_helper("aes128_round", "tests/aes128_round.prot");
+        test_helper("aes128_round", "examples/tinyaes128/aes128_round.prot");
     }
 
     #[test]
     fn typecheck_mul_invalid_transaction() {
-        test_helper("mul_invalid", "tests/mul_invalid.prot");
+        test_helper("mul_invalid", "tests/multipliers/mul_invalid.prot");
     }
 
     #[test]
     fn test_mul_prot() {
-        test_helper("mul", "tests/mul.prot");
+        test_helper("mul", "tests/multipliers/mul.prot");
     }
 
     #[test]
     fn typecheck_cond_transaction() {
-        test_helper("cond", "tests/cond.prot");
+        test_helper("cond", "tests/multipliers/mult_cond.prot");
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        test_helper("calyx_go_done_struct", "tests/calyx_go_done_struct.prot");
+        test_helper("calyx_go_done_struct", "tests/calyx_go_done/calyx_go_done_struct.prot");
     }
 
     #[test]
     fn test_simple_if_transaction() {
-        test_helper("simple_if", "tests/simple_if.prot");
+        test_helper("simple_if", "tests/counters/simple_if.prot");
     }
 
     #[test]
     fn test_simple_while_transaction() {
-        test_helper("simple_while", "tests/simple_while.prot");
+        test_helper("simple_while", "tests/control_flow/simple_while.prot");
     }
 
     // Specific Tests
@@ -288,7 +288,7 @@ mod tests {
         let c: SymbolId = symbols.add_without_parent("c".to_string(), Type::BitVec(1));
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1));
         assert_eq!(symbols["s"], symbols[s]);
-        let input = std::fs::read_to_string("tests/func_arg_invalid.prot").expect("failed to load");
+        let input = std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
         let mut tr = Transaction::new("func_arg_invalid".to_string());
         tr.args = vec![

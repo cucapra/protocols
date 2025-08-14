@@ -1,0 +1,15 @@
+// there is no corresponding verilog for this; it's just a parsing + serialization test
+struct Dummy {
+    in a: u32,
+    out b: u32,
+}
+
+fn easycond<dut: Dummy>(in a: u32, out b: u32) {
+  dut.a := a;
+  if dut.a == 1 {
+    step(1);
+  } else {
+    fork();
+  }
+  b := 1;
+}
