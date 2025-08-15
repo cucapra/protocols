@@ -3,7 +3,7 @@ source: src/serialize.rs
 expression: content
 ---
 error: Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if
-   ┌─ tests/illegal_fork.prot:12:3
+   ┌─ tests/adders/illegal_fork.prot:13:3
    │
-12 │   fork(1);
+13 │   fork(1); // forks cannot take an argument - will fail
    │   ^ Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if

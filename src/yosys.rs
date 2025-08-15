@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
-        let cmds = ["read_verilog examples/adders/add_d1.v"];
+        let cmds = ["read_verilog tests/adders/adder_d1/add_d1.v"];
         let res = run_yosys(&YosysEnv::default(), &cmds).unwrap();
         assert!(res.contains("Successfully finished Verilog frontend"));
     }
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn test_yosys_to_btor() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("examples/adders/add_d2.v");
+        let inp = PathBuf::from("tests/adders/adder_d2/add_d2.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()
@@ -266,7 +266,7 @@ mod tests {
         let btor_file = yosys_to_btor(
             &env,
             &proj,
-            Some(&PathBuf::from("examples/adders/add_d2.btor")),
+            Some(&PathBuf::from("tests/adders/adder_d2/add_d2.btor")),
         )
         .unwrap();
         assert!(btor_file
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_yosys_to_btor_auto_name() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("examples/counters/counter.v");
+        let inp = PathBuf::from("tests/counters/counter.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()

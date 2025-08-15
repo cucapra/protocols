@@ -5,7 +5,7 @@ struct Counter {
     out s: u64,
 }
 
-fn simple_while<dut: Counter>(in a: u64) {
+fn count_up<dut: Counter>(in a: u64) {
     // Loading dut with values
     dut.a := a;
 
@@ -17,4 +17,3 @@ fn simple_while<dut: Counter>(in a: u64) {
     step(2);
     assert_eq(dut.s, 0);
 }
-

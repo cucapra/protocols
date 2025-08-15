@@ -236,87 +236,99 @@ pub mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("tests/add_struct.prot", "add_struct");
+        test_helper("tests/adders/adder_d1/add_d1.prot", "add_d1");
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
-        test_helper("tests/calyx_go_done_struct.prot", "calyx_go_done_struct");
+        test_helper(
+            "tests/calyx_go_done/calyx_go_done_struct.prot",
+            "calyx_go_done_struct",
+        );
     }
 
     #[test]
     fn test_invalid_lex_prot() {
-        test_helper("tests/invalid_lex.prot", "invalid_lex");
+        test_helper("tests/misc/invalid_lex.prot", "invalid_lex");
     }
 
     #[test]
     fn test_aes128_prot() {
-        test_helper("tests/aes128.prot", "aes128");
+        test_helper("examples/tinyaes128/aes128.prot", "aes128");
     }
 
     #[test]
     fn test_aes128_round_prot() {
-        test_helper("tests/aes128_round.prot", "aes128_round");
+        test_helper("examples/tinyaes128/aes128_round.prot", "aes128_round");
     }
 
     #[test]
     fn test_aes128_expand_key_prot() {
-        test_helper("tests/aes128_expand_key.prot", "aes128_expand_key");
+        test_helper(
+            "examples/tinyaes128/aes128_expand_key.prot",
+            "aes128_expand_key",
+        );
     }
 
     #[test]
     fn test_mul_invalid_prot() {
-        test_helper("tests/mul_invalid.prot", "mul_invalid");
+        test_helper("tests/multipliers/mul_invalid.prot", "mul_invalid");
     }
 
     #[test]
     fn test_mul_prot() {
-        test_helper("tests/mul.prot", "mul");
+        test_helper("tests/multipliers/mul.prot", "mul");
     }
 
     #[test]
     fn test_mul_ignore_prot() {
-        test_helper("tests/mul_ignore.prot", "mul_ignore");
+        test_helper("tests/multipliers/mul_ignore.prot", "mul_ignore");
     }
 
     #[test]
     fn test_cond_prot() {
-        test_helper("tests/cond.prot", "cond");
+        test_helper("tests/multipliers/mult_cond.prot", "cond");
     }
 
     #[test]
     fn test_parse_serv_register_file_prot() {
-        test_helper("tests/serv/register_file.prot", "parse_serv_register_file");
+        test_helper(
+            "examples/serv/serv_regfile.prot",
+            "parse_serv_register_file",
+        );
     }
 
     #[test]
     fn test_illegal_fork_prot() {
-        test_helper("tests/illegal_fork.prot", "illegal_fork_prot");
+        test_helper("tests/adders/illegal_fork.prot", "illegal_fork_prot");
     }
 
     #[test]
     fn test_invalid_step_arg() {
-        test_helper("tests/invalid_step_arg.prot", "invalid_step_arg");
+        test_helper("tests/misc/invalid_step_arg.prot", "invalid_step_arg");
     }
 
     #[test]
     fn test_func_arg_invalid_prot() {
-        test_helper("tests/func_arg_invalid.prot", "func_arg_invalid_prot");
+        test_helper("tests/misc/func_arg_invalid.prot", "func_arg_invalid_prot");
     }
 
     #[test]
     fn test_simple_if_transaction() {
-        test_helper("tests/simple_if.prot", "simple_if");
+        test_helper("tests/counters/simple_if.prot", "simple_if");
     }
 
     #[test]
     fn test_simple_while_transaction() {
-        test_helper("tests/simple_while.prot", "simple_while");
+        test_helper("tests/counters/simple_while.prot", "simple_while");
     }
 
     #[test]
     fn test_simple_if_without_else_transaction() {
-        test_helper("tests/if_without_else.prot", "if_without_else");
+        test_helper(
+            "tests/identities/dual_identity_d1/if_without_else.prot",
+            "if_without_else",
+        );
     }
 
     #[test]
@@ -332,7 +344,7 @@ pub mod tests {
 
         // declare DUT struct (TODO: Fix struct)
         let dut_struct = symbols.add_struct(
-            "UnaryOp".to_string(),
+            "Dummy".to_string(),
             vec![
                 Field::new("a".to_string(), Dir::In, Type::BitVec(32)),
                 Field::new("b".to_string(), Dir::In, Type::BitVec(32)),

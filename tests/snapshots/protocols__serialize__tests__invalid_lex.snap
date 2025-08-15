@@ -3,7 +3,7 @@ source: src/serialize.rs
 expression: content
 ---
 error: Lexing failed: expected integer
-  ┌─ tests/invalid_lex.prot:9:8
+  ┌─ tests/misc/invalid_lex.prot:9:8
   │
 9 │   step(-1);
   │        ^ Lexing failed: expected integer

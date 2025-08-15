@@ -1,4 +1,5 @@
 // used to test having multiple transactions in the same file
+// This protocol does not correspond to a specific verilog module, as it's never executed.
 
 struct Multiplier {
   in a: u32,
@@ -21,7 +22,6 @@ fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   s := dut.s;
 }
 
-// this transaction describes what happens when the register file is not in use
 fn ignore<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   dut.a := a;
   dut.b := b;
