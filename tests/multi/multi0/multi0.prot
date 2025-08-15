@@ -1,0 +1,23 @@
+struct multi0 {
+    in start: u1,
+    in inp: u32,
+    out done: u1,
+    out out: u32,
+}
+
+fn multi<dut: multi0>(in data_in: u32, out data_out: u32, in zero: u1, in one: u1) {
+    dut.start := one;
+    dut.inp := data_in;
+    assert_eq(dut.done, zero);
+
+    step();
+
+    dut.start := zero;
+    dut.inp := X;
+
+    while (!(dut.done == one)) {
+        step();
+    }
+
+    assert_eq(dut.out, data_out);
+}

@@ -1,0 +1,23 @@
+struct multi2multi {
+    in start: u1,
+    in inp: u64,
+    out done: u1,
+    out out: u64,
+}
+
+fn multi<dut: multi2multi>(in data_in: u64, out data_out: u64, in zero: u1, in one: u1) {
+    dut.start := one;
+    dut.inp := data_in;
+    assert_eq(dut.done, zero);
+    
+    step();
+
+    dut.start := zero;
+    dut.inp := X;
+
+    while !(dut.done == one){
+        step();
+    }
+
+    assert_eq(dut.out, data_out);
+}

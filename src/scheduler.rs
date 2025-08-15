@@ -1043,4 +1043,276 @@ pub mod tests {
         assert_ok(&results[0]);
         assert_ok(&results[1]);
     }
+
+    #[test]
+    #[ignore] // FIXME: going into infinite loop
+    fn test_scheduler_picorv32_pcpi_mul() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "examples/picorv32/picorv32.v",
+            "examples/picorv32/pcpi_mul.prot",
+            Some("picorv32_pcpi_mul".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("pcpi_mul"),
+                vec![
+                    bv(10, 32), // rs1_data
+                    bv(10, 32), // rs2_data
+                    bv(100, 32), // rd_data
+                    bv((0b0000001 << 25) | (0b000 << 12) | 0b0110011, 32), // instruction
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+        assert_ok(&results[1]);
+    }
+
+    #[test]
+    fn test_scheduler_multi0() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "tests/multi/multi0/multi0.v",
+            "tests/multi/multi0/multi0.prot",
+            Some("multi0".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("multi"),
+                vec![
+                    bv(10, 32), // data_in
+                    bv(10, 32), // data_out
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+    }
+
+
+    #[test]
+    fn test_scheduler_multi0keep() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "tests/multi/multi0keep/multi0keep.v",
+            "tests/multi/multi0keep/multi0keep.prot",
+            Some("multi0keep".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("multi"),
+                vec![
+                    bv(10, 32), // data_in
+                    bv(10, 32), // data_out
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+    }
+
+    #[test]
+    fn test_scheduler_multi0keep2const() {
+        let handler = &mut DiagnosticHandler::new();
+        // TODO: instead of pasting multi0keep in multi0keep2const.v, add functionality so that yosys can take in multiple files as input
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "tests/multi/multi0keep2const/multi0keep2const.v",
+            "tests/multi/multi0keep2const/multi0keep2const.prot",
+            Some("multi0keep2const".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("multi"),
+                vec![
+                    bv(10, 64), // data_in
+                    bv(10, 64), // data_out
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+    }
+
+    #[test]
+    fn test_scheduler_multi2const() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "tests/multi/multi2const/multi2const.v",
+            "tests/multi/multi2const/multi2const.prot",
+            Some("multi2const".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("multi"),
+                vec![
+                    bv(10, 64), // data_in
+                    bv(10, 64), // data_out
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+    }
+
+    #[test]
+    fn test_scheduler_multi2multi() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "tests/multi/multi2multi/multi2multi.v",
+            "tests/multi/multi2multi/multi2multi.prot",
+            Some("multi2multi".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("multi"),
+                vec![
+                    bv(10, 64), // data_in
+                    bv(10, 64), // data_out
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+    }
+
+    #[test]
+    fn test_scheduler_multi_data() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            "tests/multi/multi_data/multi_data.v",
+            "tests/multi/multi_data/multi_data.prot",
+            Some("multi_data".to_string()),
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("multi"),
+                vec![
+                    bv(10, 32), // data_in
+                    bv(10, 32), // data_out
+                    bv(0, 1), // zero
+                    bv(1, 1), // one
+                ],
+            ),
+        ];
+
+        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
+        assert_ok(&results[0]);
+    }
 }
