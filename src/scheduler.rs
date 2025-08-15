@@ -439,7 +439,7 @@ pub mod tests {
         top_module: Option<String>,
     ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
         let env = YosysEnv::default();
-        let sources: Vec<PathBuf> = verilog_paths.iter().map(|p| PathBuf::from(p)).collect();
+        let sources: Vec<PathBuf> = verilog_paths.iter().map(PathBuf::from).collect();
         let proj = ProjectConf::with_sources(sources, top_module);
 
         let btor_file = yosys_to_btor(&env, &proj, None)
@@ -1064,7 +1064,7 @@ pub mod tests {
                 bv(10, 32),                                            // rs1_data
                 bv(10, 32),                                            // rs2_data
                 bv(100, 32),                                           // rd_data
-                bv((0b0000001 << 25) | (0b000 << 12) | 0b0110011, 32), // instruction
+                bv((0b0000001 << 25) | 0b0110011, 32),                 // instruction
                 bv(0, 1),                                              // zero
                 bv(1, 1),                                              // one
             ],
