@@ -1061,12 +1061,12 @@ pub mod tests {
         let todos = vec![(
             String::from("pcpi_mul"),
             vec![
-                bv(10, 32),                                            // rs1_data
-                bv(10, 32),                                            // rs2_data
-                bv(100, 32),                                           // rd_data
-                bv((0b0000001 << 25) | 0b0110011, 32),                 // instruction
-                bv(0, 1),                                              // zero
-                bv(1, 1),                                              // one
+                bv(10, 32),                            // rs1_data
+                bv(10, 32),                            // rs2_data
+                bv(100, 32),                           // rd_data
+                bv((0b0000001 << 25) | 0b0110011, 32), // instruction
+                bv(0, 1),                              // zero
+                bv(1, 1),                              // one
             ],
         )];
 
