@@ -8,16 +8,16 @@ fn simple_if<dut: Counter>(in a: u64, out s: u64) {
     dut.a := a;
     step(2);
     // Should not go into this if statement
-    if dut.s == 3 {
-        assert_eq(dut.s, 0);
+    if dut.s == 64'd3 {
+        assert_eq(dut.s, 64'b0);
     } else {
         step(5);
     }
     
     // Should not go into else statement
-    if dut.s == 7 {
+    if dut.s == 64'd7 {
         assert_eq(dut.s, s);
     } else {
-        assert_eq(dut.s, 0);
+        assert_eq(dut.s, 64'b0);
     }
 }

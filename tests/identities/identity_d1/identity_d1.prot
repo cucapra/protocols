@@ -9,7 +9,7 @@ fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
 
   // forking at the end means that threads run one at a time
   // so assignment of any concrete value should never conflict
-  DUT.a := 66;
+  DUT.a := 32'd66;
   assert_eq(s, DUT.s);
 
   // implicit fork here

@@ -27,7 +27,7 @@ lazy_static::lazy_static! {
         // Precedence is defined lowest to highest
         PrattParser::new()
             .op(Op::infix(eq, Left))
-            .op(Op::infix(log_and, Left))
+            .op(Op::infix(concat, Left))
             .op(Op::prefix(not))
     };
 }
@@ -78,8 +78,21 @@ impl ParserContext<'_> {
 
                 match primary.as_rule() {
                     Rule::integer => {
-                        let int_value = primary.as_str().parse::<u64>().unwrap();
-                        let bvv = BitVecValue::from_u64(int_value, 64);
+                        // unwrap into width, radix, and then value
+                        let mut inner = primary.clone().into_inner();
+                        let width: u32 = inner.next().unwrap().as_str().parse::<u32>().unwrap();
+                        let radix = inner.next().unwrap().as_rule();
+                        let value_str = inner.next().unwrap().as_str();
+
+                        let value = match radix {
+                            Rule::bin => u64::from_str_radix(value_str, 2),
+                            Rule::oct => u64::from_str_radix(value_str, 8),
+                            Rule::hex => u64::from_str_radix(value_str, 16),
+                            Rule::dec => u64::from_str_radix(value_str, 10),
+                            _ => unreachable!("Unexpected radix rule: {:?}", radix),
+                        };
+
+                        let bvv = BitVecValue::from_u64(value.unwrap(), width);
 
                         Ok(BoxedExpr::Const(bvv, start, end))
                     }
@@ -129,7 +142,7 @@ impl ParserContext<'_> {
                 let end = lhs_unwrap.end();
                 let op = match op.as_rule() {
                     Rule::eq => BinOp::Equal,
-                    Rule::log_and => BinOp::And,
+                    Rule::concat => BinOp::Concat,
                     rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
                 };
                 Ok(BoxedExpr::Binary(

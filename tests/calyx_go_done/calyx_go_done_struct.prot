@@ -7,11 +7,11 @@ struct Calyx {
 
 fn calyx_go_done<dut: Calyx>(in ii: u32, out oo: u32) {
   dut.ii := ii;
-  dut.go := 1;
-  while !(dut.done == 1) {
+  dut.go := 32'b1;
+  while !(dut.done == 1'b1) {
     step(1);
   }
-  dut.go := 0;
+  dut.go := 32'b0;
   dut.ii := X;
   oo := dut.oo;
 }

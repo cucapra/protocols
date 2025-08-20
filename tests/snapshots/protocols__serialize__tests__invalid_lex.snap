@@ -2,8 +2,8 @@
 source: src/serialize.rs
 expression: content
 ---
-error: Lexing failed: expected integer
+error: Lexing failed: expected dec_integer
   ┌─ tests/misc/invalid_lex.prot:9:8
   │
 9 │   step(-1);
-  │        ^ Lexing failed: expected integer
+  │        ^ Lexing failed: expected dec_integer

@@ -280,10 +280,10 @@ impl<'a> Evaluator<'a> {
                             }
                         }
                     },
-                    BinOp::And => match (&lhs_val, &rhs_val) {
+                    BinOp::Concat => match (&lhs_val, &rhs_val) {
                         (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
                             Err(ExecutionError::dont_care_operation(
-                                "AND".to_string(),
+                                "CONCAT".to_string(),
                                 "binary expression".to_string(),
                                 *expr_id,
                             ))
@@ -300,7 +300,7 @@ impl<'a> Evaluator<'a> {
                                     *expr_id,
                                 ))
                             } else {
-                                Ok(ExprValue::Concrete(lhs.and(rhs)))
+                                Ok(ExprValue::Concrete(lhs.concat(rhs)))
                             }
                         }
                     },

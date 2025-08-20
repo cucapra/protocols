@@ -32,7 +32,7 @@ fn check_expr_types(
                 Ok(inner_type)
             }
         }
-        Expr::Binary(BinOp::And, lhs, rhs) | Expr::Binary(BinOp::Equal, lhs, rhs) => {
+        Expr::Binary(BinOp::Concat, lhs, rhs) | Expr::Binary(BinOp::Equal, lhs, rhs) => {
             let lhs_type = check_expr_types(tr, st, handler, lhs)?;
             let rhs_type = check_expr_types(tr, st, handler, rhs)?;
             if lhs_type.is_equivalent(&rhs_type) {

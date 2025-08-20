@@ -236,7 +236,7 @@ entity_impl!(ExprId, "expr");
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BinOp {
     Equal,
-    And,
+    Concat,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

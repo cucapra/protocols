@@ -1010,8 +1010,6 @@ pub mod tests {
                     bv(1, 1),           // rd_enable: u1
                     bv(5, 5),           // rd_addr: u5
                     bv(0xdeadbeef, 32), // rd_data: u32
-                    bv(0, 1),           // zero: u1
-                    bv(1, 1),           // one: u1
                 ],
             ),
             (
@@ -1024,8 +1022,6 @@ pub mod tests {
                     bv(0, 1),           // rd_enable: u1
                     bv(0, 5),           // rd_addr: u5
                     bv(0, 32),          // rd_data: u32
-                    bv(0, 1),           // zero: u1
-                    bv(1, 1),           // one: u1
                 ],
             ),
         ];
@@ -1102,8 +1098,6 @@ pub mod tests {
             vec![
                 bv(10, 32), // data_in
                 bv(10, 32), // data_out
-                bv(0, 1),   // zero
-                bv(1, 1),   // one
             ],
         )];
 
@@ -1138,8 +1132,6 @@ pub mod tests {
             vec![
                 bv(10, 32), // data_in
                 bv(10, 32), // data_out
-                bv(0, 1),   // zero
-                bv(1, 1),   // one
             ],
         )];
 
@@ -1177,8 +1169,6 @@ pub mod tests {
             vec![
                 bv(10, 64), // data_in
                 bv(10, 64), // data_out
-                bv(0, 1),   // zero
-                bv(1, 1),   // one
             ],
         )];
 
@@ -1216,8 +1206,6 @@ pub mod tests {
             vec![
                 bv(10, 64), // data_in
                 bv(10, 64), // data_out
-                bv(0, 1),   // zero
-                bv(1, 1),   // one
             ],
         )];
 
@@ -1255,8 +1243,6 @@ pub mod tests {
             vec![
                 bv(10, 64), // data_in
                 bv(10, 64), // data_out
-                bv(0, 1),   // zero
-                bv(1, 1),   // one
             ],
         )];
 
@@ -1291,8 +1277,6 @@ pub mod tests {
             vec![
                 bv(10, 32), // data_in
                 bv(10, 32), // data_out
-                bv(0, 1),   // zero
-                bv(1, 1),   // one
             ],
         )];
 

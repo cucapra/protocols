@@ -5,17 +5,17 @@ struct multi2multi {
     out out: u64,
 }
 
-fn multi<dut: multi2multi>(in data_in: u64, out data_out: u64, in zero: u1, in one: u1) {
-    dut.start := one;
+fn multi<dut: multi2multi>(in data_in: u64, out data_out: u64) {
+    dut.start := 1'b1;
     dut.inp := data_in;
-    assert_eq(dut.done, zero);
+    assert_eq(dut.done, 1'b0);
     
     step();
 
-    dut.start := zero;
+    dut.start := 1'b0;
     dut.inp := X;
 
-    while !(dut.done == one){
+    while !(dut.done == 1'b1){
         step();
     }
 

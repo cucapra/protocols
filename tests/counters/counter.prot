@@ -15,5 +15,5 @@ fn count_up<dut: Counter>(in a: u64) {
     // now, dut.s == dut.a. we want s > a (one step), and
     // then, if we step once more, dut.s should equal 0
     step(2);
-    assert_eq(dut.s, 0);
+    assert_eq(dut.s, 64'b0);
 }
