@@ -88,7 +88,7 @@ impl ParserContext<'_> {
                             Rule::bin => u64::from_str_radix(value_str, 2),
                             Rule::oct => u64::from_str_radix(value_str, 8),
                             Rule::hex => u64::from_str_radix(value_str, 16),
-                            Rule::dec => u64::from_str_radix(value_str, 10),
+                            Rule::dec => value_str.parse::<u64>(),
                             _ => unreachable!("Unexpected radix rule: {:?}", radix),
                         };
 
