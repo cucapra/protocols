@@ -990,7 +990,7 @@ pub mod tests {
     fn test_scheduler_register_file_write_read() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["examples/serv/serv_regfile.v"],
+            vec!["examples/serv/rtl/serv_regfile.v"],
             "examples/serv/serv_regfile.prot",
             None,
             handler,
