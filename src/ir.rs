@@ -4,9 +4,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use baa::BitVecValue;
+use crate::type_inference::TypeContext;
+use baa::{BitVecOps, BitVecValue};
 use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 use std::ops::Index;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,7 +16,7 @@ pub struct Transaction {
     pub name: String,
     pub args: Vec<Arg>,
     pub body: StmtId,
-    pub type_param: Option<SymbolId>,
+   pub type_param: Option<SymbolId>,
     exprs: PrimaryMap<ExprId, Expr>,
     dont_care_id: ExprId,
     stmts: PrimaryMap<StmtId, Stmt>,
@@ -81,6 +83,24 @@ impl Transaction {
         self.stmt_loc.get(stmt_id).copied()
     }
 
+    fn expr_widths(&self, st: SymbolTable) -> HashMap<ExprId, u32> {
+        let mut type_ctx = TypeContext::new(st.clone(), self.clone());
+        type_ctx.finalize()
+    }
+
+    pub fn narrow_constant_widths(&mut self, st: &SymbolTable) {
+        let expr_widths = self.expr_widths(st.clone());
+        for expr_id in self.exprs.keys() {
+            if let Expr::Const(ref val) = self[expr_id] {
+                let width = expr_widths[&expr_id] as u32;
+
+                // narrow to the lowest significant `width` bits -- type inference should guarantee no information loss
+                let bit_vec = val.slice(width - 1, 0);
+                self.exprs[expr_id] = Expr::Const(bit_vec);
+            }
+        }
+    }
+
     pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {
         self.next_stmt_mapping_helper(self.body, None)
     }
@@ -94,11 +114,6 @@ impl Transaction {
         let mut map = FxHashMap::default();
 
         if let Stmt::Block(stmts) = &self.stmts[block_id] {
-            // Handle empty blocks by mapping them directly to stmt_after_block
-            if stmts.is_empty() {
-                map.insert(block_id, stmt_after_block);
-            }
-
             for (i, &stmt_id) in stmts.iter().enumerate() {
                 let mut new_stmt_after_block = stmt_after_block;
                 if i == stmts.len() - 1 {
@@ -128,8 +143,6 @@ impl Transaction {
                     _ => {}
                 }
             }
-        } else {
-            panic!("Precondition: input StmtId refers to the a Stmt::Block variant was violated.");
         }
 
         map
@@ -254,7 +267,7 @@ pub enum Expr {
     Binary(BinOp, ExprId, ExprId),
     // binary
     Unary(UnaryOp, ExprId),
-    /// Slice: args are msb first, then lsb
+    // Slice
     Slice(ExprId, u32, u32),
 }
 
@@ -340,7 +353,7 @@ impl Field {
     }
 
     pub fn tpe(&self) -> Type {
-        self.tpe
+        self.tpe.clone()
     }
 }
 
@@ -523,7 +536,7 @@ impl SymbolTableEntry {
     }
 
     pub fn tpe(&self) -> Type {
-        self.tpe
+        self.tpe.clone()
     }
 
     pub fn parent(&self) -> Option<SymbolId> {
