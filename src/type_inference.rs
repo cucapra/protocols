@@ -152,6 +152,13 @@ impl TypeContext {
             self.constraints.push(Constraint::LowerBound(rhs_tv, width));
             self.constraints.push(Constraint::UpperBound(rhs_tv, width));
         }
+        if let Stmt::AssertEq(lhs, rhs) = self.tr[stmt_id] {
+            let lhs_tv = self.constrain_by_expr(lhs);
+            let rhs_tv = self.constrain_by_expr(rhs);
+
+            // equality assertion
+            self.constraints.push(Constraint::Eq(lhs_tv, rhs_tv));
+        }
     }
 
     /// Solve all constraints, erroring on any lower>upper conflict.

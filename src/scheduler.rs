@@ -796,6 +796,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore] // doesn't work anymore bc we now catch this at compile time
     fn test_scheduler_identity_d1_slicing() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
