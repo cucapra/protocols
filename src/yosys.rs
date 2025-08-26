@@ -138,10 +138,7 @@ pub fn yosys_to_btor(
     let btor_name = match (btor_name, &project.top) {
         (Some(name), _) => name.to_path_buf(),
         (None, Some(top)) => PathBuf::from(format!("{top}.btor")),
-        _ => {
-            let with_btor = project.sources.first().unwrap().with_extension("btor");
-            with_btor
-        }
+        _ => project.sources.first().unwrap().with_extension("btor"),
     };
 
     let mut cmd = read_sources(project);

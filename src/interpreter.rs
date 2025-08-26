@@ -130,7 +130,7 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // Initialize the input pins with DontCares that are randomly assigned
         let mut input_vals = HashMap::new();

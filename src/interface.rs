@@ -7,7 +7,7 @@
 #[cfg(test)]
 pub mod tests {
     use crate::yosys::*;
-    use baa::{BitVecOps, BitVecValue};
+    use baa::BitVecValue;
     use marlin_verilator::*;
     use patronus::sim::{InitKind, Simulator};
     use std::path::PathBuf;
