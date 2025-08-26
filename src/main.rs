@@ -1,6 +1,5 @@
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
-use patronus::sim::Interpreter;
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
@@ -13,7 +12,7 @@ struct Cli {
     /// Path to a Verilog file
     /// (we give this argument an alias of `-l`
     /// since by default the `verbosity` flag has alias `-v`)
-    #[arg(short = 'l', long, value_name = "VERILOG_FILE")]
+    #[arg(long, value_name = "VERILOG_FILE")]
     verilog: String,
 
     /// Path to a Protocol file
@@ -29,7 +28,7 @@ struct Cli {
 }
 
 /// Example:
-/// `cargo run -- -l tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot"`
+/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot"`
 fn main() {
     // Parse CLI args
     let cli = Cli::parse();
@@ -57,13 +56,13 @@ fn main() {
         (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
     ];
 
-    let sim: &mut Interpreter<'_> = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+    let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(
         transactions_and_symbols.clone(),
         todos.clone(),
         &ctx,
         &sys,
-        sim,
+        interpreter,
         handler,
     );
     let results = scheduler.execute_todos();
