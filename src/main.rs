@@ -1,37 +1,49 @@
 use clap::Parser;
+use clap_verbosity_flag::Verbosity;
 use patronus::sim::Interpreter;
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
 use protocols::setup::{assert_ok, bv, setup_test_environment};
 
+/// Args for the interpreter CLI
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
+#[command(version, about, long_about = None, disable_version_flag = true)]
+struct Cli {
     /// Path to a Verilog file
-    #[arg(short, long)]
+    /// (we give this argument an alias of `-l`
+    /// since by default the `verbosity` flag has alias `-v`)
+    #[arg(short = 'l', long, value_name = "VERILOG_FILE")]
     verilog: String,
 
     /// Path to a Protocol file
-    #[arg(short, long)]
+    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
     protocol: String,
 
     /// Name of the top-level module (if one exists)
-    toplevel_module_name: Option<String>,
+    #[arg(short, long, value_name = "MODULE_NAME")]
+    module: Option<String>,
+
+    #[command(flatten)]
+    verbosity: Verbosity,
 }
 
 /// Example:
-/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v --protocol "tests/adders/adder_d1/add_d1.prot"`
+/// `cargo run -- -l tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot"`
 fn main() {
-    let args = Args::parse();
+    // Parse CLI args
+    let cli = Cli::parse();
+    env_logger::Builder::new()
+        .filter_level(cli.verbosity.log_level_filter())
+        .init();
 
     // Create a new handler for dealing with errors/diagnostics
     let handler = &mut DiagnosticHandler::new();
 
     let (parsed_data, ctx, sys) = setup_test_environment(
-        &args.verilog,
-        &args.protocol,
-        args.toplevel_module_name,
+        &cli.verilog,
+        &cli.protocol,
+        cli.module,
         handler, // pass handler
     );
 
