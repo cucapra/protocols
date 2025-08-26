@@ -13,6 +13,7 @@ pub mod parser;
 pub mod scheduler;
 pub mod serialize;
 pub mod setup;
+mod sim;
 pub mod static_checks;
 pub mod transactions_parser;
 pub mod typecheck;
