@@ -21,6 +21,7 @@ struct Cli {
     #[arg(short, long, value_name = "MODULE_NAME")]
     module: Option<String>,
 
+    /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
 }
@@ -49,7 +50,7 @@ fn main() {
         parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
     // CASE 1: BOTH THREADS PASS
-    // TODO: create a GH issue
+    // TODO: move the todos to a separate file and write a parser to parse the todos
     let todos = vec![
         (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
         (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
