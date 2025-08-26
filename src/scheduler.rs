@@ -143,7 +143,7 @@ impl<'a> Scheduler<'a> {
         todos: Vec<TodoItem>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,
-        sim: &'a mut Interpreter<'a>,
+        sim: Interpreter,
         handler: &'a mut DiagnosticHandler,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
@@ -343,7 +343,9 @@ impl<'a> Scheduler<'a> {
 
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             if thread.has_forked {
-                                println!("  ERROR: Thread has already forked at this point, terminating thread");
+                                println!(
+                                    "  ERROR: Thread has already forked at this point, terminating thread"
+                                );
                                 let error = ExecutionError::double_fork(
                                     thread.todo_idx,
                                     thread.todo.tr.name.clone(),
@@ -429,9 +431,9 @@ pub mod tests {
     use super::*;
     use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
     use crate::parser::parsing_helper;
-    use crate::yosys::yosys_to_btor;
     use crate::yosys::ProjectConf;
     use crate::yosys::YosysEnv;
+    use crate::yosys::yosys_to_btor;
     use std::path::PathBuf;
 
     fn create_sim_context(
@@ -536,7 +538,7 @@ pub mod tests {
             (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
         ];
 
-        let sim: &mut Interpreter<'_> = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -551,7 +553,7 @@ pub mod tests {
 
         // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
         todos[1].1[2] = bv(10, 32);
-        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -568,7 +570,7 @@ pub mod tests {
         // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = bv(4, 32);
         todos[1].1[2] = bv(9, 32);
-        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -584,7 +586,7 @@ pub mod tests {
 
         // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = bv(10, 32);
-        let sim4 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim4 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols,
             todos.clone(),
@@ -619,7 +621,7 @@ pub mod tests {
             (String::from("mul"), vec![bv(6, 32), bv(8, 32), bv(48, 32)]),
         ];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -634,7 +636,7 @@ pub mod tests {
 
         // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
         todos[1].1[2] = bv(47, 32);
-        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -651,7 +653,7 @@ pub mod tests {
         // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
         todos[0].1[2] = bv(3, 32);
         todos[1].1[2] = bv(48, 32);
-        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -667,7 +669,7 @@ pub mod tests {
 
         // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
         todos[1].1[2] = bv(47, 32);
-        let sim4 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim4 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols,
             todos.clone(),
@@ -698,14 +700,14 @@ pub mod tests {
 
         // PASSING CASE: Single thread
         let mut todos = vec![(String::from("multiple_assign"), vec![bv(1, 32), bv(1, 32)])];
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
 
         // ERROR CASE: Two different assignments
         todos.push((String::from("multiple_assign"), vec![bv(2, 32), bv(2, 32)]));
-        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
         assert_err(&results[0]);
@@ -723,7 +725,7 @@ pub mod tests {
 
         // PASSING CASE: Two assignments, but of same value (1)
         todos[1].1 = vec![bv(1, 32), bv(1, 32)];
-        let sim3 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -744,7 +746,7 @@ pub mod tests {
 
         // ERROR CASE: two_fork_err protocol
         let mut todos = vec![(String::from("two_fork_err"), vec![bv(1, 32), bv(1, 32)])];
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
         assert_err(&results[0]);
@@ -760,7 +762,7 @@ pub mod tests {
 
         // PASSING CASE: two_fork_ok protocol
         todos[0] = (String::from("two_fork_ok"), vec![bv(1, 32), bv(1, 32)]);
-        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -785,7 +787,7 @@ pub mod tests {
             (String::from("implicit_fork"), vec![bv(3, 32), bv(4, 32)]),
             (String::from("implicit_fork"), vec![bv(4, 32), bv(5, 32)]),
         ];
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -812,7 +814,7 @@ pub mod tests {
             (String::from("slicing_ok"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_ok
             (String::from("slicing_invalid"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_invalid
         ];
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -826,7 +828,7 @@ pub mod tests {
 
         // test slices that will result in an error because the widths of the slices are different
         todos[1].0 = String::from("slicing_err"); // switch to running transaction slicing_err
-        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -852,7 +854,7 @@ pub mod tests {
             (String::from("one"), vec![bv(3, 64)]),
             (String::from("two"), vec![bv(2, 64), bv(3, 64)]),
         ];
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -867,7 +869,7 @@ pub mod tests {
 
         // FAILING CASE: values of b disagree
         todos[1].1 = vec![bv(2, 64), bv(5, 64)];
-        let sim2 = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -897,7 +899,7 @@ pub mod tests {
 
         let todos = vec![(String::from("invert"), vec![bv(0, 1), bv(1, 1)])];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -926,7 +928,7 @@ pub mod tests {
 
         let todos = vec![(String::from("count_up"), vec![bv(10, 64)])];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -972,7 +974,7 @@ pub mod tests {
             ),
         ];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1030,7 +1032,7 @@ pub mod tests {
             ),
         ];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
