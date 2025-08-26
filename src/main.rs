@@ -1,5 +1,5 @@
 use clap::Parser;
-use clap_verbosity_flag::{InfoLevel, Verbosity};
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
@@ -22,7 +22,7 @@ struct Cli {
     module: Option<String>,
 
     #[command(flatten)]
-    verbosity: Verbosity<InfoLevel>,
+    verbosity: Verbosity<WarnLevel>,
 }
 
 /// Example (enables all tracing logs):
@@ -30,7 +30,11 @@ struct Cli {
 fn main() {
     // Parse CLI args
     let cli = Cli::parse();
+
+    // Set up logger to use the log-level specified via the `-v` flag
+    // For concision, we disable timestamps and the module paths in the log
     env_logger::Builder::new()
+        .format_timestamp(None)
         .filter_level(cli.verbosity.log_level_filter())
         .init();
 
