@@ -428,72 +428,7 @@ impl<'a> Scheduler<'a> {
 pub mod tests {
     use super::*;
     use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
-    use crate::parser::parsing_helper;
-    use crate::yosys::yosys_to_btor;
-    use crate::yosys::ProjectConf;
-    use crate::yosys::YosysEnv;
-    use std::path::PathBuf;
-
-    fn create_sim_context(
-        verilog_path: &str,
-        top_module: Option<String>,
-    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
-        let env = YosysEnv::default();
-        let inp = PathBuf::from(verilog_path);
-        let proj = ProjectConf::with_source(inp, top_module);
-
-        let btor_file = yosys_to_btor(&env, &proj, None)
-            .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
-
-        // Check if btor file was actually created and has content
-        if !btor_file.exists() {
-            panic!("BTOR file was not created at path: {}", btor_file.display());
-        }
-
-        let metadata = std::fs::metadata(&btor_file)
-            .unwrap_or_else(|e| panic!("Failed to read BTOR file metadata: {}", e));
-
-        if metadata.len() == 0 {
-            panic!("BTOR file is empty - likely synthesis failed. Check Yosys output for errors.");
-        }
-
-        let (ctx, sys) = patronus::btor2::parse_file(btor_file.as_path().as_os_str())
-            .unwrap_or_else(|| {
-                panic!(
-                    "Failed to parse BTOR file - possibly malformed: {}",
-                    btor_file.display()
-                )
-            });
-
-        (ctx, sys)
-    }
-
-    fn setup_test_environment(
-        verilog_path: &str,
-        transaction_filename: &str,
-        top_module: Option<String>,
-        handler: &mut DiagnosticHandler,
-    ) -> (
-        Vec<(Transaction, SymbolTable)>,    // owned
-        patronus::expr::Context,            // owned
-        patronus::system::TransitionSystem, // owned
-    ) {
-        let (ctx, sys) = create_sim_context(verilog_path, top_module);
-        let parsed = parsing_helper(transaction_filename, handler);
-        (parsed, ctx, sys)
-    }
-
-    fn bv(value: u64, width: u32) -> BitVecValue {
-        BitVecValue::from_u64(value, width)
-    }
-
-    fn assert_ok(res: &Result<(), ExecutionError>) {
-        assert!(res.is_ok(), "Expected Ok, got {:?}", res);
-    }
-
-    fn assert_err(res: &Result<(), ExecutionError>) {
-        assert!(res.is_err(), "Expected Err, got {:?}", res);
-    }
+    use crate::setup::{assert_err, assert_ok, bv, setup_test_environment};
 
     macro_rules! assert_assertion_error {
         ($result:expr) => {
