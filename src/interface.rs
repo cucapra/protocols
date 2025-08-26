@@ -17,18 +17,18 @@ pub mod tests {
     /// interpreter, just a tech demo that shows the foundations that the interpreter could
     /// be built on.
     #[test]
-    #[ignore] // unfortunately the `verilator` library does not currently support ports wider than 64 bit
+    // #[ignore] // unfortunately the `verilator` library does not currently support ports wider than 64 bit
     fn run_aes128_key_expand_with_verilator() {
         let options = VerilatorRuntimeOptions::default();
-        let mut runtime = VerilatorRuntime::new(
+        let runtime = VerilatorRuntime::new(
             "test_run".into(),
             &[
                 "examples/tinyaes128/aes_128.v".as_ref(),
                 "examples/tinyaes128/table.v".as_ref(),
             ],
+            &[],
             [],
             options,
-            false,
         )
         .unwrap();
 
@@ -42,6 +42,7 @@ pub mod tests {
                     ("out_1", 127, 0, PortDirection::Output),
                     ("out_2", 127, 0, PortDirection::Output),
                 ],
+                VerilatedModelConfig::default(),
             )
             .unwrap();
     }
@@ -50,12 +51,12 @@ pub mod tests {
     #[ignore]
     fn run_add_d1_with_verilator() {
         let options = VerilatorRuntimeOptions::default();
-        let mut runtime = VerilatorRuntime::new(
+        let runtime = VerilatorRuntime::new(
             "test_run".into(),
             &["examples/adders/add_d1.v".as_ref()],
+            &[],
             [],
             options,
-            false,
         )
         .unwrap();
 
@@ -69,6 +70,7 @@ pub mod tests {
                     ("B", 31, 0, PortDirection::Input),
                     ("S", 31, 0, PortDirection::Output),
                 ],
+                VerilatedModelConfig::default(),
             )
             .unwrap();
     }
