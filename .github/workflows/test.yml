@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 10
     env:
       # Pin Rust version to prevent new Clippy lints from breaking CI
-      RUST_VERSION: "1.83.0"
+      RUST_VERSION: "1.85.0"
 
     steps:
       - uses: actions/checkout@v4

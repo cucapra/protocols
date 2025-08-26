@@ -7,9 +7,9 @@
 #[cfg(test)]
 pub mod tests {
     use crate::yosys::*;
-    use baa::{BitVecOps, BitVecValue};
+    use baa::BitVecValue;
     use marlin_verilator::*;
-    use patronus::sim::Simulator;
+    use patronus::sim::{InitKind, Simulator};
     use std::path::PathBuf;
 
     /// This example is intended to demonstrate how the `verilog` crate can be used
@@ -95,11 +95,11 @@ pub mod tests {
             .unwrap()
             .expr;
 
-        sim.init();
+        sim.init(InitKind::Zero);
         sim.set(a, &BitVecValue::from_u64(6, 32));
         sim.set(b, &BitVecValue::from_u64(7, 32));
         sim.step();
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 42);
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 42);
     }
 
     #[test]
@@ -125,12 +125,12 @@ pub mod tests {
             .unwrap()
             .expr;
 
-        sim.init();
+        sim.init(InitKind::Zero);
         sim.set(a, &BitVecValue::from_u64(41, 32));
         sim.set(b, &BitVecValue::from_u64(59, 32));
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 100);
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 100);
         sim.step();
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 100); // First step should keep value
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 100); // First step should keep value
     }
 
     #[test]
@@ -156,12 +156,12 @@ pub mod tests {
             .unwrap()
             .expr;
 
-        sim.init();
+        sim.init(InitKind::Zero);
         sim.set(a, &BitVecValue::from_u64(4, 32));
         sim.set(b, &BitVecValue::from_u64(6, 32));
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 0);
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 0);
         sim.step();
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 10); // First step should have value
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 10); // First step should have value
     }
 
     #[test]
@@ -187,16 +187,16 @@ pub mod tests {
             .unwrap()
             .expr;
 
-        sim.init();
+        sim.init(InitKind::Zero);
         sim.set(a, &BitVecValue::from_u64(10, 32));
         sim.set(b, &BitVecValue::from_u64(5, 32));
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 0); // No step should be nothing
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 0); // No step should be nothing
         sim.step();
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 0); // First step should be nothing
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 0); // First step should be nothing
         sim.step();
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 15); // Register should now have value
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 15); // Register should now have value
         sim.step();
-        assert_eq!(sim.get(s).unwrap().to_u64().unwrap(), 15); // Register should keep value
+        assert_eq!(sim.get(s).try_into_u64().unwrap(), 15); // Register should keep value
     }
 
     #[test]
@@ -217,24 +217,24 @@ pub mod tests {
             .unwrap()
             .expr;
 
-        sim.init();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 0);
+        sim.init(InitKind::Zero);
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 0);
         sim.step();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 1);
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 1);
         sim.step();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 2);
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 2);
         sim.step();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 3);
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 3);
         sim.step();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 4);
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 4);
         sim.step();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 5);
-        sim.step();
-        sim.step();
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 5);
         sim.step();
         sim.step();
         sim.step();
         sim.step();
-        assert_eq!(sim.get(c).unwrap().to_u64().unwrap(), 0); // Reseting to 0
+        sim.step();
+        sim.step();
+        assert_eq!(sim.get(c).try_into_u64().unwrap(), 0); // Reseting to 0
     }
 }
