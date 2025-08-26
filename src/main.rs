@@ -10,16 +10,18 @@ use protocols::setup::{assert_ok, bv, setup_test_environment};
 struct Args {
     /// Path to a Verilog file
     #[arg(short, long)]
-    verilog_file: String,
+    verilog: String,
 
     /// Path to a Protocol file
     #[arg(short, long)]
-    protocol_file: String,
+    protocol: String,
 
     /// Name of the top-level module (if one exists)
     toplevel_module_name: Option<String>,
 }
 
+/// Example:
+/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v --protocol "tests/adders/adder_d1/add_d1.prot"`
 fn main() {
     let args = Args::parse();
 
@@ -27,8 +29,8 @@ fn main() {
     let handler = &mut DiagnosticHandler::new();
 
     let (parsed_data, ctx, sys) = setup_test_environment(
-        &args.verilog_file,
-        &args.protocol_file,
+        &args.verilog,
+        &args.protocol,
         args.toplevel_module_name,
         handler, // pass handler
     );
