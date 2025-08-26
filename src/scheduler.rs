@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use log::trace;
+use log::info;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
@@ -64,10 +64,9 @@ pub struct Thread<'a> {
 
 impl<'a> Thread<'a> {
     pub fn initialize_thread(todo: Todo<'a>, todo_idx: usize) -> Self {
-        trace!(
+        info!(
             "Thread initialized with transaction: {:?}, thread_id={}",
-            todo.tr.name,
-            todo_idx
+            todo.tr.name, todo_idx
         );
         Self {
             current_step: todo.tr.body,
@@ -158,7 +157,7 @@ impl<'a> Scheduler<'a> {
         let initial_todo =
             Self::next_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
 
-        trace!(
+        info!(
             "Starting with initial transaction: {:?}",
             initial_todo.tr.name
         );
@@ -175,7 +174,7 @@ impl<'a> Scheduler<'a> {
 
         let results_size = todos.len();
         let first = Thread::initialize_thread(initial_todo, 0);
-        trace!("Added first thread to active_threads");
+        info!("Added first thread to active_threads");
         Self {
             irs,
             todos,
@@ -191,8 +190,8 @@ impl<'a> Scheduler<'a> {
     }
 
     pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
-        trace!(
-            "\n==== Starting scheduling cycle {}, active threads: {} ====",
+        info!(
+            "==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count,
             self.active_threads.len()
         );
@@ -232,19 +231,19 @@ impl<'a> Scheduler<'a> {
                     return self.results.clone();
                 }
 
-                print!("Active Input Vals {:?}", active_input_vals);
+                info!("Active Input Vals {:?}", active_input_vals);
 
                 // change the previous input vals to equal the active input vals
                 previous_input_vals = Some(active_input_vals);
             }
 
             // achieved convergence, run one more time with assertions on
-            trace!("Achieved Convergence. Running once more with assertions enabled...");
+            info!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.enable_assertions_and_forks();
             self.run_all_active_until_next_step();
 
             // now that all threads are synchronized on the step, we can run step() on the sim
-            trace!("Stepping...");
+            info!("Stepping...");
             self.evaluator.sim_step();
 
             // Move each active thread into inactive or next
@@ -252,7 +251,7 @@ impl<'a> Scheduler<'a> {
                 let next_step: Option<StmtId> = active_thread.next_step;
                 match next_step {
                     Some(next_step_id) => {
-                        trace!(
+                        info!(
                             "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
                             active_thread.todo.tr.name, next_step_id
                         );
@@ -263,7 +262,7 @@ impl<'a> Scheduler<'a> {
                         self.next_threads.push(active_thread)
                     }
                     None => {
-                        trace!(
+                        info!(
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
@@ -274,15 +273,15 @@ impl<'a> Scheduler<'a> {
 
             // setup the threads for the next cycle
             if !self.next_threads.is_empty() {
-                trace!(
+                info!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
                     self.next_threads.len()
                 );
                 self.active_threads = std::mem::take(&mut self.next_threads);
                 self.step_count += 1;
-                trace!("Advancing to scheduling cycle: {}", self.step_count);
+                info!("Advancing to scheduling cycle: {}", self.step_count);
             } else {
-                trace!("No more threads to schedule. Protocol execution complete.");
+                info!("No more threads to schedule. Protocol execution complete.");
             }
         }
 
@@ -318,36 +317,34 @@ impl<'a> Scheduler<'a> {
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
 
-        trace!(
+        info!(
             "Running thread {} from step {:?}",
-            thread.todo.tr.name,
-            current
+            thread.todo.tr.name, current
         );
         self.evaluator.context_switch(thread.todo.clone());
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
-            trace!("  Evaluating statement: {:?}", current);
+            info!("  Evaluating statement: {:?}", current);
 
             match self.evaluator.evaluate_stmt(&current) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
-                    trace!(
+                    info!(
                         "  Next statement: {:?} {:?}",
-                        next_id,
-                        thread.todo.tr[next_id]
+                        next_id, thread.todo.tr[next_id]
                     );
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {
-                            trace!("  Step reached at {:?}, pausing.", next_id);
+                            info!("  Step reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
                             return;
                         }
 
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             if thread.has_forked {
-                                trace!(
+                                info!(
                                     "  ERROR: Thread has already forked at this point, terminating thread"
                                 );
                                 let error = ExecutionError::double_fork(
@@ -359,24 +356,24 @@ impl<'a> Scheduler<'a> {
                                 thread.next_step = None;
                                 return;
                             }
-                            trace!("  Fork at {:?}, spawning new thread…", next_id);
+                            info!("  Fork at {:?}, spawning new thread…", next_id);
                             match next_todo_option.clone() {
                                 Some(todo) => {
                                     let new_thread =
                                         Thread::initialize_thread(todo, self.next_todo_idx);
                                     self.next_threads.push(new_thread);
-                                    trace!(
+                                    info!(
                                         "    enqueued forked thread; queue size = {}",
                                         self.next_threads.len()
                                     );
                                 }
                                 None => {
-                                    trace!("    no more todos to fork, skipping fork.");
+                                    info!("    no more todos to fork, skipping fork.");
                                 }
                             }
                             self.next_todo_idx += 1;
                             // Mark this thread as having forked
-                            trace!("  Marking thread {} as having forked.", { thread.todo_idx });
+                            info!("  Marking thread {} as having forked.", { thread.todo_idx });
                             thread.has_forked = true;
                             // continue from the fork point
                             current = next_id;
@@ -391,14 +388,14 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    trace!("  Execution complete, no more statements.");
+                    info!("  Execution complete, no more statements.");
                     thread.next_step = None;
                     break;
                 }
 
                 // error -> record and stop
                 Err(e) => {
-                    trace!("ERROR: {:?}, terminating thread", e);
+                    info!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.todo_idx] = Err(e);
                     thread.next_step = None;
                     break;
@@ -416,13 +413,13 @@ impl<'a> Scheduler<'a> {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
                     self.next_threads.push(new_thread);
-                    trace!(
+                    info!(
                         "    enqueued implicitly forked thread; queue size = {}",
                         self.next_threads.len()
                     );
                 }
                 None => {
-                    trace!("    no more todos to fork, skipping implicit fork.");
+                    info!("    no more todos to fork, skipping implicit fork.");
                 }
             }
             self.next_todo_idx += 1;

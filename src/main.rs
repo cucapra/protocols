@@ -1,5 +1,5 @@
 use clap::Parser;
-use clap_verbosity_flag::Verbosity;
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
@@ -22,11 +22,11 @@ struct Cli {
     module: Option<String>,
 
     #[command(flatten)]
-    verbosity: Verbosity,
+    verbosity: Verbosity<InfoLevel>,
 }
 
 /// Example (enables all tracing logs):
-/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -vvvv`
+/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -v`
 fn main() {
     // Parse CLI args
     let cli = Cli::parse();
