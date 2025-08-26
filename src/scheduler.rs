@@ -343,7 +343,9 @@ impl<'a> Scheduler<'a> {
 
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             if thread.has_forked {
-                                println!("  ERROR: Thread has already forked at this point, terminating thread");
+                                println!(
+                                    "  ERROR: Thread has already forked at this point, terminating thread"
+                                );
                                 let error = ExecutionError::double_fork(
                                     thread.todo_idx,
                                     thread.todo.tr.name.clone(),
@@ -429,9 +431,9 @@ pub mod tests {
     use super::*;
     use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
     use crate::parser::parsing_helper;
-    use crate::yosys::yosys_to_btor;
     use crate::yosys::ProjectConf;
     use crate::yosys::YosysEnv;
+    use crate::yosys::yosys_to_btor;
     use std::path::PathBuf;
 
     fn create_sim_context(

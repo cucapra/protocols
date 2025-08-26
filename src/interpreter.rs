@@ -209,6 +209,7 @@ impl<'a> Evaluator<'a> {
 
     // step the simulator
     pub fn sim_step(&mut self) {
+        self.dump_signals();
         self.sim.step();
 
         // modify the input_vals to all be OldValues or DontCares
@@ -226,6 +227,14 @@ impl<'a> Evaluator<'a> {
                 (*k, new_v)
             })
             .collect();
+    }
+
+    /// Called right before a step and at the end of the simulation. Records current signal values.
+    fn dump_signals(&mut self) {}
+
+    /// Called at the end of simulation.
+    pub fn finish(&mut self) {
+        self.dump_signals();
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
