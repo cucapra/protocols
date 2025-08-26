@@ -1,18 +1,36 @@
+use clap::Parser;
 use patronus::sim::Interpreter;
-use protocols::{
-    diagnostic::DiagnosticHandler,
-    ir::{SymbolTable, Transaction},
-    scheduler::Scheduler,
-    setup::{assert_ok, bv, setup_test_environment},
-};
+use protocols::diagnostic::DiagnosticHandler;
+use protocols::ir::{SymbolTable, Transaction};
+use protocols::scheduler::Scheduler;
+use protocols::setup::{assert_ok, bv, setup_test_environment};
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Path to a Verilog file
+    #[arg(short, long)]
+    verilog_file: String,
+
+    /// Path to a Protocol file
+    #[arg(short, long)]
+    protocol_file: String,
+
+    /// Name of the top-level module (if one exists)
+    toplevel_module_name: Option<String>,
+}
 
 fn main() {
+    let args = Args::parse();
+
+    // Create a new handler for dealing with errors/diagnostics
     let handler = &mut DiagnosticHandler::new();
+
     let (parsed_data, ctx, sys) = setup_test_environment(
-        "tests/adders/adder_d1/add_d1.v",    // pass in verilog file(s)
-        "tests/adders/adder_d1/add_d1.prot", // pass in protocol
-        None,                                // list name of top module (if one exists)
-        handler,                             // pass handler
+        &args.verilog_file,
+        &args.protocol_file,
+        args.toplevel_module_name,
+        handler, // pass handler
     );
 
     // Nikil says we currently have to perform this step in order to parse properly
