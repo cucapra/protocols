@@ -25,8 +25,8 @@ struct Cli {
     verbosity: Verbosity,
 }
 
-/// Example:
-/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot"`
+/// Example (enables all tracing logs):
+/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -vvvv`
 fn main() {
     // Parse CLI args
     let cli = Cli::parse();
