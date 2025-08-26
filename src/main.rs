@@ -10,8 +10,6 @@ use protocols::setup::{assert_ok, bv, setup_test_environment};
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
     /// Path to a Verilog file
-    /// (we give this argument an alias of `-l`
-    /// since by default the `verbosity` flag has alias `-v`)
     #[arg(long, value_name = "VERILOG_FILE")]
     verilog: String,
 
@@ -39,18 +37,15 @@ fn main() {
     // Create a new handler for dealing with errors/diagnostics
     let handler = &mut DiagnosticHandler::new();
 
-    let (parsed_data, ctx, sys) = setup_test_environment(
-        &cli.verilog,
-        &cli.protocol,
-        cli.module,
-        handler, // pass handler
-    );
+    let (parsed_data, ctx, sys) =
+        setup_test_environment(&cli.verilog, &cli.protocol, cli.module, handler);
 
     // Nikil says we currently have to perform this step in order to parse properly
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
         parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
     // CASE 1: BOTH THREADS PASS
+    // TODO: create a GH issue
     let todos = vec![
         (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
         (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),

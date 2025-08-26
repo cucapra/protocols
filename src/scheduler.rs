@@ -473,7 +473,7 @@ pub mod tests {
             (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
         ];
 
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
