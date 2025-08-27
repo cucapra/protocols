@@ -22,7 +22,7 @@ use patronus::system::TransitionSystem;
 
 type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
-type TodoItem = (String, Vec<BitVecValue>);
+pub type TodoItem = (String, Vec<BitVecValue>);
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
