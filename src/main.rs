@@ -1,3 +1,7 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Ernest Ng <eyn5@cornell.edu>
+
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
