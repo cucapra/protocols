@@ -60,19 +60,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
         parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
-    // CASE 1: BOTH THREADS PASS
-
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new();
     let todos: Vec<(String, Vec<baa::BitVecValue>)> =
         parse_transactions_file(cli.transactions, transactions_handler)?;
-
-    println!("todos = {todos:?}");
-
-    // let todos: Vec<(String, Vec<baa::BitVecValue>)> = vec![
-    //     (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
-    //     (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
-    // ];
 
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(
@@ -84,6 +75,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         protocols_handler,
     );
     let results = scheduler.execute_todos();
+
+    // TODO: how to specify what should pass and what should error?
+    // see tests in `scheduler.rs`
     assert_ok(&results[0]);
     assert_ok(&results[1]);
 
