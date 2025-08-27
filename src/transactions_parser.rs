@@ -70,14 +70,23 @@ fn parse_arglist(
 ) -> Result<Vec<BitVecValue>, String> {
     let mut args = vec![];
 
-    for arg_pair in arglist_pair.into_inner() {
-        if arg_pair.as_rule() == Rule::arg {
-            let arg_value: BitVecValue = parse_arg(arg_pair, handler, fileid)?;
-            args.push(arg_value);
+    for inner_pair in arglist_pair.into_inner() {
+        match inner_pair.as_rule() {
+            Rule::arg => {
+                let arg_value = parse_arg(inner_pair, handler, fileid)?;
+                args.push(arg_value);
+            }
+            Rule::arglist => {
+                // Recursively parse nested arglist
+                let mut nested_args = parse_arglist(inner_pair, handler, fileid)?;
+                args.append(&mut nested_args);
+            }
+            _ => {
+                // Skip other rules like commas
+                continue;
+            }
         }
     }
-
-    println!("parsed args = {args:?}");
 
     Ok(args)
 }
@@ -89,47 +98,34 @@ fn parse_arglist(
 /// - `fileid`: file descriptor
 fn parse_arg(
     arg_pair: Pair<Rule>,
-    handler: &mut DiagnosticHandler,
-    fileid: usize,
+    _handler: &mut DiagnosticHandler,
+    _fileid: usize,
 ) -> Result<BitVecValue, String> {
-    let arg_inner = arg_pair.into_inner().next().unwrap();
-    let arg_str = arg_inner.as_str();
+    let arg_str = arg_pair.as_str();
 
     // TODO: figure out how to avoid hard-coding the `bitwidth`
     let bitwidth = 32;
 
-    match arg_inner.as_rule() {
-        Rule::binary_integer => {
-            // Remove "0b" or "0B" prefix and underscores
-            let binary_str = arg_str[2..].replace('_', "");
-            let value = u64::from_str_radix(&binary_str, 2)
-                .map_err(|e| format!("Invalid binary integer '{}': {}", arg_str, e))?;
-            println!("value = {value}, bitwidth = {bitwidth}");
-            Ok(bv(value, bitwidth))
-        }
-        Rule::hex_integer => {
-            // Remove "0x" or "0X" prefix and underscores
-            let hex_str = arg_str[2..].replace('_', "");
-            let value = u64::from_str_radix(&hex_str, 16)
-                .map_err(|e| format!("Invalid hex integer '{}': {}", arg_str, e))?;
-            // Each hex digit = 4 bits
-            println!("value = {value}, bitwidth = {bitwidth}");
-            Ok(bv(value, bitwidth))
-        }
-        Rule::decimal_integer => {
-            // Remove underscores
-            let decimal_str = arg_str.replace('_', "");
-            let value = decimal_str
-                .parse::<u64>()
-                .map_err(|e| format!("Invalid decimal integer '{}': {}", arg_str, e))?;
-
-            println!("value = {value}, bitwidth = {bitwidth}");
-            Ok(bv(value, bitwidth))
-        }
-        _ => {
-            let msg = format!("Unexpected argument type: {:?}", arg_inner.as_rule());
-            handler.emit_diagnostic_parsing(&msg, fileid, &arg_inner, Level::Error);
-            Err(msg)
-        }
+    if arg_str.starts_with("0b") || arg_str.starts_with("0B") {
+        // Remove "0b" or "0B" prefix and underscores
+        let binary_str = arg_str[2..].replace('_', "");
+        let value = u64::from_str_radix(&binary_str, 2)
+            .map_err(|e| format!("Invalid binary integer '{}': {}", arg_str, e))?;
+        Ok(bv(value, bitwidth))
+    } else if arg_str.starts_with("0x") || arg_str.starts_with("0X") {
+        // Remove "0x" or "0X" prefix and underscores
+        let hex_str = arg_str[2..].replace('_', "");
+        let value = u64::from_str_radix(&hex_str, 16)
+            .map_err(|e| format!("Invalid hex integer '{}': {}", arg_str, e))?;
+        // Each hex digit = 4 bits
+        Ok(bv(value, bitwidth))
+    } else {
+        // Everything else is treated as a decimal integer
+        // Remove underscores
+        let decimal_str = arg_str.replace('_', "");
+        let value = decimal_str
+            .parse::<u64>()
+            .map_err(|e| format!("Invalid decimal integer '{}': {}", arg_str, e))?;
+        Ok(bv(value, bitwidth))
     }
 }
