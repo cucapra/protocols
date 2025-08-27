@@ -64,7 +64,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new();
-    let todos = parse_transactions_file(cli.transactions, transactions_handler)?;
+    let todos: Vec<(String, Vec<baa::BitVecValue>)> =
+        parse_transactions_file(cli.transactions, transactions_handler)?;
+
+    println!("todos = {todos:?}");
+
+    // let todos: Vec<(String, Vec<baa::BitVecValue>)> = vec![
+    //     (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
+    //     (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
+    // ];
 
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(

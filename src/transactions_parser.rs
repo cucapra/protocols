@@ -77,6 +77,8 @@ fn parse_arglist(
         }
     }
 
+    println!("parsed args = {args:?}");
+
     Ok(args)
 }
 
@@ -93,13 +95,16 @@ fn parse_arg(
     let arg_inner = arg_pair.into_inner().next().unwrap();
     let arg_str = arg_inner.as_str();
 
+    // TODO: figure out how to avoid hard-coding the `bitwidth`
+    let bitwidth = 32;
+
     match arg_inner.as_rule() {
         Rule::binary_integer => {
             // Remove "0b" or "0B" prefix and underscores
             let binary_str = arg_str[2..].replace('_', "");
             let value = u64::from_str_radix(&binary_str, 2)
                 .map_err(|e| format!("Invalid binary integer '{}': {}", arg_str, e))?;
-            let bitwidth = binary_str.len() as u32;
+            println!("value = {value}, bitwidth = {bitwidth}");
             Ok(bv(value, bitwidth))
         }
         Rule::hex_integer => {
@@ -107,7 +112,8 @@ fn parse_arg(
             let hex_str = arg_str[2..].replace('_', "");
             let value = u64::from_str_radix(&hex_str, 16)
                 .map_err(|e| format!("Invalid hex integer '{}': {}", arg_str, e))?;
-            let bitwidth = hex_str.len() as u32 * 4; // Each hex digit = 4 bits
+            // Each hex digit = 4 bits
+            println!("value = {value}, bitwidth = {bitwidth}");
             Ok(bv(value, bitwidth))
         }
         Rule::decimal_integer => {
@@ -117,13 +123,7 @@ fn parse_arg(
                 .parse::<u64>()
                 .map_err(|e| format!("Invalid decimal integer '{}': {}", arg_str, e))?;
 
-            // For decimal ints, we need to determine an appropriate bitwidth
-            // Use the minimum number of bits needed to represent the value
-            let bitwidth = if value == 0 {
-                1
-            } else {
-                64 - value.leading_zeros()
-            };
+            println!("value = {value}, bitwidth = {bitwidth}");
             Ok(bv(value, bitwidth))
         }
         _ => {
