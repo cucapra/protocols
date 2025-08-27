@@ -14,15 +14,15 @@ use protocols::transactions_parser::parse_transactions_file;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Verilog file
+    /// Path to a Verilog (.v) file
     #[arg(long, value_name = "VERILOG_FILE")]
     verilog: String,
 
-    /// Path to a Protocol file
+    /// Path to a Protocol (.prot) file
     #[arg(short, long, value_name = "PROTOCOLS_FILE")]
     protocol: String,
 
-    /// Path to a transactions file
+    /// Path to a Transactions (.tx) file
     #[arg(short, long, value_name = "TRANSACTIONS_FILE")]
     transactions: String,
 
@@ -36,7 +36,9 @@ struct Cli {
 }
 
 /// Example (enables all tracing logs):
-/// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -v`
+/// ```
+/// cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -t "tests/adders/adder_d1/add_d1.tx"
+/// ```
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -49,18 +51,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Create a new handler for dealing with errors/diagnostics
-    let handler = &mut DiagnosticHandler::new();
+    let protocols_handler = &mut DiagnosticHandler::new();
 
     let (parsed_data, ctx, sys) =
-        setup_test_environment(&cli.verilog, &cli.protocol, cli.module, handler);
+        setup_test_environment(&cli.verilog, &cli.protocol, cli.module, protocols_handler);
 
     // Nikil says we currently have to perform this step in order to parse properly
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
         parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
 
     // CASE 1: BOTH THREADS PASS
-    // TODO: move the todos to a separate file and write a parser to parse the todos
-    let todos = parse_transactions_file(cli.transactions, handler)?;
+
+    // Create a separate `DiagnosticHandler` when parsing the transactions file
+    let transactions_handler = &mut DiagnosticHandler::new();
+    let todos = parse_transactions_file(cli.transactions, transactions_handler)?;
 
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(
@@ -69,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &ctx,
         &sys,
         interpreter,
-        handler,
+        protocols_handler,
     );
     let results = scheduler.execute_todos();
     assert_ok(&results[0]);

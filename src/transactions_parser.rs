@@ -1,5 +1,5 @@
-use crate::diagnostic::*;
 use crate::scheduler::TodoItem;
+use crate::{diagnostic::*, setup::bv};
 use baa::BitVecValue;
 use pest::{error::InputLocation, iterators::Pair, Parser};
 use pest_derive::Parser;
@@ -100,7 +100,7 @@ fn parse_arg(
             let value = u64::from_str_radix(&binary_str, 2)
                 .map_err(|e| format!("Invalid binary integer '{}': {}", arg_str, e))?;
             let bitwidth = binary_str.len() as u32;
-            Ok(BitVecValue::from_u64(value, bitwidth))
+            Ok(bv(value, bitwidth))
         }
         Rule::hex_integer => {
             // Remove "0x" or "0X" prefix and underscores
@@ -108,7 +108,7 @@ fn parse_arg(
             let value = u64::from_str_radix(&hex_str, 16)
                 .map_err(|e| format!("Invalid hex integer '{}': {}", arg_str, e))?;
             let bitwidth = hex_str.len() as u32 * 4; // Each hex digit = 4 bits
-            Ok(BitVecValue::from_u64(value, bitwidth))
+            Ok(bv(value, bitwidth))
         }
         Rule::decimal_integer => {
             // Remove underscores
@@ -124,7 +124,7 @@ fn parse_arg(
             } else {
                 64 - value.leading_zeros()
             };
-            Ok(BitVecValue::from_u64(value, bitwidth))
+            Ok(bv(value, bitwidth))
         }
         _ => {
             let msg = format!("Unexpected argument type: {:?}", arg_inner.as_rule());
