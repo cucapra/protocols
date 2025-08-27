@@ -9,7 +9,7 @@ use crate::diagnostic::DiagnosticHandler;
 use crate::errors::ExecutionError;
 use crate::ir::{SymbolTable, Transaction};
 use crate::parser::parsing_helper;
-use crate::yosys::{yosys_to_btor, ProjectConf, YosysEnv};
+use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use baa::BitVecValue;
 use std::path::PathBuf;
 
