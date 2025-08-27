@@ -7,7 +7,8 @@ use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
-use protocols::setup::{assert_ok, bv, setup_test_environment};
+use protocols::setup::{assert_ok, setup_test_environment};
+use protocols::transactions_parser::parse_transactions_file;
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]
@@ -21,6 +22,10 @@ struct Cli {
     #[arg(short, long, value_name = "PROTOCOLS_FILE")]
     protocol: String,
 
+    /// Path to a transactions file
+    #[arg(short, long, value_name = "TRANSACTIONS_FILE")]
+    transactions: String,
+
     /// Name of the top-level module (if one exists)
     #[arg(short, long, value_name = "MODULE_NAME")]
     module: Option<String>,
@@ -32,7 +37,7 @@ struct Cli {
 
 /// Example (enables all tracing logs):
 /// `cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -v`
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
 
@@ -55,10 +60,7 @@ fn main() {
 
     // CASE 1: BOTH THREADS PASS
     // TODO: move the todos to a separate file and write a parser to parse the todos
-    let todos = vec![
-        (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
-        (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
-    ];
+    let todos = parse_transactions_file(cli.transactions, handler)?;
 
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(
@@ -72,4 +74,6 @@ fn main() {
     let results = scheduler.execute_todos();
     assert_ok(&results[0]);
     assert_ok(&results[1]);
+
+    Ok(())
 }

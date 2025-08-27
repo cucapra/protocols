@@ -99,16 +99,16 @@ fn parse_arg(
             let binary_str = arg_str[2..].replace('_', "");
             let value = u64::from_str_radix(&binary_str, 2)
                 .map_err(|e| format!("Invalid binary integer '{}': {}", arg_str, e))?;
-            let width = binary_str.len() as u32;
-            Ok(BitVecValue::from_u64(value, width))
+            let bitwidth = binary_str.len() as u32;
+            Ok(BitVecValue::from_u64(value, bitwidth))
         }
         Rule::hex_integer => {
             // Remove "0x" or "0X" prefix and underscores
             let hex_str = arg_str[2..].replace('_', "");
             let value = u64::from_str_radix(&hex_str, 16)
                 .map_err(|e| format!("Invalid hex integer '{}': {}", arg_str, e))?;
-            let width = hex_str.len() as u32 * 4; // Each hex digit = 4 bits
-            Ok(BitVecValue::from_u64(value, width))
+            let bitwidth = hex_str.len() as u32 * 4; // Each hex digit = 4 bits
+            Ok(BitVecValue::from_u64(value, bitwidth))
         }
         Rule::decimal_integer => {
             // Remove underscores
