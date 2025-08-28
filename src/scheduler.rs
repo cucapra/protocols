@@ -1068,7 +1068,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1103,7 +1103,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1137,7 +1137,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1174,7 +1174,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1211,7 +1211,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1248,7 +1248,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
@@ -1282,7 +1282,7 @@ pub mod tests {
             ],
         )];
 
-        let sim = &mut patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),
