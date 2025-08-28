@@ -4,3 +4,5 @@ Cargo.lock
 test_run/
 *.btor
 **/.DS_Store
+.vscode/*
+*.fst

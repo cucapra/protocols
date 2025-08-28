@@ -11,5 +11,7 @@ pub mod ir;
 pub mod parser;
 pub mod scheduler;
 pub mod serialize;
+pub mod setup;
+pub mod transactions_parser;
 pub mod typecheck;
 mod yosys;

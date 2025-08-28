@@ -8,6 +8,7 @@ use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
 use crate::scheduler::Todo;
 use baa::{BitVecOps, BitVecValue};
+use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
@@ -90,7 +91,7 @@ impl<'a> Evaluator<'a> {
         let mut output_mapping = HashMap::new();
 
         for input in &sys.inputs {
-            println!(
+            info!(
                 "Input expr: {:?}, name: {:?}",
                 (input),
                 ctx.get_symbol_name(*input)
@@ -98,7 +99,7 @@ impl<'a> Evaluator<'a> {
         }
 
         for output in &sys.outputs {
-            println!(
+            info!(
                 "Output expr: {:?}, name: {:?}",
                 (output).expr,
                 ctx.get_symbol_name((output).expr)

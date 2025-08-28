@@ -16,7 +16,11 @@ lazy_static = "1.5.0"
 marlin-verilator = "0.1.0"
 patronus = "0.34.1"
 tempfile = "3.20.0"
+clap = { version = "4.5.45", features = ["derive"] }
+clap-verbosity-flag = "3.0.4"
+env_logger = "0.11.8"
 rand = "0.9"
+log = "0.4.27"
 
 [dev-dependencies]
 insta = { version = "1.41.1", features = ["yaml"] }
