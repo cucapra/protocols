@@ -6,7 +6,6 @@
 
 pub mod diagnostic;
 mod errors;
-mod interface;
 mod interpreter;
 pub mod ir;
 pub mod parser;

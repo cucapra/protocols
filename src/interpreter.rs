@@ -9,7 +9,7 @@ use crate::ir::*;
 use crate::scheduler::Todo;
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
-use patronus::sim::{Interpreter, Simulator};
+use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
 use rand::rngs::ThreadRng;
 use rustc_hash::FxHashMap;
@@ -56,7 +56,7 @@ pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
-    sim: &'a mut Interpreter<'a>,
+    sim: Interpreter,
 
     // TODO: can change to be secondarymaps for efficiency
     args_mapping: HashMap<SymbolId, BitVecValue>,
@@ -77,7 +77,7 @@ impl<'a> Evaluator<'a> {
         st: &'a SymbolTable,
         ctx: &'a patronus::expr::Context,
         sys: &'a patronus::system::TransitionSystem,
-        sim: &'a mut Interpreter<'a>,
+        mut sim: Interpreter,
     ) -> Self {
         // create mapping from each symbolId to corresponding BitVecValue based on input mapping
         let args_mapping = Evaluator::generate_args_mapping(st, args);
@@ -130,7 +130,7 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // Initialize the input pins with DontCares that are randomly assigned
         let mut input_vals = HashMap::new();
@@ -153,7 +153,7 @@ impl<'a> Evaluator<'a> {
         }
 
         // Initialize sim, return the transaction!
-        sim.init();
+        sim.init(InitKind::Zero);
 
         Evaluator {
             tr,
@@ -235,9 +235,13 @@ impl<'a> Evaluator<'a> {
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(self.sim.get(*expr_ref).unwrap()))
+                    Ok(ExprValue::Concrete(
+                        self.sim.get(*expr_ref).try_into().unwrap(),
+                    ))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(self.sim.get((output).expr).unwrap()))
+                    Ok(ExprValue::Concrete(
+                        self.sim.get((output).expr).try_into().unwrap(),
+                    ))
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(bvv.clone()))
                 } else {

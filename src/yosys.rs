@@ -137,10 +137,7 @@ pub fn yosys_to_btor(
     let btor_name = match (btor_name, &project.top) {
         (Some(name), _) => name.to_path_buf(),
         (None, Some(top)) => PathBuf::from(format!("{top}.btor")),
-        _ => {
-            let with_btor = project.sources.first().unwrap().with_extension("btor");
-            with_btor
-        }
+        _ => project.sources.first().unwrap().with_extension("btor"),
     };
 
     let mut cmd = read_sources(project);
@@ -268,10 +265,12 @@ mod tests {
             Some(&PathBuf::from("tests/adders/adder_d2/add_d2.btor")),
         )
         .unwrap();
-        assert!(btor_file
-            .to_string_lossy()
-            .to_string()
-            .ends_with("add_d2.btor"));
+        assert!(
+            btor_file
+                .to_string_lossy()
+                .to_string()
+                .ends_with("add_d2.btor")
+        );
         // let btor = fs::read_to_string(btor_file).unwrap();
         // assert!(btor.contains("input 1 d"))
     }
@@ -286,9 +285,11 @@ mod tests {
         };
         let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
         // derived from sources
-        assert!(btor_file
-            .to_string_lossy()
-            .to_string()
-            .ends_with("counter.btor"));
+        assert!(
+            btor_file
+                .to_string_lossy()
+                .to_string()
+                .ends_with("counter.btor")
+        );
     }
 }

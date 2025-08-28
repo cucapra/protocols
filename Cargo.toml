@@ -1,11 +1,11 @@
 [package]
 name = "protocols"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.83"
+edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
-baa = { version = "0.16.0", features = ["rand1"] }
+baa = { version = "0.17.1", features = ["rand1"] }
 cranelift-entity = "0.114.0"
 pest = "2.7.15"
 pest_derive = "2.7.15"
@@ -14,9 +14,9 @@ thiserror = "2.0.8"
 codespan-reporting = "0.11.1"
 lazy_static = "1.5.0"
 marlin-verilator = "0.1.0"
-patronus = "0.32.0"
+patronus = "0.34.1"
 tempfile = "3.20.0"
-rand = "0.8.5"
+rand = "0.9"
 
 [dev-dependencies]
 insta = { version = "1.41.1", features = ["yaml"] }
