@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(
         transactions_and_symbols,
-        todos.clone(),
+        todos,
         &ctx,
         &sys,
         interpreter,
