@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::*;
+use crate::core::ir::*;
 use baa::BitVecOps;
 use std::io::Write;
 
@@ -211,8 +211,8 @@ pub mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-    use crate::diagnostic::DiagnosticHandler;
-    use crate::parser::parse_file;
+    use crate::core::diagnostic::DiagnosticHandler;
+    use crate::frontend::parser::parse_file;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();

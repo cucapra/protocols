@@ -4,10 +4,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-pub mod diagnostic;
-mod errors;
-mod interpreter;
-pub mod ir;
-pub mod parser;
-pub mod serialize;
-pub mod typecheck;
+pub mod core;
+pub mod frontend;
+pub mod interpreter;

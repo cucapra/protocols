@@ -4,7 +4,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::Stmt;
+use crate::core::diagnostic::*;
+use crate::core::ir::*;
 use baa::BitVecValue;
 use pest::Parser;
 use pest::error::InputLocation;
@@ -13,10 +14,8 @@ use pest::pratt_parser::PrattParser;
 use pest_derive::Parser;
 use std::vec;
 
-use crate::{diagnostic::*, ir::*};
-
 #[derive(Parser)]
-#[grammar = "protocols.pest"]
+#[grammar = "frontend/protocols.pest"]
 struct ProtocolParser;
 
 lazy_static::lazy_static! {

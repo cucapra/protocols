@@ -1,0 +1,15 @@
+---
+source: src/frontend/typecheck.rs
+expression: content
+---
+warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   ┌─ tests/multipliers/mul.prot:18:3
+   │
+18 │   dut.a := X;
+   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+
+warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   ┌─ tests/multipliers/mul.prot:19:3
+   │
+19 │   dut.b := X;
+   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).

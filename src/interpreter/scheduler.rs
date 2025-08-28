@@ -8,12 +8,10 @@ use baa::BitVecValue;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
-use crate::diagnostic::DiagnosticHandler;
-use crate::errors::DiagnosticEmitter;
-use crate::errors::{ExecutionError, ExecutionResult};
-use crate::interpreter::Evaluator;
-use crate::interpreter::InputValue;
-use crate::ir::*;
+use super::interp::{Evaluator, InputValue};
+use crate::core::diagnostic::DiagnosticHandler;
+use crate::core::errors::*;
+use crate::core::ir::*;
 
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
@@ -111,7 +109,7 @@ impl<'a> Scheduler<'a> {
             // get the corresponding transaction, symbol table, and next_stmt_map
             let tr_name = todos[idx].0.clone();
 
-            // find the ir corresponding to the transaction name
+            // find the core corresponding to the transaction name
             let ir_idx = irs
                 .iter()
                 .position(|(tr, _, _)| tr.name == tr_name)
@@ -428,12 +426,10 @@ impl<'a> Scheduler<'a> {
 
 #[cfg(test)]
 pub mod tests {
+    use super::super::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
     use super::*;
-    use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
-    use crate::parser::parsing_helper;
-    use crate::yosys::ProjectConf;
-    use crate::yosys::YosysEnv;
-    use crate::yosys::yosys_to_btor;
+    use crate::core::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
+    use crate::frontend::parser::parsing_helper;
     use std::path::PathBuf;
 
     fn create_sim_context(

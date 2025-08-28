@@ -6,7 +6,7 @@
 
 use std::{collections::HashSet, io::Write};
 
-use crate::parser::Rule;
+use crate::frontend::parser::Rule;
 use baa::BitVecValue;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
@@ -16,7 +16,7 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
 use pest::iterators::Pair;
 
-use crate::ir::*;
+use crate::core::ir::*;
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]

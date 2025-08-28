@@ -4,6 +4,5 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-mod interp;
-mod scheduler;
-mod yosys;
+pub mod parser;
+pub mod typecheck;

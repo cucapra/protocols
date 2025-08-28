@@ -4,8 +4,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::diagnostic::{DiagnosticHandler, Level};
-use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
+use crate::core::diagnostic::{DiagnosticHandler, Level};
+use crate::core::ir::*;
 use baa::BitVecValue;
 use std::fmt;
 

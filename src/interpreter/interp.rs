@@ -4,9 +4,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::errors::{ExecutionError, ExecutionResult};
-use crate::ir::*;
-use scheduler::Todo;
+use super::scheduler::Todo;
+use crate::core::errors::{ExecutionError, ExecutionResult};
+use crate::core::ir::*;
 use baa::{BitVecOps, BitVecValue};
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
@@ -15,8 +15,6 @@ use rand::rngs::ThreadRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
-
-pub mod scheduler;
 
 #[derive(Debug, Clone)]
 pub enum InputValue {

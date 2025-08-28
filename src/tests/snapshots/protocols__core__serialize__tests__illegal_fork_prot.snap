@@ -1,0 +1,9 @@
+---
+source: src/core/serialize.rs
+expression: content
+---
+error: Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if
+   ┌─ tests/adders/illegal_fork.prot:13:3
+   │
+13 │   fork(1); // forks cannot take an argument - will fail
+   │   ^ Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if

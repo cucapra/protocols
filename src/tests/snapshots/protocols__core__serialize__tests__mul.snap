@@ -1,0 +1,21 @@
+---
+source: src/core/serialize.rs
+expression: content
+---
+struct Multiplier {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
+  dut.a := a;
+  dut.b := b;
+  step();
+  step();
+  fork();
+  dut.a := X;
+  dut.b := X;
+  step();
+  assert_eq(s, dut.s);
+}

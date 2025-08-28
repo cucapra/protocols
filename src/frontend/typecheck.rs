@@ -4,7 +4,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::{diagnostic::*, ir::*, serialize::*};
+use crate::core::diagnostic::*;
+use crate::core::ir::*;
+use crate::core::serialize_expr;
 
 fn check_expr_types(
     tr: &Transaction,
@@ -195,7 +197,7 @@ pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut Diagnostic
 mod tests {
     use std::path::Path;
 
-    use crate::parser::parse_file;
+    use super::super::parser::parse_file;
     use baa::BitVecValue;
     use insta::Settings;
     use strip_ansi_escapes::strip_str;
