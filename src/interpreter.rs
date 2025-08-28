@@ -451,7 +451,7 @@ impl<'a> Evaluator<'a> {
                                     self.st[symbol_id].name().to_string(),
                                     current_val.clone(),
                                     new_val,
-                                    0, // TODO: Need to track thread_id in evaluator
+                                    0,
                                     *stmt_id,
                                 ));
                             }
