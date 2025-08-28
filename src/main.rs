@@ -56,9 +56,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (parsed_data, ctx, sys) =
         setup_test_environment(&cli.verilog, &cli.protocol, cli.module, protocols_handler);
 
-    // Nikil says we currently have to perform this step in order to parse properly
+    // Nikil says we have to do this step in order to convert
+    // `Vec<(Transaction, SymbolTable)>` into `Vec<(&Transaction, &SymbolTable)>`
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-        parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+        parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new();
@@ -67,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
     let mut scheduler = Scheduler::new(
-        transactions_and_symbols.clone(),
+        transactions_and_symbols,
         todos.clone(),
         &ctx,
         &sys,
