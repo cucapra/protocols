@@ -9,7 +9,5 @@ mod errors;
 mod interpreter;
 pub mod ir;
 pub mod parser;
-pub mod scheduler;
 pub mod serialize;
 pub mod typecheck;
-mod yosys;
