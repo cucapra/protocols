@@ -1,7 +1,7 @@
 use crate::scheduler::TodoItem;
 use crate::{diagnostic::*, setup::bv};
 use baa::BitVecValue;
-use pest::{Parser, error::InputLocation, iterators::Pair};
+use pest::{error::InputLocation, iterators::Pair, Parser};
 use pest_derive::Parser;
 
 #[derive(Parser)]
@@ -98,31 +98,75 @@ fn parse_arglist(
 /// - `fileid`: file descriptor
 fn parse_arg(
     arg_pair: Pair<Rule>,
-    _handler: &mut DiagnosticHandler,
-    _fileid: usize,
+    handler: &mut DiagnosticHandler,
+    fileid: usize,
 ) -> Result<BitVecValue, String> {
     let arg_str = arg_pair.as_str();
 
     // TODO: figure out how to avoid hard-coding the `bitwidth`
     let bitwidth = 32;
 
-    if arg_str.starts_with("0b") || arg_str.starts_with("0B") {
+    if let Some(stripped) = arg_str
+        .strip_prefix("0b")
+        .or_else(|| arg_str.strip_prefix("0B"))
+    {
         // Remove "0b" or "0B" prefix and underscores
-        let binary_str = arg_str[2..].replace('_', "");
+        let binary_str = stripped.replace('_', "");
+        if binary_str.is_empty() {
+            let msg = format!("Empty binary integer: '{}'", arg_str);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+            return Err(msg);
+        } else if !binary_str.chars().all(|c| c == '0' || c == '1') {
+            // Ensure that all characters are binary digits
+            let msg = format!(
+                "Invalid binary integer '{}': contains non-binary digits",
+                arg_str
+            );
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+            return Err(msg);
+        }
         let value = u64::from_str_radix(&binary_str, 2)
             .map_err(|e| format!("Invalid binary integer '{}': {}", arg_str, e))?;
         Ok(bv(value, bitwidth))
-    } else if arg_str.starts_with("0x") || arg_str.starts_with("0X") {
+    } else if let Some(stripped) = arg_str
+        .strip_prefix("0x")
+        .or_else(|| arg_str.strip_prefix("0X"))
+    {
         // Remove "0x" or "0X" prefix and underscores
-        let hex_str = arg_str[2..].replace('_', "");
+        let hex_str = stripped.replace('_', "");
+        if hex_str.is_empty() {
+            let msg = format!("Empty hexadecimal integer: '{}'", arg_str);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+            return Err(msg);
+        } else if !hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
+            // Ensure that all characters are hex digits
+            let msg = format!(
+                "Invalid hexadecimal integer '{}': contains non-hex digits",
+                arg_str
+            );
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+            return Err(msg);
+        }
         let value = u64::from_str_radix(&hex_str, 16)
             .map_err(|e| format!("Invalid hex integer '{}': {}", arg_str, e))?;
         // Each hex digit = 4 bits
         Ok(bv(value, bitwidth))
     } else {
-        // Everything else is treated as a decimal integer
         // Remove underscores
         let decimal_str = arg_str.replace('_', "");
+        if decimal_str.is_empty() {
+            let msg = format!("Empty argument: '{}'", arg_str);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+            return Err(msg);
+        } else if !decimal_str.chars().all(|c| c.is_ascii_digit()) {
+            // Validate that all characters are decimal digits
+            let msg = format!(
+                "Invalid decimal integer '{}': contains non-digit characters",
+                arg_str
+            );
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+            return Err(msg);
+        }
         let value = decimal_str
             .parse::<u64>()
             .map_err(|e| format!("Invalid decimal integer '{}': {}", arg_str, e))?;
