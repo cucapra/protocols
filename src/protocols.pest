@@ -7,47 +7,41 @@ WHITESPACE = _{ " " | NEWLINE }
 COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
 
 // Literals
-// integer = ${ bin_integer | oct_integer | hex_integer | dec_integer }
-//  bin_integer = ${ "0" ~ ("b" | "B") ~ ("_"? ~ ASCII_BIN_DIGIT)+ }
-//  oct_integer = ${ "0" ~ ("o" | "O") ~ ("_"? ~ ASCII_OCT_DIGIT)+ }
-//  hex_integer = ${ "0" ~ ("x" | "X") ~ ("_"? ~ ASCII_HEX_DIGIT)+ }
-integer = ${ ASCII_DIGIT ~ ("_"? ~ ASCII_DIGIT)* }
+integer = ${ width ~ "'" ~ (bin ~ bin_integer | oct ~ oct_integer | hex ~ hex_integer | dec ~ dec_integer) }
+    bin = ${ ("b" | "B") }
+    oct = ${ ("o" | "O") }
+    hex = ${ ("x" | "X") }
+    dec = ${ ("d" | "D") }
+    bin_integer = ${ ("_"? ~ ASCII_BIN_DIGIT)+ }
+    oct_integer = ${ ("_"? ~ ASCII_OCT_DIGIT)+ }
+    hex_integer = ${ ("_"? ~ ASCII_HEX_DIGIT)+ }
+    dec_integer = ${ ("_"? ~ ASCII_DIGIT)+ }
+    width = { ASCII_DIGIT ~ ("_"? ~ ASCII_DIGIT)* }
+
 dont_care = { "X" }
 
 // Expressions
 
 // Slicing
-slice = { path_id ~ "[" ~ integer ~ (":" ~ integer)? ~ "]" }
+slice = { path_id ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
 
 primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
-    // negate = { "-" }
     not = { "!" }
-bin_op = _{ eq | log_and }
-// bin_op = _{ neq | leq | eq | log_and | log_or | shift_left | shift_right | add | subtract | multiply | divide | mod }
-//    neq = { "!=" }
-//   leq = { "<= "}
-    eq = { "== "}
-//    add = { "+" }
-    log_and = { "&&" }
-//    log_or = { "||" }
-//    subtract = { "-" }
-//    multiply = { "*" }
-//    divide = { "/" }
-//    mod = { "%" }
-//    shift_left = { "<<" }
-//    shift_right = { ">>" }
+bin_op = _{ eq | concat }
+    eq = { "==" }
+    concat = { "+" }
 
 // handle binary operations and indexing operations
 expr = { atom ~ (bin_op ~ atom)*}
 
 id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
-tpe = { "u" ~ integer }
+tpe = { "u" ~ dec_integer }
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
-step = { "step" ~ "(" ~ integer? ~ ")" ~ ";"}
+step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}
 fork = { "fork" ~ "()" ~ ";"}
 stmt = _{ (assign | step | fork | while_loop | cond | assert_eq ) }
 dir = { "in" | "out" }
