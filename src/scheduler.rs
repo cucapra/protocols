@@ -640,7 +640,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_mult() {
+    fn test_scheduler_mult_d2() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multipliers/mult_d2/mult_d2.v"],

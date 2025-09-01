@@ -187,6 +187,7 @@ fn read_write<R: Regfile>(in rs1_addr: u5, out rs1_data: u32, out rs2_data: u32,
   assert_eq(R.o_rs1, rs1_data[31]);
   assert_eq(R.o_rs2, rs2_data[31]);
   assert_eq(R.o_ready, 0);
+  step();
 }
 
 fn idle<R: Regfile>() {
