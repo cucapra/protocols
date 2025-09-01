@@ -39,5 +39,5 @@ Options:
 Example usage:
 
 ```bash
-$ cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -t "tests/adders/adder_d1/add_d1.tx"
+$ cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p tests/adders/adder_d1/add_d1.prot -t tests/adders/adder_d1/add_d1.tx
 ```

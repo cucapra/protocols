@@ -41,9 +41,10 @@ struct Cli {
     verbosity: Verbosity<WarnLevel>,
 }
 
-/// Example (enables all tracing logs):
+/// Examples (enables all tracing logs):
 /// ```
-/// cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -t "tests/adders/adder_d1/add_d1.tx"
+/// $ cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p tests/adders/adder_d1/add_d1.prot -t tests/adders/adder_d1/add_d1.tx
+/// $ cargo run -- --verilog tests/counters/counter.v -p tests/counters/counter.prot -t tests/counters/counter.tx -v
 /// ```
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
@@ -87,6 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         transaction_arg_types,
     )?;
 
+    // Run the interpreter and the scheduler on the parsed transaction file
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, cli.fst);
     let mut scheduler = Scheduler::new(
         transactions_and_symbols,
@@ -97,8 +99,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         protocols_handler,
     );
     let results = scheduler.execute_todos();
+
+    // Check whether the protocol was executed successfully
     for res in results {
         assert_ok(&res);
     }
+    println!("Protocol executed successfully!");
     Ok(())
 }
