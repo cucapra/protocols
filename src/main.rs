@@ -81,8 +81,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new();
-    let todos: Vec<(String, Vec<baa::BitVecValue>)> =
-        parse_transactions_file(cli.transactions, transactions_handler)?;
+    let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
+        cli.transactions,
+        transactions_handler,
+        transaction_arg_types,
+    )?;
 
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, cli.fst);
     let mut scheduler = Scheduler::new(
