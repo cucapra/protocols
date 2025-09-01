@@ -262,6 +262,7 @@ impl<'a> Scheduler<'a> {
 
             // now that all threads are synchronized on the step, we can run step() on the sim
             info!("Stepping...");
+            info!("Stepping...");
             self.evaluator.sim_step();
 
             // Move each active thread into inactive or next
@@ -298,7 +299,9 @@ impl<'a> Scheduler<'a> {
                 self.active_threads = std::mem::take(&mut self.next_threads);
                 self.step_count += 1;
                 info!("Advancing to scheduling cycle: {}", self.step_count);
+                info!("Advancing to scheduling cycle: {}", self.step_count);
             } else {
+                info!("No more threads to schedule. Protocol execution complete.");
                 info!("No more threads to schedule. Protocol execution complete.");
             }
         }
@@ -344,6 +347,7 @@ impl<'a> Scheduler<'a> {
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
             info!("  Evaluating statement: {:?}", current);
+            info!("  Evaluating statement: {:?}", current);
 
             match self.evaluator.evaluate_stmt(&current) {
                 // happy path: got a next statement
@@ -355,6 +359,7 @@ impl<'a> Scheduler<'a> {
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {
+                            info!("  Step reached at {:?}, pausing.", next_id);
                             info!("  Step reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
                             return;
@@ -375,6 +380,7 @@ impl<'a> Scheduler<'a> {
                                 return;
                             }
                             info!("  Fork at {:?}, spawning new thread…", next_id);
+                            info!("  Fork at {:?}, spawning new thread…", next_id);
                             match next_todo_option.clone() {
                                 Some(todo) => {
                                     let new_thread =
@@ -387,10 +393,12 @@ impl<'a> Scheduler<'a> {
                                 }
                                 None => {
                                     info!("    no more todos to fork, skipping fork.");
+                                    info!("    no more todos to fork, skipping fork.");
                                 }
                             }
                             self.next_todo_idx += 1;
                             // Mark this thread as having forked
+                            info!("  Marking thread {} as having forked.", { thread.todo_idx });
                             info!("  Marking thread {} as having forked.", { thread.todo_idx });
                             thread.has_forked = true;
                             // continue from the fork point
@@ -407,12 +415,14 @@ impl<'a> Scheduler<'a> {
                 // no more statements -> done
                 Ok(None) => {
                     info!("  Execution complete, no more statements.");
+                    info!("  Execution complete, no more statements.");
                     thread.next_step = None;
                     break;
                 }
 
                 // error -> record and stop
                 Err(e) => {
+                    info!("ERROR: {:?}, terminating thread", e);
                     info!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.todo_idx] = Err(e);
                     thread.next_step = None;
@@ -437,6 +447,7 @@ impl<'a> Scheduler<'a> {
                     );
                 }
                 None => {
+                    info!("    no more todos to fork, skipping implicit fork.");
                     info!("    no more todos to fork, skipping implicit fork.");
                 }
             }

@@ -205,11 +205,7 @@ impl<'a> Evaluator<'a> {
     pub fn disable_assertions(&mut self) {
         self.assertions_enabled = false;
     }
-
-    pub fn assertions_enabled(&self) -> bool {
-        self.assertions_enabled
-    }
-
+    
     pub fn enable_forks(&mut self) {
         self.forks_enabled = true;
     }
