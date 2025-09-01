@@ -2,10 +2,12 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use std::collections::HashMap;
+
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{SymbolTable, Transaction};
+use protocols::ir::{SymbolTable, Transaction, Type};
 use protocols::scheduler::Scheduler;
 use protocols::setup::{assert_ok, setup_test_environment};
 use protocols::transactions_parser::parse_transactions_file;
@@ -70,6 +72,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `Vec<(Transaction, SymbolTable)>` into `Vec<(&Transaction, &SymbolTable)>`
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
         parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
+
+    // Maps a transaction's name to its argument types
+    let mut transaction_arg_types: HashMap<String, Vec<Type>> = HashMap::new();
+    for (tx, symbol_table) in &transactions_and_symbols {
+        transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
+    }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new();
