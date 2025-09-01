@@ -205,7 +205,7 @@ impl<'a> Evaluator<'a> {
     pub fn disable_assertions(&mut self) {
         self.assertions_enabled = false;
     }
-    
+
     pub fn enable_forks(&mut self) {
         self.forks_enabled = true;
     }
@@ -379,7 +379,10 @@ impl<'a> Evaluator<'a> {
                 if self.assertions_enabled {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 } else {
-                    info!("Skipping assertion {:?} because assertions are disabled", stmt_id);
+                    info!(
+                        "Skipping assertion {:?} because assertions are disabled",
+                        stmt_id
+                    );
                 }
 
                 Ok(self.next_stmt_map[stmt_id])

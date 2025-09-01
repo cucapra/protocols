@@ -217,9 +217,9 @@ impl<'a> Scheduler<'a> {
                         "Moving {} threads from next_threads to active_threads",
                         self.next_threads.len()
                     );
-                    self.active_threads.extend(self.next_threads.drain(..));
+                    self.active_threads.append(&mut self.next_threads);
                 }
-                
+
                 if iters == 0 {
                     self.evaluator.disable_forks();
                 }
@@ -568,6 +568,42 @@ pub mod tests {
     }
 
     #[test]
+    fn test_scheduler_add_d1_incorrect() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            vec!["tests/adders/adder_d1/add_d1.v"],
+            "tests/adders/adder_d1/add_d1.prot",
+            None,
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (
+                String::from("add_incorrect"),
+                vec![bv(1, 32), bv(2, 32), bv(3, 32)],
+            ),
+            (
+                String::from("add_incorrect"),
+                vec![bv(4, 32), bv(5, 32), bv(9, 32)],
+            ),
+        ];
+        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results = scheduler.execute_todos();
+        assert!(results[0].is_err() || results[1].is_err());
+    }
+
+    #[test]
     fn test_scheduler_add_d2() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
@@ -583,7 +619,10 @@ pub mod tests {
         let todos = vec![
             (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
             (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
-            (String::from("add"), vec![bv(10, 32), bv(11, 32), bv(21, 32)]),
+            (
+                String::from("add"),
+                vec![bv(10, 32), bv(11, 32), bv(21, 32)],
+            ),
         ];
 
         let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
@@ -710,7 +749,7 @@ pub mod tests {
         let results = scheduler.execute_todos();
 
         // we don't know which thread will fail (b/c ordering is non-deterministic), but one should
-        assert!(results[0].is_err() || results[1].is_err()); 
+        assert!(results[0].is_err() || results[1].is_err());
 
         // // PASSING CASE: Two assignments, but of same value (1)
         todos[1].1 = vec![bv(1, 32), bv(1, 32)];
