@@ -8,5 +8,5 @@ fn func_arg_invalid<dut: Dummy>(in a: u1, in b: u1, out s: u1) {
   fork();
   c := b;
   step();
-  s := 0;
+  s := 1'b0;
 }

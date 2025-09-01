@@ -56,8 +56,7 @@ pub struct ProjectConf {
 
 #[allow(dead_code)]
 impl ProjectConf {
-    pub fn with_source(source: PathBuf, top: Option<String>) -> Self {
-        let sources = vec![source];
+    pub fn with_sources(sources: Vec<PathBuf>, top: Option<String>) -> Self {
         Self {
             sources,
             top,

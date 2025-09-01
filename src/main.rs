@@ -57,8 +57,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a new handler for dealing with errors/diagnostics
     let protocols_handler = &mut DiagnosticHandler::new();
 
-    let (parsed_data, ctx, sys) =
-        setup_test_environment(&cli.verilog, &cli.protocol, cli.module, protocols_handler);
+    // At the moment we only allow the user to specify one Verilog file
+    // through the CLI, so we have to wrap it in a singleton Vec
+    let (parsed_data, ctx, sys) = setup_test_environment(
+        vec![&cli.verilog],
+        &cli.protocol,
+        cli.module,
+        protocols_handler,
+    );
 
     // Nikil says we have to do this step in order to convert
     // `Vec<(Transaction, SymbolTable)>` into `Vec<(&Transaction, &SymbolTable)>`

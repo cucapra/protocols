@@ -73,7 +73,7 @@ module serv_regfile
       rdata <= memory[raddr];
    end
 
-// commented because yosys doesn't seem to handle this initializaton well
+
 //    integer i;
 //    initial
 //      for (i=0;i<512;i=i+1)

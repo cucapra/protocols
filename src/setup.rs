@@ -13,15 +13,15 @@ use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use baa::BitVecValue;
 use std::path::PathBuf;
 
-/// Takes a path to a Verilog file and the name of a top-level module,
+/// Takes a vec of paths to Verilog files and the name of a top-level module,
 /// and returns a (Patronus `Context`, Patronus `TransitionSystem` pair)
-fn create_sim_context(
-    verilog_path: &str,
+pub fn create_sim_context(
+    verilog_paths: Vec<&str>, // changed from verilog_path: &str
     top_module: Option<String>,
 ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
     let env = YosysEnv::default();
-    let inp = PathBuf::from(verilog_path);
-    let proj = ProjectConf::with_source(inp, top_module);
+    let sources: Vec<PathBuf> = verilog_paths.iter().map(PathBuf::from).collect();
+    let proj = ProjectConf::with_sources(sources, top_module);
 
     let btor_file = yosys_to_btor(&env, &proj, None)
         .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
@@ -47,12 +47,12 @@ fn create_sim_context(
 }
 
 /// Takes the following arguments and creates an environment for testing
-/// - `verilog_path`: path to a Verilog file
+/// - `verilog_paths`: paths to Verilog files
 /// - `transaction_filename`: path to a Protocol `.prot` file
 /// - `top_module`: Name of the top-level module
 /// - `handler`: a `DiagnosticHandler`
 pub fn setup_test_environment(
-    verilog_path: &str,
+    verilog_paths: Vec<&str>,
     transaction_filename: &str,
     top_module: Option<String>,
     handler: &mut DiagnosticHandler,
@@ -61,7 +61,7 @@ pub fn setup_test_environment(
     patronus::expr::Context,            // owned
     patronus::system::TransitionSystem, // owned
 ) {
-    let (ctx, sys) = create_sim_context(verilog_path, top_module);
+    let (ctx, sys) = create_sim_context(verilog_paths, top_module);
     let parsed = parsing_helper(transaction_filename, handler);
     (parsed, ctx, sys)
 }
