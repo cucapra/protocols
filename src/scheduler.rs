@@ -203,13 +203,11 @@ impl<'a> Scheduler<'a> {
 
             // fixed point iteration with assertions off
             self.evaluator.disable_assertions();
-            self.evaluator.enable_forks();
 
             let mut iters = 0;
             loop {
-                // info!("Fixed point iteration {}", iters);
                 // run every active thread up to the next step to synchronize on
-                self.run_all_active_until_next_step();
+                self.run_all_active_until_next_step(iters == 0); // only enable forks on the first iteration
 
                 // if there are threads now in next_threads, we need to move them to active_threads
                 if !self.next_threads.is_empty() {
@@ -218,10 +216,6 @@ impl<'a> Scheduler<'a> {
                         self.next_threads.len()
                     );
                     self.active_threads.append(&mut self.next_threads);
-                }
-
-                if iters == 0 {
-                    self.evaluator.disable_forks();
                 }
 
                 // update the active input vals to reflect the current state
@@ -258,10 +252,9 @@ impl<'a> Scheduler<'a> {
             // achieved convergence, run one more time with assertions on
             info!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.enable_assertions();
-            self.run_all_active_until_next_step();
+            self.run_all_active_until_next_step(false);
 
             // now that all threads are synchronized on the step, we can run step() on the sim
-            info!("Stepping...");
             info!("Stepping...");
             self.evaluator.sim_step();
 
@@ -327,13 +320,13 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    pub fn run_all_active_until_next_step(&mut self) {
+    pub fn run_all_active_until_next_step(&mut self, forks_enabled: bool) {
         for i in 0..self.active_threads.len() {
-            self.run_thread_until_next_step(i);
+            self.run_thread_until_next_step(i, forks_enabled);
         }
     }
 
-    pub fn run_thread_until_next_step(&mut self, thread_idx: usize) {
+    pub fn run_thread_until_next_step(&mut self, thread_idx: usize, forks_enabled: bool) {
         let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
@@ -365,7 +358,7 @@ impl<'a> Scheduler<'a> {
                             return;
                         }
 
-                        Stmt::Fork if self.evaluator.forks_enabled() => {
+                        Stmt::Fork if forks_enabled => {
                             if thread.has_forked {
                                 info!(
                                     "  ERROR: Thread has already forked at this point, terminating thread"
@@ -433,10 +426,7 @@ impl<'a> Scheduler<'a> {
 
         // fork if a thread has completed successfully
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
-        if !thread.has_forked
-            && self.evaluator.forks_enabled()
-            && self.results[thread.todo_idx].is_ok()
-        {
+        if !thread.has_forked && forks_enabled && self.results[thread.todo_idx].is_ok() {
             match next_todo_option.clone() {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);

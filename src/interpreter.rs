@@ -68,7 +68,6 @@ pub struct Evaluator<'a> {
     input_vals: HashMap<SymbolId, InputValue>,
 
     assertions_enabled: bool,
-    forks_enabled: bool,
     rng: ThreadRng,
 }
 
@@ -167,7 +166,6 @@ impl<'a> Evaluator<'a> {
             output_mapping,
             input_vals,
             assertions_enabled: false,
-            forks_enabled: false,
             rng,
         }
     }
@@ -204,18 +202,6 @@ impl<'a> Evaluator<'a> {
 
     pub fn disable_assertions(&mut self) {
         self.assertions_enabled = false;
-    }
-
-    pub fn enable_forks(&mut self) {
-        self.forks_enabled = true;
-    }
-
-    pub fn disable_forks(&mut self) {
-        self.forks_enabled = false;
-    }
-
-    pub fn forks_enabled(&self) -> bool {
-        self.forks_enabled
     }
 
     // step the simulator
