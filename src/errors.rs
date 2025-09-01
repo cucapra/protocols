@@ -342,7 +342,7 @@ impl ExecutionError {
     }
 }
 
-// Type alias for Results
+/// Type alias for Results
 pub type ExecutionResult<T> = Result<T, ExecutionError>;
 
 /// Diagnostic emission functions for different error types

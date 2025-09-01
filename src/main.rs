@@ -76,11 +76,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         protocols_handler,
     );
     let results = scheduler.execute_todos();
-
-    // TODO: how to specify what should pass and what should error?
-    // see tests in `scheduler.rs`
-    assert_ok(&results[0]);
-    assert_ok(&results[1]);
-
+    for res in results {
+        assert_ok(&res);
+    }
     Ok(())
 }
