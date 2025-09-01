@@ -2,10 +2,12 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use std::collections::HashMap;
+
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{SymbolTable, Transaction};
+use protocols::ir::{SymbolTable, Transaction, Type};
 use protocols::scheduler::Scheduler;
 use protocols::setup::{assert_ok, setup_test_environment};
 use protocols::transactions_parser::parse_transactions_file;
@@ -39,9 +41,11 @@ struct Cli {
     verbosity: Verbosity<WarnLevel>,
 }
 
-/// Example (enables all tracing logs):
+/// Examples (enables all tracing logs):
 /// ```
-/// cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p "tests/adders/adder_d1/add_d1.prot" -t "tests/adders/adder_d1/add_d1.tx"
+/// $ cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p tests/adders/adder_d1/add_d1.prot -t tests/adders/adder_d1/add_d1.tx
+/// $ cargo run -- --verilog tests/counters/counter.v -p tests/counters/counter.prot -t tests/counters/counter.tx -v
+/// $ cargo run -- --verilog tests/identities/dual_identity_d1/dual_identity_d1.v -p tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
@@ -71,11 +75,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
         parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
 
+    // Maps a transaction's name to its argument types
+    let mut transaction_arg_types: HashMap<String, Vec<Type>> = HashMap::new();
+    for (tx, symbol_table) in &transactions_and_symbols {
+        transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
+    }
+
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new();
-    let todos: Vec<(String, Vec<baa::BitVecValue>)> =
-        parse_transactions_file(cli.transactions, transactions_handler)?;
+    let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
+        cli.transactions,
+        transactions_handler,
+        transaction_arg_types,
+    )?;
 
+    // Run the interpreter and the scheduler on the parsed transaction file
     let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, cli.fst);
     let mut scheduler = Scheduler::new(
         transactions_and_symbols,
@@ -86,8 +100,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         protocols_handler,
     );
     let results = scheduler.execute_todos();
+
+    // Check whether the protocol was executed successfully
     for res in results {
         assert_ok(&res);
     }
+    println!("Protocol executed successfully!");
     Ok(())
 }

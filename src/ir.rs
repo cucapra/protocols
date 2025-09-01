@@ -134,6 +134,18 @@ impl Transaction {
 
         map
     }
+
+    /// Extracts the types of the arguments for a transaction, using the
+    /// provided `symbol_table` to look up `SymbolId`s
+    pub fn get_arg_types(&self, symbol_table: &SymbolTable) -> Vec<Type> {
+        let mut arg_types = vec![];
+        for arg in &self.args {
+            let symbol_id = arg.symbol;
+            let symbol_table_entry = &symbol_table[symbol_id];
+            arg_types.push(symbol_table_entry.tpe)
+        }
+        arg_types
+    }
 }
 
 impl Index<ExprId> for Transaction {
