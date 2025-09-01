@@ -5,6 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
+use log::info;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
@@ -21,7 +22,7 @@ use patronus::system::TransitionSystem;
 
 type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
-type TodoItem = (String, Vec<BitVecValue>);
+pub type TodoItem = (String, Vec<BitVecValue>);
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
@@ -63,7 +64,7 @@ pub struct Thread<'a> {
 
 impl<'a> Thread<'a> {
     pub fn initialize_thread(todo: Todo<'a>, todo_idx: usize) -> Self {
-        println!(
+        info!(
             "Thread initialized with transaction: {:?}, thread_id={}",
             todo.tr.name, todo_idx
         );
@@ -156,7 +157,7 @@ impl<'a> Scheduler<'a> {
         let initial_todo =
             Self::next_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
 
-        println!(
+        info!(
             "Starting with initial transaction: {:?}",
             initial_todo.tr.name
         );
@@ -173,7 +174,7 @@ impl<'a> Scheduler<'a> {
 
         let results_size = todos.len();
         let first = Thread::initialize_thread(initial_todo, 0);
-        println!("Added first thread to active_threads");
+        info!("Added first thread to active_threads");
         Self {
             irs,
             todos,
@@ -189,8 +190,8 @@ impl<'a> Scheduler<'a> {
     }
 
     pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
-        println!(
-            "\n==== Starting scheduling cycle {}, active threads: {} ====",
+        info!(
+            "==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count,
             self.active_threads.len()
         );
@@ -230,19 +231,19 @@ impl<'a> Scheduler<'a> {
                     return self.results.clone();
                 }
 
-                print!("Active Input Vals {:?}", active_input_vals);
+                info!("Active Input Vals {:?}", active_input_vals);
 
                 // change the previous input vals to equal the active input vals
                 previous_input_vals = Some(active_input_vals);
             }
 
             // achieved convergence, run one more time with assertions on
-            println!("Achieved Convergence. Running once more with assertions enabled...");
+            info!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.enable_assertions_and_forks();
             self.run_all_active_until_next_step();
 
             // now that all threads are synchronized on the step, we can run step() on the sim
-            println!("Stepping...");
+            info!("Stepping...");
             self.evaluator.sim_step();
 
             // Move each active thread into inactive or next
@@ -250,7 +251,7 @@ impl<'a> Scheduler<'a> {
                 let next_step: Option<StmtId> = active_thread.next_step;
                 match next_step {
                     Some(next_step_id) => {
-                        println!(
+                        info!(
                             "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
                             active_thread.todo.tr.name, next_step_id
                         );
@@ -261,7 +262,7 @@ impl<'a> Scheduler<'a> {
                         self.next_threads.push(active_thread)
                     }
                     None => {
-                        println!(
+                        info!(
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
@@ -272,15 +273,15 @@ impl<'a> Scheduler<'a> {
 
             // setup the threads for the next cycle
             if !self.next_threads.is_empty() {
-                println!(
+                info!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
                     self.next_threads.len()
                 );
                 self.active_threads = std::mem::take(&mut self.next_threads);
                 self.step_count += 1;
-                println!("Advancing to scheduling cycle: {}", self.step_count);
+                info!("Advancing to scheduling cycle: {}", self.step_count);
             } else {
-                println!("No more threads to schedule. Protocol execution complete.");
+                info!("No more threads to schedule. Protocol execution complete.");
             }
         }
 
@@ -316,7 +317,7 @@ impl<'a> Scheduler<'a> {
         let thread = &mut self.active_threads[thread_idx];
         let mut current = thread.current_step;
 
-        println!(
+        info!(
             "Running thread {} from step {:?}",
             thread.todo.tr.name, current
         );
@@ -324,26 +325,26 @@ impl<'a> Scheduler<'a> {
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
-            println!("  Evaluating statement: {:?}", current);
+            info!("  Evaluating statement: {:?}", current);
 
             match self.evaluator.evaluate_stmt(&current) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
-                    println!(
+                    info!(
                         "  Next statement: {:?} {:?}",
                         next_id, thread.todo.tr[next_id]
                     );
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {
-                            println!("  Step reached at {:?}, pausing.", next_id);
+                            info!("  Step reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
                             return;
                         }
 
                         Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
                             if thread.has_forked {
-                                println!(
+                                info!(
                                     "  ERROR: Thread has already forked at this point, terminating thread"
                                 );
                                 let error = ExecutionError::double_fork(
@@ -355,24 +356,24 @@ impl<'a> Scheduler<'a> {
                                 thread.next_step = None;
                                 return;
                             }
-                            println!("  Fork at {:?}, spawning new thread…", next_id);
+                            info!("  Fork at {:?}, spawning new thread…", next_id);
                             match next_todo_option.clone() {
                                 Some(todo) => {
                                     let new_thread =
                                         Thread::initialize_thread(todo, self.next_todo_idx);
                                     self.next_threads.push(new_thread);
-                                    println!(
+                                    info!(
                                         "    enqueued forked thread; queue size = {}",
                                         self.next_threads.len()
                                     );
                                 }
                                 None => {
-                                    println!("    no more todos to fork, skipping fork.");
+                                    info!("    no more todos to fork, skipping fork.");
                                 }
                             }
                             self.next_todo_idx += 1;
                             // Mark this thread as having forked
-                            println!("  Marking thread {} as having forked.", { thread.todo_idx });
+                            info!("  Marking thread {} as having forked.", { thread.todo_idx });
                             thread.has_forked = true;
                             // continue from the fork point
                             current = next_id;
@@ -387,14 +388,14 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    println!("  Execution complete, no more statements.");
+                    info!("  Execution complete, no more statements.");
                     thread.next_step = None;
                     break;
                 }
 
                 // error -> record and stop
                 Err(e) => {
-                    println!("ERROR: {:?}, terminating thread", e);
+                    info!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.todo_idx] = Err(e);
                     thread.next_step = None;
                     break;
@@ -412,13 +413,13 @@ impl<'a> Scheduler<'a> {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
                     self.next_threads.push(new_thread);
-                    println!(
+                    info!(
                         "    enqueued implicitly forked thread; queue size = {}",
                         self.next_threads.len()
                     );
                 }
                 None => {
-                    println!("    no more todos to fork, skipping implicit fork.");
+                    info!("    no more todos to fork, skipping implicit fork.");
                 }
             }
             self.next_todo_idx += 1;
@@ -430,72 +431,7 @@ impl<'a> Scheduler<'a> {
 pub mod tests {
     use super::*;
     use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
-    use crate::parser::parsing_helper;
-    use crate::yosys::ProjectConf;
-    use crate::yosys::YosysEnv;
-    use crate::yosys::yosys_to_btor;
-    use std::path::PathBuf;
-
-    fn create_sim_context(
-        verilog_paths: Vec<&str>, // changed from verilog_path: &str
-        top_module: Option<String>,
-    ) -> (patronus::expr::Context, patronus::system::TransitionSystem) {
-        let env = YosysEnv::default();
-        let sources: Vec<PathBuf> = verilog_paths.iter().map(PathBuf::from).collect();
-        let proj = ProjectConf::with_sources(sources, top_module);
-
-        let btor_file = yosys_to_btor(&env, &proj, None)
-            .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
-
-        // Check if btor file was actually created and has content
-        if !btor_file.exists() {
-            panic!("BTOR file was not created at path: {}", btor_file.display());
-        }
-
-        let metadata = std::fs::metadata(&btor_file)
-            .unwrap_or_else(|e| panic!("Failed to read BTOR file metadata: {}", e));
-
-        if metadata.len() == 0 {
-            panic!("BTOR file is empty - likely synthesis failed. Check Yosys output for errors.");
-        }
-
-        let (ctx, sys) = patronus::btor2::parse_file(btor_file.as_path().as_os_str())
-            .unwrap_or_else(|| {
-                panic!(
-                    "Failed to parse BTOR file - possibly malformed: {}",
-                    btor_file.display()
-                )
-            });
-
-        (ctx, sys)
-    }
-
-    fn setup_test_environment(
-        verilog_paths: Vec<&str>,
-        transaction_filename: &str,
-        top_module: Option<String>,
-        handler: &mut DiagnosticHandler,
-    ) -> (
-        Vec<(Transaction, SymbolTable)>,    // owned
-        patronus::expr::Context,            // owned
-        patronus::system::TransitionSystem, // owned
-    ) {
-        let (ctx, sys) = create_sim_context(verilog_paths, top_module);
-        let parsed = parsing_helper(transaction_filename, handler);
-        (parsed, ctx, sys)
-    }
-
-    fn bv(value: u64, width: u32) -> BitVecValue {
-        BitVecValue::from_u64(value, width)
-    }
-
-    fn assert_ok(res: &Result<(), ExecutionError>) {
-        assert!(res.is_ok(), "Expected Ok, got {:?}", res);
-    }
-
-    fn assert_err(res: &Result<(), ExecutionError>) {
-        assert!(res.is_err(), "Expected Err, got {:?}", res);
-    }
+    use crate::setup::{assert_err, assert_ok, bv, setup_test_environment};
 
     macro_rules! assert_assertion_error {
         ($result:expr) => {
@@ -538,7 +474,7 @@ pub mod tests {
             (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
         ];
 
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
+        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
         let mut scheduler = Scheduler::new(
             transactions_and_symbols.clone(),
             todos.clone(),

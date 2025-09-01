@@ -5,11 +5,13 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 pub mod diagnostic;
-mod errors;
+pub mod errors;
 mod interpreter;
 pub mod ir;
 pub mod parser;
 pub mod scheduler;
 pub mod serialize;
+pub mod setup;
+pub mod transactions_parser;
 pub mod typecheck;
 mod yosys;

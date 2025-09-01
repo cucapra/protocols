@@ -6,7 +6,6 @@
 
 use std::{collections::HashSet, io::Write};
 
-use crate::parser::Rule;
 use baa::BitVecValue;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
@@ -14,6 +13,7 @@ use codespan_reporting::diagnostic::{
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
+use pest::RuleType;
 use pest::iterators::Pair;
 
 use crate::ir::*;
@@ -149,11 +149,14 @@ impl DiagnosticHandler {
         }
     }
 
-    pub fn emit_diagnostic_parsing(
+    /// Note: we make this function parametric over any type `R`
+    /// that implements Pest's `RuleType` trait
+    /// so that we can call this function from different parsers
+    pub fn emit_diagnostic_parsing<R: RuleType>(
         &mut self,
         message: &str,
         fileid: usize,
-        pair: &Pair<'_, Rule>,
+        pair: &Pair<'_, R>,
         level: Level,
     ) {
         let start = pair.as_span().start();
