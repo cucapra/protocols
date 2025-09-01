@@ -30,6 +30,10 @@ struct Cli {
     #[arg(short, long, value_name = "MODULE_NAME")]
     module: Option<String>,
 
+    /// Name of the waveform file (.fst) in which to save results
+    #[arg(short, long, value_name = "WAVEFORM_FILE", default_value = "trace.fst")]
+    fst: String,
+
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
@@ -66,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let todos: Vec<(String, Vec<baa::BitVecValue>)> =
         parse_transactions_file(cli.transactions, transactions_handler)?;
 
-    let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
+    let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, cli.fst);
     let mut scheduler = Scheduler::new(
         transactions_and_symbols,
         todos,
