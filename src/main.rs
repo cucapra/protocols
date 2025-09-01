@@ -45,6 +45,7 @@ struct Cli {
 /// ```
 /// $ cargo run -- --verilog tests/adders/adder_d1/add_d1.v -p tests/adders/adder_d1/add_d1.prot -t tests/adders/adder_d1/add_d1.tx
 /// $ cargo run -- --verilog tests/counters/counter.v -p tests/counters/counter.prot -t tests/counters/counter.tx -v
+/// $ cargo run -- --verilog tests/identities/dual_identity_d1/dual_identity_d1.v -p tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
