@@ -1,10 +1,10 @@
 # Protocols
 **Protocols** is a DSL for specifying & testing hardware designs at the cycle-level RTL level.
 A protocol is described using an `fn` definition containing a list of imperative statements:
-- `symbol := RHS` assigns the value of the `RHS` expression to the DUT input port `symbol`. The right-hand side expression may be an arbitrary value, represented by `\dontcare`.
-- `step($n$)`  advances the clock by `n` cycles.
+- `symbol := RHS` assigns the value of the `RHS` expression to the DUT input port `symbol`. The right-hand side expression may be an arbitrary value, represented by `X` ("don't care").
+- `step(n)`  advances the clock by `n` cycles.
 - `fork()`  allows for concurrent protocol execution.
-- `assert\_eq($e_1$, $e_2$)` tests equality between `e_1` and `e_2`.
+- `assert_eq(e1, e2)` tests equality between `e1` and `e2`.
 - `while` and `if/else` blocks allow for control flow
 
 **Build instructions**:
@@ -13,7 +13,7 @@ A protocol is described using an `fn` definition containing a list of imperative
 - Run `cargo test` to execute all tests
 
 **CLI**:
-The interpreter has a CLI, which can be invoked as follows
+The interpreter has a CLI, which can be invoked as follows:
 ```bash
 $ cargo run -- --help
 
