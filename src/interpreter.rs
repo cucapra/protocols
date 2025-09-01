@@ -67,7 +67,8 @@ pub struct Evaluator<'a> {
     // tracks the input pins and their values
     input_vals: HashMap<SymbolId, InputValue>,
 
-    assertions_forks_enabled: bool,
+    assertions_enabled: bool,
+    forks_enabled: bool,
     rng: ThreadRng,
 }
 
@@ -165,7 +166,8 @@ impl<'a> Evaluator<'a> {
             input_mapping,
             output_mapping,
             input_vals,
-            assertions_forks_enabled: false,
+            assertions_enabled: false,
+            forks_enabled: false,
             rng,
         }
     }
@@ -196,16 +198,28 @@ impl<'a> Evaluator<'a> {
         self.input_vals.clone()
     }
 
-    pub fn enable_assertions_and_forks(&mut self) {
-        self.assertions_forks_enabled = true;
+    pub fn enable_assertions(&mut self) {
+        self.assertions_enabled = true;
     }
 
-    pub fn disable_assertions_and_forks(&mut self) {
-        self.assertions_forks_enabled = false;
+    pub fn disable_assertions(&mut self) {
+        self.assertions_enabled = false;
     }
 
-    pub fn assertions_forks_enabled(&self) -> bool {
-        self.assertions_forks_enabled
+    pub fn assertions_enabled(&self) -> bool {
+        self.assertions_enabled
+    }
+
+    pub fn enable_forks(&mut self) {
+        self.forks_enabled = true;
+    }
+
+    pub fn disable_forks(&mut self) {
+        self.forks_enabled = false;
+    }
+
+    pub fn forks_enabled(&self) -> bool {
+        self.forks_enabled
     }
 
     // step the simulator
@@ -366,8 +380,10 @@ impl<'a> Evaluator<'a> {
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr1, expr2) => {
-                if self.assertions_forks_enabled {
+                if self.assertions_enabled {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
+                } else {
+                    info!("Skipping assertion {:?} because assertions are disabled", stmt_id);
                 }
 
                 Ok(self.next_stmt_map[stmt_id])

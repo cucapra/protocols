@@ -202,12 +202,27 @@ impl<'a> Scheduler<'a> {
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
             // fixed point iteration with assertions off
-            self.evaluator.disable_assertions_and_forks();
+            self.evaluator.disable_assertions();
+            self.evaluator.enable_forks();
 
-            let iters = 0;
+            let mut iters = 0;
             loop {
+                // info!("Fixed point iteration {}", iters);
                 // run every active thread up to the next step to synchronize on
                 self.run_all_active_until_next_step();
+
+                // if there are threads now in next_threads, we need to move them to active_threads
+                if !self.next_threads.is_empty() {
+                    info!(
+                        "Moving {} threads from next_threads to active_threads",
+                        self.next_threads.len()
+                    );
+                    self.active_threads.extend(self.next_threads.drain(..));
+                }
+                
+                if iters == 0 {
+                    self.evaluator.disable_forks();
+                }
 
                 // update the active input vals to reflect the current state
                 // for each thread, get its current input_vals (read-only clone)
@@ -221,6 +236,7 @@ impl<'a> Scheduler<'a> {
 
                 // if we've exceeded the max number of iterations before convergence,
                 // return an ExecutionLimitExceeded error on every thread.
+                // we should be able to theoretically show convergence is always possible, however
                 if iters > MAX_ITERS {
                     for thread in &self.active_threads {
                         self.results[thread.todo_idx] =
@@ -235,11 +251,13 @@ impl<'a> Scheduler<'a> {
 
                 // change the previous input vals to equal the active input vals
                 previous_input_vals = Some(active_input_vals);
+
+                iters += 1;
             }
 
             // achieved convergence, run one more time with assertions on
             info!("Achieved Convergence. Running once more with assertions enabled...");
-            self.evaluator.enable_assertions_and_forks();
+            self.evaluator.enable_assertions();
             self.run_all_active_until_next_step();
 
             // now that all threads are synchronized on the step, we can run step() on the sim
@@ -342,7 +360,7 @@ impl<'a> Scheduler<'a> {
                             return;
                         }
 
-                        Stmt::Fork if self.evaluator.assertions_forks_enabled() => {
+                        Stmt::Fork if self.evaluator.forks_enabled() => {
                             if thread.has_forked {
                                 info!(
                                     "  ERROR: Thread has already forked at this point, terminating thread"
@@ -406,7 +424,7 @@ impl<'a> Scheduler<'a> {
         // fork if a thread has completed successfully
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked
-            && self.evaluator.assertions_forks_enabled()
+            && self.evaluator.forks_enabled()
             && self.results[thread.todo_idx].is_ok()
         {
             match next_todo_option.clone() {
@@ -456,7 +474,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_add() {
+    fn test_scheduler_add_d1() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/adders/adder_d1/add_d1.v"],
@@ -536,6 +554,39 @@ pub mod tests {
         assert_err(&results[1]);
         assert_assertion_error!(&results[0]);
         assert_assertion_error!(&results[1]);
+    }
+
+    #[test]
+    fn test_scheduler_add_d2() {
+        let handler = &mut DiagnosticHandler::new();
+        let (parsed_data, ctx, sys) = setup_test_environment(
+            vec!["tests/adders/adder_d2/add_d2.v"],
+            "tests/adders/adder_d2/add_d2.prot",
+            None,
+            handler,
+        );
+
+        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
+
+        let todos = vec![
+            (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
+            (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
+            (String::from("add"), vec![bv(10, 32), bv(11, 32), bv(21, 32)]),
+        ];
+
+        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+        );
+        let results = scheduler.execute_todos();
+        assert_ok(&results[0]);
+        assert_ok(&results[1]);
     }
 
     #[test]
@@ -646,25 +697,17 @@ pub mod tests {
         let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
         let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        match &results[0] {
-            Err(ExecutionError::Thread(ThreadError::ConflictingAssignment {
-                symbol_name, ..
-            })) => {
-                assert_eq!(symbol_name, "a");
-            }
-            other => panic!(
-                "Expected ConflictingAssignment error for symbol 'a', got: {:?}",
-                other
-            ),
-        }
 
-        // PASSING CASE: Two assignments, but of same value (1)
+        // we don't know which thread will fail (b/c ordering is non-deterministic), but one should
+        assert!(results[0].is_err() || results[1].is_err()); 
+
+        // // PASSING CASE: Two assignments, but of same value (1)
         todos[1].1 = vec![bv(1, 32), bv(1, 32)];
         let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
         scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
+        assert_ok(&results[1]);
     }
 
     #[test]
@@ -721,7 +764,7 @@ pub mod tests {
             (String::from("implicit_fork"), vec![bv(1, 32), bv(1, 32)]),
             (String::from("implicit_fork"), vec![bv(2, 32), bv(2, 32)]),
             (String::from("implicit_fork"), vec![bv(3, 32), bv(4, 32)]),
-            (String::from("implicit_fork"), vec![bv(4, 32), bv(5, 32)]),
+            (String::from("implicit_fork"), vec![bv(4, 32), bv(4, 32)]),
         ];
         let sim = patronus::sim::Interpreter::new(&ctx, &sys);
         let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);

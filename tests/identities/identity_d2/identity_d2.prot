@@ -7,8 +7,8 @@ fn multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
   // If multiple instances of this protocol are run, this will pass if and only if
   // both instances pass the same integer value for parameter a. 
   DUT.a := a;
-  fork();
   step();
+  fork();
   DUT.a := a;
   step();
   assert_eq(s, DUT.s);
@@ -17,11 +17,11 @@ fn multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
 fn two_fork_err<DUT: Identity>(in a: u32, out s: u32) {
   // guaranteed failure due to two works in executed
   DUT.a := a;
-  fork();
   step();
+  fork();
   DUT.a := a;
-  fork();
   step();
+  fork();
   assert_eq(s, DUT.s);
 }
 
@@ -33,15 +33,16 @@ fn two_fork_ok<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
 
+
+  DUT.a := a;
+  step();
+
   if a {
     fork();
   }
   else {
     fork();
   }
-
-  DUT.a := a;
-  step();
   
   assert_eq(s, DUT.s);
 }
