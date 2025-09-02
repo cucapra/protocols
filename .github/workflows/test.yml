@@ -31,7 +31,7 @@ jobs:
       run: cargo test --verbose
 
   msrv:
-    name: Check Minimum Rust Version
+    name: Check Minimum Rust Version for protocols library
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +39,7 @@ jobs:
         with:
           tool: cargo-msrv
       - name: Check MSRV
+        working-directory: protocols
         run: cargo msrv verify
 
   format:
