@@ -9,10 +9,17 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
-  fork();
   DUT.a := X;
   DUT.b := X;
-  // s := DUT.S;
-  // DUT.s := a;
   assert_eq(s, DUT.s);
 }
+
+fn add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := a;
+  DUT.b := b;
+  assert_eq(s, DUT.s);
+}
+

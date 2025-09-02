@@ -261,6 +261,7 @@ fn read_write<R: Regfile>(
   assert_eq(R.o_rs1, rs1_data[31]);
   assert_eq(R.o_rs2, rs2_data[31]);
   assert_eq(R.o_ready, 1'b0);
+  step();
 }
 
 // this transaction describes what happens when the register file is not in use

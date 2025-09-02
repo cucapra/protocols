@@ -1,10 +1,11 @@
-struct Multiplier {
+// maps to a verilog design
+struct Adder {
   in a: u32,
   in b: u32,
-  out s: u32
+  out s: u32,
 }
 
-fn mul<DUT: Multiplier>(in a: u32, in b: u32, out s: u32) {
+fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
 
