@@ -1,0 +1,16 @@
+[package]
+name = "protocols-interp"
+version = "0.1.0"
+description = "execute protocol transactions on your Verilog design"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+protocols.workspace = true
+clap = { version = "4.5.45", features = ["derive"] }
+clap-verbosity-flag = "3.0.4"
+env_logger = "0.11.8"
+baa.workspace = true
+patronus.workspace = true

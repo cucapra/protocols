@@ -964,8 +964,8 @@ pub mod tests {
     fn test_scheduler_aes128() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["examples/tinyaes128/aes_128.v"],
-            "examples/tinyaes128/aes128.prot",
+            vec!["../examples/tinyaes128/aes_128.v"],
+            "../examples/tinyaes128/aes128.prot",
             Some("aes_128".to_string()),
             handler,
         );
@@ -1011,8 +1011,8 @@ pub mod tests {
     fn test_scheduler_register_file_write_read() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["examples/serv/rtl/serv_regfile.v"],
-            "examples/serv/serv_regfile.prot",
+            vec!["../examples/serv/rtl/serv_regfile.v"],
+            "../examples/serv/serv_regfile.prot",
             None,
             handler,
         );

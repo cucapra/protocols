@@ -1,27 +1,17 @@
-[package]
-name = "protocols"
-version = "0.1.0"
+[workspace]
+resolver = "3"
+members = ["interp", "protocols"]
+
+
+[workspace.package]
+authors = ["Nikil Shyamsunder", "Francis Pham", "Ernest Ng", "Kevin Laeufer"]
 edition = "2024"
 rust-version = "1.85"
+repository = "https://github.com/cucapra/protocols"
+readme = "README.md"
+license = "MIT"
 
-[dependencies]
+[workspace.dependencies]
+protocols = { path = "protocols" }
 baa = { version = "0.17.1", features = ["rand1"] }
-cranelift-entity = "0.114.0"
-pest = "2.7.15"
-pest_derive = "2.7.15"
-rustc-hash = "2.1.0"
-thiserror = "2.0.8"
-codespan-reporting = "0.11.1"
-lazy_static = "1.5.0"
-marlin-verilator = "0.1.0"
 patronus = "0.34.1"
-tempfile = "3.20.0"
-clap = { version = "4.5.45", features = ["derive"] }
-clap-verbosity-flag = "3.0.4"
-env_logger = "0.11.8"
-rand = "0.9"
-log = "0.4.27"
-
-[dev-dependencies]
-insta = { version = "1.41.1", features = ["yaml"] }
-strip-ansi-escapes = "0.2"
