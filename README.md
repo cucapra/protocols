@@ -13,6 +13,7 @@ A protocol is described using an `fn` definition containing a list of imperative
   - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
 - Run `cargo build` to build
 - Run `cargo test` to execute all unit tests
+- To run a snapshot test, from the top-level directory, do `turnt protocols/tests/adders/adder_d1/add_d1.tx`
 
 **CLI**:
 The interpreter has a CLI, which can be invoked as follows:
