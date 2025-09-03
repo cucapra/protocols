@@ -1,3 +1,2 @@
-// ARGS: add_d1.v add_d1.prot  
 add(1, 2, 3);
 add(4, 5, 9);
