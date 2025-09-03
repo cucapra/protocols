@@ -1,1 +1,5 @@
+# Take the filepath, extract everything but the file extension, 
+# then save that into the `basepath` variable
+# We then pass `$basepath` as the arguments to the --verilog & --protocol CLI args 
+# (w/ the appropriate file extensions) 
 command = "basepath=`echo {filename} | cut -d . -f 1`; cargo run -- --transactions {filename} --verilog $basepath.v --protocol $basepath.prot"
