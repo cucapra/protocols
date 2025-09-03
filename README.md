@@ -9,8 +9,10 @@ A protocol is described using an `fn` definition containing a list of imperative
 
 **Build instructions**:
 - Run `brew install yosys` to install Yosys
+- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main) (then do `uvx turnt` to run Turnt)
+  - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
 - Run `cargo build` to build
-- Run `cargo test` to execute all tests
+- Run `cargo test` to execute all unit tests
 
 **CLI**:
 The interpreter has a CLI, which can be invoked as follows:
