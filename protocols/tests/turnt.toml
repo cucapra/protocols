@@ -3,4 +3,4 @@
 # We then pass `$basepath` as the arguments to the --verilog & --protocol CLI args 
 # (w/ the appropriate file extensions) 
 # command = "basepath=`echo {filename} | cut -d . -f 1`; cargo run -- --transactions {filename} --verilog $basepath.v --protocol $basepath.prot"
-command = "cargo run -- --transactions {filename} {args}"
+command = "cargo run --package protocols-interp -- --transactions {filename} {args}"
