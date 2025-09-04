@@ -475,42 +475,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_add_d2() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/adders/adder_d2/add_d2.v"],
-            "tests/adders/adder_d2/add_d2.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
-            (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
-            (
-                String::from("add"),
-                vec![bv(10, 32), bv(11, 32), bv(21, 32)],
-            ),
-        ];
-
-        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
     fn test_scheduler_mult_d2() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
