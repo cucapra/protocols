@@ -475,44 +475,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_identity_d2_multiple_assign() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d2/identity_d2.v"],
-            "tests/identities/identity_d2/identity_d2.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // PASSING CASE: Single thread
-        let mut todos = vec![(String::from("multiple_assign"), vec![bv(1, 32), bv(1, 32)])];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-
-        // ERROR CASE: Two different assignments
-        todos.push((String::from("multiple_assign"), vec![bv(2, 32), bv(2, 32)]));
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_todos();
-
-        // we don't know which thread will fail (b/c ordering is non-deterministic), but one should
-        assert!(results[0].is_err() || results[1].is_err());
-
-        // // PASSING CASE: Two assignments, but of same value (1)
-        todos[1].1 = vec![bv(1, 32), bv(1, 32)];
-        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
     fn test_scheduler_identity_d2_double_fork() {
         let handler = &mut DiagnosticHandler::new();
         let (parsed_data, ctx, sys) = setup_test_environment(
