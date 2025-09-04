@@ -523,6 +523,7 @@ impl Index<&Arg> for SymbolTable {
 pub struct SymbolTableEntry {
     name: String,
     tpe: Type,
+    /// Used to compute the fully qualified name.
     parent: Option<SymbolId>,
 }
 
