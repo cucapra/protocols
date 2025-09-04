@@ -9,11 +9,11 @@ A protocol is described using an `fn` definition containing a list of imperative
 
 **Build instructions**:
 - Run `brew install yosys` to install Yosys
-- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main) (then do `uvx turnt` to run Turnt)
+- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main) 
   - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
 - Run `cargo build` to build
 - Run `cargo test` to execute all unit tests
-- To run a snapshot test, from the top-level directory, do `turnt protocols/tests/adders/adder_d1/add_d1.tx`
+- To run a snapshot test, from the [`protocols/tests`](./protocols/tests/) subdirectory, do `turnt tests/adders/adder_d1/add_d1.tx`
 - Note: to view the expected results of some snapshot tests (in `.out` files), install the [ANSI Colors](https://marketplace.visualstudio.com/items?itemName=iliazeus.vscode-ansi) VS Code extension
   - Some tests expect the interpreter to fail, and error messages are displayed using ANSI escape sequences, which is why the VS Code extension is handy
 
