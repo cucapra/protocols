@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["interp", "protocols"]
+members = ["interp", "monitor", "protocols"]
 
 
 [workspace.package]
@@ -15,3 +15,4 @@ license = "MIT"
 protocols = { path = "protocols" }
 baa = { version = "0.17.1", features = ["rand1"] }
 patronus = "0.34.1"
+rustc-hash = "2.1.1"
