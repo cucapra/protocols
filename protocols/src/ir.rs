@@ -378,7 +378,6 @@ impl SymbolTable {
             name,
             tpe,
             parent: None,
-            next: None,
         };
         let lookup_name = entry.full_name(self);
 
@@ -420,7 +419,6 @@ impl SymbolTable {
             name,
             tpe: pin_type,
             parent: Some(parent),
-            next: None,
         };
         let lookup_name = entry.full_name(self);
 
@@ -526,7 +524,6 @@ pub struct SymbolTableEntry {
     name: String,
     tpe: Type,
     parent: Option<SymbolId>,
-    next: Option<SymbolId>,
 }
 
 impl SymbolTableEntry {
