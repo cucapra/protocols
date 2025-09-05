@@ -476,7 +476,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d2_double_fork() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/identity_d2/identity_d2.v"],
             "tests/identities/identity_d2/identity_d2.prot",
@@ -513,7 +513,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d1_implicit_fork() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/identity_d1/identity_d1.v"],
             "tests/identities/identity_d1/identity_d1.prot",
@@ -542,7 +542,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d1_slicing() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/identity_d1/identity_d1.v"],
             "tests/identities/identity_d1/identity_d1.prot",
@@ -581,7 +581,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_dual_identity() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/dual_identity_d1/dual_identity_d1.v"],
             "tests/identities/dual_identity_d1/dual_identity_d1.prot",
@@ -629,7 +629,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_inverter() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/inverters/inverter_d0.v"],
             "tests/inverters/inverter_d0.prot",
@@ -658,7 +658,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_counter() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/counters/counter.v"],
             "tests/counters/counter.prot",
@@ -686,7 +686,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_aes128() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["../examples/tinyaes128/aes_128.v"],
             "../examples/tinyaes128/aes128.prot",
@@ -733,7 +733,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_register_file_write_read() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["../examples/serv/rtl/serv_regfile.v"],
             "../examples/serv/serv_regfile.prot",
@@ -788,7 +788,7 @@ pub mod tests {
     #[test]
     #[ignore] // FIXME: going into infinite loop
     fn test_scheduler_picorv32_pcpi_mul() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["examples/picorv32/picorv32.v"],
             "examples/picorv32/pcpi_mul.prot",
@@ -827,7 +827,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi0() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multi/multi0/multi0.v"],
             "tests/multi/multi0/multi0.prot",
@@ -861,7 +861,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi0keep() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multi/multi0keep/multi0keep.v"],
             "tests/multi/multi0keep/multi0keep.prot",
@@ -895,7 +895,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi0keep2const() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec![
                 "tests/multi/multi0keep2const/multi0keep2const.v",
@@ -932,7 +932,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi2const() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec![
                 "tests/multi/multi2const/multi2const.v",
@@ -969,7 +969,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi2multi() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec![
                 "tests/multi/multi2multi/multi2multi.v",
@@ -1006,7 +1006,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi_data() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multi/multi_data/multi_data.v"],
             "tests/multi/multi_data/multi_data.prot",

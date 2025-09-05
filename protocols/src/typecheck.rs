@@ -211,7 +211,7 @@ mod tests {
     }
 
     fn test_helper(test_name: &str, file_name: &str) {
-        let mut handler = DiagnosticHandler::new();
+        let mut handler = DiagnosticHandler::default();
         let result = parse_file(file_name, &mut handler);
         let content = match result {
             Ok(trs) => {
@@ -287,7 +287,7 @@ mod tests {
     // Specific Tests
     #[test]
     fn function_argument_test() {
-        let mut handler = DiagnosticHandler::new();
+        let mut handler = DiagnosticHandler::default();
         let mut symbols = SymbolTable::default();
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1));
         let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(1));
