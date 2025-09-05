@@ -1,12 +1,12 @@
-[0m[1m[38;5;9merror[0m[1m: The two expressions did not evaluate to the same value[0m
-   [0m[34m┌─[0m multipliers/mult_d2/mult_d2.prot:22:13
-   [0m[34m│[0m
-[0m[34m22[0m [0m[34m│[0m   assert_eq([0m[31ms, DUT.s[0m);
-   [0m[34m│[0m             [0m[31m^^^^^^^^[0m [0m[31mLHS Value: ValueOwned(00000000000000000000000000000011), RHS Value: ValueOwned(00000000000000000000000000000010)[0m
+error: The two expressions did not evaluate to the same value
+   ┌─ multipliers/mult_d2/mult_d2.prot:22:13
+   │
+22 │   assert_eq(s, DUT.s);
+   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000000011), RHS Value: ValueOwned(00000000000000000000000000000010)
 
-[0m[1m[38;5;9merror[0m[1m: The two expressions did not evaluate to the same value[0m
-   [0m[34m┌─[0m multipliers/mult_d2/mult_d2.prot:22:13
-   [0m[34m│[0m
-[0m[34m22[0m [0m[34m│[0m   assert_eq([0m[31ms, DUT.s[0m);
-   [0m[34m│[0m             [0m[31m^^^^^^^^[0m [0m[31mLHS Value: ValueOwned(00000000000000000000000000101111), RHS Value: ValueOwned(00000000000000000000000000110000)[0m
+error: The two expressions did not evaluate to the same value
+   ┌─ multipliers/mult_d2/mult_d2.prot:22:13
+   │
+22 │   assert_eq(s, DUT.s);
+   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000101111), RHS Value: ValueOwned(00000000000000000000000000110000)
 

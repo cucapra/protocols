@@ -1,6 +1,6 @@
-[0m[1m[38;5;9merror[0m[1m: Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000010)[0m
-  [0m[34m┌─[0m identities/identity_d2/identity_d2.prot:9:3
-  [0m[34m│[0m
-[0m[34m9[0m [0m[34m│[0m   [0m[31mDUT.a := a;[0m
-  [0m[34m│[0m   [0m[31m^^^^^^^^^^^[0m [0m[31mThread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000010)[0m
+error: Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000010)
+  ┌─ identities/identity_d2/identity_d2.prot:9:3
+  │
+9 │   DUT.a := a;
+  │   ^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000010)
 

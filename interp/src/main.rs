@@ -3,11 +3,11 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use std::collections::HashMap;
-use std::io::{self, IsTerminal};
+// use std::io::{self, IsTerminal};
 
+use clap::ColorChoice;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
-use colorchoice::ColorChoice;
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction, Type};
 use protocols::scheduler::Scheduler;
@@ -43,8 +43,8 @@ struct Cli {
     verbosity: Verbosity<WarnLevel>,
 
     /// Users can specify `-color` to enable ANSI colors in terminal output
-    #[command(flatten)]
-    color: colorchoice_clap::Color,
+    #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
+    color: ColorChoice,
 }
 
 /// Examples (enables all tracing logs):
@@ -57,14 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
 
-    cli.color.write_global();
-
-    let mut color_choice = cli.color.as_choice();
-
-    // Disable colors if we're not writing to a terminal
-    if !io::stdin().is_terminal() {
-        color_choice = ColorChoice::Never;
-    }
+    let color_choice = cli.color;
 
     // Set up logger to use the log-level specified via the `-v` flag
     // For concision, we disable timestamps and the module paths in the log

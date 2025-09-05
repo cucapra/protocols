@@ -1,6 +1,6 @@
-[0m[1m[38;5;9merror[0m[1m: The two expressions did not evaluate to the same value[0m
-   [0m[34m┌─[0m adders/adder_d1/add_d1.prot:14:13
-   [0m[34m│[0m
-[0m[34m14[0m [0m[34m│[0m   assert_eq([0m[31ms, DUT.s[0m);
-   [0m[34m│[0m             [0m[31m^^^^^^^^[0m [0m[31mLHS Value: ValueOwned(00000000000000000000000000001010), RHS Value: ValueOwned(00000000000000000000000000001001)[0m
+error: The two expressions did not evaluate to the same value
+   ┌─ adders/adder_d1/add_d1.prot:14:13
+   │
+14 │   assert_eq(s, DUT.s);
+   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000001010), RHS Value: ValueOwned(00000000000000000000000000001001)
 

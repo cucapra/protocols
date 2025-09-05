@@ -7,13 +7,13 @@
 use std::{collections::HashSet, io::Write};
 
 use baa::BitVecValue;
+use clap::ColorChoice;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
 };
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
-use colorchoice::ColorChoice;
 use pest::iterators::Pair;
 use pest::RuleType;
 
@@ -54,6 +54,8 @@ struct Diagnostic {
     message: String,
     level: Level,
     location: Option<(usize, Label)>,
+    /// Whether colored outputs should be enabled in the diagnostic
+    _color_choice: ColorChoice,
 }
 
 impl Diagnostic {
@@ -154,6 +156,7 @@ impl DiagnosticHandler {
                 message: message.to_string(),
                 level,
                 location: Some((fileid, label)),
+                _color_choice: self.color_choice,
             };
 
             diagnostic.emit(&mut buffer, &self.files);
@@ -176,7 +179,7 @@ impl DiagnosticHandler {
     ) {
         let start = pair.as_span().start();
         let end = pair.as_span().end();
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         let label = Label {
             message: Some(message.to_string()),
             range: (start, end),
@@ -187,6 +190,7 @@ impl DiagnosticHandler {
             message: message.to_string(),
             level,
             location: Some((fileid, label)),
+            _color_choice: self.color_choice,
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -203,7 +207,7 @@ impl DiagnosticHandler {
         end: usize,
         level: Level,
     ) {
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         let label = Label {
             message: Some(message.to_string()),
             range: (start, end),
@@ -214,6 +218,7 @@ impl DiagnosticHandler {
             message: message.to_string(),
             level,
             location: Some((fileid, label)),
+            _color_choice: self.color_choice,
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -233,7 +238,7 @@ impl DiagnosticHandler {
         if !self.reported_errs.insert(ErrorKey::StmtKey(*stmt_id)) {
             return;
         }
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         if let Some((start, end, fileid)) = tr.get_stmt_loc(*stmt_id) {
             let label = Label {
                 message: Some(message.to_string()),
@@ -245,6 +250,7 @@ impl DiagnosticHandler {
                 message: message.to_string(),
                 level,
                 location: Some((fileid, label)),
+                _color_choice: self.color_choice,
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -263,7 +269,7 @@ impl DiagnosticHandler {
         eval1: &BitVecValue,
         eval2: &BitVecValue,
     ) {
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
 
         if let (Some((start1, end1, fileid1)), Some((start2, end2, fileid2))) =
             (tr.get_expr_loc(*expr1_id), tr.get_expr_loc(*expr2_id))
@@ -283,6 +289,7 @@ impl DiagnosticHandler {
                         range: (start1.min(start2), end1.max(end2)),
                     },
                 )),
+                _color_choice: self.color_choice,
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -294,12 +301,13 @@ impl DiagnosticHandler {
     }
 
     pub fn emit_general_message(&mut self, message: &str, level: Level) {
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         let diagnostic = Diagnostic {
             title: format!("{:?}", level),
             message: message.to_string(),
             level,
             location: None,
+            _color_choice: self.color_choice,
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -331,7 +339,7 @@ mod tests {
         tr.s(Stmt::Assign(a, one_expr));
         tr.s(Stmt::Assign(b, zero_expr));
 
-        let mut handler = DiagnosticHandler::new();
+        let mut handler = DiagnosticHandler::new(ColorChoice::Never);
         let file_id = handler.add_file(
             "main.calyx".to_string(),
             "12345678\nassert_eq!(x, 20);\n".to_string(),
