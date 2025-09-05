@@ -3,7 +3,6 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use std::collections::HashMap;
-// use std::io::{self, IsTerminal};
 
 use clap::ColorChoice;
 use clap::Parser;
@@ -42,16 +41,17 @@ struct Cli {
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
 
-    /// Users can specify `-color` to enable ANSI colors in terminal output
+    /// To suppress colors in error messages, pass in `--color never`
+    /// Otherwise, by default, error messages are displayed w/ ANSI colors
     #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
     color: ColorChoice,
 }
 
 /// Examples (enables all tracing logs):
 /// ```
-/// $ cargo run -- --verilog protocols/tests/adders/adder_d1/add_d1.v -p protocols/tests/adders/adder_d1/add_d1.prot -t protocols/tests/adders/adder_d1/add_d1.tx
-/// $ cargo run -- --verilog protocols/tests/counters/counter.v -p protocols/tests/counters/counter.prot -t protocols/tests/counters/counter.tx -v
-/// $ cargo run -- --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v -p protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
+/// $ cargo run -- --verilog ../protocols/tests/adders/adder_d1/add_d1.v --protocol ../protocols/tests/adders/adder_d1/add_d1.prot -t ../protocols/tests/adders/adder_d1/add_d1.tx
+/// $ cargo run -- --verilog ../protocols/tests/counters/counter.v --protocol ../protocols/tests/counters/counter.prot -t ../protocols/tests/counters/counter.tx -v
+/// $ cargo run -- --verilog ../protocols/tests/identities/dual_identity_d1/dual_identity_d1.v --protocol ../protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t ../protocols/tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
