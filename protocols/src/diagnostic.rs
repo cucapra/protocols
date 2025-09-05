@@ -54,8 +54,6 @@ struct Diagnostic {
     message: String,
     level: Level,
     location: Option<(usize, Label)>,
-    /// Whether colored outputs should be enabled in the diagnostic
-    _color_choice: ColorChoice,
 }
 
 impl Diagnostic {
@@ -156,7 +154,6 @@ impl DiagnosticHandler {
                 message: message.to_string(),
                 level,
                 location: Some((fileid, label)),
-                _color_choice: self.color_choice,
             };
 
             diagnostic.emit(&mut buffer, &self.files);
@@ -190,7 +187,6 @@ impl DiagnosticHandler {
             message: message.to_string(),
             level,
             location: Some((fileid, label)),
-            _color_choice: self.color_choice,
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -218,7 +214,6 @@ impl DiagnosticHandler {
             message: message.to_string(),
             level,
             location: Some((fileid, label)),
-            _color_choice: self.color_choice,
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -250,7 +245,6 @@ impl DiagnosticHandler {
                 message: message.to_string(),
                 level,
                 location: Some((fileid, label)),
-                _color_choice: self.color_choice,
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -289,7 +283,6 @@ impl DiagnosticHandler {
                         range: (start1.min(start2), end1.max(end2)),
                     },
                 )),
-                _color_choice: self.color_choice,
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -307,7 +300,6 @@ impl DiagnosticHandler {
             message: message.to_string(),
             level,
             location: None,
-            _color_choice: self.color_choice,
         };
 
         diagnostic.emit(buffer, &self.files);
