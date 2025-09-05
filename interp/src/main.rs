@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use clap::ColorChoice;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
@@ -39,17 +40,24 @@ struct Cli {
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
+
+    /// To suppress colors in error messages, pass in `--color never`
+    /// Otherwise, by default, error messages are displayed w/ ANSI colors
+    #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
+    color: ColorChoice,
 }
 
 /// Examples (enables all tracing logs):
 /// ```
-/// $ cargo run -- --verilog protocols/tests/adders/adder_d1/add_d1.v -p protocols/tests/adders/adder_d1/add_d1.prot -t protocols/tests/adders/adder_d1/add_d1.tx
-/// $ cargo run -- --verilog protocols/tests/counters/counter.v -p protocols/tests/counters/counter.prot -t protocols/tests/counters/counter.tx -v
-/// $ cargo run -- --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v -p protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
+/// $ cargo run -- --verilog ../protocols/tests/adders/adder_d1/add_d1.v --protocol ../protocols/tests/adders/adder_d1/add_d1.prot -t ../protocols/tests/adders/adder_d1/add_d1.tx
+/// $ cargo run -- --verilog ../protocols/tests/counters/counter.v --protocol ../protocols/tests/counters/counter.prot -t ../protocols/tests/counters/counter.tx -v
+/// $ cargo run -- --verilog ../protocols/tests/identities/dual_identity_d1/dual_identity_d1.v --protocol ../protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t ../protocols/tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
+
+    let color_choice = cli.color;
 
     // Set up logger to use the log-level specified via the `-v` flag
     // For concision, we disable timestamps and the module paths in the log
@@ -59,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Create a new handler for dealing with errors/diagnostics
-    let protocols_handler = &mut DiagnosticHandler::new();
+    let protocols_handler = &mut DiagnosticHandler::new(color_choice);
 
     // At the moment we only allow the user to specify one Verilog file
     // through the CLI, so we have to wrap it in a singleton Vec
@@ -82,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler = &mut DiagnosticHandler::new();
+    let transactions_handler = &mut DiagnosticHandler::new(color_choice);
     let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
         cli.transactions,
         transactions_handler,

@@ -7,6 +7,7 @@
 use std::{collections::HashSet, io::Write};
 
 use baa::BitVecValue;
+use clap::ColorChoice;
 use codespan_reporting::diagnostic::{
     Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
 };
@@ -91,20 +92,34 @@ pub struct DiagnosticHandler {
     files: SimpleFiles<String, String>,
     reported_errs: HashSet<ErrorKey>,
     error_string: String,
+    /// `color_choice` indicates whether to emit error messages w/ ANSI colors
+    color_choice: ColorChoice,
 }
 
 impl Default for DiagnosticHandler {
+    /// Default `DiagnosticHandler` does not emit colored error messages
     fn default() -> Self {
-        Self::new()
+        Self::new(ColorChoice::Never)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new() -> Self {
+    pub fn new(color_choice: ColorChoice) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: HashSet::new(),
             error_string: String::new(),
+            color_choice,
+        }
+    }
+
+    /// Creates a buffer for error diagnostics
+    /// (different buffers are created based on whether we want colors or not)
+    fn create_buffer(&self) -> Buffer {
+        if self.color_choice == ColorChoice::Never {
+            Buffer::no_color()
+        } else {
+            Buffer::ansi()
         }
     }
 
@@ -127,7 +142,7 @@ impl DiagnosticHandler {
         if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
             return;
         }
-        let buffer = &mut Buffer::ansi();
+        let mut buffer = self.create_buffer();
         if let Some((start, end, fileid)) = tr.get_expr_loc(*expr_id) {
             let label = Label {
                 message: Some(message.to_string()),
@@ -141,7 +156,7 @@ impl DiagnosticHandler {
                 location: Some((fileid, label)),
             };
 
-            diagnostic.emit(buffer, &self.files);
+            diagnostic.emit(&mut buffer, &self.files);
 
             let error_msg = String::from_utf8_lossy(buffer.as_slice());
             self.error_string.push_str(&error_msg);
@@ -161,7 +176,7 @@ impl DiagnosticHandler {
     ) {
         let start = pair.as_span().start();
         let end = pair.as_span().end();
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         let label = Label {
             message: Some(message.to_string()),
             range: (start, end),
@@ -188,7 +203,7 @@ impl DiagnosticHandler {
         end: usize,
         level: Level,
     ) {
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         let label = Label {
             message: Some(message.to_string()),
             range: (start, end),
@@ -218,7 +233,7 @@ impl DiagnosticHandler {
         if !self.reported_errs.insert(ErrorKey::StmtKey(*stmt_id)) {
             return;
         }
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         if let Some((start, end, fileid)) = tr.get_stmt_loc(*stmt_id) {
             let label = Label {
                 message: Some(message.to_string()),
@@ -248,7 +263,7 @@ impl DiagnosticHandler {
         eval1: &BitVecValue,
         eval2: &BitVecValue,
     ) {
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
 
         if let (Some((start1, end1, fileid1)), Some((start2, end2, fileid2))) =
             (tr.get_expr_loc(*expr1_id), tr.get_expr_loc(*expr2_id))
@@ -279,7 +294,7 @@ impl DiagnosticHandler {
     }
 
     pub fn emit_general_message(&mut self, message: &str, level: Level) {
-        let buffer = &mut Buffer::ansi();
+        let buffer = &mut self.create_buffer();
         let diagnostic = Diagnostic {
             title: format!("{:?}", level),
             message: message.to_string(),
@@ -316,7 +331,7 @@ mod tests {
         tr.s(Stmt::Assign(a, one_expr));
         tr.s(Stmt::Assign(b, zero_expr));
 
-        let mut handler = DiagnosticHandler::new();
+        let mut handler = DiagnosticHandler::new(ColorChoice::Never);
         let file_id = handler.add_file(
             "main.calyx".to_string(),
             "12345678\nassert_eq!(x, 20);\n".to_string(),

@@ -1,0 +1,3 @@
+// ARGS: --verilog identities/identity_d2/identity_d2.v --protocol identities/identity_d2/identity_d2.prot
+multiple_assign(1, 1);
+multiple_assign(1, 1);
