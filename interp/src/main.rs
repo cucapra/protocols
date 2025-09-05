@@ -3,9 +3,11 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use std::collections::HashMap;
+use std::io::{self, IsTerminal};
 
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use colorchoice::ColorChoice;
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction, Type};
 use protocols::scheduler::Scheduler;
@@ -39,6 +41,10 @@ struct Cli {
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
+
+    /// Users can specify `-color` to enable ANSI colors in terminal output
+    #[command(flatten)]
+    color: colorchoice_clap::Color,
 }
 
 /// Examples (enables all tracing logs):
@@ -51,6 +57,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
 
+    cli.color.write_global();
+
+    let mut color_choice = cli.color.as_choice();
+
+    // Disable colors if we're not writing to a terminal
+    if !io::stdin().is_terminal() {
+        color_choice = ColorChoice::Never;
+    }
+
     // Set up logger to use the log-level specified via the `-v` flag
     // For concision, we disable timestamps and the module paths in the log
     env_logger::Builder::new()
@@ -59,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Create a new handler for dealing with errors/diagnostics
-    let protocols_handler = &mut DiagnosticHandler::new();
+    let protocols_handler = &mut DiagnosticHandler::new(color_choice);
 
     // At the moment we only allow the user to specify one Verilog file
     // through the CLI, so we have to wrap it in a singleton Vec
@@ -82,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler = &mut DiagnosticHandler::new();
+    let transactions_handler = &mut DiagnosticHandler::new(color_choice);
     let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
         cli.transactions,
         transactions_handler,

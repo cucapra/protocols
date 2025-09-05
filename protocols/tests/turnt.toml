@@ -1,1 +1,1 @@
-command = "cargo run --package protocols-interp -- --transactions {filename} {args}"
+command = "cargo run --package protocols-interp -- --color never --transactions {filename} {args}"

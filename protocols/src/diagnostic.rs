@@ -13,8 +13,9 @@ use codespan_reporting::diagnostic::{
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
-use pest::RuleType;
+use colorchoice::ColorChoice;
 use pest::iterators::Pair;
+use pest::RuleType;
 
 use crate::ir::*;
 
@@ -91,20 +92,34 @@ pub struct DiagnosticHandler {
     files: SimpleFiles<String, String>,
     reported_errs: HashSet<ErrorKey>,
     error_string: String,
+    /// `color_choice` indicates whether to emit error messages w/ ANSI colors
+    color_choice: ColorChoice,
 }
 
 impl Default for DiagnosticHandler {
+    /// Default `DiagnosticHandler` does not emit colored error messages
     fn default() -> Self {
-        Self::new()
+        Self::new(ColorChoice::Never)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new() -> Self {
+    pub fn new(color_choice: ColorChoice) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: HashSet::new(),
             error_string: String::new(),
+            color_choice,
+        }
+    }
+
+    /// Creates a buffer for error diagnostics
+    /// (different buffers are created based on whether we want colors or not)
+    fn create_buffer(&self) -> Buffer {
+        if self.color_choice == ColorChoice::Never {
+            Buffer::no_color()
+        } else {
+            Buffer::ansi()
         }
     }
 
@@ -127,7 +142,7 @@ impl DiagnosticHandler {
         if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
             return;
         }
-        let buffer = &mut Buffer::ansi();
+        let mut buffer = self.create_buffer();
         if let Some((start, end, fileid)) = tr.get_expr_loc(*expr_id) {
             let label = Label {
                 message: Some(message.to_string()),
@@ -141,7 +156,7 @@ impl DiagnosticHandler {
                 location: Some((fileid, label)),
             };
 
-            diagnostic.emit(buffer, &self.files);
+            diagnostic.emit(&mut buffer, &self.files);
 
             let error_msg = String::from_utf8_lossy(buffer.as_slice());
             self.error_string.push_str(&error_msg);
