@@ -14,8 +14,6 @@ A protocol is described using an `fn` definition containing a list of imperative
 - Run `cargo build` to build
 - Run `cargo test` to execute all unit tests
 - To run a snapshot test, from the [`protocols/tests`](./protocols/tests/) subdirectory, do `turnt tests/adders/adder_d1/add_d1.tx`
-- Note: to view the expected results of some snapshot tests (in `.out` files), install the [ANSI Colors](https://marketplace.visualstudio.com/items?itemName=iliazeus.vscode-ansi) VS Code extension
-  - Some tests expect the interpreter to fail, and error messages are displayed using ANSI escape sequences, which is why the VS Code extension is handy
 
 **CLI**:
 The interpreter has a CLI, which can be invoked as follows:
