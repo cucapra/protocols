@@ -27,7 +27,7 @@ struct Cli {
     wave: String,
 
     /// A mapping of DUT struct in the protocol file to an instance in the signal trace.
-    /// Can we used multiple times. Format is: `${instance_name}:${dut_struct_name}
+    /// Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
     #[arg(short, long)]
     instances: Vec<String>,
 
@@ -80,19 +80,27 @@ fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
     dut_names.join(", ")
 }
 
+/// Metadata associated with a design
 struct Design {
     name: String,
+    /// Pins from a struct
     pins: Vec<Field>,
     symbol: SymbolId,
+    /// Index of transactions that use this struct
+    /// (e.g. an "Adder" supports these transactions)
     transaction_ids: Vec<usize>,
 }
 
+/// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT)
 fn find_designs<'a>(
     transactions: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
 ) -> FxHashMap<String, Design> {
+    // Maps the name of the transaction to metadata about the struct (design)
+    // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut out: FxHashMap<String, Design> = FxHashMap::default();
     for (tran_id, (tran, sym)) in transactions.enumerate() {
         if let Some(symbol) = tran.type_param {
+            // we assume type parameters have to be structs
             let struct_id = match sym[symbol].tpe() {
                 Type::Struct(id) => id,
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
@@ -123,9 +131,13 @@ struct Instance {
     design: String,
 }
 
+/// Takes the contents of the `-i` CLI flag and tries to find
 fn parse_instance(duts: &FxHashMap<String, Design>, arg: &str) -> Instance {
     let parts: Vec<_> = arg.split(':').collect();
     match parts.as_slice() {
+        // `module` is the name of the design
+        // (In Verilog, "modules" are like interfaces and you have "instances"
+        // (concrete instantiations, aka implementations) of the module)
         [inst, module] => {
             if !duts.contains_key(*module) {
                 panic!(
