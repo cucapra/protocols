@@ -4,12 +4,11 @@
 
 use crate::{Design, Instance};
 use baa::BitVecValue;
-use protocols::ir::{SymbolId, SymbolTable};
-use protocols::parser::Rule::assert_eq;
+use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
-use std::ptr::write_volatile;
 use wellen::{Hierarchy, SignalRef};
 
+#[allow(dead_code)]
 pub enum StepResult {
     /// advance time by one step and there are values available for this step
     Ok,
@@ -18,6 +17,7 @@ pub enum StepResult {
 }
 
 /// Provides a trace of signals that we can analyze.
+#[allow(dead_code)]
 pub trait SignalTrace {
     /// advance to the next time step
     fn step() -> StepResult;
@@ -27,6 +27,7 @@ pub trait SignalTrace {
 }
 
 /// Determines how signals from a waveform a sampled
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum WaveSamplingMode<'a> {
     /// sample on the rising edge of the signal specified by its hierarchical name
@@ -39,6 +40,7 @@ pub enum WaveSamplingMode<'a> {
 }
 
 /// Waveform dump based implementation of a signal trace.
+#[allow(dead_code)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     port_map: FxHashMap<PortKey, SignalRef>,
@@ -78,6 +80,7 @@ impl WaveSignalTrace {
 }
 
 /// check instances and build port map
+#[allow(unused_variables)]
 fn find_instances(
     h: &Hierarchy,
     designs: &FxHashMap<String, Design>,
@@ -135,7 +138,7 @@ impl SignalTrace for WaveSignalTrace {
         todo!()
     }
 
-    fn get(instance_id: u32, pin: SymbolId) -> BitVecValue {
+    fn get(_instance_id: u32, _pin: SymbolId) -> BitVecValue {
         todo!()
     }
 }

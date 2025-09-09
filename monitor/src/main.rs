@@ -12,7 +12,6 @@ use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
 use protocols::parser::parsing_helper;
 use rustc_hash::FxHashMap;
-use std::panic::panic_any;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -36,6 +35,7 @@ struct Cli {
     verbosity: Verbosity<WarnLevel>,
 }
 
+#[allow(unused_variables)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -49,9 +49,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // parse protocol file
     let mut protocols_handler = DiagnosticHandler::new();
-    let parsed = parsing_helper(&cli.protocol, &mut protocols_handler);
+    let transactions_symbol_tables = parsing_helper(&cli.protocol, &mut protocols_handler);
 
-    let designs = find_designs(parsed.iter());
+    let designs = find_designs(transactions_symbol_tables.iter());
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -67,9 +67,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     // parse waveform
-    let mut trace =
-        WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
-            .expect("failed to read waveform file");
+    let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
+        .expect("failed to read waveform file");
 
     Ok(())
 }
@@ -80,7 +79,8 @@ fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
     dut_names.join(", ")
 }
 
-/// Metadata associated with a design
+/// Metadata associated with a design (i.e. a `struct` in the Protocols language)
+#[allow(dead_code)]
 struct Design {
     name: String,
     /// Pins from a struct
@@ -91,32 +91,33 @@ struct Design {
     transaction_ids: Vec<usize>,
 }
 
-/// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT)
+/// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
+/// returning a `HashMap` from struct names to the actual `Design`
 fn find_designs<'a>(
     transactions: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
 ) -> FxHashMap<String, Design> {
     // Maps the name of the transaction to metadata about the struct (design)
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut out: FxHashMap<String, Design> = FxHashMap::default();
-    for (tran_id, (tran, sym)) in transactions.enumerate() {
-        if let Some(symbol) = tran.type_param {
-            // we assume type parameters have to be structs
-            let struct_id = match sym[symbol].tpe() {
+    for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
+        if let Some(symbol) = transaction.type_param {
+            // We assume type parameters have to be structs
+            let struct_id = match symbol_table[symbol].tpe() {
                 Type::Struct(id) => id,
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
             };
-            let name = sym[struct_id].name().to_string();
+            let name = symbol_table[struct_id].name().to_string();
             if let Some(design) = out.get_mut(&name) {
-                design.transaction_ids.push(tran_id);
+                design.transaction_ids.push(transaction_id);
             } else {
-                let pins = sym[struct_id].pins().clone();
+                let pins = symbol_table[struct_id].pins().clone();
                 out.insert(
                     name.clone(),
                     Design {
                         name,
                         pins,
                         symbol,
-                        transaction_ids: vec![tran_id],
+                        transaction_ids: vec![transaction_id],
                     },
                 );
             }

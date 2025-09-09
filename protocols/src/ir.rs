@@ -331,6 +331,10 @@ impl Struct {
     }
 }
 
+/// Datatype representing A `Field` in a `Struct`, contains:
+/// - The name of the field
+/// - The direction (`In` or `Out`)
+/// - The `Type` of the field
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     name: String,
