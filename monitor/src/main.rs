@@ -14,7 +14,7 @@ use protocols::parser::parsing_helper;
 use rustc_hash::FxHashMap;
 
 // From the top-level directory, run:
-// $ cargo run --package protocols-monitor -- --help -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i ...
+// $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -73,6 +73,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
         .expect("failed to read waveform file");
+
+    println!("Success!");
 
     Ok(())
 }
