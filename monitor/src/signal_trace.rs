@@ -20,10 +20,10 @@ pub enum StepResult {
 #[allow(dead_code)]
 pub trait SignalTrace {
     /// advance to the next time step
-    fn step() -> StepResult;
+    fn step(&mut self) -> StepResult;
 
     /// returns value of a design input / output at the current step
-    fn get(instance_id: u32, io: SymbolId) -> BitVecValue;
+    fn get(&self, instance_id: u32, io: SymbolId) -> BitVecValue;
 }
 
 /// Determines how signals from a waveform a sampled
@@ -44,6 +44,7 @@ pub enum WaveSamplingMode<'a> {
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     port_map: FxHashMap<PortKey, SignalRef>,
+    step: u32,
 }
 
 /// A PortKey is just a pair consisting of an instance_id and a symbol_id for a pin
@@ -75,7 +76,11 @@ impl WaveSignalTrace {
         signals.dedup();
         wave.load_signals(&signals);
 
-        Ok(Self { wave, port_map })
+        Ok(Self {
+            wave,
+            port_map,
+            step: 0,
+        })
     }
 }
 
@@ -136,19 +141,26 @@ fn find_instances(
 }
 
 impl SignalTrace for WaveSignalTrace {
-    fn step() -> StepResult {
-        todo!()
+    fn step(&mut self) -> StepResult {
+        let total_steps = self.wave.time_table().len() as u32;
+        if self.step < total_steps {
+            self.step += 1;
+        }
+        if self.step == total_steps {
+            StepResult::Done
+        } else {
+            StepResult::Ok
+        }
     }
 
-    fn get(_instance_id: u32, _pin: SymbolId) -> BitVecValue {
-        todo!()
+    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
+        let key = PortKey {
+            instance_id,
+            pin_id: pin,
+        };
+        let signal = self.wave.get_signal(self.port_map[&key]).unwrap();
+        let offset = signal.get_offset(self.step).unwrap();
+        let value = signal.get_value_at(&offset, 0);
+        BitVecValue::from_bit_str(&value.to_bit_string().unwrap()).unwrap()
     }
 }
-
-// Concrete TODOs:
-// - Find the concrete symbol ID for `DUT.a`
-// ^^ this may necessitate refactoring the IR
-
-// - Look at how languages with symbol tables (e.g. Rust) compiles records
-// - Idea; Build a format string: `<name_of_design>.<name_of_pin>`
-// ^^ use that to index into the symbol table
