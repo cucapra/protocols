@@ -85,8 +85,8 @@ fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
 #[allow(dead_code)]
 struct Design {
     name: String,
-    /// Pins from a struct
-    pins: Vec<Field>,
+    /// Pins from a struct, along with their associated `SymbolId`s
+    pins: Vec<(SymbolId, Field)>,
     symbol: SymbolId,
     /// Index of transactions that use this struct
     /// (e.g. an "Adder" supports these transactions)
@@ -100,7 +100,7 @@ fn find_designs<'a>(
 ) -> FxHashMap<String, Design> {
     // Maps the name of the transaction to metadata about the struct (design)
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
-    let mut out: FxHashMap<String, Design> = FxHashMap::default();
+    let mut designs: FxHashMap<String, Design> = FxHashMap::default();
     for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
         if let Some(symbol) = transaction.type_param {
             // We assume type parameters have to be structs
@@ -109,15 +109,29 @@ fn find_designs<'a>(
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
             };
             let name = symbol_table[struct_id].name().to_string();
-            if let Some(design) = out.get_mut(&name) {
+            if let Some(design) = designs.get_mut(&name) {
                 design.transaction_ids.push(transaction_id);
             } else {
-                let pins = symbol_table[struct_id].pins().clone();
-                out.insert(
+                // `Field`s are also called `pin`s`
+                let pins_vec: Vec<Field> = symbol_table[struct_id].pins().clone();
+
+                // For each pin, look up its associated `SymbolId` in the symbol table
+                let pins_with_ids: Vec<(SymbolId, Field)> = pins_vec
+                    .into_iter()
+                    .map(|pin| {
+                        (
+                            symbol_table
+                                .symbol_id_from_name(pin.name())
+                                .expect("Unable to find symbol ID for pin"),
+                            pin,
+                        )
+                    })
+                    .collect();
+                designs.insert(
                     name.clone(),
                     Design {
                         name,
-                        pins,
+                        pins: pins_with_ids,
                         symbol,
                         transaction_ids: vec![transaction_id],
                     },
@@ -126,7 +140,7 @@ fn find_designs<'a>(
         }
         // skipping any transactions that are not associated with a DUT
     }
-    out
+    designs
 }
 
 struct Instance {

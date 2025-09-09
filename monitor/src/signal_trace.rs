@@ -50,7 +50,7 @@ pub struct WaveSignalTrace {
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 struct PortKey {
     instance_id: u32,
-    pin: SymbolId,
+    pin_id: SymbolId,
 }
 
 impl WaveSignalTrace {
@@ -97,15 +97,12 @@ fn find_instances(
 
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
-            for pin in design.pins.iter() {
+            for (pin_id, pin) in design.pins.iter() {
                 // find a variable that has a matching name
                 if let Some(var) = instance_scope.vars(h).find(|v| h[*v].name(h) == pin.name()) {
-                    // TODO: how do we get the correct "pin" id here? (Look at the Protocols IR)
-                    // (i.e. `pin` here should not be default, it should be the `SymbolId`)
-                    // Note: the key here is not fully correct as a result
                     let key = PortKey {
                         instance_id: inst_id as u32,
-                        pin: Default::default(),
+                        pin_id: *pin_id,
                     };
                     let waveform_bits = h[var].length().expect("not a bit vector");
 
