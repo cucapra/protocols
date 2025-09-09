@@ -223,7 +223,7 @@ pub mod tests {
     }
 
     fn test_helper(filename: &str, snap_name: &str) {
-        let mut handler = DiagnosticHandler::new();
+        let mut handler = DiagnosticHandler::default();
         let result = parse_file(filename, &mut handler);
 
         let content = match result {

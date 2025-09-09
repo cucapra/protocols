@@ -1,0 +1,6 @@
+error: The two expressions did not evaluate to the same value
+   ┌─ adders/adder_d1/add_d1.prot:14:13
+   │
+14 │   assert_eq(s, DUT.s);
+   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000001010), RHS Value: ValueOwned(00000000000000000000000000001001)
+

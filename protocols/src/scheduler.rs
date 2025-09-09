@@ -475,284 +475,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_add_d1() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/adders/adder_d1/add_d1.v"],
-            "tests/adders/adder_d1/add_d1.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // CASE 1: BOTH THREADS PASS
-        let mut todos = vec![
-            (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
-            (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
-        ];
-
-        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-
-        // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
-        todos[1].1[2] = bv(10, 32);
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim2,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[1]);
-
-        // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
-        todos[0].1[2] = bv(4, 32);
-        todos[1].1[2] = bv(9, 32);
-        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim3,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        assert_ok(&results[1]);
-        assert_assertion_error!(&results[0]);
-
-        // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
-        todos[1].1[2] = bv(10, 32);
-        let sim4 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols,
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim4,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[0]);
-        assert_assertion_error!(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_add_d1_incorrect() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/adders/adder_d1/add_d1.v"],
-            "tests/adders/adder_d1/add_d1.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (
-                String::from("add_incorrect"),
-                vec![bv(1, 32), bv(2, 32), bv(3, 32)],
-            ),
-            (
-                String::from("add_incorrect"),
-                vec![bv(4, 32), bv(5, 32), bv(9, 32)],
-            ),
-        ];
-        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert!(results[0].is_err() || results[1].is_err());
-    }
-
-    #[test]
-    fn test_scheduler_add_d2() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/adders/adder_d2/add_d2.v"],
-            "tests/adders/adder_d2/add_d2.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (String::from("add"), vec![bv(1, 32), bv(2, 32), bv(3, 32)]),
-            (String::from("add"), vec![bv(4, 32), bv(5, 32), bv(9, 32)]),
-            (
-                String::from("add"),
-                vec![bv(10, 32), bv(11, 32), bv(21, 32)],
-            ),
-        ];
-
-        let sim = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, "trace.fst");
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_mult_d2() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/multipliers/mult_d2/mult_d2.v"],
-            "tests/multipliers/mult_d2/mult_d2.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // CASE 1: BOTH THREADS PASS
-        let mut todos = vec![
-            (String::from("mul"), vec![bv(1, 32), bv(2, 32), bv(2, 32)]),
-            (String::from("mul"), vec![bv(6, 32), bv(8, 32), bv(48, 32)]),
-        ];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-
-        // CASE 2: FIRST THREAD PASSES, SECOND THREAD FAILS
-        todos[1].1[2] = bv(47, 32);
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim2,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[1]);
-
-        // CASE 3: FIRST THREAD FAILS, SECOND THREAD PASSES
-        todos[0].1[2] = bv(3, 32);
-        todos[1].1[2] = bv(48, 32);
-        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim3,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        assert_ok(&results[1]);
-        assert_assertion_error!(&results[0]);
-
-        // CASE 4: FIRST THREAD FAILS, SECOND THREAD FAILS
-        todos[1].1[2] = bv(47, 32);
-        let sim4 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols,
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim4,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[0]);
-        assert_assertion_error!(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_identity_d2_multiple_assign() {
-        let handler = &mut DiagnosticHandler::new();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d2/identity_d2.v"],
-            "tests/identities/identity_d2/identity_d2.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // PASSING CASE: Single thread
-        let mut todos = vec![(String::from("multiple_assign"), vec![bv(1, 32), bv(1, 32)])];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-
-        // ERROR CASE: Two different assignments
-        todos.push((String::from("multiple_assign"), vec![bv(2, 32), bv(2, 32)]));
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_todos();
-
-        // we don't know which thread will fail (b/c ordering is non-deterministic), but one should
-        assert!(results[0].is_err() || results[1].is_err());
-
-        // // PASSING CASE: Two assignments, but of same value (1)
-        todos[1].1 = vec![bv(1, 32), bv(1, 32)];
-        let sim3 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim3, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
     fn test_scheduler_identity_d2_double_fork() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/identity_d2/identity_d2.v"],
             "tests/identities/identity_d2/identity_d2.prot",
@@ -789,7 +513,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d1_implicit_fork() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/identity_d1/identity_d1.v"],
             "tests/identities/identity_d1/identity_d1.prot",
@@ -818,7 +542,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_identity_d1_slicing() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/identity_d1/identity_d1.v"],
             "tests/identities/identity_d1/identity_d1.prot",
@@ -857,7 +581,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_dual_identity() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/identities/dual_identity_d1/dual_identity_d1.v"],
             "tests/identities/dual_identity_d1/dual_identity_d1.prot",
@@ -905,7 +629,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_inverter() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/inverters/inverter_d0.v"],
             "tests/inverters/inverter_d0.prot",
@@ -934,7 +658,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_counter() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/counters/counter.v"],
             "tests/counters/counter.prot",
@@ -962,7 +686,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_aes128() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["../examples/tinyaes128/aes_128.v"],
             "../examples/tinyaes128/aes128.prot",
@@ -1009,7 +733,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_register_file_write_read() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["../examples/serv/rtl/serv_regfile.v"],
             "../examples/serv/serv_regfile.prot",
@@ -1064,7 +788,7 @@ pub mod tests {
     #[test]
     #[ignore] // FIXME: going into infinite loop
     fn test_scheduler_picorv32_pcpi_mul() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["examples/picorv32/picorv32.v"],
             "examples/picorv32/pcpi_mul.prot",
@@ -1103,7 +827,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi0() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multi/multi0/multi0.v"],
             "tests/multi/multi0/multi0.prot",
@@ -1137,7 +861,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi0keep() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multi/multi0keep/multi0keep.v"],
             "tests/multi/multi0keep/multi0keep.prot",
@@ -1171,7 +895,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi0keep2const() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec![
                 "tests/multi/multi0keep2const/multi0keep2const.v",
@@ -1208,7 +932,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi2const() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec![
                 "tests/multi/multi2const/multi2const.v",
@@ -1245,7 +969,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi2multi() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec![
                 "tests/multi/multi2multi/multi2multi.v",
@@ -1282,7 +1006,7 @@ pub mod tests {
 
     #[test]
     fn test_scheduler_multi_data() {
-        let handler = &mut DiagnosticHandler::new();
+        let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
             vec!["tests/multi/multi_data/multi_data.v"],
             "tests/multi/multi_data/multi_data.prot",
