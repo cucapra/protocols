@@ -49,7 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // parse protocol file
     let mut protocols_handler = DiagnosticHandler::new();
-    let transactions_symbol_tables = parsing_helper(&cli.protocol, &mut protocols_handler);
+    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
+        parsing_helper(&cli.protocol, &mut protocols_handler);
 
     let designs = find_designs(transactions_symbol_tables.iter());
 
@@ -60,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let instances: Vec<_> = cli
+    let instances: Vec<Instance> = cli
         .instances
         .iter()
         .map(|arg| parse_instance(&designs, arg))
@@ -73,8 +74,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Concatenates all the names of `struct`s (`Design`s) into one single string
 fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
-    let mut dut_names: Vec<_> = duts.keys().cloned().collect();
+    let mut dut_names: Vec<String> = duts.keys().cloned().collect();
     dut_names.sort();
     dut_names.join(", ")
 }
@@ -134,7 +136,7 @@ struct Instance {
 
 /// Takes the contents of the `-i` CLI flag and tries to find
 fn parse_instance(duts: &FxHashMap<String, Design>, arg: &str) -> Instance {
-    let parts: Vec<_> = arg.split(':').collect();
+    let parts: Vec<&str> = arg.split(':').collect();
     match parts.as_slice() {
         // `module` is the name of the design
         // (In Verilog, "modules" are like interfaces and you have "instances"

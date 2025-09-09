@@ -70,7 +70,7 @@ impl WaveSignalTrace {
         let port_map = find_instances(wave.hierarchy(), designs, instances);
 
         // load all relavant signal references into memory
-        let mut signals: Vec<_> = port_map.values().cloned().collect();
+        let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
         signals.sort();
         signals.dedup();
         wave.load_signals(&signals);
@@ -91,7 +91,7 @@ fn find_instances(
         // fetch the design from the hashmap (the design tells us what pins to expect)
         let design = &designs[&inst.design];
 
-        let inst_name_parts: Vec<_> = inst.name.split('.').collect();
+        let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
         if let Some(instance_scope) = h.lookup_scope(&inst_name_parts) {
             let instance_scope = &h[instance_scope];
 
@@ -116,7 +116,7 @@ fn find_instances(
                     port_map.insert(key, h[var].signal_ref());
                 } else {
                     // unable to find a variable whose name matches a pin
-                    let available_vars: Vec<_> =
+                    let available_vars: Vec<&str> =
                         instance_scope.vars(h).map(|v| h[v].name(h)).collect();
                     panic!(
                         "Failed to find pin {}. Available pins in waveform for instance {} are {}",
