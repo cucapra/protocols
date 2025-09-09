@@ -13,6 +13,9 @@ use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
 use protocols::parser::parsing_helper;
 use rustc_hash::FxHashMap;
 
+// From the top-level directory, run:
+// $ cargo run --package protocols-monitor -- --help -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i ...
+
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
