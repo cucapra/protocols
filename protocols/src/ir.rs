@@ -331,6 +331,10 @@ impl Struct {
     }
 }
 
+/// Datatype representing A `Field` in a `Struct`, contains:
+/// - The name of the field
+/// - The direction (`In` or `Out`)
+/// - The `Type` of the field
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     name: String,
@@ -353,6 +357,16 @@ impl Field {
 
     pub fn tpe(&self) -> Type {
         self.tpe
+    }
+
+    /// Computes the bitwidth of a `Field`. Note: this function panics
+    /// if the `Type` of a `Field` is *not* a `BitVec`.
+    pub fn bitwidth(&self) -> u32 {
+        match self.tpe {
+            Type::BitVec(width) => width,
+            Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
+        }
     }
 }
 
@@ -378,7 +392,6 @@ impl SymbolTable {
             name,
             tpe,
             parent: None,
-            next: None,
         };
         let lookup_name = entry.full_name(self);
 
@@ -420,7 +433,6 @@ impl SymbolTable {
             name,
             tpe: pin_type,
             parent: Some(parent),
-            next: None,
         };
         let lookup_name = entry.full_name(self);
 
@@ -525,8 +537,8 @@ impl Index<&Arg> for SymbolTable {
 pub struct SymbolTableEntry {
     name: String,
     tpe: Type,
+    /// Used to compute the fully qualified name.
     parent: Option<SymbolId>,
-    next: Option<SymbolId>,
 }
 
 impl SymbolTableEntry {
