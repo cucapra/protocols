@@ -82,7 +82,7 @@ impl WaveSignalTrace {
 /// check instances and build port map
 #[allow(unused_variables)]
 fn find_instances(
-    h: &Hierarchy,
+    hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
     instances: &[Instance],
 ) -> FxHashMap<PortKey, SignalRef> {
@@ -92,29 +92,34 @@ fn find_instances(
         let design = &designs[&inst.design];
 
         let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
-        if let Some(instance_scope) = h.lookup_scope(&inst_name_parts) {
-            let instance_scope = &h[instance_scope];
+        if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
+            let instance_scope = &hierachy[instance_scope];
 
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
             for (pin_id, pin) in design.pins.iter() {
                 // find a variable that has a matching name
-                if let Some(var) = instance_scope.vars(h).find(|v| h[*v].name(h) == pin.name()) {
+                if let Some(var) = instance_scope
+                    .vars(hierachy)
+                    .find(|v| hierachy[*v].name(hierachy) == pin.name())
+                {
                     let key = PortKey {
                         instance_id: inst_id as u32,
                         pin_id: *pin_id,
                     };
-                    let waveform_bits = h[var].length().expect("not a bit vector");
+                    let waveform_bits = hierachy[var].length().expect("not a bit vector");
 
-                    // TODO: check that bit widths match
-                    // assert_eq!(waveform_bits, pin.tpe().);
+                    // Check that bit widths match
+                    assert_eq!(waveform_bits, pin.bitwidth());
 
                     // Store the internal Wellen reference to the signal
-                    port_map.insert(key, h[var].signal_ref());
+                    port_map.insert(key, hierachy[var].signal_ref());
                 } else {
                     // unable to find a variable whose name matches a pin
-                    let available_vars: Vec<&str> =
-                        instance_scope.vars(h).map(|v| h[v].name(h)).collect();
+                    let available_vars: Vec<&str> = instance_scope
+                        .vars(hierachy)
+                        .map(|v| hierachy[v].name(hierachy))
+                        .collect();
                     panic!(
                         "Failed to find pin {}. Available pins in waveform for instance {} are {}",
                         pin.name(),
