@@ -42,8 +42,8 @@ Options:
 Example usage:
 
 ```bash
-$ cargo run -- --verilog protocols/tests/adders/adder_d1/add_d1.v \
+$ cargo run --package protocols-interp -- --verilog protocols/tests/adders/adder_d1/add_d1.v \
         --protocol protocols/tests/adders/adder_d1/add_d1.prot \
-        -t protocols/tests/adders/adder_d1/add_d1.tx \
+        -t protocols/tests/adders/adder_d1/both_threads_pass.tx \
         --verbose
 ```

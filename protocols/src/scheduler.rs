@@ -20,9 +20,16 @@ use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
 
+/// `NextStmtMap` allows us to interpret without using recursion
+/// (the interpreter can just lookup what the next statement is using this map)
 type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
+
+/// A `TodoItem` corresponds to a function call in a transaction `.tx` file
 pub type TodoItem = (String, Vec<BitVecValue>);
+
+/// We pass in `TransactionInfo` to the interpreter when we want to execute
+/// a single statement
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error

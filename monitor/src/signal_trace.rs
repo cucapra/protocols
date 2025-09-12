@@ -8,6 +8,7 @@ use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
 
+/// The result of advancing the clock cycle by one step
 #[allow(dead_code)]
 pub enum StepResult {
     /// advance time by one step and there are values available for this step
