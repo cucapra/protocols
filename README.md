@@ -12,15 +12,14 @@ A protocol is described using an `fn` definition containing a list of imperative
 - Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main) 
   - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
 - Run `cargo build` to build
-- Run `cargo test` to execute all unit tests
-- To run a snapshot test, from the [`protocols/tests`](./protocols/tests/) subdirectory, do `turnt tests/adders/adder_d1/add_d1.tx`
+- Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Turnt)
 
 **CLI**:
 The interpreter has a CLI, which can be invoked as follows:
 ```bash
-$ cargo run -- --help
+$ cargo run --package protocols-interp -- --help
 
-Usage: protocols [OPTIONS] --verilog <VERILOG_FILE> --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
+Usage: protocols-interp [OPTIONS] --verilog <VERILOG_FILE> --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
 
 Options:
       --verilog <VERILOG_FILE>
