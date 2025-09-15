@@ -79,12 +79,7 @@ pub fn build_statements(
             st[lhs].full_name(st),
             serialize_expr(tr, st, rhs)
         )?,
-        Stmt::Step => writeln!(
-            out,
-            "{}step();",
-            "  ".repeat(index),
-            // serialize_expr(tr, st, expr_id)
-        )?,
+        Stmt::Step => writeln!(out, "{}step();", "  ".repeat(index),)?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
         Stmt::While(cond, bodyid) => {
             writeln!(
@@ -125,12 +120,12 @@ pub fn build_statements(
 pub fn serialize_structs(
     out: &mut impl Write,
     st: &SymbolTable,
-    strct_ids: Vec<StructId>,
+    struct_ids: Vec<StructId>,
 ) -> std::io::Result<()> {
-    for strct_id in strct_ids {
-        writeln!(out, "struct {} {{", st[strct_id].name())?;
+    for struct_id in struct_ids {
+        writeln!(out, "struct {} {{", st[struct_id].name())?;
 
-        for field in st[strct_id].pins() {
+        for field in st[struct_id].pins() {
             writeln!(
                 out,
                 "  {} {}: {},",

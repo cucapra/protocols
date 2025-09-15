@@ -10,6 +10,8 @@ use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
+use crate::serialize::serialize_expr;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     pub name: String,
@@ -151,25 +153,7 @@ impl Transaction {
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
     /// provided `SymbolTable` to look up `SymbolId`s
     pub fn format_expr(&self, expr_id: &ExprId, symbol_table: &SymbolTable) -> String {
-        let expr = &self[expr_id];
-        match expr {
-            Expr::Const(bit_vec_value) => format!("{:#?}", bit_vec_value),
-            Expr::Sym(symbol_id) => symbol_table[symbol_id].full_name(symbol_table),
-            Expr::DontCare => "X".to_string(),
-            Expr::Binary(bin_op, expr_id1, expr_id2) => {
-                let e1 = self.format_expr(expr_id1, symbol_table);
-                let e2 = self.format_expr(expr_id2, symbol_table);
-                format!("{} {} {}", bin_op, e1, e2)
-            }
-            Expr::Unary(unary_op, expr_id) => {
-                let e = self.format_expr(expr_id, symbol_table);
-                format!("{}{}", unary_op, e)
-            }
-            Expr::Slice(expr_id, i, j) => {
-                let e = self.format_expr(expr_id, symbol_table);
-                format!("{}[{}:{}]", e, i, j)
-            }
-        }
+        serialize_expr(self, symbol_table, expr_id)
     }
 
     /// Pretty-prints a `Statement` based on its `StmtId`
