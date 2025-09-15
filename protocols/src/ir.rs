@@ -5,7 +5,8 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use core::fmt;
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -239,6 +240,25 @@ pub enum Stmt {
     While(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
+}
+
+/// Pretty printing for Statements
+impl fmt::Display for Stmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stmt::Block(stmt_ids) => todo!(),
+            Stmt::Assign(symbol_id, expr_id) => {
+                // TODO: how to we figure out the variable name associated with `symbol_id`??
+
+                write!(f, "{:?} := {:?}", symbol_id, expr_id)
+            }
+            Stmt::Step => todo!(),
+            Stmt::Fork => todo!(),
+            Stmt::While(expr_id, stmt_id) => todo!(),
+            Stmt::IfElse(expr_id, stmt_id, stmt_id1) => todo!(),
+            Stmt::AssertEq(expr_id, expr_id1) => todo!(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
