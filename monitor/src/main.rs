@@ -7,7 +7,7 @@ mod designs;
 mod signal_trace;
 
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
-use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
+use crate::signal_trace::{PortKey, SignalTrace, WaveSamplingMode, WaveSignalTrace};
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
@@ -76,6 +76,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed to read waveform file");
 
     println!("Success!");
+
+    // TODO: figure out how to avoid hard-coding this
+    let design = designs.get("Adder").expect("Missing Design for Adder");
+    println!("{:?}", design);
+
+    for port_key in trace.port_map.keys() {
+        // We assume that there is only one `Instance` at the moment
+        let PortKey {
+            instance_id,
+            pin_id,
+        } = port_key;
+
+        // Fetch the current value of the `pin_id`
+        // (along with the name of the corresponding `Field`)
+        let current_value = trace.get(*instance_id, *pin_id);
+        let field_name = design
+            .get_pin_name(pin_id)
+            .unwrap_or_else(|| panic!("Missing pin_id {} in design.pins", pin_id));
+        println!("{} ({}) |-> {:#?} ", field_name, pin_id, current_value)
+    }
 
     Ok(())
 }

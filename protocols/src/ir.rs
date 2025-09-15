@@ -487,6 +487,7 @@ impl SymbolTable {
         id
     }
 
+    /// Takes a string and returns the corresponding `SymbolId` (if one exists)
     pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
         self.by_name_sym.get(name).copied()
     }

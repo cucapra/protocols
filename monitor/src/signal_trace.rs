@@ -46,15 +46,15 @@ pub enum WaveSamplingMode<'a> {
 #[allow(dead_code)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
-    port_map: FxHashMap<PortKey, SignalRef>,
-    step: u32,
+    pub port_map: FxHashMap<PortKey, SignalRef>,
+    pub step: u32,
 }
 
-/// A PortKey is just a pair consisting of an instance_id and a symbol_id for a pin
+/// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-struct PortKey {
-    instance_id: u32,
-    pin_id: SymbolId,
+pub struct PortKey {
+    pub instance_id: u32,
+    pub pin_id: SymbolId,
 }
 
 impl WaveSignalTrace {

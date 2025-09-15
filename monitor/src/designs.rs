@@ -14,6 +14,7 @@ pub fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
 }
 
 /// Metadata associated with a design (i.e. a `struct` in the Protocols language)
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct Design {
     /// The name of the struct
@@ -25,6 +26,20 @@ pub struct Design {
     /// Index of transactions that use this struct
     /// (e.g. an "Adder" supports these transactions)
     pub transaction_ids: Vec<usize>,
+}
+
+impl Design {
+    /// Takes a `pin_id` and retrieves the name of the corresponding `Field`
+    /// (if one exists)
+    pub fn get_pin_name(&self, pin_id: &SymbolId) -> Option<&str> {
+        self.pins.iter().find_map(|(id, field)| {
+            if id == pin_id {
+                Some(field.name())
+            } else {
+                None
+            }
+        })
+    }
 }
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
