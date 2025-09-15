@@ -92,7 +92,7 @@ struct Design {
     name: String,
     /// Pins from a struct, along with their associated `SymbolId`s
     pins: Vec<(SymbolId, Field)>,
-    symbol: SymbolId,
+    symbol_id: SymbolId,
     /// Index of transactions that use this struct
     /// (e.g. an "Adder" supports these transactions)
     transaction_ids: Vec<usize>,
@@ -137,7 +137,7 @@ fn find_designs<'a>(
                     Design {
                         name,
                         pins: pins_with_ids,
-                        symbol,
+                        symbol_id: symbol,
                         transaction_ids: vec![transaction_id],
                     },
                 );
@@ -153,7 +153,7 @@ struct Instance {
     design: String,
 }
 
-/// Takes the contents of the `-i` CLI flag and tries to find
+/// Takes the contents of the `-i` CLI flag and tries to find an instance
 fn parse_instance(duts: &FxHashMap<String, Design>, arg: &str) -> Instance {
     let parts: Vec<&str> = arg.split(':').collect();
     match parts.as_slice() {
