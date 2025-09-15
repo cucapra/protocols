@@ -6,7 +6,7 @@
 
 use baa::BitVecValue;
 use core::fmt;
-use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
+use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
