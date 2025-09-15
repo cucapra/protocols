@@ -377,7 +377,7 @@ impl<'a> Evaluator<'a> {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 } else {
                     info!(
-                        "Skipping assertion {} ({}) because assertions are disabled",
+                        "Skipping assertion `{}` ({}) because assertions are disabled",
                         self.format_stmt(stmt_id),
                         stmt_id
                     );
