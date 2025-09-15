@@ -357,20 +357,20 @@ impl<'a> Scheduler<'a> {
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize, forks_enabled: bool) {
         let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
-        let mut current = thread.current_step;
+        let mut current_id = thread.current_step;
 
         info!(
             "Running thread {} from step {:?}",
-            thread.todo.tr.name, current
+            thread.todo.tr.name, current_id
         );
         self.evaluator.context_switch(thread.todo.clone());
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
-            info!("  Evaluating statement: {:?}", current);
-            info!("  Evaluating statement: {:?}", current);
+            info!("  Evaluating statement: {:?}", current_id);
+            info!("  Evaluating statement: {:?}", current_id);
 
-            match self.evaluator.evaluate_stmt(&current) {
+            match self.evaluator.evaluate_stmt(&current_id) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
                     info!(
@@ -423,12 +423,12 @@ impl<'a> Scheduler<'a> {
                             info!("  Marking thread {} as having forked.", { thread.todo_idx });
                             thread.has_forked = true;
                             // continue from the fork point
-                            current = next_id;
+                            current_id = next_id;
                         }
 
                         _ => {
                             // default "just keep going" case
-                            current = next_id;
+                            current_id = next_id;
                         }
                     }
                 }

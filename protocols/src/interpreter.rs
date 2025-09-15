@@ -346,10 +346,6 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    pub fn format_stmt(&self, stmt_id: StmtId) -> String {
-        format!("{}", self.tr[stmt_id])
-    }
-
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
