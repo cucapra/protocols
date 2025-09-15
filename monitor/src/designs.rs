@@ -1,3 +1,8 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
+
 use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
 use rustc_hash::FxHashMap;
 
