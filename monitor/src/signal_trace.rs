@@ -20,7 +20,8 @@ pub enum StepResult {
 /// Provides a trace of signals that we can analyze.
 #[allow(dead_code)]
 pub trait SignalTrace {
-    /// advance to the next time step
+    /// Advance to the next time step
+    /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult;
 
     /// returns value of a design input / output at the current step
@@ -142,6 +143,8 @@ fn find_instances(
 }
 
 impl SignalTrace for WaveSignalTrace {
+    /// Advance to the next time step
+    /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult {
         let total_steps = self.wave.time_table().len() as u32;
         if self.step < total_steps {
@@ -154,6 +157,7 @@ impl SignalTrace for WaveSignalTrace {
         }
     }
 
+    // Returns value of a design input / output at the current step
     fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
         let key = PortKey {
             instance_id,

@@ -53,6 +53,7 @@ pub enum ExprValue {
     DontCare,
 }
 
+/// An `Evaluator` evaluates ("interprets") a Protocols program
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
@@ -72,6 +73,7 @@ pub struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
+    /// Creates a new `Evaluator`
     pub fn new(
         args: HashMap<&str, BitVecValue>,
         tr: &'a Transaction,
@@ -170,6 +172,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    // Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
         args: HashMap<&str, BitVecValue>,
@@ -185,6 +188,8 @@ impl<'a> Evaluator<'a> {
         args_mapping
     }
 
+    /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
+    /// `Transaction` and `SymbolTable` to that of the specified `todo`
     pub fn context_switch(&mut self, todo: Todo<'a>) {
         self.tr = todo.tr;
         self.st = todo.st;

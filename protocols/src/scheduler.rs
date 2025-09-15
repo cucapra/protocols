@@ -35,6 +35,11 @@ type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
 const MAX_ITERS: usize = 10000;
 
+/// A `Todo` is a function call to be executed. The fields of this struct are:
+/// - The associated `Transaction`
+/// - The associated `SymbolTable`
+/// - The associated argument values `args` (mapping variable names to their values)
+/// - The `NextStmtMap`
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
     pub tr: &'a Transaction,
@@ -59,6 +64,12 @@ impl<'a> Todo<'a> {
     }
 }
 
+/// Struct containing metadata associated with a `Thread`, specifically:
+/// - The corresponding `Todo` (function call to be executed)
+/// - The `StmtId` of the current step
+/// - The `StmtId` of the next step (if one exists)
+/// - Whether the thread `has_forked`
+/// - and the index of the `todo` (`todo_idx`)
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
     pub todo: Todo<'a>,
@@ -146,6 +157,13 @@ impl<'a> Scheduler<'a> {
         Self::next_todo_helper(&self.todos, idx, &self.irs)
     }
 
+    /// Creates a new `Scheduler` struct and takes the following arguments:
+    /// - A list of transactions and their associated symbol tables (`transactions_and_symbols`)
+    /// - A list of function calls to execute (`todos`)
+    /// - A Patronus context (`ctx`)
+    /// - A Patronus transition system (`sys`)
+    /// - A Patronus simulator (`sim`)
+    /// - and a `DiagnosticHandler` for emitting errors (`handler`)
     pub fn new(
         transactions_and_symbols: Vec<(&'a Transaction, &'a SymbolTable)>,
         todos: Vec<TodoItem>,
@@ -196,6 +214,7 @@ impl<'a> Scheduler<'a> {
         }
     }
 
+    /// Runs the scheduler on a list of `todo`s, returning a list of `ExecutionResult`s
     pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
         info!(
             "==== Starting scheduling cycle {}, active threads: {} ====",
@@ -327,12 +346,14 @@ impl<'a> Scheduler<'a> {
         }
     }
 
+    /// Runs every active thread up to the next step to synchronize on
     pub fn run_all_active_until_next_step(&mut self, forks_enabled: bool) {
         for i in 0..self.active_threads.len() {
             self.run_thread_until_next_step(i, forks_enabled);
         }
     }
 
+    /// Runs a single thread (indicated by its `thread_idx`) until the next step to synchronize on
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize, forks_enabled: bool) {
         let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
