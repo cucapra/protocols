@@ -189,7 +189,7 @@ impl Transaction {
             Stmt::Assign(symbol_id, expr_id) => {
                 let lhs = symbol_table[symbol_id].full_name(symbol_table);
                 let rhs = self.format_expr(expr_id, symbol_table);
-                format!("{} := {:?}", lhs, rhs)
+                format!("{} := {}", lhs, rhs)
             }
             Stmt::Step => "step()".to_string(),
             Stmt::Fork => "fork()".to_string(),

@@ -73,6 +73,12 @@ pub struct Evaluator<'a> {
 }
 
 impl<'a> Evaluator<'a> {
+    /// Pretty-prints a `Statement` identified by its `StmtId`
+    /// with respect to the current `SymbolTable` associated with this `Evaluator`
+    pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
+        self.tr.format_stmt(stmt_id, self.st)
+    }
+
     /// Creates a new `Evaluator`
     pub fn new(
         args: HashMap<&str, BitVecValue>,
@@ -371,7 +377,8 @@ impl<'a> Evaluator<'a> {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 } else {
                     info!(
-                        "Skipping assertion {:?} because assertions are disabled",
+                        "Skipping assertion {} ({}) because assertions are disabled",
+                        self.format_stmt(stmt_id),
                         stmt_id
                     );
                 }

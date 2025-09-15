@@ -62,6 +62,12 @@ impl<'a> Todo<'a> {
             next_stmt_map,
         }
     }
+
+    /// Pretty-prints a `Statement` based on its `StmtId`
+    /// and the `SymbolTable` associated with this `Todo`
+    pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
+        self.tr.format_stmt(stmt_id, self.st)
+    }
 }
 
 /// Struct containing metadata associated with a `Thread`, specifically:
@@ -93,6 +99,11 @@ impl<'a> Thread<'a> {
             todo,
             has_forked: false,
         }
+    }
+
+    /// Pretty-prints a `Statement` identified by its `StmtId`
+    pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
+        self.todo.format_stmt(stmt_id)
     }
 }
 
@@ -290,7 +301,7 @@ impl<'a> Scheduler<'a> {
                 match next_step {
                     Some(next_step_id) => {
                         info!(
-                            "Thread with transaction {:?} reached step, moving to next_threads with step: {:?}",
+                            "Thread with transaction {:?} reached `Step()`, moving to next_threads with `Step()`: {:?}",
                             active_thread.todo.tr.name, next_step_id
                         );
 
@@ -357,31 +368,33 @@ impl<'a> Scheduler<'a> {
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize, forks_enabled: bool) {
         let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
-        let mut current_id = thread.current_step;
+        let mut current_stmt_id = thread.current_step;
 
         info!(
-            "Running thread {} from step {:?}",
-            thread.todo.tr.name, current_id
+            "Running thread {} from `step()` ({})",
+            thread.todo.tr.name, current_stmt_id
         );
         self.evaluator.context_switch(thread.todo.clone());
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
-            info!("  Evaluating statement: {:?}", current_id);
-            info!("  Evaluating statement: {:?}", current_id);
+            info!(
+                "  Evaluating statement: `{}`",
+                thread.format_stmt(&current_stmt_id)
+            );
 
-            match self.evaluator.evaluate_stmt(&current_id) {
+            match self.evaluator.evaluate_stmt(&current_stmt_id) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
                     info!(
-                        "  Next statement: {:?} {:?}",
-                        next_id, thread.todo.tr[next_id]
+                        "  Next statement: {:?} `{}`",
+                        next_id,
+                        thread.format_stmt(&next_id)
                     );
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {
-                            info!("  Step reached at {:?}, pausing.", next_id);
-                            info!("  Step reached at {:?}, pausing.", next_id);
+                            info!("  `Step()` reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
                             return;
                         }
@@ -400,8 +413,7 @@ impl<'a> Scheduler<'a> {
                                 thread.next_step = None;
                                 return;
                             }
-                            info!("  Fork at {:?}, spawning new thread…", next_id);
-                            info!("  Fork at {:?}, spawning new thread…", next_id);
+                            info!("  `Fork` at stmt_id {}, spawning new thread…", next_id);
                             match next_todo_option.clone() {
                                 Some(todo) => {
                                     let new_thread =
@@ -414,21 +426,22 @@ impl<'a> Scheduler<'a> {
                                 }
                                 None => {
                                     info!("    no more todos to fork, skipping fork.");
-                                    info!("    no more todos to fork, skipping fork.");
                                 }
                             }
                             self.next_todo_idx += 1;
                             // Mark this thread as having forked
-                            info!("  Marking thread {} as having forked.", { thread.todo_idx });
-                            info!("  Marking thread {} as having forked.", { thread.todo_idx });
+                            info!(
+                                "  Marking thread {} (todo_idx {}) as having forked.",
+                                thread.todo.tr.name, thread.todo_idx
+                            );
                             thread.has_forked = true;
                             // continue from the fork point
-                            current_id = next_id;
+                            current_stmt_id = next_id;
                         }
 
                         _ => {
                             // default "just keep going" case
-                            current_id = next_id;
+                            current_stmt_id = next_id;
                         }
                     }
                 }
@@ -436,14 +449,12 @@ impl<'a> Scheduler<'a> {
                 // no more statements -> done
                 Ok(None) => {
                     info!("  Execution complete, no more statements.");
-                    info!("  Execution complete, no more statements.");
                     thread.next_step = None;
                     break;
                 }
 
                 // error -> record and stop
                 Err(e) => {
-                    info!("ERROR: {:?}, terminating thread", e);
                     info!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.todo_idx] = Err(e);
                     thread.next_step = None;
@@ -465,7 +476,6 @@ impl<'a> Scheduler<'a> {
                     );
                 }
                 None => {
-                    info!("    no more todos to fork, skipping implicit fork.");
                     info!("    no more todos to fork, skipping implicit fork.");
                 }
             }
