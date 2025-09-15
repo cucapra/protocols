@@ -5,12 +5,11 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use core::fmt;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
-use crate::serialize::serialize_expr;
+use crate::serialize::{build_statements, serialize_expr};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
@@ -157,43 +156,11 @@ impl Transaction {
     }
 
     /// Pretty-prints a `Statement` based on its `StmtId`
-    /// with respect to the curren t`Transaction`
+    /// with respect to the current `Transaction`
     pub fn format_stmt(&self, stmt_id: &StmtId, symbol_table: &SymbolTable) -> String {
-        let stmt = &self[stmt_id];
-        match stmt {
-            Stmt::Block(stmt_ids) => {
-                // We pretty-print a block by wrapping it in curly braces, a la Rust
-                let block_body = stmt_ids
-                    .iter()
-                    .map(|id| self.format_stmt(id, symbol_table))
-                    .collect::<Vec<String>>()
-                    .join("\n");
-                format!("{{ {} }}", block_body)
-            }
-            Stmt::Assign(symbol_id, expr_id) => {
-                let lhs = symbol_table[symbol_id].full_name(symbol_table);
-                let rhs = self.format_expr(expr_id, symbol_table);
-                format!("{} := {}", lhs, rhs)
-            }
-            Stmt::Step => "step()".to_string(),
-            Stmt::Fork => "fork()".to_string(),
-            Stmt::While(expr_id, stmt_id) => {
-                let guard = self.format_expr(expr_id, symbol_table);
-                let body = self.format_stmt(stmt_id, symbol_table);
-                format!("while ({}) do {{ {} }}", guard, body)
-            }
-            Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
-                let e = self.format_expr(expr_id, symbol_table);
-                let s1 = self.format_stmt(stmt_id1, symbol_table);
-                let s2 = self.format_stmt(stmt_id2, symbol_table);
-                format!("if ({}) then {{ {} }} else {{ {} }}", e, s1, s2)
-            }
-            Stmt::AssertEq(expr_id1, expr_id2) => {
-                let e1 = self.format_expr(expr_id1, symbol_table);
-                let e2 = self.format_expr(expr_id2, symbol_table);
-                format!("assert_eq({}, {})", e1, e2)
-            }
-        }
+        let mut buffer: Vec<u8> = vec![];
+        let _ = build_statements(&mut buffer, self, symbol_table, stmt_id, 0);
+        String::from_utf8(buffer).unwrap().trim_end().to_string()
     }
 }
 
@@ -303,23 +270,6 @@ pub enum BinOp {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum UnaryOp {
     Not,
-}
-
-/// Pretty-printer for `BinaryOp`s
-impl fmt::Display for BinOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BinOp::Equal => write!(f, "=="),
-            BinOp::Concat => write!(f, "+"),
-        }
-    }
-}
-
-/// Pretty-printer for `UnaryOp`s
-impl fmt::Display for UnaryOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "!")
-    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
