@@ -289,16 +289,21 @@ impl<'a> MiniInterpreter<'a> {
     fn evaluate_assign(
         &mut self,
         _stmt_id: &StmtId,
-        _symbol_id: &SymbolId,
+        symbol_id: &SymbolId,
         expr_id: &ExprId,
     ) -> ExecutionResult<()> {
-        // FIXME: This should return a DontCare or a NewValue
-        let expr_val = self.evaluate_expr(expr_id)?;
+        let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
+        let rhs_value = self.evaluate_expr(expr_id)?;
+        info!("  Setting {} := {}", lhs, rhs_value);
 
-        println!("expr_val = {}", expr_val);
-
-        // TODO: figure out what to do here
-        todo!("TODO: Figure out how to handle Assignments")
+        match rhs_value {
+            ExprValue::Concrete(bitvec_value) => {
+                self.update_arg_value(*symbol_id, bitvec_value);
+            }
+            // We don't need to anything for `DontCare`s at the moment
+            ExprValue::DontCare => (),
+        }
+        Ok(())
     }
 
     fn evaluate_while(

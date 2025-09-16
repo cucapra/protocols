@@ -439,6 +439,11 @@ impl SymbolTable {
         self.by_name_sym.get(name).copied()
     }
 
+    /// Takes a `SymbolId` and returns the corresponding (qualified) full name
+    pub fn full_name_from_symbol_id(&self, symbol_id: &SymbolId) -> String {
+        self[symbol_id].full_name(self)
+    }
+
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
         assert!(
             !name.contains('.'),
