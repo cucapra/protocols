@@ -4,11 +4,12 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 mod designs;
+mod mini_interp;
 mod signal_trace;
 
 use std::collections::HashMap;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::signal_trace::{PortKey, SignalTrace, WaveSamplingMode, WaveSignalTrace};
 use baa::BitVecValue;
 use clap::Parser;
