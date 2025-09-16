@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
@@ -47,7 +48,8 @@ impl InputValue {
     }
 }
 
-#[derive(PartialEq)]
+/// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
+#[derive(PartialEq, Debug, Clone)]
 pub enum ExprValue {
     Concrete(BitVecValue),
     DontCare,

@@ -1,8 +1,9 @@
 // Copyright 2025 Cornell University
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Design, Instance};
+use crate::{Instance, designs::Design};
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
@@ -42,18 +43,18 @@ pub enum WaveSamplingMode<'a> {
 }
 
 /// Waveform dump based implementation of a signal trace.
-#[allow(dead_code)]
+#[derive(Debug)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
-    port_map: FxHashMap<PortKey, SignalRef>,
-    step: u32,
+    pub port_map: FxHashMap<PortKey, SignalRef>,
+    pub step: u32,
 }
 
-/// A PortKey is just a pair consisting of an instance_id and a symbol_id for a pin
+/// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-struct PortKey {
-    instance_id: u32,
-    pin_id: SymbolId,
+pub struct PortKey {
+    pub instance_id: u32,
+    pub pin_id: SymbolId,
 }
 
 impl WaveSignalTrace {
@@ -96,7 +97,7 @@ fn find_instances(
     let mut port_map = FxHashMap::default();
     for (inst_id, inst) in instances.iter().enumerate() {
         // fetch the design from the hashmap (the design tells us what pins to expect)
-        let design = &designs[&inst.design];
+        let design = &designs[&inst.design_name];
 
         let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
         if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
