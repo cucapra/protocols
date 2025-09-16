@@ -48,6 +48,7 @@ impl InputValue {
     }
 }
 
+/// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
 #[derive(PartialEq)]
 pub enum ExprValue {
     Concrete(BitVecValue),
@@ -92,7 +93,7 @@ impl<'a> Evaluator<'a> {
         // create mapping from each symbolId to corresponding BitVecValue based on input mapping
         let args_mapping = Evaluator::generate_args_mapping(st, args);
 
-        // create mapping for each of the DUT's children symbols to the input and output mappings
+        // create mapping for each of the DUTs children symbols to the input and output mappings
         let dut = tr.type_param.unwrap();
         let dut_symbols = &st.get_children(&dut);
 
