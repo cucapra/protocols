@@ -6,12 +6,15 @@
 mod designs;
 mod signal_trace;
 
+use std::collections::HashMap;
+
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::signal_trace::{PortKey, SignalTrace, WaveSamplingMode, WaveSignalTrace};
+use baa::BitVecValue;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{SymbolTable, Transaction};
+use protocols::ir::{SymbolId, SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 
 // From the top-level directory, run:
@@ -81,6 +84,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let design = designs.get("Adder").expect("Missing Design for Adder");
     println!("{:?}", design);
 
+    // Environment mapping `SymbolId`s to their values
+    let mut environment: HashMap<SymbolId, BitVecValue> = HashMap::new();
+
     for port_key in trace.port_map.keys() {
         // We assume that there is only one `Instance` at the moment
         let PortKey {
@@ -94,7 +100,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let field_name = design
             .get_pin_name(pin_id)
             .unwrap_or_else(|| panic!("Missing pin_id {} in design.pins", pin_id));
-        println!("{} ({}) |-> {:#?} ", field_name, pin_id, current_value)
+        println!(
+            "{} ({}) |-> {:#?} ",
+            field_name,
+            pin_id,
+            current_value.clone()
+        );
+
+        // Update the environment with the `current_value` for the `pin_id`
+        environment.insert(*pin_id, current_value);
     }
 
     Ok(())
