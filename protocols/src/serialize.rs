@@ -5,8 +5,9 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use crate::{interpreter::ExprValue, ir::*};
-use baa::BitVecOps;
-use std::io::Write;
+use baa::{BitVecOps, BitVecValue};
+use itertools::Itertools;
+use std::{collections::HashMap, io::Write};
 
 /// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to a `String`
 pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
@@ -60,6 +61,28 @@ impl std::fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "!")
     }
+}
+
+/// Pretty-prints the arguments map, where `SymbolId`s are rendered using
+/// the corresponding string variable name according to the `SymbolTable`.
+/// When printing, we sort the keys by lexicographic order of variable names
+/// (to ensure a canonical serialization format).
+pub fn serialize_args_mapping(
+    args_mapping: &HashMap<SymbolId, BitVecValue>,
+    symbol_table: &SymbolTable,
+) -> String {
+    args_mapping
+        .iter()
+        .sorted_by_key(|(symbol_id, _)| symbol_table.full_name_from_symbol_id(symbol_id))
+        .map(|(symbol_id, value)| {
+            format!(
+                "{}: {:?}",
+                symbol_table.full_name_from_symbol_id(symbol_id),
+                value
+            )
+        })
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 /// Pretty-prints an `Expression` (identified by its `ExprId`) using the current

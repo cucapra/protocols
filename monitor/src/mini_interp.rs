@@ -6,6 +6,7 @@ use protocols::{
     errors::{ExecutionError, ExecutionResult},
     interpreter::ExprValue,
     ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
+    serialize::serialize_args_mapping,
 };
 use rustc_hash::FxHashMap;
 
@@ -93,7 +94,7 @@ impl<'a> MiniInterpreter<'a> {
             design,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-            assertions_enabled: false,
+            assertions_enabled: true,
         }
     }
 
@@ -112,6 +113,11 @@ impl<'a> MiniInterpreter<'a> {
                 if let Some(value) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(value.clone()))
                 } else {
+                    info!(
+                        "args_mapping: \n{}",
+                        serialize_args_mapping(&self.args_mapping, self.symbol_table)
+                    );
+
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,
                         name.to_string(),
@@ -292,14 +298,16 @@ impl<'a> MiniInterpreter<'a> {
     ) -> ExecutionResult<()> {
         let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
         let rhs_value = self.evaluate_expr(expr_id)?;
-        info!("  Setting {} := {}", lhs, rhs_value);
 
-        match rhs_value {
+        match rhs_value.clone() {
             ExprValue::Concrete(bitvec_value) => {
+                info!("  Setting {} := {}", lhs, rhs_value);
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
-            // We don't need to anything for `DontCare`s at the moment
-            ExprValue::DontCare => (),
+            ExprValue::DontCare => {
+                // We don't need to anything for `DontCare`s at the moment
+                info!("  RHS of assignment is DontCare, skipping...");
+            }
         }
         Ok(())
     }
