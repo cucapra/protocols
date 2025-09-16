@@ -76,7 +76,8 @@ pub fn serialize_args_mapping(
         .sorted_by_key(|(symbol_id, _)| symbol_table.full_name_from_symbol_id(symbol_id))
         .map(|(symbol_id, value)| {
             format!(
-                "{}: {:?}",
+                "({}) {}: {:?}",
+                symbol_id,
                 symbol_table.full_name_from_symbol_id(symbol_id),
                 value
             )

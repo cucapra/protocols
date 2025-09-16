@@ -94,7 +94,9 @@ impl<'a> MiniInterpreter<'a> {
             design,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-            assertions_enabled: true,
+
+            // TODO: we may want to avoid hard-coding this in the future
+            assertions_enabled: false,
         }
     }
 
