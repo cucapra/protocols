@@ -7,7 +7,7 @@ mod designs;
 mod mini_interp;
 mod signal_trace;
 
-use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
+use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
 use clap::Parser;
@@ -78,7 +78,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("failed to read waveform file");
 
     // TODO: figure out how to avoid hard-coding this
-    let design = designs.get("Adder").expect("Missing Design for Adder");
+    let dut_struct_name = &instances[0].design_name;
+    let design = designs
+        .get(dut_struct_name)
+        .unwrap_or_else(|| panic!("Missing Design for {}", dut_struct_name));
 
     // TODO: we assume only one `Transaction` & `SymbolTable` for now
     let (transaction, symbol_table) = &transactions_symbol_tables[0];

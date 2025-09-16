@@ -28,6 +28,7 @@ pub struct Design {
     pub transaction_ids: Vec<usize>,
 }
 
+#[allow(dead_code)]
 impl Design {
     /// Takes a `pin_id` and retrieves the name of the corresponding `Field`
     /// (if one exists)
@@ -98,26 +99,25 @@ pub struct Instance {
     pub name: String,
 
     /// The name of the `Design` that this `Instance` is implementing
-    pub design: String,
+    pub design_name: String,
 }
 
 /// Takes the contents of the `-i` CLI flag and tries to find an instance
 pub fn parse_instance(duts: &FxHashMap<String, Design>, arg: &str) -> Instance {
     let parts: Vec<&str> = arg.split(':').collect();
     match parts.as_slice() {
-        // `module` is the name of the design
         // (In Verilog, "modules" are like interfaces and you have "instances"
         // (concrete instantiations, aka implementations) of the module)
-        [inst, module] => {
-            if !duts.contains_key(*module) {
+        [instance_name, module_name] => {
+            if !duts.contains_key(*module_name) {
                 panic!(
-                    "Unknown design {module} for instance {inst}. Did you mean {}?",
+                    "Unknown design {module_name} for instance {instance_name}. Did you mean {}?",
                     collects_design_names(duts)
                 );
             } else {
                 Instance {
-                    name: inst.to_string(),
-                    design: module.to_string(),
+                    name: instance_name.to_string(),
+                    design_name: module_name.to_string(),
                 }
             }
         }

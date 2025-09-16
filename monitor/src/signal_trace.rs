@@ -97,7 +97,7 @@ fn find_instances(
     let mut port_map = FxHashMap::default();
     for (inst_id, inst) in instances.iter().enumerate() {
         // fetch the design from the hashmap (the design tells us what pins to expect)
-        let design = &designs[&inst.design];
+        let design = &designs[&inst.design_name];
 
         let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
         if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {

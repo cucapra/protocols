@@ -73,19 +73,13 @@ impl<'a> MiniInterpreter<'a> {
             // Fetch the current value of the `pin_id`
             // (along with the name of the corresponding `Field`)
             let current_value = trace.get(*instance_id, *pin_id);
-            let field_name = design
-                .get_pin_name(pin_id)
-                .unwrap_or_else(|| panic!("Missing pin_id {} in design.pins", pin_id));
-            println!(
-                "{} ({}) |-> {:#?} ",
-                field_name,
-                pin_id,
-                current_value.clone()
-            );
-
-            // Update the `args_mapping` with the `current_value` for the `pin_id`
             args_mapping.insert(*pin_id, current_value);
         }
+
+        info!(
+            "Initial args_mapping:\n{}",
+            serialize_args_mapping(&args_mapping, symbol_table)
+        );
 
         Self {
             transaction,
@@ -303,12 +297,12 @@ impl<'a> MiniInterpreter<'a> {
 
         match rhs_value.clone() {
             ExprValue::Concrete(bitvec_value) => {
-                info!("  Setting {} := {}", lhs, rhs_value);
+                info!("Setting {} := {}", lhs, rhs_value);
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
             ExprValue::DontCare => {
                 // We don't need to anything for `DontCare`s at the moment
-                info!("  RHS of assignment is DontCare, skipping...");
+                info!("RHS of assignment is DontCare, skipping...");
             }
         }
         Ok(())
@@ -369,7 +363,7 @@ impl<'a> MiniInterpreter<'a> {
         let mut current_stmt_id = self.transaction.body;
         loop {
             info!(
-                "  Evaluating statement: `{}`",
+                "Evaluating statement: `{}`",
                 self.format_stmt(&current_stmt_id)
             );
 
@@ -391,7 +385,7 @@ impl<'a> MiniInterpreter<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    info!(" Execution complete, no more statements.");
+                    info!("Execution complete, no more statements.");
                     break;
                 }
 
@@ -402,5 +396,10 @@ impl<'a> MiniInterpreter<'a> {
                 }
             }
         }
+
+        info!(
+            "Final args_mapping:\n{}",
+            serialize_args_mapping(&self.args_mapping, self.symbol_table)
+        );
     }
 }
