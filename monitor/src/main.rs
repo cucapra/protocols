@@ -7,7 +7,7 @@ mod designs;
 mod mini_interp;
 mod signal_trace;
 
-use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
+use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{PortKey, SignalTrace, WaveSamplingMode, WaveSignalTrace};
 use clap::Parser;
