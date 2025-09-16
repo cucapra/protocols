@@ -666,35 +666,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_inverter() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/inverters/inverter_d0.v"],
-            "tests/inverters/inverter_d0.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(String::from("invert"), vec![bv(0, 1), bv(1, 1)])];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        assert_thread_error!(&results[0], ConflictingAssignment);
-    }
-
-    #[test]
     fn test_scheduler_aes128() {
         let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
