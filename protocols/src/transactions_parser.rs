@@ -2,7 +2,7 @@ use crate::ir::Type;
 use crate::scheduler::TodoItem;
 use crate::{diagnostic::*, setup::bv};
 use baa::BitVecValue;
-use pest::{error::InputLocation, iterators::Pair, Parser};
+use pest::{Parser, error::InputLocation, iterators::Pair};
 use pest_derive::Parser;
 use std::collections::HashMap;
 
