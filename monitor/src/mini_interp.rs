@@ -22,10 +22,10 @@ use crate::{
 #[derive(Debug)]
 pub struct MiniInterpreter<'a> {
     /// The `Transaction` being interpreted
-    tr: &'a Transaction,
+    transaction: &'a Transaction,
 
     /// The `SymbolTable` associated with the `Transaction`
-    st: &'a SymbolTable,
+    symbol_table: &'a SymbolTable,
 
     /// The waveform supplied by the user
     trace: WaveSignalTrace,
@@ -49,15 +49,15 @@ impl<'a> MiniInterpreter<'a> {
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
-        self.tr.format_stmt(stmt_id, self.st)
+        self.transaction.format_stmt(stmt_id, self.symbol_table)
     }
 
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
     /// and a `WaveSignalTrace`. This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
-        tr: &'a Transaction,
-        st: &'a SymbolTable,
+        transaction: &'a Transaction,
+        symbol_table: &'a SymbolTable,
         trace: WaveSignalTrace,
         design: &'a Design,
     ) -> Self {
@@ -87,11 +87,11 @@ impl<'a> MiniInterpreter<'a> {
         }
 
         Self {
-            tr,
-            st,
+            transaction,
+            symbol_table,
             trace,
             design,
-            next_stmt_map: tr.next_stmt_mapping(),
+            next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
             assertions_enabled: false,
         }
@@ -104,11 +104,11 @@ impl<'a> MiniInterpreter<'a> {
 
     /// Evaluates an `Expr` identified by its `ExprId`, returning an `ExprValue`
     fn evaluate_expr(&self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
-        let expr = &self.tr[expr_id];
+        let expr = &self.transaction[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
-                let name = self.st[sym_id].name();
+                let name = self.symbol_table[sym_id].name();
                 if let Some(value) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(value.clone()))
                 } else {
@@ -215,7 +215,7 @@ impl<'a> MiniInterpreter<'a> {
     /// Evaluates a `Statement` identified by its `StmtId`, r
     /// returning the `StmtId` of the next statement to evaluate (if one exists)
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
-        match &self.tr[stmt_id] {
+        match &self.transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // TODO: figure out what to do if the `pin_id` already has a value in the environment
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
@@ -296,7 +296,7 @@ impl<'a> MiniInterpreter<'a> {
         let _expr_val = self.evaluate_expr(expr_id)?;
 
         // TODO: figure out what to do here
-        todo!()
+        todo!("TODO: Figure out how to handle Assignments")
     }
 
     fn evaluate_while(
@@ -346,6 +346,40 @@ impl<'a> MiniInterpreter<'a> {
             ))
         } else {
             Ok(())
+        }
+    }
+
+    /// Runs the `MiniInterpreter` on the Protocols file
+    pub fn run(&mut self) {
+        let mut current_stmt_id = self.transaction.body;
+        loop {
+            info!(
+                "  Evaluating statement: `{}`",
+                self.format_stmt(&current_stmt_id)
+            );
+
+            match self.evaluate_stmt(&current_stmt_id) {
+                Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
+                    Stmt::Step => todo!("TODO: Figure out how to handle Step"),
+                    Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),
+                    _ => {
+                        // default "just keep going" case
+                        current_stmt_id = next_stmt_id;
+                    }
+                },
+
+                // no more statements -> done
+                Ok(None) => {
+                    info!(" Execution complete, no more statements.");
+                    break;
+                }
+
+                // error -> record and stop
+                Err(e) => {
+                    info!("ERROR: {:?}, terminating thread", e);
+                    break;
+                }
+            }
         }
     }
 }

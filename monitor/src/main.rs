@@ -87,7 +87,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
     // Create a new Interpreter for the `.prot` file
-    let interpreter = MiniInterpreter::new(transaction, symbol_table, trace, design);
+    let mut interpreter = MiniInterpreter::new(transaction, symbol_table, trace, design);
+
+    // Run the interpreter on the Protocol
+    interpreter.run();
 
     Ok(())
 }

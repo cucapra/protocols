@@ -13,12 +13,25 @@ use crate::serialize::{build_statements, serialize_expr};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
+    /// The name of the `Transaction`
     pub name: String,
+
+    /// List of `Arg`s to the `Transaction`
     pub args: Vec<Arg>,
+
+    /// The body of the `Transaction`, identified by its `StmtId`
     pub body: StmtId,
+
+    /// Optional type parameter (identified by its `SymbolId`)
     pub type_param: Option<SymbolId>,
+
+    /// Maps `ExprId`s to their corresponding `Expr`s
     exprs: PrimaryMap<ExprId, Expr>,
+
+    /// The distinguished `ExprId` corresponding to `DontCare`
     dont_care_id: ExprId,
+
+    /// Maps `StmtId`s to their corresponding `Stmt`s
     stmts: PrimaryMap<StmtId, Stmt>,
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
     stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
