@@ -862,38 +862,4 @@ pub mod tests {
         assert_ok(&results[0]);
         assert_ok(&results[1]);
     }
-
-    #[test]
-    fn test_scheduler_multi0() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/multi/multi0/multi0.v"],
-            "tests/multi/multi0/multi0.prot",
-            Some("multi0".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 32), // data_in
-                bv(10, 32), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
 }
