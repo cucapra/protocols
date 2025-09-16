@@ -8,6 +8,7 @@ use crate::ir::*;
 use baa::BitVecOps;
 use std::io::Write;
 
+/// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to a `String`
 pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
     let mut out = Vec::new();
     serialize(&mut out, trs)?;
@@ -15,6 +16,7 @@ pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Res
     Ok(out)
 }
 
+/// Pretty prints a `type` with respect to the current `SymbolTable`
 fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => "u".to_owned() + &t.to_string(),
@@ -23,42 +25,65 @@ fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     }
 }
 
-fn serialize_dir(dir: Dir) -> String {
-    match dir {
-        Dir::In => "in".to_string(),
-        Dir::Out => "out".to_string(),
+/// Pretty prints a `Direction`
+impl std::fmt::Display for Dir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Dir::In => write!(f, "in"),
+            Dir::Out => write!(f, "out"),
+        }
     }
 }
 
+/// Pretty-printer for `BinaryOp`s
+impl std::fmt::Display for BinOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BinOp::Equal => write!(f, "=="),
+            BinOp::Concat => write!(f, "+"),
+        }
+    }
+}
+
+/// Pretty-printer for `UnaryOp`s
+impl std::fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "!")
+    }
+}
+
+/// Pretty-prints an `Expression` (identified by its `ExprId`) using the current
+/// `Transaction` and `SymbolTable`
 pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
         Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
-        Expr::DontCare => "X".to_owned(),
-        Expr::Unary(UnaryOp::Not, not_exprid) => {
-            "!(".to_owned() + &serialize_expr(tr, st, not_exprid) + ")"
+        Expr::DontCare => "X".to_string(),
+        Expr::Unary(unary_op, expr_id) => {
+            let e = serialize_expr(tr, st, expr_id);
+            format!("{}({})", unary_op, e)
         }
-        Expr::Binary(BinOp::Concat, lhs, rhs) => {
-            serialize_expr(tr, st, lhs) + " + " + &serialize_expr(tr, st, rhs)
-        }
-        Expr::Binary(BinOp::Equal, lhs, rhs) => {
-            serialize_expr(tr, st, lhs) + " == " + &serialize_expr(tr, st, rhs)
+        Expr::Binary(op, lhs, rhs) => {
+            let e1 = serialize_expr(tr, st, lhs);
+            let e2 = serialize_expr(tr, st, rhs);
+            format!("{e1} {op} {e2}")
         }
         Expr::Slice(expr, idx1, idx2) => {
+            let e = serialize_expr(tr, st, expr);
+            let i = idx1.to_string();
             if *idx2 == *idx1 {
-                serialize_expr(tr, st, expr) + "[" + idx1.to_string().as_str() + "]"
+                format!("{}[{}]", e, i)
             } else {
-                serialize_expr(tr, st, expr)
-                    + "["
-                    + idx1.to_string().as_str()
-                    + ":"
-                    + idx2.to_string().as_str()
-                    + "]"
+                let j = idx2.to_string();
+                format!("{}[{}:{}]", e, i, j)
             }
         }
     }
 }
 
+/// Pretty-prints a `Statement` (identified by its `StmtId`) using the
+/// provided `Transaction` and `SymbolTable` using the provided output buffer `out`,
+/// with the amount of indentation specified by `index`
 pub fn build_statements(
     out: &mut impl Write,
     tr: &Transaction,
@@ -79,12 +104,7 @@ pub fn build_statements(
             st[lhs].full_name(st),
             serialize_expr(tr, st, rhs)
         )?,
-        Stmt::Step => writeln!(
-            out,
-            "{}step();",
-            "  ".repeat(index),
-            // serialize_expr(tr, st, expr_id)
-        )?,
+        Stmt::Step => writeln!(out, "{}step();", "  ".repeat(index),)?,
         Stmt::Fork => writeln!(out, "{}fork();", "  ".repeat(index))?,
         Stmt::While(cond, bodyid) => {
             writeln!(
@@ -122,19 +142,21 @@ pub fn build_statements(
     Ok(())
 }
 
+/// Pretty prints the definition of a struct type definition
+/// to the output buffer `out`
 pub fn serialize_structs(
     out: &mut impl Write,
     st: &SymbolTable,
-    strct_ids: Vec<StructId>,
+    struct_ids: Vec<StructId>,
 ) -> std::io::Result<()> {
-    for strct_id in strct_ids {
-        writeln!(out, "struct {} {{", st[strct_id].name())?;
+    for struct_id in struct_ids {
+        writeln!(out, "struct {} {{", st[struct_id].name())?;
 
-        for field in st[strct_id].pins() {
+        for field in st[struct_id].pins() {
             writeln!(
                 out,
                 "  {} {}: {},",
-                serialize_dir(field.dir()),
+                field.dir(),
                 field.name(),
                 serialize_type(st, field.tpe())
             )?;
@@ -145,6 +167,8 @@ pub fn serialize_structs(
     Ok(())
 }
 
+/// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to the provided
+/// output buffer `out`
 pub fn serialize(
     out: &mut impl Write,
     trs: Vec<(SymbolTable, Transaction)>,
@@ -179,7 +203,7 @@ pub fn serialize(
                     writeln!(
                         out,
                         "{} {}: {}) {{",
-                        serialize_dir(arg.dir()),
+                        arg.dir(),
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
                     )?;
@@ -187,7 +211,7 @@ pub fn serialize(
                     write!(
                         out,
                         "{} {}: {}, ",
-                        serialize_dir(arg.dir()),
+                        arg.dir(),
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
                     )?;
