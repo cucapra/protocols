@@ -7,7 +7,7 @@ mod designs;
 mod mini_interp;
 mod signal_trace;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{PortKey, SignalTrace, WaveSamplingMode, WaveSignalTrace};
 use clap::Parser;
@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
     // Create a new Interpreter for the `.prot` file
-    let mut interpreter = MiniInterpreter::new(transaction, symbol_table, &trace);
+    let mut interpreter = MiniInterpreter::new(transaction, symbol_table, &trace, design);
 
     for port_key in trace.port_map.keys() {
         // We assume that there is only one `Instance` at the moment

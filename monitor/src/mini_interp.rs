@@ -9,7 +9,7 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::signal_trace::WaveSignalTrace;
+use crate::{designs::Design, signal_trace::WaveSignalTrace};
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
 /// with the monitor.
@@ -26,6 +26,9 @@ pub struct MiniInterpreter<'a> {
 
     /// The waveform supplied by the user
     trace: &'a WaveSignalTrace,
+
+    /// The design under test
+    design: &'a Design,
 
     /// Maps a `StmtId` to the `StmtId` of the
     /// next statement to interpret (if one exists)
@@ -48,11 +51,17 @@ impl<'a> MiniInterpreter<'a> {
 
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
     /// and a `WaveSignalTrace`
-    pub fn new(tr: &'a Transaction, st: &'a SymbolTable, trace: &'a WaveSignalTrace) -> Self {
+    pub fn new(
+        tr: &'a Transaction,
+        st: &'a SymbolTable,
+        trace: &'a WaveSignalTrace,
+        design: &'a Design,
+    ) -> Self {
         Self {
             tr,
             st,
             trace,
+            design,
             next_stmt_map: tr.next_stmt_mapping(),
             args_mapping: HashMap::new(),
             assertions_enabled: false,
