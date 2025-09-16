@@ -1,5 +1,5 @@
-// corresponds with tests/brave_new_world/signal_async_bug.v
-// and tests/brave_new_world/signal_async_fix.v
+// corresponds with tests/brave_new_world/signal_asynchrony/signal_async_bug.v
+// and tests/brave_new_world/signal_asynchrony/signal_async_fix.v
 struct SignalAsyncBug {
     in request: u1,
     in input_data: u32, 
