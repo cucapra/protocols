@@ -17,9 +17,9 @@ use protocols::transactions_parser::parse_transactions_file;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Verilog (.v) file
-    #[arg(long, value_name = "VERILOG_FILE")]
-    verilog: String,
+    /// Paths to one or more Verilog (.v) files
+    #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
+    verilog: Vec<String>,
 
     /// Path to a Protocol (.prot) file
     #[arg(short, long, value_name = "PROTOCOLS_FILE")]
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // At the moment we only allow the user to specify one Verilog file
     // through the CLI, so we have to wrap it in a singleton Vec
     let (parsed_data, ctx, sys) = setup_test_environment(
-        vec![&cli.verilog],
+        cli.verilog.iter().map(|v| v.as_str()).collect(),
         &cli.protocol,
         cli.module,
         protocols_handler,

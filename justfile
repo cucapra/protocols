@@ -6,8 +6,3 @@ turnt-tests:
 test:
   cargo test 
   @just turnt-tests
-
-# Applies Clippy's suggestions & formats the code 
-lint:
-  cargo clippy --fix
-  cargo fmt 
