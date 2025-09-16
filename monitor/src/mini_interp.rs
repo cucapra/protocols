@@ -9,7 +9,10 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::{designs::Design, signal_trace::WaveSignalTrace};
+use crate::{
+    designs::Design,
+    signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
+};
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
 /// with the monitor.
@@ -25,7 +28,7 @@ pub struct MiniInterpreter<'a> {
     st: &'a SymbolTable,
 
     /// The waveform supplied by the user
-    trace: &'a WaveSignalTrace,
+    trace: WaveSignalTrace,
 
     /// The design under test
     design: &'a Design,
@@ -50,20 +53,46 @@ impl<'a> MiniInterpreter<'a> {
     }
 
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
-    /// and a `WaveSignalTrace`
+    /// and a `WaveSignalTrace`. This method also sets up the `args_mapping`
+    /// accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
         tr: &'a Transaction,
         st: &'a SymbolTable,
-        trace: &'a WaveSignalTrace,
+        trace: WaveSignalTrace,
         design: &'a Design,
     ) -> Self {
+        let mut args_mapping = HashMap::new();
+        for port_key in trace.port_map.keys() {
+            // We assume that there is only one `Instance` at the moment
+            let PortKey {
+                instance_id,
+                pin_id,
+            } = port_key;
+
+            // Fetch the current value of the `pin_id`
+            // (along with the name of the corresponding `Field`)
+            let current_value = trace.get(*instance_id, *pin_id);
+            let field_name = design
+                .get_pin_name(pin_id)
+                .unwrap_or_else(|| panic!("Missing pin_id {} in design.pins", pin_id));
+            println!(
+                "{} ({}) |-> {:#?} ",
+                field_name,
+                pin_id,
+                current_value.clone()
+            );
+
+            // Update the `args_mapping` with the `current_value` for the `pin_id`
+            args_mapping.insert(*pin_id, current_value);
+        }
+
         Self {
             tr,
             st,
             trace,
             design,
             next_stmt_map: tr.next_stmt_mapping(),
-            args_mapping: HashMap::new(),
+            args_mapping,
             assertions_enabled: false,
         }
     }
@@ -188,6 +217,7 @@ impl<'a> MiniInterpreter<'a> {
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
+                // TODO: figure out what to do if the `pin_id` already has a value in the environment
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
@@ -198,7 +228,10 @@ impl<'a> MiniInterpreter<'a> {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                // the scheduler will handle the step. simply return the next statement to run
+                // trace.step() returns a `StepResult` which is either `Done` or `Ok`
+                // In either case, we can just ignore the `StepResult` and
+                // return the `StmtId` of the next statement to execute
+                let _ = self.trace.step();
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
