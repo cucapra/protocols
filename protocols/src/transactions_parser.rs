@@ -2,7 +2,7 @@ use crate::ir::Type;
 use crate::scheduler::TodoItem;
 use crate::{diagnostic::*, setup::bv};
 use baa::BitVecValue;
-use pest::{Parser, error::InputLocation, iterators::Pair};
+use pest::{error::InputLocation, iterators::Pair, Parser};
 use pest_derive::Parser;
 use std::collections::HashMap;
 
@@ -46,9 +46,9 @@ pub fn parse_transactions_file(
             // First element should be the function name (ident)
             let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-            let arg_types = transaction_arg_types
-                .get(&function_name)
-                .expect("Unable to fetch argument types for transaction");
+            let arg_types = transaction_arg_types.get(&function_name).expect(
+                format!("Unable to fetch argument types for transaction {function_name}").as_str(),
+            );
 
             // Parse arguments if they exist
             let mut args: Vec<BitVecValue> = vec![];
