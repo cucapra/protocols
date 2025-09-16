@@ -9,6 +9,8 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
+use crate::signal_trace::WaveSignalTrace;
+
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
 /// with the monitor.
 /// - This is "mini" in the sense that it does not rely on Patronus/Yosys,
@@ -21,6 +23,9 @@ pub struct MiniInterpreter<'a> {
 
     /// The `SymbolTable` associated with the `Transaction`
     st: &'a SymbolTable,
+
+    /// The waveform supplied by the user
+    trace: &'a WaveSignalTrace,
 
     /// Maps a `StmtId` to the `StmtId` of the
     /// next statement to interpret (if one exists)
@@ -41,11 +46,13 @@ impl<'a> MiniInterpreter<'a> {
         self.tr.format_stmt(stmt_id, self.st)
     }
 
-    /// Creates a new `MiniInterpreter` given a `Transaction` and a `SymbolTable`
-    pub fn new(tr: &'a Transaction, st: &'a SymbolTable) -> Self {
+    /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
+    /// and a `WaveSignalTrace`
+    pub fn new(tr: &'a Transaction, st: &'a SymbolTable, trace: &'a WaveSignalTrace) -> Self {
         Self {
             tr,
             st,
+            trace,
             next_stmt_map: tr.next_stmt_mapping(),
             args_mapping: HashMap::new(),
             assertions_enabled: false,
@@ -75,6 +82,7 @@ impl<'a> MiniInterpreter<'a> {
                     ))
                 }
             }
+            // TODO: figure out how we shoudl deal with `DontCare`s
             Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
@@ -185,8 +193,7 @@ impl<'a> MiniInterpreter<'a> {
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
-                // the scheduler will handle the fork. simply return the next statement to run
-                Ok(self.next_stmt_map[stmt_id])
+                todo!("Figure out how to handle Forks")
             }
             Stmt::AssertEq(expr1, expr2) => {
                 if self.assertions_enabled {

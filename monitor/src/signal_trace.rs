@@ -43,7 +43,7 @@ pub enum WaveSamplingMode<'a> {
 }
 
 /// Waveform dump based implementation of a signal trace.
-#[allow(dead_code)]
+#[derive(Debug)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     pub port_map: FxHashMap<PortKey, SignalRef>,

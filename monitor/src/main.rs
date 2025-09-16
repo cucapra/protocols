@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
     // Create a new Interpreter for the `.prot` file
-    let mut interpreter = MiniInterpreter::new(transaction, symbol_table);
+    let mut interpreter = MiniInterpreter::new(transaction, symbol_table, &trace);
 
     for port_key in trace.port_map.keys() {
         // We assume that there is only one `Instance` at the moment
