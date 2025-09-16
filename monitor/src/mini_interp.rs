@@ -293,7 +293,9 @@ impl<'a> MiniInterpreter<'a> {
         expr_id: &ExprId,
     ) -> ExecutionResult<()> {
         // FIXME: This should return a DontCare or a NewValue
-        let _expr_val = self.evaluate_expr(expr_id)?;
+        let expr_val = self.evaluate_expr(expr_id)?;
+
+        println!("expr_val = {}", expr_val);
 
         // TODO: figure out what to do here
         todo!("TODO: Figure out how to handle Assignments")

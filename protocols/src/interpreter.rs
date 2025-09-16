@@ -49,7 +49,7 @@ impl InputValue {
 }
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum ExprValue {
     Concrete(BitVecValue),
     DontCare,

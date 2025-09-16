@@ -4,7 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::*;
+use crate::{interpreter::ExprValue, ir::*};
 use baa::BitVecOps;
 use std::io::Write;
 
@@ -41,6 +41,16 @@ impl std::fmt::Display for BinOp {
         match self {
             BinOp::Equal => write!(f, "=="),
             BinOp::Concat => write!(f, "+"),
+        }
+    }
+}
+
+/// Pretty-printer for `ExprValue`s
+impl std::fmt::Display for ExprValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprValue::Concrete(bit_vec_value) => write!(f, "{:?}", bit_vec_value),
+            ExprValue::DontCare => write!(f, "DontCare"),
         }
     }
 }
