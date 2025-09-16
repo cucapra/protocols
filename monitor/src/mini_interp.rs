@@ -212,7 +212,7 @@ impl<'a> MiniInterpreter<'a> {
         }
     }
 
-    /// Evaluates a `Statement` identified by its `StmtId`, r
+    /// Evaluates a `Statement` identified by its `StmtId`,
     /// returning the `StmtId` of the next statement to evaluate (if one exists)
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.transaction[stmt_id] {
@@ -228,10 +228,8 @@ impl<'a> MiniInterpreter<'a> {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                // trace.step() returns a `StepResult` which is either `Done` or `Ok`
-                // In either case, we can just ignore the `StepResult` and
-                // return the `StmtId` of the next statement to execute
-                let _ = self.trace.step();
+                // The top-level `run` function handles the step
+                // Here we just return the next `stmt_id`
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
@@ -367,7 +365,13 @@ impl<'a> MiniInterpreter<'a> {
 
             match self.evaluate_stmt(&current_stmt_id) {
                 Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
-                    Stmt::Step => todo!("TODO: Figure out how to handle Step"),
+                    Stmt::Step => {
+                        // trace.step() returns a `StepResult` which is either `Done` or `Ok`
+                        // In either case, we can just ignore the `StepResult` and
+                        // return the `StmtId` of the next statement to execute
+                        let _ = self.trace.step();
+                        current_stmt_id = next_stmt_id;
+                    }
                     Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),
                     _ => {
                         // default "just keep going" case
