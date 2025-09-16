@@ -499,19 +499,6 @@ pub mod tests {
         };
     }
 
-    macro_rules! assert_thread_error {
-        ($result:expr, $error_type:ident) => {
-            match $result {
-                Err(ExecutionError::Thread(ThreadError::$error_type { .. })) => {}
-                other => panic!(
-                    "Expected ThreadError::{}, got: {:?}",
-                    stringify!($error_type),
-                    other
-                ),
-            }
-        };
-    }
-
     #[test]
     fn test_scheduler_identity_d2_double_fork() {
         let handler = &mut DiagnosticHandler::default();
