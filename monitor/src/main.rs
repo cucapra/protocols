@@ -7,15 +7,13 @@ mod designs;
 mod mini_interp;
 mod signal_trace;
 
-use std::collections::HashMap;
-
 use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
+use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{PortKey, SignalTrace, WaveSamplingMode, WaveSignalTrace};
-use baa::BitVecValue;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{SymbolId, SymbolTable, Transaction};
+use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 
 // From the top-level directory, run:
@@ -85,8 +83,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let design = designs.get("Adder").expect("Missing Design for Adder");
     println!("{:?}", design);
 
-    // Environment mapping `SymbolId`s to their values
-    let mut environment: HashMap<SymbolId, BitVecValue> = HashMap::new();
+    // TODO: we assume only one `Transaction` & `SymbolTable` for now
+    let (transaction, symbol_table) = &transactions_symbol_tables[0];
+
+    // Create a new Interpreter for the `.prot` file
+    let mut interpreter = MiniInterpreter::new(transaction, symbol_table);
 
     for port_key in trace.port_map.keys() {
         // We assume that there is only one `Instance` at the moment
@@ -112,8 +113,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // TODO: figure out how to handle `step()`
 
-        // Update the environment with the `current_value` for the `pin_id`
-        environment.insert(*pin_id, current_value);
+        // Update the `args_mapping` with the `current_value` for the `pin_id`
+        interpreter.update_arg_value(*pin_id, current_value);
     }
 
     Ok(())

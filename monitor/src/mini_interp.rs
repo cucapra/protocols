@@ -1,4 +1,7 @@
-use protocols::ir::{StmtId, SymbolTable, Transaction};
+use std::collections::HashMap;
+
+use baa::BitVecValue;
+use protocols::ir::{StmtId, SymbolId, SymbolTable, Transaction};
 use rustc_hash::FxHashMap;
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
@@ -9,8 +12,10 @@ use rustc_hash::FxHashMap;
 #[derive(Debug)]
 pub struct MiniInterpreter<'a> {
     tr: &'a Transaction,
-    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
+    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+    // `HashMap` mapping `SymbolId`s to their values
+    args_mapping: HashMap<SymbolId, BitVecValue>,
 }
 
 #[allow(dead_code)]
@@ -27,6 +32,12 @@ impl<'a> MiniInterpreter<'a> {
             tr,
             st,
             next_stmt_map: tr.next_stmt_mapping(),
+            args_mapping: HashMap::new(),
         }
+    }
+
+    // Update the `args_mapping` with the `current_value` for the `pin_id`
+    pub fn update_arg_value(&mut self, pin_id: SymbolId, value: BitVecValue) {
+        self.args_mapping.insert(pin_id, value);
     }
 }
