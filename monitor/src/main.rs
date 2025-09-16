@@ -107,6 +107,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             current_value.clone()
         );
 
+        // TODO: figure out what to do if the `pin_id` already has a value in the environment
+
+        // TODO: figure out how to handle `step()`
+
         // Update the environment with the `current_value` for the `pin_id`
         environment.insert(*pin_id, current_value);
     }
