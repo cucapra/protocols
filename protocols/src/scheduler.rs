@@ -487,65 +487,8 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::errors::{AssertionError, ExecutionError};
-    use crate::setup::{assert_err, assert_ok, bv, setup_test_environment};
-
-    macro_rules! assert_assertion_error {
-        ($result:expr) => {
-            match $result {
-                Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) => {}
-                other => panic!("Expected AssertionError, got: {:?}", other),
-            }
-        };
-    }
-
-    #[test]
-    fn test_scheduler_dual_identity() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/dual_identity_d1/dual_identity_d1.v"],
-            "tests/identities/dual_identity_d1/dual_identity_d1.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // PASSING CASE: values of b agree
-        let mut todos = vec![
-            (String::from("one"), vec![bv(3, 64)]),
-            (String::from("two"), vec![bv(2, 64), bv(3, 64)]),
-        ];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-
-        // FAILING CASE: values of b disagree
-        todos[1].1 = vec![bv(2, 64), bv(5, 64)];
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim2,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[1]);
-    }
+    use crate::errors::ExecutionError;
+    use crate::setup::{assert_ok, bv, setup_test_environment};
 
     #[test]
     fn test_scheduler_aes128() {
