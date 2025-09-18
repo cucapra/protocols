@@ -13,6 +13,7 @@ A protocol is described using an `fn` definition containing a list of imperative
   - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
 - Run `cargo build` to build
 - Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Turnt)
+  - Run `just turnt` to only run Turnt snapshot tests
 
 **CLI**:
 The interpreter has a CLI, which can be invoked as follows:
