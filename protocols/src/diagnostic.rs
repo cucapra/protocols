@@ -146,8 +146,10 @@ impl DiagnosticHandler {
         &self.error_string
     }
 
-    /// Creates an error location based on the provided `fileid` and the `label`
-    /// if the `self.error_locations` flag is enabled
+    /// If `self.no_error_locations` is false, this function
+    /// creates an error location (wrapped in an `Option`)
+    /// based on the provided `fileid` and the `label`.
+    /// Otherwise, this function returns `None`.
     fn error_location(&self, fileid: usize, label: Label) -> Option<(usize, Label)> {
         if self.no_error_locations {
             None
