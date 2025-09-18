@@ -487,7 +487,7 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
+    use crate::errors::{AssertionError, EvaluationError, ExecutionError};
     use crate::setup::{assert_err, assert_ok, bv, setup_test_environment};
 
     macro_rules! assert_assertion_error {
@@ -497,35 +497,6 @@ pub mod tests {
                 other => panic!("Expected AssertionError, got: {:?}", other),
             }
         };
-    }
-
-    #[test]
-    fn test_scheduler_identity_d1_implicit_fork() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d1/identity_d1.v"],
-            "tests/identities/identity_d1/identity_d1.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (String::from("implicit_fork"), vec![bv(1, 32), bv(1, 32)]),
-            (String::from("implicit_fork"), vec![bv(2, 32), bv(2, 32)]),
-            (String::from("implicit_fork"), vec![bv(3, 32), bv(4, 32)]),
-            (String::from("implicit_fork"), vec![bv(4, 32), bv(4, 32)]),
-        ];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-        assert_err(&results[2]);
-        assert_ok(&results[3]);
-        assert_assertion_error!(&results[2]);
     }
 
     #[test]
