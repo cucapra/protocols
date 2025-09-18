@@ -45,6 +45,10 @@ struct Cli {
     /// Otherwise, by default, error messages are displayed w/ ANSI colors
     #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
     color: ColorChoice,
+
+    /// Stop the interpreter if it ever reaches the maximum number if cycles specified with this option.
+    #[arg(long)]
+    max_steps: Option<u32>,
 }
 
 /// Examples (enables all tracing logs):
@@ -106,6 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &sys,
         interpreter,
         protocols_handler,
+        cli.max_steps.unwrap_or(u32::MAX),
     );
     let results = scheduler.execute_todos();
 
