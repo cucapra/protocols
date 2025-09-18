@@ -487,7 +487,7 @@ impl<'a> Scheduler<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::errors::{AssertionError, EvaluationError, ExecutionError};
+    use crate::errors::{AssertionError, ExecutionError};
     use crate::setup::{assert_err, assert_ok, bv, setup_test_environment};
 
     macro_rules! assert_assertion_error {
@@ -497,45 +497,6 @@ pub mod tests {
                 other => panic!("Expected AssertionError, got: {:?}", other),
             }
         };
-    }
-
-    #[test]
-    fn test_scheduler_identity_d1_slicing() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d1/identity_d1.v"],
-            "tests/identities/identity_d1/identity_d1.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let mut todos = vec![
-            (String::from("slicing_ok"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_ok
-            (String::from("slicing_invalid"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_invalid
-        ];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-
-        // Check that the failure is InvalidSlice
-        match &results[1] {
-            Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice { .. })) => {}
-            other => panic!("Expected invalid slice failure, got: {:?}", other),
-        }
-
-        // test slices that will result in an error because the widths of the slices are different
-        todos[1].0 = String::from("slicing_err"); // switch to running transaction slicing_err
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[1]);
     }
 
     #[test]

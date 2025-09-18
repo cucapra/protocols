@@ -1,0 +1,6 @@
+error: The two expressions did not evaluate to the same value
+   ┌─ identities/identity_d1/identity_d1.prot:30:13
+   │
+30 │   assert_eq(s[31:15], DUT.s[31:16]);
+   │             ^^^^^^^^^^^^^^^^^^^^^^ LHS Value: ValueOwned(00000000000000000), RHS Value: ValueOwned(0000000000000000)
+
