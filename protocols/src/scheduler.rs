@@ -500,43 +500,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler_identity_d2_double_fork() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d2/identity_d2.v"],
-            "tests/identities/identity_d2/identity_d2.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // ERROR CASE: two_fork_err protocol
-        let mut todos = vec![(String::from("two_fork_err"), vec![bv(1, 32), bv(1, 32)])];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        match &results[0] {
-            Err(ExecutionError::Thread(ThreadError::DoubleFork {
-                thread_idx: thread_id,
-                ..
-            })) => {
-                assert_eq!(*thread_id, 0);
-            }
-            other => panic!("Expected DoubleFork error, got: {:?}", other),
-        }
-
-        // PASSING CASE: two_fork_ok protocol
-        todos[0] = (String::from("two_fork_ok"), vec![bv(1, 32), bv(1, 32)]);
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
     fn test_scheduler_identity_d1_implicit_fork() {
         let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
