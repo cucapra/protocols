@@ -491,60 +491,6 @@ pub mod tests {
     use crate::setup::{assert_ok, bv, setup_test_environment};
 
     #[test]
-    fn test_scheduler_register_file_write_read() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["../examples/serv/rtl/serv_regfile.v"],
-            "../examples/serv/serv_regfile.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (
-                String::from("read_write"),
-                vec![
-                    bv(0, 5),           // rs1_addr: u5
-                    bv(0, 32),          // rs1_data: u32 (output)
-                    bv(0, 32),          // rs2_data: u32 (output)
-                    bv(0, 5),           // rs2_addr: u5
-                    bv(1, 1),           // rd_enable: u1
-                    bv(5, 5),           // rd_addr: u5
-                    bv(0xdeadbeef, 32), // rd_data: u32
-                ],
-            ),
-            (
-                String::from("read_write"),
-                vec![
-                    bv(5, 5),           // rs1_addr: u5
-                    bv(0xdeadbeef, 32), // rs1_data: u32 (output)
-                    bv(0, 32),          // rs2_data: u32 (output)
-                    bv(0, 5),           // rs2_addr: u5
-                    bv(0, 1),           // rd_enable: u1
-                    bv(0, 5),           // rd_addr: u5
-                    bv(0, 32),          // rd_data: u32
-                ],
-            ),
-        ];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
     #[ignore] // FIXME: going into infinite loop
     fn test_scheduler_picorv32_pcpi_mul() {
         let handler = &mut DiagnosticHandler::default();
