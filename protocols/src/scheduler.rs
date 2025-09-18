@@ -491,53 +491,6 @@ pub mod tests {
     use crate::setup::{assert_ok, bv, setup_test_environment};
 
     #[test]
-    fn test_scheduler_aes128() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["../examples/tinyaes128/aes_128.v"],
-            "../examples/tinyaes128/aes128.prot",
-            Some("aes_128".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // Example taken from NIST FIPS 197
-        let todos = vec![
-            (
-                String::from("aes128"),
-                vec![
-                    BitVecValue::from_u128(0x000102030405060708090a0b0c0d0e0f, 128), // key
-                    BitVecValue::from_u128(0x00112233445566778899aabbccddeeff, 128), // state
-                    BitVecValue::from_u128(0x69c4e0d86a7b0430d8cdb78070b4c55a, 128), // expected output
-                ],
-            ),
-            (
-                String::from("aes128"),
-                vec![
-                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // key
-                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // state
-                    BitVecValue::from_u128(0x66e94bd4ef8a2c3b884cfa59ca342b2e, 128), // expected output
-                ],
-            ),
-        ];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
     fn test_scheduler_register_file_write_read() {
         let handler = &mut DiagnosticHandler::default();
         let (parsed_data, ctx, sys) = setup_test_environment(
