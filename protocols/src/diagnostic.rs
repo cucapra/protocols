@@ -14,8 +14,8 @@ use codespan_reporting::diagnostic::{
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
-use pest::RuleType;
 use pest::iterators::Pair;
+use pest::RuleType;
 
 use crate::ir::*;
 
@@ -84,6 +84,16 @@ impl Diagnostic {
             buffer
                 .set_color(&ColorSpec::new())
                 .expect("Failed to reset color");
+
+            let severity = match self.level {
+                Level::Error => Severity::Error,
+                Level::Warning => Severity::Warning,
+            };
+
+            let diagnostic = CodespanDiagnostic::new(severity).with_message(&self.message);
+
+            let config = term::Config::default(); // Change config depending on how error needs to be produced
+            term::emit(buffer, &config, files, &diagnostic).expect("Failed to write diagnostic");
         }
     }
 }
@@ -94,22 +104,27 @@ pub struct DiagnosticHandler {
     error_string: String,
     /// `color_choice` indicates whether to emit error messages w/ ANSI colors
     color_choice: ColorChoice,
+    /// `no_error_locations` indicates whether to suppress location info
+    /// (i.e. `fileid` and `Label`s) in error messages
+    no_error_locations: bool,
 }
 
 impl Default for DiagnosticHandler {
     /// Default `DiagnosticHandler` does not emit colored error messages
+    /// and includes location info in error locations
     fn default() -> Self {
-        Self::new(ColorChoice::Never)
+        Self::new(ColorChoice::Never, false)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new(color_choice: ColorChoice) -> Self {
+    pub fn new(color_choice: ColorChoice, error_locations: bool) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: HashSet::new(),
             error_string: String::new(),
             color_choice,
+            no_error_locations: error_locations,
         }
     }
 
@@ -129,6 +144,16 @@ impl DiagnosticHandler {
 
     pub fn error_string(&self) -> &str {
         &self.error_string
+    }
+
+    /// Creates an error location based on the provided `fileid` and the `label`
+    /// if the `self.error_locations` flag is enabled
+    fn error_location(&self, fileid: usize, label: Label) -> Option<(usize, Label)> {
+        if self.no_error_locations {
+            None
+        } else {
+            Some((fileid, label))
+        }
     }
 
     pub fn emit_diagnostic_expr(
@@ -153,7 +178,7 @@ impl DiagnosticHandler {
                 title: format!("{:?} in file {}", level, fileid),
                 message: message.to_string(),
                 level,
-                location: Some((fileid, label)),
+                location: self.error_location(fileid, label),
             };
 
             diagnostic.emit(&mut buffer, &self.files);
@@ -186,7 +211,7 @@ impl DiagnosticHandler {
             title: format!("{:?} in file {}", level, fileid),
             message: message.to_string(),
             level,
-            location: Some((fileid, label)),
+            location: self.error_location(fileid, label),
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -213,7 +238,7 @@ impl DiagnosticHandler {
             title: format!("{:?} in file {}", level, fileid),
             message: message.to_string(),
             level,
-            location: Some((fileid, label)),
+            location: self.error_location(fileid, label),
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -244,7 +269,7 @@ impl DiagnosticHandler {
                 title: format!("{:?} in file {}", level, fileid),
                 message: message.to_string(),
                 level,
-                location: Some((fileid, label)),
+                location: self.error_location(fileid, label),
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -276,13 +301,13 @@ impl DiagnosticHandler {
                 title: format!("Error in file {}", fileid1),
                 message: "The two expressions did not evaluate to the same value".to_string(),
                 level: Level::Error,
-                location: Some((
+                location: self.error_location(
                     fileid1,
                     Label {
                         message: Some(format!("LHS Value: {:?}, RHS Value: {:?}", eval1, eval2)),
                         range: (start1.min(start2), end1.max(end2)),
                     },
-                )),
+                ),
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -331,7 +356,7 @@ mod tests {
         tr.s(Stmt::Assign(a, one_expr));
         tr.s(Stmt::Assign(b, zero_expr));
 
-        let mut handler = DiagnosticHandler::new(ColorChoice::Never);
+        let mut handler = DiagnosticHandler::default();
         let file_id = handler.add_file(
             "main.calyx".to_string(),
             "12345678\nassert_eq!(x, 20);\n".to_string(),

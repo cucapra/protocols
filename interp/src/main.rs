@@ -45,6 +45,10 @@ struct Cli {
     /// Otherwise, by default, error messages are displayed w/ ANSI colors
     #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
     color: ColorChoice,
+
+    /// Whether to suppress location info (source file and label) in error messages
+    #[arg(short, long, value_name = "ERROR_LOCATIONS")]
+    no_error_locations: bool,
 }
 
 /// Examples (enables all tracing logs):
@@ -67,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Create a new handler for dealing with errors/diagnostics
-    let protocols_handler = &mut DiagnosticHandler::new(color_choice);
+    let protocols_handler = &mut DiagnosticHandler::new(color_choice, cli.no_error_locations);
 
     // At the moment we only allow the user to specify one Verilog file
     // through the CLI, so we have to wrap it in a singleton Vec
@@ -90,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler = &mut DiagnosticHandler::new(color_choice);
+    let transactions_handler = &mut DiagnosticHandler::new(color_choice, cli.no_error_locations);
     let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
         cli.transactions,
         transactions_handler,
