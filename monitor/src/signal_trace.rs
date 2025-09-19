@@ -4,6 +4,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::{Instance, designs::Design};
+use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
@@ -25,7 +26,7 @@ pub trait SignalTrace {
     fn step(&mut self) -> StepResult;
 
     /// returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, io: SymbolId) -> BitVecValue;
+    fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
 }
 
 /// Determines how signals from a waveform a sampled
@@ -157,7 +158,7 @@ impl SignalTrace for WaveSignalTrace {
     }
 
     // Returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
+    fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue> {
         let key = PortKey {
             instance_id,
             pin_id: pin,
@@ -165,15 +166,19 @@ impl SignalTrace for WaveSignalTrace {
         let signal = self
             .wave
             .get_signal(self.port_map[&key])
-            .unwrap_or_else(|| panic!("Unable to get signal for pin_id {pin}"));
+            .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
         let offset = signal
             .get_offset(self.step)
-            .unwrap_or_else(|| panic!("Unable to get offset for time-table index {}", self.step));
+            .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
         let value = signal.get_value_at(&offset, 0);
         let bit_str = value
             .to_bit_string()
-            .unwrap_or_else(|| panic!("Unable to convert {value} to bit-string"));
-        BitVecValue::from_bit_str(&bit_str)
-            .unwrap_or_else(|err| panic!("Unable to convert bit-string to BitVecValue: {:?}", err))
+            .with_context(|| format!("Unable to convert {value} to bit-string"))?;
+        Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {
+            panic!(
+                "Unable to convert bit-string {bit_str} to BitVecValue, {:?}",
+                err
+            )
+        }))
     }
 }

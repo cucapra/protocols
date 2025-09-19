@@ -46,6 +46,10 @@ pub struct MiniInterpreter<'a> {
 
     /// Whether there are steps remaining in the signal trace
     has_steps_remaining: bool,
+
+    /// The `instance_id` corresponding to the DUT instance
+    /// (Note: We assume that there is only one `Instance` at the moment)
+    instance_id: u32,
 }
 
 impl<'a> MiniInterpreter<'a> {
@@ -69,6 +73,7 @@ impl<'a> MiniInterpreter<'a> {
         design: &'a Design,
     ) -> Self {
         let mut args_mapping = HashMap::new();
+
         for port_key in trace.port_map.keys() {
             // We assume that there is only one `Instance` at the moment
             let PortKey {
@@ -78,7 +83,12 @@ impl<'a> MiniInterpreter<'a> {
 
             // Fetch the current value of the `pin_id`
             // (along with the name of the corresponding `Field`)
-            let current_value = trace.get(*instance_id, *pin_id);
+            let current_value = trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to get value for pin {pin_id} in signal trace, {:?}",
+                    err
+                )
+            });
             args_mapping.insert(*pin_id, current_value);
         }
 
@@ -86,6 +96,10 @@ impl<'a> MiniInterpreter<'a> {
             "Initial args_mapping:\n{}",
             serialize_args_mapping(&args_mapping, symbol_table)
         );
+
+        // We assume that there is only one `Instance` at the moment,
+        // so we just use the first `PortKey`'s `instance_id`
+        let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;
 
         Self {
             transaction,
@@ -101,6 +115,8 @@ impl<'a> MiniInterpreter<'a> {
             // We haven't run anything yet,
             // so `has_steps_remaining` is initialized to `true`
             has_steps_remaining: true,
+
+            instance_id,
         }
     }
 
@@ -110,14 +126,21 @@ impl<'a> MiniInterpreter<'a> {
     }
 
     /// Evaluates an `Expr` identified by its `ExprId`, returning an `ExprValue`
-    fn evaluate_expr(&self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
         let expr = &self.transaction[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
                 let name = self.symbol_table[sym_id].name();
-                if let Some(value) = self.args_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(value.clone()))
+
+                info!("Getting value for {name} ({sym_id}) from trace...");
+
+                // Fetch the value for the `sym_id` from the trace,
+                // then update the `args_mapping`
+                if let Ok(value) = self.trace.get(self.instance_id, *sym_id) {
+                    info!("value for {name} is {:?}", value);
+                    self.update_arg_value(*sym_id, value.clone());
+                    Ok(ExprValue::Concrete(value))
                 } else {
                     info!(
                         "args_mapping: \n{}",
@@ -228,7 +251,7 @@ impl<'a> MiniInterpreter<'a> {
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                // TODO: figure out what to do if the `pin_id` already has a value in the environment
+                // TODO: figure out what to do if the `symbol_id` already has a value in the environment
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
@@ -309,10 +332,7 @@ impl<'a> MiniInterpreter<'a> {
                 info!("Setting {} := {}", lhs, rhs_value);
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
-            ExprValue::DontCare => {
-                // We don't need to anything for `DontCare`s at the moment
-                info!("RHS of assignment is DontCare, skipping...");
-            }
+            ExprValue::DontCare => (),
         }
         Ok(())
     }
@@ -386,6 +406,7 @@ impl<'a> MiniInterpreter<'a> {
                         // `has_steps_remaining` flag to `false`
                         if let StepResult::Done = self.trace.step() {
                             self.has_steps_remaining = false;
+                            info!("No steps remaining left in signal trace");
                         }
                         current_stmt_id = next_stmt_id;
                     }
