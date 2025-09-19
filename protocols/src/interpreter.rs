@@ -13,8 +13,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
