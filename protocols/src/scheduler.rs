@@ -349,7 +349,7 @@ impl<'a> Scheduler<'a> {
         self.results.clone()
     }
 
-    fn emit_all_diagnostics(&mut self) {
+    pub fn emit_all_diagnostics(&mut self) {
         // results and todos are parallel arrays, so we can use the same idx
         for (idx, result) in self.results.iter().enumerate() {
             if let Err(error) = result {

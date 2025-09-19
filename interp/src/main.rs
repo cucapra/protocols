@@ -113,6 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cli.max_steps.unwrap_or(u32::MAX),
     );
     let results = scheduler.execute_todos();
+    scheduler.emit_all_diagnostics();
 
     // Check whether the protocol was executed successfully
     for res in results {

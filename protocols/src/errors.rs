@@ -373,8 +373,11 @@ impl DiagnosticEmitter {
             ExecutionError::Assertion(assert_err) => {
                 Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
             }
-            ExecutionError::MaxStepsReached(_) => {
-                handler.emit_general_message(&format!("{error}"), Level::Error);
+            ExecutionError::MaxStepsReached(max_steps) => {
+                let thread_err = ThreadError::ExecutionLimitExceeded {
+                    max_steps: *max_steps as usize,
+                };
+                Self::emit_thread_error(handler, &thread_err, transaction, symbol_table);
             }
         }
     }
