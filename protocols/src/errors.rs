@@ -20,6 +20,8 @@ pub enum ExecutionError {
     Symbol(SymbolError),
     /// Assertion failures
     Assertion(AssertionError),
+    /// Reached the maximum number of steps
+    MaxStepsReached(u32),
 }
 
 /// Errors that occur during expression/statement evaluation
@@ -115,6 +117,9 @@ impl fmt::Display for ExecutionError {
             ExecutionError::Thread(e) => write!(f, "Thread error: {}", e),
             ExecutionError::Symbol(e) => write!(f, "Symbol error: {}", e),
             ExecutionError::Assertion(e) => write!(f, "Assertion error: {}", e),
+            ExecutionError::MaxStepsReached(max_steps) => {
+                write!(f, "Reached the maximum number of steps: {max_steps}")
+            }
         }
     }
 }
@@ -367,6 +372,9 @@ impl DiagnosticEmitter {
             }
             ExecutionError::Assertion(assert_err) => {
                 Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
+            }
+            ExecutionError::MaxStepsReached(_) => {
+                handler.emit_general_message(&format!("{error}"), Level::Error);
             }
         }
     }

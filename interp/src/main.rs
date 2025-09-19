@@ -49,6 +49,10 @@ struct Cli {
     /// Whether to suppress location info (source file and label) in error messages
     #[arg(short, long, value_name = "ERROR_LOCATIONS")]
     no_error_locations: bool,
+
+    /// Stop the interpreter if it ever reaches the maximum number if cycles specified with this option.
+    #[arg(long)]
+    max_steps: Option<u32>,
 }
 
 /// Examples (enables all tracing logs):
@@ -110,6 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &sys,
         interpreter,
         protocols_handler,
+        cli.max_steps.unwrap_or(u32::MAX),
     );
     let results = scheduler.execute_todos();
 

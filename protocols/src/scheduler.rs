@@ -124,7 +124,8 @@ pub struct Scheduler<'a> {
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
     inactive_threads: Vec<Thread<'a>>,
-    step_count: i32,
+    step_count: u32,
+    max_steps: u32,
     evaluator: Evaluator<'a>,
     results: Vec<ExecutionResult<()>>,
     handler: &'a mut DiagnosticHandler,
@@ -182,6 +183,7 @@ impl<'a> Scheduler<'a> {
         sys: &'a TransitionSystem,
         sim: Interpreter,
         handler: &'a mut DiagnosticHandler,
+        max_steps: u32,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
         let irs: Vec<TransactionInfo<'a>> = transactions_and_symbols
@@ -218,10 +220,11 @@ impl<'a> Scheduler<'a> {
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
-            step_count: 1,
+            step_count: 0,
             evaluator,
             results: vec![Ok(()); results_size],
             handler,
+            max_steps,
         }
     }
 
@@ -229,7 +232,7 @@ impl<'a> Scheduler<'a> {
     pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
         info!(
             "==== Starting scheduling cycle {}, active threads: {} ====",
-            self.step_count,
+            self.step_count + 1,
             self.active_threads.len()
         );
 
@@ -328,8 +331,13 @@ impl<'a> Scheduler<'a> {
                 );
                 self.active_threads = std::mem::take(&mut self.next_threads);
                 self.step_count += 1;
-                info!("Advancing to scheduling cycle: {}", self.step_count);
-                info!("Advancing to scheduling cycle: {}", self.step_count);
+                info!("Advancing to scheduling cycle: {}", self.step_count + 1);
+                if self.step_count >= self.max_steps {
+                    *(self.results.last_mut().unwrap()) =
+                        Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    // shut down execution by clearing all active threads
+                    self.active_threads.clear();
+                }
             } else {
                 info!("No more threads to schedule. Protocol execution complete.");
                 info!("No more threads to schedule. Protocol execution complete.");
@@ -524,6 +532,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
