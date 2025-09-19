@@ -1,4 +1,4 @@
-// ARGS: --verilog serv/serv_regfile.v --protocol serv/serv_regfile.prot 
+// ARGS: --verilog serv/rtl/serv_regfile.v --protocol serv/serv_regfile.prot 
 // Arguments to transaction are:
 // rs1_addr: u5
 // rs1_data: u32 (output)
