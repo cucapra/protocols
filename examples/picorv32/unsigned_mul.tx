@@ -1,3 +1,4 @@
+// ARGS: --verilog picorv32/picorv32.v --protocol picorv32/pcpi_mul.prot --module picorv32_pcpi_mul
 pcpi_mul_reset();
 pcpi_mul(1, 1, 1, 0x2000033);
 pcpi_mul(1, 100, 100, 0x2000033);

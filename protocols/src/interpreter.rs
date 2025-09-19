@@ -13,7 +13,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::rngs::ThreadRng;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
@@ -71,7 +72,7 @@ pub struct Evaluator<'a> {
     input_vals: HashMap<SymbolId, InputValue>,
 
     assertions_enabled: bool,
-    rng: ThreadRng,
+    rng: StdRng,
 }
 
 impl<'a> Evaluator<'a> {
@@ -141,7 +142,7 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        let mut rng = rand::rng();
+        let mut rng = StdRng::seed_from_u64(0);
 
         // Initialize the input pins with DontCares that are randomly assigned
         let mut input_vals = HashMap::new();

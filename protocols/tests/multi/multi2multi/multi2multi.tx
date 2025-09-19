@@ -1,0 +1,2 @@
+// ARGS: --verilog multi/multi2multi/multi2multi.v multi/multi0/multi0.v --protocol multi/multi2multi/multi2multi.prot --module multi2multi
+multi(10, 10);

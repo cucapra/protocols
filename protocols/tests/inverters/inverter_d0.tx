@@ -1,0 +1,3 @@
+// ARGS: --verilog inverters/inverter_d0.v --protocol inverters/inverter_d0.prot
+// RETURN: 101
+invert(0, 1);
