@@ -10,6 +10,7 @@ mod signal_trace;
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
+use anyhow::Context;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
@@ -41,8 +42,7 @@ struct Cli {
     verbosity: Verbosity<WarnLevel>,
 }
 
-#[allow(unused_variables)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
 
@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let designs = find_designs(transactions_symbol_tables.iter());
 
-    // try to find instances that we care about
+    // Try to find instances that we care about
     if cli.instances.is_empty() {
         println!("Available DUTs are: {}", collects_design_names(&designs));
         println!("No instances specified. Nothing to monitor. Exiting...");
@@ -75,13 +75,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
-        .expect("failed to read waveform file");
+        .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // TODO: figure out how to avoid hard-coding this
     let dut_struct_name = &instances[0].design_name;
     let design = designs
         .get(dut_struct_name)
-        .unwrap_or_else(|| panic!("Missing Design for {}", dut_struct_name));
+        .with_context(|| format!("Missing Design for {}", dut_struct_name))?;
 
     // TODO: we assume only one `Transaction` & `SymbolTable` for now
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
