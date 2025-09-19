@@ -124,7 +124,8 @@ pub struct Scheduler<'a> {
     active_threads: Vec<Thread<'a>>,
     next_threads: Vec<Thread<'a>>,
     inactive_threads: Vec<Thread<'a>>,
-    step_count: i32,
+    step_count: u32,
+    max_steps: u32,
     evaluator: Evaluator<'a>,
     results: Vec<ExecutionResult<()>>,
     handler: &'a mut DiagnosticHandler,
@@ -182,6 +183,7 @@ impl<'a> Scheduler<'a> {
         sys: &'a TransitionSystem,
         sim: Interpreter,
         handler: &'a mut DiagnosticHandler,
+        max_steps: u32,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
         let irs: Vec<TransactionInfo<'a>> = transactions_and_symbols
@@ -218,10 +220,11 @@ impl<'a> Scheduler<'a> {
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
-            step_count: 1,
+            step_count: 0,
             evaluator,
             results: vec![Ok(()); results_size],
             handler,
+            max_steps,
         }
     }
 
@@ -229,7 +232,7 @@ impl<'a> Scheduler<'a> {
     pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
         info!(
             "==== Starting scheduling cycle {}, active threads: {} ====",
-            self.step_count,
+            self.step_count + 1,
             self.active_threads.len()
         );
 
@@ -328,8 +331,13 @@ impl<'a> Scheduler<'a> {
                 );
                 self.active_threads = std::mem::take(&mut self.next_threads);
                 self.step_count += 1;
-                info!("Advancing to scheduling cycle: {}", self.step_count);
-                info!("Advancing to scheduling cycle: {}", self.step_count);
+                info!("Advancing to scheduling cycle: {}", self.step_count + 1);
+                if self.step_count >= self.max_steps {
+                    *(self.results.last_mut().unwrap()) =
+                        Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    // shut down execution by clearing all active threads
+                    self.active_threads.clear();
+                }
             } else {
                 info!("No more threads to schedule. Protocol execution complete.");
                 info!("No more threads to schedule. Protocol execution complete.");
@@ -528,7 +536,15 @@ pub mod tests {
         // ERROR CASE: two_fork_err protocol
         let mut todos = vec![(String::from("two_fork_err"), vec![bv(1, 32), bv(1, 32)])];
         let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            irs.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+            u32::MAX,
+        );
         let results = scheduler.execute_todos();
         assert_err(&results[0]);
         match &results[0] {
@@ -544,7 +560,15 @@ pub mod tests {
         // PASSING CASE: two_fork_ok protocol
         todos[0] = (String::from("two_fork_ok"), vec![bv(1, 32), bv(1, 32)]);
         let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            irs.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+            u32::MAX,
+        );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
     }
@@ -569,7 +593,15 @@ pub mod tests {
             (String::from("implicit_fork"), vec![bv(4, 32), bv(4, 32)]),
         ];
         let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            irs.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+            u32::MAX,
+        );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
         assert_ok(&results[1]);
@@ -596,7 +628,15 @@ pub mod tests {
             (String::from("slicing_invalid"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_invalid
         ];
         let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
+        let mut scheduler = Scheduler::new(
+            irs.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim,
+            handler,
+            u32::MAX,
+        );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
         assert_err(&results[1]);
@@ -610,7 +650,15 @@ pub mod tests {
         // test slices that will result in an error because the widths of the slices are different
         todos[1].0 = String::from("slicing_err"); // switch to running transaction slicing_err
         let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
+        scheduler = Scheduler::new(
+            irs.clone(),
+            todos.clone(),
+            &ctx,
+            &sys,
+            sim2,
+            handler,
+            u32::MAX,
+        );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
         assert_err(&results[1]);
@@ -643,6 +691,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -658,6 +707,7 @@ pub mod tests {
             &sys,
             sim2,
             handler,
+            u32::MAX,
         );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -688,6 +738,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results = scheduler.execute_todos();
         assert_err(&results[0]);
@@ -717,6 +768,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -763,6 +815,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -817,6 +870,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -857,6 +911,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -892,6 +947,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -926,6 +982,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -963,6 +1020,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -1000,6 +1058,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -1037,6 +1096,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
@@ -1071,6 +1131,7 @@ pub mod tests {
             &sys,
             sim,
             handler,
+            u32::MAX,
         );
         let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
         assert_ok(&results[0]);
