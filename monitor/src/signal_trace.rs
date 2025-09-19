@@ -162,9 +162,18 @@ impl SignalTrace for WaveSignalTrace {
             instance_id,
             pin_id: pin,
         };
-        let signal = self.wave.get_signal(self.port_map[&key]).unwrap();
-        let offset = signal.get_offset(self.step).unwrap();
+        let signal = self
+            .wave
+            .get_signal(self.port_map[&key])
+            .unwrap_or_else(|| panic!("Unable to get signal for pin_id {pin}"));
+        let offset = signal
+            .get_offset(self.step)
+            .unwrap_or_else(|| panic!("Unable to get offset for time-table index {}", self.step));
         let value = signal.get_value_at(&offset, 0);
-        BitVecValue::from_bit_str(&value.to_bit_string().unwrap()).unwrap()
+        let bit_str = value
+            .to_bit_string()
+            .unwrap_or_else(|| panic!("Unable to convert {value} to bit-string"));
+        BitVecValue::from_bit_str(&bit_str)
+            .unwrap_or_else(|err| panic!("Unable to convert bit-string to BitVecValue: {:?}", err))
     }
 }
