@@ -10,7 +10,7 @@ use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
 
 /// The result of advancing the clock cycle by one step
-#[allow(dead_code)]
+#[derive(Debug)]
 pub enum StepResult {
     /// advance time by one step and there are values available for this step
     Ok,
@@ -19,7 +19,6 @@ pub enum StepResult {
 }
 
 /// Provides a trace of signals that we can analyze.
-#[allow(dead_code)]
 pub trait SignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
@@ -30,8 +29,8 @@ pub trait SignalTrace {
 }
 
 /// Determines how signals from a waveform a sampled
-#[allow(dead_code)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum WaveSamplingMode<'a> {
     /// sample on the rising edge of the signal specified by its hierarchical name
     RisingEdge(&'a str),
@@ -88,7 +87,6 @@ impl WaveSignalTrace {
 }
 
 /// check instances and build port map
-#[allow(unused_variables)]
 fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,

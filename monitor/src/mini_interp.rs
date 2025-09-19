@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     designs::Design,
-    signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
+    signal_trace::{PortKey, SignalTrace, StepResult, WaveSignalTrace},
 };
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
@@ -43,14 +43,20 @@ pub struct MiniInterpreter<'a> {
 
     /// Whether to interpret `assert_eq` statements
     assertions_enabled: bool,
+
+    /// Whether there are steps remaining in the signal trace
+    has_steps_remaining: bool,
 }
 
-#[allow(dead_code)]
 impl<'a> MiniInterpreter<'a> {
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
         self.transaction.format_stmt(stmt_id, self.symbol_table)
+    }
+
+    pub fn has_steps_remaining(&self) -> bool {
+        self.has_steps_remaining
     }
 
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
@@ -91,6 +97,10 @@ impl<'a> MiniInterpreter<'a> {
 
             // TODO: we may want to avoid hard-coding this in the future
             assertions_enabled: false,
+
+            // We haven't run anything yet,
+            // so `has_steps_remaining` is initialized to `true`
+            has_steps_remaining: true,
         }
     }
 
@@ -122,7 +132,6 @@ impl<'a> MiniInterpreter<'a> {
                     ))
                 }
             }
-            // TODO: figure out how we shoudl deal with `DontCare`s
             Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
@@ -370,10 +379,14 @@ impl<'a> MiniInterpreter<'a> {
             match self.evaluate_stmt(&current_stmt_id) {
                 Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
                     Stmt::Step => {
-                        // trace.step() returns a `StepResult` which is either `Done` or `Ok`
-                        // In either case, we can just ignore the `StepResult` and
-                        // return the `StmtId` of the next statement to execute
-                        let _ = self.trace.step();
+                        // `trace.step()` returns a `StepResult` which is
+                        // either `Done` or `Ok`.
+                        // If `StepResult = Done`, there are no more steps
+                        // left in the signal trace, so we set the
+                        // `has_steps_remaining` flag to `false`
+                        if let StepResult::Done = self.trace.step() {
+                            self.has_steps_remaining = false;
+                        }
                         current_stmt_id = next_stmt_id;
                     }
                     Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),

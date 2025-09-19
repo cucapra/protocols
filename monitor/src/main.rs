@@ -89,8 +89,11 @@ fn main() -> anyhow::Result<()> {
     // Create a new Interpreter for the `.prot` file
     let mut interpreter = MiniInterpreter::new(transaction, symbol_table, trace, design);
 
-    // Run the interpreter on the Protocol
-    interpreter.run();
+    // Run the interpreter on the Protocol as long as there are still
+    // steps remaining in the signal trace
+    while interpreter.has_steps_remaining() {
+        interpreter.run();
+    }
 
     Ok(())
 }
