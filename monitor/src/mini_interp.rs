@@ -431,9 +431,32 @@ impl<'a> MiniInterpreter<'a> {
             }
         }
 
+        // Print what the reconstructed transaction was
         info!(
-            "Final args_mapping:\n{}",
-            serialize_args_mapping(&self.args_mapping, self.symbol_table)
-        );
+            "Reconstructed transaction:\n{}",
+            self.serialize_reconstructed_transaction()
+        )
+    }
+
+    /// Prints the reconstructed transaction
+    /// (i.e. the function call that led to the signal trace)
+    /// Note: this function is only called at the end of `MiniInterpreter::run`
+    /// after we have finished interpreting the protocol / signal trace
+    fn serialize_reconstructed_transaction(&self) -> String {
+        let mut args = vec![];
+        // Iterates through each arg to the transaction and sees
+        // what their final value in the `args_mapping` is
+        for arg in &self.transaction.args {
+            let symbol_id = arg.symbol();
+            let name = self.symbol_table[symbol_id].name();
+            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
+                panic!(
+                    "Unable to find value for {} ({}) in args_mapping",
+                    name, symbol_id
+                )
+            });
+            args.push(format!("{:?}", value));
+        }
+        format!("{}({})", self.transaction.name, args.join(", "))
     }
 }
