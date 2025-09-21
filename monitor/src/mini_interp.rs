@@ -434,6 +434,7 @@ impl<'a> MiniInterpreter<'a> {
                         if let StepResult::Done = self.trace.step() {
                             self.has_steps_remaining = false;
                             info!("No steps remaining left in signal trace");
+                            break;
                         }
                         current_stmt_id = next_stmt_id;
                     }
@@ -459,7 +460,9 @@ impl<'a> MiniInterpreter<'a> {
         }
 
         // Print what the reconstructed transaction was
-        info!(
+        // (Note: we use `println!` instead of `info!` here so that we can see
+        // what the transaction was without having to see all the other logs.)
+        println!(
             "Reconstructed transaction: {}",
             self.serialize_reconstructed_transaction()
         )
