@@ -71,12 +71,8 @@ impl<'a> MiniInterpreter<'a> {
     /// Serializes a bit-vector value. If `self.display_hex = true`,
     /// the bit-vector is printed in hexadecimal, otherwise it is displayed
     /// in decimal.
-    pub fn serialize_bitvec(&self, bv: BitVecValue) -> String {
-        if self.display_hex {
-            format!("0x{}", bv.to_hex_str())
-        } else {
-            bv.to_dec_str()
-        }
+    pub fn serialize_bitvec(&self, bv: &BitVecValue) -> String {
+        protocols::serialize::serialize_bitvec(bv, self.display_hex)
     }
 
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
@@ -113,7 +109,7 @@ impl<'a> MiniInterpreter<'a> {
 
         info!(
             "Initial args_mapping:\n{}",
-            serialize_args_mapping(&args_mapping, symbol_table)
+            serialize_args_mapping(&args_mapping, symbol_table, display_hex)
         );
 
         // We assume that there is only one `Instance` at the moment,
@@ -155,14 +151,18 @@ impl<'a> MiniInterpreter<'a> {
                 if let Ok(value) = self.trace.get(self.instance_id, *sym_id) {
                     info!(
                         "In the trace, {name} has value {}",
-                        self.serialize_bitvec(value.clone())
+                        self.serialize_bitvec(&value)
                     );
                     self.update_arg_value(*sym_id, value.clone());
                     Ok(ExprValue::Concrete(value))
                 } else {
                     info!(
                         "args_mapping: \n{}",
-                        serialize_args_mapping(&self.args_mapping, self.symbol_table)
+                        serialize_args_mapping(
+                            &self.args_mapping,
+                            self.symbol_table,
+                            self.display_hex
+                        )
                     );
 
                     Err(ExecutionError::symbol_not_found(
@@ -350,7 +350,7 @@ impl<'a> MiniInterpreter<'a> {
                 info!(
                     "Setting {} := {}",
                     lhs,
-                    self.serialize_bitvec(bitvec_value.clone())
+                    self.serialize_bitvec(&bitvec_value)
                 );
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
@@ -482,7 +482,7 @@ impl<'a> MiniInterpreter<'a> {
                     name, symbol_id
                 )
             });
-            args.push(self.serialize_bitvec(value.clone()));
+            args.push(self.serialize_bitvec(value));
         }
         format!("{}({})", self.transaction.name, args.join(", "))
     }

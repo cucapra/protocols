@@ -63,13 +63,27 @@ impl std::fmt::Display for UnaryOp {
     }
 }
 
+/// Serializes a bit-vector value. If `display_hex = true`,
+/// the bit-vector is printed in hexadecimal, otherwise it is displayed
+/// in decimal.
+pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
+    if display_hex {
+        format!("0x{}", bv.to_hex_str())
+    } else {
+        bv.to_dec_str()
+    }
+}
+
 /// Pretty-prints the arguments map, where `SymbolId`s are rendered using
 /// the corresponding string variable name according to the `SymbolTable`.
 /// When printing, we sort the keys by lexicographic order of variable names
 /// (to ensure a canonical serialization format).
+/// The `display_hex` argument indicates whether to display integer literals
+/// using hexadeimcal (if `false`, we default to using decimal).
 pub fn serialize_args_mapping(
     args_mapping: &HashMap<SymbolId, BitVecValue>,
     symbol_table: &SymbolTable,
+    display_hex: bool,
 ) -> String {
     args_mapping
         .iter()
@@ -79,7 +93,7 @@ pub fn serialize_args_mapping(
                 "({}) {}: {}",
                 symbol_id,
                 symbol_table.full_name_from_symbol_id(symbol_id),
-                value.to_dec_str()
+                serialize_bitvec(value, display_hex)
             )
         })
         .collect::<Vec<String>>()
