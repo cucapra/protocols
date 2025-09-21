@@ -133,12 +133,10 @@ impl<'a> MiniInterpreter<'a> {
             Expr::Sym(sym_id) => {
                 let name = self.symbol_table[sym_id].name();
 
-                info!("Getting value for {name} ({sym_id}) from trace...");
-
                 // Fetch the value for the `sym_id` from the trace,
                 // then update the `args_mapping`
                 if let Ok(value) = self.trace.get(self.instance_id, *sym_id) {
-                    info!("value for {name} is {:?}", value);
+                    info!("In the trace, {name} has value {}", value.to_dec_str());
                     self.update_arg_value(*sym_id, value.clone());
                     Ok(ExprValue::Concrete(value))
                 } else {
@@ -329,7 +327,7 @@ impl<'a> MiniInterpreter<'a> {
 
         match rhs_value.clone() {
             ExprValue::Concrete(bitvec_value) => {
-                info!("Setting {} := {}", lhs, rhs_value);
+                info!("Setting {} := {}", lhs, bitvec_value.to_dec_str());
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
             ExprValue::DontCare => (),
@@ -391,10 +389,15 @@ impl<'a> MiniInterpreter<'a> {
     pub fn run(&mut self) {
         let mut current_stmt_id = self.transaction.body;
         loop {
-            info!(
-                "Evaluating statement: `{}`",
-                self.format_stmt(&current_stmt_id)
-            );
+            let stmt = &self.transaction[current_stmt_id];
+            if let Stmt::Block(_) = stmt {
+                info!("Beginning to evaluate statement block...")
+            } else {
+                info!(
+                    "Evaluating statement `{}`",
+                    self.format_stmt(&current_stmt_id)
+                );
+            }
 
             match self.evaluate_stmt(&current_stmt_id) {
                 Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
@@ -433,7 +436,7 @@ impl<'a> MiniInterpreter<'a> {
 
         // Print what the reconstructed transaction was
         info!(
-            "Reconstructed transaction:\n{}",
+            "Reconstructed transaction: {}",
             self.serialize_reconstructed_transaction()
         )
     }
@@ -455,7 +458,7 @@ impl<'a> MiniInterpreter<'a> {
                     name, symbol_id
                 )
             });
-            args.push(format!("{:?}", value));
+            args.push(value.to_dec_str().to_string());
         }
         format!("{}({})", self.transaction.name, args.join(", "))
     }
