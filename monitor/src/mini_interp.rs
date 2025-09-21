@@ -50,6 +50,10 @@ pub struct MiniInterpreter<'a> {
     /// The `instance_id` corresponding to the DUT instance
     /// (Note: We assume that there is only one `Instance` at the moment)
     instance_id: u32,
+
+    /// Indicates whether to print integer literals
+    /// using hexadecimal (if `false`, we default to using decimal).
+    display_hex: bool,
 }
 
 impl<'a> MiniInterpreter<'a> {
@@ -59,18 +63,33 @@ impl<'a> MiniInterpreter<'a> {
         self.transaction.format_stmt(stmt_id, self.symbol_table)
     }
 
+    /// Determines if there are steps remaining in the signal trace
     pub fn has_steps_remaining(&self) -> bool {
         self.has_steps_remaining
+    }
+
+    /// Serializes a bit-vector value. If `self.display_hex = true`,
+    /// the bit-vector is printed in hexadecimal, otherwise it is displayed
+    /// in decimal.
+    pub fn serialize_bitvec(&self, bv: BitVecValue) -> String {
+        if self.display_hex {
+            format!("0x{}", bv.to_hex_str())
+        } else {
+            bv.to_dec_str()
+        }
     }
 
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
     /// and a `WaveSignalTrace`. This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
+    /// The `display_hex` argument indicates whether to print integer literals
+    /// using hexadecimal (if `false`, we default to using decimal).
     pub fn new(
         transaction: &'a Transaction,
         symbol_table: &'a SymbolTable,
         trace: WaveSignalTrace,
         design: &'a Design,
+        display_hex: bool,
     ) -> Self {
         let mut args_mapping = HashMap::new();
 
@@ -108,15 +127,13 @@ impl<'a> MiniInterpreter<'a> {
             design,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-
             // TODO: we may want to avoid hard-coding this in the future
             assertions_enabled: false,
-
             // We haven't run anything yet,
             // so `has_steps_remaining` is initialized to `true`
             has_steps_remaining: true,
-
             instance_id,
+            display_hex,
         }
     }
 
@@ -136,7 +153,10 @@ impl<'a> MiniInterpreter<'a> {
                 // Fetch the value for the `sym_id` from the trace,
                 // then update the `args_mapping`
                 if let Ok(value) = self.trace.get(self.instance_id, *sym_id) {
-                    info!("In the trace, {name} has value {}", value.to_dec_str());
+                    info!(
+                        "In the trace, {name} has value {}",
+                        self.serialize_bitvec(value.clone())
+                    );
                     self.update_arg_value(*sym_id, value.clone());
                     Ok(ExprValue::Concrete(value))
                 } else {
@@ -327,7 +347,11 @@ impl<'a> MiniInterpreter<'a> {
 
         match rhs_value.clone() {
             ExprValue::Concrete(bitvec_value) => {
-                info!("Setting {} := {}", lhs, bitvec_value.to_dec_str());
+                info!(
+                    "Setting {} := {}",
+                    lhs,
+                    self.serialize_bitvec(bitvec_value.clone())
+                );
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
             ExprValue::DontCare => (),
@@ -458,7 +482,7 @@ impl<'a> MiniInterpreter<'a> {
                     name, symbol_id
                 )
             });
-            args.push(value.to_dec_str().to_string());
+            args.push(self.serialize_bitvec(value.clone()));
         }
         format!("{}({})", self.transaction.name, args.join(", "))
     }

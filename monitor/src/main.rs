@@ -40,6 +40,10 @@ struct Cli {
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
+
+    /// If enabled, displays integer literals using hexadecimal notation
+    #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
+    display_hex: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -87,7 +91,8 @@ fn main() -> anyhow::Result<()> {
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
     // Create a new Interpreter for the `.prot` file
-    let mut interpreter = MiniInterpreter::new(transaction, symbol_table, trace, design);
+    let mut interpreter =
+        MiniInterpreter::new(transaction, symbol_table, trace, design, cli.display_hex);
 
     // Run the interpreter on the Protocol as long as there are still
     // steps remaining in the signal trace
