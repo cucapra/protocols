@@ -17,9 +17,9 @@ use protocols::transactions_parser::parse_transactions_file;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Verilog (.v) file
-    #[arg(long, value_name = "VERILOG_FILE")]
-    verilog: String,
+    /// Paths to one or more Verilog (.v) files
+    #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
+    verilog: Vec<String>,
 
     /// Path to a Protocol (.prot) file
     #[arg(short, long, value_name = "PROTOCOLS_FILE")]
@@ -45,6 +45,14 @@ struct Cli {
     /// Otherwise, by default, error messages are displayed w/ ANSI colors
     #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
     color: ColorChoice,
+
+    /// Whether to suppress location info (source file and label) in error messages
+    #[arg(short, long, value_name = "ERROR_LOCATIONS")]
+    no_error_locations: bool,
+
+    /// Stop the interpreter if it ever reaches the maximum number if cycles specified with this option.
+    #[arg(long)]
+    max_steps: Option<u32>,
 }
 
 /// Examples (enables all tracing logs):
@@ -67,12 +75,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Create a new handler for dealing with errors/diagnostics
-    let protocols_handler = &mut DiagnosticHandler::new(color_choice);
+    let protocols_handler = &mut DiagnosticHandler::new(color_choice, cli.no_error_locations);
 
     // At the moment we only allow the user to specify one Verilog file
     // through the CLI, so we have to wrap it in a singleton Vec
     let (parsed_data, ctx, sys) = setup_test_environment(
-        vec![&cli.verilog],
+        cli.verilog.iter().map(|v| v.as_str()).collect(),
         &cli.protocol,
         cli.module,
         protocols_handler,
@@ -90,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler = &mut DiagnosticHandler::new(color_choice);
+    let transactions_handler = &mut DiagnosticHandler::new(color_choice, cli.no_error_locations);
     let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
         cli.transactions,
         transactions_handler,
@@ -106,6 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &sys,
         interpreter,
         protocols_handler,
+        cli.max_steps.unwrap_or(u32::MAX),
     );
     let results = scheduler.execute_todos();
 
