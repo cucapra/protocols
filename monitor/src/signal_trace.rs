@@ -163,9 +163,13 @@ impl SignalTrace for WaveSignalTrace {
             instance_id,
             pin_id: pin,
         };
+        let signal_ref = self
+            .port_map
+            .get(&key)
+            .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
         let signal = self
             .wave
-            .get_signal(self.port_map[&key])
+            .get_signal(*signal_ref)
             .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
         let offset = signal
             .get_offset(self.step)

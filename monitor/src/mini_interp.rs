@@ -144,7 +144,7 @@ impl<'a> MiniInterpreter<'a> {
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
-                let name = self.symbol_table[sym_id].name();
+                let name = self.symbol_table[sym_id].full_name(self.symbol_table);
 
                 // Fetch the value for the `sym_id` from the trace,
                 // then update the `args_mapping`
@@ -291,6 +291,8 @@ impl<'a> MiniInterpreter<'a> {
                 if self.assertions_enabled {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 } else {
+                    let _ = self.evaluate_expr(expr1);
+                    let _ = self.evaluate_expr(expr2);
                     info!(
                         "Skipping assertion `{}` ({}) because assertions are disabled",
                         self.format_stmt(stmt_id),
