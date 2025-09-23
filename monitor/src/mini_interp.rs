@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use baa::{BitVecOps, BitVecValue};
-use log::info;
+use log::{error, info};
 use protocols::{
     errors::{ExecutionError, ExecutionResult},
     interpreter::ExprValue,
@@ -54,6 +54,9 @@ pub struct MiniInterpreter<'a> {
     /// Indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
     display_hex: bool,
+
+    /// Flag to keep track of whether any errors were raised during execution
+    has_errored: bool,
 }
 
 impl<'a> MiniInterpreter<'a> {
@@ -136,6 +139,9 @@ impl<'a> MiniInterpreter<'a> {
             has_steps_remaining: true,
             instance_id,
             display_hex,
+            // We haven't executed anything yet,
+            // so `has_errored` is initialized to `false`
+            has_errored: false,
         }
     }
 
@@ -286,9 +292,34 @@ impl<'a> MiniInterpreter<'a> {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                // The top-level `run` function handles the step
-                // Here we just return the next `stmt_id`
-                Ok(self.next_stmt_map[stmt_id])
+                info!(
+                    "before step, num_steps_remaining = {}",
+                    self.trace.num_steps_remaining()
+                );
+
+                let step_result = self.trace.step();
+                info!(
+                    "StepResult = {:?}, num_steps_remaining = {}, total steps = {}",
+                    step_result,
+                    self.trace.num_steps_remaining(),
+                    self.trace.num_total_steps()
+                );
+
+                // `trace.step()` returns a `StepResult` which is
+                // either `Done` or `Ok`.
+                // If `StepResult = Done`, there are no more steps
+                // left in the signal trace, so we set the
+                // `has_steps_remaining` flag to `false`
+                if let StepResult::Done = step_result {
+                    self.has_steps_remaining = false;
+                    info!("No steps remaining left in signal trace");
+                    Err(ExecutionError::MaxStepsReached(
+                        self.trace.num_total_steps(),
+                    ))
+                } else {
+                    // Here we just return the next `stmt_id`
+                    Ok(self.next_stmt_map[stmt_id])
+                }
             }
             Stmt::Fork => {
                 todo!("Figure out how to handle Forks")
@@ -437,19 +468,6 @@ impl<'a> MiniInterpreter<'a> {
 
             match self.evaluate_stmt(&current_stmt_id) {
                 Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
-                    Stmt::Step => {
-                        // `trace.step()` returns a `StepResult` which is
-                        // either `Done` or `Ok`.
-                        // If `StepResult = Done`, there are no more steps
-                        // left in the signal trace, so we set the
-                        // `has_steps_remaining` flag to `false`
-                        if let StepResult::Done = self.trace.step() {
-                            self.has_steps_remaining = false;
-                            info!("No steps remaining left in signal trace");
-                            break;
-                        }
-                        current_stmt_id = next_stmt_id;
-                    }
                     Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),
                     _ => {
                         // default "just keep going" case
@@ -465,19 +483,22 @@ impl<'a> MiniInterpreter<'a> {
 
                 // error -> record and stop
                 Err(e) => {
-                    info!("ERROR: {:?}, terminating thread", e);
+                    error!("ERROR: {:?}, terminating thread", e);
+                    self.has_errored = true;
                     break;
                 }
             }
         }
 
-        // Print what the reconstructed transaction was
+        // If there were no errors, print the reconstructed transaction
         // (Note: we use `println!` instead of `info!` here so that we can see
         // what the transaction was without having to see all the other logs.)
-        println!(
-            "Reconstructed transaction: {}",
-            self.serialize_reconstructed_transaction()
-        )
+        if !self.has_errored {
+            println!(
+                "Reconstructed transaction: {}",
+                self.serialize_reconstructed_transaction()
+            )
+        }
     }
 
     /// Prints the reconstructed transaction
