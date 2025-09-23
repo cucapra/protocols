@@ -494,10 +494,7 @@ impl<'a> MiniInterpreter<'a> {
         // (Note: we use `println!` instead of `info!` here so that we can see
         // what the transaction was without having to see all the other logs.)
         if !self.has_errored {
-            println!(
-                "Reconstructed transaction: {}",
-                self.serialize_reconstructed_transaction()
-            )
+            println!("{}", self.serialize_reconstructed_transaction())
         }
     }
 

@@ -36,8 +36,10 @@ jobs:
       uses: astral-sh/setup-uv@v5
     - name: Install Turnt 
       run: uv tool install turnt
-    - name: Run Turnt snapshot tests
-      run: turnt $(find . -type f -name '*.tx') 
+    - name: Run Turnt tests for interpreter
+      run: turnt --env interp $(find . -type f -name '*.tx') 
+    - name: Run Turnt tests for monitor 
+      run: turnt --env monitor $(find . -type f -name '*.prot')
 
   msrv:
     name: Check Minimum Rust Version for protocols library

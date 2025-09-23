@@ -1,0 +1,3 @@
+[envs.monitor]
+command = "cargo run --package protocols-monitor -- --color never -p {filename} {args}"
+output.out = "-"
