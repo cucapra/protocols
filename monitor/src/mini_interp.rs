@@ -63,6 +63,12 @@ impl<'a> MiniInterpreter<'a> {
         self.transaction.format_stmt(stmt_id, self.symbol_table)
     }
 
+    /// Pretty-prints a `Expr` identified by its `ExprID`
+    /// with respect to the current `SymbolTable` associated with this `Evaluator`
+    pub fn format_expr(&self, expr_id: &ExprId) -> String {
+        self.transaction.format_expr(expr_id, self.symbol_table)
+    }
+
     /// Determines if there are steps remaining in the signal trace
     pub fn has_steps_remaining(&self) -> bool {
         self.has_steps_remaining
@@ -291,8 +297,12 @@ impl<'a> MiniInterpreter<'a> {
                 if self.assertions_enabled {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 } else {
-                    let _ = self.evaluate_expr(expr1);
-                    let _ = self.evaluate_expr(expr2);
+                    if self.evaluate_expr(expr1).is_err() {
+                        info!("{} is ???", self.format_expr(expr1))
+                    }
+                    if self.evaluate_expr(expr2).is_err() {
+                        info!("{} is ???", self.format_expr(expr2))
+                    }
                     info!(
                         "Skipping assertion `{}` ({}) because assertions are disabled",
                         self.format_stmt(stmt_id),
