@@ -11,7 +11,7 @@ use crate::designs::{Instance, collects_design_names, find_designs, parse_instan
 use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
 use anyhow::Context;
-use clap::Parser;
+use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
@@ -41,6 +41,11 @@ struct Cli {
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
 
+    /// To suppress colors in error messages, pass in `--color never`
+    /// Otherwise, by default, error messages are displayed w/ ANSI colors
+    #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
+    color: ColorChoice,
+
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
@@ -52,10 +57,17 @@ fn main() -> anyhow::Result<()> {
 
     // Set up logger to use the log-level specified via the `-v` flag
     // For concision, we disable timestamps and the module paths in the log
-    env_logger::Builder::new()
+    let mut logger = env_logger::Builder::new();
+
+    logger
         .format_timestamp(None)
-        .filter_level(cli.verbosity.log_level_filter())
-        .init();
+        .filter_level(cli.verbosity.log_level_filter());
+
+    if cli.color == ColorChoice::Never {
+        logger.write_style(env_logger::WriteStyle::Never);
+    }
+
+    logger.init();
 
     // parse protocol file
     let mut protocols_handler = DiagnosticHandler::default();
