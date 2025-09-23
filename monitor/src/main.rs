@@ -10,7 +10,8 @@ mod signal_trace;
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::mini_interp::MiniInterpreter;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
-use clap::Parser;
+use anyhow::Context;
+use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
@@ -39,19 +40,34 @@ struct Cli {
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
+
+    /// To suppress colors in error messages, pass in `--color never`
+    /// Otherwise, by default, error messages are displayed w/ ANSI colors
+    #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
+    color: ColorChoice,
+
+    /// If enabled, displays integer literals using hexadecimal notation
+    #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
+    display_hex: bool,
 }
 
-#[allow(unused_variables)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
 
     // Set up logger to use the log-level specified via the `-v` flag
     // For concision, we disable timestamps and the module paths in the log
-    env_logger::Builder::new()
+    let mut logger = env_logger::Builder::new();
+
+    logger
         .format_timestamp(None)
-        .filter_level(cli.verbosity.log_level_filter())
-        .init();
+        .filter_level(cli.verbosity.log_level_filter());
+
+    if cli.color == ColorChoice::Never {
+        logger.write_style(env_logger::WriteStyle::Never);
+    }
+
+    logger.init();
 
     // parse protocol file
     let mut protocols_handler = DiagnosticHandler::default();
@@ -60,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let designs = find_designs(transactions_symbol_tables.iter());
 
-    // try to find instances that we care about
+    // Try to find instances that we care about
     if cli.instances.is_empty() {
         println!("Available DUTs are: {}", collects_design_names(&designs));
         println!("No instances specified. Nothing to monitor. Exiting...");
@@ -75,22 +91,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
-        .expect("failed to read waveform file");
+        .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // TODO: figure out how to avoid hard-coding this
     let dut_struct_name = &instances[0].design_name;
     let design = designs
         .get(dut_struct_name)
-        .unwrap_or_else(|| panic!("Missing Design for {}", dut_struct_name));
+        .with_context(|| format!("Missing Design for {}", dut_struct_name))?;
 
     // TODO: we assume only one `Transaction` & `SymbolTable` for now
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
     // Create a new Interpreter for the `.prot` file
-    let mut interpreter = MiniInterpreter::new(transaction, symbol_table, trace, design);
+    let mut interpreter =
+        MiniInterpreter::new(transaction, symbol_table, trace, design, cli.display_hex);
 
-    // Run the interpreter on the Protocol
-    interpreter.run();
+    // Run the interpreter on the Protocol as long as there are still
+    // steps remaining in the signal trace
+    while interpreter.has_steps_remaining() {
+        interpreter.run();
+    }
 
     Ok(())
 }

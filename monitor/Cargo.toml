@@ -17,3 +17,4 @@ patronus.workspace = true
 wellen = "0.19.0"
 log = "0.4.27"
 rustc-hash.workspace = true
+anyhow = "1.0.100"

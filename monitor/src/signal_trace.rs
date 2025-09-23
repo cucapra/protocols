@@ -4,13 +4,14 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::{Instance, designs::Design};
+use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
 
 /// The result of advancing the clock cycle by one step
-#[allow(dead_code)]
+#[derive(Debug)]
 pub enum StepResult {
     /// advance time by one step and there are values available for this step
     Ok,
@@ -19,19 +20,24 @@ pub enum StepResult {
 }
 
 /// Provides a trace of signals that we can analyze.
-#[allow(dead_code)]
 pub trait SignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult;
 
+    /// Returns the total no. of steps remaining in the signal trace
+    fn num_total_steps(&self) -> u32;
+
+    /// Returns the no. of steps remaining in the signal trace
+    fn num_steps_remaining(&self) -> u32;
+
     /// returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, io: SymbolId) -> BitVecValue;
+    fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
 }
 
 /// Determines how signals from a waveform a sampled
-#[allow(dead_code)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum WaveSamplingMode<'a> {
     /// sample on the rising edge of the signal specified by its hierarchical name
     RisingEdge(&'a str),
@@ -88,7 +94,6 @@ impl WaveSignalTrace {
 }
 
 /// check instances and build port map
-#[allow(unused_variables)]
 fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
@@ -147,7 +152,7 @@ impl SignalTrace for WaveSignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult {
-        let total_steps = self.wave.time_table().len() as u32;
+        let total_steps = self.num_total_steps();
         if self.step < total_steps {
             self.step += 1;
         }
@@ -158,15 +163,43 @@ impl SignalTrace for WaveSignalTrace {
         }
     }
 
+    /// Returns the total no. of steps in the signal trace
+    /// We have to subtract 1 since we start at time 0
+    fn num_total_steps(&self) -> u32 {
+        (self.wave.time_table().len() - 1) as u32
+    }
+
+    /// Returns the no. of steps remaining in the signal trace
+    fn num_steps_remaining(&self) -> u32 {
+        self.num_total_steps() - self.step
+    }
+
     // Returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
+    fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue> {
         let key = PortKey {
             instance_id,
             pin_id: pin,
         };
-        let signal = self.wave.get_signal(self.port_map[&key]).unwrap();
-        let offset = signal.get_offset(self.step).unwrap();
+        let signal_ref = self
+            .port_map
+            .get(&key)
+            .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
+        let signal = self
+            .wave
+            .get_signal(*signal_ref)
+            .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
+        let offset = signal
+            .get_offset(self.step)
+            .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
         let value = signal.get_value_at(&offset, 0);
-        BitVecValue::from_bit_str(&value.to_bit_string().unwrap()).unwrap()
+        let bit_str = value
+            .to_bit_string()
+            .with_context(|| format!("Unable to convert {value} to bit-string"))?;
+        Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {
+            panic!(
+                "Unable to convert bit-string {bit_str} to BitVecValue, {:?}",
+                err
+            )
+        }))
     }
 }

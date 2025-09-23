@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use baa::{BitVecOps, BitVecValue};
-use log::info;
+use log::{error, info};
 use protocols::{
     errors::{ExecutionError, ExecutionResult},
     interpreter::ExprValue,
@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     designs::Design,
-    signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
+    signal_trace::{PortKey, SignalTrace, StepResult, WaveSignalTrace},
 };
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
@@ -43,9 +43,22 @@ pub struct MiniInterpreter<'a> {
 
     /// Whether to interpret `assert_eq` statements
     assertions_enabled: bool,
+
+    /// Whether there are steps remaining in the signal trace
+    has_steps_remaining: bool,
+
+    /// The `instance_id` corresponding to the DUT instance
+    /// (Note: We assume that there is only one `Instance` at the moment)
+    instance_id: u32,
+
+    /// Indicates whether to print integer literals
+    /// using hexadecimal (if `false`, we default to using decimal).
+    display_hex: bool,
+
+    /// Flag to keep track of whether any errors were raised during execution
+    has_errored: bool,
 }
 
-#[allow(dead_code)]
 impl<'a> MiniInterpreter<'a> {
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
@@ -53,16 +66,38 @@ impl<'a> MiniInterpreter<'a> {
         self.transaction.format_stmt(stmt_id, self.symbol_table)
     }
 
+    /// Pretty-prints a `Expr` identified by its `ExprID`
+    /// with respect to the current `SymbolTable` associated with this `Evaluator`
+    pub fn format_expr(&self, expr_id: &ExprId) -> String {
+        self.transaction.format_expr(expr_id, self.symbol_table)
+    }
+
+    /// Determines if there are steps remaining in the signal trace
+    pub fn has_steps_remaining(&self) -> bool {
+        self.has_steps_remaining
+    }
+
+    /// Serializes a bit-vector value. If `self.display_hex = true`,
+    /// the bit-vector is printed in hexadecimal, otherwise it is displayed
+    /// in decimal.
+    pub fn serialize_bitvec(&self, bv: &BitVecValue) -> String {
+        protocols::serialize::serialize_bitvec(bv, self.display_hex)
+    }
+
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
     /// and a `WaveSignalTrace`. This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
+    /// The `display_hex` argument indicates whether to print integer literals
+    /// using hexadecimal (if `false`, we default to using decimal).
     pub fn new(
         transaction: &'a Transaction,
         symbol_table: &'a SymbolTable,
         trace: WaveSignalTrace,
         design: &'a Design,
+        display_hex: bool,
     ) -> Self {
         let mut args_mapping = HashMap::new();
+
         for port_key in trace.port_map.keys() {
             // We assume that there is only one `Instance` at the moment
             let PortKey {
@@ -72,14 +107,23 @@ impl<'a> MiniInterpreter<'a> {
 
             // Fetch the current value of the `pin_id`
             // (along with the name of the corresponding `Field`)
-            let current_value = trace.get(*instance_id, *pin_id);
+            let current_value = trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to get value for pin {pin_id} in signal trace, {:?}",
+                    err
+                )
+            });
             args_mapping.insert(*pin_id, current_value);
         }
 
         info!(
             "Initial args_mapping:\n{}",
-            serialize_args_mapping(&args_mapping, symbol_table)
+            serialize_args_mapping(&args_mapping, symbol_table, display_hex)
         );
+
+        // We assume that there is only one `Instance` at the moment,
+        // so we just use the first `PortKey`'s `instance_id`
+        let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;
 
         Self {
             transaction,
@@ -88,9 +132,16 @@ impl<'a> MiniInterpreter<'a> {
             design,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-
             // TODO: we may want to avoid hard-coding this in the future
             assertions_enabled: false,
+            // We haven't run anything yet,
+            // so `has_steps_remaining` is initialized to `true`
+            has_steps_remaining: true,
+            instance_id,
+            display_hex,
+            // We haven't executed anything yet,
+            // so `has_errored` is initialized to `false`
+            has_errored: false,
         }
     }
 
@@ -100,18 +151,30 @@ impl<'a> MiniInterpreter<'a> {
     }
 
     /// Evaluates an `Expr` identified by its `ExprId`, returning an `ExprValue`
-    fn evaluate_expr(&self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
+    fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
         let expr = &self.transaction[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
-                let name = self.symbol_table[sym_id].name();
-                if let Some(value) = self.args_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(value.clone()))
+                let name = self.symbol_table[sym_id].full_name(self.symbol_table);
+
+                // Fetch the value for the `sym_id` from the trace,
+                // then update the `args_mapping`
+                if let Ok(value) = self.trace.get(self.instance_id, *sym_id) {
+                    info!(
+                        "In the trace, {name} has value {}",
+                        self.serialize_bitvec(&value)
+                    );
+                    self.update_arg_value(*sym_id, value.clone());
+                    Ok(ExprValue::Concrete(value))
                 } else {
                     info!(
                         "args_mapping: \n{}",
-                        serialize_args_mapping(&self.args_mapping, self.symbol_table)
+                        serialize_args_mapping(
+                            &self.args_mapping,
+                            self.symbol_table,
+                            self.display_hex
+                        )
                     );
 
                     Err(ExecutionError::symbol_not_found(
@@ -122,7 +185,6 @@ impl<'a> MiniInterpreter<'a> {
                     ))
                 }
             }
-            // TODO: figure out how we shoudl deal with `DontCare`s
             Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
@@ -219,7 +281,7 @@ impl<'a> MiniInterpreter<'a> {
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                // TODO: figure out what to do if the `pin_id` already has a value in the environment
+                // TODO: figure out what to do if the `symbol_id` already has a value in the environment
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
@@ -230,9 +292,34 @@ impl<'a> MiniInterpreter<'a> {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                // The top-level `run` function handles the step
-                // Here we just return the next `stmt_id`
-                Ok(self.next_stmt_map[stmt_id])
+                info!(
+                    "before step, num_steps_remaining = {}",
+                    self.trace.num_steps_remaining()
+                );
+
+                let step_result = self.trace.step();
+                info!(
+                    "StepResult = {:?}, num_steps_remaining = {}, total steps = {}",
+                    step_result,
+                    self.trace.num_steps_remaining(),
+                    self.trace.num_total_steps()
+                );
+
+                // `trace.step()` returns a `StepResult` which is
+                // either `Done` or `Ok`.
+                // If `StepResult = Done`, there are no more steps
+                // left in the signal trace, so we set the
+                // `has_steps_remaining` flag to `false`
+                if let StepResult::Done = step_result {
+                    self.has_steps_remaining = false;
+                    info!("No steps remaining left in signal trace");
+                    Err(ExecutionError::MaxStepsReached(
+                        self.trace.num_total_steps(),
+                    ))
+                } else {
+                    // Here we just return the next `stmt_id`
+                    Ok(self.next_stmt_map[stmt_id])
+                }
             }
             Stmt::Fork => {
                 todo!("Figure out how to handle Forks")
@@ -241,6 +328,12 @@ impl<'a> MiniInterpreter<'a> {
                 if self.assertions_enabled {
                     self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
                 } else {
+                    if self.evaluate_expr(expr1).is_err() {
+                        info!("{} is ???", self.format_expr(expr1))
+                    }
+                    if self.evaluate_expr(expr2).is_err() {
+                        info!("{} is ???", self.format_expr(expr2))
+                    }
                     info!(
                         "Skipping assertion `{}` ({}) because assertions are disabled",
                         self.format_stmt(stmt_id),
@@ -297,13 +390,14 @@ impl<'a> MiniInterpreter<'a> {
 
         match rhs_value.clone() {
             ExprValue::Concrete(bitvec_value) => {
-                info!("Setting {} := {}", lhs, rhs_value);
+                info!(
+                    "Setting {} := {}",
+                    lhs,
+                    self.serialize_bitvec(&bitvec_value)
+                );
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
-            ExprValue::DontCare => {
-                // We don't need to anything for `DontCare`s at the moment
-                info!("RHS of assignment is DontCare, skipping...");
-            }
+            ExprValue::DontCare => (),
         }
         Ok(())
     }
@@ -362,20 +456,18 @@ impl<'a> MiniInterpreter<'a> {
     pub fn run(&mut self) {
         let mut current_stmt_id = self.transaction.body;
         loop {
-            info!(
-                "Evaluating statement: `{}`",
-                self.format_stmt(&current_stmt_id)
-            );
+            let stmt = &self.transaction[current_stmt_id];
+            if let Stmt::Block(_) = stmt {
+                info!("Beginning to evaluate statement block...")
+            } else {
+                info!(
+                    "Evaluating statement `{}`",
+                    self.format_stmt(&current_stmt_id)
+                );
+            }
 
             match self.evaluate_stmt(&current_stmt_id) {
                 Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
-                    Stmt::Step => {
-                        // trace.step() returns a `StepResult` which is either `Done` or `Ok`
-                        // In either case, we can just ignore the `StepResult` and
-                        // return the `StmtId` of the next statement to execute
-                        let _ = self.trace.step();
-                        current_stmt_id = next_stmt_id;
-                    }
                     Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),
                     _ => {
                         // default "just keep going" case
@@ -391,15 +483,40 @@ impl<'a> MiniInterpreter<'a> {
 
                 // error -> record and stop
                 Err(e) => {
-                    info!("ERROR: {:?}, terminating thread", e);
+                    error!("ERROR: {:?}, terminating thread", e);
+                    self.has_errored = true;
                     break;
                 }
             }
         }
 
-        info!(
-            "Final args_mapping:\n{}",
-            serialize_args_mapping(&self.args_mapping, self.symbol_table)
-        );
+        // If there were no errors, print the reconstructed transaction
+        // (Note: we use `println!` instead of `info!` here so that we can see
+        // what the transaction was without having to see all the other logs.)
+        if !self.has_errored {
+            println!("{}", self.serialize_reconstructed_transaction())
+        }
+    }
+
+    /// Prints the reconstructed transaction
+    /// (i.e. the function call that led to the signal trace)
+    /// Note: this function is only called at the end of `MiniInterpreter::run`
+    /// after we have finished interpreting the protocol / signal trace
+    fn serialize_reconstructed_transaction(&self) -> String {
+        let mut args = vec![];
+        // Iterates through each arg to the transaction and sees
+        // what their final value in the `args_mapping` is
+        for arg in &self.transaction.args {
+            let symbol_id = arg.symbol();
+            let name = self.symbol_table[symbol_id].name();
+            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
+                panic!(
+                    "Unable to find value for {} ({}) in args_mapping",
+                    name, symbol_id
+                )
+            });
+            args.push(self.serialize_bitvec(value));
+        }
+        format!("{}({})", self.transaction.name, args.join(", "))
     }
 }
