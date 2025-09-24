@@ -1,0 +1,10 @@
+struct bit_truncation_sha {
+    in right: u64,
+    out left: u42,
+}
+
+fn sha_bug<dut: bit_truncation_sha>(in data_in: u64, out data_out: u42) {
+    dut.right := data_in;
+    step(1);
+    assert_eq(data_out, dut.left);
+}
