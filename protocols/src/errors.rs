@@ -493,13 +493,13 @@ impl DiagnosticEmitter {
                 stmt_id,
             } => {
                 handler.emit_diagnostic_stmt(
-                    transaction, 
-                    stmt_id, 
+                    transaction,
+                    stmt_id,
                     &format!(
                         "Thread {} (transaction '{}') called `fork()` without previously calling `step()` first",
-                        thread_idx, 
+                        thread_idx,
                         transaction_name)
-                    , 
+                    ,
                     Level::Error
                 );
             }
