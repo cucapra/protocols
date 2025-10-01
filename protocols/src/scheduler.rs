@@ -70,20 +70,22 @@ impl<'a> Todo<'a> {
     }
 }
 
-/// Struct containing metadata associated with a `Thread`, specifically:
-/// - The corresponding `Todo` (function call to be executed)
-/// - The `StmtId` of the current step
-/// - The `StmtId` of the next step (if one exists)
-/// - Whether the thread has `has_stepped` already
-/// - Whether the thread `has_forked` already
-/// - and the index of the `todo` (`todo_idx`)
+/// Struct containing metadata associated with a `Thread`
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
+    /// The corresponding `Todo` (function call to be executed)
     pub todo: Todo<'a>,
+    /// The `StmtId` of the current step
     pub current_step: StmtId,
+    /// The `StmtId` of the next step (if one exists)
     pub next_step: Option<StmtId>,
+    /// Whether the thread has `has_stepped` already
     pub has_stepped: bool,
+    /// Whether the thread `has_forked` already
     pub has_forked: bool,
+    /// The `StmtId` of the previous fork (if one exists)
+    /// (This is used to allow more precise error messages for `DoubleFork` errors)
+    pub prev_fork_stmt_id: Option<StmtId>,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     pub todo_idx: usize,
 }
@@ -99,6 +101,7 @@ impl<'a> Thread<'a> {
             next_step: None,
             todo_idx,
             todo,
+            prev_fork_stmt_id: None,
             has_stepped: false,
             has_forked: false,
         }
@@ -422,6 +425,7 @@ impl<'a> Scheduler<'a> {
                                 let error = ExecutionError::double_fork(
                                     thread.todo_idx,
                                     thread.todo.tr.name.clone(),
+                                    thread.prev_fork_stmt_id.expect("Forked multiple times but `prev_fork_stmt_id` field is `None`"),
                                     next_id,
                                 );
                                 self.results[thread.todo_idx] = Err(error);
@@ -462,9 +466,12 @@ impl<'a> Scheduler<'a> {
                                 "  Marking thread {} (todo_idx {}) as having forked.",
                                 thread.todo.tr.name, thread.todo_idx
                             );
-                            thread.has_forked = true;
                             // continue from the fork point
                             current_stmt_id = next_id;
+                            // Update fields in the `Thread` struct that track whether
+                            // we've forked already
+                            thread.has_forked = true;
+                            thread.prev_fork_stmt_id = Some(next_id);
                         }
 
                         _ => {

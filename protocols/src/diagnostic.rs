@@ -156,7 +156,7 @@ impl DiagnosticHandler {
 
     /// If `self.no_error_locations` is false, this function creates
     /// error locations for multiple expressions/statements.
-    /// Otherwise, thsi function returns an empty `Vec`.
+    /// Otherwise, this function returns an empty `Vec`.
     fn error_locations(&self, locations: Vec<(usize, Label)>) -> Vec<(usize, Label)> {
         if self.no_error_locations {
             Vec::new()
@@ -256,6 +256,7 @@ impl DiagnosticHandler {
         print!("{}", error_msg);
     }
 
+    /// Emits a diagnostic message for one single statement
     pub fn emit_diagnostic_stmt(
         &mut self,
         tr: &Transaction,
@@ -279,6 +280,48 @@ impl DiagnosticHandler {
                 message: message.to_string(),
                 level,
                 locations: self.error_locations(vec![(fileid, label)]),
+            };
+
+            diagnostic.emit(buffer, &self.files);
+
+            let error_msg = String::from_utf8_lossy(buffer.as_slice());
+            self.error_string.push_str(&error_msg);
+            print!("{}", error_msg);
+        }
+    }
+
+    /// Emits a diagnostic message that concerns multiple statements
+    pub fn emit_diagnostic_multi_stmt(
+        &mut self,
+        tr: &Transaction,
+        stmt_ids: &[StmtId],
+        messages: &[&str],
+        main_message: &str,
+        level: Level,
+    ) {
+        let buffer = &mut self.create_buffer();
+        let mut locations = Vec::new();
+        let mut fileid_opt = None;
+
+        for (stmt_id, message) in stmt_ids.iter().zip(messages) {
+            if let Some((start, end, fileid)) = tr.get_stmt_loc(*stmt_id) {
+                fileid_opt = Some(fileid);
+                locations.push((
+                    fileid,
+                    Label {
+                        message: Some(message.to_string()),
+                        range: (start, end),
+                    },
+                ));
+            }
+        }
+
+        if let Some(fileid) = fileid_opt {
+            let diagnostic = Diagnostic {
+                title: format!("{:?} in file {}", level, fileid),
+                message: main_message.to_string(),
+                level,
+                locations: self.error_locations(locations),
             };
 
             diagnostic.emit(buffer, &self.files);

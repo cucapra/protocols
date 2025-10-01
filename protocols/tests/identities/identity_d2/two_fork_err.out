@@ -1,6 +1,9 @@
 error: Thread 0 (transaction 'two_fork_err') attempted to fork more than once
-   ┌─ identities/identity_d2/identity_d2.prot:24:3
+   ┌─ identities/identity_d2/identity_d2.prot:21:3
    │
+21 │   fork();
+   │   ^^^^^^^ first fork() called here
+   ·
 24 │   fork();
-   │   ^^^^^^^ Thread 0 (transaction 'two_fork_err') attempted to fork more than once
+   │   ^^^^^^^ second fork() called here
 

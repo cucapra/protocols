@@ -61,7 +61,8 @@ pub enum ThreadError {
     DoubleFork {
         thread_idx: usize,
         transaction_name: String,
-        stmt_id: StmtId,
+        first_fork_stmt_id: StmtId,
+        second_fork_stmt_id: StmtId,
     },
     /// Thread called `fork()` before `step()`
     ForkBeforeStep {
@@ -258,11 +259,17 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
-    pub fn double_fork(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
+    pub fn double_fork(
+        thread_id: usize,
+        transaction_name: String,
+        first_fork_stmt_id: StmtId,
+        second_fork_stmt_id: StmtId,
+    ) -> Self {
         ExecutionError::Thread(ThreadError::DoubleFork {
             thread_idx: thread_id,
             transaction_name,
-            stmt_id,
+            first_fork_stmt_id,
+            second_fork_stmt_id,
         })
     }
 
@@ -475,11 +482,13 @@ impl DiagnosticEmitter {
             ThreadError::DoubleFork {
                 thread_idx,
                 transaction_name,
-                stmt_id,
+                first_fork_stmt_id,
+                second_fork_stmt_id,
             } => {
-                handler.emit_diagnostic_stmt(
+                handler.emit_diagnostic_multi_stmt(
                     transaction,
-                    stmt_id,
+                    &[*first_fork_stmt_id, *second_fork_stmt_id],
+                    &["first fork() called here", "second fork() called here"],
                     &format!(
                         "Thread {} (transaction '{}') attempted to fork more than once",
                         thread_idx, transaction_name
@@ -497,10 +506,9 @@ impl DiagnosticEmitter {
                     stmt_id,
                     &format!(
                         "Thread {} (transaction '{}') called `fork()` without previously calling `step()` first",
-                        thread_idx,
-                        transaction_name)
-                    ,
-                    Level::Error
+                        thread_idx, transaction_name
+                    ),
+                    Level::Error,
                 );
             }
             ThreadError::ConflictingAssignment {
