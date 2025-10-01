@@ -192,7 +192,7 @@ impl fmt::Display for ThreadError {
             } => {
                 write!(
                     f,
-                    "Thread {} (transaction '{}') called `fork()` without previously calling `step()` first",
+                    "Thread {} (transaction '{}') called `fork()` before calling `step()`",
                     thread_idx, transaction_name
                 )
             }
@@ -505,7 +505,7 @@ impl DiagnosticEmitter {
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} (transaction '{}') called `fork()` without previously calling `step()` first",
+                        "Thread {} (transaction '{}') called `fork()` before calling `step()`",
                         thread_idx, transaction_name
                     ),
                     Level::Error,
