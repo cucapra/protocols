@@ -1,0 +1,6 @@
+error: Thread 0 (transaction 'add_double_fork') attempted to fork more than once
+   ┌─ adders/adder_d1/double_fork_error.prot:15:3
+   │
+15 │   fork();
+   │   ^^^^^^^ Thread 0 (transaction 'add_double_fork') attempted to fork more than once
+

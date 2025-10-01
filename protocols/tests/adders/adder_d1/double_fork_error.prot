@@ -1,0 +1,18 @@
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+// This should fail since there are two forks
+fn add_double_fork<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  fork();
+  DUT.a := X;
+  DUT.b := X;
+  fork();
+  assert_eq(s, DUT.s);
+}
+
