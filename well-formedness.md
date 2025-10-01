@@ -14,5 +14,9 @@ Well-formed Protocols programs prevent the following bad things from happening.
 | We assert equality with a `DontCare` value                        | `AssertionError::DontCareAssertion`  |
 | Width mismatches in bitvec operations                             | `EvaluationError::ArithmeticError`   |
 | Invalid slice operations                                          | `EvaluationError::InvalidSlice`      |
-| Non-termination (infinite `while` loops)                          | (no type specified)                  |
+| Non-termination (infinite `while` loops)                          | N/A                                  |
 
+**TODO:**
+- No `fork`s in program (per 9/30 meeting, a function must have exactly one `fork` somewhere in its body)
+- `fork` before `step`
+- Missing `step` at the end of a function
