@@ -74,13 +74,15 @@ impl<'a> Todo<'a> {
 /// - The corresponding `Todo` (function call to be executed)
 /// - The `StmtId` of the current step
 /// - The `StmtId` of the next step (if one exists)
-/// - Whether the thread `has_forked`
+/// - Whether the thread has `has_stepped` already
+/// - Whether the thread `has_forked` already
 /// - and the index of the `todo` (`todo_idx`)
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
     pub todo: Todo<'a>,
     pub current_step: StmtId,
     pub next_step: Option<StmtId>,
+    pub has_stepped: bool,
     pub has_forked: bool,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     pub todo_idx: usize,
@@ -97,6 +99,7 @@ impl<'a> Thread<'a> {
             next_step: None,
             todo_idx,
             todo,
+            has_stepped: false,
             has_forked: false,
         }
     }
@@ -402,6 +405,10 @@ impl<'a> Scheduler<'a> {
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {
+                            // We've encountered a step, so set `has_stepped` to true
+                            if !thread.has_stepped {
+                                thread.has_stepped = true;
+                            }
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
                             return;
@@ -420,7 +427,20 @@ impl<'a> Scheduler<'a> {
                                 self.results[thread.todo_idx] = Err(error);
                                 thread.next_step = None;
                                 return;
+                            } else if !thread.has_stepped {
+                                info!(
+                                    "  ERROR: fork() called before step() in this thread, terminating thread"
+                                );
+                                let error = ExecutionError::fork_before_step(
+                                    thread.todo_idx,
+                                    thread.todo.tr.name.clone(),
+                                    next_id,
+                                );
+                                self.results[thread.todo_idx] = Err(error);
+                                thread.next_step = None;
+                                return;
                             }
+
                             info!("  `Fork` at stmt_id {}, spawning new thread…", next_id);
                             match next_todo_option.clone() {
                                 Some(todo) => {
