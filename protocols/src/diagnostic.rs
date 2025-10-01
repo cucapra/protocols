@@ -41,6 +41,7 @@ struct Label {
 }
 
 impl Label {
+    /// Converts a `Label` to a `CodespanLabel`
     fn to_codespan_label(&self, fileid: usize) -> CodespanLabel<usize> {
         CodespanLabel::new(LabelStyle::Primary, fileid, self.range.0..self.range.1)
             .with_message(self.message.clone().unwrap_or_default())
@@ -53,20 +54,27 @@ struct Diagnostic {
     title: String,
     message: String,
     level: Level,
-    location: Option<(usize, Label)>,
+    locations: Vec<(usize, Label)>,
 }
 
 impl Diagnostic {
     pub fn emit(&self, buffer: &mut Buffer, files: &SimpleFiles<String, String>) {
-        if let Some((fileid, label)) = &self.location {
+        if !self.locations.is_empty() {
             let severity = match self.level {
                 Level::Error => Severity::Error,
                 Level::Warning => Severity::Warning,
             };
 
+            // Convert all locations to Codespan labels
+            let labels = self
+                .locations
+                .iter()
+                .map(|(fileid, label)| label.to_codespan_label(*fileid))
+                .collect();
+
             let diagnostic = CodespanDiagnostic::new(severity)
                 .with_message(&self.message) // Severity: (msg)
-                .with_labels(vec![label.to_codespan_label(*fileid)]);
+                .with_labels(labels);
 
             let config = term::Config::default(); // Change config depending on how error needs to be produced
             term::emit(buffer, &config, files, &diagnostic).expect("Failed to write diagnostic");
@@ -146,15 +154,14 @@ impl DiagnosticHandler {
         &self.error_string
     }
 
-    /// If `self.no_error_locations` is false, this function
-    /// creates an error location (wrapped in an `Option`)
-    /// based on the provided `fileid` and the `label`.
-    /// Otherwise, this function returns `None`.
-    fn error_location(&self, fileid: usize, label: Label) -> Option<(usize, Label)> {
+    /// If `self.no_error_locations` is false, this function creates
+    /// error locations for multiple expressions/statements.
+    /// Otherwise, thsi function returns an empty `Vec`.
+    fn error_locations(&self, locations: Vec<(usize, Label)>) -> Vec<(usize, Label)> {
         if self.no_error_locations {
-            None
+            Vec::new()
         } else {
-            Some((fileid, label))
+            locations
         }
     }
 
@@ -180,7 +187,7 @@ impl DiagnosticHandler {
                 title: format!("{:?} in file {}", level, fileid),
                 message: message.to_string(),
                 level,
-                location: self.error_location(fileid, label),
+                locations: self.error_locations(vec![(fileid, label)]),
             };
 
             diagnostic.emit(&mut buffer, &self.files);
@@ -213,7 +220,7 @@ impl DiagnosticHandler {
             title: format!("{:?} in file {}", level, fileid),
             message: message.to_string(),
             level,
-            location: self.error_location(fileid, label),
+            locations: self.error_locations(vec![(fileid, label)]),
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -240,7 +247,7 @@ impl DiagnosticHandler {
             title: format!("{:?} in file {}", level, fileid),
             message: message.to_string(),
             level,
-            location: self.error_location(fileid, label),
+            locations: self.error_locations(vec![(fileid, label)]),
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -271,7 +278,7 @@ impl DiagnosticHandler {
                 title: format!("{:?} in file {}", level, fileid),
                 message: message.to_string(),
                 level,
-                location: self.error_location(fileid, label),
+                locations: self.error_locations(vec![(fileid, label)]),
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -303,13 +310,13 @@ impl DiagnosticHandler {
                 title: format!("Error in file {}", fileid1),
                 message: "The two expressions did not evaluate to the same value".to_string(),
                 level: Level::Error,
-                location: self.error_location(
+                locations: self.error_locations(vec![(
                     fileid1,
                     Label {
                         message: Some(format!("LHS Value: {:?}, RHS Value: {:?}", eval1, eval2)),
                         range: (start1.min(start2), end1.max(end2)),
                     },
-                ),
+                )]),
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -326,7 +333,7 @@ impl DiagnosticHandler {
             title: format!("{:?}", level),
             message: message.to_string(),
             level,
-            location: None,
+            locations: vec![],
         };
 
         diagnostic.emit(buffer, &self.files);
