@@ -483,7 +483,9 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    if !thread.has_forked {
+                    // Throw an error if forks are enabled but the
+                    // thread finished without making any calls to `fork()`
+                    if forks_enabled && !thread.has_forked {
                         info!("  ERROR: thread did not make any calls to `fork()`, terminating thread");
                         let error = ExecutionError::missing_fork(
                             thread.todo_idx,
