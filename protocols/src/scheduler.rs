@@ -483,9 +483,20 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    info!("  Execution complete, no more statements.");
-                    thread.next_step = None;
-                    break;
+                    if !thread.has_forked {
+                        info!("  ERROR: thread did not make any calls to `fork()`, terminating thread");
+                        let error = ExecutionError::missing_fork(
+                            thread.todo_idx,
+                            thread.todo.tr.name.clone(),
+                        );
+                        self.results[thread.todo_idx] = Err(error);
+                        thread.next_step = None;
+                        return;
+                    } else {
+                        info!("  Execution complete, no more statements.");
+                        thread.next_step = None;
+                        break;
+                    }
                 }
 
                 // error -> record and stop

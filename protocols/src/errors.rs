@@ -275,6 +275,13 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
+    pub fn missing_fork(thread_id: usize, transaction_name: String) -> Self {
+        ExecutionError::Thread(ThreadError::MissingFork {
+            thread_idx: thread_id,
+            transaction_name,
+        })
+    }
+
     pub fn double_fork(
         thread_id: usize,
         transaction_name: String,
