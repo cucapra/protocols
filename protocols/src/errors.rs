@@ -83,7 +83,7 @@ pub enum ThreadError {
     ExecutionLimitExceeded { max_steps: usize },
     /// The thread doesn't `fork()` at all
     /// (it is required to have exactly one `fork()`)
-    MissingFork {
+    FinishedWithoutFork {
         thread_idx: usize,
         transaction_name: String,
     },
@@ -218,7 +218,7 @@ impl fmt::Display for ThreadError {
             ThreadError::ExecutionLimitExceeded { max_steps } => {
                 write!(f, "Threads exceeded execution limit of {} steps", max_steps,)
             }
-            ThreadError::MissingFork {
+            ThreadError::FinishedWithoutFork {
                 thread_idx,
                 transaction_name,
             } => {
@@ -276,7 +276,7 @@ impl fmt::Display for AssertionError {
 // Convenience constructors
 impl ExecutionError {
     pub fn missing_fork(thread_id: usize, transaction_name: String) -> Self {
-        ExecutionError::Thread(ThreadError::MissingFork {
+        ExecutionError::Thread(ThreadError::FinishedWithoutFork {
             thread_idx: thread_id,
             transaction_name,
         })
@@ -560,7 +560,7 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
-            ThreadError::MissingFork {
+            ThreadError::FinishedWithoutFork {
                 thread_idx,
                 transaction_name,
             } => {
