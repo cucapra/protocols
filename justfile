@@ -1,3 +1,7 @@
+# Only run Turnt tests for the interpreters on the adder examples
+adders:
+  turnt --env interp $(find protocols/tests/adders -type f -name '*.tx') 
+
 # Only run Turnt tests for the interpreter
 interp:
   turnt --env interp $(find . -type f -name '*.tx')

@@ -81,8 +81,8 @@ pub enum ThreadError {
     },
     /// Thread execution limit exceeded (for infinite loop protection)
     ExecutionLimitExceeded { max_steps: usize },
-    /// The thread doesn't `fork()` at all
-    /// (it is required to have exactly one `fork()`)
+    /// The thread finished executing without calling `fork()`
+    /// (it is required to make exactly one call to `fork()`)
     FinishedWithoutFork {
         thread_idx: usize,
         transaction_name: String,
