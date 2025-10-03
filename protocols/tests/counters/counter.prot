@@ -16,4 +16,6 @@ fn count_up<dut: Counter>(in a: u64) {
     // then, if we step once more, dut.s should equal 0
     step(2);
     assert_eq(dut.s, 64'b0);
+    
+    fork();
 }

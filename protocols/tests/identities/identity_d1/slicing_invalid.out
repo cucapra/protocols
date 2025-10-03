@@ -1,6 +1,6 @@
 error: Invalid slice operation: [15:31] on width 32
-   ┌─ identities/identity_d1/identity_d1.prot:38:13
+   ┌─ identities/identity_d1/identity_d1.prot:44:13
    │
-38 │   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
+44 │   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
    │             ^ Invalid slice operation: [15:31] on width 32
 

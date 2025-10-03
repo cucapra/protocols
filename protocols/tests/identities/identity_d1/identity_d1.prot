@@ -3,7 +3,7 @@ struct Identity {
   out s: u32,
 }
 
-fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
+fn explicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
 
@@ -11,7 +11,8 @@ fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := X;
   assert_eq(s, DUT.s);
 
-  // implicit fork here
+  // Note: changed the implicit fork to an explicit fork 
+  fork();
 }
 
 fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
@@ -20,21 +21,26 @@ fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
   step();
 
   assert_eq(s[31:15], DUT.s[31:15]);
+
+  fork();
 }
 
 fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
 
   step();
+
   // will fail, because the widths are different
   assert_eq(s[31:15], DUT.s[31:16]);
+
+  fork();
 }
 
 fn slicing_invalid<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
-  fork();
 
   step();
+  fork(); 
   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
-  // implicit fork here
+  
 }

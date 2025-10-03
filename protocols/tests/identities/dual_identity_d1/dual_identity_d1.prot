@@ -48,4 +48,6 @@ fn two<dut: DualIdentity>(in a: u64, in b: u64) {
 
     assert_eq(dut.s1, a);
     assert_eq(dut.s2, b);
+
+    fork();
 }
