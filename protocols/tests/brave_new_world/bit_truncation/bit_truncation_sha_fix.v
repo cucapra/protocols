@@ -1,4 +1,5 @@
-module sha_truncation_fixed (
+module bit_truncation_sha_fixed (
+    input             clk,
     input      [63:0] right,
     output reg [41:0] left
 );
