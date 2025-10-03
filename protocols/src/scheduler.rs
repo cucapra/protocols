@@ -435,6 +435,7 @@ impl<'a> Scheduler<'a> {
                                 info!(
                                     "  ERROR: fork() called before step() in this thread, terminating thread"
                                 );
+                                thread.has_forked = true;
                                 let error = ExecutionError::fork_before_step(
                                     thread.todo_idx,
                                     thread.todo.tr.name.clone(),
