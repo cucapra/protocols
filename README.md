@@ -32,7 +32,7 @@ Options:
   -m, --module <MODULE_NAME>
           Name of the top-level module (if one exists)
   -f, --fst <WAVEFORM_FILE>
-          Name of the waveform file (.fst) in which to save results [default: trace.fst]
+          (Optional) Name of the waveform file (.fst) in which to save results
   -v, --verbose...
           Prints logs / debugging information to stdout
   -h, --help

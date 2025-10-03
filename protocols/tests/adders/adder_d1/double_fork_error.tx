@@ -1,0 +1,4 @@
+// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/double_fork_error.prot
+// RETURN: 101
+add_double_fork(1, 2, 3);
+add_double_fork(4, 5, 9);

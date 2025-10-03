@@ -1,0 +1,4 @@
+// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/fork_before_step_error.prot
+// RETURN: 101
+add_fork_before_step(1, 2, 3);
+add_fork_before_step(4, 5, 9);

@@ -1,0 +1,6 @@
+error: Thread 0 (transaction 'add_fork_before_step') called `fork()` before calling `step()`
+   ┌─ adders/adder_d1/fork_before_step_error.prot:11:3
+   │
+11 │   fork();
+   │   ^^^^^^^ Thread 0 (transaction 'add_fork_before_step') called `fork()` before calling `step()`
+

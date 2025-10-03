@@ -33,16 +33,16 @@ struct Cli {
     #[arg(short, long, value_name = "MODULE_NAME")]
     module: Option<String>,
 
-    /// Name of the waveform file (.fst) in which to save results
-    #[arg(short, long, value_name = "WAVEFORM_FILE", default_value = "trace.fst")]
-    fst: String,
+    /// (Optional) Name of the waveform file (.fst) in which to save results
+    #[arg(short, long, value_name = "WAVEFORM_FILE")]
+    fst: Option<String>,
 
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
 
-    /// To suppress colors in error messages, pass in `--color never`
-    /// Otherwise, by default, error messages are displayed w/ ANSI colors
+    /// Pass in `--color never` to suppress colored error messages.       
+    /// (By default, error messages are displayed w/ ANSI colors.)
     #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
     color: ColorChoice,
 
@@ -50,7 +50,8 @@ struct Cli {
     #[arg(short, long, value_name = "ERROR_LOCATIONS")]
     no_error_locations: bool,
 
-    /// Stop the interpreter if it ever reaches the maximum number if cycles specified with this option.
+    /// Stop the interpreter if it ever reaches the maximum number
+    /// of cycles specified with this option.
     #[arg(long)]
     max_steps: Option<u32>,
 }
@@ -106,7 +107,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // Run the interpreter and the scheduler on the parsed transaction file
-    let interpreter = patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, cli.fst);
+    let interpreter = if let Some(waveform_file) = cli.fst {
+        patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
+    } else {
+        patronus::sim::Interpreter::new(&ctx, &sys)
+    };
+
     let mut scheduler = Scheduler::new(
         transactions_and_symbols,
         todos,

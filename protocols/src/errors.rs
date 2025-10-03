@@ -61,6 +61,13 @@ pub enum ThreadError {
     DoubleFork {
         thread_idx: usize,
         transaction_name: String,
+        first_fork_stmt_id: StmtId,
+        second_fork_stmt_id: StmtId,
+    },
+    /// Thread called `fork()` before `step()`
+    ForkBeforeStep {
+        thread_idx: usize,
+        transaction_name: String,
         stmt_id: StmtId,
     },
     /// Multiple threads trying to assign to same input
@@ -178,6 +185,17 @@ impl fmt::Display for ThreadError {
                     thread_idx, transaction_name
                 )
             }
+            ThreadError::ForkBeforeStep {
+                thread_idx,
+                transaction_name,
+                ..
+            } => {
+                write!(
+                    f,
+                    "Thread {} (transaction '{}') called `fork()` before calling `step()`",
+                    thread_idx, transaction_name
+                )
+            }
             ThreadError::ConflictingAssignment {
                 symbol_name,
                 current_value,
@@ -241,8 +259,22 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
-    pub fn double_fork(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
+    pub fn double_fork(
+        thread_id: usize,
+        transaction_name: String,
+        first_fork_stmt_id: StmtId,
+        second_fork_stmt_id: StmtId,
+    ) -> Self {
         ExecutionError::Thread(ThreadError::DoubleFork {
+            thread_idx: thread_id,
+            transaction_name,
+            first_fork_stmt_id,
+            second_fork_stmt_id,
+        })
+    }
+
+    pub fn fork_before_step(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
+        ExecutionError::Thread(ThreadError::ForkBeforeStep {
             thread_idx: thread_id,
             transaction_name,
             stmt_id,
@@ -450,13 +482,30 @@ impl DiagnosticEmitter {
             ThreadError::DoubleFork {
                 thread_idx,
                 transaction_name,
+                first_fork_stmt_id,
+                second_fork_stmt_id,
+            } => {
+                handler.emit_diagnostic_multi_stmt(
+                    transaction,
+                    &[*first_fork_stmt_id, *second_fork_stmt_id],
+                    &["first fork() called here", "second fork() called here"],
+                    &format!(
+                        "Thread {} (transaction '{}') attempted to fork more than once",
+                        thread_idx, transaction_name
+                    ),
+                    Level::Error,
+                );
+            }
+            ThreadError::ForkBeforeStep {
+                thread_idx,
+                transaction_name,
                 stmt_id,
             } => {
                 handler.emit_diagnostic_stmt(
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} (transaction '{}') attempted to fork more than once",
+                        "Thread {} (transaction '{}') called `fork()` before calling `step()`",
                         thread_idx, transaction_name
                     ),
                     Level::Error,
