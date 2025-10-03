@@ -3,7 +3,7 @@ struct Identity {
   out s: u32,
 }
 
-fn implicit_fork<DUT: Identity>(in a: u32, out s: u32) {
+fn explicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
 
@@ -27,7 +27,7 @@ fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
 
   step();
-  
+
   // will fail, because the widths are different
   assert_eq(s[31:15], DUT.s[31:16]);
 }
