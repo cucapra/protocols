@@ -8,6 +8,7 @@
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
 use crate::scheduler::Todo;
+use crate::serialize::serialize_type;
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use patronus::expr::ExprRef;
@@ -46,6 +47,11 @@ impl InputValue {
             InputValue::NewValue(bvv) => bvv,
             InputValue::DontCare(bvv) => bvv,
         }
+    }
+
+    /// Returns the bitwidth of an `InputValue`
+    pub fn bitwidth(&self) -> u32 {
+        self.value().width()
     }
 }
 
@@ -142,6 +148,8 @@ impl<'a> Evaluator<'a> {
             }
         }
 
+        // For simplicity, we initialize an RNG with the seed 0 when generating
+        // random values for `DontCare`s
         let mut rng = StdRng::seed_from_u64(0);
 
         // Initialize the input pins with DontCares that are randomly assigned
@@ -565,6 +573,26 @@ impl<'a> Evaluator<'a> {
             ))
         } else {
             Ok(())
+        }
+    }
+
+    /// Resets input pins to `DontCare`
+    pub fn reset_all_input_pins(&mut self) {
+        // Reset all input pins
+        for (input_pin, value) in self.input_vals.iter_mut() {
+            let symbol_table_entry = &self.st[input_pin];
+            let symbol_name = symbol_table_entry.full_name(self.st);
+            let ty = symbol_table_entry.tpe();
+
+            if let Type::BitVec(width) = ty {
+                *value = InputValue::DontCare(BitVecValue::random(&mut self.rng, width));
+            } else {
+                panic!(
+                    "Cannot set pin {} to DontCare as its type {} is not a BitVec",
+                    symbol_name,
+                    serialize_type(self.st, ty)
+                )
+            }
         }
     }
 }

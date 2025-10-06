@@ -347,7 +347,6 @@ impl<'a> Scheduler<'a> {
                 }
             } else {
                 info!("No more threads to schedule. Protocol execution complete.");
-                info!("No more threads to schedule. Protocol execution complete.");
             }
         }
 
@@ -500,6 +499,7 @@ impl<'a> Scheduler<'a> {
                                 ExecutionError::finished_without_fork(thread_id, transaction_name);
                             self.results[thread_id] = Err(error);
                         } else {
+                            // Thread completed execution successfully
                             info!("  Execution complete, no more statements.");
                         }
                     } else {
