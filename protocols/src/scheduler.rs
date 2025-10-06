@@ -435,6 +435,7 @@ impl<'a> Scheduler<'a> {
                                 info!(
                                     "  ERROR: fork() called before step() in this thread, terminating thread"
                                 );
+                                thread.has_forked = true;
                                 let error = ExecutionError::fork_before_step(
                                     thread.todo_idx,
                                     thread.todo.tr.name.clone(),
@@ -483,9 +484,24 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    info!("  Execution complete, no more statements.");
-                    thread.next_step = None;
-                    break;
+                    // Throw an error if forks are enabled but the
+                    // thread finished without making any calls to `fork()`
+                    if forks_enabled && !thread.has_forked {
+                        info!(
+                            "  ERROR: thread did not make any calls to `fork()`, terminating thread"
+                        );
+                        let error = ExecutionError::missing_fork(
+                            thread.todo_idx,
+                            thread.todo.tr.name.clone(),
+                        );
+                        self.results[thread.todo_idx] = Err(error);
+                        thread.next_step = None;
+                        return;
+                    } else {
+                        info!("  Execution complete, no more statements.");
+                        thread.next_step = None;
+                        break;
+                    }
                 }
 
                 // error -> record and stop

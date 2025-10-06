@@ -1,5 +1,5 @@
 ---
-source: src/serialize.rs
+source: protocols/src/serialize.rs
 expression: content
 ---
 struct Adder {
@@ -15,6 +15,7 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := X;
   DUT.b := X;
   assert_eq(s, DUT.s);
+  fork();
 }
 
 fn add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
@@ -24,4 +25,5 @@ fn add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   assert_eq(s, DUT.s);
+  fork();
 }
