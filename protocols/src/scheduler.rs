@@ -325,6 +325,10 @@ impl<'a> Scheduler<'a> {
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
+
+                        // Set all input pins to `DontCare` after a thread finishes
+                        self.evaluator.reset_all_input_pins();
+
                         self.inactive_threads.push(active_thread)
                     }
                 }
