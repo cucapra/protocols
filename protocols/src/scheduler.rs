@@ -484,9 +484,10 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    if !thread.has_stepped {
-                        todo!("Throw a FinishedWithoutStep error here");
-                    } else if forks_enabled && !thread.has_forked {
+                    // TODO: check if `thread.todo.tr[current_stmt_id]` is `Stmt::Step`
+                    // (i.e. if the last executed statement was a `step()`)
+
+                    if forks_enabled && !thread.has_forked {
                         // Throw an error if forks are enabled but the
                         // thread finished without making any calls to `fork()`
                         info!(
