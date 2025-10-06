@@ -90,6 +90,7 @@ pub enum ThreadError {
     /// The last executed statement in the thread is not `step()`
     /// (we explicitly require protocols to end with the
     /// execution of a `step()` statement)
+    /// TODO: augment the error msg to include info about what the actual last executed stmt was
     DidntEndWithStep {
         thread_idx: usize,
         transaction_name: String,
