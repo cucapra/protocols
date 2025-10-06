@@ -492,7 +492,7 @@ impl<'a> Scheduler<'a> {
                         info!(
                             "  ERROR: thread did not make any calls to `fork()`, terminating thread"
                         );
-                        let error = ExecutionError::missing_fork(
+                        let error = ExecutionError::finished_without_fork(
                             thread.todo_idx,
                             thread.todo.tr.name.clone(),
                         );
