@@ -20,4 +20,6 @@ fn multi<dut: multi0keep>(in data_in: u32, out data_out: u32) {
     }
 
     assert_eq(dut.out, data_out);
+
+    fork();
 }
