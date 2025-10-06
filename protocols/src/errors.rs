@@ -598,7 +598,7 @@ impl DiagnosticEmitter {
                         "Thread {} (transaction '{}') finished without calling `step()` (all threads must have make at least one call to `step()`)", 
                         thread_idx,
                         transaction_name
-                    ), 
+                    ),
                     Level::Error
                 );
             }
