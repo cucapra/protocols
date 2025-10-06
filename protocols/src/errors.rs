@@ -87,9 +87,10 @@ pub enum ThreadError {
         thread_idx: usize,
         transaction_name: String,
     },
-    /// The thread finished executing without calling `step()`
-    /// (it is required to make exactly at least one call to `step()`)
-    FinishedWithoutStep {
+    /// The last executed statement in the thread is not `step()`
+    /// (we explicitly require protocols to end with the
+    /// execution of a `step()` statement)
+    DidntEndWithStep {
         thread_idx: usize,
         transaction_name: String,
     },
@@ -234,13 +235,13 @@ impl fmt::Display for ThreadError {
                     thread_idx, transaction_name
                 )
             }
-            ThreadError::FinishedWithoutStep {
+            ThreadError::DidntEndWithStep {
                 thread_idx,
                 transaction_name,
             } => {
                 write!(
                     f,
-                    "Thread {} (transaction '{}') completed without calling `steo()` (all threads must have make at least one call to `step()`)",
+                    "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)",
                     thread_idx, transaction_name
                 )
             }
@@ -589,13 +590,13 @@ impl DiagnosticEmitter {
                     Level::Error
                 );
             }
-            ThreadError::FinishedWithoutStep {
+            ThreadError::DidntEndWithStep {
                 thread_idx,
                 transaction_name,
             } => {
                 handler.emit_general_message(
                     &format!(
-                        "Thread {} (transaction '{}') finished without calling `step()` (all threads must have make at least one call to `step()`)", 
+                        "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)", 
                         thread_idx,
                         transaction_name
                     ),
