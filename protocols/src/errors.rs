@@ -89,11 +89,13 @@ pub enum ThreadError {
     },
     /// The last executed statement in the thread is not `step()`
     /// (we explicitly require protocols to end with the
-    /// execution of a `step()` statement)
-    /// TODO: augment the error msg to include info about what the actual last executed stmt was
+    /// execution of a `step()` statement).
+    /// Note that the error message includes info
+    /// about what the actual last executed stmt was.
     DidntEndWithStep {
         thread_idx: usize,
         transaction_name: String,
+        last_executed_stmt_id: StmtId,
     },
 }
 
@@ -239,6 +241,7 @@ impl fmt::Display for ThreadError {
             ThreadError::DidntEndWithStep {
                 thread_idx,
                 transaction_name,
+                last_executed_stmt_id: _,
             } => {
                 write!(
                     f,
@@ -297,6 +300,18 @@ impl ExecutionError {
         ExecutionError::Thread(ThreadError::FinishedWithoutFork {
             thread_idx: thread_id,
             transaction_name,
+        })
+    }
+
+    pub fn didnt_end_with_step(
+        thread_id: usize,
+        transaction_name: String,
+        last_executed_stmt_id: StmtId,
+    ) -> Self {
+        ExecutionError::Thread(ThreadError::DidntEndWithStep {
+            thread_idx: thread_id,
+            transaction_name,
+            last_executed_stmt_id,
         })
     }
 
@@ -594,8 +609,12 @@ impl DiagnosticEmitter {
             ThreadError::DidntEndWithStep {
                 thread_idx,
                 transaction_name,
+                last_executed_stmt_id,
             } => {
-                handler.emit_general_message(
+                handler.emit_diagnostic_multi_stmt(
+                    transaction,
+                    &[*last_executed_stmt_id],
+                    &["last statement wasn't `step()`"],
                     &format!(
                         "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)", 
                         thread_idx,
