@@ -13,6 +13,7 @@ fn explicit_fork<DUT: Identity>(in a: u32, out s: u32) {
 
   // Note: changed the implicit fork to an explicit fork 
   fork();
+  step();
 }
 
 fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
@@ -23,6 +24,7 @@ fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
   assert_eq(s[31:15], DUT.s[31:15]);
 
   fork();
+  step();
 }
 
 fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
@@ -34,6 +36,7 @@ fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
   assert_eq(s[31:15], DUT.s[31:16]);
 
   fork();
+  step();
 }
 
 fn slicing_invalid<DUT: Identity>(in a: u32, out s: u32) {
@@ -42,5 +45,5 @@ fn slicing_invalid<DUT: Identity>(in a: u32, out s: u32) {
   step();
   fork(); 
   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
-  
+  step();
 }
