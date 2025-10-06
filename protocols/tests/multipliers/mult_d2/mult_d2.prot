@@ -20,4 +20,5 @@ fn mul<DUT: Multiplier>(in a: u32, in b: u32, out s: u32) {
   DUT.b := X;
 
   assert_eq(s, DUT.s);
+  step();
 }

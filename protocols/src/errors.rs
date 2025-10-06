@@ -87,6 +87,16 @@ pub enum ThreadError {
         thread_idx: usize,
         transaction_name: String,
     },
+    /// The last executed statement in the thread is not `step()`
+    /// (we explicitly require protocols to end with the
+    /// execution of a `step()` statement).
+    /// Note that the error message includes info
+    /// about what the actual last executed stmt was.
+    DidntEndWithStep {
+        thread_idx: usize,
+        transaction_name: String,
+        last_executed_stmt_id: StmtId,
+    },
 }
 
 /// Symbol resolution and mapping errors
@@ -228,6 +238,17 @@ impl fmt::Display for ThreadError {
                     thread_idx, transaction_name
                 )
             }
+            ThreadError::DidntEndWithStep {
+                thread_idx,
+                transaction_name,
+                last_executed_stmt_id: _,
+            } => {
+                write!(
+                    f,
+                    "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)",
+                    thread_idx, transaction_name
+                )
+            }
         }
     }
 }
@@ -275,10 +296,22 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
-    pub fn missing_fork(thread_id: usize, transaction_name: String) -> Self {
+    pub fn finished_without_fork(thread_id: usize, transaction_name: String) -> Self {
         ExecutionError::Thread(ThreadError::FinishedWithoutFork {
             thread_idx: thread_id,
             transaction_name,
+        })
+    }
+
+    pub fn didnt_end_with_step(
+        thread_id: usize,
+        transaction_name: String,
+        last_executed_stmt_id: StmtId,
+    ) -> Self {
+        ExecutionError::Thread(ThreadError::DidntEndWithStep {
+            thread_idx: thread_id,
+            transaction_name,
+            last_executed_stmt_id,
         })
     }
 
@@ -567,6 +600,23 @@ impl DiagnosticEmitter {
                 handler.emit_general_message(
                     &format!(
                         "Thread {} (transaction '{}') missing a call to `fork()` (all threads must have exactly one call to `fork()`)", 
+                        thread_idx,
+                        transaction_name
+                    ),
+                    Level::Error
+                );
+            }
+            ThreadError::DidntEndWithStep {
+                thread_idx,
+                transaction_name,
+                last_executed_stmt_id,
+            } => {
+                handler.emit_diagnostic_multi_stmt(
+                    transaction,
+                    &[*last_executed_stmt_id],
+                    &["last statement wasn't `step()`"],
+                    &format!(
+                        "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)", 
                         thread_idx,
                         transaction_name
                     ),

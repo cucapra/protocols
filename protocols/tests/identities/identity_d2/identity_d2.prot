@@ -12,6 +12,7 @@ fn multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
   assert_eq(s, DUT.s);
+  step();
 }
 
 fn two_fork_err<DUT: Identity>(in a: u32, out s: u32) {
@@ -23,6 +24,7 @@ fn two_fork_err<DUT: Identity>(in a: u32, out s: u32) {
   step();
   fork();
   assert_eq(s, DUT.s);
+  step();
 }
 
 fn two_fork_ok<DUT: Identity>(in a: u32, out s: u32) {
@@ -45,4 +47,5 @@ fn two_fork_ok<DUT: Identity>(in a: u32, out s: u32) {
   }
   
   assert_eq(s, DUT.s);
+  step();
 }

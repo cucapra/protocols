@@ -18,4 +18,5 @@ fn count_up<dut: Counter>(in a: u64) {
     assert_eq(dut.s, 64'b0);
     
     fork();
+    step();
 }

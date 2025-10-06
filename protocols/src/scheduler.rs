@@ -484,24 +484,38 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    // Throw an error if forks are enabled but the
-                    // thread finished without making any calls to `fork()`
-                    if forks_enabled && !thread.has_forked {
-                        info!(
-                            "  ERROR: thread did not make any calls to `fork()`, terminating thread"
-                        );
-                        let error = ExecutionError::missing_fork(
-                            thread.todo_idx,
-                            thread.todo.tr.name.clone(),
-                        );
-                        self.results[thread.todo_idx] = Err(error);
-                        thread.next_step = None;
-                        return;
+                    let thread_id = thread.todo_idx;
+                    let transaction_name = thread.todo.tr.name.clone();
+
+                    // TODO: check if `thread.todo.tr[current_stmt_id]` is `Stmt::Step`
+                    // (i.e. if the last executed statement was a `step()`)
+                    if let Stmt::Step = thread.todo.tr[current_stmt_id] {
+                        if forks_enabled && !thread.has_forked {
+                            // Throw an error if forks are enabled but the
+                            // thread finished without making any calls to `fork()`
+                            info!(
+                                "  ERROR: thread did not make any calls to `fork()`, terminating thread"
+                            );
+                            let error =
+                                ExecutionError::finished_without_fork(thread_id, transaction_name);
+                            self.results[thread_id] = Err(error);
+                        } else {
+                            info!("  Execution complete, no more statements.");
+                        }
                     } else {
-                        info!("  Execution complete, no more statements.");
-                        thread.next_step = None;
-                        break;
+                        // Last executed statement wasn't `step()`, report an error
+                        info!(
+                            " ERROR: Last executed statement in this thread wasn't `step()`, terminating thread"
+                        );
+                        let error = ExecutionError::didnt_end_with_step(
+                            thread_id,
+                            transaction_name,
+                            current_stmt_id,
+                        );
+                        self.results[thread_id] = Err(error);
                     }
+                    thread.next_step = None;
+                    break;
                 }
 
                 // error -> record and stop
