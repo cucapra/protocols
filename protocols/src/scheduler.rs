@@ -484,9 +484,11 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    // Throw an error if forks are enabled but the
-                    // thread finished without making any calls to `fork()`
-                    if forks_enabled && !thread.has_forked {
+                    if !thread.has_stepped {
+                        todo!("Throw a FinishedWithoutStep error here");
+                    } else if forks_enabled && !thread.has_forked {
+                        // Throw an error if forks are enabled but the
+                        // thread finished without making any calls to `fork()`
                         info!(
                             "  ERROR: thread did not make any calls to `fork()`, terminating thread"
                         );
