@@ -16,6 +16,19 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
+// Like `add` above, but this protocol doesn't end in `step`, 
+// so this function is ill-formed
+fn add_doesnt_end_in_step<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+}
+
+
 fn add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;

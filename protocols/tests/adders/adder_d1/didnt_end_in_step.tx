@@ -1,0 +1,4 @@
+// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/add_d1.prot
+// RETURN: 101
+add_doesnt_end_in_step(1, 2, 3);
+add_doesnt_end_in_step(4, 5, 9);
