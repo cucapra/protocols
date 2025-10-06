@@ -487,8 +487,7 @@ impl<'a> Scheduler<'a> {
                     let thread_id = thread.todo_idx;
                     let transaction_name = thread.todo.tr.name.clone();
 
-                    // TODO: check if `thread.todo.tr[current_stmt_id]` is `Stmt::Step`
-                    // (i.e. if the last executed statement was a `step()`)
+                    // Check if the last executed statement was `step()`
                     if let Stmt::Step = thread.todo.tr[current_stmt_id] {
                         if forks_enabled && !thread.has_forked {
                             // Throw an error if forks are enabled but the
