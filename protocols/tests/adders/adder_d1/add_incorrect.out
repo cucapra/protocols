@@ -1,6 +1,6 @@
 error: Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000100)
-   ┌─ adders/adder_d1/add_d1.prot:19:3
+   ┌─ adders/adder_d1/add_d1.prot:20:3
    │
-19 │   DUT.a := a;
+20 │   DUT.a := a;
    │   ^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000100)
 
