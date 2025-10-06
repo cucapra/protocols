@@ -87,6 +87,12 @@ pub enum ThreadError {
         thread_idx: usize,
         transaction_name: String,
     },
+    /// The thread finished executing without calling `step()`
+    /// (it is required to make exactly at least one call to `step()`)
+    FinishedWithoutStep {
+        thread_idx: usize,
+        transaction_name: String,
+    },
 }
 
 /// Symbol resolution and mapping errors
@@ -225,6 +231,16 @@ impl fmt::Display for ThreadError {
                 write!(
                     f,
                     "Thread {} (transaction '{}') is missing a call `fork()` (all threads must have exactly one `fork()` call)",
+                    thread_idx, transaction_name
+                )
+            }
+            ThreadError::FinishedWithoutStep {
+                thread_idx,
+                transaction_name,
+            } => {
+                write!(
+                    f,
+                    "Thread {} (transaction '{}') completed without calling `steo()` (all threads must have make at least one call to `step()`)",
                     thread_idx, transaction_name
                 )
             }
@@ -570,6 +586,19 @@ impl DiagnosticEmitter {
                         thread_idx,
                         transaction_name
                     ),
+                    Level::Error
+                );
+            }
+            ThreadError::FinishedWithoutStep {
+                thread_idx,
+                transaction_name,
+            } => {
+                handler.emit_general_message(
+                    &format!(
+                        "Thread {} (transaction '{}') finished without calling `step()` (all threads must have make at least one call to `step()`)", 
+                        thread_idx,
+                        transaction_name
+                    ), 
                     Level::Error
                 );
             }
