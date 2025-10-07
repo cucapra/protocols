@@ -1,3 +1,4 @@
+// ARGS: --wave adders/add_d2_trace.fst --instances add_d2:Adder 
 struct Adder {
   in a: u32,
   in b: u32,
