@@ -292,7 +292,9 @@ impl<'a> MiniInterpreter<'a> {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::Step => {
-                todo!()
+                // Actual stepping is done in the `run` function below.
+                // Here, we simply return the next statement to run
+                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Fork => {
                 todo!("Figure out how to handle Forks")
@@ -440,28 +442,38 @@ impl<'a> MiniInterpreter<'a> {
             }
 
             match self.evaluate_stmt(&current_stmt_id) {
-                Ok(Some(next_stmt_id)) => match self.transaction[next_stmt_id] {
-                    Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),
-                    Stmt::Step => {
-                        let step_result = self.trace.step();
-                        info!("StepResult = {:?}", step_result);
+                Ok(Some(next_stmt_id)) => {
+                    info!(
+                        "Next statement: {:?} `{}`",
+                        next_stmt_id,
+                        self.format_stmt(&next_stmt_id)
+                    );
 
-                        // `trace.step()` returns a `StepResult` which is
-                        // either `Done` or `Ok`.
-                        // If `StepResult = Done`, there are no more steps
-                        // left in the signal trace, so we set the
-                        // `has_steps_remaining` flag to `false`
-                        if let StepResult::Done = step_result {
-                            self.has_steps_remaining = false;
-                            info!("No steps remaining left in signal trace");
-                            break;
+                    match self.transaction[next_stmt_id] {
+                        Stmt::Fork => todo!("TODO: Figure out how to handle Fork"),
+                        Stmt::Step => {
+                            let step_result = self.trace.step();
+                            info!("StepResult = {:?}", step_result);
+
+                            // `trace.step()` returns a `StepResult` which is
+                            // either `Done` or `Ok`.
+                            // If `StepResult = Done`, there are no more steps
+                            // left in the signal trace, so we set the
+                            // `has_steps_remaining` flag to `false`
+                            if let StepResult::Done = step_result {
+                                self.has_steps_remaining = false;
+                                info!("No steps remaining left in signal trace");
+                                break;
+                            }
+                            current_stmt_id = next_stmt_id;
+                        }
+                        _ => {
+                            // Default "just keep going" case, in which we just
+                            // proceed to the next `StmtId`
+                            current_stmt_id = next_stmt_id;
                         }
                     }
-                    _ => {
-                        // default "just keep going" case
-                        current_stmt_id = next_stmt_id;
-                    }
-                },
+                }
 
                 // no more statements -> done
                 Ok(None) => {
