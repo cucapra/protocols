@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design};
+use crate::{designs::Design, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
@@ -24,12 +24,6 @@ pub trait SignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult;
-
-    /// Returns the total no. of steps remaining in the signal trace
-    fn num_total_steps(&self) -> u32;
-
-    /// Returns the no. of steps remaining in the signal trace
-    fn num_steps_remaining(&self) -> u32;
 
     /// returns value of a design input / output at the current step
     fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
@@ -152,7 +146,7 @@ impl SignalTrace for WaveSignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult {
-        let total_steps = self.num_total_steps();
+        let total_steps = self.wave.time_table().len() as u32;
         if self.step < total_steps {
             self.step += 1;
         }
@@ -161,17 +155,6 @@ impl SignalTrace for WaveSignalTrace {
         } else {
             StepResult::Ok
         }
-    }
-
-    /// Returns the total no. of steps in the signal trace
-    /// We have to subtract 1 since we start at time 0
-    fn num_total_steps(&self) -> u32 {
-        (self.wave.time_table().len() - 1) as u32
-    }
-
-    /// Returns the no. of steps remaining in the signal trace
-    fn num_steps_remaining(&self) -> u32 {
-        self.num_total_steps() - self.step
     }
 
     // Returns value of a design input / output at the current step
