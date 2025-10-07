@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{designs::Design, Instance};
+use crate::{Instance, designs::Design};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;

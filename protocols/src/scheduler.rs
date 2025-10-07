@@ -243,7 +243,9 @@ impl<'a> Scheduler<'a> {
         );
 
         while !self.active_threads.is_empty() {
-            // initially there are no previous values. we always need to cycle at least twice to check convergence, and the first time we will get a previous input val.
+            // initially there are no previous values.
+            // we always need to cycle at least twice to check convergence,
+            // and the first time we will get a previous input val.
             let mut previous_input_vals: Option<HashMap<SymbolId, InputValue>> = None;
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
@@ -298,6 +300,7 @@ impl<'a> Scheduler<'a> {
             // achieved convergence, run one more time with assertions on
             info!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.enable_assertions();
+            // Disable forks when we run all threads till the next
             self.run_all_active_until_next_step(false);
 
             // now that all threads are synchronized on the step, we can run step() on the sim
@@ -345,7 +348,6 @@ impl<'a> Scheduler<'a> {
                     self.active_threads.clear();
                 }
             } else {
-                info!("No more threads to schedule. Protocol execution complete.");
                 info!("No more threads to schedule. Protocol execution complete.");
             }
         }
