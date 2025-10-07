@@ -16,7 +16,7 @@ fn multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
 }
 
 fn two_fork_err<DUT: Identity>(in a: u32, out s: u32) {
-  // guaranteed failure due to two works in executed
+  // guaranteed failure due to two forks during execution
   DUT.a := a;
   step();
   fork();
@@ -34,7 +34,6 @@ fn two_fork_ok<DUT: Identity>(in a: u32, out s: u32) {
   // a single execution thread
   DUT.a := a;
   step();
-
 
   DUT.a := a;
   step();

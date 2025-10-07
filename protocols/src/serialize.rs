@@ -18,7 +18,7 @@ pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Res
 }
 
 /// Pretty prints a `type` with respect to the current `SymbolTable`
-fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
+pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => "u".to_owned() + &t.to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
