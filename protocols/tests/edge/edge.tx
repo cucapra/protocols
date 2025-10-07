@@ -1,3 +1,0 @@
-// ARGS: --verilog edge/edge.v --protocol edge/edge.prot
-setup_edge();
-check_stable();

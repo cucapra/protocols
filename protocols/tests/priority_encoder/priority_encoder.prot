@@ -1,0 +1,61 @@
+// Protocol for testing priority encoder with lock feature
+
+struct PriorityEncoder {
+    // Input pins
+    in req: u4,
+    in lock: u1,
+    
+    // Output pins
+    out grant_id: u2,
+    out valid: u1
+}
+
+fn thread_lock_high_priority<DUT: PriorityEncoder>() {
+    // Thread 1: Request high priority and lock it
+    DUT.req := 4'b1000;  // Request bit 3 (highest priority)
+    DUT.lock := 1'd1;     // Enable lock
+    
+    step();
+    assert_eq(DUT.grant_id, 2'd3);
+    assert_eq(DUT.valid, 1'd1);
+    
+    // Keep lock active and lower request
+    DUT.req := 4'b0001;  // Only request bit 0 now
+    step();
+    fork();
+    assert_eq(DUT.grant_id, 2'd3);  // Should stay locked to 3
+    
+    // Thread ends with lock := 1
+    // WITHOUT RESET: lock stays at 1, keeping the lock active
+    step();
+}
+
+fn thread_expect_priority<DUT: PriorityEncoder>() {
+    // Thread 2: Expects normal priority encoding (no lock)
+    DUT.req := 4'b0110;  // Request bits 1 and 2
+    
+    // Does NOT set lock (expects it to be 0 or DontCare)
+    step();
+    
+    // Expects grant_id = 2 (highest priority of bits 1 and 2)
+    // But if lock is still 1 from Thread 1, it stays locked to previous value!
+    assert_eq(DUT.grant_id, 2'd2);  // ALWAYS FAILS if lock wasn't reset
+    assert_eq(DUT.valid, 1'd1);
+}
+
+fn fork_conflict_test<DUT: PriorityEncoder>() {
+    fork();
+    // Fork 1: Set lock high
+    DUT.lock := 1'd1;
+    DUT.req := 4'b1000;
+    step(1);
+    assert_eq(DUT.grant_id, 2'd3);
+    
+    fork();
+    // Fork 2: Expects lock to be 0
+    DUT.req := 4'b0100;  // Request bit 2
+    // Doesn't set lock - expects default behavior
+    step(1);
+    // Expects grant_id = 2, but if Fork 1's lock=1 affects this...
+    assert_eq(DUT.grant_id, 2'd2);  // ALWAYS FAILS without proper reset
+}

@@ -1,0 +1,19 @@
+// ARGS: --verilog priority_encoder/priority_encoder.v --protocol priority_encoder/priority_encoder.prot 
+
+// Run Thread 1 first to set up the lock
+thread_lock_high_priority();
+
+// Then run Thread 2 which expects no lock
+// This ALWAYS fails without reset because:
+// - Thread 1 leaves lock=1 and grant locked to id=3
+// - Thread 2 expects grant_id=2 but gets id=3 due to active lock
+thread_expect_priority();
+
+// Test 2: Fork-based concurrent execution with lock conflict  
+// fork_conflict_test();
+
+// Test 3: Multiple sequential lock/unlock cycles
+// thread_lock_high_priority();
+// thread_expect_priority();  // Fails without reset
+// thread_lock_high_priority();
+// thread_expect_priority();  // Fails again without reset
