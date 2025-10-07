@@ -53,6 +53,12 @@ impl InputValue {
     pub fn bitwidth(&self) -> u32 {
         self.value().width()
     }
+
+    /// Creates a random `InputValue::DontCare` value with the specified `width`
+    /// using the `rng` provided
+    pub fn dont_care(mut rng: StdRng, width: u32) -> InputValue {
+        InputValue::DontCare(BitVecValue::random(&mut rng, width))
+    }
 }
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
@@ -78,6 +84,8 @@ pub struct Evaluator<'a> {
     input_vals: HashMap<SymbolId, InputValue>,
 
     assertions_enabled: bool,
+
+    /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
 }
 
@@ -576,7 +584,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    /// Resets input pins to `DontCare`
+    /// Resets all input pins to `DontCare` (i.e. randomizes their values)
     pub fn reset_all_input_pins(&mut self) {
         // Reset all input pins
         for (input_pin, value) in self.input_vals.iter_mut() {
@@ -585,7 +593,7 @@ impl<'a> Evaluator<'a> {
             let ty = symbol_table_entry.tpe();
 
             if let Type::BitVec(width) = ty {
-                *value = InputValue::DontCare(BitVecValue::random(&mut self.rng, width));
+                *value = InputValue::dont_care(self.rng.clone(), width);
             } else {
                 panic!(
                     "Cannot set pin {} to DontCare as its type {} is not a BitVec",
