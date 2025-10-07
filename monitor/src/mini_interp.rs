@@ -463,6 +463,9 @@ impl<'a> MiniInterpreter<'a> {
                             if let StepResult::Done = step_result {
                                 self.has_steps_remaining = false;
                                 info!("No steps remaining left in signal trace");
+
+                                // The trace has ended, so we can just return here
+                                self.has_errored = true;
                                 break;
                             }
                             current_stmt_id = next_stmt_id;

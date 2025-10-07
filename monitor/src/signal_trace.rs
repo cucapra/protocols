@@ -146,7 +146,9 @@ impl SignalTrace for WaveSignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult {
-        let total_steps = self.wave.time_table().len() as u32;
+        // The no. of times we can call `step` is 1 less than the
+        // total no. of cycles available in the signal trace
+        let total_steps = (self.wave.time_table().len() - 1) as u32;
         if self.step < total_steps {
             self.step += 1;
         }
