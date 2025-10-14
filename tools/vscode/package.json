@@ -1,7 +1,7 @@
 {
   "name": "protocols",
-  "displayName": "Protocols Language Syntax Highlighting",
-  "description": "Syntax highlighting for the Protocols language",
+  "displayName": "Protocols",
+  "description": "Syntax highlighting for Protocols language (.prot and .tx files)",
   "version": "0.0.1",
   "publisher": "protocols",
   "engines": {
@@ -19,12 +19,24 @@
       {
         "id": "protocols",
         "aliases": [
-          "Protocols"
+          "Protocols",
+          "protocols"
         ],
         "extensions": [
           ".prot"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "protocols-transactions",
+        "aliases": [
+          "Protocols Transactions",
+          "transactions"
+        ],
+        "extensions": [
+          ".tx"
+        ],
+        "configuration": "./transactions-configuration.json"
       }
     ],
     "grammars": [
@@ -32,6 +44,11 @@
         "language": "protocols",
         "scopeName": "source.protocols",
         "path": "./syntaxes/protocols.tmLanguage.json"
+      },
+      {
+        "language": "protocols-transactions",
+        "scopeName": "source.protocols.transactions",
+        "path": "./syntaxes/transactions.tmLanguage.json"
       }
     ]
   }
