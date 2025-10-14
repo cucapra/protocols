@@ -53,7 +53,7 @@ This repo contains a basic VS Code extension which provides syntax highlighting
 for `.prot` and `.tx` files.
 
 ### Installation
-Add a link to the Filament VSCode extension directory to your VSCode extensions directory.
+Add a link to the Protocols VSCode extension directory to your VSCode extensions directory.
 
 ```bash
 cd $HOME/.vscode/extensions
