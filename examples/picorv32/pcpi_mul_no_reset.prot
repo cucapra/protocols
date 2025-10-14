@@ -1,3 +1,6 @@
+// This file is identical to `pcpi_mul.prot`, except for minor changes 
+// (see comments below)
+
 struct picorv32_pcpi_mul {
   in resetn: u1,
   in pcpi_insn: u32,
@@ -16,7 +19,7 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
     out rd_data: u32,
     in insn: u32,
   ) {
-  // Note: the line `p.resetn := 1'b1` has been removed here
+  // NOTE: the line `p.resetn := 1'b1` has been removed here  
 
   p.pcpi_valid := 1'b1;
   // HACK: pass multiplication instruction as input
@@ -53,6 +56,6 @@ fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
   step();
   fork();
-  p.resetn := 1'b1; // Note: this line is new!
+  p.resetn := 1'b1; // NOTE: this line is new!
   step();
 }
