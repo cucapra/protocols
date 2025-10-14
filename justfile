@@ -18,6 +18,10 @@ identities:
 multi:
   turnt --env interp $(find protocols/tests/multi -type f -name '*.tx')   
 
+# Only test the `picorv` examples
+picorv:
+  turnt --env interp $(find examples/picorv32 -type f -name '*.tx')
+
 # Runs all Turnt tests for both the interpreter & monitor
 turnt:
   @just interp  

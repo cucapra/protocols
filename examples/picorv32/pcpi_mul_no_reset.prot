@@ -1,0 +1,58 @@
+struct picorv32_pcpi_mul {
+  in resetn: u1,
+  in pcpi_insn: u32,
+  in pcpi_rs1: u32,
+  in pcpi_rs2: u32,
+  out pcpi_wr: u1,
+  out pcpi_ready: u1,
+  in pcpi_valid: u1,
+  out pcpi_rd: u32,
+}
+
+// Adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/picorv32/PicoRV32Spec.scala#L27
+fn pcpi_mul<p: picorv32_pcpi_mul>(
+    in rs1_data: u32,
+    in rs2_data: u32,
+    out rd_data: u32,
+    in insn: u32,
+  ) {
+  // Note: the line `p.resetn := 1'b1` has been removed here
+
+  p.pcpi_valid := 1'b1;
+  // HACK: pass multiplication instruction as input
+  p.pcpi_insn := insn;
+  // p.pcpi_insn := 33554483; // multiplication insn. TODO: allow binary values
+
+
+  p.pcpi_rs1 := rs1_data;
+  p.pcpi_rs2 := rs2_data;
+  
+  assert_eq(p.pcpi_wr, 1'b0);
+  assert_eq(p.pcpi_ready, 1'b0);
+
+  while (!(p.pcpi_ready == 1'b1)) {
+    step();
+  }
+
+  p.pcpi_valid := 1'b0;
+  p.pcpi_insn := X;
+  p.pcpi_rs1 := X;
+  p.pcpi_rs2 := X;
+
+
+  assert_eq(p.pcpi_wr, 1'b1);
+  assert_eq(p.pcpi_rd, rd_data);
+
+  // TODO: do we need/want this step?
+  step();
+  fork();
+  step();
+}
+
+fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
+  p.resetn := 1'b0;
+  step();
+  fork();
+  p.resetn := 1'b1; // Note: this line is new!
+  step();
+}
