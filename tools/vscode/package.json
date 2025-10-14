@@ -2,7 +2,7 @@
   "name": "protocols",
   "displayName": "Protocols Language Syntax Highlighting",
   "description": "Syntax highlighting for the Protocols language",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "publisher": "protocols",
   "engines": {
     "vscode": "^1.60.0"
