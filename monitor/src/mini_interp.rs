@@ -15,6 +15,20 @@ use crate::{
     signal_trace::{PortKey, SignalTrace, StepResult, WaveSignalTrace},
 };
 
+// TODO: split the struct below into 2 contexts
+// (one global ctx, one thread-local ctx)
+
+// For each thread, we need to know locally:
+// - Which transaction are we currently running?
+// - Where in the transaction are we currently at? (the `StmtId`)
+// - A mutable map mapping variable names to their values (`args_mapping`)
+
+// In the global context, we need:
+// - immutable fields like the `SymbolTable` (?)
+// - the `WaveSignalTrace` (since all threads are working over the same trace)
+// - the `Design` (since all threads are working over the same `Design`)
+//
+
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
 /// with the monitor.
 /// - This is "mini" in the sense that it does not rely on Patronus/Yosys,
@@ -42,6 +56,9 @@ pub struct MiniInterpreter<'a> {
     args_mapping: HashMap<SymbolId, BitVecValue>,
 
     /// Whether to interpret `assert_eq` statements
+    /// TODO: remove this (this is only for fix-point iteration in the forward interpreter)
+    /// In the monitor, the values are already assigned in the trace (one value per cycle),
+    /// so we don't need to do fix-point iteration
     assertions_enabled: bool,
 
     /// Whether there are steps remaining in the signal trace
