@@ -13,8 +13,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
@@ -218,7 +218,8 @@ impl<'a> Evaluator<'a> {
         self.assertions_enabled = false;
     }
 
-    // step the simulator
+    // Steps the simulator, then modifies `input_vals` to be
+    // `OldValue`s or `DontCares`
     pub fn sim_step(&mut self) {
         self.sim.step();
 
@@ -464,6 +465,8 @@ impl<'a> Evaluator<'a> {
                         }
                         ExprValue::Concrete(new_val) => {
                             // no width check needed; guaranteed to be the same
+                            // Otherwise, if `current_val != new_value`,
+                            // report a `ConflictingAssignment` error
                             if !current_val.is_equal(&new_val) {
                                 return Err(ExecutionError::conflicting_assignment(
                                     *symbol_id,

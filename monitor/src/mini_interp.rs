@@ -354,6 +354,9 @@ impl<'a> MiniInterpreter<'a> {
 
     /// Evaluates an assignment statement `symbol_id := expr_id`, where `stmt_id`
     /// is the `StmtId` of the assignment statement
+    /// Note: most of the logic for fixed-point iteration is in
+    /// `evaluate_assign` in `interpreter.rs`, we may want to
+    /// look at that function to take inspiration
     fn evaluate_assign(
         &mut self,
         _stmt_id: &StmtId,
