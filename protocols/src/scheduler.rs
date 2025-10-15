@@ -36,16 +36,16 @@ type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
 const MAX_ITERS: usize = 10000;
 
-/// A `Todo` is a function call to be executed. The fields of this struct are:
-/// - The associated `Transaction`
-/// - The associated `SymbolTable`
-/// - The associated argument values `args` (mapping variable names to their values)
-/// - The `NextStmtMap`
+/// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
+    /// The associated `Transaction`
     pub tr: &'a Transaction,
+    /// The associated `SymbolTable`
     pub st: &'a SymbolTable,
+    /// The associated argument values `args` (mapping variable names to their values)
     pub args: ArgMap<'a>,
+    /// Maps each `StmtId` to an optional `StmtId` of the next statement
     pub next_stmt_map: NextStmtMap,
 }
 
