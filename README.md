@@ -47,3 +47,17 @@ $ cargo run --package protocols-interp -- --verilog protocols/tests/adders/adder
         -t protocols/tests/adders/adder_d1/both_threads_pass.tx \
         --verbose
 ```
+
+## Syntax highlighting
+This repo contains a basic VS Code extension which provides syntax highlighting
+for `.prot` and `.tx` files.
+
+### Installation
+Add a link to the Protocols VSCode extension directory to your VSCode extensions directory.
+
+```bash
+cd $HOME/.vscode/extensions
+ln -s <path to protocols root directory>/tools/vscode protocols.protocols-0.0.1
+```
+
+Then, restart VSCode.

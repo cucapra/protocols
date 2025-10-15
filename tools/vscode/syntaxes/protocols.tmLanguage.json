@@ -1,0 +1,229 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Protocols",
+  "scopeName": "source.protocols",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#struct-definition"
+    },
+    {
+      "include": "#function-definition"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#integers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#identifiers"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.protocols",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.protocols",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.protocols",
+          "match": "\\b(if|else|while)\\b"
+        },
+        {
+          "name": "keyword.other.protocols",
+          "match": "\\b(step|fork|assert_eq)\\b"
+        },
+        {
+          "name": "storage.type.protocols",
+          "match": "\\b(struct|fn|in|out)\\b"
+        },
+        {
+          "name": "constant.language.protocols",
+          "match": "\\b(X)\\b"
+        }
+      ]
+    },
+    "struct-definition": {
+      "patterns": [
+        {
+          "begin": "\\b(struct)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\{",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.struct.protocols"
+            },
+            "2": {
+              "name": "entity.name.type.struct.protocols"
+            }
+          },
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#struct-fields"
+            }
+          ]
+        }
+      ]
+    },
+    "struct-fields": {
+      "patterns": [
+        {
+          "match": "\\b(in|out)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.protocols"
+            },
+            "2": {
+              "name": "variable.other.member.protocols"
+            },
+            "3": {
+              "name": "entity.name.type.protocols"
+            }
+          }
+        }
+      ]
+    },
+    "function-definition": {
+      "patterns": [
+        {
+          "begin": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(<\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*>)?\\s*\\(",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.function.protocols"
+            },
+            "2": {
+              "name": "entity.name.function.protocols"
+            },
+            "4": {
+              "name": "variable.parameter.type-param.protocols"
+            },
+            "5": {
+              "name": "entity.name.type.protocols"
+            }
+          },
+          "end": "\\)",
+          "patterns": [
+            {
+              "include": "#function-parameters"
+            }
+          ]
+        }
+      ]
+    },
+    "function-parameters": {
+      "patterns": [
+        {
+          "match": "\\b(in|out)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.protocols"
+            },
+            "2": {
+              "name": "variable.parameter.protocols"
+            },
+            "3": {
+              "name": "entity.name.type.protocols"
+            }
+          }
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.protocols",
+          "match": "\\b(u1|u8|u16|u32|u64|u128)\\b"
+        }
+      ]
+    },
+    "integers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.binary.protocols",
+          "match": "\\b([0-9]+)'[bB][01_]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.octal.protocols",
+          "match": "\\b([0-9]+)'[oO][0-7_]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.hexadecimal.protocols",
+          "match": "\\b([0-9]+)'[xX][0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.decimal.protocols",
+          "match": "\\b([0-9]+)'[dD][0-9_]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.protocols",
+          "match": "\\b[0-9][0-9_]*\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.protocols",
+          "match": ":="
+        },
+        {
+          "name": "keyword.operator.comparison.protocols",
+          "match": "=="
+        },
+        {
+          "name": "keyword.operator.logical.protocols",
+          "match": "!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.protocols",
+          "match": "\\+"
+        },
+        {
+          "name": "keyword.operator.slice.protocols",
+          "match": ":"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.protocols",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b(?=\\s*(?:\\.|\\[|:=))"
+        },
+        {
+          "name": "variable.other.member.protocols",
+          "match": "(?<=\\.)([a-zA-Z_][a-zA-Z0-9_]*)"
+        },
+        {
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.call.protocols"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
