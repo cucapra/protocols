@@ -31,3 +31,8 @@ turnt:
 test:
   cargo test 
   @just turnt
+
+# Builds HTML documentation by running `cargo doc`
+doc:
+  cargo doc --document-private-items --workspace --no-deps --open
+
