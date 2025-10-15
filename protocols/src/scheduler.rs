@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
 use log::info;
@@ -324,6 +325,10 @@ impl<'a> Scheduler<'a> {
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
+
+                        // Set all input pins to `DontCare` after a thread finishes
+                        self.evaluator.reset_all_input_pins();
+
                         self.inactive_threads.push(active_thread)
                     }
                 }
@@ -345,7 +350,6 @@ impl<'a> Scheduler<'a> {
                     self.active_threads.clear();
                 }
             } else {
-                info!("No more threads to schedule. Protocol execution complete.");
                 info!("No more threads to schedule. Protocol execution complete.");
             }
         }
@@ -499,6 +503,7 @@ impl<'a> Scheduler<'a> {
                                 ExecutionError::finished_without_fork(thread_id, transaction_name);
                             self.results[thread_id] = Err(error);
                         } else {
+                            // Thread completed execution successfully
                             info!("  Execution complete, no more statements.");
                         }
                     } else {
