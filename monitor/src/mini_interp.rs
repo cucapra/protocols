@@ -15,19 +15,12 @@ use crate::{
     signal_trace::{PortKey, SignalTrace, StepResult, WaveSignalTrace},
 };
 
-// TODO: split the struct below into 2 contexts
-// (one global ctx, one thread-local ctx)
-
-// For each thread, we need to know locally:
-// - Which transaction are we currently running?
-// - Where in the transaction are we currently at? (the `StmtId`)
-// - A mutable map mapping variable names to their values (`args_mapping`)
-
-// In the global context, we need:
-// - immutable fields like the `SymbolTable` (?)
+/// The scheduler (global context) for threads, storing fields which are common
+/// to all threads, such as:
+///- immutable fields like the `SymbolTable`
 // - the `WaveSignalTrace` (since all threads are working over the same trace)
 // - the `Design` (since all threads are working over the same `Design`)
-
+#[allow(dead_code)]
 pub struct MonitorScheduler<'a> {
     /// The `SymbolTable` associated with the `Transaction`
     symbol_table: &'a SymbolTable,
@@ -50,6 +43,12 @@ pub struct MonitorScheduler<'a> {
     display_hex: bool,
 }
 
+/// The local context associated with an individual thread,
+/// storing information such as:
+// - Which transaction are we currently running?
+// - Where in the transaction are we currently at? (the `StmtId`)
+// - A mutable map mapping variable names to their values (`args_mapping`)
+#[allow(dead_code)]
 pub struct MonitorThread<'a> {
     /// The `Transaction` being interpreted
     transaction: &'a Transaction,
@@ -66,6 +65,7 @@ pub struct MonitorThread<'a> {
 }
 
 /// Type representing the current and next queues of threads
+#[allow(dead_code)]
 type ThreadQueue<'a> = Vec<MonitorThread<'a>>;
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
