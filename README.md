@@ -14,6 +14,7 @@ A protocol is described using an `fn` definition containing a list of imperative
 - Run `cargo build` to build
 - Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Turnt)
   - Run `just turnt` to only run Turnt snapshot tests
+- To generate HTML documentation, run `just doc` (this opens Cargo-generated docs in your browser)
 
 **CLI**:
 The interpreter has a CLI, which can be invoked as follows:
