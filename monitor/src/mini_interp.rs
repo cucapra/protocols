@@ -55,12 +55,6 @@ pub struct MiniInterpreter<'a> {
     /// `HashMap` mapping `SymbolId`s to their values
     args_mapping: HashMap<SymbolId, BitVecValue>,
 
-    /// Whether to interpret `assert_eq` statements
-    /// TODO: remove this (this is only for fix-point iteration in the forward interpreter)
-    /// In the monitor, the values are already assigned in the trace (one value per cycle),
-    /// so we don't need to do fix-point iteration
-    assertions_enabled: bool,
-
     /// Whether there are steps remaining in the signal trace
     has_steps_remaining: bool,
 
@@ -149,8 +143,6 @@ impl<'a> MiniInterpreter<'a> {
             design,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-            // TODO: we may want to avoid hard-coding this in the future
-            assertions_enabled: false,
             // We haven't run anything yet,
             // so `has_steps_remaining` is initialized to `true`
             has_steps_remaining: true,
@@ -317,22 +309,17 @@ impl<'a> MiniInterpreter<'a> {
                 todo!("Figure out how to handle Forks")
             }
             Stmt::AssertEq(expr1, expr2) => {
-                if self.assertions_enabled {
-                    self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
-                } else {
-                    if self.evaluate_expr(expr1).is_err() {
-                        info!("{} is ???", self.format_expr(expr1))
-                    }
-                    if self.evaluate_expr(expr2).is_err() {
-                        info!("{} is ???", self.format_expr(expr2))
-                    }
-                    info!(
-                        "Skipping assertion `{}` ({}) because assertions are disabled",
-                        self.format_stmt(stmt_id),
-                        stmt_id
-                    );
+                if self.evaluate_expr(expr1).is_err() {
+                    info!("{} is ???", self.format_expr(expr1))
                 }
-
+                if self.evaluate_expr(expr2).is_err() {
+                    info!("{} is ???", self.format_expr(expr2))
+                }
+                info!(
+                    "Skipping assertion `{}` ({}) because assertions are disabled",
+                    self.format_stmt(stmt_id),
+                    stmt_id
+                );
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
@@ -416,34 +403,6 @@ impl<'a> MiniInterpreter<'a> {
                     Ok(self.next_stmt_map[while_id])
                 }
             }
-        }
-    }
-
-    /// Evaluates an `assert_eq` statement
-    fn evaluate_assert_eq(
-        &mut self,
-        stmt_id: &StmtId,
-        expr1: &ExprId,
-        expr2: &ExprId,
-    ) -> ExecutionResult<()> {
-        let res1 = self.evaluate_expr(expr1)?;
-        let res2 = self.evaluate_expr(expr2)?;
-        let (bvv1, bvv2) = match (&res1, &res2) {
-            (ExprValue::Concrete(bvv1), ExprValue::Concrete(bvv2)) => (bvv1, bvv2),
-            _ => {
-                return Err(ExecutionError::assertion_dont_care(*stmt_id));
-            }
-        };
-        // short circuit guarantees width equality before is_equal call
-        if bvv1.width() != bvv2.width() || !bvv1.is_equal(bvv2) {
-            Err(ExecutionError::assertion_failed(
-                *expr1,
-                *expr2,
-                bvv1.clone(),
-                bvv2.clone(),
-            ))
-        } else {
-            Ok(())
         }
     }
 
