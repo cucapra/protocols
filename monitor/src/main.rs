@@ -4,11 +4,12 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 mod designs;
-mod mini_interp;
+mod global_context;
+mod scheduler;
 mod signal_trace;
+mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
-use crate::mini_interp::MiniInterpreter;
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
 use anyhow::Context;
 use clap::{ColorChoice, Parser};
@@ -51,6 +52,7 @@ struct Cli {
     display_hex: bool,
 }
 
+#[allow(unused_variables)]
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -102,15 +104,15 @@ fn main() -> anyhow::Result<()> {
     // TODO: we assume only one `Transaction` & `SymbolTable` for now
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
-    // Create a new Interpreter for the `.prot` file
-    let mut interpreter =
-        MiniInterpreter::new(transaction, symbol_table, trace, design, cli.display_hex);
+    // // Create a new Interpreter for the `.prot` file
+    // let mut interpreter =
+    //     MiniInterpreter::new(transaction, symbol_table, trace, design, cli.display_hex);
 
-    // Run the interpreter on the Protocol as long as there are still
-    // steps remaining in the signal trace
-    while interpreter.has_steps_remaining() {
-        interpreter.run();
-    }
+    // // Run the interpreter on the Protocol as long as there are still
+    // // steps remaining in the signal trace
+    // while interpreter.has_steps_remaining() {
+    //     interpreter.run();
+    // }
 
-    Ok(())
+    todo!("Figure out how to invoke scheduler");
 }

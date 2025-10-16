@@ -1,51 +1,28 @@
 use std::collections::HashMap;
 
-use baa::{BitVecOps, BitVecValue};
 use log::{error, info};
 use protocols::{
-    errors::{ExecutionError, ExecutionResult},
-    interpreter::ExprValue,
-    ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
-    serialize::{serialize_args_mapping, serialize_bitvec},
+    ir::{Stmt, SymbolTable, Transaction},
+    scheduler::Thread,
+    serialize::serialize_args_mapping,
 };
-use rustc_hash::FxHashMap;
 
 use crate::{
     designs::Design,
     signal_trace::{PortKey, SignalTrace, StepResult, WaveSignalTrace},
 };
 
-/// The scheduler (global context) for threads, storing fields which are common
-/// to all threads, such as:
-/// - the `WaveSignalTrace` (since all threads are working over the same trace)
-/// - the `Design` (since all threads are working over the same `Design`)
-/// - other immutable fields
-#[allow(dead_code)]
+/// Queue of threads
+type Queue<'a> = Vec<Thread<'a>>;
+
 pub struct Scheduler<'a> {
-    /// The waveform supplied by the user
-    trace: WaveSignalTrace,
-
-    /// The design under test
-    design: &'a Design,
-
-    /// Whether there are steps remaining in the signal trace
-    has_steps_remaining: bool,
-
-    /// The `instance_id` corresponding to the DUT instance
-    /// (Note: We assume that there is only one `Instance` at the moment)
-    instance_id: u32,
+    /// THe current queue
+    current_queue: Queue<'a>,
+    /// The next queue
+    next_queue: Queue<'a>,
 }
 
-/// Type representing the current and next queues of threads
-#[allow(dead_code)]
-type ThreadQueue<'a> = Vec<Thread<'a>>;
-
 impl<'a> Scheduler<'a> {
-    /// Determines if there are steps remaining in the signal trace
-    pub fn has_steps_remaining(&self) -> bool {
-        self.has_steps_remaining
-    }
-
     /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
     /// and a `WaveSignalTrace`. This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
