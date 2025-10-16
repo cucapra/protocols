@@ -27,7 +27,46 @@ use crate::{
 // - immutable fields like the `SymbolTable` (?)
 // - the `WaveSignalTrace` (since all threads are working over the same trace)
 // - the `Design` (since all threads are working over the same `Design`)
-//
+
+pub struct MonitorScheduler<'a> {
+    /// The `SymbolTable` associated with the `Transaction`
+    symbol_table: &'a SymbolTable,
+
+    /// The waveform supplied by the user
+    trace: WaveSignalTrace,
+
+    /// The design under test
+    design: &'a Design,
+
+    /// Whether there are steps remaining in the signal trace
+    has_steps_remaining: bool,
+
+    /// The `instance_id` corresponding to the DUT instance
+    /// (Note: We assume that there is only one `Instance` at the moment)
+    instance_id: u32,
+
+    /// Indicates whether to print integer literals
+    /// using hexadecimal (if `false`, we default to using decimal).
+    display_hex: bool,
+}
+
+pub struct MonitorThread<'a> {
+    /// The `Transaction` being interpreted
+    transaction: &'a Transaction,
+
+    /// The current statement in the `Transaction`, identified by its `StmtId`
+    stmt_id: StmtId,
+
+    /// Maps a `StmtId` to the `StmtId` of the
+    /// next statement to interpret (if one exists)
+    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+
+    /// `HashMap` mapping `SymbolId`s to their values
+    args_mapping: HashMap<SymbolId, BitVecValue>,
+}
+
+/// Type representing the current and next queues of threads
+type ThreadQueue<'a> = Vec<MonitorThread<'a>>;
 
 /// A "mini" interpreter for Protocols programs, to be used in conjunction
 /// with the monitor.
