@@ -9,7 +9,7 @@ use protocols::ir::{Stmt, SymbolTable, Transaction};
 
 use crate::{global_context::GlobalContext, interpreter::Interpreter, thread::Thread};
 
-/// Queue of threads
+/// `Queue` is just a type alias for `Vec<Thread>`
 type Queue = Vec<Thread>;
 
 /// Extracts all elements in the `Queue` where all the threads have the
@@ -21,6 +21,7 @@ pub fn threads_with_start_time(queue: Queue, start_cycle: u32) -> Queue {
         .collect()
 }
 
+/// Scheduler for handling the multiple threads in the monitor
 pub struct Scheduler {
     /// Queue storing threads that are ready (to be run during the current step)
     current: Queue,
@@ -68,13 +69,19 @@ impl Scheduler {
         if let Some(thread) = self.current.pop() {
             self.run_thread_till_next_step(thread);
         } else if !self.next.is_empty() {
-            todo!("Swap current and next");
+            // Mark all suspended threads as ready for execution
+            // by setting `current` to `next`, and subsequently emptying `next`
+            self.current = self.next.clone();
+            self.next = vec![];
         } else {
             todo!("Figure out what to do when both current and next are empty");
         }
     }
 
-    /// Pops a thread from the `current` queue and runs it till the next `step()` or `fork()` statement
+    /// Runs a `thread` until:
+    /// - It reaches the next `step()` or `fork()` statement
+    /// - It completes succesfully
+    /// - An error was encountered during execution
     pub fn run_thread_till_next_step(&mut self, mut thread: Thread) {
         let mut current_stmt_id = thread.current_stmt_id;
 
