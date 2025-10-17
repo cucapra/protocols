@@ -16,24 +16,26 @@ use crate::{
 };
 
 pub struct Interpreter {
-    transaction: Transaction,
-    symbol_table: SymbolTable,
-    next_stmt_map: NextStmtMap,
-    args_mapping: HashMap<SymbolId, BitVecValue>,
+    pub transaction: Transaction,
+    pub symbol_table: SymbolTable,
+    pub next_stmt_map: NextStmtMap,
+    pub args_mapping: HashMap<SymbolId, BitVecValue>,
 }
 
 impl Interpreter {
     /// Performs a context switch in the `Interpreter` by setting its
-    /// `Transaction` and `SymbolTable` to the specified arguments
+    /// `Transaction`, `SymbolTable` and `args_mapping` to the specified arguments
     pub fn context_switch(
         &mut self,
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
+        args_mapping: HashMap<SymbolId, BitVecValue>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
+        self.args_mapping = args_mapping;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`

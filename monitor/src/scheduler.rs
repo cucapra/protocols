@@ -120,15 +120,22 @@ impl Scheduler {
             transaction,
             symbol_table,
             next_stmt_map,
+            args_mapping,
             ..
         } = thread.clone();
         self.interpreter
-            .context_switch(transaction, symbol_table, next_stmt_map);
+            .context_switch(transaction, symbol_table, next_stmt_map, args_mapping);
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
             match self.interpreter.evaluate_stmt(&current_stmt_id, &self.ctx) {
                 Ok(Some(next_stmt_id)) => {
+                    // Update the thread-local `args_mapping` to be the resultant
+                    // arg map in the interpreter
+                    thread.args_mapping = self.interpreter.args_mapping.clone();
+
+                    // Check whether the next statement is `Step` or `Fork`
+                    // This determines if we need to move threads to/from different queues
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
                             info!(
@@ -146,6 +153,7 @@ impl Scheduler {
                                 thread.transaction,
                                 thread.symbol_table,
                                 thread.next_stmt_map,
+                                thread.args_mapping,
                                 &self.ctx,
                                 self.num_threads,
                                 self.step_count,

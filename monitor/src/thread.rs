@@ -4,8 +4,9 @@
 
 use std::collections::HashMap;
 
+use baa::BitVecValue;
 use protocols::{
-    ir::{StmtId, SymbolTable, Transaction},
+    ir::{StmtId, SymbolId, SymbolTable, Transaction},
     scheduler::NextStmtMap,
 };
 
@@ -36,6 +37,9 @@ pub struct Thread {
     /// The `NextStmtMap` associated with the `Transaction`
     pub next_stmt_map: NextStmtMap,
 
+    /// Map storing the inferred values for the input and output arguments
+    pub args_mapping: HashMap<SymbolId, BitVecValue>,
+
     /// The current statement in the `Transaction`, identified by its `StmtId`
     pub current_stmt_id: StmtId,
 }
@@ -48,10 +52,12 @@ impl Thread {
     /// Note that `GlobalContext` is not a field in `Thread`, since we cannot
     /// derive `Clone` for `WaveSignalTrace`, but ideally we'd like to be able
     /// to clone `Thread`s.
+    #[allow(unused_variables)]
     pub fn new(
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
+        args_mapping: HashMap<SymbolId, BitVecValue>,
         ctx: &GlobalContext,
         thread_id: u32,
         start_cycle: u32,
@@ -80,6 +86,7 @@ impl Thread {
             thread_id,
             transaction: transaction.clone(),
             next_stmt_map,
+            args_mapping,
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,
