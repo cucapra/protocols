@@ -12,7 +12,7 @@ jobs:
   tests:
     name: Unit Tests
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.draft == false || github.event_name == 'push'
+    if: github.event.pull_request.draft == false
     strategy:
       matrix:
         toolchain:
@@ -46,7 +46,7 @@ jobs:
   msrv:
     name: Check Minimum Rust Version for protocols library
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.draft == false || github.event_name == 'push'
+    if: github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/cache-cargo-install-action@v2
@@ -60,7 +60,7 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    if: github.event.pull_request.draft == false || github.event_name == 'push'
+    if: github.event.pull_request.draft == false
 
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +70,7 @@ jobs:
     name: Clippy Lints
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    if: github.event.pull_request.draft == false || github.event_name == 'push'
+    if: github.event.pull_request.draft == false
     env:
       # Pin Rust version to prevent new Clippy lints from breaking CI
       RUST_VERSION: "1.85.0"
