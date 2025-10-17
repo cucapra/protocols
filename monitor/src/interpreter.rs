@@ -335,7 +335,6 @@ impl Interpreter {
 
     /// Prints the reconstructed transaction
     /// (i.e. the function call that led to the signal trace)
-    #[allow(dead_code)]
     pub fn serialize_reconstructed_transaction(&self, ctx: &GlobalContext) -> String {
         let mut args = vec![];
         // Iterates through each arg to the transaction and sees

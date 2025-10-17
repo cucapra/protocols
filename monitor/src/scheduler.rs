@@ -76,7 +76,7 @@ impl Scheduler {
     /// 2. When the `current` queue is empty, it sets `current` to `next`
     ///    (marking all suspended threads as ready for execution),
     ///    then advances the trace to the next step.
-    pub fn run_scheduler(&mut self) {
+    pub fn run(&mut self) {
         loop {
             while let Some(thread) = self.current.pop() {
                 self.run_thread_till_next_step(thread);
@@ -158,6 +158,11 @@ impl Scheduler {
                     info!(
                         "Thread {:?} completed successfully, adding to `completed` queue",
                         thread.thread_id
+                    );
+                    println!(
+                        "Reconstructed transaction: {}",
+                        self.interpreter
+                            .serialize_reconstructed_transaction(&self.ctx)
                     );
                     self.completed.push(thread);
                     break;
