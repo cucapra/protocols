@@ -65,16 +65,26 @@ impl Scheduler {
         }
     }
 
+    /// Runs the scheduler:
+    /// 1. Pops a thread from the `current` queue and runs it till the next step,
+    /// and keeps repeating this while the `current` queue is non-empty
+    /// 2. When the `current` queue si empty, it sets `current` to `next`
+    /// (marking all suspended threads as ready for execution)
     pub fn run_scheduler(&mut self) {
-        if let Some(thread) = self.current.pop() {
+        while let Some(thread) = self.current.pop() {
             self.run_thread_till_next_step(thread);
-        } else if !self.next.is_empty() {
+        }
+        // At this point, `current` is empty
+        // (i.e. all threads have been executed till their next `step`)
+        if !self.next.is_empty() {
             // Mark all suspended threads as ready for execution
-            // by setting `current` to `next`, and subsequently emptying `next`
-            self.current = self.next.clone();
-            self.next = vec![];
+            // by setting `current` to `next`, and setting `next = []`
+            // (the latter is done via `std::mem::take`)
+            self.current = std::mem::take(&mut self.next);
         } else {
-            todo!("Figure out what to do when both current and next are empty");
+            // When both current and next are finished, the monitor is done
+            // since there are no more threads to run
+            info!("Monitor finished!");
         }
     }
 
