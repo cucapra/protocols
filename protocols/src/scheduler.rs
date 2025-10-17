@@ -23,7 +23,7 @@ use patronus::system::TransitionSystem;
 
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
-type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
+pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
 
 /// A `TodoItem` corresponds to a function call in a transaction `.tx` file

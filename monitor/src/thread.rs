@@ -4,7 +4,10 @@
 
 use std::collections::HashMap;
 
-use protocols::ir::{StmtId, SymbolTable, Transaction};
+use protocols::{
+    ir::{StmtId, SymbolTable, Transaction},
+    scheduler::NextStmtMap,
+};
 
 use crate::{
     global_context::GlobalContext,
@@ -30,6 +33,9 @@ pub struct Thread {
     /// The `SymbolTable` associated with the `Transaction`
     pub symbol_table: SymbolTable,
 
+    /// The `NextStmtMap` associated with the `Transaction`
+    pub next_stmt_map: NextStmtMap,
+
     /// The current statement in the `Transaction`, identified by its `StmtId`
     pub current_stmt_id: StmtId,
 }
@@ -45,6 +51,7 @@ impl Thread {
     pub fn new(
         transaction: Transaction,
         symbol_table: SymbolTable,
+        next_stmt_map: NextStmtMap,
         ctx: &GlobalContext,
         thread_id: u32,
         start_cycle: u32,
@@ -72,6 +79,7 @@ impl Thread {
         Self {
             thread_id,
             transaction: transaction.clone(),
+            next_stmt_map,
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,

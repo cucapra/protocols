@@ -6,9 +6,9 @@ use protocols::{
     errors::{ExecutionError, ExecutionResult},
     interpreter::ExprValue,
     ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
+    scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec},
 };
-use rustc_hash::FxHashMap;
 
 use crate::{
     global_context::GlobalContext,
@@ -18,11 +18,24 @@ use crate::{
 pub struct Interpreter {
     transaction: Transaction,
     symbol_table: SymbolTable,
-    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+    next_stmt_map: NextStmtMap,
     args_mapping: HashMap<SymbolId, BitVecValue>,
 }
 
 impl Interpreter {
+    /// Performs a context switch in the `Interpreter` by setting its
+    /// `Transaction` and `SymbolTable` to the specified arguments
+    pub fn context_switch(
+        &mut self,
+        transaction: Transaction,
+        symbol_table: SymbolTable,
+        next_stmt_map: NextStmtMap,
+    ) {
+        self.transaction = transaction;
+        self.symbol_table = symbol_table;
+        self.next_stmt_map = next_stmt_map;
+    }
+
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
@@ -221,13 +234,10 @@ impl Interpreter {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx)
             }
-            Stmt::Step => {
-                // Actual stepping is done in the `run` function below.
+            Stmt::Step | Stmt::Fork => {
+                // The scheduler handles `step`s and `fork`s.
                 // Here, we simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
-            }
-            Stmt::Fork => {
-                todo!("Figure out how to handle Forks")
             }
             Stmt::AssertEq(expr1, expr2) => {
                 if self.evaluate_expr(expr1, ctx).is_err() {

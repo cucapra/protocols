@@ -114,6 +114,16 @@ impl Scheduler {
     /// - It completes succesfully
     /// - An error was encountered during execution
     pub fn run_thread_till_next_step(&mut self, mut thread: Thread) {
+        // Perform a context switch (use the argument thread's `Transaction`
+        // & associated `SymbolTable` / `NextStmtMap`)
+        let Thread {
+            transaction,
+            symbol_table,
+            next_stmt_map,
+            ..
+        } = thread.clone();
+        self.interpreter
+            .context_switch(transaction, symbol_table, next_stmt_map);
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
@@ -135,6 +145,7 @@ impl Scheduler {
                             let new_thread = Thread::new(
                                 thread.transaction,
                                 thread.symbol_table,
+                                thread.next_stmt_map,
                                 &self.ctx,
                                 self.num_threads,
                                 self.step_count,
