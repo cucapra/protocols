@@ -36,10 +36,13 @@ impl Scheduler {
     /// Creates a new `Scheduler` where all four queues are empty
     pub fn new() -> Self {
         Self {
-            ready_threads: Queue::new(),
-            suspended_threads: Queue::new(),
-            completed_threads: Queue::new(),
-            failed_threads: Queue::new(),
+            ready_threads: vec![],
+            suspended_threads: vec![],
+            completed_threads: vec![],
+            failed_threads: vec![],
         }
     }
+
+    // TODO: figure out how to run a thread till the next `step`
+    // I guess we need a way to pop from `ready_threads` and run it till the next step
 }
