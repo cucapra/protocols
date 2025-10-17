@@ -27,31 +27,29 @@ use crate::{
 // - Where in the transaction are we currently at? (the `StmtId`)
 // - A mutable map mapping variable names to their values (`args_mapping`)
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct Thread {
     // The thread's ID
-    thread_id: usize,
+    pub thread_id: usize,
 
     /// The cycle in which the thread was started
-    start_cycle: usize,
+    pub start_cycle: usize,
 
     /// The `Transaction` being interpreted
-    transaction: Transaction,
+    pub transaction: Transaction,
 
     /// The `SymbolTable` associated with the `Transaction`
-    symbol_table: SymbolTable,
+    pub symbol_table: SymbolTable,
 
     /// The current statement in the `Transaction`, identified by its `StmtId`
-    stmt_id: StmtId,
+    pub stmt_id: StmtId,
 
     /// Maps a `StmtId` to the `StmtId` of the
     /// next statement to interpret (if one exists)
-    next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
+    pub next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
 
     /// `HashMap` mapping `SymbolId`s to their values
-    args_mapping: HashMap<SymbolId, BitVecValue>,
-
-    /// A reference to the `GlobalContext` for all threads
-    ctx: GlobalContext,
+    pub args_mapping: HashMap<SymbolId, BitVecValue>,
 }
 
 impl Thread {
@@ -59,6 +57,9 @@ impl Thread {
     /// `GlobalContext`, `thread_id` & `start_cycle`.
     /// This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
+    /// Note that `GlobalContext` is not a field in `Thread`, since we cannot
+    /// derive `Clone` for `WaveSignalTrace`, but ideally we'd like to be able
+    /// to clone `Thread`s.
     pub fn new(
         transaction: Transaction,
         symbol_table: SymbolTable,
@@ -93,7 +94,6 @@ impl Thread {
             stmt_id: transaction.body,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-            ctx,
             start_cycle,
         }
     }
@@ -116,7 +116,11 @@ impl Thread {
     }
 
     /// Evaluates an `Expr` identified by its `ExprId`, returning an `ExprValue`
-    fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
+    fn evaluate_expr(
+        &mut self,
+        expr_id: &ExprId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<ExprValue> {
         let transaction = self.transaction.clone();
         let expr = &transaction[expr_id];
         match expr {
@@ -126,10 +130,10 @@ impl Thread {
 
                 // Fetch the value for the `sym_id` from the trace,
                 // then update the `args_mapping`
-                if let Ok(value) = self.ctx.trace.get(self.ctx.instance_id, *sym_id) {
+                if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
                     info!(
                         "In the trace, {name} has value {}",
-                        serialize_bitvec(&value, self.ctx.display_hex)
+                        serialize_bitvec(&value, ctx.display_hex)
                     );
                     self.update_arg_value(*sym_id, value.clone());
                     Ok(ExprValue::Concrete(value))
@@ -139,7 +143,7 @@ impl Thread {
                         serialize_args_mapping(
                             &self.args_mapping,
                             &self.symbol_table,
-                            self.ctx.display_hex
+                            ctx.display_hex
                         )
                     );
 
@@ -153,8 +157,8 @@ impl Thread {
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
-                let lhs_val = self.evaluate_expr(lhs_id)?;
-                let rhs_val = self.evaluate_expr(rhs_id)?;
+                let lhs_val = self.evaluate_expr(lhs_id, ctx)?;
+                let rhs_val = self.evaluate_expr(rhs_id, ctx)?;
                 match bin_op {
                     BinOp::Equal => match (&lhs_val, &rhs_val) {
                         (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
@@ -209,7 +213,7 @@ impl Thread {
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
-                let expr_val = self.evaluate_expr(expr_id)?;
+                let expr_val = self.evaluate_expr(expr_id, ctx)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => match unary_op {
                         UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
@@ -222,7 +226,7 @@ impl Thread {
                 }
             }
             Expr::Slice(expr_id, msb, lsb) => {
-                let expr_val = self.evaluate_expr(expr_id)?;
+                let expr_val = self.evaluate_expr(expr_id, ctx)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => {
                         let width = bvv.width();
@@ -244,19 +248,23 @@ impl Thread {
 
     /// Evaluates a `Statement` identified by its `StmtId`,
     /// returning the `StmtId` of the next statement to evaluate (if one exists)
-    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
+    pub fn evaluate_stmt(
+        &mut self,
+        stmt_id: &StmtId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<Option<StmtId>> {
         let transaction = self.transaction.clone();
         match &transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // TODO: figure out what to do if the `symbol_id` already has a value in the environment
-                self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
+                self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id)
+                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id, ctx)
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
+                self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx)
             }
             Stmt::Step => {
                 // Actual stepping is done in the `run` function below.
@@ -267,10 +275,10 @@ impl Thread {
                 todo!("Figure out how to handle Forks")
             }
             Stmt::AssertEq(expr1, expr2) => {
-                if self.evaluate_expr(expr1).is_err() {
+                if self.evaluate_expr(expr1, ctx).is_err() {
                     info!("{} is ???", self.format_expr(expr1))
                 }
-                if self.evaluate_expr(expr2).is_err() {
+                if self.evaluate_expr(expr2, ctx).is_err() {
                     info!("{} is ???", self.format_expr(expr2))
                 }
                 info!(
@@ -297,8 +305,9 @@ impl Thread {
         cond_expr_id: &ExprId,
         then_stmt_id: &StmtId,
         else_stmt_id: &StmtId,
+        ctx: &GlobalContext,
     ) -> ExecutionResult<Option<StmtId>> {
-        let res = self.evaluate_expr(cond_expr_id)?;
+        let res = self.evaluate_expr(cond_expr_id, ctx)?;
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "if".to_string(),
@@ -324,16 +333,17 @@ impl Thread {
         _stmt_id: &StmtId,
         symbol_id: &SymbolId,
         expr_id: &ExprId,
+        ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
         let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
-        let rhs_value = self.evaluate_expr(expr_id)?;
+        let rhs_value = self.evaluate_expr(expr_id, ctx)?;
 
         match rhs_value.clone() {
             ExprValue::Concrete(bitvec_value) => {
                 info!(
                     "Setting {} := {}",
                     lhs,
-                    serialize_bitvec(&bitvec_value, self.ctx.display_hex)
+                    serialize_bitvec(&bitvec_value, ctx.display_hex)
                 );
                 self.update_arg_value(*symbol_id, bitvec_value);
             }
@@ -350,8 +360,9 @@ impl Thread {
         loop_guard_id: &ExprId,
         while_id: &StmtId,
         do_block_id: &StmtId,
+        ctx: &GlobalContext,
     ) -> ExecutionResult<Option<StmtId>> {
-        let res = self.evaluate_expr(loop_guard_id)?;
+        let res = self.evaluate_expr(loop_guard_id, ctx)?;
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "while".to_string(),
@@ -371,7 +382,7 @@ impl Thread {
     /// (i.e. the function call that led to the signal trace)
     /// Note: this function is only called at the end of `MiniInterpreter::run`
     /// after we have finished interpreting the protocol / signal trace
-    fn serialize_reconstructed_transaction(&self) -> String {
+    fn serialize_reconstructed_transaction(&self, ctx: &GlobalContext) -> String {
         let mut args = vec![];
         // Iterates through each arg to the transaction and sees
         // what their final value in the `args_mapping` is
@@ -384,7 +395,7 @@ impl Thread {
                     name, symbol_id
                 )
             });
-            args.push(serialize_bitvec(value, self.ctx.display_hex));
+            args.push(serialize_bitvec(value, ctx.display_hex));
         }
         format!("{}({})", self.transaction.name, args.join(", "))
     }

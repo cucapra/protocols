@@ -11,6 +11,7 @@ use crate::{designs::Design, signal_trace::WaveSignalTrace};
 /// - the `WaveSignalTrace` (since all threads are working over the same trace)
 /// - the `Design` (since all threads are working over the same `Design`)
 /// - other immutable fields
+#[derive(Debug)]
 pub struct GlobalContext {
     /// The waveform supplied by the user
     pub trace: WaveSignalTrace,

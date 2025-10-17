@@ -5,7 +5,7 @@
 
 #![allow(dead_code)]
 
-use crate::{Instance, designs::Design};
+use crate::{designs::Design, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
