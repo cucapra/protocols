@@ -105,15 +105,5 @@ fn main() -> anyhow::Result<()> {
     // TODO: we assume only one `Transaction` & `SymbolTable` for now
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
-    // // Create a new Interpreter for the `.prot` file
-    // let mut interpreter =
-    //     MiniInterpreter::new(transaction, symbol_table, trace, design, cli.display_hex);
-
-    // // Run the interpreter on the Protocol as long as there are still
-    // // steps remaining in the signal trace
-    // while interpreter.has_steps_remaining() {
-    //     interpreter.run();
-    // }
-
-    todo!("Figure out how to invoke scheduler");
+    todo!("Figure out how to invoke scheduler and create new threads");
 }

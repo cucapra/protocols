@@ -4,6 +4,9 @@
 
 #![allow(dead_code)]
 
+use std::collections::HashSet;
+
+use anyhow::anyhow;
 use log::info;
 use protocols::ir::{Stmt, SymbolTable, Transaction};
 
@@ -19,11 +22,18 @@ type Queue = Vec<Thread>;
 
 /// Extracts all elements in the `Queue` where all the threads have the
 /// same `start_cycle`, preserving their order
-pub fn threads_with_start_time(queue: Queue, start_cycle: u32) -> Queue {
+pub fn threads_with_start_time(queue: &Queue, start_cycle: u32) -> Queue {
     queue
+        .clone()
         .into_iter()
         .filter(|thread| thread.start_cycle == start_cycle)
         .collect()
+}
+
+/// Finds all the unique start cycles of all the threads in the same queue
+pub fn unique_start_cycles(queue: &Queue) -> HashSet<u32> {
+    let start_cycles: Vec<u32> = queue.iter().map(|thread| thread.start_cycle).collect();
+    HashSet::from_iter(start_cycles)
 }
 
 /// Scheduler for handling the multiple threads in the monitor
@@ -34,8 +44,8 @@ pub struct Scheduler {
     /// Queue of suspended threads (to be run during the next step)
     next: Queue,
 
-    /// Threads that have completed successfully
-    completed: Queue,
+    /// Threads that have finished successfully
+    finished: Queue,
 
     /// Threads that failed
     failed: Queue,
@@ -61,7 +71,7 @@ impl Scheduler {
         Self {
             current: vec![],
             next: vec![],
-            completed: vec![],
+            finished: vec![],
             failed: vec![],
             ctx,
             interpreter,
@@ -76,7 +86,7 @@ impl Scheduler {
     /// 2. When the `current` queue is empty, it sets `current` to `next`
     ///    (marking all suspended threads as ready for execution),
     ///    then advances the trace to the next step.
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> anyhow::Result<()> {
         loop {
             while let Some(thread) = self.current.pop() {
                 self.run_thread_till_next_step(thread);
@@ -84,10 +94,58 @@ impl Scheduler {
 
             // At this point, all threads have been executed till their next `step`
             // and are synchronized (i.e. `current` is empty)
-            // TODO: implement the checks in the Meeting google docs
-            // (i.e. print the threads that completed/failed during this step
-            // and check whether there are any threads that started in the same
-            // cycle in the other queues that shouldn't be there)
+
+            // Find the unique start cycles of all threads in the `finished` queue
+            let finished_threads_start_cycles = unique_start_cycles(&self.finished);
+
+            // Out of all threads that started in the same cycle & finished in the most recent step...
+            for start_cycle in finished_threads_start_cycles {
+                // ...there should only be at most one of them in `finished`
+                let finished = threads_with_start_time(&self.finished, start_cycle);
+                if finished.len() > 1 {
+                    return Err(anyhow!(
+                        "Expected the no. of threads that started in cycle {} & ended in cycle {} to be at most 1, but instead there were {}",
+                        start_cycle,
+                        self.step_count,
+                        finished.len()
+                    ));
+                }
+                let finished_thread = &finished[0];
+
+                // ...and there shouldn't be any other threads in `next`
+                let next = threads_with_start_time(&self.next, start_cycle);
+                if !next.is_empty() {
+                    return Err(anyhow!(
+                        "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
+                        finished_thread.thread_id,
+                        finished_thread.start_cycle
+                    ));
+                }
+            }
+
+            // Next, find the unique start cycles of all threads in `failed`
+            let failed_threads_start_cycles = unique_start_cycles(&self.failed);
+
+            // Out of all threads that started in the same cycle & failed in the most recent step...
+            for start_cycle in failed_threads_start_cycles {
+                // ...if `failed` is non-empty, but `next` and `finished` are non-empty,
+                // then we should emit an error
+                // (The expected behavior is that all but one threads that started in
+                // the same cycle should fail, but here we have the case where
+                // *all* the threads that started in the same cycle failed)
+                let failed = threads_with_start_time(&self.failed, start_cycle);
+                let finished = threads_with_start_time(&self.finished, start_cycle);
+                let paused = threads_with_start_time(&self.next, start_cycle);
+                if !failed.is_empty() && finished.is_empty() && paused.is_empty() {
+                    return Err(anyhow!(
+                        "Out of all {} threads that started in {}, all but one are expected to fail, but all of them failed",
+                        finished.len(),
+                        start_cycle
+                    ));
+                }
+            }
+
+            // TODO: print all the threads that finished & failed during the most recent step
 
             if !self.next.is_empty() {
                 // Mark all suspended threads as ready for execution
@@ -113,6 +171,7 @@ impl Scheduler {
                 break;
             }
         }
+        Ok(())
     }
 
     /// Keeps running a `thread` until:
@@ -181,7 +240,7 @@ impl Scheduler {
                 }
                 Ok(None) => {
                     info!(
-                        "Thread {:?} completed successfully, adding to `completed` queue",
+                        "Thread {:?} finished successfully, adding to `finished` queue",
                         thread.thread_id
                     );
                     println!(
@@ -189,7 +248,7 @@ impl Scheduler {
                         self.interpreter
                             .serialize_reconstructed_transaction(&self.ctx)
                     );
-                    self.completed.push(thread);
+                    self.finished.push(thread);
                     break;
                 }
                 Err(e) => {
