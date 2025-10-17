@@ -5,6 +5,7 @@
 
 mod designs;
 mod global_context;
+mod interpreter;
 mod scheduler;
 mod signal_trace;
 mod thread;

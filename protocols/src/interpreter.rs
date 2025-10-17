@@ -14,8 +14,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
@@ -197,7 +197,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    // Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
+    /// Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
         args: HashMap<&str, BitVecValue>,

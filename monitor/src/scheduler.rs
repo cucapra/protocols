@@ -4,14 +4,17 @@
 
 #![allow(dead_code)]
 
-use crate::thread::Thread;
+use log::info;
+use protocols::ir::{Stmt, SymbolTable, Transaction};
+
+use crate::{global_context::GlobalContext, interpreter::Interpreter, thread::Thread};
 
 /// Queue of threads
 type Queue = Vec<Thread>;
 
 /// Extracts all elements in the `Queue` where all the threads have the
 /// same `start_cycle`, preserving their order
-pub fn threads_with_start_time(queue: Queue, start_cycle: usize) -> Queue {
+pub fn threads_with_start_time(queue: Queue, start_cycle: u32) -> Queue {
     queue
         .into_iter()
         .filter(|thread| thread.start_cycle == start_cycle)
@@ -20,29 +23,116 @@ pub fn threads_with_start_time(queue: Queue, start_cycle: usize) -> Queue {
 
 pub struct Scheduler {
     /// Queue storing threads that are ready (to be run during the current step)
-    ready_threads: Queue,
+    current: Queue,
 
     /// Queue of suspended threads (to be run during the next step)
-    suspended_threads: Queue,
+    next: Queue,
 
     /// Threads that have completed successfully
-    completed_threads: Queue,
+    completed: Queue,
 
     /// Threads that failed
-    failed_threads: Queue,
+    failed: Queue,
+
+    /// The global context (shared across all threads)
+    ctx: GlobalContext,
+
+    /// The current scheduling cycle
+    step_count: u32,
+
+    /// The no. of threads that have been created so far.  
+    /// (This variable is used to create unique `thread_id`s for `Thread`s.)
+    num_threads: u32,
+
+    /// The associated interpreter for Protocols programs
+    interpreter: Interpreter,
 }
 
 impl Scheduler {
     /// Creates a new `Scheduler` where all four queues are empty
-    pub fn new() -> Self {
+    pub fn new(transaction: Transaction, symbol_table: SymbolTable, ctx: GlobalContext) -> Self {
+        let interpreter = Interpreter::new(transaction, symbol_table, &ctx);
         Self {
-            ready_threads: vec![],
-            suspended_threads: vec![],
-            completed_threads: vec![],
-            failed_threads: vec![],
+            current: vec![],
+            next: vec![],
+            completed: vec![],
+            failed: vec![],
+            ctx,
+            interpreter,
+            step_count: 0,
+            num_threads: 0,
         }
     }
 
-    // TODO: figure out how to run a thread till the next `step`
-    // I guess we need a way to pop from `ready_threads` and run it till the next step
+    pub fn run_scheduler(&mut self) {
+        if let Some(thread) = self.current.pop() {
+            self.run_thread_till_next_step(thread);
+        } else if !self.next.is_empty() {
+            todo!("Swap current and next");
+        } else {
+            todo!("Figure out what to do when both current and next are empty");
+        }
+    }
+
+    /// Pops a thread from the `current` queue and runs it till the next `step()` or `fork()` statement
+    pub fn run_thread_till_next_step(&mut self, mut thread: Thread) {
+        let mut current_stmt_id = thread.current_stmt_id;
+
+        loop {
+            match self.interpreter.evaluate_stmt(&current_stmt_id, &self.ctx) {
+                Ok(Some(next_stmt_id)) => {
+                    match thread.transaction[next_stmt_id] {
+                        Stmt::Step => {
+                            info!(
+                                "Thread {:?} called `step()`, adding to `next` queue",
+                                thread.thread_id
+                            );
+                            // if the thread is moving to the `next` queue,
+                            // its `current_stmt_id` is updated to be `next_stmt_id`
+                            thread.current_stmt_id = next_stmt_id;
+                            self.next.push(thread);
+                            break;
+                        }
+                        Stmt::Fork => {
+                            let new_thread = Thread::new(
+                                thread.transaction,
+                                thread.symbol_table,
+                                &self.ctx,
+                                self.num_threads,
+                                self.step_count,
+                            );
+                            self.num_threads += 1;
+                            info!(
+                                "Thread {:?} called `fork(), created new thread {:?} for transaction {}, adding to `current` queue",
+                                thread.thread_id, new_thread.thread_id, new_thread.transaction.name
+                            );
+                            self.current.push(new_thread);
+                            break;
+                        }
+                        _ => {
+                            // Default case: update `current_stmt_id`
+                            // to point to `next_stmt_id`
+                            current_stmt_id = next_stmt_id;
+                        }
+                    }
+                }
+                Ok(None) => {
+                    info!(
+                        "Thread {:?} completed successfully, adding to `completed` queue",
+                        thread.thread_id
+                    );
+                    self.completed.push(thread);
+                    break;
+                }
+                Err(e) => {
+                    info!(
+                        "Thread {:?} encountered error {}, adding to `failed` queue",
+                        thread.thread_id, e
+                    );
+                    self.failed.push(thread);
+                    break;
+                }
+            }
+        }
+    }
 }
