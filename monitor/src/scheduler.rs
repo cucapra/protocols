@@ -81,22 +81,28 @@ impl Scheduler {
             while let Some(thread) = self.current.pop() {
                 self.run_thread_till_next_step(thread);
             }
-            // At this point, `current` is empty
-            // (i.e. all threads have been executed till their next `step`)
+
+            // At this point, all threads have been executed till their next `step`
+            // and are synchronized (i.e. `current` is empty)
+            // TODO: implement the checks in the Meeting google docs
+            // (i.e. print the threads that completed/failed during this step
+            // and check whether there are any threads that started in the same
+            // cycle in the other queues that shouldn't be there)
+
             if !self.next.is_empty() {
                 // Mark all suspended threads as ready for execution
                 // by setting `current` to `next`, and setting `next = []`
                 // (the latter is done via `std::mem::take`)
                 self.current = std::mem::take(&mut self.next);
 
-                // Then, advance the trace to the next `step`
+                // Then, advance the trace to the next `step` and update
+                // the scheduler's `step_count`
                 let step_result = self.ctx.trace.step();
-                // `trace.step()` returns a `StepResult` which is
-                // either `Done` or `Ok`.
-                // If `StepResult = Done`, there are no more steps
-                // left in the signal trace
+                self.step_count += 1;
+
                 if let StepResult::Done = step_result {
-                    // The trace has ended, so we can just return here
+                    // If `StepResult = Done`, the trace has ended,
+                    // so we can just return here
                     info!("No steps remaining left in signal trace");
                     break;
                 }
@@ -109,7 +115,7 @@ impl Scheduler {
         }
     }
 
-    /// Runs a `thread` until:
+    /// Keeps running a `thread` until:
     /// - It reaches the next `step()` or `fork()` statement
     /// - It completes succesfully
     /// - An error was encountered during execution
