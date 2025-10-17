@@ -4,14 +4,33 @@
 
 #![allow(dead_code)]
 
-use protocols::scheduler::Thread;
+use crate::thread::Thread;
 
 /// Queue of threads
-type Queue<'a> = Vec<Thread<'a>>;
+type Queue = Vec<Thread>;
 
-pub struct Scheduler<'a> {
-    /// The current queue
-    current_queue: Queue<'a>,
-    /// The next queue
-    next_queue: Queue<'a>,
+pub struct Scheduler {
+    /// Queue storing threads that are ready (to be run during the current step)
+    ready_threads: Queue,
+
+    /// Queue of suspended threads (to be run during the next step)
+    suspended_threads: Queue,
+
+    /// Threads that have completed successfully
+    completed_threads: Queue,
+
+    /// Threads that failed
+    failed_threads: Queue,
+}
+
+impl Scheduler {
+    /// Creates a new `Scheduler` where all four queues are empty
+    pub fn new() -> Self {
+        Self {
+            ready_threads: vec![],
+            suspended_threads: vec![],
+            completed_threads: vec![],
+            failed_threads: vec![],
+        }
+    }
 }

@@ -27,9 +27,12 @@ use crate::{
 // - Where in the transaction are we currently at? (the `StmtId`)
 // - A mutable map mapping variable names to their values (`args_mapping`)
 #[allow(dead_code)]
-struct Thread {
+pub struct Thread {
     // The thread's ID
     thread_id: usize,
+
+    /// The cycle in which the thread was started
+    start_cycle: usize,
 
     /// The `Transaction` being interpreted
     transaction: Transaction,
@@ -52,14 +55,16 @@ struct Thread {
 }
 
 impl Thread {
-    /// Creates a new `Thread` given a `Transaction`, `SymbolTable`,
-    /// `GlobalContext` and `thread_id`. This method also sets up the `args_mapping`
+    /// Creates a new `Thread` that given a `Transaction`, `SymbolTable`,
+    /// `GlobalContext`, `thread_id` & `start_cycle`.
+    /// This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
         transaction: Transaction,
         symbol_table: SymbolTable,
         ctx: GlobalContext,
         thread_id: usize,
+        start_cycle: usize,
     ) -> Self {
         let mut args_mapping = HashMap::new();
 
@@ -89,6 +94,7 @@ impl Thread {
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
             ctx,
+            start_cycle,
         }
     }
 
