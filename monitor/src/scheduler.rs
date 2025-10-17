@@ -7,7 +7,12 @@
 use log::info;
 use protocols::ir::{Stmt, SymbolTable, Transaction};
 
-use crate::{global_context::GlobalContext, interpreter::Interpreter, thread::Thread};
+use crate::{
+    global_context::GlobalContext,
+    interpreter::Interpreter,
+    signal_trace::{SignalTrace, StepResult},
+    thread::Thread,
+};
 
 /// `Queue` is just a type alias for `Vec<Thread>`
 type Queue = Vec<Thread>;
@@ -65,26 +70,42 @@ impl Scheduler {
         }
     }
 
-    /// Runs the scheduler:
-    /// 1. Pops a thread from the `current` queue and runs it till the next step,
-    /// and keeps repeating this while the `current` queue is non-empty
-    /// 2. When the `current` queue si empty, it sets `current` to `next`
-    /// (marking all suspended threads as ready for execution)
+    /// Runs the scheduler by repeating the following steps.
+    /// 1. Pops a thread from the `current` queue and runs it till the next step.
+    ///    We keep doing this while the `current` queue is non-empty.
+    /// 2. When the `current` queue is empty, it sets `current` to `next`
+    ///    (marking all suspended threads as ready for execution),
+    ///    then advances the trace to the next step.
     pub fn run_scheduler(&mut self) {
-        while let Some(thread) = self.current.pop() {
-            self.run_thread_till_next_step(thread);
-        }
-        // At this point, `current` is empty
-        // (i.e. all threads have been executed till their next `step`)
-        if !self.next.is_empty() {
-            // Mark all suspended threads as ready for execution
-            // by setting `current` to `next`, and setting `next = []`
-            // (the latter is done via `std::mem::take`)
-            self.current = std::mem::take(&mut self.next);
-        } else {
-            // When both current and next are finished, the monitor is done
-            // since there are no more threads to run
-            info!("Monitor finished!");
+        loop {
+            while let Some(thread) = self.current.pop() {
+                self.run_thread_till_next_step(thread);
+            }
+            // At this point, `current` is empty
+            // (i.e. all threads have been executed till their next `step`)
+            if !self.next.is_empty() {
+                // Mark all suspended threads as ready for execution
+                // by setting `current` to `next`, and setting `next = []`
+                // (the latter is done via `std::mem::take`)
+                self.current = std::mem::take(&mut self.next);
+
+                // Then, advance the trace to the next `step`
+                let step_result = self.ctx.trace.step();
+                // `trace.step()` returns a `StepResult` which is
+                // either `Done` or `Ok`.
+                // If `StepResult = Done`, there are no more steps
+                // left in the signal trace
+                if let StepResult::Done = step_result {
+                    // The trace has ended, so we can just return here
+                    info!("No steps remaining left in signal trace");
+                    break;
+                }
+            } else {
+                // When both current and next are finished, the monitor is done
+                // since there are no more threads to run
+                info!("Monitor finished!");
+                break;
+            }
         }
     }
 
