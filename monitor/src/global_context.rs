@@ -1,3 +1,9 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Ernest Ng <eyn5@cornell.edu>
+
+#![allow(dead_code)]
+
 use crate::{designs::Design, signal_trace::WaveSignalTrace};
 
 /// The `GlobalContext` stores fields which are common
@@ -5,12 +11,12 @@ use crate::{designs::Design, signal_trace::WaveSignalTrace};
 /// - the `WaveSignalTrace` (since all threads are working over the same trace)
 /// - the `Design` (since all threads are working over the same `Design`)
 /// - other immutable fields
-pub struct GlobalContext<'a> {
+pub struct GlobalContext {
     /// The waveform supplied by the user
     pub trace: WaveSignalTrace,
 
     /// The design under test
-    pub design: &'a Design,
+    pub design: Design,
 
     /// Whether there are steps remaining in the signal trace
     pub has_steps_remaining: bool,
@@ -24,12 +30,12 @@ pub struct GlobalContext<'a> {
     pub display_hex: bool,
 }
 
-impl<'a> GlobalContext<'a> {
+impl GlobalContext {
     /// Creates a new `GlobalContext` with the provided `trace`,
     /// `design` and `display_hex` flag. The `display_hex` argument
     /// indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
-    pub fn new(trace: WaveSignalTrace, design: &'a Design, display_hex: bool) -> Self {
+    pub fn new(trace: WaveSignalTrace, design: Design, display_hex: bool) -> Self {
         // We assume that there is only one `Instance` at the moment,
         // so we just use the first `PortKey`'s `instance_id`
         let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;

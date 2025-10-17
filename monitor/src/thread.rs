@@ -1,3 +1,9 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Ernest Ng <eyn5@cornell.edu>
+
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 
 use baa::{BitVecOps, BitVecValue};
@@ -21,15 +27,15 @@ use crate::{
 // - Where in the transaction are we currently at? (the `StmtId`)
 // - A mutable map mapping variable names to their values (`args_mapping`)
 #[allow(dead_code)]
-struct Thread<'a> {
+struct Thread {
     // The thread's ID
     thread_id: usize,
 
     /// The `Transaction` being interpreted
-    transaction: &'a Transaction,
+    transaction: Transaction,
 
     /// The `SymbolTable` associated with the `Transaction`
-    symbol_table: &'a SymbolTable,
+    symbol_table: SymbolTable,
 
     /// The current statement in the `Transaction`, identified by its `StmtId`
     stmt_id: StmtId,
@@ -42,17 +48,17 @@ struct Thread<'a> {
     args_mapping: HashMap<SymbolId, BitVecValue>,
 
     /// A reference to the `GlobalContext` for all threads
-    ctx: &'a GlobalContext<'a>,
+    ctx: GlobalContext,
 }
 
-impl<'a> Thread<'a> {
+impl Thread {
     /// Creates a new `Thread` given a `Transaction`, `SymbolTable`,
     /// `GlobalContext` and `thread_id`. This method also sets up the `args_mapping`
     /// accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
-        transaction: &'a Transaction,
-        symbol_table: &'a SymbolTable,
-        ctx: &'a GlobalContext,
+        transaction: Transaction,
+        symbol_table: SymbolTable,
+        ctx: GlobalContext,
         thread_id: usize,
     ) -> Self {
         let mut args_mapping = HashMap::new();
@@ -77,7 +83,7 @@ impl<'a> Thread<'a> {
 
         Self {
             thread_id,
-            transaction,
+            transaction: transaction.clone(),
             symbol_table,
             stmt_id: transaction.body,
             next_stmt_map: transaction.next_stmt_mapping(),
@@ -89,13 +95,13 @@ impl<'a> Thread<'a> {
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
-        self.transaction.format_stmt(stmt_id, self.symbol_table)
+        self.transaction.format_stmt(stmt_id, &self.symbol_table)
     }
 
     /// Pretty-prints a `Expr` identified by its `ExprID`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
     pub fn format_expr(&self, expr_id: &ExprId) -> String {
-        self.transaction.format_expr(expr_id, self.symbol_table)
+        self.transaction.format_expr(expr_id, &self.symbol_table)
     }
 
     // Update the `args_mapping` with the `current_value` for the `pin_id`
@@ -105,11 +111,12 @@ impl<'a> Thread<'a> {
 
     /// Evaluates an `Expr` identified by its `ExprId`, returning an `ExprValue`
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
-        let expr = &self.transaction[expr_id];
+        let transaction = self.transaction.clone();
+        let expr = &transaction[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
-                let name = self.symbol_table[sym_id].full_name(self.symbol_table);
+                let name = self.symbol_table[sym_id].full_name(&self.symbol_table);
 
                 // Fetch the value for the `sym_id` from the trace,
                 // then update the `args_mapping`
@@ -125,7 +132,7 @@ impl<'a> Thread<'a> {
                         "args_mapping: \n{}",
                         serialize_args_mapping(
                             &self.args_mapping,
-                            self.symbol_table,
+                            &self.symbol_table,
                             self.ctx.display_hex
                         )
                     );
@@ -232,7 +239,8 @@ impl<'a> Thread<'a> {
     /// Evaluates a `Statement` identified by its `StmtId`,
     /// returning the `StmtId` of the next statement to evaluate (if one exists)
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
-        match &self.transaction[stmt_id] {
+        let transaction = self.transaction.clone();
+        match &transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 // TODO: figure out what to do if the `symbol_id` already has a value in the environment
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;

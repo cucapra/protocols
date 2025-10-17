@@ -3,6 +3,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+#![allow(dead_code)]
+
 use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
 use rustc_hash::FxHashMap;
 
@@ -14,8 +16,7 @@ pub fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
 }
 
 /// Metadata associated with a design (i.e. a `struct` in the Protocols language)
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct Design {
     /// The name of the struct
     pub name: String,
@@ -28,7 +29,6 @@ pub struct Design {
     pub transaction_ids: Vec<usize>,
 }
 
-#[allow(dead_code)]
 impl Design {
     /// Takes a `pin_id` and retrieves the name of the corresponding `Field`
     /// (if one exists)
