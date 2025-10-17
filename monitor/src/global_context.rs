@@ -26,7 +26,9 @@ pub struct GlobalContext<'a> {
 
 impl<'a> GlobalContext<'a> {
     /// Creates a new `GlobalContext` with the provided `trace`,
-    /// `design` and `display_hex` flag
+    /// `design` and `display_hex` flag. The `display_hex` argument
+    /// indicates whether to print integer literals
+    /// using hexadecimal (if `false`, we default to using decimal).
     pub fn new(trace: WaveSignalTrace, design: &'a Design, display_hex: bool) -> Self {
         // We assume that there is only one `Instance` at the moment,
         // so we just use the first `PortKey`'s `instance_id`

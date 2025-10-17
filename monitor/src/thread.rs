@@ -10,7 +10,10 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::{global_context::GlobalContext, signal_trace::SignalTrace};
+use crate::{
+    global_context::GlobalContext,
+    signal_trace::{PortKey, SignalTrace},
+};
 
 /// The local context associated with an individual thread,
 /// storing information such as:
@@ -43,6 +46,46 @@ struct Thread<'a> {
 }
 
 impl<'a> Thread<'a> {
+    /// Creates a new `Thread` given a `Transaction`, `SymbolTable`,
+    /// `GlobalContext` and `thread_id`. This method also sets up the `args_mapping`
+    /// accordingly based on the pins' values at the beginning of the signal trace.
+    pub fn new(
+        transaction: &'a Transaction,
+        symbol_table: &'a SymbolTable,
+        ctx: &'a GlobalContext,
+        thread_id: usize,
+    ) -> Self {
+        let mut args_mapping = HashMap::new();
+
+        for port_key in ctx.trace.port_map.keys() {
+            // We assume that there is only one `Instance` at the moment
+            let PortKey {
+                instance_id,
+                pin_id,
+            } = port_key;
+
+            // Fetch the current value of the `pin_id`
+            // (along with the name of the corresponding `Field`)
+            let current_value = ctx.trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to get value for pin {pin_id} in signal trace, {:?}",
+                    err
+                )
+            });
+            args_mapping.insert(*pin_id, current_value);
+        }
+
+        Self {
+            thread_id,
+            transaction,
+            symbol_table,
+            stmt_id: transaction.body,
+            next_stmt_map: transaction.next_stmt_mapping(),
+            args_mapping,
+            ctx,
+        }
+    }
+
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
@@ -285,6 +328,9 @@ impl<'a> Thread<'a> {
         Ok(())
     }
 
+    /// Evaluates a `while`-loop with guard `loop_guard_id` and
+    /// loop-body `do_block_id`. Note that the argument `while_id`
+    /// is the `StmtId` for the `while`-loop itself.
     fn evaluate_while(
         &mut self,
         loop_guard_id: &ExprId,

@@ -16,72 +16,13 @@ use crate::{
 type Queue<'a> = Vec<Thread<'a>>;
 
 pub struct Scheduler<'a> {
-    /// THe current queue
+    /// The current queue
     current_queue: Queue<'a>,
     /// The next queue
     next_queue: Queue<'a>,
 }
 
 impl<'a> Scheduler<'a> {
-    /// Creates a new `MiniInterpreter` given a `Transaction`, a `SymbolTable`
-    /// and a `WaveSignalTrace`. This method also sets up the `args_mapping`
-    /// accordingly based on the pins' values at the beginning of the signal trace.
-    /// The `display_hex` argument indicates whether to print integer literals
-    /// using hexadecimal (if `false`, we default to using decimal).
-    pub fn new(
-        transaction: &'a Transaction,
-        symbol_table: &'a SymbolTable,
-        trace: WaveSignalTrace,
-        design: &'a Design,
-        display_hex: bool,
-    ) -> Self {
-        let mut args_mapping = HashMap::new();
-
-        for port_key in trace.port_map.keys() {
-            // We assume that there is only one `Instance` at the moment
-            let PortKey {
-                instance_id,
-                pin_id,
-            } = port_key;
-
-            // Fetch the current value of the `pin_id`
-            // (along with the name of the corresponding `Field`)
-            let current_value = trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to get value for pin {pin_id} in signal trace, {:?}",
-                    err
-                )
-            });
-            args_mapping.insert(*pin_id, current_value);
-        }
-
-        info!(
-            "Initial args_mapping:\n{}",
-            serialize_args_mapping(&args_mapping, symbol_table, display_hex)
-        );
-
-        // We assume that there is only one `Instance` at the moment,
-        // so we just use the first `PortKey`'s `instance_id`
-        let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;
-
-        Self {
-            transaction,
-            symbol_table,
-            trace,
-            design,
-            next_stmt_map: transaction.next_stmt_mapping(),
-            args_mapping,
-            // We haven't run anything yet,
-            // so `has_steps_remaining` is initialized to `true`
-            has_steps_remaining: true,
-            instance_id,
-            display_hex,
-            // We haven't executed anything yet,
-            // so `has_errored` is initialized to `false`
-            has_errored: false,
-        }
-    }
-
     /// Runs the `MiniInterpreter` on the Protocols file
     pub fn run(&mut self) {
         let mut current_stmt_id = self.transaction.body;
