@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::anyhow;
 use log::info;
@@ -19,6 +19,20 @@ use crate::{
 
 /// `Queue` is just a type alias for `Vec<Thread>`
 type Queue = Vec<Thread>;
+
+/// Formats a queue's contents into a pretty-printed string
+/// Note: we can't implement the `Display` trait for `Queue` since
+/// `Queue` is just a type alias
+fn format_queue(queue: &Queue) -> String {
+    if !queue.is_empty() {
+        let formatted_queue = queue.iter().map(|thread| format!("{}", thread)).collect::<Vec<String>>()
+            .join("\n");
+        format!("\n\t{}", formatted_queue)
+    } else {
+        "<EMPTY>".to_string()
+    }
+}
+
 
 /// Extracts all elements in the `Queue` where all the threads have the
 /// same `start_cycle`, preserving their order
@@ -65,18 +79,46 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    /// Creates a new `Scheduler` where all four queues are empty
-    pub fn new(transaction: Transaction, symbol_table: SymbolTable, ctx: GlobalContext) -> Self {
-        let interpreter = Interpreter::new(transaction, symbol_table, &ctx);
+    /// Prints the internal state of the scheduler 
+    /// (i.e. the contents of all 4 queues + current scheduling cycle)
+    pub fn print_scheduler_state(&self) {
+        info!("SCHULEDER STATE, CYCLE {}:", self.step_count);
+        info!("Current: {}", format_queue(&self.current));
+        info!("Next: {}", format_queue(&self.next));
+        info!("Failed: {}", format_queue(&self.failed));
+        info!("Finished: {}", format_queue(&self.finished));
+    }
+
+    /// Initializes a `Scheduler` with a thread that runs the given
+    /// `Transaction` with the provided `SymbolTable` and `GlobalContext`
+    pub fn initialize_with_thread(
+        transaction: Transaction,
+        symbol_table: SymbolTable,
+        ctx: GlobalContext,
+    ) -> Self {
+        let interpreter = Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx);
+        let mut thread_id = 0;
+        let step_count = 0;
+        let args_mapping = HashMap::new();
+        let thread = Thread::new(
+            transaction.clone(),
+            symbol_table,
+            transaction.next_stmt_mapping(),
+            args_mapping,
+            &ctx,
+            thread_id,
+            step_count,
+        );
+        thread_id += 1;
         Self {
-            current: vec![],
+            current: vec![thread],
             next: vec![],
             finished: vec![],
             failed: vec![],
             ctx,
             interpreter,
             step_count: 0,
-            num_threads: 0,
+            num_threads: thread_id,
         }
     }
 
@@ -88,6 +130,8 @@ impl Scheduler {
     ///    then advances the trace to the next step.
     pub fn run(&mut self) -> anyhow::Result<()> {
         loop {
+            self.print_scheduler_state();
+
             while let Some(thread) = self.current.pop() {
                 self.run_thread_till_next_step(thread);
             }
@@ -146,20 +190,26 @@ impl Scheduler {
             }
 
             // Print all the threads that finished & failed during the most recent step
-            info!("Threads that failed in cycle {}:", self.step_count);
-            for failed_thread in &self.failed {
-                info!(
-                    "Thread {} (transaction {}) failed in cycle",
-                    failed_thread.thread_id, failed_thread.transaction.name
-                );
+            if !self.failed.is_empty() {
+                info!("Threads that failed in cycle {}:", self.step_count);
+                for failed_thread in &self.failed {
+                    info!(
+                        "Thread {} (transaction {}) failed in cycle",
+                        failed_thread.thread_id, failed_thread.transaction.name
+                    );
+                }
+                self.failed.clear();
             }
 
-            info!("Threads that finished in cycle {}:", self.step_count);
-            for finished_thread in &self.finished {
-                info!(
-                    "Thread {} (transaction {})",
-                    finished_thread.thread_id, finished_thread.transaction.name
-                )
+            if !self.finished.is_empty() {
+                info!("Threads that finished in cycle {}:", self.step_count);
+                for finished_thread in &self.finished {
+                    info!(
+                        "Thread {} (transaction {})",
+                        finished_thread.thread_id, finished_thread.transaction.name
+                    )
+                }
+                self.finished.clear();
             }
 
             if !self.next.is_empty() {
@@ -185,13 +235,6 @@ impl Scheduler {
                 info!("Monitor finished!");
                 break;
             }
-
-            // Clear the `failed` and `finished` queue
-            // before proceeding to the next `step`
-            // (These two queues only store threads that `failed`/`finished`
-            // within the most recent `step`)
-            self.failed.clear();
-            self.finished.clear();
         }
         Ok(())
     }
@@ -201,6 +244,12 @@ impl Scheduler {
     /// - It completes succesfully
     /// - An error was encountered during execution
     pub fn run_thread_till_next_step(&mut self, mut thread: Thread) {
+        info!(
+            "Running thread {} (transaction `{}`) till next `step()`", 
+            thread.thread_id, 
+            thread.transaction.name
+        );
+        
         // Perform a context switch (use the argument thread's `Transaction`
         // & associated `SymbolTable` / `NextStmtMap`)
         let Thread {
@@ -226,8 +275,8 @@ impl Scheduler {
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
                             info!(
-                                "Thread {:?} called `step()`, adding to `next` queue",
-                                thread.thread_id
+                                "Thread {:?} (transaction `{}`) called `step()`, adding to `next` queue",
+                                thread.thread_id, thread.transaction.name, 
                             );
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
@@ -247,7 +296,7 @@ impl Scheduler {
                             );
                             self.num_threads += 1;
                             info!(
-                                "Thread {:?} called `fork(), created new thread {:?} for transaction {}, adding to `current` queue",
+                                "Thread {:?} called `fork()`, created new thread {:?} for transaction {}, adding to `current` queue",
                                 thread.thread_id, new_thread.thread_id, new_thread.transaction.name
                             );
                             self.current.push(new_thread);

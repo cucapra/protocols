@@ -10,7 +10,7 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::global_context::GlobalContext;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
@@ -110,9 +110,8 @@ fn main() -> anyhow::Result<()> {
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
     let ctx = GlobalContext::new(trace, design.clone(), cli.display_hex);
-    let mut scheduler = Scheduler::new(transaction.clone(), symbol_table.clone(), ctx);
-
-    // TODO: figure out how to insert threads into the initial ready queue
+    let mut scheduler =
+        Scheduler::initialize_with_thread(transaction.clone(), symbol_table.clone(), ctx);
 
     // Actually run the scheduler
     scheduler.run()

@@ -44,6 +44,17 @@ pub struct Thread {
     pub current_stmt_id: StmtId,
 }
 
+/// Pretty-prints a `Thread`
+impl std::fmt::Display for Thread {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "THREAD {}:\n\tStart cycle: {}\n\tTransaction: {}\n\tCurrent statement ID: {}",
+            self.thread_id, self.start_cycle, self.transaction.name, self.current_stmt_id
+        )
+    }
+}
+
 impl Thread {
     /// Creates a new `Thread` that given a `Transaction`, `SymbolTable`,
     /// `GlobalContext`, `thread_id` & `start_cycle`.
