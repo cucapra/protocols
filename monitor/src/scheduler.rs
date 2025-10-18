@@ -145,7 +145,22 @@ impl Scheduler {
                 }
             }
 
-            // TODO: print all the threads that finished & failed during the most recent step
+            // Print all the threads that finished & failed during the most recent step
+            info!("Threads that failed in cycle {}:", self.step_count);
+            for failed_thread in &self.failed {
+                info!(
+                    "Thread {} (transaction {}) failed in cycle",
+                    failed_thread.thread_id, failed_thread.transaction.name
+                );
+            }
+
+            info!("Threads that finished in cycle {}:", self.step_count);
+            for finished_thread in &self.finished {
+                info!(
+                    "Thread {} (transaction {})",
+                    finished_thread.thread_id, finished_thread.transaction.name
+                )
+            }
 
             if !self.next.is_empty() {
                 // Mark all suspended threads as ready for execution
@@ -170,6 +185,13 @@ impl Scheduler {
                 info!("Monitor finished!");
                 break;
             }
+
+            // Clear the `failed` and `finished` queue
+            // before proceeding to the next `step`
+            // (These two queues only store threads that `failed`/`finished`
+            // within the most recent `step`)
+            self.failed.clear();
+            self.finished.clear();
         }
         Ok(())
     }

@@ -11,6 +11,8 @@ mod signal_trace;
 mod thread;
 
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::global_context::GlobalContext;
+use crate::scheduler::Scheduler;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
 use anyhow::Context;
 use clap::{ColorChoice, Parser};
@@ -105,5 +107,13 @@ fn main() -> anyhow::Result<()> {
     // TODO: we assume only one `Transaction` & `SymbolTable` for now
     let (transaction, symbol_table) = &transactions_symbol_tables[0];
 
-    todo!("Figure out how to invoke scheduler and create new threads");
+    // Initialize the `GlobalContext` (shared across all threads)
+    // & the scheduler
+    let ctx = GlobalContext::new(trace, design.clone(), cli.display_hex);
+    let mut scheduler = Scheduler::new(transaction.clone(), symbol_table.clone(), ctx);
+
+    // TODO: figure out how to insert threads into the initial ready queue
+
+    // Actually run the scheduler
+    scheduler.run()
 }
