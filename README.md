@@ -7,13 +7,16 @@ A protocol is described using an `fn` definition containing a list of imperative
 - `assert_eq(e1, e2)` tests equality between `e1` and `e2`.
 - `while` and `if/else` blocks allow for control flow
 
-**Build instructions**:
-- Run `brew install yosys` to install Yosys
+**Installing dependencies**
+- Run `brew install yosys` to install [Yosys](https://yosyshq.readthedocs.io/projects/yosys/en/latest/)
+- Run `brew install just` to install [Just](https://github.com/casey/just)
 - Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main) 
   - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
+
+**Building / testing**:
 - Run `cargo build` to build
 - Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Turnt)
-  - Run `just turnt` to only run Turnt snapshot tests
+- Run `just turnt` to only run Turnt snapshot tests
 - To generate HTML documentation, run `just doc` (this opens Cargo-generated docs in your browser)
 
 **CLI**:
@@ -49,12 +52,11 @@ $ cargo run --package protocols-interp -- --verilog protocols/tests/adders/adder
         --verbose
 ```
 
-## Syntax highlighting
-This repo contains a basic VS Code extension which provides syntax highlighting
-for `.prot` and `.tx` files.
+### Syntax highlighting
+This repo contains a basic VS Code extension which provides syntax highlighting for `.prot` and `.tx` files.
 
-### Installation
-Add a link to the Protocols VSCode extension directory to your VSCode extensions directory.
+**Installation**:
+Add a link to the Protocols VSCode extension directory to your VSCode extensions directory as follows:
 
 ```bash
 cd $HOME/.vscode/extensions
