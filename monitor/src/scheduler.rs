@@ -29,8 +29,28 @@ fn format_queue(queue: &Queue) -> String {
             .iter()
             .map(|thread| format!("{}", thread))
             .collect::<Vec<String>>()
-            .join("\n");
+            .join("\n\t");
         format!("\n\t{}", formatted_queue)
+    } else {
+        "<EMPTY>".to_string()
+    }
+}
+
+/// Formats a queue's contents into a *compact* pretty-printed string
+/// (i.e. no new-lines, only displays the thread_id and transaction name
+/// for each thread)
+fn format_queue_compact(queue: &Queue) -> String {
+    if !queue.is_empty() {
+        queue
+            .iter()
+            .map(|thread| {
+                format!(
+                    "Thread {} (`{}`)",
+                    thread.thread_id, thread.transaction.name
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     } else {
         "<EMPTY>".to_string()
     }
@@ -72,23 +92,29 @@ pub struct Scheduler {
     /// The current scheduling cycle
     cycle_count: u32,
 
-    /// The no. of threads that have been created so far.  
+    /// The no. of threads that have been created so far.
     /// (This variable is used to create unique `thread_id`s for `Thread`s.)
     num_threads: u32,
 
     /// The associated interpreter for Protocols programs
     interpreter: Interpreter,
+
+    /// Flag indicating whether the trace has ended
+    trace_ended: bool,
 }
 
 impl Scheduler {
     /// Prints the internal state of the scheduler
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
     pub fn print_scheduler_state(&self) {
-        info!("SCHULEDER STATE, CYCLE {}:", self.cycle_count);
-        info!("Current: {}", format_queue(&self.current));
-        info!("Next: {}", format_queue(&self.next));
-        info!("Failed: {}", format_queue(&self.failed));
-        info!("Finished: {}", format_queue(&self.finished));
+        info!(
+            "{}\n{}\n{}\n{}\n{}",
+            format!("SCHULEDER STATE, CYCLE {}:", self.cycle_count),
+            format!("Current: {}", format_queue(&self.current)),
+            format!("Next: {}", format_queue(&self.next)),
+            format!("Failed: {}", format_queue(&self.failed)),
+            format!("Finished: {}", format_queue(&self.finished))
+        );
     }
 
     /// Initializes a `Scheduler` with a thread that runs the given
@@ -122,6 +148,7 @@ impl Scheduler {
             interpreter,
             cycle_count,
             num_threads: thread_id,
+            trace_ended: false,
         }
     }
 
@@ -194,28 +221,33 @@ impl Scheduler {
 
             // Print all the threads that finished & failed during the most recent step
             if !self.failed.is_empty() {
-                info!("Threads that failed in cycle {}:", self.cycle_count);
-                for failed_thread in &self.failed {
-                    info!(
-                        "Thread {} (transaction {}) failed in cycle",
-                        failed_thread.thread_id, failed_thread.transaction.name
-                    );
-                }
+                info!(
+                    "Threads that failed in cycle {}: {}",
+                    self.cycle_count,
+                    format_queue_compact(&self.failed)
+                );
                 self.failed.clear();
             }
 
             if !self.finished.is_empty() {
-                info!("Threads that finished in cycle {}:", self.cycle_count);
-                for finished_thread in &self.finished {
-                    info!(
-                        "Thread {} (transaction {})",
-                        finished_thread.thread_id, finished_thread.transaction.name
-                    )
-                }
+                info!(
+                    "Threads that finished in cycle {}: {}",
+                    self.cycle_count,
+                    format_queue_compact(&self.finished)
+                );
                 self.finished.clear();
             }
 
             if !self.next.is_empty() {
+                // If the trace has already ended, terminate the scheduler
+                if self.trace_ended {
+                    info!(
+                        "Trace has ended, threads in `next` can't proceed, terminating scheduler w/ final state:"
+                    );
+                    self.print_scheduler_state();
+                    break;
+                }
+
                 // Mark all suspended threads as ready for execution
                 // by setting `current` to `next`, and setting `next = []`
                 // (the latter is done via `std::mem::take`)
@@ -234,12 +266,11 @@ impl Scheduler {
                 );
 
                 if let StepResult::Done = step_result {
-                    // If `StepResult = Done`, the trace has ended,
-                    // so we can just return here
-                    info!("No steps remaining left in signal trace, terminating scheduler");
-                    info!("Final scheduler state:");
-                    self.print_scheduler_state();
-                    break;
+                    // If `StepResult = Done`, the trace has ended.
+                    // Set `trace_ended = true` and continue
+                    // executing threads in `current`
+                    info!("No steps remaining left in signal trace");
+                    self.trace_ended = true;
                 }
             } else {
                 // When both current and next are finished, the monitor is done
@@ -257,7 +288,7 @@ impl Scheduler {
     /// - An error was encountered during execution
     pub fn run_thread_till_next_step(&mut self, mut thread: Thread) {
         info!(
-            "Running thread {} (transaction `{}`) till next `step()`",
+            "Running thread {} (transaction `{}`) till next `step()`...",
             thread.thread_id, thread.transaction.name
         );
 
