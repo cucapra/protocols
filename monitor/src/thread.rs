@@ -8,6 +8,7 @@ use baa::BitVecValue;
 use protocols::{
     ir::{StmtId, SymbolId, SymbolTable, Transaction},
     scheduler::NextStmtMap,
+    serialize::serialize_stmt,
 };
 
 use crate::{
@@ -49,8 +50,12 @@ impl std::fmt::Display for Thread {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "THREAD {}:\n\tStart cycle: {}\n\tTransaction: {}\n\tCurrent statement ID: {}",
-            self.thread_id, self.start_cycle, self.transaction.name, self.current_stmt_id
+            "THREAD {}:\n\tStart cycle: {}\n\tTransaction: {}\n\tCurrent statement: `{}` ({})",
+            self.thread_id,
+            self.start_cycle,
+            self.transaction.name,
+            serialize_stmt(&self.transaction, &self.symbol_table, &self.current_stmt_id),
+            self.current_stmt_id
         )
     }
 }

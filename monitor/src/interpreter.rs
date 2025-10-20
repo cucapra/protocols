@@ -7,7 +7,7 @@ use protocols::{
     interpreter::ExprValue,
     ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
-    serialize::{serialize_args_mapping, serialize_bitvec, serialize_stmt},
+    serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };
 
 use crate::{
@@ -236,7 +236,7 @@ impl Interpreter {
         let transaction = self.transaction.clone();
         let stmt = &transaction[stmt_id];
         info!(
-            "Examining statement {}",
+            "Examining statement `{}`",
             serialize_stmt(&self.transaction, &self.symbol_table, stmt_id)
         );
         match stmt {
@@ -333,8 +333,8 @@ impl Interpreter {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let expr = &self.transaction[expr_id];
                 info!(
-                    "{:?} evaluates to a concrete value {}",
-                    expr,
+                    "`{}` evaluates to Concrete Value `{}`",
+                    serialize_expr(&self.transaction, &self.symbol_table, expr_id),
                     serialize_bitvec(&rhs_value, false)
                 );
                 match expr {
@@ -354,7 +354,7 @@ impl Interpreter {
                             }
                         } else {
                             info!(
-                                "Unable to find value for {} in trace at cycle {:?}",
+                                "Unable to find value for `{}` in trace at cycle {:?}",
                                 lhs, self.trace_cycle_count
                             );
                             Err(ExecutionError::symbol_not_found(
