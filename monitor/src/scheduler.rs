@@ -228,11 +228,17 @@ impl Scheduler {
 
                 self.cycle_count += 1;
                 self.interpreter.trace_cycle_count += 1;
+                info!(
+                    "Advancing to cycle {}, setting current = next",
+                    self.cycle_count
+                );
 
                 if let StepResult::Done = step_result {
                     // If `StepResult = Done`, the trace has ended,
                     // so we can just return here
-                    info!("No steps remaining left in signal trace");
+                    info!("No steps remaining left in signal trace, terminating scheduler");
+                    info!("Final scheduler state:");
+                    self.print_scheduler_state();
                     break;
                 }
             } else {
@@ -280,32 +286,36 @@ impl Scheduler {
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
                             info!(
-                                "Thread {:?} (transaction `{}`) called `step()`, adding to `next` queue",
-                                thread.thread_id, thread.transaction.name,
+                                "Thread {:?} (transaction `{}`) called `step()`, moving to `next` queue",
+                                thread.thread_id, thread.transaction.clone().name,
                             );
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
                             self.next.push(thread);
+                            self.print_scheduler_state();
                             break;
                         }
                         Stmt::Fork => {
                             let new_thread = Thread::new(
-                                thread.transaction,
-                                thread.symbol_table,
-                                thread.next_stmt_map,
-                                thread.args_mapping,
+                                thread.transaction.clone(),
+                                thread.symbol_table.clone(),
+                                thread.next_stmt_map.clone(),
+                                thread.args_mapping.clone(),
                                 &self.ctx,
                                 self.num_threads,
                                 self.cycle_count,
                             );
                             self.num_threads += 1;
                             info!(
-                                "Thread {:?} called `fork()`, created new thread {:?} for transaction {}, adding to `current` queue",
+                                "Thread {:?} called `fork()`, created new thread {:?} for transaction `{}`, adding to `current` queue",
                                 thread.thread_id, new_thread.thread_id, new_thread.transaction.name
                             );
                             self.current.push(new_thread);
-                            break;
+                            self.print_scheduler_state();
+
+                            // Continue from the fork statement onwards
+                            current_stmt_id = next_stmt_id;
                         }
                         _ => {
                             // Default case: update `current_stmt_id`
@@ -324,7 +334,7 @@ impl Scheduler {
                         self.interpreter
                             .serialize_reconstructed_transaction(&self.ctx)
                     );
-                    self.finished.push(thread);
+                    self.finished.push(thread.clone());
                     break;
                 }
                 Err(e) => {
@@ -333,6 +343,7 @@ impl Scheduler {
                         thread.thread_id, e
                     );
                     self.failed.push(thread);
+                    self.print_scheduler_state();
                     break;
                 }
             }

@@ -265,7 +265,7 @@ impl Interpreter {
                     info!("{} is ???", self.format_expr(expr2))
                 }
                 info!(
-                    "Skipping assertion `{}` ({}) because assertions are disabled",
+                    "Skipping assertion `{}` ({})",
                     self.format_stmt(stmt_id),
                     stmt_id
                 );
