@@ -362,7 +362,7 @@ impl Scheduler {
                         thread.thread_id
                     );
                     println!(
-                        "Reconstructed transaction: {}",
+                        "{}",
                         self.interpreter
                             .serialize_reconstructed_transaction(&self.ctx)
                     );
