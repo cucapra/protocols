@@ -332,7 +332,7 @@ impl Interpreter {
                 info!(
                     "`{}` evaluates to Concrete Value `{}`",
                     serialize_expr(&self.transaction, &self.symbol_table, expr_id),
-                    serialize_bitvec(&rhs_value, false)
+                    serialize_bitvec(&rhs_value, ctx.display_hex)
                 );
                 match expr {
                     Expr::Sym(rhs_symbol_id) => {
@@ -365,7 +365,7 @@ impl Interpreter {
                     _ => todo!(
                         "Unhandled expr pattern {} which evaluates to {}",
                         serialize_expr(&self.transaction, &self.symbol_table, expr_id),
-                        serialize_bitvec(&rhs_value, false)
+                        serialize_bitvec(&rhs_value, ctx.display_hex)
                     ),
                 }
             }
@@ -383,7 +383,7 @@ impl Interpreter {
                         info!(
                             "Updated args_mapping to map {} |-> {}",
                             symbol_name,
-                            serialize_bitvec(&trace_value, false)
+                            serialize_bitvec(&trace_value, ctx.display_hex)
                         );
                         Ok(())
                     } else {
