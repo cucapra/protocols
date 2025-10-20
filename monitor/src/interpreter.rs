@@ -112,7 +112,9 @@ impl Interpreter {
                 // then update the `args_mapping`
                 if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
                     info!(
-                        "In the trace, {name} has value {}",
+                        "Trace @ cycle {}: `{}` has value {}",
+                        self.trace_cycle_count,
+                        name,
                         serialize_bitvec(&value, ctx.display_hex)
                     );
                     self.update_arg_value(*sym_id, value.clone());
@@ -365,7 +367,11 @@ impl Interpreter {
                             ))
                         }
                     }
-                    _ => todo!("Unhandled expr pattern"),
+                    _ => todo!(
+                        "Unhandled expr pattern {} which evaluates to {}",
+                        serialize_expr(&self.transaction, &self.symbol_table, expr_id),
+                        serialize_bitvec(&rhs_value, false)
+                    ),
                 }
             }
             Ok(ExprValue::DontCare) => Ok(()),
@@ -394,10 +400,13 @@ impl Interpreter {
                         ))
                     }
                 } else {
-                    todo!()
+                    todo!(
+                        "Unhandled expr pattern {} which results in SymbolNotFound error",
+                        serialize_expr(&self.transaction, &self.symbol_table, expr_id),
+                    )
                 }
             }
-            Err(_) => todo!(),
+            Err(e) => todo!("Unhandled error {}", e),
         }
     }
 
