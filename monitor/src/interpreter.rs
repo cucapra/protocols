@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
-    errors::{ExecutionError, ExecutionResult},
+    errors::{ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
     ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
@@ -20,6 +20,10 @@ pub struct Interpreter {
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
     pub args_mapping: HashMap<SymbolId, BitVecValue>,
+
+    /// The current cycle count in the trace
+    /// (This field is only used to make error messages more informative)
+    pub trace_cycle_count: u32,
 }
 
 impl Interpreter {
@@ -51,7 +55,12 @@ impl Interpreter {
     }
 
     /// Creates a new Interpreter for a given `Transaction`
-    pub fn new(transaction: Transaction, symbol_table: SymbolTable, ctx: &GlobalContext) -> Self {
+    pub fn new(
+        transaction: Transaction,
+        symbol_table: SymbolTable,
+        ctx: &GlobalContext,
+        trace_cycle_count: u32,
+    ) -> Self {
         let mut args_mapping = HashMap::new();
 
         for port_key in ctx.trace.port_map.keys() {
@@ -77,6 +86,7 @@ impl Interpreter {
             symbol_table,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
+            trace_cycle_count,
         }
     }
 
@@ -226,16 +236,6 @@ impl Interpreter {
         let transaction = self.transaction.clone();
         match &transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                // TODO: when we encounter `DUT.a := a`
-                // - Try to evaluate `expr_id` to a value
-                //      - fails if undefined symbol
-                //      - If we fail, check if the expr is a symbol
-                //      - If it is a symbol s, update map[s |-> read_trace(DUT.a)]
-                //      - For any other pattern, do a `todo!(...)`
-                // - If `expr_id` successfully evaluates to a value,
-                //   then we have a constant
-                //      - Cimpare this constant value with the value fo the LHS from the trace
-                //      - Fail if the values are different
                 self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
@@ -312,20 +312,48 @@ impl Interpreter {
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
         let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
-        let rhs_value = self.evaluate_expr(expr_id, ctx)?;
 
-        match rhs_value.clone() {
-            ExprValue::Concrete(bitvec_value) => {
-                info!(
-                    "Setting {} := {}",
-                    lhs,
-                    serialize_bitvec(&bitvec_value, ctx.display_hex)
-                );
-                self.update_arg_value(*symbol_id, bitvec_value);
+        // TODO: when we encounter `DUT.a := a`
+        // - Try to evaluate `expr_id` to a value
+        //      - fails if undefined symbol
+        //      - If we fail, check if the expr is a symbol
+        //      - If it is a symbol s, update map[s |-> read_trace(DUT.a)]
+        //      - For any other pattern, do a `todo!(...)`
+        // - If `expr_id` successfully evaluates to a value,
+        //   then we have a constant
+        //      - Compare this constant value with the value fo the LHS from the trace
+        //      - Fail if the values are different
+
+        match self.evaluate_expr(expr_id, ctx) {
+            Ok(ExprValue::Concrete(rhs_value)) => {
+                if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *symbol_id) {
+                    if rhs_value != trace_value {
+                        Err(ExecutionError::value_disagrees_with_trace(
+                            *expr_id,
+                            rhs_value,
+                            trace_value,
+                            *symbol_id,
+                            lhs,
+                            self.trace_cycle_count,
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    Err(ExecutionError::symbol_not_found(
+                        *symbol_id,
+                        lhs.to_string(),
+                        "trace".to_string(),
+                        *expr_id,
+                    ))
+                }
             }
-            ExprValue::DontCare => (),
+            Ok(ExprValue::DontCare) => Ok(()),
+            Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
+                todo!()
+            }
+            Err(_) => todo!(),
         }
-        Ok(())
     }
 
     /// Evaluates a `while`-loop with guard `loop_guard_id` and

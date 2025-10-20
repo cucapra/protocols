@@ -68,7 +68,7 @@ pub struct Scheduler {
     ctx: GlobalContext,
 
     /// The current scheduling cycle
-    step_count: u32,
+    cycle_count: u32,
 
     /// The no. of threads that have been created so far.  
     /// (This variable is used to create unique `thread_id`s for `Thread`s.)
@@ -82,7 +82,7 @@ impl Scheduler {
     /// Prints the internal state of the scheduler 
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
     pub fn print_scheduler_state(&self) {
-        info!("SCHULEDER STATE, CYCLE {}:", self.step_count);
+        info!("SCHULEDER STATE, CYCLE {}:", self.cycle_count);
         info!("Current: {}", format_queue(&self.current));
         info!("Next: {}", format_queue(&self.next));
         info!("Failed: {}", format_queue(&self.failed));
@@ -96,9 +96,9 @@ impl Scheduler {
         symbol_table: SymbolTable,
         ctx: GlobalContext,
     ) -> Self {
-        let interpreter = Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx);
+        let cycle_count = 0;
+        let interpreter = Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx, cycle_count);
         let mut thread_id = 0;
-        let step_count = 0;
         let args_mapping = HashMap::new();
         let thread = Thread::new(
             transaction.clone(),
@@ -107,7 +107,7 @@ impl Scheduler {
             args_mapping,
             &ctx,
             thread_id,
-            step_count,
+            cycle_count,
         );
         thread_id += 1;
         Self {
@@ -117,7 +117,7 @@ impl Scheduler {
             failed: vec![],
             ctx,
             interpreter,
-            step_count: 0,
+            cycle_count,
             num_threads: thread_id,
         }
     }
@@ -150,7 +150,7 @@ impl Scheduler {
                     return Err(anyhow!(
                         "Expected the no. of threads that started in cycle {} & ended in cycle {} to be at most 1, but instead there were {}",
                         start_cycle,
-                        self.step_count,
+                        self.cycle_count,
                         finished.len()
                     ));
                 }
@@ -191,7 +191,7 @@ impl Scheduler {
 
             // Print all the threads that finished & failed during the most recent step
             if !self.failed.is_empty() {
-                info!("Threads that failed in cycle {}:", self.step_count);
+                info!("Threads that failed in cycle {}:", self.cycle_count);
                 for failed_thread in &self.failed {
                     info!(
                         "Thread {} (transaction {}) failed in cycle",
@@ -202,7 +202,7 @@ impl Scheduler {
             }
 
             if !self.finished.is_empty() {
-                info!("Threads that finished in cycle {}:", self.step_count);
+                info!("Threads that finished in cycle {}:", self.cycle_count);
                 for finished_thread in &self.finished {
                     info!(
                         "Thread {} (transaction {})",
@@ -219,9 +219,12 @@ impl Scheduler {
                 self.current = std::mem::take(&mut self.next);
 
                 // Then, advance the trace to the next `step` and update
-                // the scheduler's `step_count`
+                // the scheduler's `cycle_count` (along with the corresponding
+                // `trace_cycle_count` in the interpreter)
                 let step_result = self.ctx.trace.step();
-                self.step_count += 1;
+
+                self.cycle_count += 1;
+                self.interpreter.trace_cycle_count += 1;
 
                 if let StepResult::Done = step_result {
                     // If `StepResult = Done`, the trace has ended,
@@ -292,7 +295,7 @@ impl Scheduler {
                                 thread.args_mapping,
                                 &self.ctx,
                                 self.num_threads,
-                                self.step_count,
+                                self.cycle_count,
                             );
                             self.num_threads += 1;
                             info!(
