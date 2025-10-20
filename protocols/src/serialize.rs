@@ -129,6 +129,53 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
     }
 }
 
+/// Pretty-prints a `Statement` (identified by its `StmtId`) using the current
+/// `Transaction` and `SymbolTable`
+pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> String {
+    match &tr[stmt_id] {
+        Stmt::Block(stmt_ids) => {
+            // Only print the first two statements in a block for brevity
+            let formatted_stmts = stmt_ids[..2]
+                .iter()
+                .map(|stmt_id| serialize_stmt(tr, st, stmt_id))
+                .collect::<Vec<_>>()
+                .join("; ");
+            format!("{{ {}; ... }}", formatted_stmts)
+        }
+        Stmt::Assign(symbol_id, expr_id) => {
+            format!(
+                "{} := {}",
+                st.full_name_from_symbol_id(symbol_id),
+                serialize_expr(tr, st, expr_id)
+            )
+        }
+        Stmt::Step => "step()".to_string(),
+        Stmt::Fork => "fork()".to_string(),
+        Stmt::While(expr_id, stmt_id) => {
+            format!(
+                "while {} {{ {} }}",
+                serialize_expr(tr, st, expr_id),
+                serialize_stmt(tr, st, stmt_id)
+            )
+        }
+        Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
+            format!(
+                "if {} {{ {} }} {{ {} }}",
+                serialize_expr(tr, st, expr_id),
+                serialize_stmt(tr, st, stmt_id1),
+                serialize_stmt(tr, st, stmt_id2)
+            )
+        }
+        Stmt::AssertEq(expr_id1, expr_id2) => {
+            format!(
+                "assert_eq({}, {})",
+                serialize_expr(tr, st, expr_id1),
+                serialize_expr(tr, st, expr_id2)
+            )
+        }
+    }
+}
+
 /// Pretty-prints a `Statement` (identified by its `StmtId`) using the
 /// provided `Transaction` and `SymbolTable` using the provided output buffer `out`,
 /// with the amount of indentation specified by `index`

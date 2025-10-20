@@ -7,7 +7,7 @@ use protocols::{
     interpreter::ExprValue,
     ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
-    serialize::{serialize_args_mapping, serialize_bitvec},
+    serialize::{serialize_args_mapping, serialize_bitvec, serialize_stmt},
 };
 
 use crate::{
@@ -234,7 +234,12 @@ impl Interpreter {
         ctx: &GlobalContext,
     ) -> ExecutionResult<Option<StmtId>> {
         let transaction = self.transaction.clone();
-        match &transaction[stmt_id] {
+        let stmt = &transaction[stmt_id];
+        info!(
+            "Examining statement {}",
+            serialize_stmt(&self.transaction, &self.symbol_table, stmt_id)
+        );
+        match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
                 self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
                 Ok(self.next_stmt_map[stmt_id])
@@ -311,8 +316,6 @@ impl Interpreter {
         expr_id: &ExprId,
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
-        let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
-
         // TODO: when we encounter `DUT.a := a`
         // - Try to evaluate `expr_id` to a value
         //      - fails if undefined symbol
@@ -324,28 +327,45 @@ impl Interpreter {
         //      - Compare this constant value with the value fo the LHS from the trace
         //      - Fail if the values are different
 
+        let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
+
         match self.evaluate_expr(expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
-                if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *symbol_id) {
-                    if rhs_value != trace_value {
-                        Err(ExecutionError::value_disagrees_with_trace(
-                            *expr_id,
-                            rhs_value,
-                            trace_value,
-                            *symbol_id,
-                            lhs,
-                            self.trace_cycle_count,
-                        ))
-                    } else {
-                        Ok(())
+                let expr = &self.transaction[expr_id];
+                info!(
+                    "{:?} evaluates to a concrete value {}",
+                    expr,
+                    serialize_bitvec(&rhs_value, false)
+                );
+                match expr {
+                    Expr::Sym(rhs_symbol_id) => {
+                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *rhs_symbol_id) {
+                            if rhs_value != trace_value {
+                                Err(ExecutionError::value_disagrees_with_trace(
+                                    *expr_id,
+                                    rhs_value,
+                                    trace_value,
+                                    *rhs_symbol_id,
+                                    lhs,
+                                    self.trace_cycle_count,
+                                ))
+                            } else {
+                                Ok(())
+                            }
+                        } else {
+                            info!(
+                                "Unable to find value for {} in trace at cycle {:?}",
+                                lhs, self.trace_cycle_count
+                            );
+                            Err(ExecutionError::symbol_not_found(
+                                *rhs_symbol_id,
+                                lhs.to_string(),
+                                "trace".to_string(),
+                                *expr_id,
+                            ))
+                        }
                     }
-                } else {
-                    Err(ExecutionError::symbol_not_found(
-                        *symbol_id,
-                        lhs.to_string(),
-                        "trace".to_string(),
-                        *expr_id,
-                    ))
+                    _ => todo!("Unhandled expr pattern"),
                 }
             }
             Ok(ExprValue::DontCare) => Ok(()),
@@ -360,8 +380,9 @@ impl Interpreter {
                     if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *symbol_id) {
                         self.args_mapping.insert(*symbol_id, trace_value.clone());
                         info!(
-                            "Updated args_mapping to map {} |-> {:?}",
-                            symbol_name, trace_value
+                            "Updated args_mapping to map {} |-> {}",
+                            symbol_name,
+                            serialize_bitvec(&trace_value, false)
                         );
                         Ok(())
                     } else {
