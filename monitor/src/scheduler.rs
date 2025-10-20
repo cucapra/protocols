@@ -109,11 +109,11 @@ impl Scheduler {
     pub fn print_scheduler_state(&self) {
         info!(
             "{}\n{}\n{}\n{}\n{}",
-            format!("SCHULEDER STATE, CYCLE {}:", self.cycle_count),
-            format!("Current: {}", format_queue(&self.current)),
-            format!("Next: {}", format_queue(&self.next)),
-            format!("Failed: {}", format_queue(&self.failed)),
-            format!("Finished: {}", format_queue(&self.finished))
+            format_args!("SCHULEDER STATE, CYCLE {}:", self.cycle_count),
+            format_args!("Current: {}", format_queue(&self.current)),
+            format_args!("Next: {}", format_queue(&self.next)),
+            format_args!("Failed: {}", format_queue(&self.failed)),
+            format_args!("Finished: {}", format_queue(&self.finished))
         );
     }
 
@@ -318,7 +318,8 @@ impl Scheduler {
                         Stmt::Step => {
                             info!(
                                 "Thread {:?} (transaction `{}`) called `step()`, moving to `next` queue",
-                                thread.thread_id, thread.transaction.clone().name,
+                                thread.thread_id,
+                                thread.transaction.clone().name,
                             );
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`

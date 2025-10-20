@@ -305,12 +305,19 @@ impl Interpreter {
             }
         }
     }
-
-    /// Evaluates an assignment statement `symbol_id := expr_id`, where `stmt_id`
-    /// is the `StmtId` of the assignment statement
-    /// Note: most of the logic for fixed-point iteration is in
-    /// `evaluate_assign` in `interpreter.rs`, we may want to
-    /// look at that function to take inspiration
+    /// When the monitor encounters an assignment of the form `symbol_id := expr_id`
+    /// (where `stmt_id` is the `StmtId` of the assignment),
+    /// 1. It first tries to evaluate `expr_id` to a value.
+    /// 2. If `expr_id` successfully evaluates to a value, we know the corresponding
+    ///    `expr` is a value.
+    ///   - We compare this constant value with the value of `symbol_id` (the LHS) from the trace.
+    ///   - If the values are different, we emit a `ValueDisagreesWithTrace` error
+    /// 3. If `expr_id` can't be evaluated to a value (e.g. it fails with a `SymbolNotFound` error),
+    ///    this is either because `expr_id` is an unsupported expr pattern (indicated w/ `todo!(...)`)
+    ///    or `expr_id` corresponds to a `Symbol` that is currently not in `args_mapping`.
+    ///   - For the latter, we check if the expr is a symbol.
+    ///   - If it is a symbol `s`, update `args_mapping` to be `args_mapping[s |-> read_trace(symbol_id)]`
+    ///   - For any other expr pattern, we do `todo!(...)`
     fn evaluate_assign(
         &mut self,
         _stmt_id: &StmtId,
@@ -318,19 +325,7 @@ impl Interpreter {
         expr_id: &ExprId,
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
-        // TODO: when we encounter `DUT.a := a`
-        // - Try to evaluate `expr_id` to a value
-        //      - fails if undefined symbol
-        //      - If we fail, check if the expr is a symbol
-        //      - If it is a symbol s, update map[s |-> read_trace(DUT.a)]
-        //      - For any other pattern, do a `todo!(...)`
-        // - If `expr_id` successfully evaluates to a value,
-        //   then we have a constant
-        //      - Compare this constant value with the value fo the LHS from the trace
-        //      - Fail if the values are different
-
         let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
-
         match self.evaluate_expr(expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let expr = &self.transaction[expr_id];
