@@ -169,7 +169,11 @@ impl fmt::Display for EvaluationError {
                 symbol_name,
                 cycle_count,
             } => {
-                write!(f, "Attempted to assign value {:?} (expr_id {}) to {} (symbol_id {}) but the trace value {:?} at cycle {} is different", value, expr_id, symbol_name, symbol_id, trace_value, cycle_count)
+                write!(
+                    f,
+                    "Attempted to assign value {:?} (expr_id {}) to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
+                    value, expr_id, symbol_name, symbol_id, trace_value, cycle_count
+                )
             }
             EvaluationError::DontCareOperation {
                 operation, context, ..
@@ -572,7 +576,10 @@ impl DiagnosticEmitter {
                 symbol_name,
                 cycle_count,
             } => {
-                let message = format!("Attempted to assign {:?} to {} (symbol_id {}) but the trace value {:?} at cycle {} is different", value, symbol_name, symbol_id, trace_value, cycle_count);
+                let message = format!(
+                    "Attempted to assign {:?} to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
+                    value, symbol_name, symbol_id, trace_value, cycle_count
+                );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
             }
         }

@@ -25,14 +25,16 @@ type Queue = Vec<Thread>;
 /// `Queue` is just a type alias
 fn format_queue(queue: &Queue) -> String {
     if !queue.is_empty() {
-        let formatted_queue = queue.iter().map(|thread| format!("{}", thread)).collect::<Vec<String>>()
+        let formatted_queue = queue
+            .iter()
+            .map(|thread| format!("{}", thread))
+            .collect::<Vec<String>>()
             .join("\n");
         format!("\n\t{}", formatted_queue)
     } else {
         "<EMPTY>".to_string()
     }
 }
-
 
 /// Extracts all elements in the `Queue` where all the threads have the
 /// same `start_cycle`, preserving their order
@@ -79,7 +81,7 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    /// Prints the internal state of the scheduler 
+    /// Prints the internal state of the scheduler
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
     pub fn print_scheduler_state(&self) {
         info!("SCHULEDER STATE, CYCLE {}:", self.cycle_count);
@@ -97,7 +99,8 @@ impl Scheduler {
         ctx: GlobalContext,
     ) -> Self {
         let cycle_count = 0;
-        let interpreter = Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx, cycle_count);
+        let interpreter =
+            Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx, cycle_count);
         let mut thread_id = 0;
         let args_mapping = HashMap::new();
         let thread = Thread::new(
@@ -248,11 +251,10 @@ impl Scheduler {
     /// - An error was encountered during execution
     pub fn run_thread_till_next_step(&mut self, mut thread: Thread) {
         info!(
-            "Running thread {} (transaction `{}`) till next `step()`", 
-            thread.thread_id, 
-            thread.transaction.name
+            "Running thread {} (transaction `{}`) till next `step()`",
+            thread.thread_id, thread.transaction.name
         );
-        
+
         // Perform a context switch (use the argument thread's `Transaction`
         // & associated `SymbolTable` / `NextStmtMap`)
         let Thread {
@@ -279,7 +281,7 @@ impl Scheduler {
                         Stmt::Step => {
                             info!(
                                 "Thread {:?} (transaction `{}`) called `step()`, adding to `next` queue",
-                                thread.thread_id, thread.transaction.name, 
+                                thread.thread_id, thread.transaction.name,
                             );
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
