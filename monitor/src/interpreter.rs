@@ -226,7 +226,16 @@ impl Interpreter {
         let transaction = self.transaction.clone();
         match &transaction[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
-                // TODO: figure out what to do if the `symbol_id` already has a value in the environment
+                // TODO: when we encounter `DUT.a := a`
+                // - Try to evaluate `expr_id` to a value
+                //      - fails if undefined symbol
+                //      - If we fail, check if the expr is a symbol
+                //      - If it is a symbol s, update map[s |-> read_trace(DUT.a)]
+                //      - For any other pattern, do a `todo!(...)`
+                // - If `expr_id` successfully evaluates to a value,
+                //   then we have a constant
+                //      - Cimpare this constant value with the value fo the LHS from the trace
+                //      - Fail if the values are different
                 self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
