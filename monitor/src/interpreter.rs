@@ -350,7 +350,28 @@ impl Interpreter {
             }
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
-                todo!()
+                let expr = &self.transaction[expr_id];
+                if let Expr::Sym(symbol_id) = expr {
+                    let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+                    info!("RHS of assignment is a symbol {} that is not in the args_mapping, adding it...", symbol_name);
+                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *symbol_id) {
+                        self.args_mapping.insert(*symbol_id, trace_value.clone());
+                        info!(
+                            "Updated args_mapping to map {} |-> {:?}",
+                            symbol_name, trace_value
+                        );
+                        Ok(())
+                    } else {
+                        Err(ExecutionError::symbol_not_found(
+                            *symbol_id,
+                            symbol_name,
+                            "trace".to_string(),
+                            *expr_id,
+                        ))
+                    }
+                } else {
+                    todo!()
+                }
             }
             Err(_) => todo!(),
         }
