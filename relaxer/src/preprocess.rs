@@ -1,5 +1,5 @@
-use rustc_hash::FxHashMap;
 use protocols::ir;
+use rustc_hash::FxHashMap;
 
 /// Compiler pass that normalizes a transaction to have assignments for all DUT input pins
 /// immediately after each step() call. If if an assignment to a DUT input is reassigned,
@@ -15,46 +15,41 @@ use protocols::ir;
 ///    - Collect all current assignments
 ///    - Remove assignment statements from the body
 ///    - Insert assignments for ALL input pins right after the step
-pub fn normalize_assignments(tr: &ir::Transaction, st: &ir::SymbolTable) -> ir::Transaction {
-    // Create a new transaction with the same metadata
-    let mut new_transaction = ir::Transaction::new(tr.name.clone());
-    new_transaction.args = tr.args.clone();
-    new_transaction.type_param = tr.type_param;
-
+pub fn normalize_assignments(tr: &mut ir::Transaction, st: &ir::SymbolTable) {
     // Get all DUT input pins
-    let dut_struct = st[st
-        .struct_id_from_name(
-            st[tr
-                .type_param
-                .expect("Transaction must have a type parameter")]
-            .name(),
-        )
-        .expect("Symbol Table must have struct in it")]
-    .clone();
+    let dut_struct = match st[tr
+        .type_param
+        .expect("Transaction must have a type parameter")]
+    .tpe()
+    {
+        ir::Type::Struct(struct_id) => &st[struct_id],
+        _ => panic!("Transaction type parameter must be a struct"),
+    };
 
     let dut_input_pins: Vec<ir::SymbolId> = dut_struct
         .pins()
         .iter()
         .filter(|pin| pin.dir() == ir::Dir::In)
         .map(|pin| {
-            st.symbol_id_from_name(&(dut_struct.name().to_owned() + "." + pin.name()))
-                .expect("Struct pins and Symbol Table do not align")
-                .clone()
+            st.symbol_id_from_name(
+                &(st[tr.type_param.expect("")].name().to_owned() + "." + pin.name()),
+            )
+            .expect("Struct pins and Symbol Table do not align")
+            .clone()
         })
         .collect();
 
-    // Initialize state: map each input pin to its current assignment StmtId (DontCare initially)
-    let mut pin_state: FxHashMap<ir::SymbolId, ir::StmtId> = FxHashMap::default();
+    // Initialize state: map each input pin to its current assignment ExprId (DontCare initially)
+    let mut pin_state: FxHashMap<ir::SymbolId, ir::ExprId> = FxHashMap::default();
     for pin in &dut_input_pins {
-        let dont_care_expr = new_transaction.expr_dont_care();
-        let assign_stmt = new_transaction.s(ir::Stmt::Assign(*pin, dont_care_expr));
-        pin_state.insert(*pin, assign_stmt);
+        let dont_care_expr = tr.expr_dont_care();
+        pin_state.insert(*pin, dont_care_expr);
     }
 
-    // Get the body of the original transaction
+    // Get the body of the original transaction (clone to avoid borrow issues)
     let body_stmt_id = tr.body;
     let body_stmts = match &tr[body_stmt_id] {
-        ir::Stmt::Block(stmts) => stmts,
+        ir::Stmt::Block(stmts) => stmts.clone(),
         _ => panic!("Transaction body must be a Block"),
     };
 
@@ -81,10 +76,10 @@ pub fn normalize_assignments(tr: &ir::Transaction, st: &ir::SymbolTable) -> ir::
         for i in current_idx..segment_end {
             let stmt_id = body_stmts[i];
             match &tr[stmt_id] {
-                ir::Stmt::Assign(symbol_id, _expr_id) => {
+                ir::Stmt::Assign(symbol_id, expr_id) => {
                     if dut_input_pins.contains(symbol_id) {
-                        // Update pin state with this assignment StmtId (last assignment wins)
-                        pin_state.insert(*symbol_id, stmt_id);
+                        // Update pin state with this assignment ExprId (last assignment wins)
+                        pin_state.insert(*symbol_id, *expr_id);
                         // Don't add to new_body_stmts - we'll insert after the step
                     } else {
                         // Non-input assignment, keep it in place
@@ -119,8 +114,9 @@ pub fn normalize_assignments(tr: &ir::Transaction, st: &ir::SymbolTable) -> ir::
 
             // Insert assignments for all DUT input pins right after this step
             for pin in &dut_input_pins {
-                let assign_stmt_id = pin_state[pin];
-                new_body_stmts.push(assign_stmt_id);
+                let expr_id = pin_state[pin];
+                let assign_stmt = tr.s(ir::Stmt::Assign(*pin, expr_id));
+                new_body_stmts.push(assign_stmt);
             }
 
             // Move current_idx past this step
@@ -132,7 +128,73 @@ pub fn normalize_assignments(tr: &ir::Transaction, st: &ir::SymbolTable) -> ir::
     }
 
     // Set the new body
-    new_transaction.body = new_transaction.s(ir::Stmt::Block(new_body_stmts));
+    tr.body = tr.s(ir::Stmt::Block(new_body_stmts));
+}
 
-    new_transaction
+#[cfg(test)]
+pub mod tests {
+    use baa::BitVecValue;
+    use insta::Settings;
+    use std::path::Path;
+    use strip_ansi_escapes::strip_str;
+
+    use super::*;
+    use crate::diagnostic::DiagnosticHandler;
+    use crate::parser::parse_file;
+    use crate::serialize::serialize_to_string;
+
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
+    }
+
+    // fn test_helper(filename: &str, snap_name: &str) {
+    //     let mut handler = DiagnosticHandler::default();
+    //     let result = parse_file(filename, &mut handler);
+
+    //     let content = match result {
+    //         Ok(trs) => serialize_to_string(trs).unwrap(),
+    //         Err(_) => strip_str(handler.error_string()),
+    //     };
+    //     println!("{}", content);
+    //     // snap(snap_name, content);
+    // }
+
+    fn test_helper(filename: &str, _snap_name: &str) {
+        let mut handler = DiagnosticHandler::default();
+        let result = parse_file(filename, &mut handler);
+        let mut new_trs: Vec<(ir::SymbolTable, ir::Transaction)> = Vec::new();
+
+        // create a new vector of (st, tr) pairs by running
+        // the normalize_assignments pass on every transaction
+        // then serialize the result (or produce the error string).
+        let content = match result {
+            Ok(trs) => {
+                // Consume the parsed vector of (SymbolTable, Transaction) pairs,
+                // normalize each transaction with its corresponding symbol table,
+                // and collect the results for serialization.
+                println!("OK!");
+                for (st, mut tr) in trs.into_iter() {
+                    normalize_assignments(&mut tr, &st);
+                    // println!("==== Normalized Transaction ====");
+                    // println!("{:?}", tr);
+                    new_trs.push((st, tr));
+                }
+                serialize_to_string(new_trs).unwrap()
+            }
+            Err(_) => "failed".to_string(),
+        };
+        // println!("==== Normalized Transaction ====");
+
+        println!("{}", content);
+        // snap("add_d1", content);
+    }
+
+    #[test]
+    fn test_add_transaction() {
+        test_helper("tests/adders/add_d1.prot", "add_d1");
+    }
 }

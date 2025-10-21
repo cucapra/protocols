@@ -12,3 +12,8 @@ protocols.workspace = true
 baa.workspace = true
 patronus.workspace = true
 rustc-hash.workspace = true
+
+[dev-dependencies]
+insta = { version = "1.41.1", features = ["yaml"] }
+strip-ansi-escapes = "0.2"
+

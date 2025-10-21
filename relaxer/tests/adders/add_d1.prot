@@ -1,0 +1,26 @@
+// maps to a verilog design
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+fn add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
