@@ -5,6 +5,7 @@ struct Adder {
   out s: u32,
 }
 
+// Adder with 1-cycle delay (i.e. `DUT.s` is only assigned after one cycle)s
 fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
@@ -12,4 +13,10 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := X;
   DUT.b := X;
   assert_eq(s, DUT.s);
+
+  // TODO: figure out how to make the 
+  // monitor support the same `.prot` file that is supplied to the forwards interpreter
+  // (at the moment, this fails because the monitor doesn't support `fork`)
+  fork();
+  step();
 }

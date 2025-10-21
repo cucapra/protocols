@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check whether the protocol was executed successfully
     for res in results {
-        assert_ok(&res);
+        assert_ok(&res)
     }
     println!("Protocol executed successfully!");
     Ok(())

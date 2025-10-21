@@ -53,6 +53,16 @@ pub enum EvaluationError {
         end: u32,
         width: u32,
     },
+    /// (For monitor only) When the value of an expression on the RHS
+    /// of an assignment disagreess with the actual observed trace value
+    ValueDisagreesWithTrace {
+        expr_id: ExprId,
+        value: BitVecValue,
+        trace_value: BitVecValue,
+        symbol_id: SymbolId,
+        symbol_name: String,
+        cycle_count: u32,
+    },
 }
 
 /// Thread-specific execution errors
@@ -151,6 +161,20 @@ impl fmt::Display for ExecutionError {
 impl fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EvaluationError::ValueDisagreesWithTrace {
+                expr_id,
+                value,
+                trace_value,
+                symbol_id,
+                symbol_name,
+                cycle_count,
+            } => {
+                write!(
+                    f,
+                    "Attempted to assign value {:?} (expr_id {}) to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
+                    value, expr_id, symbol_name, symbol_id, trace_value, cycle_count
+                )
+            }
             EvaluationError::DontCareOperation {
                 operation, context, ..
             } => {
@@ -297,6 +321,24 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
+    pub fn value_disagrees_with_trace(
+        expr_id: ExprId,
+        value: BitVecValue,
+        trace_value: BitVecValue,
+        symbol_id: SymbolId,
+        symbol_name: String,
+        cycle_count: u32,
+    ) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
+            expr_id,
+            value,
+            trace_value,
+            symbol_id,
+            symbol_name,
+            cycle_count,
+        })
+    }
+
     pub fn finished_without_fork(thread_id: usize, transaction_name: String) -> Self {
         ExecutionError::Thread(ThreadError::FinishedWithoutFork {
             thread_idx: thread_id,
@@ -525,6 +567,20 @@ impl DiagnosticEmitter {
                     ),
                     Level::Error,
                 );
+            }
+            EvaluationError::ValueDisagreesWithTrace {
+                expr_id,
+                value,
+                trace_value,
+                symbol_id,
+                symbol_name,
+                cycle_count,
+            } => {
+                let message = format!(
+                    "Attempted to assign {:?} to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
+                    value, symbol_name, symbol_id, trace_value, cycle_count
+                );
+                handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
             }
         }
     }

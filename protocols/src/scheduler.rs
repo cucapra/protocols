@@ -23,29 +23,31 @@ use patronus::system::TransitionSystem;
 
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
-type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
+pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
 
 /// A `TodoItem` corresponds to a function call in a transaction `.tx` file
 pub type TodoItem = (String, Vec<BitVecValue>);
 
-/// We pass in `TransactionInfo` to the interpreter when we want to execute
-/// a single statement
+/// A `TransactionInfo` is a triple of the form
+/// `(Transaction, SymbolTable, NextStmtMap)`.
+/// This is passed to the interpreter when we want to execute
+/// a single transaction.
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
 const MAX_ITERS: usize = 10000;
 
-/// A `Todo` is a function call to be executed. The fields of this struct are:
-/// - The associated `Transaction`
-/// - The associated `SymbolTable`
-/// - The associated argument values `args` (mapping variable names to their values)
-/// - The `NextStmtMap`
+/// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
+    /// The associated `Transaction`
     pub tr: &'a Transaction,
+    /// The associated `SymbolTable`
     pub st: &'a SymbolTable,
+    /// The associated argument values (a map from variable names to their values)
     pub args: ArgMap<'a>,
+    /// Maps each `StmtId` to an optional `StmtId` of the next statement
     pub next_stmt_map: NextStmtMap,
 }
 
@@ -123,18 +125,31 @@ pub enum StepResult<'a> {
     Error(usize /* thread_id */, ExecutionError),
 }
 
+/// The `Scheduler` struct contains metadata necessary for scheduling `Thread`s.
 pub struct Scheduler<'a> {
+    /// A `Vec` of `Transaction`s, along with their associated `SymbolTable`s
+    /// and `NextStmtMap`s
     irs: Vec<TransactionInfo<'a>>,
+    /// A list of `TodoItem`s to be executed (each element corresponds to
+    /// a function call in a `.tx` file)
     todos: Vec<TodoItem>,
-    /// Next index into `todos` to pull when we fork
+    /// The index of the next element in `todo`s to be executed when we `fork`
     next_todo_idx: usize,
+    /// A list of currently active threads
     active_threads: Vec<Thread<'a>>,
+    /// The scheduler's ready queue, storing all threads to be executed next
     next_threads: Vec<Thread<'a>>,
+    /// A list of inactive threads (threads that have finished execution)
     inactive_threads: Vec<Thread<'a>>,
+    /// The current scheduling cycle
     step_count: u32,
+    /// The max no. of steps allowed in the interpreter
     max_steps: u32,
+    /// The associated `Evaluator` (interpreter) for evaluating Protocols programs
     evaluator: Evaluator<'a>,
+    /// A `Vec` storing the `ExecutionResult`s of each thread
     results: Vec<ExecutionResult<()>>,
+    /// Handler for error diagnostics
     handler: &'a mut DiagnosticHandler,
 }
 
@@ -244,7 +259,9 @@ impl<'a> Scheduler<'a> {
         );
 
         while !self.active_threads.is_empty() {
-            // initially there are no previous values. we always need to cycle at least twice to check convergence, and the first time we will get a previous input val.
+            // initially there are no previous values.
+            // we always need to cycle at least twice to check convergence,
+            // and the first time we will get a previous input val.
             let mut previous_input_vals: Option<HashMap<SymbolId, InputValue>> = None;
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
@@ -299,6 +316,7 @@ impl<'a> Scheduler<'a> {
             // achieved convergence, run one more time with assertions on
             info!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.enable_assertions();
+            // Disable forks when we run all threads till the next
             self.run_all_active_until_next_step(false);
 
             // now that all threads are synchronized on the step, we can run step() on the sim
