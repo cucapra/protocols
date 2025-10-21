@@ -1,3 +1,4 @@
-// ARGS: --verilog adders/adder_d2/add_d2.v --protocol adders/adder_d2/add_d2.prot
+// ARGS: --verilog adders/adder_d2/add_d2.v --protocol adders/adder_d2/add_d2.prot --max-steps 4
+// RETURN: 101
 add(1, 2, 3);
 add(4, 5, 9);
