@@ -73,7 +73,11 @@ pub fn find_designs<'a>(
                             symbol_table
                                 .symbol_id_from_name(pin.name())
                                 .unwrap_or_else(|| {
-                                    panic!("Unable to find symbol ID for pin {}", pin.name())
+                                    panic!(
+                                        "Unable to find symbol ID for pin {}, symbol_table is {:#?}",
+                                        pin.name(),
+                                        symbol_table
+                                    )
                                 }),
                             pin,
                         )
