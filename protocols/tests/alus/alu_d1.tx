@@ -1,3 +1,4 @@
+// ARGS: --verilog alus/alu_d1.v --protocol alus/alu_d1.prot
 add(1, 2, 3);
 add(123, 245, 368);
 sub(200, 200, 0);
