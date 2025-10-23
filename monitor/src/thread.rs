@@ -81,7 +81,8 @@ impl Thread {
         // e.g. 'a' |-> value of 'DUT.a' from the trace at current cycle
         let dut_name = symbol_table[ctx.design.symbol_id].name();
         for arg in &transaction.args {
-            // Skip output parameters - they will be populated when observed in assertions
+            // Skip output parameters since they're
+            // populated when observed in assertions
             if arg.dir() == protocols::ir::Dir::Out {
                 continue;
             }
