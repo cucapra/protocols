@@ -54,7 +54,7 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
         .collect::<Vec<_>>()
         .join(",\n");
     format!(
-        "Design {{\n\tname: {}\n{}\npins: [\n{}\n]\ntransaction_ids: {:?}\n}}",
+        "Design {{\nname: {}\n{}\npins: [\n{}\n]\ntransaction_ids: {:?}\n}}",
         design.name, symbol_str, pins_str, design.transaction_ids
     )
 }
@@ -82,33 +82,40 @@ pub fn find_designs<'a>(
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut designs: FxHashMap<String, Design> = FxHashMap::default();
     for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
-        if let Some(symbol) = transaction.type_param {
+        // Check whether the transaction is parameterized by a type parameter
+        // of the form `<DUT: struct_type>`
+        if let Some(struct_symbol_id) = transaction.type_param {
             // We assume type parameters have to be structs
-            let struct_id = match symbol_table[symbol].tpe() {
+            let struct_id = match symbol_table[struct_symbol_id].tpe() {
                 Type::Struct(id) => id,
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
             };
-            let name = symbol_table[struct_id].name().to_string();
-            if let Some(design) = designs.get_mut(&name) {
+            let struct_name = symbol_table[struct_id].name().to_string();
+            if let Some(design) = designs.get_mut(&struct_name) {
                 design.transaction_ids.push(transaction_id);
             } else {
                 // `Field`s are also called `pin`s`
                 let pins_vec: Vec<Field> = symbol_table[struct_id].pins().clone();
 
                 // For each pin, look up its associated `SymbolId` in the symbol table
+                // We do this by calling `symbol_table.symbol_id_from_name(...)`
+                // with the pin name, qualified by the name of the DUT
+                // (i.e. when looking up the pin `a`, we call
+                // `symbol_table.symbol_id_from_name(...)` on "DUT.a")
                 let pins_with_ids: Vec<(SymbolId, Field)> = pins_vec
                     .into_iter()
                     .map(|pin| {
+                        info!("{}.{}", symbol_table[struct_symbol_id].name(), pin.name());
                         (
                             symbol_table
                                 .symbol_id_from_name(&format!(
                                     "{}.{}",
-                                    symbol_table[symbol].name(),
+                                    symbol_table[struct_symbol_id].name(),
                                     pin.name()
                                 ))
                                 .unwrap_or_else(|| {
                                     panic!(
-                                        "Unable to find symbol ID for pin {}, symbol_table is {}",
+                                        "Unable to find symbol ID for pin `{}`, symbol_table is {}",
                                         pin.name(),
                                         symbol_table
                                     )
@@ -118,13 +125,13 @@ pub fn find_designs<'a>(
                     })
                     .collect();
                 let design = Design {
-                    name: name.clone(),
+                    name: struct_name.clone(),
                     pins: pins_with_ids,
-                    symbol_id: symbol,
+                    symbol_id: struct_symbol_id,
                     transaction_ids: vec![transaction_id],
                 };
                 info!("Inserting {}", serialize_design(symbol_table, &design));
-                designs.insert(name, design);
+                designs.insert(struct_name, design);
             }
         }
         // skipping any transactions that are not associated with a DUT

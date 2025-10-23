@@ -11,10 +11,7 @@ use protocols::{
     serialize::serialize_stmt,
 };
 
-use crate::{
-    global_context::GlobalContext,
-    signal_trace::{PortKey, SignalTrace},
-};
+use crate::{global_context::GlobalContext, signal_trace::SignalTrace};
 
 /// The local context associated with an individual thread,
 /// storing information such as:
@@ -80,22 +77,42 @@ impl Thread {
     ) -> Self {
         let mut args_mapping = HashMap::new();
 
-        for port_key in ctx.trace.port_map.keys() {
-            // We assume that there is only one `Instance` at the moment
-            let PortKey {
-                instance_id,
-                pin_id,
-            } = port_key;
+        // Map input parameters to their corresponding DUT pin values
+        // e.g. 'a' |-> value of 'DUT.a' from the trace at current cycle
+        let dut_name = symbol_table[ctx.design.symbol_id].name();
+        for arg in &transaction.args {
+            // Skip output parameters - they will be populated when observed in assertions
+            if arg.dir() == protocols::ir::Dir::Out {
+                continue;
+            }
 
-            // Fetch the current value of the `pin_id`
-            // (along with the name of the corresponding `Field`)
-            let current_value = ctx.trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to get value for pin {pin_id} in signal trace, {:?}",
-                    err
-                )
-            });
-            args_mapping.insert(*pin_id, current_value);
+            let param_symbol_id = arg.symbol();
+            let param_name = symbol_table[param_symbol_id].name();
+
+            // Find the corresponding DUT pin (e.g., "DUT.a" for parameter "a")
+            let dut_pin_name = format!("{}.{}", dut_name, param_name);
+            let dut_pin_symbol_id = symbol_table
+                .symbol_id_from_name(&dut_pin_name)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Unable to find DUT pin '{}' for transaction parameter '{}'",
+                        dut_pin_name, param_name
+                    )
+                });
+
+            // Fetch the current value of the DUT pin from the trace
+            let current_value = ctx
+                .trace
+                .get(ctx.instance_id, dut_pin_symbol_id)
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Unable to get value for DUT pin {} in signal trace, {:?}",
+                        dut_pin_name, err
+                    )
+                });
+
+            // Map the transaction parameter to the DUT pin's value
+            args_mapping.insert(param_symbol_id, current_value);
         }
 
         Self {
