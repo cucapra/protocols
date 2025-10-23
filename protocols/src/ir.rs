@@ -419,7 +419,7 @@ impl std::fmt::Display for SymbolTable {
         // Display symbol table entries
         writeln!(f, "  Symbols:")?;
         for (symbol_id, entry) in self.entries.iter() {
-            let type_str = serialize_type(&self, entry.tpe());
+            let type_str = serialize_type(self, entry.tpe());
 
             let parent_str = match entry.parent {
                 Some(parent_id) => format!(
@@ -446,7 +446,7 @@ impl std::fmt::Display for SymbolTable {
             for (struct_id, struct_def) in self.structs.iter() {
                 writeln!(f, "    struct{} \"{}\" {{", struct_id.0, struct_def.name)?;
                 for field in &struct_def.pins {
-                    let type_str = serialize_type(&self, field.tpe());
+                    let type_str = serialize_type(self, field.tpe());
                     writeln!(f, "      {} {}: {}", field.dir, field.name, type_str)?;
                 }
                 writeln!(f, "    }}")?;

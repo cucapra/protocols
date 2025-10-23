@@ -5,7 +5,11 @@
 
 #![allow(dead_code)]
 
-use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
+use log::info;
+use protocols::{
+    ir::{Field, SymbolId, SymbolTable, Transaction, Type},
+    serialize::serialize_field,
+};
 use rustc_hash::FxHashMap;
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string
@@ -27,6 +31,31 @@ pub struct Design {
     /// Index of transactions that use this struct
     /// (e.g. an "Adder" supports these transactions)
     pub transaction_ids: Vec<usize>,
+}
+
+/// Pretty-prints a `Design` with respect to the current `SymbolTable`
+pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
+    let symbol_str = format!(
+        "symbol_id {} ({})",
+        design.symbol_id,
+        symbol_table[design.symbol_id].name()
+    );
+    let pins_str = design
+        .pins
+        .iter()
+        .map(|(symbol_id, field)| {
+            format!(
+                "{}: {}",
+                symbol_table[symbol_id].name(),
+                serialize_field(symbol_table, field)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Design {{\n\tname: {}\n\t{}\n\tpins: {}\n\ttransaction_ids: {:?}",
+        design.name, symbol_str, pins_str, design.transaction_ids
+    )
 }
 
 impl Design {
@@ -87,15 +116,17 @@ pub fn find_designs<'a>(
                         )
                     })
                     .collect();
-                designs.insert(
-                    name.clone(),
-                    Design {
-                        name,
-                        pins: pins_with_ids,
-                        symbol_id: symbol,
-                        transaction_ids: vec![transaction_id],
-                    },
+                let design = Design {
+                    name: name.clone(),
+                    pins: pins_with_ids,
+                    symbol_id: symbol,
+                    transaction_ids: vec![transaction_id],
+                };
+                info!(
+                    "Inserting design {}",
+                    serialize_design(symbol_table, &design)
                 );
+                designs.insert(name, design);
             }
         }
         // skipping any transactions that are not associated with a DUT

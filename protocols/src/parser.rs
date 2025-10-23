@@ -6,10 +6,10 @@
 
 use crate::ir::Stmt;
 use baa::BitVecValue;
+use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
-use pest::Parser;
 use pest_derive::Parser;
 use std::vec;
 
