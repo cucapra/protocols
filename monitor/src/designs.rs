@@ -45,15 +45,16 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
         .iter()
         .map(|(symbol_id, field)| {
             format!(
-                "{}: {}",
-                symbol_table[symbol_id].name(),
+                "{} ({}) ↦ {}",
+                symbol_table[symbol_id].full_name(symbol_table),
+                symbol_id,
                 serialize_field(symbol_table, field)
             )
         })
         .collect::<Vec<_>>()
-        .join("\n");
+        .join(",\n");
     format!(
-        "Design {{\n\tname: {}\n\t{}\n\tpins: {}\n\ttransaction_ids: {:?}",
+        "Design {{\n\tname: {}\n{}\npins: [\n{}\n]\ntransaction_ids: {:?}\n}}",
         design.name, symbol_str, pins_str, design.transaction_ids
     )
 }
@@ -122,10 +123,7 @@ pub fn find_designs<'a>(
                     symbol_id: symbol,
                     transaction_ids: vec![transaction_id],
                 };
-                info!(
-                    "Inserting design {}",
-                    serialize_design(symbol_table, &design)
-                );
+                info!("Inserting {}", serialize_design(symbol_table, &design));
                 designs.insert(name, design);
             }
         }
