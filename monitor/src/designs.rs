@@ -6,11 +6,13 @@
 #![allow(dead_code)]
 
 use log::info;
+use protocols::ir::{Field, Ident, SymbolId, SymbolTable, Transaction, Type};
 use protocols::{
     ir::{Field, SymbolId, SymbolTable, Transaction, Type},
     serialize::serialize_field,
 };
 use rustc_hash::FxHashMap;
+use std::str::FromStr;
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string
 pub fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
@@ -105,21 +107,19 @@ pub fn find_designs<'a>(
                 let pins_with_ids: Vec<(SymbolId, Field)> = pins_vec
                     .into_iter()
                     .map(|pin| {
-                        info!("{}.{}", symbol_table[struct_symbol_id].name(), pin.name());
+                        let qualified_name =
+                            format!("{}.{}", symbol_table[struct_symbol_id].name(), pin.name());
+                        info!("{}", qualified_name);
+                        let ident = Ident::from_str(&qualified_name)
+                            .expect(&format!("Unable to convert {} to Ident", qualified_name));
                         (
-                            symbol_table
-                                .symbol_id_from_name(&format!(
-                                    "{}.{}",
-                                    symbol_table[struct_symbol_id].name(),
-                                    pin.name()
-                                ))
-                                .unwrap_or_else(|| {
-                                    panic!(
-                                        "Unable to find symbol ID for pin `{}`, symbol_table is {}",
-                                        pin.name(),
-                                        symbol_table
-                                    )
-                                }),
+                            symbol_table.lookup(&ident).unwrap_or_else(|| {
+                                panic!(
+                                    "Unable to find symbol ID for pin `{}`, symbol_table is {}",
+                                    pin.name(),
+                                    symbol_table
+                                )
+                            }),
                             pin,
                         )
                     })

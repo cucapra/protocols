@@ -14,11 +14,12 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub enum InputValue {
@@ -204,7 +205,9 @@ impl<'a> Evaluator<'a> {
     ) -> HashMap<SymbolId, BitVecValue> {
         let mut args_mapping = HashMap::new();
         for (name, value) in &args {
-            if let Some(symbol_id) = st.symbol_id_from_name(name) {
+            let ident =
+                Ident::from_str(name).expect(&format!("Unable to convert {name} into Ident"));
+            if let Some(symbol_id) = st.lookup(&ident) {
                 args_mapping.insert(symbol_id, (*value).clone());
             } else {
                 panic!("Argument {} not found in DUT symbols.", name);

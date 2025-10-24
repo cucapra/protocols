@@ -5,11 +5,85 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
 use crate::serialize::{build_statements, serialize_expr, serialize_type};
+
+/// The `Ident` type represents an *identifier*
+/// that may be qualified (e.g.`"DUT.a"`) or unqualified (just `"a"`).
+/// This datatype makes the distinction explicit between
+/// the names of input/output parameters & the fields of structs
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Ident {
+    /// A *simple* (unqualified) identifier, e.g. `"a"`
+    Simple(String),
+    /// A qualified identifiers, where `"DUT.a"` is represented as `["dut", "a"]`
+    Qualified(Vec<String>),
+}
+
+/// Parse a string into an `Ident`, splitting on '.' for qualified identifiers
+impl std::str::FromStr for Ident {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<String> = s.split('.').map(String::from).collect();
+        if parts.len() == 1 {
+            Ok(Self::Simple(parts[0].clone()))
+        } else {
+            Ok(Self::Qualified(parts))
+        }
+    }
+}
+
+impl Ident {
+    /// Reconstructs the full qualified identifier as a string
+    pub fn as_str(&self) -> String {
+        match self {
+            Ident::Simple(s) => s.clone(),
+            Ident::Qualified(parts) => parts.join("."),
+        }
+    }
+
+    /// Retrives the final (unqualified) segment of the identifier
+    /// Spec: `base_name("DUT.s") = "s"` and `base_name("s") = "s"`
+    pub fn base_name(&self) -> &str {
+        match self {
+            Ident::Simple(s) => s,
+            Ident::Qualified(parts) => parts.last().unwrap(),
+        }
+    }
+
+    /// Retrieves the parent (the part of a qualified ident before the `.`)
+    /// if there is one.
+    /// For `"DUT.a"`, this function returns `Some(Symbol::Simple("dut"))`.
+    /// For `"a"`, this function returns `None`.
+    pub fn qualifier(&self) -> Option<Ident> {
+        match self {
+            Ident::Simple(_) => None,
+            Ident::Qualified(parts) if parts.len() <= 1 => None,
+            Ident::Qualified(parts) => {
+                let parent_parts = parts[..parts.len() - 1].to_vec();
+                Some(if parent_parts.len() == 1 {
+                    Ident::Simple(parent_parts[0].clone())
+                } else {
+                    Ident::Qualified(parent_parts)
+                })
+            }
+        }
+    }
+
+    /// Check if this is a simple (unqualified) identifier
+    pub fn is_simple(&self) -> bool {
+        matches!(self, Ident::Simple(_))
+    }
+
+    /// Check if this is a qualified identifier
+    pub fn is_qualified(&self) -> bool {
+        matches!(self, Ident::Qualified(_))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
@@ -488,6 +562,11 @@ impl SymbolTable {
     /// Takes a `SymbolId` and returns the corresponding (qualified) full name
     pub fn full_name_from_symbol_id(&self, symbol_id: &SymbolId) -> String {
         self[symbol_id].full_name(self)
+    }
+
+    /// Lookup a symbol by its potentially qualified name using the `Ident` type
+    pub fn lookup(&self, ident: &Ident) -> Option<SymbolId> {
+        self.by_name_sym.get(&ident.as_str()).copied()
     }
 
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
