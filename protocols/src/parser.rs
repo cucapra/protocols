@@ -6,10 +6,10 @@
 
 use crate::ir::Stmt;
 use baa::BitVecValue;
+use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
-use pest::Parser;
 use pest_derive::Parser;
 use std::{str::FromStr, vec};
 
@@ -62,7 +62,8 @@ impl ParserContext<'_> {
         context_pair: &pest::iterators::Pair<Rule>,
         message: &str,
     ) -> Result<SymbolId, String> {
-        let ident = Ident::from_str(name).expect(&format!("Unable to convert {name} to Ident"));
+        let ident =
+            Ident::from_str(name).unwrap_or_else(|_| panic!("Unable to convert {name} to Ident"));
         self.st.lookup(&ident).ok_or_else(|| {
             let msg = format!("{}: {}", message, name);
             self.handler
@@ -99,7 +100,7 @@ impl ParserContext<'_> {
                     }
                     Rule::path_id => {
                         let ident = Ident::from_str(primary.as_str())
-                            .expect(&format!("Unable to convert {primary} to Ident"));
+                            .unwrap_or_else(|_| panic!("Unable to convert {primary} to Ident"));
                         let symbol_id = self.st.lookup(&ident);
                         match symbol_id {
                             Some(id) => Ok(BoxedExpr::Sym(id, start, end)),

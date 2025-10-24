@@ -6,9 +6,8 @@
 #![allow(dead_code)]
 
 use log::info;
-use protocols::ir::{Field, Ident, SymbolId, SymbolTable, Transaction, Type};
 use protocols::{
-    ir::{Field, SymbolId, SymbolTable, Transaction, Type},
+    ir::{Field, Ident, SymbolId, SymbolTable, Transaction, Type},
     serialize::serialize_field,
 };
 use rustc_hash::FxHashMap;
@@ -110,8 +109,9 @@ pub fn find_designs<'a>(
                         let qualified_name =
                             format!("{}.{}", symbol_table[struct_symbol_id].name(), pin.name());
                         info!("{}", qualified_name);
-                        let ident = Ident::from_str(&qualified_name)
-                            .expect(&format!("Unable to convert {} to Ident", qualified_name));
+                        let ident = Ident::from_str(&qualified_name).unwrap_or_else(|_| {
+                            panic!("Unable to convert {} to Ident", qualified_name)
+                        });
                         (
                             symbol_table.lookup(&ident).unwrap_or_else(|| {
                                 panic!(

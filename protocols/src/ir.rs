@@ -565,6 +565,8 @@ impl SymbolTable {
     }
 
     /// Lookup a symbol by its potentially qualified name using the `Ident` type
+    /// This is the preferred way to lookup the `SymbolId` corresponding to
+    /// an identifier.
     pub fn lookup(&self, ident: &Ident) -> Option<SymbolId> {
         self.by_name_sym.get(&ident.as_str()).copied()
     }
