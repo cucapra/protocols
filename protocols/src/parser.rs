@@ -6,12 +6,12 @@
 
 use crate::ir::Stmt;
 use baa::BitVecValue;
-use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
+use pest::Parser;
 use pest_derive::Parser;
-use std::vec;
+use std::{str::FromStr, vec};
 
 use crate::{diagnostic::*, ir::*};
 
@@ -62,7 +62,8 @@ impl ParserContext<'_> {
         context_pair: &pest::iterators::Pair<Rule>,
         message: &str,
     ) -> Result<SymbolId, String> {
-        self.st.symbol_id_from_name(name).ok_or_else(|| {
+        let ident = Ident::from_str(name).expect(&format!("Unable to convert {name} to Ident"));
+        self.st.lookup(&ident).ok_or_else(|| {
             let msg = format!("{}: {}", message, name);
             self.handler
                 .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
@@ -97,12 +98,14 @@ impl ParserContext<'_> {
                         Ok(BoxedExpr::Const(bvv, start, end))
                     }
                     Rule::path_id => {
-                        let path_id = primary.as_str();
-                        let symbol_id = self.st.symbol_id_from_name(path_id);
+                        let ident = Ident::from_str(primary.as_str())
+                            .expect(&format!("Unable to convert {primary} to Ident"));
+                        let symbol_id = self.st.lookup(&ident);
                         match symbol_id {
                             Some(id) => Ok(BoxedExpr::Sym(id, start, end)),
                             None => {
-                                let msg = format!("Referencing undefined symbol: {}", path_id);
+                                let msg =
+                                    format!("Referencing undefined symbol: {}", ident.as_str());
                                 self.handler.emit_diagnostic_parsing(
                                     &msg,
                                     self.fileid,

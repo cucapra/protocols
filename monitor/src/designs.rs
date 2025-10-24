@@ -5,8 +5,9 @@
 
 #![allow(dead_code)]
 
-use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
+use protocols::ir::{Field, Ident, SymbolId, SymbolTable, Transaction, Type};
 use rustc_hash::FxHashMap;
+use std::str::FromStr;
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string
 pub fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
@@ -69,9 +70,11 @@ pub fn find_designs<'a>(
                 let pins_with_ids: Vec<(SymbolId, Field)> = pins_vec
                     .into_iter()
                     .map(|pin| {
+                        let ident = Ident::from_str(pin.name())
+                            .expect(&format!("Unable to convert {} to Ident", pin.name()));
                         (
                             symbol_table
-                                .symbol_id_from_name(pin.name())
+                                .lookup(&ident)
                                 .expect("Unable to find symbol ID for pin"),
                             pin,
                         )
