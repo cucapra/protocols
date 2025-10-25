@@ -81,6 +81,11 @@ impl Interpreter {
             args_mapping.insert(*pin_id, current_value);
         }
 
+        info!(
+            "initial args_mapping:\n{}",
+            serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
+        );
+
         Self {
             transaction: transaction.clone(),
             symbol_table,
@@ -375,7 +380,7 @@ impl Interpreter {
                 if let Expr::Sym(symbol_id) = expr {
                     let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
                     info!(
-                        "RHS of assignment is a symbol {} that is not in the args_mapping, adding it...",
+                        "RHS of assignment is a symbol `{}` that is not in the args_mapping, adding it...",
                         symbol_name
                     );
                     if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *symbol_id) {

@@ -82,20 +82,24 @@ pub fn find_designs<'a>(
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut designs: FxHashMap<String, Design> = FxHashMap::default();
     for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
-        if let Some(symbol) = transaction.type_param {
+        if let Some(dut_symbol_id) = transaction.type_param {
             // We assume type parameters have to be structs
-            let struct_id = match symbol_table[symbol].tpe() {
+            let struct_id = match symbol_table[dut_symbol_id].tpe() {
                 Type::Struct(id) => id,
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
             };
-            let name = symbol_table[struct_id].name().to_string();
-            if let Some(design) = designs.get_mut(&name) {
+            let struct_name = symbol_table[struct_id].name().to_string();
+            if let Some(design) = designs.get_mut(&struct_name) {
                 design.transaction_ids.push(transaction_id);
             } else {
-                // `Field`s are also called `pin`s`
+                // Extract all the fields from the struct
+                // (`Field`s are also called `pin`s`)
                 let pins_vec: Vec<Field> = symbol_table[struct_id].pins().clone();
 
                 // For each pin, look up its associated `SymbolId` in the symbol table
+                // This returns an association list mapping `SymbolId`s to their associated pins
+                // Concretely, what we do is take each pin `p` and find
+                // the `SymbolId` corresponding to `DUT.p`
                 let pins_with_ids: Vec<(SymbolId, Field)> = pins_vec
                     .into_iter()
                     .map(|pin| {
@@ -103,7 +107,7 @@ pub fn find_designs<'a>(
                             symbol_table
                                 .symbol_id_from_name(&format!(
                                     "{}.{}",
-                                    symbol_table[symbol].name(),
+                                    symbol_table[dut_symbol_id].name(),
                                     pin.name()
                                 ))
                                 .unwrap_or_else(|| {
@@ -118,13 +122,13 @@ pub fn find_designs<'a>(
                     })
                     .collect();
                 let design = Design {
-                    name: name.clone(),
+                    name: struct_name.clone(),
                     pins: pins_with_ids,
-                    symbol_id: symbol,
+                    symbol_id: dut_symbol_id,
                     transaction_ids: vec![transaction_id],
                 };
                 info!("Inserting {}", serialize_design(symbol_table, &design));
-                designs.insert(name, design);
+                designs.insert(struct_name, design);
             }
         }
         // skipping any transactions that are not associated with a DUT
