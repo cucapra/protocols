@@ -492,7 +492,7 @@ impl SymbolTable {
         id
     }
 
-    pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
+    pub fn struct_id_from_name(&self, name: &str) -> Option<StructId> {
         self.by_name_struct.get(name).copied()
     }
 
