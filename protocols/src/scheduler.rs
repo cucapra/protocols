@@ -319,10 +319,6 @@ impl<'a> Scheduler<'a> {
             // Disable forks when we run all threads till the next
             self.run_all_active_until_next_step(false);
 
-            // now that all threads are synchronized on the step, we can run step() on the sim
-            info!("Stepping...");
-            self.evaluator.sim_step();
-
             // Move each active thread into inactive or next
             while let Some(mut active_thread) = self.active_threads.pop() {
                 let next_step: Option<StmtId> = active_thread.next_step;
@@ -354,6 +350,10 @@ impl<'a> Scheduler<'a> {
 
             // setup the threads for the next cycle
             if !self.next_threads.is_empty() {
+                // advance simulation for next step
+                info!("Stepping...");
+                self.evaluator.sim_step();
+
                 info!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
                     self.next_threads.len()
