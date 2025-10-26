@@ -340,6 +340,8 @@ impl Scheduler {
                             break;
                         }
                         Stmt::Fork => {
+                            // TODO: instead of forking just one thread that has the same transaction,
+                            // fork a thread for all possible transactions (i.e. `n` new threads for `n` transactions)
                             let new_thread = Thread::new(
                                 thread.transaction.clone(),
                                 thread.symbol_table.clone(),
