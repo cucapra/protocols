@@ -124,7 +124,8 @@ impl Scheduler {
         let cycle_count = 0;
         let mut thread_id = 0;
         let mut current_threads = vec![];
-        // Create a new thread for each transaction
+        // Create a new thread for each transaction, then push it to the
+        // end of the `current` queue
         for (transaction, symbol_table) in &transactions {
             let args_mapping = HashMap::new();
             let thread = Thread::new(
@@ -139,6 +140,11 @@ impl Scheduler {
             current_threads.push(thread);
             thread_id += 1;
         }
+        // Technically, initializing the `interpreter` here is necessary
+        // since when we pop a thread from the `current` queue, we perform
+        // a context switch and run the `interpreter` on the transaction/symbol_table
+        // corresponding to the thread. However, we do this here nonetheless
+        // since we need to initialize all fields in `Scheduler` struct.
         let initial_thread = &current_threads[0];
         let initial_transaction = initial_thread.transaction.clone();
         let initial_symbol_table = initial_thread.symbol_table.clone();
