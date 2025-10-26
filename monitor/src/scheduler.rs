@@ -117,30 +117,35 @@ impl Scheduler {
         );
     }
 
-    /// Initializes a `Scheduler` with a thread that runs the given
-    /// `Transaction` with the provided `SymbolTable` and `GlobalContext`
-    pub fn initialize_with_thread(
-        transaction: Transaction,
-        symbol_table: SymbolTable,
-        ctx: GlobalContext,
-    ) -> Self {
+    /// Initializes a `Scheduler` with one scheduled thread for each `(Transcation, SymbolTable)`
+    /// pair in the argument `transactions`, along with a `GlobalContext` that is
+    /// shared across all threads
+    pub fn initialize(transactions: Vec<(Transaction, SymbolTable)>, ctx: GlobalContext) -> Self {
         let cycle_count = 0;
-        let interpreter =
-            Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx, cycle_count);
         let mut thread_id = 0;
-        let args_mapping = HashMap::new();
-        let thread = Thread::new(
-            transaction.clone(),
-            symbol_table,
-            transaction.next_stmt_mapping(),
-            args_mapping,
-            &ctx,
-            thread_id,
-            cycle_count,
-        );
-        thread_id += 1;
+        let mut current_threads = vec![];
+        // Create a new thread for each transaction
+        for (transaction, symbol_table) in &transactions {
+            let args_mapping = HashMap::new();
+            let thread = Thread::new(
+                transaction.clone(),
+                symbol_table.clone(),
+                transaction.next_stmt_mapping(),
+                args_mapping,
+                &ctx,
+                thread_id,
+                cycle_count,
+            );
+            current_threads.push(thread);
+            thread_id += 1;
+        }
+        let initial_thread = &current_threads[0];
+        let initial_transaction = initial_thread.transaction.clone();
+        let initial_symbol_table = initial_thread.symbol_table.clone();
+        let interpreter =
+            Interpreter::new(initial_transaction, initial_symbol_table, &ctx, cycle_count);
         Self {
-            current: vec![thread],
+            current: current_threads,
             next: vec![],
             finished: vec![],
             failed: vec![],
