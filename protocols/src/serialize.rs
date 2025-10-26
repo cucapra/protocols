@@ -97,12 +97,12 @@ pub fn serialize_args_mapping(
 ) -> String {
     args_mapping
         .iter()
-        .sorted_by_key(|(symbol_id, _)| symbol_table.full_name_from_symbol_id(symbol_id))
+        .sorted_by_key(|(symbol_id, _)| symbol_table[*symbol_id].name())
         .map(|(symbol_id, value)| {
             format!(
                 "({}) {}: {}",
                 symbol_id,
-                symbol_table.full_name_from_symbol_id(symbol_id),
+                symbol_table[*symbol_id].name(),
                 serialize_bitvec(value, display_hex)
             )
         })
