@@ -86,7 +86,7 @@ impl Thread {
         let dut_name = symbol_table[ctx.design.symbol_id].name();
         for arg in &transaction.args {
             // Skip output parameters
-            // (these are populated in the `args_mapping` when we actually need them)
+            // (these are added to the `args_mapping` when we actually need them)
             if let Dir::Out = arg.dir() {
                 continue;
             }
