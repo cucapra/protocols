@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use baa::BitVecValue;
 use log::info;
 use protocols::{
-    ir::{StmtId, SymbolId, SymbolTable, Transaction},
+    ir::{Dir, StmtId, SymbolId, SymbolTable, Transaction},
     scheduler::NextStmtMap,
     serialize::{serialize_bitvec, serialize_stmt},
 };
@@ -85,6 +85,13 @@ impl Thread {
         // Obtain the name of the DUT
         let dut_name = symbol_table[ctx.design.symbol_id].name();
         for arg in &transaction.args {
+            // Skip output parameters
+            // (these are populated in the `args_mapping` when we actually need them)
+            if let Dir::Out = arg.dir() {
+                continue;
+            }
+
+            // Extract the `SymbolID` and the name of the intput parameter
             let param_symbol_id = arg.symbol();
             let param_name = symbol_table[param_symbol_id].name();
 

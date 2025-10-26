@@ -5,7 +5,7 @@ use log::info;
 use protocols::{
     errors::{ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
-    ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
+    ir::{BinOp, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };
@@ -121,6 +121,37 @@ impl Interpreter {
                         name,
                         serialize_bitvec(&value, ctx.display_hex)
                     );
+                    // Check if the symbol we're referring to
+                    // is the DUT pin corresponding to an output parameter
+
+                    // Concretely, we check if the identifier begins with
+                    // the name of the DUT (e.g. check if "DUT.s" begins with "DUT.")
+                    let dut_prefix = format!("{}.", self.symbol_table[ctx.design.symbol_id].name());
+                    if name.starts_with(&dut_prefix) {
+                        let pin_name = &name[dut_prefix.len()..];
+
+                        // Find if there's an output parameter with this name
+                        // that hasn't been added to the `args_mapping` yet
+                        for arg in &self.transaction.args {
+                            if let Dir::Out = arg.dir() {
+                                let param_name = self.symbol_table[arg.symbol()].name();
+                                if param_name == pin_name
+                                    && !self.args_mapping.contains_key(&arg.symbol())
+                                {
+                                    // If yes, we read the value for the corresponding
+                                    // DUT pin from the trace, and update the args_mapping
+                                    // so that `<output_param> |-> <value_of_DUT_pin_from_trace>`
+                                    info!(
+                                        "Capturing output parameter {} = {}",
+                                        param_name,
+                                        serialize_bitvec(&value, ctx.display_hex)
+                                    );
+                                    self.args_mapping.insert(arg.symbol(), value.clone());
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     Ok(ExprValue::Concrete(value))
                 } else {
                     info!(
@@ -445,16 +476,24 @@ impl Interpreter {
     /// Prints the reconstructed transaction
     /// (i.e. the function call that led to the signal trace)
     pub fn serialize_reconstructed_transaction(&self, ctx: &GlobalContext) -> String {
+        // Print the full args_mapping for debugging
+        info!(
+            "Final args_mapping:\n{}",
+            serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
+        );
+
         let mut args = vec![];
         // Iterates through each arg to the transaction and sees
         // what their final value in the `args_mapping` is
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].name();
+            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
             let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
                 panic!(
-                    "Unable to find value for {} ({}) in args_mapping",
-                    name, symbol_id
+                    "Unable to find value for {} ({}) in args_mapping, which is {}",
+                    name,
+                    symbol_id,
+                    serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
                 )
             });
             args.push(serialize_bitvec(value, ctx.display_hex));
