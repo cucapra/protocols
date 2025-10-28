@@ -11,10 +11,7 @@ use protocols::{
     serialize::serialize_stmt,
 };
 
-use crate::{
-    global_context::GlobalContext,
-    signal_trace::{PortKey, SignalTrace},
-};
+use crate::global_context::GlobalContext;
 
 /// The local context associated with an individual thread,
 /// storing information such as:
@@ -73,36 +70,15 @@ impl Thread {
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
-        args_mapping: HashMap<SymbolId, BitVecValue>,
         ctx: &GlobalContext,
         thread_id: u32,
         start_cycle: u32,
     ) -> Self {
-        let mut args_mapping = HashMap::new();
-
-        for port_key in ctx.trace.port_map.keys() {
-            // We assume that there is only one `Instance` at the moment
-            let PortKey {
-                instance_id,
-                pin_id,
-            } = port_key;
-
-            // Fetch the current value of the `pin_id`
-            // (along with the name of the corresponding `Field`)
-            let current_value = ctx.trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
-                panic!(
-                    "Unable to get value for pin {pin_id} in signal trace, {:?}",
-                    err
-                )
-            });
-            args_mapping.insert(*pin_id, current_value);
-        }
-
         Self {
             thread_id,
             transaction: transaction.clone(),
             next_stmt_map,
-            args_mapping,
+            args_mapping: HashMap::new(),
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,

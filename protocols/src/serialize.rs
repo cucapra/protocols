@@ -26,6 +26,16 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     }
 }
 
+/// Pretty-prints a `Field` with respect to the current `SymbolTable`
+pub fn serialize_field(st: &SymbolTable, field: &Field) -> String {
+    format!(
+        "{} {}: {}",
+        field.dir(),
+        field.name(),
+        serialize_type(st, field.tpe())
+    )
+}
+
 /// Pretty prints a `Direction`
 impl std::fmt::Display for Dir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -87,12 +97,12 @@ pub fn serialize_args_mapping(
 ) -> String {
     args_mapping
         .iter()
-        .sorted_by_key(|(symbol_id, _)| symbol_table.full_name_from_symbol_id(symbol_id))
+        .sorted_by_key(|(symbol_id, _)| symbol_table[*symbol_id].name())
         .map(|(symbol_id, value)| {
             format!(
                 "({}) {}: {}",
                 symbol_id,
-                symbol_table.full_name_from_symbol_id(symbol_id),
+                symbol_table[*symbol_id].name(),
                 serialize_bitvec(value, display_hex)
             )
         })

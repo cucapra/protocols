@@ -3,8 +3,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-#![allow(dead_code)]
-
 use crate::{Instance, designs::Design};
 use anyhow::Context;
 use baa::BitVecValue;

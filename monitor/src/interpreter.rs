@@ -5,7 +5,7 @@ use log::info;
 use protocols::{
     errors::{ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
-    ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
+    ir::{BinOp, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };
@@ -81,6 +81,11 @@ impl Interpreter {
             args_mapping.insert(*pin_id, current_value);
         }
 
+        info!(
+            "initial args_mapping:\n{}",
+            serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
+        );
+
         Self {
             transaction: transaction.clone(),
             symbol_table,
@@ -88,11 +93,6 @@ impl Interpreter {
             args_mapping,
             trace_cycle_count,
         }
-    }
-
-    // Update the `args_mapping` with the `current_value` for the `pin_id`
-    pub fn update_arg_value(&mut self, pin_id: SymbolId, value: BitVecValue) {
-        self.args_mapping.insert(pin_id, value);
     }
 
     /// Evaluates an `Expr` identified by its `ExprId`, returning an `ExprValue`
@@ -108,16 +108,50 @@ impl Interpreter {
             Expr::Sym(sym_id) => {
                 let name = self.symbol_table[sym_id].full_name(&self.symbol_table);
 
-                // Fetch the value for the `sym_id` from the trace,
-                // then update the `args_mapping`
-                if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
+                // First check if the symbol is in args_mapping
+                // (the symbol corresponds to a parameter to the transaction)
+                if let Some(value) = self.args_mapping.get(sym_id) {
+                    Ok(ExprValue::Concrete(value.clone()))
+                }
+                // Otherwise, try to fetch the value from the trace
+                else if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
                     info!(
                         "Trace @ cycle {}: `{}` has value {}",
                         self.trace_cycle_count,
                         name,
                         serialize_bitvec(&value, ctx.display_hex)
                     );
-                    self.update_arg_value(*sym_id, value.clone());
+                    // Check if the symbol we're referring to
+                    // is the DUT pin corresponding to an output parameter
+
+                    // Concretely, we check if the identifier begins with
+                    // the name of the DUT (e.g. check if "DUT.s" begins with "DUT.")
+                    let dut_prefix = format!("{}.", self.symbol_table[ctx.design.symbol_id].name());
+                    if name.starts_with(&dut_prefix) {
+                        let pin_name = &name[dut_prefix.len()..];
+
+                        // Find if there's an output parameter with this name
+                        // that hasn't been added to the `args_mapping` yet
+                        for arg in &self.transaction.args {
+                            if let Dir::Out = arg.dir() {
+                                let param_name = self.symbol_table[arg.symbol()].name();
+                                if param_name == pin_name
+                                    && !self.args_mapping.contains_key(&arg.symbol())
+                                {
+                                    // If yes, we read the value for the corresponding
+                                    // DUT pin from the trace, and update the args_mapping
+                                    // so that `<output_param> |-> <value_of_DUT_pin_from_trace>`
+                                    info!(
+                                        "Capturing output parameter {} = {}",
+                                        param_name,
+                                        serialize_bitvec(&value, ctx.display_hex)
+                                    );
+                                    self.args_mapping.insert(arg.symbol(), value.clone());
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     Ok(ExprValue::Concrete(value))
                 } else {
                     info!(
@@ -132,7 +166,7 @@ impl Interpreter {
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,
                         name.to_string(),
-                        "input, output, or args mapping".to_string(),
+                        "args_mapping or trace".to_string(),
                         *expr_id,
                     ))
                 }
@@ -305,45 +339,51 @@ impl Interpreter {
             }
         }
     }
-    /// When the monitor encounters an assignment of the form `symbol_id := expr_id`
-    /// (where `stmt_id` is the `StmtId` of the assignment),
-    /// 1. It first tries to evaluate `expr_id` to a value.
-    /// 2. If `expr_id` successfully evaluates to a value, we know the corresponding
+    /// When the monitor encounters an assignment of the form `lhs_symbol_id := rhs_expr_id`,
+    /// e.g. `DUT.a := a` (where `stmt_id` is the `StmtId` of the assignment):
+    /// 1. It first tries to evaluate `rhs_expr_id` to a value.
+    /// 2. If `rhs_expr_id` successfully evaluates to a value, we know the corresponding
     ///    `expr` is a value.
-    ///   - We compare this constant value with the value of `symbol_id` (the LHS) from the trace.
+    ///   - We compare this constant value with the value of `lhs_symbol_id` (the LHS)
+    ///     (the DUT pin) from the trace.
     ///   - If the values are different, we emit a `ValueDisagreesWithTrace` error
-    /// 3. If `expr_id` can't be evaluated to a value (e.g. it fails with a `SymbolNotFound` error),
-    ///    this is either because `expr_id` is an unsupported expr pattern (indicated w/ `todo!(...)`)
-    ///    or `expr_id` corresponds to a `Symbol` that is currently not in `args_mapping`.
+    /// 3. If `rhs_expr_id` can't be evaluated to a value (e.g. it fails with a `SymbolNotFound` error),
+    ///    this is either because `rhs_expr_id` is an unsupported expr pattern (indicated w/ `todo!(...)`)
+    ///    or `rhs_expr_id` corresponds to a `Symbol` that is currently not in `args_mapping`.
     ///   - For the latter, we check if the expr is a symbol.
-    ///   - If it is a symbol `s`, update `args_mapping` to be `args_mapping[s |-> read_trace(symbol_id)]`
+    ///   - If it is a symbol `s`, update `args_mapping` to be `args_mapping[s |-> read_trace(lhs_symbol_id)]`,
+    ///     i.e. make the symbol `s` point to the trace value for `lhs_symbol_id`
+    ///     in the resultant `args_mapping`.
     ///   - For any other expr pattern, we do `todo!(...)`
     fn evaluate_assign(
         &mut self,
         _stmt_id: &StmtId,
-        symbol_id: &SymbolId,
-        expr_id: &ExprId,
+        lhs_symbol_id: &SymbolId,
+        rhs_expr_id: &ExprId,
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
-        let lhs = self.symbol_table.full_name_from_symbol_id(symbol_id);
-        match self.evaluate_expr(expr_id, ctx) {
+        let lhs = self.symbol_table.full_name_from_symbol_id(lhs_symbol_id);
+        match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
-                let expr = &self.transaction[expr_id];
+                let rhs_expr = &self.transaction[rhs_expr_id];
                 info!(
                     "`{}` evaluates to Concrete Value `{}`",
-                    serialize_expr(&self.transaction, &self.symbol_table, expr_id),
+                    serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
                     serialize_bitvec(&rhs_value, ctx.display_hex)
                 );
-                match expr {
-                    Expr::Sym(rhs_symbol_id) => {
-                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *rhs_symbol_id) {
+                match rhs_expr {
+                    Expr::Const(_) | Expr::Sym(_) => {
+                        // If the `rhs` is a constant or an identifier,
+                        // we compare it with the trace's value for the LHS
+                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                            // If they're different, we report an error
                             if rhs_value != trace_value {
                                 Err(ExecutionError::value_disagrees_with_trace(
-                                    *expr_id,
+                                    *rhs_expr_id,
                                     rhs_value,
                                     trace_value,
-                                    *rhs_symbol_id,
-                                    lhs,
+                                    *lhs_symbol_id, // Use LHS symbol for error reporting
+                                    lhs.to_string(),
                                     self.trace_cycle_count,
                                 ))
                             } else {
@@ -355,31 +395,33 @@ impl Interpreter {
                                 lhs, self.trace_cycle_count
                             );
                             Err(ExecutionError::symbol_not_found(
-                                *rhs_symbol_id,
+                                *lhs_symbol_id,
                                 lhs.to_string(),
                                 "trace".to_string(),
-                                *expr_id,
+                                *rhs_expr_id,
                             ))
                         }
                     }
                     _ => todo!(
                         "Unhandled expr pattern {} which evaluates to {}",
-                        serialize_expr(&self.transaction, &self.symbol_table, expr_id),
+                        serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
                         serialize_bitvec(&rhs_value, ctx.display_hex)
                     ),
                 }
             }
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
-                let expr = &self.transaction[expr_id];
-                if let Expr::Sym(symbol_id) = expr {
-                    let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+                let expr = &self.transaction[rhs_expr_id];
+                if let Expr::Sym(rhs_symbol_id) = expr {
+                    let symbol_name =
+                        self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
                     info!(
-                        "RHS of assignment is a symbol {} that is not in the args_mapping, adding it...",
-                        symbol_name
+                        "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
+                        symbol_name, rhs_symbol_id
                     );
-                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *symbol_id) {
-                        self.args_mapping.insert(*symbol_id, trace_value.clone());
+                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        self.args_mapping
+                            .insert(*rhs_symbol_id, trace_value.clone());
                         info!(
                             "Updated args_mapping to map {} |-> {}",
                             symbol_name,
@@ -388,16 +430,16 @@ impl Interpreter {
                         Ok(())
                     } else {
                         Err(ExecutionError::symbol_not_found(
-                            *symbol_id,
+                            *lhs_symbol_id,
                             symbol_name,
                             "trace".to_string(),
-                            *expr_id,
+                            *rhs_expr_id,
                         ))
                     }
                 } else {
                     todo!(
                         "Unhandled expr pattern {} which results in SymbolNotFound error",
-                        serialize_expr(&self.transaction, &self.symbol_table, expr_id),
+                        serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
                     )
                 }
             }
@@ -434,16 +476,24 @@ impl Interpreter {
     /// Prints the reconstructed transaction
     /// (i.e. the function call that led to the signal trace)
     pub fn serialize_reconstructed_transaction(&self, ctx: &GlobalContext) -> String {
+        // Print the full args_mapping for debugging
+        info!(
+            "Final args_mapping:\n{}",
+            serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
+        );
+
         let mut args = vec![];
         // Iterates through each arg to the transaction and sees
         // what their final value in the `args_mapping` is
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].name();
+            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
             let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
                 panic!(
-                    "Unable to find value for {} ({}) in args_mapping",
-                    name, symbol_id
+                    "Unable to find value for {} ({}) in args_mapping, which is {}",
+                    name,
+                    symbol_id,
+                    serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
                 )
             });
             args.push(serialize_bitvec(value, ctx.display_hex));

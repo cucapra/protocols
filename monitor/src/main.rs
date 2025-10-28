@@ -104,14 +104,10 @@ fn main() -> anyhow::Result<()> {
         .get(dut_struct_name)
         .with_context(|| format!("Missing Design for {}", dut_struct_name))?;
 
-    // TODO: we assume only one `Transaction` & `SymbolTable` for now
-    let (transaction, symbol_table) = &transactions_symbol_tables[0];
-
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
     let ctx = GlobalContext::new(trace, design.clone(), cli.display_hex);
-    let mut scheduler =
-        Scheduler::initialize_with_thread(transaction.clone(), symbol_table.clone(), ctx);
+    let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
     // Actually run the scheduler
     scheduler.run()

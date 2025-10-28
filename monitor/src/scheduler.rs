@@ -2,9 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-#![allow(dead_code)]
-
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use anyhow::anyhow;
 use log::info;
@@ -101,6 +99,10 @@ pub struct Scheduler {
 
     /// Flag indicating whether the trace has ended
     trace_ended: bool,
+
+    /// All possible transactions (along with their corresponding transactions)
+    /// (This is used when forking new threads)
+    possible_transactions: Vec<(Transaction, SymbolTable)>,
 }
 
 impl Scheduler {
@@ -117,30 +119,39 @@ impl Scheduler {
         );
     }
 
-    /// Initializes a `Scheduler` with a thread that runs the given
-    /// `Transaction` with the provided `SymbolTable` and `GlobalContext`
-    pub fn initialize_with_thread(
-        transaction: Transaction,
-        symbol_table: SymbolTable,
-        ctx: GlobalContext,
-    ) -> Self {
+    /// Initializes a `Scheduler` with one scheduled thread for each `(Transcation, SymbolTable)`
+    /// pair in the argument `transactions`, along with a `GlobalContext` that is
+    /// shared across all threads
+    pub fn initialize(transactions: Vec<(Transaction, SymbolTable)>, ctx: GlobalContext) -> Self {
         let cycle_count = 0;
-        let interpreter =
-            Interpreter::new(transaction.clone(), symbol_table.clone(), &ctx, cycle_count);
         let mut thread_id = 0;
-        let args_mapping = HashMap::new();
-        let thread = Thread::new(
-            transaction.clone(),
-            symbol_table,
-            transaction.next_stmt_mapping(),
-            args_mapping,
-            &ctx,
-            thread_id,
-            cycle_count,
-        );
-        thread_id += 1;
+        let mut current_threads = vec![];
+        // Create a new thread for each transaction, then push it to the
+        // end of the `current` queue
+        for (transaction, symbol_table) in &transactions {
+            let thread = Thread::new(
+                transaction.clone(),
+                symbol_table.clone(),
+                transaction.next_stmt_mapping(),
+                &ctx,
+                thread_id,
+                cycle_count,
+            );
+            current_threads.push(thread);
+            thread_id += 1;
+        }
+        // Technically, initializing the `interpreter` here is necessary
+        // since when we pop a thread from the `current` queue, we perform
+        // a context switch and run the `interpreter` on the transaction/symbol_table
+        // corresponding to the thread. However, we do this here nonetheless
+        // since we need to initialize all fields in `Scheduler` struct.
+        let initial_thread = &current_threads[0];
+        let initial_transaction = initial_thread.transaction.clone();
+        let initial_symbol_table = initial_thread.symbol_table.clone();
+        let interpreter =
+            Interpreter::new(initial_transaction, initial_symbol_table, &ctx, cycle_count);
         Self {
-            current: vec![thread],
+            current: current_threads,
             next: vec![],
             finished: vec![],
             failed: vec![],
@@ -149,6 +160,7 @@ impl Scheduler {
             cycle_count,
             num_threads: thread_id,
             trace_ended: false,
+            possible_transactions: transactions,
         }
     }
 
@@ -329,21 +341,31 @@ impl Scheduler {
                             break;
                         }
                         Stmt::Fork => {
-                            let new_thread = Thread::new(
-                                thread.transaction.clone(),
-                                thread.symbol_table.clone(),
-                                thread.next_stmt_map.clone(),
-                                thread.args_mapping.clone(),
-                                &self.ctx,
-                                self.num_threads,
-                                self.cycle_count,
-                            );
-                            self.num_threads += 1;
+                            // For each possible transaction, fork one new thread for it,
+                            // i.e. add it to the `current` queue
+                            // This means if there are `n` possible transactions,
+                            // we push `n` threads to the `current` queue.
                             info!(
-                                "Thread {:?} called `fork()`, created new thread {:?} for transaction `{}`, adding to `current` queue",
-                                thread.thread_id, new_thread.thread_id, new_thread.transaction.name
+                                "Thread {:?} called `fork()`, creating new threads...",
+                                thread.thread_id
                             );
-                            self.current.push(new_thread);
+                            for (transaction, symbol_table) in &self.possible_transactions {
+                                let new_thread = Thread::new(
+                                    transaction.clone(),
+                                    symbol_table.clone(),
+                                    thread.next_stmt_map.clone(),
+                                    &self.ctx,
+                                    self.num_threads,
+                                    self.cycle_count,
+                                );
+                                self.num_threads += 1;
+                                info!(
+                                    "Adding new thread {:?} (`{}`) to `current` queue",
+                                    new_thread.thread_id, new_thread.transaction.name
+                                );
+                                self.current.push(new_thread);
+                            }
+
                             self.print_scheduler_state();
 
                             // Continue from the fork statement onwards

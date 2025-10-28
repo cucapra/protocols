@@ -9,7 +9,7 @@ use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
-use crate::serialize::{build_statements, serialize_expr};
+use crate::serialize::{build_statements, serialize_expr, serialize_type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
@@ -411,6 +411,52 @@ pub struct SymbolTable {
     by_name_struct: FxHashMap<String, StructId>,
 }
 
+/// Pretty-printer for `SymbolTable`s
+impl std::fmt::Display for SymbolTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "SymbolTable {{")?;
+
+        // Display symbol table entries
+        writeln!(f, "  Symbols:")?;
+        for (symbol_id, entry) in self.entries.iter() {
+            let type_str = serialize_type(self, entry.tpe());
+
+            let parent_str = match entry.parent {
+                Some(parent_id) => format!(
+                    " [parent: symbol{} \"{}\"]",
+                    parent_id.0, self[parent_id].name
+                ),
+                None => "".to_string(),
+            };
+
+            writeln!(
+                f,
+                "    symbol{} \"{}\": {}{}",
+                symbol_id.0,
+                entry.full_name(self),
+                type_str,
+                parent_str
+            )?;
+        }
+
+        // Display structs
+        if !self.structs.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "  Structs:")?;
+            for (struct_id, struct_def) in self.structs.iter() {
+                writeln!(f, "    struct{} \"{}\" {{", struct_id.0, struct_def.name)?;
+                for field in &struct_def.pins {
+                    let type_str = serialize_type(self, field.tpe());
+                    writeln!(f, "      {} {}: {}", field.dir, field.name, type_str)?;
+                }
+                writeln!(f, "    }}")?;
+            }
+        }
+
+        write!(f, "}}")
+    }
+}
+
 impl SymbolTable {
     pub fn add_without_parent(&mut self, name: String, tpe: Type) -> SymbolId {
         assert!(
@@ -585,6 +631,9 @@ impl SymbolTableEntry {
         self.tpe
     }
 
+    /// Retrieves the `SymbolID` of the parent symbol
+    /// (e.g. if the current entry refers to the field of a struct,
+    /// then this method returns the parent struct)
     pub fn parent(&self) -> Option<SymbolId> {
         self.parent
     }
@@ -633,6 +682,9 @@ mod tests {
         let dut_s = symbols.add_with_parent("s".to_string(), dut);
         assert_eq!(symbols["dut.s"], symbols[dut_s]);
         assert_eq!(symbols["s"], symbols[s]);
+
+        // Print the symbol table to demonstrate Display trait
+        println!("\n{}", symbols);
 
         // 2) create transaction
         let mut add = Transaction::new("add".to_string());
