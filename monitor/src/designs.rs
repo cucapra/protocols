@@ -3,8 +3,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-#![allow(dead_code)]
-
 use log::info;
 use protocols::{
     ir::{Field, SymbolId, SymbolTable, Transaction, Type},
@@ -57,20 +55,6 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
         "Design {{\n\tname: {}\n{}\npins: [\n{}\n]\ntransaction_ids: {:?}\n}}",
         design.name, symbol_str, pins_str, design.transaction_ids
     )
-}
-
-impl Design {
-    /// Takes a `pin_id` and retrieves the name of the corresponding `Field`
-    /// (if one exists)
-    pub fn get_pin_name(&self, pin_id: &SymbolId) -> Option<&str> {
-        self.pins.iter().find_map(|(id, field)| {
-            if id == pin_id {
-                Some(field.name())
-            } else {
-                None
-            }
-        })
-    }
 }
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),

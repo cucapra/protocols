@@ -2,9 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-#![allow(dead_code)]
-
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use anyhow::anyhow;
 use log::info;
@@ -131,12 +129,10 @@ impl Scheduler {
         // Create a new thread for each transaction, then push it to the
         // end of the `current` queue
         for (transaction, symbol_table) in &transactions {
-            let args_mapping = HashMap::new();
             let thread = Thread::new(
                 transaction.clone(),
                 symbol_table.clone(),
                 transaction.next_stmt_mapping(),
-                args_mapping,
                 &ctx,
                 thread_id,
                 cycle_count,
@@ -358,7 +354,6 @@ impl Scheduler {
                                     transaction.clone(),
                                     symbol_table.clone(),
                                     thread.next_stmt_map.clone(),
-                                    thread.args_mapping.clone(),
                                     &self.ctx,
                                     self.num_threads,
                                     self.cycle_count,

@@ -5,14 +5,13 @@
 use std::collections::HashMap;
 
 use baa::BitVecValue;
-use log::info;
 use protocols::{
-    ir::{Dir, StmtId, SymbolId, SymbolTable, Transaction},
+    ir::{StmtId, SymbolId, SymbolTable, Transaction},
     scheduler::NextStmtMap,
-    serialize::{serialize_bitvec, serialize_stmt},
+    serialize::serialize_stmt,
 };
 
-use crate::{global_context::GlobalContext, signal_trace::SignalTrace};
+use crate::global_context::GlobalContext;
 
 /// The local context associated with an individual thread,
 /// storing information such as:
@@ -71,67 +70,15 @@ impl Thread {
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
-        args_mapping: HashMap<SymbolId, BitVecValue>,
         ctx: &GlobalContext,
         thread_id: u32,
         start_cycle: u32,
     ) -> Self {
-        let mut args_mapping = HashMap::new();
-        info!("Creating new thread");
-
-        // Map input parameters to their corresponding DUT pin values
-        // e.g. 'a' |-> value of 'DUT.a' from the trace at current cycle
-
-        // Obtain the name of the DUT
-        let dut_name = symbol_table[ctx.design.symbol_id].name();
-        for arg in &transaction.args {
-            // Skip output parameters
-            // (these are added to the `args_mapping` when we actually need them)
-            if let Dir::Out = arg.dir() {
-                continue;
-            }
-
-            // Extract the `SymbolID` and the name of the intput parameter
-            let param_symbol_id = arg.symbol();
-            let param_name = symbol_table[param_symbol_id].name();
-
-            // Find the corresponding DUT pin (e.g., "DUT.a" for parameter "a")
-            let dut_pin_name = format!("{}.{}", dut_name, param_name);
-            let dut_pin_symbol_id = symbol_table
-                .symbol_id_from_name(&dut_pin_name)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Unable to find DUT pin '{}' for transaction parameter '{}'",
-                        dut_pin_name, param_name
-                    )
-                });
-
-            // Fetch the current value of the DUT pin from the trace
-            let current_value = ctx
-                .trace
-                .get(ctx.instance_id, dut_pin_symbol_id)
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Unable to get value for DUT pin {} in signal trace, {:?}",
-                        dut_pin_name, err
-                    )
-                });
-
-            info!(
-                "Inserting ({}, {}) into args_mapping...",
-                symbol_table.full_name_from_symbol_id(&param_symbol_id),
-                serialize_bitvec(&current_value, ctx.display_hex)
-            );
-
-            // Map the transaction parameter to the DUT pin's value
-            args_mapping.insert(param_symbol_id, current_value);
-        }
-
         Self {
             thread_id,
             transaction: transaction.clone(),
             next_stmt_map,
-            args_mapping,
+            args_mapping: HashMap::new(),
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,

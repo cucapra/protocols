@@ -6,3 +6,4 @@ test_run/
 **/.DS_Store
 .vscode/*
 .surfer/
+monitor/target

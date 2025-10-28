@@ -2,8 +2,6 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-#![allow(dead_code)]
-
 use crate::{designs::Design, signal_trace::WaveSignalTrace};
 
 /// The `GlobalContext` stores fields which are common
@@ -18,9 +16,6 @@ pub struct GlobalContext {
 
     /// The design under test
     pub design: Design,
-
-    /// Whether there are steps remaining in the signal trace
-    pub has_steps_remaining: bool,
 
     /// The `instance_id` corresponding to the DUT instance
     /// (Note: We assume that there is only one `Instance` at the moment)
@@ -44,9 +39,6 @@ impl GlobalContext {
         Self {
             trace,
             design,
-            // We haven't run anything yet,
-            // so `has_steps_remaining` is initialized to `true`
-            has_steps_remaining: true,
             instance_id,
             display_hex,
         }

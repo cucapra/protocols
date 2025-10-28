@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -631,6 +631,9 @@ impl SymbolTableEntry {
         self.tpe
     }
 
+    /// Retrieves the `SymbolID` of the parent symbol
+    /// (e.g. if the current entry refers to the field of a struct,
+    /// then this method returns the parent struct)
     pub fn parent(&self) -> Option<SymbolId> {
         self.parent
     }
