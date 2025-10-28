@@ -144,13 +144,18 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
 pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> String {
     match &tr[stmt_id] {
         Stmt::Block(stmt_ids) => {
-            // Only print the first two statements in a block for brevity
-            let formatted_stmts = stmt_ids[..2]
+            // Only print the at most 2 statements in a block for brevity
+            let num_stmts = std::cmp::min(2, stmt_ids.len());
+            let formatted_stmts = stmt_ids[..num_stmts]
                 .iter()
                 .map(|stmt_id| serialize_stmt(tr, st, stmt_id))
                 .collect::<Vec<_>>()
                 .join("; ");
-            format!("{{ {}; ... }}", formatted_stmts)
+            if num_stmts < 2 {
+                format!("{};", formatted_stmts)
+            } else {
+                format!("{{ {}; ... }}", formatted_stmts)
+            }
         }
         Stmt::Assign(symbol_id, expr_id) => {
             format!(

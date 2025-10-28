@@ -1,3 +1,5 @@
+// An ALU with a 1-cycle delay, 
+// supporting addition / subtraction / bitwise AND / bitwise OR
 module alu_d1 (
     input              clk, 
     input       [31:0] a,
