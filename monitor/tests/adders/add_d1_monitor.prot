@@ -14,9 +14,6 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.b := X;
   assert_eq(s, DUT.s);
 
-  // TODO: figure out how to make the 
-  // monitor support the same `.prot` file that is supplied to the forwards interpreter
-  // (at the moment, this fails because the monitor doesn't support `fork`)
   fork();
   step();
 }

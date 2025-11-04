@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -160,6 +160,20 @@ impl Transaction {
             arg_types.push(symbol_table_entry.tpe)
         }
         arg_types
+    }
+
+    /// Retrieves the `SymbolId`s of all the output parameters of a transaction
+    pub fn get_output_param_symbols(&self) -> Vec<SymbolId> {
+        self.args
+            .iter()
+            .filter_map(|arg| {
+                if arg.dir == Dir::Out {
+                    Some(arg.symbol)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
