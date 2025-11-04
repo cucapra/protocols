@@ -1,0 +1,23 @@
+// ARGS: --wave multi/multi0keep2const.fst --instances multi0keep2const:multi0keep2const
+struct multi0keep2const {
+    in start: u1,
+    in inp: u64,
+    out out: u64,
+}
+
+fn multi<DUT: multi0keep2const>(in data_in: u64, out data_out: u64) {
+    DUT.start := 1'b1;
+    DUT.inp := data_in;
+    
+    step();
+
+    DUT.start := 1'b0;
+    DUT.inp := X;
+
+    step(3);
+
+    assert_eq(DUT.out, data_out);
+
+    fork();
+    step();
+}
