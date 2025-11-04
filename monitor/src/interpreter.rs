@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -285,18 +285,20 @@ impl Interpreter {
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
         if let Ok(value) = ctx.trace.get(ctx.instance_id, trace_symbol) {
-            if self.args_mapping.contains_key(&out_param_symbol) {
-                // If `out_param_symbol` is already in the `args_mapping`,
-                // we do nothing (we don't want to overwrite existing
-                // key-value bindings)
-                Ok(())
-            } else {
-                self.args_mapping.insert(out_param_symbol, value.clone());
+            // Only modify the args_mapping if `out_param_symbol`
+            // is currently *not* present
+            if let Entry::Vacant(e) = self.args_mapping.entry(out_param_symbol) {
+                e.insert(value.clone());
                 info!(
                     "Extended args_mapping with {} |-> {}",
                     out_param_name,
                     serialize_bitvec(&value, ctx.display_hex)
                 );
+                Ok(())
+            } else {
+                // If `out_param_symbol` is already in the `args_mapping`,
+                // we do nothing (we don't want to overwrite existing
+                // key-value bindings)
                 Ok(())
             }
         } else {
@@ -351,10 +353,10 @@ impl Interpreter {
                     // one of them is an output param of the transaction,
                     // & the other is a DUT output port
                     (Expr::Sym(symbol_id1), Expr::Sym(symbol_id2)) => {
-                        // We need to clone the 2 `SymbolId`s in order to
+                        // We deference the two `SymbolId`s in order to
                         // avoid borrow-checker issues here
-                        let symbol_id1 = symbol_id1.clone();
-                        let symbol_id2 = symbol_id2.clone();
+                        let symbol_id1 = *symbol_id1;
+                        let symbol_id2 = *symbol_id2;
 
                         let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
                         let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
