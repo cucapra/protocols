@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -287,6 +287,8 @@ impl Interpreter {
         if let Ok(value) = ctx.trace.get(ctx.instance_id, trace_symbol) {
             // Only modify the args_mapping if `out_param_symbol`
             // is currently *not* present
+            // (Clippy suggested checking if the `Entry` is `Vacant`
+            // instead of using `contains_key` + `insert`)
             if let Entry::Vacant(e) = self.args_mapping.entry(out_param_symbol) {
                 e.insert(value.clone());
                 info!(
