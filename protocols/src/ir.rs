@@ -162,10 +162,16 @@ impl Transaction {
         arg_types
     }
 
-    /// Retrieves all the output parameters of a transaction,
-    /// returning an `Iterator` of `&Arg`'s
-    pub fn get_output_param_symbols(&self) -> impl Iterator<Item = &Arg> {
-        self.args.iter().filter(|arg| arg.dir == Dir::Out)
+    /// Retrieves the `SymbolId`s of all the output parameters of a transaction,
+    /// returning an `Iterator`
+    pub fn get_output_param_symbols(&self) -> impl Iterator<Item = SymbolId> {
+        self.args.iter().filter_map(|arg| {
+            if arg.dir == Dir::Out {
+                Some(arg.symbol)
+            } else {
+                None
+            }
+        })
     }
 
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
