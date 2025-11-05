@@ -363,8 +363,9 @@ impl Interpreter {
                         let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
                         let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
 
-                        let output_param_symbols = self.transaction.get_output_param_symbols();
-                        for out_param_symbol in output_param_symbols {
+                        let out_params: Vec<SymbolId> =
+                            self.transaction.get_output_param_symbols().collect();
+                        for out_param_symbol in out_params {
                             if out_param_symbol == symbol_id1 {
                                 info!("{} is an output param of the transaction", name1);
                                 self.map_output_param_to_trace(
