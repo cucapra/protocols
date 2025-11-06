@@ -532,6 +532,15 @@ impl Interpreter {
                         }
                     }
                     Expr::Slice(expr_id, start, end) => {
+                        println!(
+                            "Current args mapping: {}",
+                            serialize_args_mapping(
+                                &self.args_mapping,
+                                &self.symbol_table,
+                                ctx.display_hex
+                            )
+                        );
+
                         todo!(
                             "Unhandled expr pattern {}[{}:{}] which results in SymbolNotFound error",
                             serialize_expr(&self.transaction, &self.symbol_table, expr_id),
