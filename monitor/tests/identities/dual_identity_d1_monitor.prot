@@ -1,0 +1,42 @@
+// ARGS: --wave identities/dual_identity_d1.fst --instances dual_identity_d1:DualIdentity 
+
+struct DualIdentity {
+  in a: u64,
+  in b: u64,
+  out s1: u64,
+  out s2: u64,
+}
+
+// this pair of protocols works by having each thread assign one of DUT.a or DUT.b,
+// but assignment of DUT.a is conditioned upon correct assignment of DUT.b
+
+fn one<DUT: DualIdentity>(in b: u64) {
+    DUT.a := X;
+    DUT.b := X;
+
+    step();
+    fork();
+
+    DUT.b := b;
+
+    step();
+}
+
+
+fn two<DUT: DualIdentity>(in a: u64, in b: u64) {
+    if (DUT.b == b) {
+        DUT.a := a;
+    } else {
+        // This is a placeholder statement because currently 
+        // the scheduler cannot handle empty else blocks
+        assert_eq(1'b1, 1'b1);
+    }
+
+    step();
+
+    assert_eq(DUT.s1, a);
+    assert_eq(DUT.s2, b);
+
+    fork();
+    step();
+}
