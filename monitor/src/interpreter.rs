@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -319,12 +319,13 @@ impl Interpreter {
     }
 
     /// Evaluates a `Statement` identified by its `StmtId`,
-    /// returning the `StmtId` of the next statement to evaluate (if one exists)
+    /// returning a vector `StmtId` of the next statement(s) to evaluate,
+    /// or reports an `Error`
     pub fn evaluate_stmt(
         &mut self,
         stmt_id: &StmtId,
         ctx: &GlobalContext,
-    ) -> ExecutionResult<Option<StmtId>> {
+    ) -> ExecutionResult<Vec<StmtId>> {
         let transaction = self.transaction.clone();
         let stmt = &transaction[stmt_id];
         info!(
@@ -334,18 +335,22 @@ impl Interpreter {
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
                 self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
-                Ok(self.next_stmt_map[stmt_id])
+                let vec = self.next_stmt_map[stmt_id].into_iter().collect();
+                Ok(vec)
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id, ctx)
+                // self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id, ctx)
+                todo!("Return vec of length 2 contaiing the 2 stmt ids")
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx)
+                // self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx)
+                todo!()
             }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.
                 // Here, we simply return the next statement to run
-                Ok(self.next_stmt_map[stmt_id])
+                let vec = self.next_stmt_map[stmt_id].into_iter().collect();
+                Ok(vec)
             }
             Stmt::AssertEq(expr_id1, expr_id2) => {
                 let e1 = &self.transaction[expr_id1];
