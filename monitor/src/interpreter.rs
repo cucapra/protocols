@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -505,35 +505,44 @@ impl Interpreter {
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
                 let expr = &self.transaction[rhs_expr_id];
-                if let Expr::Sym(rhs_symbol_id) = expr {
-                    let symbol_name =
-                        self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
-                    info!(
-                        "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
-                        symbol_name, rhs_symbol_id
-                    );
-                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
-                        self.args_mapping
-                            .insert(*rhs_symbol_id, trace_value.clone());
+                match expr {
+                    Expr::Sym(rhs_symbol_id) => {
+                        let symbol_name =
+                            self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
                         info!(
-                            "Updated args_mapping to map {} |-> {}",
-                            symbol_name,
-                            serialize_bitvec(&trace_value, ctx.display_hex)
+                            "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
+                            symbol_name, rhs_symbol_id
                         );
-                        Ok(())
-                    } else {
-                        Err(ExecutionError::symbol_not_found(
-                            *lhs_symbol_id,
-                            symbol_name,
-                            "trace".to_string(),
-                            *rhs_expr_id,
-                        ))
+                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                            self.args_mapping
+                                .insert(*rhs_symbol_id, trace_value.clone());
+                            info!(
+                                "Updated args_mapping to map {} |-> {}",
+                                symbol_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex)
+                            );
+                            Ok(())
+                        } else {
+                            Err(ExecutionError::symbol_not_found(
+                                *lhs_symbol_id,
+                                symbol_name,
+                                "trace".to_string(),
+                                *rhs_expr_id,
+                            ))
+                        }
                     }
-                } else {
-                    todo!(
+                    Expr::Slice(expr_id, start, end) => {
+                        todo!(
+                            "Unhandled expr pattern {}[{}:{}] which results in SymbolNotFound error",
+                            serialize_expr(&self.transaction, &self.symbol_table, expr_id),
+                            start,
+                            end
+                        );
+                    }
+                    _ => todo!(
                         "Unhandled expr pattern {} which results in SymbolNotFound error",
                         serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
-                    )
+                    ),
                 }
             }
             Err(e) => todo!("Unhandled error {}", e),
