@@ -1,6 +1,6 @@
-error: Type mismatch in assert_eq: s[31:15] : BitVec(16) and DUT.s[31:16] : BitVec(15).
+error: Type mismatch in assert_eq: s[31:15] : u16 and DUT.s[31:16] : u15.
    ┌─ identities/identity_d1/slicing_err.prot:13:3
    │
 13 │   assert_eq(s[31:15], DUT.s[31:16]);
-   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Type mismatch in assert_eq: s[31:15] : BitVec(16) and DUT.s[31:16] : BitVec(15).
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Type mismatch in assert_eq: s[31:15] : u16 and DUT.s[31:16] : u15.
 

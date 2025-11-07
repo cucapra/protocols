@@ -2,20 +2,20 @@
 source: protocols/src/typecheck.rs
 expression: content
 ---
-warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+warning: Inferred RHS type as u32 from LHS type u32.
    ┌─ tests/multipliers/mult_cond.prot:19:3
    │
 19 │   dut.a := X;
-   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+warning: Inferred RHS type as u32 from LHS type u32.
    ┌─ tests/multipliers/mult_cond.prot:20:3
    │
 20 │   dut.b := X;
-   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-error: dut.c is an output and thus cannot be assigned.
+error: dut.c is an output port of dut and thus cannot be assigned.
    ┌─ tests/multipliers/mult_cond.prot:30:3
    │
 30 │   dut.c := 1'b1;
-   │   ^^^^^^^^^^^^^^ dut.c is an output and thus cannot be assigned.
+   │   ^^^^^^^^^^^^^^ dut.c is an output port of dut and thus cannot be assigned.
