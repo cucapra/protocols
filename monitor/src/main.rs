@@ -17,9 +17,11 @@ use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
 use anyhow::Context;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use log::LevelFilter;
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
+use protocols::typecheck::type_check;
 
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
@@ -74,10 +76,18 @@ fn main() -> anyhow::Result<()> {
 
     logger.init();
 
-    // parse protocol file
-    let mut protocols_handler = DiagnosticHandler::default();
+    // Print warning messages only if `--verbose` is enabled
+    let emit_warnings = cli.verbosity.log_level_filter() != LevelFilter::Warn;
+    // Note: for the monitor, error message locations in `.prot` files are suppressed
+    // in the `DiagnosticHandlers` for now
+    let mut protocols_handler = DiagnosticHandler::new(cli.color, false, emit_warnings);
+
+    // Parse protocols file
     let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
         parsing_helper(&cli.protocol, &mut protocols_handler);
+
+    // Type-check the parsed transactions
+    type_check(&transactions_symbol_tables, &mut protocols_handler)?;
 
     let designs = find_designs(transactions_symbol_tables.iter());
 

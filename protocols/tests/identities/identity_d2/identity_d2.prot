@@ -38,7 +38,7 @@ fn two_fork_ok<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
 
-  if a {
+  if (!(a == 32'd0)) {
     fork();
   }
   else {

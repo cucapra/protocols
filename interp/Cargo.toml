@@ -14,3 +14,4 @@ clap-verbosity-flag = "3.0.4"
 env_logger = "0.11.8"
 baa.workspace = true
 patronus.workspace = true
+anyhow = "1.0.100"

@@ -1,5 +1,5 @@
 ---
-source: src/typecheck.rs
+source: protocols/src/typecheck.rs
 expression: content
 ---
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
@@ -19,9 +19,3 @@ error: dut.c is an output and thus cannot be assigned.
    │
 30 │   dut.c := 1'b1;
    │   ^^^^^^^^^^^^^^ dut.c is an output and thus cannot be assigned.
-
-error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
-   ┌─ tests/multipliers/mult_cond.prot:32:3
-   │
-32 │   s := dut.s;
-   │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.

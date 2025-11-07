@@ -1,0 +1,17 @@
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+
+  step();
+
+  // This fails typechecking, because the bit-widths 
+  // of the two arguments are different
+  assert_eq(s[31:15], DUT.s[31:16]);
+
+  fork();
+  step();
+}

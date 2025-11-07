@@ -6,12 +6,13 @@ use std::collections::HashMap;
 
 use clap::ColorChoice;
 use clap::Parser;
-use clap_verbosity_flag::{Verbosity, WarnLevel};
+use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction, Type};
 use protocols::scheduler::Scheduler;
 use protocols::setup::{assert_ok, setup_test_environment};
 use protocols::transactions_parser::parse_transactions_file;
+use protocols::typecheck::type_check;
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]
@@ -62,7 +63,7 @@ struct Cli {
 /// $ cargo run --package protocols-interp -- --verilog protocols/tests/counters/counter.v -p protocols/tests/counters/counter.prot -t protocols/tests/counters/counter.tx -v
 /// $ cargo run --package protocols-interp -- --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v -p protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
 
@@ -75,8 +76,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_level(cli.verbosity.log_level_filter())
         .init();
 
-    // Create a new handler for dealing with errors/diagnostics
-    let protocols_handler = &mut DiagnosticHandler::new(color_choice, cli.no_error_locations);
+    // Print warning messages only if `--verbose` is enabled
+    let emit_warnings = cli.verbosity.log_level_filter() != LevelFilter::Warn;
+    let protocols_handler =
+        &mut DiagnosticHandler::new(color_choice, cli.no_error_locations, emit_warnings);
 
     // At the moment we only allow the user to specify one Verilog file
     // through the CLI, so we have to wrap it in a singleton Vec
@@ -86,6 +89,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cli.module,
         protocols_handler,
     );
+
+    // Type-check the parsed transactions
+    type_check(&parsed_data, protocols_handler)?;
 
     // Nikil says we have to do this step in order to convert
     // `Vec<(Transaction, SymbolTable)>` into `Vec<(&Transaction, &SymbolTable)>`
@@ -99,7 +105,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler = &mut DiagnosticHandler::new(color_choice, cli.no_error_locations);
+    let transactions_handler =
+        &mut DiagnosticHandler::new(color_choice, cli.no_error_locations, emit_warnings);
     let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
         cli.transactions,
         transactions_handler,

@@ -4,20 +4,94 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use anyhow::anyhow;
+use baa::BitVecOps;
+use std::cmp::Ordering::{Equal, Greater, Less};
+
 use crate::{diagnostic::*, ir::*, serialize::*};
 
+/// Helper function for emitting error messages related to invalid bit-slices
+fn emit_bitslice_type_error(
+    start_idx: u32,
+    end_idx: u32,
+    expr_width: u32,
+    handler: &mut DiagnosticHandler,
+    tr: &Transaction,
+    expr_id: &ExprId,
+) -> anyhow::Result<Type> {
+    let error_msg = format!(
+        "Invalid slice operation: [{}:{}] on width {}",
+        start_idx, end_idx, expr_width
+    );
+    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+    Err(anyhow!(error_msg))
+}
+
+/// Typechecks an expression (identified by its `ExprId`) with respect to
+/// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
 fn check_expr_types(
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
-) -> Result<Type, String> {
+) -> anyhow::Result<Type> {
     match &tr[expr_id] {
-        Expr::Const(_) => Ok(Type::BitVec(32)), // TODO: need to determine how to check type size
+        Expr::Const(bitvec) => {
+            // Constants have bit-vector types whose length correspond
+            // to the bit-width of the value
+            Ok(Type::BitVec(bitvec.width()))
+        }
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
-        // FIXME: is this the correct typechecking logic?
-        Expr::Slice(sym_expr, _, _) => check_expr_types(tr, st, handler, sym_expr),
+        Expr::Slice(sym_expr, start_idx, end_idx) => {
+            // To type-check `e[i:j]`, first typecheck `e` and make sure
+            // it is a actually a bit-vector
+            let ty = check_expr_types(tr, st, handler, sym_expr)?;
+            match ty {
+                Type::BitVec(expr_width) => match start_idx.cmp(end_idx) {
+                    Equal => Ok(Type::BitVec(1)),
+                    Greater => {
+                        // Make sure the width of the bitslice is at most
+                        // the width of the entire bit-vector
+                        let slice_width = start_idx - end_idx;
+                        if slice_width <= expr_width {
+                            Ok(Type::BitVec(slice_width))
+                        } else {
+                            emit_bitslice_type_error(
+                                *start_idx, *end_idx, expr_width, handler, tr, expr_id,
+                            )
+                        }
+                    }
+                    Less => {
+                        // Emit an error message when `i < j` in `e[i:j]`
+                        // (we expect `i >= j`,
+                        // since `i` is the MSB & `j` is the LSB)
+                        let error_msg = format!(
+                            "Invalid slice operation: [{}:{}] on width {} (MSB {} is less than LSB {}, which is the other way round)",
+                            start_idx, end_idx, expr_width, start_idx, end_idx
+                        );
+                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
+                },
+                Type::Struct(struct_id) => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of struct {}",
+                        st[struct_id].name()
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+                Type::Unknown => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of expr {} with Unknown type",
+                        serialize_expr(tr, st, expr_id)
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            }
+        }
         Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(1) = inner_type {
@@ -58,14 +132,16 @@ fn check_stmt_types(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     match &tr[stmt_id] {
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
         Stmt::Assign(lhs, rhs) => {
             // Function argument cannot be assigned
             if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
-                handler.emit_diagnostic_stmt(tr, stmt_id, "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.", Level::Error);
+                let error_msg = "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.";
+                handler.emit_diagnostic_stmt(tr, stmt_id, error_msg, Level::Error);
+                return Err(anyhow!(error_msg));
             }
             // DUT output cannot be assigned
             if let Some(parent) = st[lhs].parent() {
@@ -75,15 +151,12 @@ fn check_stmt_types(
                         .iter()
                         .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                     {
-                        handler.emit_diagnostic_stmt(
-                            tr,
-                            stmt_id,
-                            &format!(
-                                "{} is an output and thus cannot be assigned.",
-                                st[lhs].full_name(st)
-                            ),
-                            Level::Error,
+                        let error_msg = format!(
+                            "{} is an output and thus cannot be assigned.",
+                            st[lhs].full_name(st)
                         );
+                        handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                        return Err(anyhow!(error_msg));
                     }
                 }
             }
@@ -105,49 +178,39 @@ fn check_stmt_types(
                 Ok(())
             } else {
                 let expr_name = serialize_expr(tr, st, rhs);
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
-                        st[lhs].full_name(st),
-                        lhs_type,
-                        expr_name,
-                        rhs_type
-                    ),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
+                    st[lhs].full_name(st),
+                    lhs_type,
+                    expr_name,
+                    rhs_type
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::While(cond, bodyid) => {
             let cond_type = check_expr_types(tr, st, handler, cond)?;
+            // Guards for while-loops must have type `BitVec(1)`
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
-                handler.emit_diagnostic_expr(
-                    tr,
-                    cond,
-                    &format!("Invalid type for [while] condition: {:?}", cond_type),
-                    Level::Error,
-                );
-                Ok(())
+                let error_msg = format!("Invalid type for [while] condition: {:?}", cond_type);
+                handler.emit_diagnostic_expr(tr, cond, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             let cond_type = check_expr_types(tr, st, handler, cond)?;
-            if let Type::BitVec(_) = cond_type {
+            // Guards for conditions must have type `BitVec(1)`
+            if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, ifbody)?;
                 check_stmt_types(tr, st, handler, elsebody)?;
                 Ok(())
             } else {
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!("Type mistmatch in If/Else condition: {:?}", cond_type),
-                    Level::Error,
-                );
-                Ok(())
+                let error_msg = format!("Type mismatch in If/Else condition: {:?}", cond_type);
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::AssertEq(exprid1, exprid2) => {
@@ -158,16 +221,12 @@ fn check_stmt_types(
             } else {
                 let expr1_name = serialize_expr(tr, st, exprid1);
                 let expr2_name = serialize_expr(tr, st, exprid2);
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
-                        expr1_name, expr1_type, expr2_name, expr2_type,
-                    ),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
+                    expr1_name, expr1_type, expr2_name, expr2_type,
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::Block(stmts) => {
@@ -179,16 +238,22 @@ fn check_stmt_types(
     }
 }
 
-pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut DiagnosticHandler) {
-    for (st, tr) in trs {
+/// Typechecks every function contained in the argument `Vec`
+/// of `(Transaction, SymbolTable)` pairs
+pub fn type_check(
+    trs: &Vec<(Transaction, SymbolTable)>,
+    handler: &mut DiagnosticHandler,
+) -> anyhow::Result<()> {
+    for (tr, st) in trs {
         for expr_id in tr.expr_ids() {
-            let _ = check_expr_types(&tr, &st, handler, &expr_id);
+            check_expr_types(tr, st, handler, &expr_id)?;
         }
 
         for stmt_id in tr.stmt_ids() {
-            let _ = check_stmt_types(&tr, &st, handler, &stmt_id);
+            check_stmt_types(tr, st, handler, &stmt_id)?;
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -215,7 +280,7 @@ mod tests {
         let result = parse_file(file_name, &mut handler);
         let content = match result {
             Ok(trs) => {
-                type_check(trs, &mut handler);
+                let _ = type_check(&trs, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -225,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot");
+        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot")
     }
 
     #[test]
@@ -324,6 +389,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        type_check(vec![(symbols, tr)], &mut handler);
+        let _ = type_check(&vec![(tr, symbols)], &mut handler);
     }
 }
