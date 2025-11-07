@@ -125,7 +125,9 @@ fn check_stmt_types(
         Stmt::Assign(lhs, rhs) => {
             // Function argument cannot be assigned
             if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
-                handler.emit_diagnostic_stmt(tr, stmt_id, "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.", Level::Error);
+                let error_msg = "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.";
+                handler.emit_diagnostic_stmt(tr, stmt_id, error_msg, Level::Error);
+                return Err(anyhow!(error_msg));
             }
             // DUT output cannot be assigned
             if let Some(parent) = st[lhs].parent() {
@@ -135,15 +137,12 @@ fn check_stmt_types(
                         .iter()
                         .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                     {
-                        handler.emit_diagnostic_stmt(
-                            tr,
-                            stmt_id,
-                            &format!(
-                                "{} is an output and thus cannot be assigned.",
-                                st[lhs].full_name(st)
-                            ),
-                            Level::Error,
+                        let error_msg = format!(
+                            "{} is an output and thus cannot be assigned.",
+                            st[lhs].full_name(st)
                         );
+                        handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                        return Err(anyhow!(error_msg));
                     }
                 }
             }
@@ -165,19 +164,15 @@ fn check_stmt_types(
                 Ok(())
             } else {
                 let expr_name = serialize_expr(tr, st, rhs);
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
-                        st[lhs].full_name(st),
-                        lhs_type,
-                        expr_name,
-                        rhs_type
-                    ),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
+                    st[lhs].full_name(st),
+                    lhs_type,
+                    expr_name,
+                    rhs_type
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::While(cond, bodyid) => {
@@ -185,29 +180,21 @@ fn check_stmt_types(
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
-                handler.emit_diagnostic_expr(
-                    tr,
-                    cond,
-                    &format!("Invalid type for [while] condition: {:?}", cond_type),
-                    Level::Error,
-                );
-                Ok(())
+                let error_msg = format!("Invalid type for [while] condition: {:?}", cond_type);
+                handler.emit_diagnostic_expr(tr, cond, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             let cond_type = check_expr_types(tr, st, handler, cond)?;
-            if let Type::BitVec(_) = cond_type {
+            if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, ifbody)?;
                 check_stmt_types(tr, st, handler, elsebody)?;
                 Ok(())
             } else {
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!("Type mistmatch in If/Else condition: {:?}", cond_type),
-                    Level::Error,
-                );
-                Ok(())
+                let error_msg = format!("Type mistmatch in If/Else condition: {:?}", cond_type);
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::AssertEq(exprid1, exprid2) => {
@@ -218,16 +205,12 @@ fn check_stmt_types(
             } else {
                 let expr1_name = serialize_expr(tr, st, exprid1);
                 let expr2_name = serialize_expr(tr, st, exprid2);
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
-                        expr1_name, expr1_type, expr2_name, expr2_type,
-                    ),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
+                    expr1_name, expr1_type, expr2_name, expr2_type,
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::Block(stmts) => {
