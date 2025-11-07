@@ -76,8 +76,7 @@ fn main() -> anyhow::Result<()> {
         .filter_level(cli.verbosity.log_level_filter())
         .init();
 
-    // Create a new handler for dealing with errors/diagnostics
-    // Enable warnings only if verbose flag is set
+    // Print warning messages only if `--verbose` is enabled
     let emit_warnings = cli.verbosity.log_level_filter() != LevelFilter::Warn;
     let protocols_handler =
         &mut DiagnosticHandler::new(color_choice, cli.no_error_locations, emit_warnings);
