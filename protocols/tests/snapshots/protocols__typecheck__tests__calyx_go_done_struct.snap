@@ -1,13 +1,7 @@
 ---
-source: src/typecheck.rs
+source: protocols/src/typecheck.rs
 expression: content
 ---
-error: Type mismatch in binary operation: BitVec(1) and BitVec(32)
-   ┌─ tests/calyx_go_done/calyx_go_done_struct.prot:11:11
-   │
-11 │   while !(dut.done == 1'b1) {
-   │           ^^^^^^^^ Type mismatch in binary operation: BitVec(1) and BitVec(32)
-
 warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
    ┌─ tests/calyx_go_done/calyx_go_done_struct.prot:15:3
    │
