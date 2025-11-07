@@ -1,10 +1,44 @@
 # Well-Formedness
 
-Well-formed Protocols programs prevent the following bad things from happening.
+This document details the well-formedness constraints on `.prot` programs:
 
-## Bad things that can happen at runtime
+## Static checks 
+- Local variable definitions in function bodies are forbidden.
+- All function arguments are immutable. 
 
-| **Description**                                                                                                              | **Error enum** (if one exists)       |
+### Grammar for assignments
+- In assignments `LHS := RHS`, `LHS` & `RHS` must conform to the following grammar:
+
+```
+LHS := DUT input port
+RHS ::= rhs_expr
+   | rhs_expr[i:j] (bitslices)
+   | rhs_expr ++ rhs_expr (where `++` is concatenation)
+
+rhs_expr ::= DUT input port | input parameter to a function | constant
+```
+- We also permit `LHS := X`, where `LHS` still a DUT input port & `X` is a distinguished `DontCare` symbol 
+that indicates the value of `LHS` is irrelevant at the current cycle.
+
+### Grammar for assertions
+- In assertions (`assert_eq(LHS, RHS)` or `assert_eq(RHS, LHS)`), `LHS` & `RHS` must conform to the following grammar:
+
+```
+LHS := DUT output port
+
+RHS ::= rhs_expr
+   | rhs_expr[i:j] (bitslices)
+   | rhs_expr ++ rhs_expr (where `++` is concatenation)
+
+rhs_expr ::= DUT output port | output parameter to a function | constant
+```
+- This grammar is slightly different from the grammar for assignments: assertions refer to *output* parameters / DUT ports,
+whereas assignments refer to *input* parameters / DUT ports 
+
+
+## Runtime checks
+
+| **Error condition**                                                                                                          | **Error enum** (if one exists)       |
 |------------------------------------------------------------------------------------------------------------------------------|--------------------------------------|
 | Multiple threads try to assign to the same input                                                                             | `ThreadError::ConflictingAssignment` |
 | We assign to a read-only symbol                                                                                              | `ThreadError::ReadOnlyAssignment`    |
