@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -256,6 +256,11 @@ pub enum Type {
 }
 
 impl Type {
+    /// Checks whether two types are *equivalent*,
+    /// i.e. if two bit-vector types have the same length,
+    /// or if two `struct`s have the same `StructId`.
+    /// NB: this function returns `false` if either type is `Unknown`,
+    /// or if any of the aforementioned cases don't hold.
     pub fn is_equivalent(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
