@@ -60,8 +60,22 @@ fn check_expr_types(
                         Err(anyhow!(error_msg))
                     }
                 },
-                Type::Struct(_) => todo!("Emit type error when taking bit-slice of structs"),
-                Type::Unknown => todo!("Emit type error when taking bit-slice of Unknown"),
+                Type::Struct(struct_id) => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of struct {}",
+                        st[struct_id].name()
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+                Type::Unknown => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of expr {} with Unknown type",
+                        serialize_expr(tr, st, expr_id)
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
             }
         }
         Expr::Unary(UnaryOp::Not, not_exprid) => {
