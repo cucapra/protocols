@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
-use crate::{diagnostic::*, ir::*, serialize::*};
+use crate::{diagnostic::*, ir::*, serialize::*, static_checks::check_condition_well_formedness};
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -198,9 +198,13 @@ fn check_stmt_types(
             }
         }
         Stmt::While(cond, bodyid) => {
-            let cond_type = check_expr_types(tr, st, handler, cond)?;
             // Guards for while-loops must have type `BitVec(1)`
+            let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
+                // If the loop guard typechecks, make sure it is well-formed
+                check_condition_well_formedness(tr, st, handler, cond)?;
+
+                // Then, type-check the body of the while-loop
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
                 let error_msg = format!(
@@ -212,12 +216,15 @@ fn check_stmt_types(
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
+            // Conditions for if-statement must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;
-            // Guards for conditions must have type `BitVec(1)`
             if let Type::BitVec(1) = cond_type {
+                // If the condition typechecks, make sure it is well-formed
+                check_condition_well_formedness(tr, st, handler, cond)?;
+
+                // Then, type-check the bodies of the `then` & `else` branches
                 check_stmt_types(tr, st, handler, ifbody)?;
-                check_stmt_types(tr, st, handler, elsebody)?;
-                Ok(())
+                check_stmt_types(tr, st, handler, elsebody)
             } else {
                 let error_msg = format!(
                     "Type mismatch in If/Else condition: {}",

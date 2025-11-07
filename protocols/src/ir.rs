@@ -380,9 +380,13 @@ impl Struct {
     /// Retrieves the (fully-qualified) names of all the output pins of a `Struct`,
     /// returning an `Iterator` of `String`s
     pub fn get_output_pin_names(&self) -> impl Iterator<Item = String> {
+        println!("pins = {:?}", self.pins);
+
         self.pins.iter().filter_map(|field| {
             if field.dir == Dir::Out {
-                Some(format!("{}.{}", self.name, field.name))
+                let field_name = format!("{}.{}", self.name, field.name);
+                println!("found field {field_name}");
+                Some(field_name)
             } else {
                 None
             }

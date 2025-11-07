@@ -8,8 +8,7 @@ use itertools::Itertools;
 
 /// Checks whether the condition (guard) for an if-statement / while-loop
 /// conforms to the well-formedness requirements
-#[allow(dead_code)]
-fn check_conditional(
+pub fn check_condition_well_formedness(
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
@@ -40,6 +39,10 @@ fn check_conditional(
                             if output_pin_names.contains(&symbol_full_name) {
                                 Ok(())
                             } else {
+                                println!(
+                                    "output fields: {:?}",
+                                    output_pin_names.collect::<Vec<_>>()
+                                );
                                 let error_msg = format!(
                                     "{} is not an output field of struct {} but only output fields of {} are allowed to appear in the condition for loops/if-statements",
                                     symbol_full_name, struct_name, struct_name
@@ -71,10 +74,12 @@ fn check_conditional(
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
-            check_conditional(tr, st, handler, expr_id1)?;
-            check_conditional(tr, st, handler, expr_id2)
+            check_condition_well_formedness(tr, st, handler, expr_id1)?;
+            check_condition_well_formedness(tr, st, handler, expr_id2)
         }
-        Expr::Unary(_, inner_expr) => check_conditional(tr, st, handler, inner_expr),
-        Expr::Slice(sliced_expr, _, _) => check_conditional(tr, st, handler, sliced_expr),
+        Expr::Unary(_, inner_expr) => check_condition_well_formedness(tr, st, handler, inner_expr),
+        Expr::Slice(sliced_expr, _, _) => {
+            check_condition_well_formedness(tr, st, handler, sliced_expr)
+        }
     }
 }
