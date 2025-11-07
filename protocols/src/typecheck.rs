@@ -10,6 +10,7 @@ use std::cmp::Ordering::{Equal, Greater, Less};
 
 use crate::{diagnostic::*, ir::*, serialize::*};
 
+/// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
     start_idx: u32,
     end_idx: u32,
@@ -26,6 +27,8 @@ fn emit_bitslice_type_error(
     Err(anyhow!(error_msg))
 }
 
+/// Typechecks an expression (identified by its `ExprId`) with respect to
+/// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
 fn check_expr_types(
     tr: &Transaction,
     st: &SymbolTable,
@@ -33,15 +36,23 @@ fn check_expr_types(
     expr_id: &ExprId,
 ) -> anyhow::Result<Type> {
     match &tr[expr_id] {
-        Expr::Const(bitvec) => Ok(Type::BitVec(bitvec.width())),
+        Expr::Const(bitvec) => {
+            // Constants have bit-vector types whose length correspond
+            // to the bit-width of the value
+            Ok(Type::BitVec(bitvec.width()))
+        }
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
         Expr::Slice(sym_expr, start_idx, end_idx) => {
+            // To type-check `e[i:j]`, first typecheck `e` and make sure
+            // it is a actually a bit-vector
             let ty = check_expr_types(tr, st, handler, sym_expr)?;
             match ty {
                 Type::BitVec(expr_width) => match start_idx.cmp(end_idx) {
                     Equal => Ok(Type::BitVec(1)),
                     Greater => {
+                        // Make sure the width of the bitslice is at most
+                        // the width of the entire bit-vector
                         let slice_width = start_idx - end_idx;
                         if slice_width <= expr_width {
                             Ok(Type::BitVec(slice_width))
@@ -52,6 +63,9 @@ fn check_expr_types(
                         }
                     }
                     Less => {
+                        // Emit an error message when `i < j` in `e[i:j]`
+                        // (we expect `i >= j`,
+                        // since `i` is the MSB & `j` is the LSB)
                         let error_msg = format!(
                             "Invalid slice operation: [{}:{}] on width {} (MSB {} is less than LSB {}, which is the other way round)",
                             start_idx, end_idx, expr_width, start_idx, end_idx
