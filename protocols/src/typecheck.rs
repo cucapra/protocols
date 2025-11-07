@@ -5,6 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use baa::BitVecOps;
+use std::cmp::Ordering::{Equal, Greater, Less};
 
 use crate::{diagnostic::*, ir::*, serialize::*};
 
@@ -18,8 +19,25 @@ fn check_expr_types(
         Expr::Const(bitvec) => Ok(Type::BitVec(bitvec.width())),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
-        // FIXME: is this the correct typechecking logic?
-        Expr::Slice(sym_expr, _, _) => check_expr_types(tr, st, handler, sym_expr),
+        Expr::Slice(sym_expr, start_idx, end_idx) => {
+            let ty = check_expr_types(tr, st, handler, sym_expr)?;
+            match ty {
+                Type::BitVec(expr_width) => match start_idx.cmp(end_idx) {
+                    Less => todo!("Emit type error when start_idx < end_idx"),
+                    Equal => Ok(Type::BitVec(1)),
+                    Greater => {
+                        let slice_width = start_idx - end_idx;
+                        if slice_width <= expr_width {
+                            Ok(Type::BitVec(slice_width))
+                        } else {
+                            todo!("Emit type error when slice_width > expr_width")
+                        }
+                    }
+                },
+                Type::Struct(_) => todo!("Emit type error when taking bit-slice of structs"),
+                Type::Unknown => todo!("Emit type error when taking bit-slice of Unknown"),
+            }
+        }
         Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(1) = inner_type {
