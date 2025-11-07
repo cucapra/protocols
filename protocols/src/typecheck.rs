@@ -191,6 +191,7 @@ fn check_stmt_types(
         }
         Stmt::While(cond, bodyid) => {
             let cond_type = check_expr_types(tr, st, handler, cond)?;
+            // Guards for while-loops must have type `BitVec(1)`
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
@@ -201,12 +202,13 @@ fn check_stmt_types(
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             let cond_type = check_expr_types(tr, st, handler, cond)?;
+            // Guards for conditions must have type `BitVec(1)`
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, ifbody)?;
                 check_stmt_types(tr, st, handler, elsebody)?;
                 Ok(())
             } else {
-                let error_msg = format!("Type mistmatch in If/Else condition: {:?}", cond_type);
+                let error_msg = format!("Type mismatch in If/Else condition: {:?}", cond_type);
                 handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))
             }
