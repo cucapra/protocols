@@ -174,7 +174,7 @@ fn check_stmt_types(
                     tr,
                     stmt_id,
                     &format!(
-                        "Inferred RHS type as {:?} from LHS type {:?}.",
+                        "Inferred RHS type as {} from LHS type {}.",
                         serialize_type(st, rhs_type),
                         serialize_type(st, lhs_type)
                     ),
