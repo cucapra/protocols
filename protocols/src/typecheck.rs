@@ -4,10 +4,27 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use anyhow::anyhow;
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
 use crate::{diagnostic::*, ir::*, serialize::*};
+
+fn emit_bitslice_type_error(
+    start_idx: u32,
+    end_idx: u32,
+    expr_width: u32,
+    handler: &mut DiagnosticHandler,
+    tr: &Transaction,
+    expr_id: &ExprId,
+) -> anyhow::Result<Type> {
+    let error_msg = format!(
+        "Invalid slice operation: [{}:{}] on width {}",
+        start_idx, end_idx, expr_width
+    );
+    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+    Err(anyhow!(error_msg))
+}
 
 fn check_expr_types(
     tr: &Transaction,
@@ -23,15 +40,24 @@ fn check_expr_types(
             let ty = check_expr_types(tr, st, handler, sym_expr)?;
             match ty {
                 Type::BitVec(expr_width) => match start_idx.cmp(end_idx) {
-                    Less => todo!("Emit type error when start_idx < end_idx"),
                     Equal => Ok(Type::BitVec(1)),
                     Greater => {
                         let slice_width = start_idx - end_idx;
                         if slice_width <= expr_width {
                             Ok(Type::BitVec(slice_width))
                         } else {
-                            todo!("Emit type error when slice_width > expr_width")
+                            emit_bitslice_type_error(
+                                *start_idx, *end_idx, expr_width, handler, tr, expr_id,
+                            )
                         }
+                    }
+                    Less => {
+                        let error_msg = format!(
+                            "Invalid slice operation: [{}:{}] on width {} (MSB {} is less than LSB {}, which is the other way round)",
+                            start_idx, end_idx, expr_width, start_idx, end_idx
+                        );
+                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
                     }
                 },
                 Type::Struct(_) => todo!("Emit type error when taking bit-slice of structs"),

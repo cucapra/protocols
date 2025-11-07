@@ -1,6 +1,12 @@
-error: The two expressions did not evaluate to the same value
-   ┌─ identities/identity_d1/identity_d1.prot:36:13
+error: Type mismatch in assert_eq: s[31:15] : BitVec(16) and DUT.s[31:16] : BitVec(15).
+   ┌─ identities/identity_d1/slicing_err.prot:13:3
    │
-36 │   assert_eq(s[31:15], DUT.s[31:16]);
+13 │   assert_eq(s[31:15], DUT.s[31:16]);
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Type mismatch in assert_eq: s[31:15] : BitVec(16) and DUT.s[31:16] : BitVec(15).
+
+error: The two expressions did not evaluate to the same value
+   ┌─ identities/identity_d1/slicing_err.prot:13:13
+   │
+13 │   assert_eq(s[31:15], DUT.s[31:16]);
    │             ^^^^^^^^^^^^^^^^^^^^^^ LHS Value: ValueOwned(00000000000000000), RHS Value: ValueOwned(0000000000000000)
 
