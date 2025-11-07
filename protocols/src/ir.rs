@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
 use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
@@ -375,9 +376,21 @@ impl Struct {
     pub fn pins(&self) -> &Vec<Field> {
         &self.pins
     }
+
+    /// Retrieves the (fully-qualified) names of all the output pins of a `Struct`,
+    /// returning an `Iterator` of `String`s
+    pub fn get_output_pin_names(&self) -> impl Iterator<Item = String> {
+        self.pins.iter().filter_map(|field| {
+            if field.dir == Dir::Out {
+                Some(format!("{}.{}", self.name, field.name))
+            } else {
+                None
+            }
+        })
+    }
 }
 
-/// Datatype representing A `Field` in a `Struct`, contains:
+/// Datatype representing a `Field` in a `Struct`, contains:
 /// - The name of the field
 /// - The direction (`In` or `Out`)
 /// - The `Type` of the field
@@ -396,7 +409,6 @@ impl Field {
     pub fn name(&self) -> &str {
         &self.name
     }
-
     pub fn dir(&self) -> Dir {
         self.dir
     }

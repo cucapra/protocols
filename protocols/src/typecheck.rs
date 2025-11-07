@@ -104,8 +104,7 @@ fn check_expr_types(
                     &format!(
                         "Invalid type for 'Not' expression {}",
                         serialize_type(st, inner_type)
-                    )
-                    .to_string(),
+                    ),
                     Level::Error,
                 );
                 Ok(inner_type)
