@@ -607,16 +607,14 @@ impl ParserContext<'_> {
 pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-) -> Result<Vec<(SymbolTable, Transaction)>, String> {
+) -> Result<Vec<(Transaction, SymbolTable)>, String> {
     let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     let fileid = handler.add_file(name, input.clone());
 
     let res = ProtocolParser::parse(Rule::file, &input);
     match res {
-        Ok(_parsed) => {
-            //println!("Parsing successful: {:?}", parsed);
-        }
+        Ok(_parsed) => (),
         Err(err) => {
             let (start, end) = match err.location {
                 InputLocation::Pos(start) => (start, start),
@@ -659,7 +657,7 @@ pub fn parse_file(
             };
             context.parse_transaction(pair)?;
 
-            trs.push((context.st.clone(), context.tr.clone()));
+            trs.push((context.tr.clone(), context.st.clone()));
         }
     }
     Ok(trs)
@@ -671,7 +669,7 @@ pub fn parsing_helper(
 ) -> Vec<(Transaction, SymbolTable)> {
     let result = parse_file(transaction_filename, handler);
     match result {
-        Ok(success_vec) => success_vec.into_iter().map(|(st, tr)| (tr, st)).collect(),
+        Ok(success_vec) => success_vec,
         Err(err) => panic!(
             "Failed to parse file: {}\nError: {}",
             transaction_filename, err

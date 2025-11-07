@@ -11,7 +11,7 @@ fn check_expr_types(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
-) -> Result<Type, String> {
+) -> anyhow::Result<Type> {
     match &tr[expr_id] {
         Expr::Const(_) => Ok(Type::BitVec(32)), // TODO: need to determine how to check type size
         Expr::Sym(symid) => Ok(st[symid].tpe()),
@@ -58,7 +58,7 @@ fn check_stmt_types(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     match &tr[stmt_id] {
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
@@ -179,16 +179,22 @@ fn check_stmt_types(
     }
 }
 
-pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut DiagnosticHandler) {
-    for (st, tr) in trs {
+/// Typechecks every function contained in the argument `Vec`
+/// of `(Transaction, SymbolTable)` pairs
+pub fn type_check(
+    trs: &Vec<(Transaction, SymbolTable)>,
+    handler: &mut DiagnosticHandler,
+) -> anyhow::Result<()> {
+    for (tr, st) in trs {
         for expr_id in tr.expr_ids() {
-            let _ = check_expr_types(&tr, &st, handler, &expr_id);
+            check_expr_types(tr, st, handler, &expr_id)?;
         }
 
         for stmt_id in tr.stmt_ids() {
-            let _ = check_stmt_types(&tr, &st, handler, &stmt_id);
+            check_stmt_types(tr, st, handler, &stmt_id)?;
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -215,7 +221,7 @@ mod tests {
         let result = parse_file(file_name, &mut handler);
         let content = match result {
             Ok(trs) => {
-                type_check(trs, &mut handler);
+                let _ = type_check(&trs, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -225,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot");
+        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot")
     }
 
     #[test]
@@ -324,6 +330,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        type_check(vec![(symbols, tr)], &mut handler);
+        let _ = type_check(&vec![(tr, symbols)], &mut handler);
     }
 }
