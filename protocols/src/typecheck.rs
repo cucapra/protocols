@@ -158,8 +158,9 @@ fn check_stmt_types(
                         .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                     {
                         let error_msg = format!(
-                            "{} is a DUT output port and thus cannot be assigned.",
-                            st[lhs].full_name(st)
+                            "{} is an output port of {} and thus cannot be assigned.",
+                            st[lhs].full_name(st),
+                            st[parent].name()
                         );
                         handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
                         return Err(anyhow!(error_msg));

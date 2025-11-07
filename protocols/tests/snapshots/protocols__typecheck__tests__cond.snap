@@ -14,8 +14,8 @@ warning: Inferred RHS type as u32 from LHS type u32.
 20 │   dut.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-error: dut.c is a DUT output port and thus cannot be assigned.
+error: dut.c is an output port of dut and thus cannot be assigned.
    ┌─ tests/multipliers/mult_cond.prot:30:3
    │
 30 │   dut.c := 1'b1;
-   │   ^^^^^^^^^^^^^^ dut.c is a DUT output port and thus cannot be assigned.
+   │   ^^^^^^^^^^^^^^ dut.c is an output port of dut and thus cannot be assigned.
