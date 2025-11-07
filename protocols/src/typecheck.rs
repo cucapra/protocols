@@ -100,7 +100,11 @@ fn check_expr_types(
                 handler.emit_diagnostic_expr(
                     tr,
                     expr_id,
-                    &format!("Invalid type for 'Not' expression {:?}", inner_type).to_string(),
+                    &format!(
+                        "Invalid type for 'Not' expression {}",
+                        serialize_type(st, inner_type)
+                    )
+                    .to_string(),
                     Level::Error,
                 );
                 Ok(inner_type)
@@ -112,12 +116,14 @@ fn check_expr_types(
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(Type::BitVec(1))
             } else {
+                let lhs_type_str = serialize_type(st, lhs_type);
+                let rhs_type_str = serialize_type(st, rhs_type);
                 handler.emit_diagnostic_expr(
                     tr,
                     expr_id,
                     &format!(
-                        "Type mismatch in binary operation: {:?} and {:?}",
-                        lhs_type, rhs_type
+                        "Type mismatch in binary operation: {} and {}",
+                        lhs_type_str, rhs_type_str
                     ),
                     Level::Error,
                 );
@@ -152,7 +158,7 @@ fn check_stmt_types(
                         .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
                     {
                         let error_msg = format!(
-                            "{} is an output and thus cannot be assigned.",
+                            "{} is a DUT output port and thus cannot be assigned.",
                             st[lhs].full_name(st)
                         );
                         handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
@@ -169,7 +175,8 @@ fn check_stmt_types(
                     stmt_id,
                     &format!(
                         "Inferred RHS type as {:?} from LHS type {:?}.",
-                        rhs_type, lhs_type
+                        serialize_type(st, rhs_type),
+                        serialize_type(st, lhs_type)
                     ),
                     Level::Warning,
                 );
@@ -179,11 +186,11 @@ fn check_stmt_types(
             } else {
                 let expr_name = serialize_expr(tr, st, rhs);
                 let error_msg = format!(
-                    "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
+                    "Type mismatch in assignment: {} : {} and {} : {}.",
                     st[lhs].full_name(st),
-                    lhs_type,
+                    serialize_type(st, lhs_type),
                     expr_name,
-                    rhs_type
+                    serialize_type(st, rhs_type)
                 );
                 handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))
@@ -195,7 +202,10 @@ fn check_stmt_types(
             if let Type::BitVec(1) = cond_type {
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
-                let error_msg = format!("Invalid type for [while] condition: {:?}", cond_type);
+                let error_msg = format!(
+                    "Invalid type for [while] condition: {}",
+                    serialize_type(st, cond_type)
+                );
                 handler.emit_diagnostic_expr(tr, cond, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))
             }
@@ -208,7 +218,10 @@ fn check_stmt_types(
                 check_stmt_types(tr, st, handler, elsebody)?;
                 Ok(())
             } else {
-                let error_msg = format!("Type mismatch in If/Else condition: {:?}", cond_type);
+                let error_msg = format!(
+                    "Type mismatch in If/Else condition: {}",
+                    serialize_type(st, cond_type)
+                );
                 handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))
             }
@@ -222,8 +235,11 @@ fn check_stmt_types(
                 let expr1_name = serialize_expr(tr, st, exprid1);
                 let expr2_name = serialize_expr(tr, st, exprid2);
                 let error_msg = format!(
-                    "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
-                    expr1_name, expr1_type, expr2_name, expr2_type,
+                    "Type mismatch in assert_eq: {} : {} and {} : {}.",
+                    expr1_name,
+                    serialize_type(st, expr1_type),
+                    expr2_name,
+                    serialize_type(st, expr2_type),
                 );
                 handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))
