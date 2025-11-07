@@ -1,0 +1,26 @@
+// ARGS: --wave multipliers/mult_d2.fst --instances mult_d2:Multiplier 
+struct Multiplier {
+  in a: u32,
+  in b: u32,
+  out s: u32
+}
+
+// A multiplier with a 2-cycle delay
+fn mul<DUT: Multiplier>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+
+  step();
+  fork();
+
+  DUT.a := X;
+  DUT.b := X;
+
+  step();
+
+  DUT.a := X;
+  DUT.b := X;
+
+  assert_eq(s, DUT.s);
+  step();
+}

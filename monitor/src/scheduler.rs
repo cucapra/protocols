@@ -222,11 +222,11 @@ impl Scheduler {
                 let failed = threads_with_start_time(&self.failed, start_cycle);
                 let finished = threads_with_start_time(&self.finished, start_cycle);
                 let paused = threads_with_start_time(&self.next, start_cycle);
-                if !failed.is_empty() && finished.is_empty() && paused.is_empty() {
+                if failed.len() > 1 && finished.is_empty() && paused.is_empty() {
                     return Err(anyhow!(
-                        "Out of all {} threads that started in {}, all but one are expected to fail, but all of them failed",
-                        finished.len(),
-                        start_cycle
+                        "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
+                        start_cycle,
+                        failed.len()
                     ));
                 }
             }

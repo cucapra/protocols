@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -36,6 +36,7 @@ impl Interpreter {
         next_stmt_map: NextStmtMap,
         args_mapping: HashMap<SymbolId, BitVecValue>,
     ) {
+        info!("Performing context switch...");
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
@@ -262,6 +263,61 @@ impl Interpreter {
         }
     }
 
+    /// Helper function to map an output parameter of a function (`out_param_symbol`)
+    /// to the trace value for `trace_symbol`. This function checks
+    /// if `trace_symbol` exists in the trace and `out_param_symbol` is
+    /// currently *not* in the `args_mapping`. If so, it
+    /// adds a mapping from `out_param_symbol` to the trace value.
+    ///
+    /// Other arguments:
+    /// - `out_param_name` & `trace_symbol_name`
+    ///   are the full (string) names corresponding to the two symbols
+    ///   respectively.
+    /// - `trace_symbol_expr_id` is the `ExprId` of `trace_symbol` (this is
+    ///   only used to enable more precise error message locations)
+    fn map_output_param_to_trace(
+        &mut self,
+        out_param_symbol: SymbolId,
+        trace_symbol: SymbolId,
+        out_param_name: &str,
+        trace_symbol_name: &str,
+        trace_symbol_expr_id: ExprId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<()> {
+        if let Ok(value) = ctx.trace.get(ctx.instance_id, trace_symbol) {
+            // Only modify the args_mapping if `out_param_symbol`
+            // is currently *not* present
+            // (Clippy suggested checking if the `Entry` is `Vacant`
+            // instead of using `contains_key` + `insert`)
+            if let Entry::Vacant(e) = self.args_mapping.entry(out_param_symbol) {
+                e.insert(value.clone());
+                info!(
+                    "Extended args_mapping with {} |-> {}",
+                    out_param_name,
+                    serialize_bitvec(&value, ctx.display_hex)
+                );
+                Ok(())
+            } else {
+                // If `out_param_symbol` is already in the `args_mapping`,
+                // we do nothing (we don't want to overwrite existing
+                // key-value bindings)
+                Ok(())
+            }
+        } else {
+            info!(
+                "args_mapping: \n{}",
+                serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
+            );
+
+            Err(ExecutionError::symbol_not_found(
+                trace_symbol,
+                trace_symbol_name.to_string(),
+                "trace".to_string(),
+                trace_symbol_expr_id,
+            ))
+        }
+    }
+
     /// Evaluates a `Statement` identified by its `StmtId`,
     /// returning the `StmtId` of the next statement to evaluate (if one exists)
     pub fn evaluate_stmt(
@@ -291,19 +347,56 @@ impl Interpreter {
                 // Here, we simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
             }
-            Stmt::AssertEq(expr1, expr2) => {
-                if self.evaluate_expr(expr1, ctx).is_err() {
-                    info!("{} is ???", self.format_expr(expr1))
+            Stmt::AssertEq(expr_id1, expr_id2) => {
+                let e1 = &self.transaction[expr_id1];
+                let e2 = &self.transaction[expr_id2];
+                match (e1, e2) {
+                    // If the two args to `assert_eq`s are both identifiers,
+                    // one of them is an output param of the transaction,
+                    // & the other is a DUT output port
+                    (Expr::Sym(symbol_id1), Expr::Sym(symbol_id2)) => {
+                        // We deference the two `SymbolId`s in order to
+                        // avoid borrow-checker issues here
+                        let symbol_id1 = *symbol_id1;
+                        let symbol_id2 = *symbol_id2;
+
+                        let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
+                        let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
+
+                        let out_params: Vec<SymbolId> =
+                            self.transaction.get_output_param_symbols().collect();
+                        for out_param_symbol in out_params {
+                            if out_param_symbol == symbol_id1 {
+                                info!("{} is an output param of the transaction", name1);
+                                self.map_output_param_to_trace(
+                                    symbol_id1, symbol_id2, &name1, &name2, *expr_id2, ctx,
+                                )?;
+                            } else if out_param_symbol == symbol_id2 {
+                                info!("{} is an output param of the transaction", name2);
+                                self.map_output_param_to_trace(
+                                    symbol_id2, symbol_id1, &name2, &name1, *expr_id1, ctx,
+                                )?;
+                            }
+                        }
+                        Ok(self.next_stmt_map[stmt_id])
+                    }
+                    (_, _) => {
+                        // Handle other exprs that are supplied to `assert_eq`,
+                        // e.g. bit-slices
+                        if self.evaluate_expr(expr_id1, ctx).is_err() {
+                            info!("{} is ???", self.format_expr(expr_id1))
+                        }
+                        if self.evaluate_expr(expr_id2, ctx).is_err() {
+                            info!("{} is ???", self.format_expr(expr_id2))
+                        }
+                        info!(
+                            "Skipping assertion `{}` ({})",
+                            self.format_stmt(stmt_id),
+                            stmt_id
+                        );
+                        Ok(self.next_stmt_map[stmt_id])
+                    }
                 }
-                if self.evaluate_expr(expr2, ctx).is_err() {
-                    info!("{} is ???", self.format_expr(expr2))
-                }
-                info!(
-                    "Skipping assertion `{}` ({})",
-                    self.format_stmt(stmt_id),
-                    stmt_id
-                );
-                Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
@@ -490,7 +583,7 @@ impl Interpreter {
             let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
             let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
                 panic!(
-                    "Unable to find value for {} ({}) in args_mapping, which is {}",
+                    "Unable to find value for {} ({}) in args_mapping, which is {{ {} }}",
                     name,
                     symbol_id,
                     serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)

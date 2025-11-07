@@ -10,6 +10,10 @@ monitor:
 adders:
   turnt --env interp $(find protocols/tests/adders -type f -name '*.tx') 
 
+# Only run interpreter tests for the ALU examples
+alus:
+  turnt --env interp $(find protocols/tests/alus -type f -name '*.tx') 
+
 # Only test the `identities` examples
 identities:
   turnt --env interp $(find protocols/tests/identities -type f -name '*.tx')  
