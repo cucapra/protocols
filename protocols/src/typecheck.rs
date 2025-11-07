@@ -4,6 +4,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use baa::BitVecOps;
+
 use crate::{diagnostic::*, ir::*, serialize::*};
 
 fn check_expr_types(
@@ -13,7 +15,7 @@ fn check_expr_types(
     expr_id: &ExprId,
 ) -> anyhow::Result<Type> {
     match &tr[expr_id] {
-        Expr::Const(_) => Ok(Type::BitVec(32)), // TODO: need to determine how to check type size
+        Expr::Const(bitvec) => Ok(Type::BitVec(bitvec.width())),
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
         // FIXME: is this the correct typechecking logic?
