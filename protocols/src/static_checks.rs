@@ -94,3 +94,8 @@ pub fn check_condition_well_formedness(
         }
     }
 }
+
+// TODO: refactor the logic for checking assignment WF-ness from `monitor/src/interpreter.rs`
+// into a helper function `check_assignment_well_formedness`
+
+// TODO: implement a helper function that checks well-formedness of assertions
