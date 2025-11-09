@@ -1,1 +1,8 @@
-Protocol executed successfully!
+error: `dut.a` is not an output field of the struct `dut`
+                        (Only output fields are allowed to appear in conditions in if-statements / while-loops)
+   ┌─ counters/counter.prot:12:22
+   │
+12 │     while !(dut.s == dut.a) {
+   │                      ^^^^^ `dut.a` is not an output field of the struct `dut`
+                        (Only output fields are allowed to appear in conditions in if-statements / while-loops)
+
