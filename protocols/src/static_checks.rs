@@ -1,6 +1,6 @@
 use crate::{
     diagnostic::{DiagnosticHandler, Level},
-    ir::{Expr, ExprId, SymbolTable, Transaction, Type},
+    ir::{Dir, Expr, ExprId, SymbolTable, Transaction, Type},
     serialize::serialize_expr,
 };
 use anyhow::anyhow;
@@ -39,7 +39,7 @@ pub fn check_condition_well_formedness(
                             // Fetch the names of all the output pins,
                             // qualified by the name of the struct *instance*
                             let output_pin_names = the_struct
-                                .get_output_pin_names()
+                                .get_fields_by_direction(Dir::Out)
                                 .map(|field| format!("{}.{}", struct_name, field))
                                 .collect::<Vec<String>>();
 

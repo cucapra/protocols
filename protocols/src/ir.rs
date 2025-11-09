@@ -377,16 +377,17 @@ impl Struct {
         &self.pins
     }
 
-    /// Retrieves the names of all the output fields of a `Struct`,
-    /// returning an `Iterator` of `String`s
+    /// Retrieves the names of all the fields of a `Struct` that
+    /// have a given `direction` (either `Dir::In` or `Dir::Out`),
+    /// returning an `Iterator` of field name `String`s.
     /// (Note: the names returned here are *not* fully-qualified -- instead
     /// it is the caller's responsibility to qualify the field names
     /// by the name of the struct *instance*. We do not do this in this
     /// method as we only have access to the name of the *struct type*
     /// here, as opposed to the name of the *struct instance*.)
-    pub fn get_output_pin_names(&self) -> impl Iterator<Item = String> {
-        self.pins.iter().filter_map(|field| {
-            if field.dir == Dir::Out {
+    pub fn get_fields_by_direction(&self, direction: Dir) -> impl Iterator<Item = String> {
+        self.pins.iter().filter_map(move |field| {
+            if field.dir == direction {
                 Some(field.name.clone())
             } else {
                 None
