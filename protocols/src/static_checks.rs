@@ -73,39 +73,19 @@ pub fn check_if_symbol_is_dut_port(
     match (tr.type_param, symbol_table[symbol_id].parent()) {
         (None, _) => {
             let error_msg = format!(
-                "Expected {} to be an {}put parameter / {}put field of a struct,
-                            but the function {} is not parameterized by any structs",
-                symbol_full_name, direction, direction, tr.name
+                "Expected {} to be a struct's {}put field,
+                but the function {} is not parameterized by any structs",
+                symbol_full_name, direction, tr.name
             );
             emit_diagnostic(handler, &error_msg);
             Err(anyhow!(error_msg))
         }
         (Some(_), None) => {
-            // If we reach this case, then we know that
-            // `symbol_id` is not a function parameter with the desired `direction`,
-            // nor is it a field of a struct (since it has no parent)
-
-            // Check if `symbol_id` is a parameter with the opposite direciton
-            let has_opposite_direction = tr
-                .get_parameters_by_direction(!direction)
-                .contains(&symbol_id);
-
-            let error_msg_prefix = if has_opposite_direction {
-                format!(
-                    "{} is an {}put parameter of {}, which is illegal
-                    (a {} parameter is expected in {})",
-                    symbol_full_name, !direction, tr.name, direction, lang_feature
-                )
-            } else {
-                format!("Unrecognized identifier {}", symbol_full_name)
-            };
             let error_msg = format!(
-                            "{error_msg_prefix}
-                            (Only {}put parameters / {}put fields of structs are allowed to appear in {}",
-                            direction,
-                            direction,
-                            lang_feature
-                        );
+                "Expected {} to be a struct's {}put field,
+                but {} is not a field of a struct",
+                symbol_full_name, direction, symbol_full_name
+            );
             emit_diagnostic(handler, &error_msg);
             Err(anyhow!(error_msg))
         }
