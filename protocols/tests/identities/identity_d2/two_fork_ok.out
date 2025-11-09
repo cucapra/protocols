@@ -1,1 +1,8 @@
-Protocol executed successfully!
+error: Expected a to be a struct's output field,
+                but a is not a field of a struct
+   ┌─ identities/identity_d2/two_fork_ok.prot:17:9
+   │
+17 │   if (!(a == 32'd0)) {
+   │         ^ Expected a to be a struct's output field,
+                but a is not a field of a struct
+
