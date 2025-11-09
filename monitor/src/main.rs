@@ -10,7 +10,7 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::global_context::GlobalContext;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
@@ -77,7 +77,9 @@ fn main() -> anyhow::Result<()> {
     logger.init();
 
     // Print warning messages only if `--verbose` is enabled
-    let emit_warnings = cli.verbosity.log_level_filter() != LevelFilter::Warn;
+    // (the --verbose flag triggers `LevelFilter::Info`)
+    let emit_warnings = cli.verbosity.log_level_filter() == LevelFilter::Info;
+
     // Note: for the monitor, error message locations in `.prot` files are suppressed
     // in the `DiagnosticHandlers` for now
     let mut protocols_handler = DiagnosticHandler::new(cli.color, false, emit_warnings);
