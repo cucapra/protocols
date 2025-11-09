@@ -6,7 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -247,6 +247,19 @@ impl Arg {
 pub enum Dir {
     In,
     Out,
+}
+
+/// Implementing the `Not` trait allows us to use the unary negation operator
+/// on the `Dir` type, e.g. `!In = Out`
+impl std::ops::Not for Dir {
+    type Output = Dir;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Dir::In => Dir::Out,
+            Dir::Out => Dir::In,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
