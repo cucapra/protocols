@@ -9,7 +9,12 @@ use anyhow::anyhow;
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
-use crate::{diagnostic::*, ir::*, serialize::*, static_checks::check_condition_wf};
+use crate::{
+    diagnostic::*,
+    ir::*,
+    serialize::*,
+    static_checks::{check_assertion_wf, check_condition_wf},
+};
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -235,11 +240,20 @@ fn check_stmt_types(
             }
         }
         Stmt::AssertEq(exprid1, exprid2) => {
+            // First, type-check the two arguments to `assert_eq` separately
             let expr1_type = check_expr_types(tr, st, handler, exprid1)?;
             let expr2_type = check_expr_types(tr, st, handler, exprid2)?;
+
+            // Check that the types of both arguments are equivalent
             if expr1_type.is_equivalent(&expr2_type) {
+                // Then, check that the assertion itself is well-formed
+                check_assertion_wf(exprid1, exprid2, tr, st, handler)?;
+
+                // If all the above checks pass, then the assertion both
+                // type-checks and is well-formed, so it is `Ok`
                 Ok(())
             } else {
+                // Arguments to `assert_eq` are ill-typed, so report an error
                 let expr1_name = serialize_expr(tr, st, exprid1);
                 let expr2_name = serialize_expr(tr, st, exprid2);
                 let error_msg = format!(

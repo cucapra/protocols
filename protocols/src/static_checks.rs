@@ -214,11 +214,8 @@ pub fn check_assertion_lhs_wf(
             Err(anyhow!(error_msg))
         }
         _ => {
-            let error_msg = format!(
-                "Illegal expression {}",
-                serialize_expr(tr, st, &lhs_expr_id),
-            );
-            handler.emit_diagnostic_expr(tr, &lhs_expr_id, &error_msg, Level::Error);
+            let error_msg = format!("Illegal expression {}", serialize_expr(tr, st, lhs_expr_id),);
+            handler.emit_diagnostic_expr(tr, lhs_expr_id, &error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
     }
@@ -255,7 +252,7 @@ pub fn check_assertion_rhs_wf(
         }
         Expr::DontCare => {
             let error_msg = "DontCare expressions not allowed inside assert_eq";
-            handler.emit_diagnostic_expr(tr, &rhs_expr_id, error_msg, Level::Error);
+            handler.emit_diagnostic_expr(tr, rhs_expr_id, error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
@@ -275,8 +272,8 @@ pub fn check_assertion_rhs_wf(
 /// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
 ///   are also expected as inputs (for error message purposes)
 pub fn check_assertion_wf(
-    expr_id1: ExprId,
-    expr_id2: ExprId,
+    expr_id1: &ExprId,
+    expr_id2: &ExprId,
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
@@ -287,13 +284,13 @@ pub fn check_assertion_wf(
     // argument is the LHS/RHS, as `assert_eq` is symmetric in its arguments)
 
     let first_check_result = {
-        check_assertion_lhs_wf(&expr_id1, tr, st, handler)?;
-        check_assertion_rhs_wf(&expr_id2, tr, st, handler)
+        check_assertion_lhs_wf(expr_id1, tr, st, handler)?;
+        check_assertion_rhs_wf(expr_id2, tr, st, handler)
     };
 
     let second_check_result = {
-        check_assertion_lhs_wf(&expr_id2, tr, st, handler)?;
-        check_assertion_rhs_wf(&expr_id1, tr, st, handler)
+        check_assertion_lhs_wf(expr_id2, tr, st, handler)?;
+        check_assertion_rhs_wf(expr_id1, tr, st, handler)
     };
 
     match (first_check_result, second_check_result) {
