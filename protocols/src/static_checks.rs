@@ -1,3 +1,7 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Ernest Ng <eyn5@cornell.edu>
+
 use crate::{
     diagnostic::{DiagnosticHandler, Level},
     ir::{BinOp, Dir, Expr, ExprId, LocationId, StmtId, SymbolId, SymbolTable, Transaction, Type},
