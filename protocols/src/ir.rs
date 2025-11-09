@@ -163,11 +163,12 @@ impl Transaction {
         arg_types
     }
 
-    /// Retrieves the `SymbolId`s of all the output parameters of a transaction,
-    /// returning an `Iterator`
-    pub fn get_output_param_symbols(&self) -> impl Iterator<Item = SymbolId> {
-        self.args.iter().filter_map(|arg| {
-            if arg.dir == Dir::Out {
+    /// Retrieves the `SymbolId`s of all the parameters of a transaction
+    /// that have a specified `direction`,
+    /// returning an `Iterator` over the `SymbolId`s of the parameters
+    pub fn get_parameters_by_direction(&self, direction: Dir) -> impl Iterator<Item = SymbolId> {
+        self.args.iter().filter_map(move |arg| {
+            if arg.dir == direction {
                 Some(arg.symbol)
             } else {
                 None

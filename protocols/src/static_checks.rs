@@ -6,6 +6,8 @@ use crate::{
 use anyhow::anyhow;
 use itertools::Itertools;
 
+// pub fn is_dut_port(symbol_id: SymbolId, tr: &Transaction) -> bool {}
+
 /// Checks whether the condition (guard) for an if-statement / while-loop
 /// conforms to the well-formedness requirements
 pub fn check_condition_well_formedness(
@@ -19,13 +21,45 @@ pub fn check_condition_well_formedness(
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
             // Check if the identifier is a DUT output port or an output parameter
-            let is_output_param = tr.get_output_param_symbols().contains(symbol_id);
+            let is_output_param = tr.get_parameters_by_direction(Dir::Out).contains(symbol_id);
             if is_output_param {
                 Ok(())
             } else {
+                // Fully-qualify the name of the identifier
+                let symbol_full_name = symbol_table.full_name_from_symbol_id(symbol_id);
+
                 match (tr.type_param, symbol_table[symbol_id].parent()) {
-                    (None, None) => todo!(),
-                    (None, Some(_)) | (Some(_), None) => todo!(),
+                    (None, _) => {
+                        let error_msg = format!(
+                            "Expected {} to be an output parameter or an output field of a struct, 
+                            but the function {} is not parameterized by any structs",
+                            symbol_full_name, tr.name
+                        );
+                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
+                    (Some(_), None) => {
+                        // If we reach this case, then we know that
+                        // `symbol_id` is neither an output parameter nor
+                        // is it a field of a struct (since it has no parent),
+                        // in which case, it must be an input parameter
+                        let is_input_param =
+                            tr.get_parameters_by_direction(Dir::In).contains(symbol_id);
+
+                        let error_msg_prefix = if is_input_param {
+                            format!(
+                                "{} is an input parameter of {}, which is illegal",
+                                symbol_full_name, tr.name
+                            )
+                        } else {
+                            format!("Unrecognized identifier {}", symbol_full_name)
+                        };
+                        let error_msg = format!(
+                            "{error_msg_prefix} (Only output parameters / output fields of structs are allowed to appear in the conditions for if-statements / while-loops)"
+                        );
+                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
                     (Some(struct_id), Some(parent_symbol_id)) => {
                         // Check whether the name of the identifier corresponds
                         // to a DUT output port
@@ -43,9 +77,6 @@ pub fn check_condition_well_formedness(
                                 .map(|field| format!("{}.{}", struct_name, field))
                                 .collect::<Vec<String>>();
 
-                            // Fully-qualify the name of the identifier
-                            let symbol_full_name = symbol_table.full_name_from_symbol_id(symbol_id);
-
                             // If the identifier corresponds to a DUT output port,
                             // the condition is well-formed, otherwise
                             // emit an error message
@@ -53,7 +84,8 @@ pub fn check_condition_well_formedness(
                                 Ok(())
                             } else {
                                 let error_msg = format!(
-                                    "`{}` is not an output field of the struct `{}` (Only output fields are allowed to appear in conditions for loops/if-statements",
+                                    "`{}` is not an output field of the struct `{}` 
+                                    (Only output fields are allowed to appear in conditions for loops/if-statements",
                                     symbol_full_name, struct_name
                                 );
                                 handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
