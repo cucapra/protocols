@@ -271,7 +271,7 @@ pub fn check_assignment_rhs_wf(
                     tr,
                     symbol_table,
                     handler,
-                    LangFeature::Conditionals,
+                    LangFeature::Assignments,
                 )
             }
         }
