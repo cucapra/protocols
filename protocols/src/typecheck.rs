@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
@@ -230,7 +230,8 @@ fn check_stmt_types(
             // Check that the types of both arguments are equivalent
             if expr1_type.is_equivalent(&expr2_type) {
                 // Then, check that the assertion itself is well-formed
-                check_assertion_wf(exprid1, exprid2, tr, st, handler)?;
+                check_assertion_wf(exprid1, exprid2, tr, st, handler)
+                    .context("Ill-formed assert_eq statement")?;
 
                 // If all the above checks pass, then the assertion both
                 // type-checks and is well-formed, so it is `Ok`

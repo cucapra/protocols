@@ -163,58 +163,17 @@ pub fn check_condition_wf(
     }
 }
 
-/// Checks whether the LHS of an assertion is well-formed (WF).
+/// Checks whether an argument of an assertion (identified by its `ExprId`)
+/// is well-formed (WF).
 /// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
 ///   are also expected as inputs (for error message purposes)
-pub fn check_assertion_lhs_wf(
-    lhs_expr_id: &ExprId,
-    tr: &Transaction,
-    st: &SymbolTable,
-    handler: &mut DiagnosticHandler,
-) -> anyhow::Result<()> {
-    let lhs_expr = &tr[lhs_expr_id];
-    match lhs_expr {
-        Expr::Const(_) => Ok(()),
-        Expr::Sym(lhs_symbol_id) => {
-            // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_correct_direction(*lhs_symbol_id, Dir::Out) {
-                Ok(())
-            } else {
-                // Check if the identifier is a DUT output port
-                check_if_symbol_is_dut_port(
-                    *lhs_symbol_id,
-                    Dir::Out,
-                    LocationId::Expr(*lhs_expr_id),
-                    tr,
-                    st,
-                    handler,
-                    LangFeature::Conditionals,
-                )
-            }
-        }
-        Expr::DontCare => {
-            let error_msg = "DontCare expressions not allowed inside assert_eq";
-            handler.emit_diagnostic_expr(tr, lhs_expr_id, error_msg, Level::Error);
-            Err(anyhow!(error_msg))
-        }
-        _ => {
-            let error_msg = format!("Illegal expression {}", serialize_expr(tr, st, lhs_expr_id),);
-            handler.emit_diagnostic_expr(tr, lhs_expr_id, &error_msg, Level::Error);
-            Err(anyhow!(error_msg))
-        }
-    }
-}
-
-/// Checks whether the RHS of an assertion is well-formed (WF).
-/// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
-///   are also expected as inputs (for error message purposes)
-pub fn check_assertion_rhs_wf(
-    rhs_expr_id: &ExprId,
+pub fn check_assertion_arg_wf(
+    expr_id: &ExprId,
     tr: &Transaction,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
-    let rhs_expr = &tr[rhs_expr_id];
+    let rhs_expr = &tr[expr_id];
     match rhs_expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
@@ -226,7 +185,7 @@ pub fn check_assertion_rhs_wf(
                 check_if_symbol_is_dut_port(
                     *symbol_id,
                     Dir::Out,
-                    LocationId::Expr(*rhs_expr_id),
+                    LocationId::Expr(*expr_id),
                     tr,
                     symbol_table,
                     handler,
@@ -236,16 +195,16 @@ pub fn check_assertion_rhs_wf(
         }
         Expr::DontCare => {
             let error_msg = "DontCare expressions not allowed inside assert_eq";
-            handler.emit_diagnostic_expr(tr, rhs_expr_id, error_msg, Level::Error);
+            handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
-            check_assertion_rhs_wf(expr_id1, tr, symbol_table, handler)?;
-            check_assertion_rhs_wf(expr_id2, tr, symbol_table, handler)
+            check_assertion_arg_wf(expr_id1, tr, symbol_table, handler)?;
+            check_assertion_arg_wf(expr_id2, tr, symbol_table, handler)
         }
-        Expr::Unary(_, inner_expr) => check_assertion_rhs_wf(inner_expr, tr, symbol_table, handler),
+        Expr::Unary(_, inner_expr) => check_assertion_arg_wf(inner_expr, tr, symbol_table, handler),
         Expr::Slice(sliced_expr, _, _) => {
-            check_assertion_rhs_wf(sliced_expr, tr, symbol_table, handler)
+            check_assertion_arg_wf(sliced_expr, tr, symbol_table, handler)
         }
     }
 }
@@ -267,29 +226,8 @@ pub fn check_assertion_wf(
     // (We need to do this since there is no way a priori to determine which
     // argument is the LHS/RHS, as `assert_eq` is symmetric in its arguments)
 
-    let first_check_result = {
-        let _ = check_assertion_lhs_wf(expr_id1, tr, st, handler);
-        check_assertion_rhs_wf(expr_id2, tr, st, handler)
-    };
-
-    let second_check_result = {
-        let _ = check_assertion_lhs_wf(expr_id2, tr, st, handler);
-        check_assertion_rhs_wf(expr_id1, tr, st, handler)
-    };
-
-    match (first_check_result, second_check_result) {
-        (Ok(_), Ok(_)) | (Ok(_), Err(_)) | (Err(_), Ok(_)) => {
-            // If at least one of the checks succeeded
-            // we deem the assertion to be well-formed
-            Ok(())
-        }
-        (Err(e), Err(_)) => {
-            // If checks in both directions failed, since `assert_eq` is
-            // symmetric in its arguments, without loss of generality,
-            // we just report the left `Err` in the tuple
-            Err(e.context("Ill-formed assertion"))
-        }
-    }
+    check_assertion_arg_wf(expr_id1, tr, st, handler)?;
+    check_assertion_arg_wf(expr_id2, tr, st, handler)
 }
 
 /// Recursively checks whether the RHS of an assignment
