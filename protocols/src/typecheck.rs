@@ -13,7 +13,7 @@ use crate::{
     diagnostic::*,
     ir::*,
     serialize::*,
-    static_checks::{check_assertion_wf, check_condition_wf},
+    static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf},
 };
 
 /// Helper function for emitting error messages related to invalid bit-slices
@@ -148,32 +148,14 @@ fn check_stmt_types(
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
         Stmt::Assign(lhs, rhs) => {
-            // Function argument cannot be assigned
-            if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
-                let error_msg = "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.";
-                handler.emit_diagnostic_stmt(tr, stmt_id, error_msg, Level::Error);
-                return Err(anyhow!(error_msg));
-            }
-            // DUT output cannot be assigned
-            if let Some(parent) = st[lhs].parent() {
-                if let Type::Struct(structid) = st[parent].tpe() {
-                    let fields = st[structid].pins();
-                    if fields
-                        .iter()
-                        .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
-                    {
-                        let error_msg = format!(
-                            "{} is an output port of {} and thus cannot be assigned.",
-                            st[lhs].full_name(st),
-                            st[parent].name()
-                        );
-                        handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
-                        return Err(anyhow!(error_msg));
-                    }
-                }
-            }
+            // First, make sure the assignment itself is well-formed
+            check_assignment_wf(lhs, rhs, stmt_id, tr, st, handler)?;
+
+            // Then, type-check the two sides of the assignment
             let lhs_type = st[lhs].tpe();
             let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            // If the RHS type is `Unknown`, we infer it to be
+            // the same type as the LHS
             if rhs_type == Type::Unknown {
                 rhs_type = lhs_type;
                 handler.emit_diagnostic_stmt(
@@ -187,6 +169,7 @@ fn check_stmt_types(
                     Level::Warning,
                 );
             }
+            // Check whether the LHS & RHS have equivalent types
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {

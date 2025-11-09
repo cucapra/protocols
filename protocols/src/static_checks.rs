@@ -4,7 +4,6 @@ use crate::{
     serialize::serialize_expr,
 };
 use anyhow::anyhow;
-use itertools::Itertools;
 
 /// Enum representing a location in the AST that
 /// is either an expression (identified by its `ExprId`)
