@@ -7,6 +7,7 @@
 
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -174,6 +175,13 @@ impl Transaction {
                 None
             }
         })
+    }
+
+    /// Determines if `symbol_id` is a function parameter with the desired `direction`
+    /// (e.g. check if an identifier corresponds to an input parameter of the function)
+    pub fn is_param_with_correct_direction(&self, symbol_id: SymbolId, direction: Dir) -> bool {
+        self.get_parameters_by_direction(direction)
+            .contains(&symbol_id)
     }
 
     /// Pretty-prints an `Expr` based on its `ExprId`, using the

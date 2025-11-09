@@ -37,7 +37,7 @@ impl std::fmt::Display for LangFeature {
 ///   are also expected as inputs (for error message purposes)
 /// - `language_feature` is a `LangFeature` enum that describes the corresponding
 ///   language feature for which the well-formedness check is performed
-///   (alsos used for error message purposes)
+///   (also used for error message purposes)
 pub fn check_if_symbol_is_dut_port(
     symbol_id: SymbolId,
     direction: Dir,
@@ -45,7 +45,7 @@ pub fn check_if_symbol_is_dut_port(
     tr: &Transaction,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
-    language_feature: LangFeature,
+    lang_feature: LangFeature,
 ) -> anyhow::Result<()> {
     // Fully-qualify the name of the identifier
     let symbol_full_name = symbol_table.full_name_from_symbol_id(&symbol_id);
@@ -74,7 +74,7 @@ pub fn check_if_symbol_is_dut_port(
                 format!(
                     "{} is an {}put parameter of {}, which is illegal 
                     (a {} parameter is expected in {})",
-                    symbol_full_name, !direction, tr.name, direction, language_feature
+                    symbol_full_name, !direction, tr.name, direction, lang_feature
                 )
             } else {
                 format!("Unrecognized identifier {}", symbol_full_name)
@@ -84,7 +84,7 @@ pub fn check_if_symbol_is_dut_port(
                             (Only {}put parameters / {}put fields of structs are allowed to appear in {}",
                             direction,
                             direction,
-                            language_feature
+                            lang_feature
                         );
             handler.emit_diagnostic_expr(tr, &expr_id, &error_msg, Level::Error);
             Err(anyhow!(error_msg))
@@ -113,8 +113,9 @@ pub fn check_if_symbol_is_dut_port(
                     Ok(())
                 } else {
                     let error_msg = format!(
-                        "`{}` is not an {}put field of the struct `{}` (Only {}put fields are allowed to appear in {})",
-                        symbol_full_name, direction, struct_name, direction, language_feature
+                        "`{}` is not an {}put field of the struct `{}` 
+                        (Only {}put fields are allowed to appear in {})",
+                        symbol_full_name, direction, struct_name, direction, lang_feature
                     );
                     handler.emit_diagnostic_expr(tr, &expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
@@ -122,7 +123,7 @@ pub fn check_if_symbol_is_dut_port(
             } else {
                 let parent_name = symbol_table[parent_symbol_id].name();
                 let error_msg = format!(
-                    "Expected {} to be an output field of struct {}({}) but got {}({}) as the parent instead",
+                    "Expected {} to be an output field of struct {}({}) but got {}({}) as the parent struct instead",
                     serialize_expr(tr, symbol_table, &expr_id),
                     struct_name,
                     struct_id,
@@ -137,22 +138,24 @@ pub fn check_if_symbol_is_dut_port(
 }
 
 /// Checks whether the condition (guard) for an if-statement / while-loop
-/// conforms to the well-formedness requirements
-pub fn check_condition_well_formedness(
+/// conforms to the well-formedness (WF) requirements.
+/// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
+///   are also expected as inputs (for error message purposes)
+pub fn check_condition_wf(
+    expr_id: &ExprId,
     tr: &Transaction,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
-    expr_id: &ExprId,
 ) -> anyhow::Result<()> {
     let expr = &tr[expr_id];
     match expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
-            // Check if the identifier is a DUT output port or an output parameter
-            let is_output_param = tr.get_parameters_by_direction(Dir::Out).contains(symbol_id);
-            if is_output_param {
+            // Check if the identifier is an output parameter of the function
+            if tr.is_param_with_correct_direction(*symbol_id, Dir::Out) {
                 Ok(())
             } else {
+                // Check if the identifier is a DUT output port
                 check_if_symbol_is_dut_port(
                     *symbol_id,
                     Dir::Out,
@@ -171,27 +174,141 @@ pub fn check_condition_well_formedness(
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
-            check_condition_well_formedness(tr, symbol_table, handler, expr_id1)?;
-            check_condition_well_formedness(tr, symbol_table, handler, expr_id2)
+            check_condition_wf(expr_id1, tr, symbol_table, handler)?;
+            check_condition_wf(expr_id2, tr, symbol_table, handler)
         }
-        Expr::Unary(_, inner_expr) => {
-            check_condition_well_formedness(tr, symbol_table, handler, inner_expr)
-        }
+        Expr::Unary(_, inner_expr) => check_condition_wf(inner_expr, tr, symbol_table, handler),
         Expr::Slice(sliced_expr, _, _) => {
-            check_condition_well_formedness(tr, symbol_table, handler, sliced_expr)
+            check_condition_wf(sliced_expr, tr, symbol_table, handler)
         }
     }
 }
 
-// TODO: complete this function
-#[allow(dead_code, unused_variables)]
-pub fn check_assertion_well_formedness(
+/// Checks whether the LHS of an assertion is well-formed (WF).
+/// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
+///   are also expected as inputs (for error message purposes)
+pub fn check_assertion_lhs_wf(
+    lhs_expr_id: &ExprId,
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+) -> anyhow::Result<()> {
+    let lhs_expr = &tr[lhs_expr_id];
+    match lhs_expr {
+        Expr::Const(_) => Ok(()),
+        Expr::Sym(lhs_symbol_id) => {
+            // Check if the identifier is a DUT output port
+            check_if_symbol_is_dut_port(
+                *lhs_symbol_id,
+                Dir::Out,
+                *lhs_expr_id,
+                tr,
+                st,
+                handler,
+                LangFeature::Conditionals,
+            )
+        }
+        Expr::DontCare => {
+            let error_msg = "DontCare expressions not allowed inside assert_eq";
+            handler.emit_diagnostic_expr(tr, lhs_expr_id, error_msg, Level::Error);
+            Err(anyhow!(error_msg))
+        }
+        _ => {
+            let error_msg = format!(
+                "Illegal expression {}",
+                serialize_expr(tr, st, &lhs_expr_id),
+            );
+            handler.emit_diagnostic_expr(tr, &lhs_expr_id, &error_msg, Level::Error);
+            Err(anyhow!(error_msg))
+        }
+    }
+}
+
+/// Checks whether the RHS of an assertion is well-formed (WF).
+/// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
+///   are also expected as inputs (for error message purposes)
+pub fn check_assertion_rhs_wf(
+    rhs_expr_id: &ExprId,
     tr: &Transaction,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
-    expr_id: &ExprId,
 ) -> anyhow::Result<()> {
-    todo!()
+    let rhs_expr = &tr[rhs_expr_id];
+    match rhs_expr {
+        Expr::Const(_) => Ok(()),
+        Expr::Sym(symbol_id) => {
+            // Check if the identifier is an output parameter of the function
+            if tr.is_param_with_correct_direction(*symbol_id, Dir::Out) {
+                Ok(())
+            } else {
+                // Check if the identifier is a DUT output port
+                check_if_symbol_is_dut_port(
+                    *symbol_id,
+                    Dir::Out,
+                    *rhs_expr_id,
+                    tr,
+                    symbol_table,
+                    handler,
+                    LangFeature::Assertions,
+                )
+            }
+        }
+        Expr::DontCare => {
+            let error_msg = "DontCare expressions not allowed inside assert_eq";
+            handler.emit_diagnostic_expr(tr, &rhs_expr_id, error_msg, Level::Error);
+            Err(anyhow!(error_msg))
+        }
+        Expr::Binary(_, expr_id1, expr_id2) => {
+            check_assertion_rhs_wf(expr_id1, tr, symbol_table, handler)?;
+            check_assertion_rhs_wf(expr_id2, tr, symbol_table, handler)
+        }
+        Expr::Unary(_, inner_expr) => check_assertion_rhs_wf(inner_expr, tr, symbol_table, handler),
+        Expr::Slice(sliced_expr, _, _) => {
+            check_assertion_rhs_wf(sliced_expr, tr, symbol_table, handler)
+        }
+    }
+}
+
+/// Checks whether an assertion (an `assert_eq` statement) is well-formed (WF).
+/// -`expr_id1` & `expr_id2` are the `ExprId` of the two arguments supplied to
+///   `assert_eq`.
+/// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
+///   are also expected as inputs (for error message purposes)
+pub fn check_assertion_wf(
+    expr_id1: ExprId,
+    expr_id2: ExprId,
+    tr: &Transaction,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+) -> anyhow::Result<()> {
+    // Check assertion well-formedness twice, once with `expr_id1` as the LHS
+    // & `expr_id2` as the RHS, and once with the LHS/RHS swapped
+    // (We need to do this since there is no way a priori to determine which
+    // argument is the LHS/RHS, as `assert_eq` is symmetric in its arguments)
+
+    let first_check_result = {
+        check_assertion_lhs_wf(&expr_id1, tr, st, handler)?;
+        check_assertion_rhs_wf(&expr_id2, tr, st, handler)
+    };
+
+    let second_check_result = {
+        check_assertion_lhs_wf(&expr_id2, tr, st, handler)?;
+        check_assertion_rhs_wf(&expr_id1, tr, st, handler)
+    };
+
+    match (first_check_result, second_check_result) {
+        (Ok(_), Ok(_)) | (Ok(_), Err(_)) | (Err(_), Ok(_)) => {
+            // If at least one of the checks succeeded
+            // we deem the assertion to be well-formed
+            Ok(())
+        }
+        (Err(e), Err(_)) => {
+            // If checks in both directions failed, since `assert_eq` is
+            // symmetric in its arguments, without loss of generality,
+            // we just report the left `Err` in the tuple
+            Err(e.context("Ill-formed assertion"))
+        }
+    }
 }
 
 // TODO: refactor the logic for checking assignment WF-ness from `monitor/src/interpreter.rs`

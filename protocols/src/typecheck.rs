@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
-use crate::{diagnostic::*, ir::*, serialize::*, static_checks::check_condition_well_formedness};
+use crate::{diagnostic::*, ir::*, serialize::*, static_checks::check_condition_wf};
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -202,7 +202,7 @@ fn check_stmt_types(
             let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
                 // If the loop guard typechecks, make sure it is well-formed
-                check_condition_well_formedness(tr, st, handler, cond)?;
+                check_condition_wf(cond, tr, st, handler)?;
 
                 // Then, type-check the body of the while-loop
                 check_stmt_types(tr, st, handler, bodyid)
@@ -220,7 +220,7 @@ fn check_stmt_types(
             let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
                 // If the condition typechecks, make sure it is well-formed
-                check_condition_well_formedness(tr, st, handler, cond)?;
+                check_condition_wf(cond, tr, st, handler)?;
 
                 // Then, type-check the bodies of the `then` & `else` branches
                 check_stmt_types(tr, st, handler, ifbody)?;

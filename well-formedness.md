@@ -7,7 +7,7 @@ This document details the well-formedness constraints on `.prot` programs:
 - All function arguments are immutable. 
 - We also check that assignments, assertions and conditionals (`if` and `while`) 
 abide by the grammars discussed below. These grammars are designed in order to 
-make it tractable to reconstruct transcations from a waveform and `.prot` file
+make it tractable to reconstruct transactions from a waveform and `.prot` file
 (which is what the monitor does)
 
 ### Grammar for assignments
