@@ -314,6 +314,16 @@ pub enum Stmt {
 pub struct ExprId(u32);
 entity_impl!(ExprId, "expr");
 
+/// Enum representing a location in the IR that can be
+/// either an expression or a statement.
+/// (This is used in generic error-reporting functions that can
+/// accept both `ExprId`s & `StmtId`s.)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LocationId {
+    Expr(ExprId),
+    Stmt(StmtId),
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BinOp {
     Equal,

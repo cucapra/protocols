@@ -310,6 +310,25 @@ impl DiagnosticHandler {
         }
     }
 
+    /// Emits a diagnostic message for either an expression or a statement
+    /// based on the `LocationId` variant
+    pub fn emit_diagnostic(
+        &mut self,
+        tr: &Transaction,
+        location_id: &LocationId,
+        message: &str,
+        level: Level,
+    ) {
+        match location_id {
+            LocationId::Expr(expr_id) => {
+                self.emit_diagnostic_expr(tr, expr_id, message, level);
+            }
+            LocationId::Stmt(stmt_id) => {
+                self.emit_diagnostic_stmt(tr, stmt_id, message, level);
+            }
+        }
+    }
+
     /// Emits a diagnostic message that concerns multiple statements
     pub fn emit_diagnostic_multi_stmt(
         &mut self,

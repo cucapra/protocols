@@ -1,17 +1,9 @@
 use crate::{
     diagnostic::{DiagnosticHandler, Level},
-    ir::{BinOp, Dir, Expr, ExprId, StmtId, SymbolId, SymbolTable, Transaction, Type},
+    ir::{BinOp, Dir, Expr, ExprId, LocationId, StmtId, SymbolId, SymbolTable, Transaction, Type},
     serialize::serialize_expr,
 };
 use anyhow::anyhow;
-
-/// Enum representing a location in the AST that
-/// is either an expression (identified by its `ExprId`)
-/// or a statement (identified by its `StmtId`)
-pub enum LocationId {
-    Expr(ExprId),
-    Stmt(StmtId),
-}
 
 /// Enum representing *language features* for which static well-formedness
 /// checks need to be performed
@@ -55,17 +47,6 @@ pub fn check_if_symbol_is_dut_port(
     handler: &mut DiagnosticHandler,
     lang_feature: LangFeature,
 ) -> anyhow::Result<()> {
-    // Helper closure that figures out whether to call `emit_diagnostic_expr`
-    // or `emit_diagnostic_stmt` based on `location_id`
-    let emit_diagnostic = |handler: &mut DiagnosticHandler, error_msg: &str| match &location_id {
-        LocationId::Expr(expr_id) => {
-            handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
-        }
-        LocationId::Stmt(stmt_id) => {
-            handler.emit_diagnostic_stmt(tr, stmt_id, error_msg, Level::Error);
-        }
-    };
-
     // Fully-qualify the name of the identifier
     let symbol_full_name = symbol_table.full_name_from_symbol_id(&symbol_id);
 
@@ -76,7 +57,7 @@ pub fn check_if_symbol_is_dut_port(
                 but the function {} is not parameterized by any structs",
                 symbol_full_name, direction, tr.name
             );
-            emit_diagnostic(handler, &error_msg);
+            handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
         (Some(_), None) => {
@@ -85,7 +66,7 @@ pub fn check_if_symbol_is_dut_port(
                 but {} is not a field of a struct",
                 symbol_full_name, direction, symbol_full_name
             );
-            emit_diagnostic(handler, &error_msg);
+            handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
         (Some(struct_id), Some(parent_symbol_id)) => {
@@ -116,7 +97,7 @@ pub fn check_if_symbol_is_dut_port(
                         (Only {}put fields are allowed to appear in {})",
                         symbol_full_name, direction, struct_name, direction, lang_feature
                     );
-                    emit_diagnostic(handler, &error_msg);
+                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
             } else {
@@ -125,7 +106,7 @@ pub fn check_if_symbol_is_dut_port(
                     "Expected {} to be an output field of struct {}({}) but got {}({}) as the parent struct instead",
                     symbol_full_name, struct_name, struct_id, parent_name, parent_symbol_id
                 );
-                emit_diagnostic(handler, &error_msg);
+                handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))
             }
         }
