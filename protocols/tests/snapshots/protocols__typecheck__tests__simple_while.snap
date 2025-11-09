@@ -1,5 +1,11 @@
 ---
-source: src/typecheck.rs
+source: protocols/src/typecheck.rs
 expression: content
 ---
-
+error: Expected b to be a struct's output field,
+                but b is not a field of a struct
+   ┌─ tests/counters/simple_while.prot:10:22
+   │
+10 │     while !(dut.s == b) {
+   │                      ^ Expected b to be a struct's output field,
+                but b is not a field of a struct

@@ -14,8 +14,10 @@ warning: Inferred RHS type as u32 from LHS type u32.
 20 │   dut.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+error: Expected s to be a struct's input field,
+                but s is not a field of a struct
    ┌─ tests/multipliers/mul_invalid.prot:22:3
    │
 22 │   s := dut.s;
-   │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+   │   ^^^^^^^^^^^ Expected s to be a struct's input field,
+                but s is not a field of a struct

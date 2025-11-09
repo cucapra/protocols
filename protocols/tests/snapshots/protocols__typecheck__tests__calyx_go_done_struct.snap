@@ -8,8 +8,10 @@ warning: Inferred RHS type as u32 from LHS type u32.
 15 │   dut.ii := X;
    │   ^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+error: Expected oo to be a struct's input field,
+                but oo is not a field of a struct
    ┌─ tests/calyx_go_done/calyx_go_done_struct.prot:16:3
    │
 16 │   oo := dut.oo;
-   │   ^^^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+   │   ^^^^^^^^^^^^^ Expected oo to be a struct's input field,
+                but oo is not a field of a struct
