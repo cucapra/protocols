@@ -28,13 +28,13 @@ that indicates the value of `LHS` is irrelevant at the current cycle.
 - In assertions (`assert_eq(LHS, RHS)` or `assert_eq(RHS, LHS)`), `LHS` & `RHS` must conform to the following grammar:
 
 ```
-LHS := DUT output port | constant 
+LHS := DUT output port | output parameter of a function | constant 
 
 RHS ::= rhs_expr
    | rhs_expr[i:j]          (bit-slice)
    | rhs_expr ++ rhs_expr   (where `++` is concatenation)
 
-rhs_expr ::= DUT output port | output parameter to a function | constant
+rhs_expr ::= DUT output port | output parameter of a function | constant
 ```
 - This grammar is slightly different from the grammar for assignments: assertions refer to *output* parameters / DUT ports,
 whereas assignments refer to *input* parameters / DUT ports 

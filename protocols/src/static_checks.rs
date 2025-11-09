@@ -176,16 +176,21 @@ pub fn check_assertion_lhs_wf(
     match lhs_expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(lhs_symbol_id) => {
-            // Check if the identifier is a DUT output port
-            check_if_symbol_is_dut_port(
-                *lhs_symbol_id,
-                Dir::Out,
-                LocationId::Expr(*lhs_expr_id),
-                tr,
-                st,
-                handler,
-                LangFeature::Conditionals,
-            )
+            // Check if the identifier is an output parameter of the function
+            if tr.is_param_with_correct_direction(*lhs_symbol_id, Dir::Out) {
+                Ok(())
+            } else {
+                // Check if the identifier is a DUT output port
+                check_if_symbol_is_dut_port(
+                    *lhs_symbol_id,
+                    Dir::Out,
+                    LocationId::Expr(*lhs_expr_id),
+                    tr,
+                    st,
+                    handler,
+                    LangFeature::Conditionals,
+                )
+            }
         }
         Expr::DontCare => {
             let error_msg = "DontCare expressions not allowed inside assert_eq";
@@ -263,12 +268,12 @@ pub fn check_assertion_wf(
     // argument is the LHS/RHS, as `assert_eq` is symmetric in its arguments)
 
     let first_check_result = {
-        check_assertion_lhs_wf(expr_id1, tr, st, handler)?;
+        let _ = check_assertion_lhs_wf(expr_id1, tr, st, handler);
         check_assertion_rhs_wf(expr_id2, tr, st, handler)
     };
 
     let second_check_result = {
-        check_assertion_lhs_wf(expr_id2, tr, st, handler)?;
+        let _ = check_assertion_lhs_wf(expr_id2, tr, st, handler);
         check_assertion_rhs_wf(expr_id1, tr, st, handler)
     };
 
@@ -316,14 +321,14 @@ pub fn check_assignment_rhs_wf(
             Err(anyhow!(error_msg))
         }
         Expr::Sym(symbol_id) => {
-            // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_correct_direction(*symbol_id, Dir::Out) {
+            // Check if the identifier is an input parameter of the function
+            if tr.is_param_with_correct_direction(*symbol_id, Dir::In) {
                 Ok(())
             } else {
-                // Check if the identifier is a DUT output port
+                // Check if the identifier is a DUT input port
                 check_if_symbol_is_dut_port(
                     *symbol_id,
-                    Dir::Out,
+                    Dir::In,
                     LocationId::Expr(*rhs_expr_id),
                     tr,
                     symbol_table,
