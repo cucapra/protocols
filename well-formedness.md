@@ -28,7 +28,7 @@ that indicates the value of `LHS` is irrelevant at the current cycle.
 - In assertions (`assert_eq(LHS, RHS)` or `assert_eq(RHS, LHS)`), `LHS` & `RHS` must conform to the following grammar:
 
 ```
-LHS := DUT output port
+LHS := DUT output port | constant 
 
 RHS ::= rhs_expr
    | rhs_expr[i:j]          (bit-slice)
