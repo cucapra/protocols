@@ -6,8 +6,6 @@ use crate::{
 use anyhow::anyhow;
 use itertools::Itertools;
 
-// pub fn is_dut_port(symbol_id: SymbolId, tr: &Transaction) -> bool {}
-
 /// Checks whether the condition (guard) for an if-statement / while-loop
 /// conforms to the well-formedness requirements
 pub fn check_condition_well_formedness(
@@ -55,7 +53,8 @@ pub fn check_condition_well_formedness(
                             format!("Unrecognized identifier {}", symbol_full_name)
                         };
                         let error_msg = format!(
-                            "{error_msg_prefix} (Only output parameters / output fields of structs are allowed to appear in the conditions for if-statements / while-loops)"
+                            "{error_msg_prefix} 
+                            (Only output parameters / output fields of structs are allowed to appear in the conditions for if-statements / while-loops)"
                         );
                         handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                         Err(anyhow!(error_msg))
@@ -127,7 +126,16 @@ pub fn check_condition_well_formedness(
     }
 }
 
+// TODO: complete this function
+#[allow(dead_code, unused_variables)]
+pub fn check_assertion_well_formedness(
+    tr: &Transaction,
+    symbol_table: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+    expr_id: &ExprId,
+) -> anyhow::Result<()> {
+    todo!()
+}
+
 // TODO: refactor the logic for checking assignment WF-ness from `monitor/src/interpreter.rs`
 // into a helper function `check_assignment_well_formedness`
-
-// TODO: implement a helper function that checks well-formedness of assertions
