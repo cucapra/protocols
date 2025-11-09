@@ -6,7 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
+use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -377,16 +377,17 @@ impl Struct {
         &self.pins
     }
 
-    /// Retrieves the (fully-qualified) names of all the output pins of a `Struct`,
+    /// Retrieves the names of all the output fields of a `Struct`,
     /// returning an `Iterator` of `String`s
+    /// (Note: the names returned here are *not* fully-qualified -- instead
+    /// it is the caller's responsibility to qualify the field names
+    /// by the name of the struct *instance*. We do not do this in this
+    /// method as we only have access to the name of the *struct type*
+    /// here, as opposed to the name of the *struct instance*.)
     pub fn get_output_pin_names(&self) -> impl Iterator<Item = String> {
-        println!("pins = {:?}", self.pins);
-
         self.pins.iter().filter_map(|field| {
             if field.dir == Dir::Out {
-                let field_name = format!("{}.{}", self.name, field.name);
-                println!("found field {field_name}");
-                Some(field_name)
+                Some(field.name.clone())
             } else {
                 None
             }

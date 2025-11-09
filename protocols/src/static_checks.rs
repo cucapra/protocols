@@ -10,7 +10,7 @@ use itertools::Itertools;
 /// conforms to the well-formedness requirements
 pub fn check_condition_well_formedness(
     tr: &Transaction,
-    st: &SymbolTable,
+    symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
 ) -> anyhow::Result<()> {
@@ -23,38 +23,47 @@ pub fn check_condition_well_formedness(
             if is_output_param {
                 Ok(())
             } else {
-                match (tr.type_param, st[symbol_id].parent()) {
+                match (tr.type_param, symbol_table[symbol_id].parent()) {
                     (None, None) => todo!(),
                     (None, Some(_)) | (Some(_), None) => todo!(),
                     (Some(struct_id), Some(parent_symbol_id)) => {
                         // Check whether the name of the identifier corresponds
                         // to a DUT output port
-                        let struct_name = st[struct_id].name();
-                        if let Type::Struct(struct_id) = st[parent_symbol_id].tpe() {
-                            let the_struct = &st[struct_id];
-                            // Fetch the (qualified) names of all the output pins and check
-                            // if `symbol_full_name` is one of them
-                            let mut output_pin_names = the_struct.get_output_pin_names();
-                            let symbol_full_name = st.full_name_from_symbol_id(symbol_id);
+                        let struct_name = symbol_table[struct_id].name();
+                        if let Type::Struct(struct_id) = symbol_table[parent_symbol_id].tpe() {
+                            // `struct` is a reserved keyword in Rust,
+                            // so this variable of type `Struct`
+                            // is called `the_struct`
+                            let the_struct = &symbol_table[struct_id];
+
+                            // Fetch the names of all the output pins,
+                            // qualified by the name of the struct *instance*
+                            let output_pin_names = the_struct
+                                .get_output_pin_names()
+                                .map(|field| format!("{}.{}", struct_name, field))
+                                .collect::<Vec<String>>();
+
+                            // Fully-qualify the name of the identifier
+                            let symbol_full_name = symbol_table.full_name_from_symbol_id(symbol_id);
+
+                            // If the identifier corresponds to a DUT output port,
+                            // the condition is well-formed, otherwise
+                            // emit an error message
                             if output_pin_names.contains(&symbol_full_name) {
                                 Ok(())
                             } else {
-                                println!(
-                                    "output fields: {:?}",
-                                    output_pin_names.collect::<Vec<_>>()
-                                );
                                 let error_msg = format!(
-                                    "{} is not an output field of struct {} but only output fields of {} are allowed to appear in the condition for loops/if-statements",
-                                    symbol_full_name, struct_name, struct_name
+                                    "`{}` is not an output field of the struct `{}` (Only output fields are allowed to appear in conditions for loops/if-statements",
+                                    symbol_full_name, struct_name
                                 );
                                 handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                                 Err(anyhow!(error_msg))
                             }
                         } else {
-                            let parent_name = st[parent_symbol_id].name();
+                            let parent_name = symbol_table[parent_symbol_id].name();
                             let error_msg = format!(
                                 "Expected {} to be an output field of struct {}({}) but got {}({}) as the parent instead",
-                                serialize_expr(tr, st, expr_id),
+                                serialize_expr(tr, symbol_table, expr_id),
                                 struct_name,
                                 struct_id,
                                 parent_name,
@@ -74,12 +83,14 @@ pub fn check_condition_well_formedness(
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
-            check_condition_well_formedness(tr, st, handler, expr_id1)?;
-            check_condition_well_formedness(tr, st, handler, expr_id2)
+            check_condition_well_formedness(tr, symbol_table, handler, expr_id1)?;
+            check_condition_well_formedness(tr, symbol_table, handler, expr_id2)
         }
-        Expr::Unary(_, inner_expr) => check_condition_well_formedness(tr, st, handler, inner_expr),
+        Expr::Unary(_, inner_expr) => {
+            check_condition_well_formedness(tr, symbol_table, handler, inner_expr)
+        }
         Expr::Slice(sliced_expr, _, _) => {
-            check_condition_well_formedness(tr, st, handler, sliced_expr)
+            check_condition_well_formedness(tr, symbol_table, handler, sliced_expr)
         }
     }
 }
