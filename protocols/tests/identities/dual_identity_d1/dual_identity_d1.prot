@@ -5,6 +5,11 @@ struct DualIdentity {
   out s2: u64,
 }
 
+// Update (11/9): this pair of protocols are considered to be ill-formed
+// because the guard for the if-statement in the function `two` mentioned an 
+// input parameter, which is forbidden (see `well-formedness.md`)
+
+
 // this pair of protocols works by having each thread assign one of dut.a or dut.b,
 // but assignment of dut.a is conditioned upon correct assignment of dut.b
 // if the threads disagree on the value of b, a remains a DontCare and the assertion fails

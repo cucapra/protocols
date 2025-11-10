@@ -363,8 +363,10 @@ impl Interpreter {
                         let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
                         let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
 
-                        let out_params: Vec<SymbolId> =
-                            self.transaction.get_output_param_symbols().collect();
+                        let out_params: Vec<SymbolId> = self
+                            .transaction
+                            .get_parameters_by_direction(Dir::Out)
+                            .collect();
                         for out_param_symbol in out_params {
                             if out_param_symbol == symbol_id1 {
                                 info!("{} is an output param of the transaction", name1);

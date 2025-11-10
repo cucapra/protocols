@@ -3,12 +3,18 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
-use crate::{diagnostic::*, ir::*, serialize::*};
+use crate::{
+    diagnostic::*,
+    ir::*,
+    serialize::*,
+    static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf},
+};
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -103,8 +109,7 @@ fn check_expr_types(
                     &format!(
                         "Invalid type for 'Not' expression {}",
                         serialize_type(st, inner_type)
-                    )
-                    .to_string(),
+                    ),
                     Level::Error,
                 );
                 Ok(inner_type)
@@ -143,32 +148,14 @@ fn check_stmt_types(
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
         Stmt::Assign(lhs, rhs) => {
-            // Function argument cannot be assigned
-            if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
-                let error_msg = "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.";
-                handler.emit_diagnostic_stmt(tr, stmt_id, error_msg, Level::Error);
-                return Err(anyhow!(error_msg));
-            }
-            // DUT output cannot be assigned
-            if let Some(parent) = st[lhs].parent() {
-                if let Type::Struct(structid) = st[parent].tpe() {
-                    let fields = st[structid].pins();
-                    if fields
-                        .iter()
-                        .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
-                    {
-                        let error_msg = format!(
-                            "{} is an output port of {} and thus cannot be assigned.",
-                            st[lhs].full_name(st),
-                            st[parent].name()
-                        );
-                        handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
-                        return Err(anyhow!(error_msg));
-                    }
-                }
-            }
+            // First, make sure the assignment itself is well-formed
+            check_assignment_wf(lhs, rhs, stmt_id, tr, st, handler)?;
+
+            // Then, type-check the two sides of the assignment
             let lhs_type = st[lhs].tpe();
             let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            // If the RHS type is `Unknown`, we infer it to be
+            // the same type as the LHS
             if rhs_type == Type::Unknown {
                 rhs_type = lhs_type;
                 handler.emit_diagnostic_stmt(
@@ -182,6 +169,7 @@ fn check_stmt_types(
                     Level::Warning,
                 );
             }
+            // Check whether the LHS & RHS have equivalent types
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
@@ -198,9 +186,13 @@ fn check_stmt_types(
             }
         }
         Stmt::While(cond, bodyid) => {
-            let cond_type = check_expr_types(tr, st, handler, cond)?;
             // Guards for while-loops must have type `BitVec(1)`
+            let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
+                // If the loop guard typechecks, make sure it is well-formed
+                check_condition_wf(cond, tr, st, handler)?;
+
+                // Then, type-check the body of the while-loop
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
                 let error_msg = format!(
@@ -212,12 +204,15 @@ fn check_stmt_types(
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
+            // Conditions for if-statement must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;
-            // Guards for conditions must have type `BitVec(1)`
             if let Type::BitVec(1) = cond_type {
+                // If the condition typechecks, make sure it is well-formed
+                check_condition_wf(cond, tr, st, handler)?;
+
+                // Then, type-check the bodies of the `then` & `else` branches
                 check_stmt_types(tr, st, handler, ifbody)?;
-                check_stmt_types(tr, st, handler, elsebody)?;
-                Ok(())
+                check_stmt_types(tr, st, handler, elsebody)
             } else {
                 let error_msg = format!(
                     "Type mismatch in If/Else condition: {}",
@@ -228,11 +223,21 @@ fn check_stmt_types(
             }
         }
         Stmt::AssertEq(exprid1, exprid2) => {
+            // First, type-check the two arguments to `assert_eq` separately
             let expr1_type = check_expr_types(tr, st, handler, exprid1)?;
             let expr2_type = check_expr_types(tr, st, handler, exprid2)?;
+
+            // Check that the types of both arguments are equivalent
             if expr1_type.is_equivalent(&expr2_type) {
+                // Then, check that the assertion itself is well-formed
+                check_assertion_wf(exprid1, exprid2, tr, st, handler)
+                    .context("Ill-formed assert_eq statement")?;
+
+                // If all the above checks pass, then the assertion both
+                // type-checks and is well-formed, so it is `Ok`
                 Ok(())
             } else {
+                // Arguments to `assert_eq` are ill-typed, so report an error
                 let expr1_name = serialize_expr(tr, st, exprid1);
                 let expr2_name = serialize_expr(tr, st, exprid2);
                 let error_msg = format!(

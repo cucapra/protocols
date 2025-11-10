@@ -77,7 +77,9 @@ fn main() -> anyhow::Result<()> {
     logger.init();
 
     // Print warning messages only if `--verbose` is enabled
-    let emit_warnings = cli.verbosity.log_level_filter() != LevelFilter::Warn;
+    // (the --verbose flag triggers `LevelFilter::Info`)
+    let emit_warnings = cli.verbosity.log_level_filter() == LevelFilter::Info;
+
     // Note: for the monitor, error message locations in `.prot` files are suppressed
     // in the `DiagnosticHandlers` for now
     let mut protocols_handler = DiagnosticHandler::new(cli.color, false, emit_warnings);
