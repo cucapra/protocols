@@ -16,4 +16,6 @@ fn signal_async<dut: SignalAsyncBug>(in data_in: u32, out data_out: u32) {
         step(1);
     }
     assert_eq(data_out, dut.final_resp);
+    fork();
+    step();
 }
