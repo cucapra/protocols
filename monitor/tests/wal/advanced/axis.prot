@@ -1,28 +1,30 @@
+// ARGS: --wave wal/advanced/uart-axi.fst --instances uut_rx:AXIS
+//
 // This implementation of an AXI-Streaming Protocol is a bit different from the WAL version.
 
 struct AXIS {
-    out ready: u1,
-    in valid: u1,
-    in data: u8,
+    out m_axis_tready: u1,
+    in m_axis_tvalid: u1,
+    in m_axis_tdata: u8,
 }
 
 fn send_data<D: AXIS>(in data: u8) {
-    D.data := data;
-    D.valid := 1'b1;
-    while (!(D.ready == 1'b1)) {
+    D.m_axis_tdata := data;
+    D.m_axis_tvalid := 1'b1;
+    while (!(D.m_axis_tready == 1'b1)) {
         step();
     }
     // one cycle for the data transfer to take place
     step();
     // TODO: can we get rid of this boiler plate code?
-    D.data := X;
-    D.valid := X;
+    D.m_axis_tdata := X;
+    D.m_axis_tvalid := X;
     fork();
     step();
 }
 
 fn idle<D: AXIS>() {
-    D.valid := 1'b0;
+    D.m_axis_tvalid := 1'b0;
     // D.data is implicitly X
     step();
 }
