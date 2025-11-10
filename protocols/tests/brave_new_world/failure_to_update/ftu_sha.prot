@@ -1,4 +1,4 @@
-// corresponds with tests/brave_new_world/failure_to_update/ftu_sha
+// corresponds with tests/brave_new_world/failure_to_update/ftu_sha_{fix,bug}.tx
 struct  FailureToUpdateSHA {
     in reset: u1,
     in start: u1,
@@ -27,4 +27,6 @@ fn failure_to_update_sha<dut: FailureToUpdateSHA>() {
     dut.almfull := 1'b1;
     step(1);
     assert_eq(dut.valid, 1'b0);
+    fork();
+    step(1);
 }

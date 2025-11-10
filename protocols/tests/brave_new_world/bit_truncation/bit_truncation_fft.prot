@@ -1,4 +1,4 @@
-// corresponds with tests/brave_new_world/bit_truncation/bit_truncation_fft
+// corresponds with tests/brave_new_world/bit_truncation/bit_truncation_fft_{bug,fix}.tx
 struct BitTruncationFFT {
     in input_data: u27,
     out output_data: u11,
