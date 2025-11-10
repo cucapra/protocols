@@ -1,0 +1,13 @@
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn slicing_invalid<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+
+  step();
+  fork(); 
+  assert_eq(s[15:31], DUT.s[15:31]); // illegal slices! (should be `s[31:15]`)
+  step();
+}

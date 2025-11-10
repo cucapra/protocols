@@ -3,22 +3,37 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
-use crate::serialize::{build_statements, serialize_expr};
+use crate::serialize::{build_statements, serialize_expr, serialize_type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
+    /// The name of the `Transaction`
     pub name: String,
+
+    /// List of `Arg`s to the `Transaction`
     pub args: Vec<Arg>,
+
+    /// The body of the `Transaction`, identified by its `StmtId`
     pub body: StmtId,
+
+    /// Optional type parameter (identified by its `SymbolId`)
     pub type_param: Option<SymbolId>,
+
+    /// Maps `ExprId`s to their corresponding `Expr`s
     exprs: PrimaryMap<ExprId, Expr>,
+
+    /// The distinguished `ExprId` corresponding to `DontCare`
     dont_care_id: ExprId,
+
+    /// Maps `StmtId`s to their corresponding `Stmt`s
     stmts: PrimaryMap<StmtId, Stmt>,
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
     stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
@@ -149,6 +164,26 @@ impl Transaction {
         arg_types
     }
 
+    /// Retrieves the `SymbolId`s of all the parameters of a transaction
+    /// that have a specified `direction`,
+    /// returning an `Iterator` over the `SymbolId`s of the parameters
+    pub fn get_parameters_by_direction(&self, direction: Dir) -> impl Iterator<Item = SymbolId> {
+        self.args.iter().filter_map(move |arg| {
+            if arg.dir == direction {
+                Some(arg.symbol)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Determines if `symbol_id` is a function parameter with the desired `direction`
+    /// (e.g. check if an identifier corresponds to an input parameter of the function)
+    pub fn is_param_with_correct_direction(&self, symbol_id: SymbolId, direction: Dir) -> bool {
+        self.get_parameters_by_direction(direction)
+            .contains(&symbol_id)
+    }
+
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
     /// provided `SymbolTable` to look up `SymbolId`s
     pub fn format_expr(&self, expr_id: &ExprId, symbol_table: &SymbolTable) -> String {
@@ -222,6 +257,19 @@ pub enum Dir {
     Out,
 }
 
+/// Implementing the `Not` trait allows us to use the unary negation operator
+/// on the `Dir` type, e.g. `!In = Out`
+impl std::ops::Not for Dir {
+    type Output = Dir;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Dir::In => Dir::Out,
+            Dir::Out => Dir::In,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Type {
     BitVec(u32),
@@ -231,6 +279,11 @@ pub enum Type {
 }
 
 impl Type {
+    /// Checks whether two types are *equivalent*,
+    /// i.e. if two bit-vector types have the same length,
+    /// or if two `struct`s have the same `StructId`.
+    /// NB: this function returns `false` if either type is `Unknown`,
+    /// or if any of the aforementioned cases don't hold.
     pub fn is_equivalent(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
@@ -260,6 +313,16 @@ pub enum Stmt {
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct ExprId(u32);
 entity_impl!(ExprId, "expr");
+
+/// Enum representing a location in the IR that can be
+/// either an expression or a statement.
+/// (This is used in generic error-reporting functions that can
+/// accept both `ExprId`s & `StmtId`s.)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LocationId {
+    Expr(ExprId),
+    Stmt(StmtId),
+}
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BinOp {
@@ -345,9 +408,27 @@ impl Struct {
     pub fn pins(&self) -> &Vec<Field> {
         &self.pins
     }
+
+    /// Retrieves the names of all the fields of a `Struct` that
+    /// have a given `direction` (either `Dir::In` or `Dir::Out`),
+    /// returning an `Iterator` of field name `String`s.
+    /// (Note: the names returned here are *not* fully-qualified -- instead
+    /// it is the caller's responsibility to qualify the field names
+    /// by the name of the struct *instance*. We do not do this in this
+    /// method as we only have access to the name of the *struct type*
+    /// here, as opposed to the name of the *struct instance*.)
+    pub fn get_fields_by_direction(&self, direction: Dir) -> impl Iterator<Item = String> {
+        self.pins.iter().filter_map(move |field| {
+            if field.dir == direction {
+                Some(field.name.clone())
+            } else {
+                None
+            }
+        })
+    }
 }
 
-/// Datatype representing A `Field` in a `Struct`, contains:
+/// Datatype representing a `Field` in a `Struct`, contains:
 /// - The name of the field
 /// - The direction (`In` or `Out`)
 /// - The `Type` of the field
@@ -366,7 +447,6 @@ impl Field {
     pub fn name(&self) -> &str {
         &self.name
     }
-
     pub fn dir(&self) -> Dir {
         self.dir
     }
@@ -398,6 +478,52 @@ pub struct SymbolTable {
     by_name_struct: FxHashMap<String, StructId>,
 }
 
+/// Pretty-printer for `SymbolTable`s
+impl std::fmt::Display for SymbolTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "SymbolTable {{")?;
+
+        // Display symbol table entries
+        writeln!(f, "  Symbols:")?;
+        for (symbol_id, entry) in self.entries.iter() {
+            let type_str = serialize_type(self, entry.tpe());
+
+            let parent_str = match entry.parent {
+                Some(parent_id) => format!(
+                    " [parent: symbol{} \"{}\"]",
+                    parent_id.0, self[parent_id].name
+                ),
+                None => "".to_string(),
+            };
+
+            writeln!(
+                f,
+                "    symbol{} \"{}\": {}{}",
+                symbol_id.0,
+                entry.full_name(self),
+                type_str,
+                parent_str
+            )?;
+        }
+
+        // Display structs
+        if !self.structs.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "  Structs:")?;
+            for (struct_id, struct_def) in self.structs.iter() {
+                writeln!(f, "    struct{} \"{}\" {{", struct_id.0, struct_def.name)?;
+                for field in &struct_def.pins {
+                    let type_str = serialize_type(self, field.tpe());
+                    writeln!(f, "      {} {}: {}", field.dir, field.name, type_str)?;
+                }
+                writeln!(f, "    }}")?;
+            }
+        }
+
+        write!(f, "}}")
+    }
+}
+
 impl SymbolTable {
     pub fn add_without_parent(&mut self, name: String, tpe: Type) -> SymbolId {
         assert!(
@@ -421,8 +547,14 @@ impl SymbolTable {
         id
     }
 
+    /// Takes a string and returns the corresponding `SymbolId` (if one exists)
     pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
         self.by_name_sym.get(name).copied()
+    }
+
+    /// Takes a `SymbolId` and returns the corresponding (qualified) full name
+    pub fn full_name_from_symbol_id(&self, symbol_id: &SymbolId) -> String {
+        self[symbol_id].full_name(self)
     }
 
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
@@ -566,6 +698,9 @@ impl SymbolTableEntry {
         self.tpe
     }
 
+    /// Retrieves the `SymbolID` of the parent symbol
+    /// (e.g. if the current entry refers to the field of a struct,
+    /// then this method returns the parent struct)
     pub fn parent(&self) -> Option<SymbolId> {
         self.parent
     }
@@ -614,6 +749,9 @@ mod tests {
         let dut_s = symbols.add_with_parent("s".to_string(), dut);
         assert_eq!(symbols["dut.s"], symbols[dut_s]);
         assert_eq!(symbols["s"], symbols[s]);
+
+        // Print the symbol table to demonstrate Display trait
+        println!("\n{}", symbols);
 
         // 2) create transaction
         let mut add = Transaction::new("add".to_string());

@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use std::{collections::HashSet, io::Write};
 
@@ -41,6 +42,7 @@ struct Label {
 }
 
 impl Label {
+    /// Converts a `Label` to a `CodespanLabel`
     fn to_codespan_label(&self, fileid: usize) -> CodespanLabel<usize> {
         CodespanLabel::new(LabelStyle::Primary, fileid, self.range.0..self.range.1)
             .with_message(self.message.clone().unwrap_or_default())
@@ -53,20 +55,27 @@ struct Diagnostic {
     title: String,
     message: String,
     level: Level,
-    location: Option<(usize, Label)>,
+    locations: Vec<(usize, Label)>,
 }
 
 impl Diagnostic {
     pub fn emit(&self, buffer: &mut Buffer, files: &SimpleFiles<String, String>) {
-        if let Some((fileid, label)) = &self.location {
+        if !self.locations.is_empty() {
             let severity = match self.level {
                 Level::Error => Severity::Error,
                 Level::Warning => Severity::Warning,
             };
 
+            // Convert all locations to Codespan labels
+            let labels = self
+                .locations
+                .iter()
+                .map(|(fileid, label)| label.to_codespan_label(*fileid))
+                .collect();
+
             let diagnostic = CodespanDiagnostic::new(severity)
                 .with_message(&self.message) // Severity: (msg)
-                .with_labels(vec![label.to_codespan_label(*fileid)]);
+                .with_labels(labels);
 
             let config = term::Config::default(); // Change config depending on how error needs to be produced
             term::emit(buffer, &config, files, &diagnostic).expect("Failed to write diagnostic");
@@ -84,6 +93,16 @@ impl Diagnostic {
             buffer
                 .set_color(&ColorSpec::new())
                 .expect("Failed to reset color");
+
+            let severity = match self.level {
+                Level::Error => Severity::Error,
+                Level::Warning => Severity::Warning,
+            };
+
+            let diagnostic = CodespanDiagnostic::new(severity).with_message(&self.message);
+
+            let config = term::Config::default(); // Change config depending on how error needs to be produced
+            term::emit(buffer, &config, files, &diagnostic).expect("Failed to write diagnostic");
         }
     }
 }
@@ -94,22 +113,30 @@ pub struct DiagnosticHandler {
     error_string: String,
     /// `color_choice` indicates whether to emit error messages w/ ANSI colors
     color_choice: ColorChoice,
+    /// `no_error_locations` indicates whether to suppress location info
+    /// (i.e. `fileid` and `Label`s) in error messages
+    no_error_locations: bool,
+    /// `emit_warnings` indicates whether to emit warning-level diagnostics
+    emit_warnings: bool,
 }
 
 impl Default for DiagnosticHandler {
-    /// Default `DiagnosticHandler` does not emit colored error messages
+    /// Default `DiagnosticHandler` does not emit colored error messages,
+    /// includes location info in error locations, and emits warnings
     fn default() -> Self {
-        Self::new(ColorChoice::Never)
+        Self::new(ColorChoice::Never, false, true)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new(color_choice: ColorChoice) -> Self {
+    pub fn new(color_choice: ColorChoice, error_locations: bool, emit_warnings: bool) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: HashSet::new(),
             error_string: String::new(),
             color_choice,
+            no_error_locations: error_locations,
+            emit_warnings,
         }
     }
 
@@ -131,6 +158,17 @@ impl DiagnosticHandler {
         &self.error_string
     }
 
+    /// If `self.no_error_locations` is false, this function creates
+    /// error locations for multiple expressions/statements.
+    /// Otherwise, this function returns an empty `Vec`.
+    fn error_locations(&self, locations: Vec<(usize, Label)>) -> Vec<(usize, Label)> {
+        if self.no_error_locations {
+            Vec::new()
+        } else {
+            locations
+        }
+    }
+
     pub fn emit_diagnostic_expr(
         &mut self,
         tr: &Transaction,
@@ -138,6 +176,10 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         // need to check errors to avoid recursive duplication of error message
         if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
             return;
@@ -153,7 +195,7 @@ impl DiagnosticHandler {
                 title: format!("{:?} in file {}", level, fileid),
                 message: message.to_string(),
                 level,
-                location: Some((fileid, label)),
+                locations: self.error_locations(vec![(fileid, label)]),
             };
 
             diagnostic.emit(&mut buffer, &self.files);
@@ -174,6 +216,10 @@ impl DiagnosticHandler {
         pair: &Pair<'_, R>,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         let start = pair.as_span().start();
         let end = pair.as_span().end();
         let buffer = &mut self.create_buffer();
@@ -186,7 +232,7 @@ impl DiagnosticHandler {
             title: format!("{:?} in file {}", level, fileid),
             message: message.to_string(),
             level,
-            location: Some((fileid, label)),
+            locations: self.error_locations(vec![(fileid, label)]),
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -203,6 +249,10 @@ impl DiagnosticHandler {
         end: usize,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         let buffer = &mut self.create_buffer();
         let label = Label {
             message: Some(message.to_string()),
@@ -213,7 +263,7 @@ impl DiagnosticHandler {
             title: format!("{:?} in file {}", level, fileid),
             message: message.to_string(),
             level,
-            location: Some((fileid, label)),
+            locations: self.error_locations(vec![(fileid, label)]),
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -222,6 +272,7 @@ impl DiagnosticHandler {
         print!("{}", error_msg);
     }
 
+    /// Emits a diagnostic message for one single statement
     pub fn emit_diagnostic_stmt(
         &mut self,
         tr: &Transaction,
@@ -229,6 +280,10 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         // need to check errors to avoid recursive duplication of error message
         if !self.reported_errs.insert(ErrorKey::StmtKey(*stmt_id)) {
             return;
@@ -244,7 +299,68 @@ impl DiagnosticHandler {
                 title: format!("{:?} in file {}", level, fileid),
                 message: message.to_string(),
                 level,
-                location: Some((fileid, label)),
+                locations: self.error_locations(vec![(fileid, label)]),
+            };
+
+            diagnostic.emit(buffer, &self.files);
+
+            let error_msg = String::from_utf8_lossy(buffer.as_slice());
+            self.error_string.push_str(&error_msg);
+            print!("{}", error_msg);
+        }
+    }
+
+    /// Emits a diagnostic message for either an expression or a statement
+    /// based on the `LocationId` variant
+    pub fn emit_diagnostic(
+        &mut self,
+        tr: &Transaction,
+        location_id: &LocationId,
+        message: &str,
+        level: Level,
+    ) {
+        match location_id {
+            LocationId::Expr(expr_id) => {
+                self.emit_diagnostic_expr(tr, expr_id, message, level);
+            }
+            LocationId::Stmt(stmt_id) => {
+                self.emit_diagnostic_stmt(tr, stmt_id, message, level);
+            }
+        }
+    }
+
+    /// Emits a diagnostic message that concerns multiple statements
+    pub fn emit_diagnostic_multi_stmt(
+        &mut self,
+        tr: &Transaction,
+        stmt_ids: &[StmtId],
+        messages: &[&str],
+        main_message: &str,
+        level: Level,
+    ) {
+        let buffer = &mut self.create_buffer();
+        let mut locations = Vec::new();
+        let mut fileid_opt = None;
+
+        for (stmt_id, message) in stmt_ids.iter().zip(messages) {
+            if let Some((start, end, fileid)) = tr.get_stmt_loc(*stmt_id) {
+                fileid_opt = Some(fileid);
+                locations.push((
+                    fileid,
+                    Label {
+                        message: Some(message.to_string()),
+                        range: (start, end),
+                    },
+                ));
+            }
+        }
+
+        if let Some(fileid) = fileid_opt {
+            let diagnostic = Diagnostic {
+                title: format!("{:?} in file {}", level, fileid),
+                message: main_message.to_string(),
+                level,
+                locations: self.error_locations(locations),
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -276,13 +392,13 @@ impl DiagnosticHandler {
                 title: format!("Error in file {}", fileid1),
                 message: "The two expressions did not evaluate to the same value".to_string(),
                 level: Level::Error,
-                location: Some((
+                locations: self.error_locations(vec![(
                     fileid1,
                     Label {
                         message: Some(format!("LHS Value: {:?}, RHS Value: {:?}", eval1, eval2)),
                         range: (start1.min(start2), end1.max(end2)),
                     },
-                )),
+                )]),
             };
 
             diagnostic.emit(buffer, &self.files);
@@ -294,12 +410,16 @@ impl DiagnosticHandler {
     }
 
     pub fn emit_general_message(&mut self, message: &str, level: Level) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         let buffer = &mut self.create_buffer();
         let diagnostic = Diagnostic {
             title: format!("{:?}", level),
             message: message.to_string(),
             level,
-            location: None,
+            locations: vec![],
         };
 
         diagnostic.emit(buffer, &self.files);
@@ -331,7 +451,7 @@ mod tests {
         tr.s(Stmt::Assign(a, one_expr));
         tr.s(Stmt::Assign(b, zero_expr));
 
-        let mut handler = DiagnosticHandler::new(ColorChoice::Never);
+        let mut handler = DiagnosticHandler::default();
         let file_id = handler.add_file(
             "main.calyx".to_string(),
             "12345678\nassert_eq!(x, 20);\n".to_string(),

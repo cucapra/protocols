@@ -16,4 +16,7 @@ fn multi<dut: multi0keep2const>(in data_in: u64, out data_out: u64) {
     step(3);
 
     assert_eq(dut.out, data_out);
+
+    fork();
+    step();
 }

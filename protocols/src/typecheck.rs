@@ -3,21 +3,101 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{diagnostic::*, ir::*, serialize::*};
+use anyhow::{Context, anyhow};
+use baa::BitVecOps;
+use std::cmp::Ordering::{Equal, Greater, Less};
 
+use crate::{
+    diagnostic::*,
+    ir::*,
+    serialize::*,
+    static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf},
+};
+
+/// Helper function for emitting error messages related to invalid bit-slices
+fn emit_bitslice_type_error(
+    start_idx: u32,
+    end_idx: u32,
+    expr_width: u32,
+    handler: &mut DiagnosticHandler,
+    tr: &Transaction,
+    expr_id: &ExprId,
+) -> anyhow::Result<Type> {
+    let error_msg = format!(
+        "Invalid slice operation: [{}:{}] on width {}",
+        start_idx, end_idx, expr_width
+    );
+    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+    Err(anyhow!(error_msg))
+}
+
+/// Typechecks an expression (identified by its `ExprId`) with respect to
+/// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
 fn check_expr_types(
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
-) -> Result<Type, String> {
+) -> anyhow::Result<Type> {
     match &tr[expr_id] {
-        Expr::Const(_) => Ok(Type::BitVec(32)), // TODO: need to determine how to check type size
+        Expr::Const(bitvec) => {
+            // Constants have bit-vector types whose length correspond
+            // to the bit-width of the value
+            Ok(Type::BitVec(bitvec.width()))
+        }
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
-        // FIXME: is this the correct typechecking logic?
-        Expr::Slice(sym_expr, _, _) => check_expr_types(tr, st, handler, sym_expr),
+        Expr::Slice(sym_expr, start_idx, end_idx) => {
+            // To type-check `e[i:j]`, first typecheck `e` and make sure
+            // it is a actually a bit-vector
+            let ty = check_expr_types(tr, st, handler, sym_expr)?;
+            match ty {
+                Type::BitVec(expr_width) => match start_idx.cmp(end_idx) {
+                    Equal => Ok(Type::BitVec(1)),
+                    Greater => {
+                        // Make sure the width of the bitslice is at most
+                        // the width of the entire bit-vector
+                        let slice_width = start_idx - end_idx;
+                        if slice_width <= expr_width {
+                            Ok(Type::BitVec(slice_width))
+                        } else {
+                            emit_bitslice_type_error(
+                                *start_idx, *end_idx, expr_width, handler, tr, expr_id,
+                            )
+                        }
+                    }
+                    Less => {
+                        // Emit an error message when `i < j` in `e[i:j]`
+                        // (we expect `i >= j`,
+                        // since `i` is the MSB & `j` is the LSB)
+                        let error_msg = format!(
+                            "Invalid slice operation: [{}:{}] on width {} (MSB {} is less than LSB {}, which is the other way round)",
+                            start_idx, end_idx, expr_width, start_idx, end_idx
+                        );
+                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
+                },
+                Type::Struct(struct_id) => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of struct {}",
+                        st[struct_id].name()
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+                Type::Unknown => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of expr {} with Unknown type",
+                        serialize_expr(tr, st, expr_id)
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            }
+        }
         Expr::Unary(UnaryOp::Not, not_exprid) => {
             let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
             if let Type::BitVec(1) = inner_type {
@@ -26,7 +106,10 @@ fn check_expr_types(
                 handler.emit_diagnostic_expr(
                     tr,
                     expr_id,
-                    &format!("Invalid type for 'Not' expression {:?}", inner_type).to_string(),
+                    &format!(
+                        "Invalid type for 'Not' expression {}",
+                        serialize_type(st, inner_type)
+                    ),
                     Level::Error,
                 );
                 Ok(inner_type)
@@ -38,12 +121,14 @@ fn check_expr_types(
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(Type::BitVec(1))
             } else {
+                let lhs_type_str = serialize_type(st, lhs_type);
+                let rhs_type_str = serialize_type(st, rhs_type);
                 handler.emit_diagnostic_expr(
                     tr,
                     expr_id,
                     &format!(
-                        "Type mismatch in binary operation: {:?} and {:?}",
-                        lhs_type, rhs_type
+                        "Type mismatch in binary operation: {} and {}",
+                        lhs_type_str, rhs_type_str
                     ),
                     Level::Error,
                 );
@@ -58,116 +143,112 @@ fn check_stmt_types(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     match &tr[stmt_id] {
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
         Stmt::Assign(lhs, rhs) => {
-            // Function argument cannot be assigned
-            if tr.args.iter().any(|arg| arg.symbol() == *lhs) {
-                handler.emit_diagnostic_stmt(tr, stmt_id, "Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.", Level::Error);
-            }
-            // DUT output cannot be assigned
-            if let Some(parent) = st[lhs].parent() {
-                if let Type::Struct(structid) = st[parent].tpe() {
-                    let fields = st[structid].pins();
-                    if fields
-                        .iter()
-                        .any(|field| field.dir() == Dir::Out && field.name() == st[lhs].name())
-                    {
-                        handler.emit_diagnostic_stmt(
-                            tr,
-                            stmt_id,
-                            &format!(
-                                "{} is an output and thus cannot be assigned.",
-                                st[lhs].full_name(st)
-                            ),
-                            Level::Error,
-                        );
-                    }
-                }
-            }
+            // First, make sure the assignment itself is well-formed
+            check_assignment_wf(lhs, rhs, stmt_id, tr, st, handler)?;
+
+            // Then, type-check the two sides of the assignment
             let lhs_type = st[lhs].tpe();
             let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            // If the RHS type is `Unknown`, we infer it to be
+            // the same type as the LHS
             if rhs_type == Type::Unknown {
                 rhs_type = lhs_type;
                 handler.emit_diagnostic_stmt(
                     tr,
                     stmt_id,
                     &format!(
-                        "Inferred RHS type as {:?} from LHS type {:?}.",
-                        rhs_type, lhs_type
+                        "Inferred RHS type as {} from LHS type {}.",
+                        serialize_type(st, rhs_type),
+                        serialize_type(st, lhs_type)
                     ),
                     Level::Warning,
                 );
             }
+            // Check whether the LHS & RHS have equivalent types
             if lhs_type.is_equivalent(&rhs_type) {
                 Ok(())
             } else {
                 let expr_name = serialize_expr(tr, st, rhs);
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Type mismatch in assignment: {} : {:?} and {} : {:?}.",
-                        st[lhs].full_name(st),
-                        lhs_type,
-                        expr_name,
-                        rhs_type
-                    ),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in assignment: {} : {} and {} : {}.",
+                    st[lhs].full_name(st),
+                    serialize_type(st, lhs_type),
+                    expr_name,
+                    serialize_type(st, rhs_type)
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::While(cond, bodyid) => {
+            // Guards for while-loops must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
+                // If the loop guard typechecks, make sure it is well-formed
+                check_condition_wf(cond, tr, st, handler)?;
+
+                // Then, type-check the body of the while-loop
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
-                handler.emit_diagnostic_expr(
-                    tr,
-                    cond,
-                    &format!("Invalid type for [while] condition: {:?}", cond_type),
-                    Level::Error,
+                let error_msg = format!(
+                    "Invalid type for [while] condition: {}",
+                    serialize_type(st, cond_type)
                 );
-                Ok(())
+                handler.emit_diagnostic_expr(tr, cond, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
+            // Conditions for if-statement must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;
-            if let Type::BitVec(_) = cond_type {
+            if let Type::BitVec(1) = cond_type {
+                // If the condition typechecks, make sure it is well-formed
+                check_condition_wf(cond, tr, st, handler)?;
+
+                // Then, type-check the bodies of the `then` & `else` branches
                 check_stmt_types(tr, st, handler, ifbody)?;
-                check_stmt_types(tr, st, handler, elsebody)?;
-                Ok(())
+                check_stmt_types(tr, st, handler, elsebody)
             } else {
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!("Type mistmatch in If/Else condition: {:?}", cond_type),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in If/Else condition: {}",
+                    serialize_type(st, cond_type)
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::AssertEq(exprid1, exprid2) => {
+            // First, type-check the two arguments to `assert_eq` separately
             let expr1_type = check_expr_types(tr, st, handler, exprid1)?;
             let expr2_type = check_expr_types(tr, st, handler, exprid2)?;
+
+            // Check that the types of both arguments are equivalent
             if expr1_type.is_equivalent(&expr2_type) {
+                // Then, check that the assertion itself is well-formed
+                check_assertion_wf(exprid1, exprid2, tr, st, handler)
+                    .context("Ill-formed assert_eq statement")?;
+
+                // If all the above checks pass, then the assertion both
+                // type-checks and is well-formed, so it is `Ok`
                 Ok(())
             } else {
+                // Arguments to `assert_eq` are ill-typed, so report an error
                 let expr1_name = serialize_expr(tr, st, exprid1);
                 let expr2_name = serialize_expr(tr, st, exprid2);
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Type mismatch in assert_eq: {} : {:?} and {} : {:?}.",
-                        expr1_name, expr1_type, expr2_name, expr2_type,
-                    ),
-                    Level::Error,
+                let error_msg = format!(
+                    "Type mismatch in assert_eq: {} : {} and {} : {}.",
+                    expr1_name,
+                    serialize_type(st, expr1_type),
+                    expr2_name,
+                    serialize_type(st, expr2_type),
                 );
-                Ok(())
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Stmt::Block(stmts) => {
@@ -179,16 +260,22 @@ fn check_stmt_types(
     }
 }
 
-pub fn type_check(trs: Vec<(SymbolTable, Transaction)>, handler: &mut DiagnosticHandler) {
-    for (st, tr) in trs {
+/// Typechecks every function contained in the argument `Vec`
+/// of `(Transaction, SymbolTable)` pairs
+pub fn type_check(
+    trs: &Vec<(Transaction, SymbolTable)>,
+    handler: &mut DiagnosticHandler,
+) -> anyhow::Result<()> {
+    for (tr, st) in trs {
         for expr_id in tr.expr_ids() {
-            let _ = check_expr_types(&tr, &st, handler, &expr_id);
+            check_expr_types(tr, st, handler, &expr_id)?;
         }
 
         for stmt_id in tr.stmt_ids() {
-            let _ = check_stmt_types(&tr, &st, handler, &stmt_id);
+            check_stmt_types(tr, st, handler, &stmt_id)?;
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -215,7 +302,7 @@ mod tests {
         let result = parse_file(file_name, &mut handler);
         let content = match result {
             Ok(trs) => {
-                type_check(trs, &mut handler);
+                let _ = type_check(&trs, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -225,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_add_transaction() {
-        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot");
+        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot")
     }
 
     #[test]
@@ -324,6 +411,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        type_check(vec![(symbols, tr)], &mut handler);
+        let _ = type_check(&vec![(tr, symbols)], &mut handler);
     }
 }

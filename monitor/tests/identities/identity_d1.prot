@@ -1,0 +1,17 @@
+// ARGS: --wave identities/identity_d1.fst --instances identity_d1:Identity 
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
+  DUT.a := a;
+
+  step();
+
+  assert_eq(s[31:15], DUT.s[31:15]);
+
+  fork();
+  step();
+}
+

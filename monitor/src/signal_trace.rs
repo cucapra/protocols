@@ -1,15 +1,17 @@
 // Copyright 2025 Cornell University
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Design, Instance};
+use crate::{Instance, designs::Design};
+use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
 
 /// The result of advancing the clock cycle by one step
-#[allow(dead_code)]
+#[derive(Debug)]
 pub enum StepResult {
     /// advance time by one step and there are values available for this step
     Ok,
@@ -18,19 +20,18 @@ pub enum StepResult {
 }
 
 /// Provides a trace of signals that we can analyze.
-#[allow(dead_code)]
 pub trait SignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult;
 
     /// returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, io: SymbolId) -> BitVecValue;
+    fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
 }
 
 /// Determines how signals from a waveform a sampled
-#[allow(dead_code)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum WaveSamplingMode<'a> {
     /// sample on the rising edge of the signal specified by its hierarchical name
     RisingEdge(&'a str),
@@ -42,18 +43,18 @@ pub enum WaveSamplingMode<'a> {
 }
 
 /// Waveform dump based implementation of a signal trace.
-#[allow(dead_code)]
+#[derive(Debug)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
-    port_map: FxHashMap<PortKey, SignalRef>,
-    step: u32,
+    pub port_map: FxHashMap<PortKey, SignalRef>,
+    pub step: u32,
 }
 
-/// A PortKey is just a pair consisting of an instance_id and a symbol_id for a pin
+/// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-struct PortKey {
-    instance_id: u32,
-    pin_id: SymbolId,
+pub struct PortKey {
+    pub instance_id: u32,
+    pub pin_id: SymbolId,
 }
 
 impl WaveSignalTrace {
@@ -87,7 +88,6 @@ impl WaveSignalTrace {
 }
 
 /// check instances and build port map
-#[allow(unused_variables)]
 fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
@@ -96,7 +96,7 @@ fn find_instances(
     let mut port_map = FxHashMap::default();
     for (inst_id, inst) in instances.iter().enumerate() {
         // fetch the design from the hashmap (the design tells us what pins to expect)
-        let design = &designs[&inst.design];
+        let design = &designs[&inst.design_name];
 
         let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
         if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
@@ -146,7 +146,9 @@ impl SignalTrace for WaveSignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult {
-        let total_steps = self.wave.time_table().len() as u32;
+        // The no. of times we can call `step` is 1 less than the
+        // total no. of cycles available in the signal trace
+        let total_steps = (self.wave.time_table().len() - 1) as u32;
         if self.step < total_steps {
             self.step += 1;
         }
@@ -158,14 +160,31 @@ impl SignalTrace for WaveSignalTrace {
     }
 
     // Returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
+    fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue> {
         let key = PortKey {
             instance_id,
             pin_id: pin,
         };
-        let signal = self.wave.get_signal(self.port_map[&key]).unwrap();
-        let offset = signal.get_offset(self.step).unwrap();
+        let signal_ref = self
+            .port_map
+            .get(&key)
+            .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
+        let signal = self
+            .wave
+            .get_signal(*signal_ref)
+            .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
+        let offset = signal
+            .get_offset(self.step)
+            .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
         let value = signal.get_value_at(&offset, 0);
-        BitVecValue::from_bit_str(&value.to_bit_string().unwrap()).unwrap()
+        let bit_str = value
+            .to_bit_string()
+            .with_context(|| format!("Unable to convert {value} to bit-string"))?;
+        Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {
+            panic!(
+                "Unable to convert bit-string {bit_str} to BitVecValue, {:?}",
+                err
+            )
+        }))
     }
 }

@@ -1,0 +1,11 @@
+// ARGS: --verilog serv/rtl/serv_regfile.v --protocol serv/serv_regfile.prot 
+// Arguments to transaction are:
+// rs1_addr: u5
+// rs1_data: u32 (output)
+// rs2_data: u32 (output)
+// rs2_addr: u5
+// rd_enable: u1
+// rd_addr: u5
+// rd_data: u32
+read_write(0, 0, 0, 0, 1, 5, 0xdeadbeef);
+read_write(5, 0xdeadbeef, 0, 0, 0, 0, 0);

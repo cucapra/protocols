@@ -1,21 +1,21 @@
 ---
-source: src/typecheck.rs
+source: protocols/src/typecheck.rs
 expression: content
 ---
-warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+warning: Inferred RHS type as u32 from LHS type u32.
    ┌─ tests/multipliers/mul_invalid.prot:19:3
    │
 19 │   dut.a := X;
-   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-warning: Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+warning: Inferred RHS type as u32 from LHS type u32.
    ┌─ tests/multipliers/mul_invalid.prot:20:3
    │
 20 │   dut.b := X;
-   │   ^^^^^^^^^^^ Inferred RHS type as BitVec(32) from LHS type BitVec(32).
+   │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-error: Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+error: Cannot assign to function argument s. Try using assert_eq if you want to check the value of a transaction output.
    ┌─ tests/multipliers/mul_invalid.prot:22:3
    │
 22 │   s := dut.s;
-   │   ^^^^^^^^^^^ Cannot assign to function argument. Try using assert_eq if you want to check the value of a transaction output.
+   │   ^^^^^^^^^^^ Cannot assign to function argument s. Try using assert_eq if you want to check the value of a transaction output.

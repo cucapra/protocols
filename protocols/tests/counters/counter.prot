@@ -5,6 +5,10 @@ struct Counter {
     out s: u64,
 }
 
+// Update (11/9): this protocol is considered to be ill-formed
+// because the guard for the while-loop refer to an
+// input port of the DUT, which is forbidden (see `well-formedness.md`)
+
 fn count_up<dut: Counter>(in a: u64) {
     // Loading dut with values
     dut.a := a;
@@ -16,4 +20,7 @@ fn count_up<dut: Counter>(in a: u64) {
     // more should result with dut.0 equal 0
     step(1);
     assert_eq(dut.s, 64'b0);
+    
+    fork();
+    step();
 }

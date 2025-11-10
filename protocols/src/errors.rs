@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::diagnostic::{DiagnosticHandler, Level};
 use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
@@ -20,6 +21,8 @@ pub enum ExecutionError {
     Symbol(SymbolError),
     /// Assertion failures
     Assertion(AssertionError),
+    /// Reached the maximum number of steps
+    MaxStepsReached(u32),
 }
 
 /// Errors that occur during expression/statement evaluation
@@ -50,6 +53,16 @@ pub enum EvaluationError {
         end: u32,
         width: u32,
     },
+    /// (For monitor only) When the value of an expression on the RHS
+    /// of an assignment disagreess with the actual observed trace value
+    ValueDisagreesWithTrace {
+        expr_id: ExprId,
+        value: BitVecValue,
+        trace_value: BitVecValue,
+        symbol_id: SymbolId,
+        symbol_name: String,
+        cycle_count: u32,
+    },
 }
 
 /// Thread-specific execution errors
@@ -57,6 +70,13 @@ pub enum EvaluationError {
 pub enum ThreadError {
     /// Thread attempted to fork more than once
     DoubleFork {
+        thread_idx: usize,
+        transaction_name: String,
+        first_fork_stmt_id: StmtId,
+        second_fork_stmt_id: StmtId,
+    },
+    /// Thread called `fork()` before `step()`
+    ForkBeforeStep {
         thread_idx: usize,
         transaction_name: String,
         stmt_id: StmtId,
@@ -72,6 +92,22 @@ pub enum ThreadError {
     },
     /// Thread execution limit exceeded (for infinite loop protection)
     ExecutionLimitExceeded { max_steps: usize },
+    /// The thread finished executing without calling `fork()`
+    /// (it is required to make exactly one call to `fork()`)
+    FinishedWithoutFork {
+        thread_idx: usize,
+        transaction_name: String,
+    },
+    /// The last executed statement in the thread is not `step()`
+    /// (we explicitly require protocols to end with the
+    /// execution of a `step()` statement).
+    /// Note that the error message includes info
+    /// about what the actual last executed stmt was.
+    DidntEndWithStep {
+        thread_idx: usize,
+        transaction_name: String,
+        last_executed_stmt_id: StmtId,
+    },
 }
 
 /// Symbol resolution and mapping errors
@@ -115,6 +151,9 @@ impl fmt::Display for ExecutionError {
             ExecutionError::Thread(e) => write!(f, "Thread error: {}", e),
             ExecutionError::Symbol(e) => write!(f, "Symbol error: {}", e),
             ExecutionError::Assertion(e) => write!(f, "Assertion error: {}", e),
+            ExecutionError::MaxStepsReached(max_steps) => {
+                write!(f, "Reached the maximum number of steps: {max_steps}")
+            }
         }
     }
 }
@@ -122,6 +161,20 @@ impl fmt::Display for ExecutionError {
 impl fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EvaluationError::ValueDisagreesWithTrace {
+                expr_id,
+                value,
+                trace_value,
+                symbol_id,
+                symbol_name,
+                cycle_count,
+            } => {
+                write!(
+                    f,
+                    "Attempted to assign value {:?} (expr_id {}) to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
+                    value, expr_id, symbol_name, symbol_id, trace_value, cycle_count
+                )
+            }
             EvaluationError::DontCareOperation {
                 operation, context, ..
             } => {
@@ -173,6 +226,17 @@ impl fmt::Display for ThreadError {
                     thread_idx, transaction_name
                 )
             }
+            ThreadError::ForkBeforeStep {
+                thread_idx,
+                transaction_name,
+                ..
+            } => {
+                write!(
+                    f,
+                    "Thread {} (transaction '{}') called `fork()` before calling `step()`",
+                    thread_idx, transaction_name
+                )
+            }
             ThreadError::ConflictingAssignment {
                 symbol_name,
                 current_value,
@@ -188,6 +252,27 @@ impl fmt::Display for ThreadError {
             }
             ThreadError::ExecutionLimitExceeded { max_steps } => {
                 write!(f, "Threads exceeded execution limit of {} steps", max_steps,)
+            }
+            ThreadError::FinishedWithoutFork {
+                thread_idx,
+                transaction_name,
+            } => {
+                write!(
+                    f,
+                    "Thread {} (transaction '{}') is missing a call `fork()` (all threads must have exactly one `fork()` call)",
+                    thread_idx, transaction_name
+                )
+            }
+            ThreadError::DidntEndWithStep {
+                thread_idx,
+                transaction_name,
+                last_executed_stmt_id: _,
+            } => {
+                write!(
+                    f,
+                    "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)",
+                    thread_idx, transaction_name
+                )
             }
         }
     }
@@ -236,8 +321,59 @@ impl fmt::Display for AssertionError {
 
 // Convenience constructors
 impl ExecutionError {
-    pub fn double_fork(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
+    pub fn value_disagrees_with_trace(
+        expr_id: ExprId,
+        value: BitVecValue,
+        trace_value: BitVecValue,
+        symbol_id: SymbolId,
+        symbol_name: String,
+        cycle_count: u32,
+    ) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
+            expr_id,
+            value,
+            trace_value,
+            symbol_id,
+            symbol_name,
+            cycle_count,
+        })
+    }
+
+    pub fn finished_without_fork(thread_id: usize, transaction_name: String) -> Self {
+        ExecutionError::Thread(ThreadError::FinishedWithoutFork {
+            thread_idx: thread_id,
+            transaction_name,
+        })
+    }
+
+    pub fn didnt_end_with_step(
+        thread_id: usize,
+        transaction_name: String,
+        last_executed_stmt_id: StmtId,
+    ) -> Self {
+        ExecutionError::Thread(ThreadError::DidntEndWithStep {
+            thread_idx: thread_id,
+            transaction_name,
+            last_executed_stmt_id,
+        })
+    }
+
+    pub fn double_fork(
+        thread_id: usize,
+        transaction_name: String,
+        first_fork_stmt_id: StmtId,
+        second_fork_stmt_id: StmtId,
+    ) -> Self {
         ExecutionError::Thread(ThreadError::DoubleFork {
+            thread_idx: thread_id,
+            transaction_name,
+            first_fork_stmt_id,
+            second_fork_stmt_id,
+        })
+    }
+
+    pub fn fork_before_step(thread_id: usize, transaction_name: String, stmt_id: StmtId) -> Self {
+        ExecutionError::Thread(ThreadError::ForkBeforeStep {
             thread_idx: thread_id,
             transaction_name,
             stmt_id,
@@ -368,6 +504,9 @@ impl DiagnosticEmitter {
             ExecutionError::Assertion(assert_err) => {
                 Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
             }
+            ExecutionError::MaxStepsReached(_) => {
+                handler.emit_general_message(&format!("{error}"), Level::Error);
+            }
         }
     }
 
@@ -429,6 +568,20 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
+            EvaluationError::ValueDisagreesWithTrace {
+                expr_id,
+                value,
+                trace_value,
+                symbol_id,
+                symbol_name,
+                cycle_count,
+            } => {
+                let message = format!(
+                    "Attempted to assign {:?} to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
+                    value, symbol_name, symbol_id, trace_value, cycle_count
+                );
+                handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
+            }
         }
     }
 
@@ -442,13 +595,30 @@ impl DiagnosticEmitter {
             ThreadError::DoubleFork {
                 thread_idx,
                 transaction_name,
+                first_fork_stmt_id,
+                second_fork_stmt_id,
+            } => {
+                handler.emit_diagnostic_multi_stmt(
+                    transaction,
+                    &[*first_fork_stmt_id, *second_fork_stmt_id],
+                    &["first fork() called here", "second fork() called here"],
+                    &format!(
+                        "Thread {} (transaction '{}') attempted to fork more than once",
+                        thread_idx, transaction_name
+                    ),
+                    Level::Error,
+                );
+            }
+            ThreadError::ForkBeforeStep {
+                thread_idx,
+                transaction_name,
                 stmt_id,
             } => {
                 handler.emit_diagnostic_stmt(
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} (transaction '{}') attempted to fork more than once",
+                        "Thread {} (transaction '{}') called `fork()` before calling `step()`",
                         thread_idx, transaction_name
                     ),
                     Level::Error,
@@ -478,6 +648,36 @@ impl DiagnosticEmitter {
                 handler.emit_general_message(
                     &format!("Threads exceeded execution limit of {} steps", max_steps),
                     Level::Error,
+                );
+            }
+            ThreadError::FinishedWithoutFork {
+                thread_idx,
+                transaction_name,
+            } => {
+                handler.emit_general_message(
+                    &format!(
+                        "Thread {} (transaction '{}') missing a call to `fork()` (all threads must have exactly one call to `fork()`)", 
+                        thread_idx,
+                        transaction_name
+                    ),
+                    Level::Error
+                );
+            }
+            ThreadError::DidntEndWithStep {
+                thread_idx,
+                transaction_name,
+                last_executed_stmt_id,
+            } => {
+                handler.emit_diagnostic_multi_stmt(
+                    transaction,
+                    &[*last_executed_stmt_id],
+                    &["last statement wasn't `step()`"],
+                    &format!(
+                        "The last executed statement in Thread {} (transaction '{}') wasn't `step()` (all threads must end their execution with a call to `step()`)", 
+                        thread_idx,
+                        transaction_name
+                    ),
+                    Level::Error
                 );
             }
         }

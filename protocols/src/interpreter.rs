@@ -3,16 +3,19 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
 use crate::scheduler::Todo;
+use crate::serialize::serialize_type;
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::rngs::ThreadRng;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
 use std::collections::HashMap;
@@ -45,9 +48,21 @@ impl InputValue {
             InputValue::DontCare(bvv) => bvv,
         }
     }
+
+    /// Returns the bitwidth of an `InputValue`
+    pub fn bitwidth(&self) -> u32 {
+        self.value().width()
+    }
+
+    /// Creates a random `InputValue::DontCare` value with the specified `width`
+    /// using the `rng` provided
+    pub fn dont_care(mut rng: StdRng, width: u32) -> InputValue {
+        InputValue::DontCare(BitVecValue::random(&mut rng, width))
+    }
 }
 
-#[derive(PartialEq)]
+/// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
+#[derive(PartialEq, Debug, Clone)]
 pub enum ExprValue {
     Concrete(BitVecValue),
     DontCare,
@@ -69,7 +84,9 @@ pub struct Evaluator<'a> {
     input_vals: HashMap<SymbolId, InputValue>,
 
     assertions_enabled: bool,
-    rng: ThreadRng,
+
+    /// Random number generator used for generating random values for `DontCare`
+    rng: StdRng,
 }
 
 impl<'a> Evaluator<'a> {
@@ -139,7 +156,9 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        let mut rng = rand::rng();
+        // For simplicity, we initialize an RNG with the seed 0 when generating
+        // random values for `DontCare`s
+        let mut rng = StdRng::seed_from_u64(0);
 
         // Initialize the input pins with DontCares that are randomly assigned
         let mut input_vals = HashMap::new();
@@ -178,7 +197,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    // Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
+    /// Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
         args: HashMap<&str, BitVecValue>,
@@ -215,7 +234,8 @@ impl<'a> Evaluator<'a> {
         self.assertions_enabled = false;
     }
 
-    // step the simulator
+    // Steps the simulator, then modifies `input_vals` to be
+    // `OldValue`s or `DontCares`
     pub fn sim_step(&mut self) {
         self.sim.step();
 
@@ -461,6 +481,8 @@ impl<'a> Evaluator<'a> {
                         }
                         ExprValue::Concrete(new_val) => {
                             // no width check needed; guaranteed to be the same
+                            // Otherwise, if `current_val != new_value`,
+                            // report a `ConflictingAssignment` error
                             if !current_val.is_equal(&new_val) {
                                 return Err(ExecutionError::conflicting_assignment(
                                     *symbol_id,
@@ -562,6 +584,26 @@ impl<'a> Evaluator<'a> {
             ))
         } else {
             Ok(())
+        }
+    }
+
+    /// Resets all input pins to `DontCare` (i.e. randomizes their values)
+    pub fn reset_all_input_pins(&mut self) {
+        // Reset all input pins
+        for (input_pin, value) in self.input_vals.iter_mut() {
+            let symbol_table_entry = &self.st[input_pin];
+            let symbol_name = symbol_table_entry.full_name(self.st);
+            let ty = symbol_table_entry.tpe();
+
+            if let Type::BitVec(width) = ty {
+                *value = InputValue::dont_care(self.rng.clone(), width);
+            } else {
+                panic!(
+                    "Cannot set pin {} to DontCare as its type {} is not a BitVec",
+                    symbol_name,
+                    serialize_type(self.st, ty)
+                )
+            }
         }
     }
 }

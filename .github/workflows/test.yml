@@ -2,7 +2,10 @@ name: Protocols Tests
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 env:
   CARGO_TERM_COLOR: always
@@ -11,6 +14,7 @@ jobs:
   tests:
     name: Unit Tests
     runs-on: ubuntu-24.04
+    if: github.event.pull_request.draft == false
     strategy:
       matrix:
         toolchain:
@@ -22,17 +26,29 @@ jobs:
     - name: Update Rust to ${{ matrix.toolchain }}
       run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
     - uses: actions/checkout@v4
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
     - uses: YosysHQ/setup-oss-cad-suite@v3
       with:
         version: '2024-05-07'
     - name: Build
       run: cargo build --verbose
-    - name: Run tests (Debug)
+    - name: Run unit tests (Debug)
       run: cargo test --verbose
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+    - name: Install Turnt 
+      run: uv tool install turnt
+    - name: Run Turnt tests for interpreter
+      run: turnt --env interp $(find . -type f -name '*.tx') 
+    - name: Run Turnt tests for monitor 
+      run: turnt --env monitor $(find . -type f -name '*.prot')
 
   msrv:
     name: Check Minimum Rust Version for protocols library
     runs-on: ubuntu-24.04
+    if: github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/cache-cargo-install-action@v2
@@ -46,6 +62,7 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    if: github.event.pull_request.draft == false
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +72,7 @@ jobs:
     name: Clippy Lints
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    if: github.event.pull_request.draft == false
     env:
       # Pin Rust version to prevent new Clippy lints from breaking CI
       RUST_VERSION: "1.85.0"

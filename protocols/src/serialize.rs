@@ -4,12 +4,13 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::ir::*;
-use baa::BitVecOps;
-use std::io::Write;
+use crate::{interpreter::ExprValue, ir::*};
+use baa::{BitVecOps, BitVecValue};
+use itertools::Itertools;
+use std::{collections::HashMap, io::Write};
 
-/// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to a `String`
-pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Result<String> {
+/// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
+pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Result<String> {
     let mut out = Vec::new();
     serialize(&mut out, trs)?;
     let out = String::from_utf8(out).unwrap();
@@ -17,12 +18,22 @@ pub fn serialize_to_string(trs: Vec<(SymbolTable, Transaction)>) -> std::io::Res
 }
 
 /// Pretty prints a `type` with respect to the current `SymbolTable`
-fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
+pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
-        Type::BitVec(t) => "u".to_owned() + &t.to_string(),
+        Type::BitVec(t) => format!("u{}", t),
         Type::Struct(structid) => st[structid].name().to_owned(),
         Type::Unknown => "unknown".to_string(),
     }
+}
+
+/// Pretty-prints a `Field` with respect to the current `SymbolTable`
+pub fn serialize_field(st: &SymbolTable, field: &Field) -> String {
+    format!(
+        "{} {}: {}",
+        field.dir(),
+        field.name(),
+        serialize_type(st, field.tpe())
+    )
 }
 
 /// Pretty prints a `Direction`
@@ -45,11 +56,58 @@ impl std::fmt::Display for BinOp {
     }
 }
 
+/// Pretty-printer for `ExprValue`s
+impl std::fmt::Display for ExprValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprValue::Concrete(bit_vec_value) => write!(f, "{:?}", bit_vec_value),
+            ExprValue::DontCare => write!(f, "DontCare"),
+        }
+    }
+}
+
 /// Pretty-printer for `UnaryOp`s
 impl std::fmt::Display for UnaryOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "!")
     }
+}
+
+/// Serializes a bit-vector value. If `display_hex = true`,
+/// the bit-vector is printed in hexadecimal, otherwise it is displayed
+/// in decimal.
+pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
+    if display_hex {
+        format!("0x{}", bv.to_hex_str())
+    } else {
+        bv.to_dec_str()
+    }
+}
+
+/// Pretty-prints the arguments map, where `SymbolId`s are rendered using
+/// the corresponding string variable name according to the `SymbolTable`.
+/// When printing, we sort the keys by lexicographic order of variable names
+/// (to ensure a canonical serialization format).
+/// The `display_hex` argument indicates whether to display integer literals
+/// using hexadeimcal (if `false`, we default to using decimal).
+pub fn serialize_args_mapping(
+    args_mapping: &HashMap<SymbolId, BitVecValue>,
+    symbol_table: &SymbolTable,
+    display_hex: bool,
+) -> String {
+    args_mapping
+        .iter()
+        .sorted_by_key(|(symbol_id, _)| symbol_table[*symbol_id].name())
+        .map(|(symbol_id, value)| {
+            format!(
+                "({}) {}: {}",
+                symbol_id,
+                symbol_table[*symbol_id].name(),
+                serialize_bitvec(value, display_hex)
+            )
+        })
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 /// Pretty-prints an `Expression` (identified by its `ExprId`) using the current
@@ -77,6 +135,58 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
                 let j = idx2.to_string();
                 format!("{}[{}:{}]", e, i, j)
             }
+        }
+    }
+}
+
+/// Pretty-prints a `Statement` (identified by its `StmtId`) using the current
+/// `Transaction` and `SymbolTable`
+pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> String {
+    match &tr[stmt_id] {
+        Stmt::Block(stmt_ids) => {
+            // Only print the at most 2 statements in a block for brevity
+            let num_stmts = std::cmp::min(2, stmt_ids.len());
+            let formatted_stmts = stmt_ids[..num_stmts]
+                .iter()
+                .map(|stmt_id| serialize_stmt(tr, st, stmt_id))
+                .collect::<Vec<_>>()
+                .join("; ");
+            if num_stmts < 2 {
+                format!("{};", formatted_stmts)
+            } else {
+                format!("{{ {}; ... }}", formatted_stmts)
+            }
+        }
+        Stmt::Assign(symbol_id, expr_id) => {
+            format!(
+                "{} := {}",
+                st.full_name_from_symbol_id(symbol_id),
+                serialize_expr(tr, st, expr_id)
+            )
+        }
+        Stmt::Step => "step()".to_string(),
+        Stmt::Fork => "fork()".to_string(),
+        Stmt::While(expr_id, stmt_id) => {
+            format!(
+                "while {} {{ {} }}",
+                serialize_expr(tr, st, expr_id),
+                serialize_stmt(tr, st, stmt_id)
+            )
+        }
+        Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
+            format!(
+                "if {} {{ {} }} {{ {} }}",
+                serialize_expr(tr, st, expr_id),
+                serialize_stmt(tr, st, stmt_id1),
+                serialize_stmt(tr, st, stmt_id2)
+            )
+        }
+        Stmt::AssertEq(expr_id1, expr_id2) => {
+            format!(
+                "assert_eq({}, {})",
+                serialize_expr(tr, st, expr_id1),
+                serialize_expr(tr, st, expr_id2)
+            )
         }
     }
 }
@@ -171,15 +281,15 @@ pub fn serialize_structs(
 /// output buffer `out`
 pub fn serialize(
     out: &mut impl Write,
-    trs: Vec<(SymbolTable, Transaction)>,
+    trs: Vec<(Transaction, SymbolTable)>,
 ) -> std::io::Result<()> {
-    let (st, _) = &trs[0];
+    let (_, st) = &trs[0];
 
     if !st.struct_ids().is_empty() {
         serialize_structs(out, st, st.struct_ids())?;
     }
 
-    for (st, tr) in trs {
+    for (tr, st) in trs {
         write!(out, "fn {}", tr.name)?;
 
         if let Some(type_param) = tr.type_param {
@@ -405,7 +515,7 @@ pub mod tests {
         easycond.body = easycond.s(Stmt::Block(body));
         println!(
             "{}",
-            serialize_to_string(vec![(symbols, easycond)]).unwrap()
+            serialize_to_string(vec![(easycond, symbols)]).unwrap()
         );
     }
 }

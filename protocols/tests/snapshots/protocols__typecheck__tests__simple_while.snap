@@ -1,5 +1,9 @@
 ---
-source: src/typecheck.rs
+source: protocols/src/typecheck.rs
 expression: content
 ---
-
+error: b is a function argument, but conditions in if-statements / while-loops cannot mention function arguments
+   ┌─ tests/counters/simple_while.prot:10:22
+   │
+10 │     while !(dut.s == b) {
+   │                      ^ b is a function argument, but conditions in if-statements / while-loops cannot mention function arguments

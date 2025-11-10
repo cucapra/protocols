@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
 use log::info;
@@ -22,29 +23,31 @@ use patronus::system::TransitionSystem;
 
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
-type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
+pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
 
 /// A `TodoItem` corresponds to a function call in a transaction `.tx` file
 pub type TodoItem = (String, Vec<BitVecValue>);
 
-/// We pass in `TransactionInfo` to the interpreter when we want to execute
-/// a single statement
+/// A `TransactionInfo` is a triple of the form
+/// `(Transaction, SymbolTable, NextStmtMap)`.
+/// This is passed to the interpreter when we want to execute
+/// a single transaction.
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
 const MAX_ITERS: usize = 10000;
 
-/// A `Todo` is a function call to be executed. The fields of this struct are:
-/// - The associated `Transaction`
-/// - The associated `SymbolTable`
-/// - The associated argument values `args` (mapping variable names to their values)
-/// - The `NextStmtMap`
+/// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
+    /// The associated `Transaction`
     pub tr: &'a Transaction,
+    /// The associated `SymbolTable`
     pub st: &'a SymbolTable,
+    /// The associated argument values (a map from variable names to their values)
     pub args: ArgMap<'a>,
+    /// Maps each `StmtId` to an optional `StmtId` of the next statement
     pub next_stmt_map: NextStmtMap,
 }
 
@@ -70,18 +73,22 @@ impl<'a> Todo<'a> {
     }
 }
 
-/// Struct containing metadata associated with a `Thread`, specifically:
-/// - The corresponding `Todo` (function call to be executed)
-/// - The `StmtId` of the current step
-/// - The `StmtId` of the next step (if one exists)
-/// - Whether the thread `has_forked`
-/// - and the index of the `todo` (`todo_idx`)
+/// Struct containing metadata associated with a `Thread`
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
+    /// The corresponding `Todo` (function call to be executed)
     pub todo: Todo<'a>,
+    /// The `StmtId` of the current step
     pub current_step: StmtId,
+    /// The `StmtId` of the next step (if one exists)
     pub next_step: Option<StmtId>,
+    /// Whether the thread has `has_stepped` already
+    pub has_stepped: bool,
+    /// Whether the thread `has_forked` already
     pub has_forked: bool,
+    /// The `StmtId` of the previous fork (if one exists)
+    /// (This is used to allow more precise error messages for `DoubleFork` errors)
+    pub prev_fork_stmt_id: Option<StmtId>,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     pub todo_idx: usize,
 }
@@ -97,6 +104,8 @@ impl<'a> Thread<'a> {
             next_step: None,
             todo_idx,
             todo,
+            prev_fork_stmt_id: None,
+            has_stepped: false,
             has_forked: false,
         }
     }
@@ -116,17 +125,31 @@ pub enum StepResult<'a> {
     Error(usize /* thread_id */, ExecutionError),
 }
 
+/// The `Scheduler` struct contains metadata necessary for scheduling `Thread`s.
 pub struct Scheduler<'a> {
+    /// A `Vec` of `Transaction`s, along with their associated `SymbolTable`s
+    /// and `NextStmtMap`s
     irs: Vec<TransactionInfo<'a>>,
+    /// A list of `TodoItem`s to be executed (each element corresponds to
+    /// a function call in a `.tx` file)
     todos: Vec<TodoItem>,
-    /// Next index into `todos` to pull when we fork
+    /// The index of the next element in `todo`s to be executed when we `fork`
     next_todo_idx: usize,
+    /// A list of currently active threads
     active_threads: Vec<Thread<'a>>,
+    /// The scheduler's ready queue, storing all threads to be executed next
     next_threads: Vec<Thread<'a>>,
+    /// A list of inactive threads (threads that have finished execution)
     inactive_threads: Vec<Thread<'a>>,
-    step_count: i32,
+    /// The current scheduling cycle
+    step_count: u32,
+    /// The max no. of steps allowed in the interpreter
+    max_steps: u32,
+    /// The associated `Evaluator` (interpreter) for evaluating Protocols programs
     evaluator: Evaluator<'a>,
+    /// A `Vec` storing the `ExecutionResult`s of each thread
     results: Vec<ExecutionResult<()>>,
+    /// Handler for error diagnostics
     handler: &'a mut DiagnosticHandler,
 }
 
@@ -182,6 +205,7 @@ impl<'a> Scheduler<'a> {
         sys: &'a TransitionSystem,
         sim: Interpreter,
         handler: &'a mut DiagnosticHandler,
+        max_steps: u32,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
         let irs: Vec<TransactionInfo<'a>> = transactions_and_symbols
@@ -218,10 +242,11 @@ impl<'a> Scheduler<'a> {
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
-            step_count: 1,
+            step_count: 0,
             evaluator,
             results: vec![Ok(()); results_size],
             handler,
+            max_steps,
         }
     }
 
@@ -229,12 +254,14 @@ impl<'a> Scheduler<'a> {
     pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
         info!(
             "==== Starting scheduling cycle {}, active threads: {} ====",
-            self.step_count,
+            self.step_count + 1,
             self.active_threads.len()
         );
 
         while !self.active_threads.is_empty() {
-            // initially there are no previous values. we always need to cycle at least twice to check convergence, and the first time we will get a previous input val.
+            // initially there are no previous values.
+            // we always need to cycle at least twice to check convergence,
+            // and the first time we will get a previous input val.
             let mut previous_input_vals: Option<HashMap<SymbolId, InputValue>> = None;
             let mut active_input_vals: HashMap<SymbolId, InputValue>;
 
@@ -289,11 +316,8 @@ impl<'a> Scheduler<'a> {
             // achieved convergence, run one more time with assertions on
             info!("Achieved Convergence. Running once more with assertions enabled...");
             self.evaluator.enable_assertions();
+            // Disable forks when we run all threads till the next
             self.run_all_active_until_next_step(false);
-
-            // now that all threads are synchronized on the step, we can run step() on the sim
-            info!("Stepping...");
-            self.evaluator.sim_step();
 
             // Move each active thread into inactive or next
             while let Some(mut active_thread) = self.active_threads.pop() {
@@ -315,6 +339,10 @@ impl<'a> Scheduler<'a> {
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
+
+                        // Set all input pins to `DontCare` after a thread finishes
+                        self.evaluator.reset_all_input_pins();
+
                         self.inactive_threads.push(active_thread)
                     }
                 }
@@ -322,16 +350,24 @@ impl<'a> Scheduler<'a> {
 
             // setup the threads for the next cycle
             if !self.next_threads.is_empty() {
+                // advance simulation for next step
+                info!("Stepping...");
+                self.evaluator.sim_step();
+
                 info!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
                     self.next_threads.len()
                 );
                 self.active_threads = std::mem::take(&mut self.next_threads);
                 self.step_count += 1;
-                info!("Advancing to scheduling cycle: {}", self.step_count);
-                info!("Advancing to scheduling cycle: {}", self.step_count);
+                info!("Advancing to scheduling cycle: {}", self.step_count + 1);
+                if self.step_count >= self.max_steps {
+                    *(self.results.last_mut().unwrap()) =
+                        Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    // shut down execution by clearing all active threads
+                    self.active_threads.clear();
+                }
             } else {
-                info!("No more threads to schedule. Protocol execution complete.");
                 info!("No more threads to schedule. Protocol execution complete.");
             }
         }
@@ -394,6 +430,10 @@ impl<'a> Scheduler<'a> {
 
                     match thread.todo.tr[next_id] {
                         Stmt::Step => {
+                            // We've encountered a step, so set `has_stepped` to true
+                            if !thread.has_stepped {
+                                thread.has_stepped = true;
+                            }
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
                             return;
@@ -407,12 +447,27 @@ impl<'a> Scheduler<'a> {
                                 let error = ExecutionError::double_fork(
                                     thread.todo_idx,
                                     thread.todo.tr.name.clone(),
+                                    thread.prev_fork_stmt_id.expect("Forked multiple times but `prev_fork_stmt_id` field is `None`"),
+                                    next_id,
+                                );
+                                self.results[thread.todo_idx] = Err(error);
+                                thread.next_step = None;
+                                return;
+                            } else if !thread.has_stepped {
+                                info!(
+                                    "  ERROR: fork() called before step() in this thread, terminating thread"
+                                );
+                                thread.has_forked = true;
+                                let error = ExecutionError::fork_before_step(
+                                    thread.todo_idx,
+                                    thread.todo.tr.name.clone(),
                                     next_id,
                                 );
                                 self.results[thread.todo_idx] = Err(error);
                                 thread.next_step = None;
                                 return;
                             }
+
                             info!("  `Fork` at stmt_id {}, spawning new thread…", next_id);
                             match next_todo_option.clone() {
                                 Some(todo) => {
@@ -434,9 +489,12 @@ impl<'a> Scheduler<'a> {
                                 "  Marking thread {} (todo_idx {}) as having forked.",
                                 thread.todo.tr.name, thread.todo_idx
                             );
-                            thread.has_forked = true;
                             // continue from the fork point
                             current_stmt_id = next_id;
+                            // Update fields in the `Thread` struct that track whether
+                            // we've forked already
+                            thread.has_forked = true;
+                            thread.prev_fork_stmt_id = Some(next_id);
                         }
 
                         _ => {
@@ -448,7 +506,36 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    info!("  Execution complete, no more statements.");
+                    let thread_id = thread.todo_idx;
+                    let transaction_name = thread.todo.tr.name.clone();
+
+                    // Check if the last executed statement was `step()`
+                    if let Stmt::Step = thread.todo.tr[current_stmt_id] {
+                        if forks_enabled && !thread.has_forked {
+                            // Throw an error if forks are enabled but the
+                            // thread finished without making any calls to `fork()`
+                            info!(
+                                "  ERROR: thread did not make any calls to `fork()`, terminating thread"
+                            );
+                            let error =
+                                ExecutionError::finished_without_fork(thread_id, transaction_name);
+                            self.results[thread_id] = Err(error);
+                        } else {
+                            // Thread completed execution successfully
+                            info!("  Execution complete, no more statements.");
+                        }
+                    } else {
+                        // Last executed statement wasn't `step()`, report an error
+                        info!(
+                            " ERROR: Last executed statement in this thread wasn't `step()`, terminating thread"
+                        );
+                        let error = ExecutionError::didnt_end_with_step(
+                            thread_id,
+                            transaction_name,
+                            current_stmt_id,
+                        );
+                        self.results[thread_id] = Err(error);
+                    }
                     thread.next_step = None;
                     break;
                 }
@@ -481,598 +568,5 @@ impl<'a> Scheduler<'a> {
             }
             self.next_todo_idx += 1;
         }
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use crate::errors::{AssertionError, EvaluationError, ExecutionError, ThreadError};
-    use crate::setup::{assert_err, assert_ok, bv, setup_test_environment};
-
-    macro_rules! assert_assertion_error {
-        ($result:expr) => {
-            match $result {
-                Err(ExecutionError::Assertion(AssertionError::EqualityFailed { .. })) => {}
-                other => panic!("Expected AssertionError, got: {:?}", other),
-            }
-        };
-    }
-
-    macro_rules! assert_thread_error {
-        ($result:expr, $error_type:ident) => {
-            match $result {
-                Err(ExecutionError::Thread(ThreadError::$error_type { .. })) => {}
-                other => panic!(
-                    "Expected ThreadError::{}, got: {:?}",
-                    stringify!($error_type),
-                    other
-                ),
-            }
-        };
-    }
-
-    #[test]
-    fn test_scheduler_identity_d2_double_fork() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d2/identity_d2.v"],
-            "tests/identities/identity_d2/identity_d2.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // ERROR CASE: two_fork_err protocol
-        let mut todos = vec![(String::from("two_fork_err"), vec![bv(1, 32), bv(1, 32)])];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        match &results[0] {
-            Err(ExecutionError::Thread(ThreadError::DoubleFork {
-                thread_idx: thread_id,
-                ..
-            })) => {
-                assert_eq!(*thread_id, 0);
-            }
-            other => panic!("Expected DoubleFork error, got: {:?}", other),
-        }
-
-        // PASSING CASE: two_fork_ok protocol
-        todos[0] = (String::from("two_fork_ok"), vec![bv(1, 32), bv(1, 32)]);
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_identity_d1_implicit_fork() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d1/identity_d1.v"],
-            "tests/identities/identity_d1/identity_d1.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (String::from("implicit_fork"), vec![bv(1, 32), bv(1, 32)]),
-            (String::from("implicit_fork"), vec![bv(2, 32), bv(2, 32)]),
-            (String::from("implicit_fork"), vec![bv(3, 32), bv(4, 32)]),
-            (String::from("implicit_fork"), vec![bv(4, 32), bv(4, 32)]),
-        ];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-        assert_err(&results[2]);
-        assert_ok(&results[3]);
-        assert_assertion_error!(&results[2]);
-    }
-
-    #[test]
-    fn test_scheduler_identity_d1_slicing() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/identity_d1/identity_d1.v"],
-            "tests/identities/identity_d1/identity_d1.prot",
-            None,
-            handler,
-        );
-
-        let irs: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let mut todos = vec![
-            (String::from("slicing_ok"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_ok
-            (String::from("slicing_invalid"), vec![bv(1, 32), bv(1, 32)]), // transaction: slicing_invalid
-        ];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-
-        // Check that the failure is InvalidSlice
-        match &results[1] {
-            Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice { .. })) => {}
-            other => panic!("Expected invalid slice failure, got: {:?}", other),
-        }
-
-        // test slices that will result in an error because the widths of the slices are different
-        todos[1].0 = String::from("slicing_err"); // switch to running transaction slicing_err
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(irs.clone(), todos.clone(), &ctx, &sys, sim2, handler);
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_dual_identity() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/identities/dual_identity_d1/dual_identity_d1.v"],
-            "tests/identities/dual_identity_d1/dual_identity_d1.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // PASSING CASE: values of b agree
-        let mut todos = vec![
-            (String::from("one"), vec![bv(3, 64)]),
-            (String::from("two"), vec![bv(2, 64), bv(3, 64)]),
-        ];
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-
-        // FAILING CASE: values of b disagree
-        todos[1].1 = vec![bv(2, 64), bv(5, 64)];
-        let sim2 = patronus::sim::Interpreter::new(&ctx, &sys);
-        scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim2,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_err(&results[1]);
-        assert_assertion_error!(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_inverter() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/inverters/inverter_d0.v"],
-            "tests/inverters/inverter_d0.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(String::from("invert"), vec![bv(0, 1), bv(1, 1)])];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_err(&results[0]);
-        assert_thread_error!(&results[0], ConflictingAssignment);
-    }
-
-    #[test]
-    fn test_scheduler_counter() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/counters/counter.v"],
-            "tests/counters/counter.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(String::from("count_up"), vec![bv(10, 64)])];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_aes128() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["../examples/tinyaes128/aes_128.v"],
-            "../examples/tinyaes128/aes128.prot",
-            Some("aes_128".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        // Example taken from NIST FIPS 197
-        let todos = vec![
-            (
-                String::from("aes128"),
-                vec![
-                    BitVecValue::from_u128(0x000102030405060708090a0b0c0d0e0f, 128), // key
-                    BitVecValue::from_u128(0x00112233445566778899aabbccddeeff, 128), // state
-                    BitVecValue::from_u128(0x69c4e0d86a7b0430d8cdb78070b4c55a, 128), // expected output
-                ],
-            ),
-            (
-                String::from("aes128"),
-                vec![
-                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // key
-                    BitVecValue::from_u128(0x00000000000000000000000000000000, 128), // state
-                    BitVecValue::from_u128(0x66e94bd4ef8a2c3b884cfa59ca342b2e, 128), // expected output
-                ],
-            ),
-        ];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_register_file_write_read() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["../examples/serv/rtl/serv_regfile.v"],
-            "../examples/serv/serv_regfile.prot",
-            None,
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![
-            (
-                String::from("read_write"),
-                vec![
-                    bv(0, 5),           // rs1_addr: u5
-                    bv(0, 32),          // rs1_data: u32 (output)
-                    bv(0, 32),          // rs2_data: u32 (output)
-                    bv(0, 5),           // rs2_addr: u5
-                    bv(1, 1),           // rd_enable: u1
-                    bv(5, 5),           // rd_addr: u5
-                    bv(0xdeadbeef, 32), // rd_data: u32
-                ],
-            ),
-            (
-                String::from("read_write"),
-                vec![
-                    bv(5, 5),           // rs1_addr: u5
-                    bv(0xdeadbeef, 32), // rs1_data: u32 (output)
-                    bv(0, 32),          // rs2_data: u32 (output)
-                    bv(0, 5),           // rs2_addr: u5
-                    bv(0, 1),           // rd_enable: u1
-                    bv(0, 5),           // rd_addr: u5
-                    bv(0, 32),          // rd_data: u32
-                ],
-            ),
-        ];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
-    #[ignore] // FIXME: going into infinite loop
-    fn test_scheduler_picorv32_pcpi_mul() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["examples/picorv32/picorv32.v"],
-            "examples/picorv32/pcpi_mul.prot",
-            Some("picorv32_pcpi_mul".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("pcpi_mul"),
-            vec![
-                bv(10, 32),                            // rs1_data
-                bv(10, 32),                            // rs2_data
-                bv(100, 32),                           // rd_data
-                bv((0b0000001 << 25) | 0b0110011, 32), // instruction
-                bv(0, 1),                              // zero
-                bv(1, 1),                              // one
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-        assert_ok(&results[1]);
-    }
-
-    #[test]
-    fn test_scheduler_multi0() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/multi/multi0/multi0.v"],
-            "tests/multi/multi0/multi0.prot",
-            Some("multi0".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 32), // data_in
-                bv(10, 32), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_multi0keep() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/multi/multi0keep/multi0keep.v"],
-            "tests/multi/multi0keep/multi0keep.prot",
-            Some("multi0keep".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 32), // data_in
-                bv(10, 32), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_multi0keep2const() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec![
-                "tests/multi/multi0keep2const/multi0keep2const.v",
-                "tests/multi/multi0keep/multi0keep.v",
-            ],
-            "tests/multi/multi0keep2const/multi0keep2const.prot",
-            Some("multi0keep2const".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 64), // data_in
-                bv(10, 64), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_multi2const() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec![
-                "tests/multi/multi2const/multi2const.v",
-                "tests/multi/multi0/multi0.v",
-            ],
-            "tests/multi/multi2const/multi2const.prot",
-            Some("multi2const".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 64), // data_in
-                bv(10, 64), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_multi2multi() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec![
-                "tests/multi/multi2multi/multi2multi.v",
-                "tests/multi/multi0/multi0.v",
-            ],
-            "tests/multi/multi2multi/multi2multi.prot",
-            Some("multi2multi".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 64), // data_in
-                bv(10, 64), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
-    }
-
-    #[test]
-    fn test_scheduler_multi_data() {
-        let handler = &mut DiagnosticHandler::default();
-        let (parsed_data, ctx, sys) = setup_test_environment(
-            vec!["tests/multi/multi_data/multi_data.v"],
-            "tests/multi/multi_data/multi_data.prot",
-            Some("multi_data".to_string()),
-            handler,
-        );
-
-        let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
-            parsed_data.iter().map(|(tr, st)| (tr, st)).collect();
-
-        let todos = vec![(
-            String::from("multi"),
-            vec![
-                bv(10, 32), // data_in
-                bv(10, 32), // data_out
-            ],
-        )];
-
-        let sim = patronus::sim::Interpreter::new(&ctx, &sys);
-        let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
-            todos.clone(),
-            &ctx,
-            &sys,
-            sim,
-            handler,
-        );
-        let results: Vec<Result<(), ExecutionError>> = scheduler.execute_todos();
-        assert_ok(&results[0]);
     }
 }
