@@ -1,4 +1,4 @@
-module use_without_valid_bug (
+module use_without_valid_fix (
     input             clk,
     input   [31:0]    data,
     input             data_val,

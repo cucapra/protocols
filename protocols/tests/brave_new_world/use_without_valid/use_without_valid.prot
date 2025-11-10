@@ -13,4 +13,6 @@ fn use_without_valid<dut: UseWithoutValid>(in data: u32, out data_out: u32) {
     dut.data_val := 1'b1;
     step(1);
     assert_eq(data_out, dut.sum);
+    fork();
+    step(1);
 }
