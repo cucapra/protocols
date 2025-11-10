@@ -1,8 +1,6 @@
-error: Expected a to be a struct's output field,
-                but a is not a field of a struct
+error: a is a function argument, but conditions in if-statements / while-loops cannot mention function arguments
    ┌─ identities/identity_d2/two_fork_ill_formed.prot:16:9
    │
 16 │   if (!(a == 32'd0)) {
-   │         ^ Expected a to be a struct's output field,
-                but a is not a field of a struct
+   │         ^ a is a function argument, but conditions in if-statements / while-loops cannot mention function arguments
 

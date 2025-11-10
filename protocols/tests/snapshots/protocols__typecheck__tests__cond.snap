@@ -14,10 +14,8 @@ warning: Inferred RHS type as u32 from LHS type u32.
 20 │   dut.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-error: `dut.c` is not an input field of the struct `dut`
-                        (Only input fields are allowed to appear in assignments)
+error: `dut.c` is a output field of the struct `dut`, but only input fields are allowed to appear in assignments)
    ┌─ tests/multipliers/mult_cond.prot:30:3
    │
 30 │   dut.c := 1'b1;
-   │   ^^^^^^^^^^^^^^ `dut.c` is not an input field of the struct `dut`
-                        (Only input fields are allowed to appear in assignments)
+   │   ^^^^^^^^^^^^^^ `dut.c` is a output field of the struct `dut`, but only input fields are allowed to appear in assignments)

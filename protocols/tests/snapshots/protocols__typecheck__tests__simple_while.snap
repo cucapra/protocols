@@ -2,10 +2,8 @@
 source: protocols/src/typecheck.rs
 expression: content
 ---
-error: Expected b to be a struct's output field,
-                but b is not a field of a struct
+error: b is a function argument, but conditions in if-statements / while-loops cannot mention function arguments
    ┌─ tests/counters/simple_while.prot:10:22
    │
 10 │     while !(dut.s == b) {
-   │                      ^ Expected b to be a struct's output field,
-                but b is not a field of a struct
+   │                      ^ b is a function argument, but conditions in if-statements / while-loops cannot mention function arguments

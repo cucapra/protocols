@@ -65,11 +65,18 @@ pub fn check_if_symbol_is_dut_port(
             Err(anyhow!(error_msg))
         }
         (Some(_), None) => {
-            let error_msg = format!(
-                "Expected {} to be a struct's {}put field,
-                but {} is not a field of a struct",
-                symbol_full_name, direction, symbol_full_name
-            );
+            // The identifier doesn't have a parent,
+            // i.e. it is a function parameter (which is not allowed)
+            let error_msg = match lang_feature {
+                LangFeature::Assignments => format!(
+                    "Cannot assign to function argument {}. Try using assert_eq if you want to check the value of a transaction output.",
+                    symbol_full_name
+                ),
+                _ => format!(
+                    "{} is a function argument, but {} cannot mention function arguments",
+                    symbol_full_name, lang_feature
+                ),
+            };
             handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
@@ -85,7 +92,7 @@ pub fn check_if_symbol_is_dut_port(
 
                 // Fetch the names of all the DUT ports that have the desired
                 // direction, qualified by the name of the struct *instance*
-                let pins_with_desired_reiction = the_struct
+                let pins_with_desired_direction = the_struct
                     .get_fields_by_direction(direction)
                     .map(|field| format!("{}.{}", struct_name, field))
                     .collect::<Vec<String>>();
@@ -93,13 +100,12 @@ pub fn check_if_symbol_is_dut_port(
                 // If the identifier corresponds to a DUT port with the desired
                 // direction, the check passes,
                 // otherwise emit an error message
-                if pins_with_desired_reiction.contains(&symbol_full_name) {
+                if pins_with_desired_direction.contains(&symbol_full_name) {
                     Ok(())
                 } else {
                     let error_msg = format!(
-                        "`{}` is not an {}put field of the struct `{}`
-                        (Only {}put fields are allowed to appear in {})",
-                        symbol_full_name, direction, struct_name, direction, lang_feature
+                        "`{}` is a {}put field of the struct `{}`, but only {}put fields are allowed to appear in {})",
+                        symbol_full_name, !direction, struct_name, direction, lang_feature
                     );
                     handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))

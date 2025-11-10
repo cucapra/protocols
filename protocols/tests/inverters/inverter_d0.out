@@ -1,8 +1,6 @@
-error: `DUT.s` is not an input field of the struct `DUT`
-                        (Only input fields are allowed to appear in assignments)
+error: `DUT.s` is a output field of the struct `DUT`, but only input fields are allowed to appear in assignments)
   ┌─ inverters/inverter_d0.prot:7:12
   │
 7 │   DUT.a := DUT.s;
-  │            ^^^^^ `DUT.s` is not an input field of the struct `DUT`
-                        (Only input fields are allowed to appear in assignments)
+  │            ^^^^^ `DUT.s` is a output field of the struct `DUT`, but only input fields are allowed to appear in assignments)
 
