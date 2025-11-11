@@ -7,6 +7,7 @@
 
 use crate::diagnostic::{DiagnosticHandler, Level};
 use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
+use crate::serialize::serialize_bitvec;
 use baa::BitVecValue;
 use std::fmt;
 
@@ -171,8 +172,13 @@ impl fmt::Display for EvaluationError {
             } => {
                 write!(
                     f,
-                    "Attempted to assign value {:?} (expr_id {}) to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
-                    value, expr_id, symbol_name, symbol_id, trace_value, cycle_count
+                    "Attempted to assign value {} (expr_id {}) to {} (symbol_id {}) but the trace value {} at cycle {} is different",
+                    serialize_bitvec(value, false),
+                    expr_id,
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(trace_value, false),
+                    cycle_count
                 )
             }
             EvaluationError::DontCareOperation {

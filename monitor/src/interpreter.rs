@@ -36,7 +36,6 @@ impl Interpreter {
         next_stmt_map: NextStmtMap,
         args_mapping: HashMap<SymbolId, BitVecValue>,
     ) {
-        info!("Performing context switch...");
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
@@ -461,13 +460,17 @@ impl Interpreter {
         match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
-                info!(
-                    "`{}` evaluates to Concrete Value `{}`",
-                    serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
-                    serialize_bitvec(&rhs_value, ctx.display_hex)
-                );
+
                 match rhs_expr {
                     Expr::Const(_) | Expr::Sym(_) => {
+                        if let Expr::Sym(_) = rhs_expr {
+                            info!(
+                                "`{}` evaluates to Concrete Value `{}`",
+                                serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
+                                serialize_bitvec(&rhs_value, ctx.display_hex)
+                            );
+                        }
+
                         // If the `rhs` is a constant or an identifier,
                         // we compare it with the trace's value for the LHS
                         if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
