@@ -4,7 +4,7 @@ module counter (
     output reg [63:0] s
 );
     always @(posedge clk) begin
-        if (s > a) begin
+        if (s >= a) begin
             s <= 0; 
         end else begin
             s <= s + 1;

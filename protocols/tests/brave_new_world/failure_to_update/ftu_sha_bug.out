@@ -1,0 +1,6 @@
+error: The two expressions did not evaluate to the same value
+   ┌─ brave_new_world/failure_to_update/ftu_sha.prot:29:15
+   │
+29 │     assert_eq(dut.valid, 1'b0);
+   │               ^^^^^^^^^^^^^^^ LHS Value: ValueOwned(1), RHS Value: ValueOwned(0)
+

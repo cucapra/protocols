@@ -22,6 +22,10 @@ identities:
 multi:
   turnt --env interp $(find protocols/tests/multi -type f -name '*.tx')   
 
+# Only test the Brave New World examples
+brave:
+  turnt --env interp $(find protocols/tests/brave_new_world -type f -name '*.tx')  
+
 # Only test the `picorv` examples
 picorv:
   turnt --env interp $(find examples/picorv32 -type f -name '*.tx')
