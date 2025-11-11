@@ -228,9 +228,11 @@ impl Scheduler {
                 // an error. The reason is for protocols that currently end in
                 // `step(); fork(); step()` (to comply with the well-formedness
                 // constraints), there can be an edge case where a thread `t`
-                // started earlier has been paused (`t` in `next`), but all
-                // other threads started later have failed. In this case,
-                // we still need to try to run `t` since it has been paused.
+                // that started in an EARLIER cycle has been paused
+                // (i.e. `t` is in `next`), but all
+                // other threads started at the CURRENT `start_cycle` have failed.
+                // In this case, we still need to try to run `t` since it may
+                // succeed, even though all threads from the current cycle failed.
                 // (Example: `picorv32/unsigned_mul.prot`)
                 if failed.len() > 1
                     && finished.is_empty()
