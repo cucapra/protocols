@@ -79,6 +79,12 @@ pub struct Evaluator<'a> {
     args_mapping: HashMap<SymbolId, BitVecValue>,
     input_mapping: HashMap<SymbolId, ExprRef>,
     output_mapping: HashMap<SymbolId, Output>,
+    input_dependencies: HashMap<SymbolId, Vec<SymbolId>>,
+    output_dependencies: HashMap<SymbolId, Vec<SymbolId>>,
+
+    // tracks forbidden ports due to combinational dependencies
+    forbidden_inputs: Vec<SymbolId>,
+    forbidden_outputs: Vec<SymbolId>,
 
     // tracks the input pins and their values
     input_vals: HashMap<SymbolId, InputValue>,
@@ -112,8 +118,8 @@ impl<'a> Evaluator<'a> {
         let dut = tr.type_param.unwrap();
         let dut_symbols = &st.get_children(&dut);
 
-        let mut input_mapping = HashMap::new();
-        let mut output_mapping = HashMap::new();
+        let mut input_mapping: HashMap<SymbolId, ExprRef> = HashMap::new();
+        let mut output_mapping: HashMap<SymbolId, Output> = HashMap::new();
 
         for input in &sys.inputs {
             info!(
@@ -156,6 +162,61 @@ impl<'a> Evaluator<'a> {
             }
         }
 
+        // find the combinational cone of influence for each input
+        let mut output_dependencies: HashMap<SymbolId, Vec<SymbolId>> = HashMap::new();
+        let mut input_dependencies: HashMap<SymbolId, Vec<SymbolId>> = HashMap::new();
+
+        // initialize: keys are outputs -> output_dependencies, and inputs -> input_dependencies
+        for symbol_id in output_mapping.keys() {
+            output_dependencies.insert(*symbol_id, Vec::new());
+        }
+        for symbol_id in input_mapping.keys() {
+            input_dependencies.insert(*symbol_id, Vec::new());
+        }
+
+        for (out_sym, out) in output_mapping.clone() {
+            let input_exprs =
+                patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
+            // println!("{:?} {:?}", st[out_sym].name(), input_exprs.len());
+            for input_expr in input_exprs {
+                if let Some(input_sym) = input_mapping
+                    .iter()
+                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
+                {
+                    // println!("{:?}", input_sym.clone());
+                    if let Some(vec) = output_dependencies.get_mut(&out_sym) {
+                        vec.push(input_sym);
+                    }
+                    if let Some(vec) = input_dependencies.get_mut(&input_sym) {
+                        vec.push(out_sym.clone());
+                    }
+                }
+            }
+        }
+
+        // DEBUG
+        // for (out_sym, inputs) in &output_dependencies {
+        //     let out_name = st[out_sym].name();
+        //     let input_names: Vec<String> = inputs.iter().map(|s| st[s].name().to_string()).collect();
+        //     println!(
+        //         "Output '{}' ({:?}) depends on inputs: {:?}",
+        //         out_name,
+        //         out_sym,
+        //         input_names
+        //     );
+        // }
+
+        // for (in_sym, outputs) in &input_dependencies {
+        //     let in_name = st[in_sym].name();
+        //     let output_names: Vec<String> = outputs.iter().map(|s| st[s].name().to_string()).collect();
+        //     println!(
+        //         "Input '{}' ({:?}) affects outputs: {:?}",
+        //         in_name,
+        //         in_sym,
+        //         output_names
+        //     );
+        // }
+
         // For simplicity, we initialize an RNG with the seed 0 when generating
         // random values for `DontCare`s
         let mut rng = StdRng::seed_from_u64(0);
@@ -191,6 +252,10 @@ impl<'a> Evaluator<'a> {
             args_mapping,
             input_mapping,
             output_mapping,
+            input_dependencies,
+            output_dependencies,
+            forbidden_inputs: Vec::new(),
+            forbidden_outputs: Vec::new(),
             input_vals,
             assertions_enabled: false,
             rng,
@@ -220,6 +285,10 @@ impl<'a> Evaluator<'a> {
         self.st = todo.st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
         self.next_stmt_map = todo.next_stmt_map;
+
+        // during each context switch (in a non-fixed point approach), we're in a new cycle so we need to clear forbidden ports
+        self.forbidden_inputs = Vec::new();
+        self.forbidden_outputs = Vec::new();
     }
 
     pub fn input_vals(&self) -> HashMap<SymbolId, InputValue> {
@@ -263,12 +332,28 @@ impl<'a> Evaluator<'a> {
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(
+                    // FIXME: if we observe a dut input prot, nothing to do??
+                    return Ok(ExprValue::Concrete(
                         self.sim.get(*expr_ref).try_into().unwrap(),
-                    ))
+                    ));
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
+                    // if observing this output port is forbidden, error out
+                    // FIXME: make a new error type for this
+                    if self.forbidden_outputs.contains(sym_id) {
+                        return Err(ExecutionError::dont_care_operation(
+                            String::from("OBSERVED FORBIDDEN PORT"),
+                            String::from(""),
+                            *expr_id,
+                        ));
+                    }
+
+                    // if we observe a dut output port, restrict assignments to dependent input ports
+                    if let Some(deps) = self.input_dependencies.get(sym_id) {
+                        self.forbidden_inputs.extend(deps.iter().copied());
+                    }
+
                     Ok(ExprValue::Concrete(
-                        self.sim.get((output).expr).try_into().unwrap(),
+                        self.sim.get(output.expr).try_into().unwrap(),
                     ))
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(bvv.clone()))
@@ -447,6 +532,20 @@ impl<'a> Evaluator<'a> {
     ) -> ExecutionResult<()> {
         // FIXME: This should return a DontCare or a NewValue
         let expr_val = self.evaluate_expr(expr_id)?;
+
+        // if the symbol is a forbidden input, error out
+        if self.forbidden_inputs.contains(symbol_id) {
+            return Err(ExecutionError::dont_care_operation(
+                String::from("ASSIGNED FORBIDDEN PORT"),
+                String::from(""),
+                *expr_id,
+            ));
+        }
+
+        // otherwise, proceed with the assignment and forbid all dependent outputs
+        if let Some(deps) = self.output_dependencies.get(symbol_id) {
+            self.forbidden_outputs.extend(deps.iter().copied());
+        }
 
         // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
         // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
