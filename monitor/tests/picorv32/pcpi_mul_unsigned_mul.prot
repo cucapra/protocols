@@ -1,0 +1,50 @@
+// ARGS: --wave picorv32/unsigned_mul.fst --instances picorv32_pcpi_mul:picorv32_pcpi_mul
+struct picorv32_pcpi_mul {
+  in resetn: u1,
+  in pcpi_insn: u32,
+  in pcpi_rs1: u32,
+  in pcpi_rs2: u32,
+  out pcpi_wr: u1,
+  out pcpi_ready: u1,
+  in pcpi_valid: u1,
+  out pcpi_rd: u32,
+}
+
+fn pcpi_mul<p: picorv32_pcpi_mul>(
+    in rs1_data: u32,
+    in rs2_data: u32,
+    out rd_data: u32,
+    in insn: u32,
+  ) {
+  p.resetn := 1'b1;
+  p.pcpi_valid := 1'b1;
+  p.pcpi_insn := insn;
+  p.pcpi_rs1 := rs1_data;
+  p.pcpi_rs2 := rs2_data;
+  
+  assert_eq(p.pcpi_wr, 1'b0);
+  assert_eq(p.pcpi_ready, 1'b0);
+
+  while (!(p.pcpi_ready == 1'b1)) {
+    step();
+  }
+
+  p.pcpi_valid := 1'b0;
+  p.pcpi_insn := X;
+  p.pcpi_rs1 := X;
+  p.pcpi_rs2 := X;
+
+  assert_eq(p.pcpi_wr, 1'b1);
+  assert_eq(p.pcpi_rd, rd_data);
+
+  step();
+  fork();
+  step();
+}
+
+fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
+  p.resetn := 1'b0;
+  step();
+  fork();
+  step();
+}

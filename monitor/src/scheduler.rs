@@ -222,7 +222,23 @@ impl Scheduler {
                 let failed = threads_with_start_time(&self.failed, start_cycle);
                 let finished = threads_with_start_time(&self.finished, start_cycle);
                 let paused = threads_with_start_time(&self.next, start_cycle);
-                if failed.len() > 1 && finished.is_empty() && paused.is_empty() {
+
+                // We also need to check whether the `next` queue contains
+                // any threads (regardless of their start time) before emitting
+                // an error. The reason is for protocols that currently end in
+                // `step(); fork(); step()` (to comply with the well-formedness
+                // constraints), there can be an edge case where a thread `t`
+                // that started in an EARLIER cycle has been paused
+                // (i.e. `t` is in `next`), but all
+                // other threads started at the CURRENT `start_cycle` have failed.
+                // In this case, we still need to try to run `t` since it may
+                // succeed, even though all threads from the current cycle failed.
+                // (Example: `picorv32/unsigned_mul.prot`)
+                if failed.len() > 1
+                    && finished.is_empty()
+                    && paused.is_empty()
+                    && self.next.is_empty()
+                {
                     return Err(anyhow!(
                         "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
                         start_cycle,
@@ -350,10 +366,12 @@ impl Scheduler {
                                 thread.thread_id
                             );
                             for (transaction, symbol_table) in &self.possible_transactions {
+                                // Note: we use the new transaction's
+                                // `next_stmt_mapping` when creating a new thread
                                 let new_thread = Thread::new(
                                     transaction.clone(),
                                     symbol_table.clone(),
-                                    thread.next_stmt_map.clone(),
+                                    transaction.next_stmt_mapping(),
                                     &self.ctx,
                                     self.num_threads,
                                     self.cycle_count,
@@ -391,10 +409,10 @@ impl Scheduler {
                     self.finished.push(thread.clone());
                     break;
                 }
-                Err(e) => {
+                Err(err) => {
                     info!(
-                        "Thread {:?} encountered error {}, adding to `failed` queue",
-                        thread.thread_id, e
+                        "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
+                        thread.thread_id, thread.transaction.name, err
                     );
                     self.failed.push(thread);
                     self.print_scheduler_state();
