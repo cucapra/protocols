@@ -353,7 +353,7 @@ impl Scheduler {
                                 let new_thread = Thread::new(
                                     transaction.clone(),
                                     symbol_table.clone(),
-                                    thread.next_stmt_map.clone(),
+                                    transaction.next_stmt_mapping(),
                                     &self.ctx,
                                     self.num_threads,
                                     self.cycle_count,

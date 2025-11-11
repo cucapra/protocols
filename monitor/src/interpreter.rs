@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -334,16 +334,6 @@ impl Interpreter {
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
                 self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
-
-                info!(
-                    "Assignment finished, next stmt is {:?}",
-                    self.next_stmt_map[stmt_id],
-                );
-
-                if let None = self.next_stmt_map[stmt_id] {
-                    info!("next_stmt_map = {:?}", self.next_stmt_map)
-                }
-
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
