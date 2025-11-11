@@ -65,20 +65,44 @@ pub fn check_if_symbol_is_dut_port(
             Err(anyhow!(error_msg))
         }
         (Some(_), None) => {
-            // The identifier doesn't have a parent,
-            // i.e. it is a function parameter (which is not allowed)
-            let error_msg = match lang_feature {
-                LangFeature::Assignments => format!(
-                    "Cannot assign to function argument {}. Try using assert_eq if you want to check the value of a transaction output.",
-                    symbol_full_name
-                ),
-                _ => format!(
-                    "{} is a function argument, but {} cannot mention function arguments",
-                    symbol_full_name, lang_feature
-                ),
-            };
-            handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
-            Err(anyhow!(error_msg))
+            // The identifier doesn't have a parent, so we need to
+            // perform more granular analysis before emitting the error message
+            match lang_feature {
+                // Function parameters are not allowed to appear in assignments
+                LangFeature::Assignments => {
+                    let error_msg = format!(
+                        "Cannot assign to function argument {}. Try using assert_eq if you want to check the value of a transaction output.",
+                        symbol_full_name
+                    );
+                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+                LangFeature::Assertions => {
+                    // Only output parameters are allowed in assertions
+                    let is_output_param = tr.is_param_with_direction(symbol_id, Dir::Out);
+                    if is_output_param {
+                        Ok(())
+                    } else {
+                        // Output parameters to functions are forbidden in assertions
+                        let error_msg = format!(
+                            "`{}` is an input parameter of the function `{}`, but `{}` cannot mention input parameters",
+                            symbol_full_name, tr.name, lang_feature
+                        );
+                        handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
+                }
+                LangFeature::Conditionals => {
+                    // Input/output parameters of functions are not allowed
+                    // to appear in conditions
+                    let error_msg = format!(
+                        "{} is a function argument, but {} cannot mention function arguments",
+                        symbol_full_name, lang_feature
+                    );
+                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            }
         }
         (Some(struct_id), Some(parent_symbol_id)) => {
             // Check whether the name of the identifier corresponds
@@ -138,7 +162,7 @@ pub fn check_condition_wf(
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
             // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_correct_direction(*symbol_id, Dir::Out) {
+            if tr.is_param_with_direction(*symbol_id, Dir::Out) {
                 Ok(())
             } else {
                 // Check if the identifier is a DUT output port
@@ -179,12 +203,12 @@ pub fn check_assertion_arg_wf(
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
-    let rhs_expr = &tr[expr_id];
-    match rhs_expr {
+    let expr = &tr[expr_id];
+    match expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
             // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_correct_direction(*symbol_id, Dir::Out) {
+            if tr.is_param_with_direction(*symbol_id, Dir::Out) {
                 Ok(())
             } else {
                 // Check if the identifier is a DUT output port
@@ -265,20 +289,44 @@ pub fn check_assignment_rhs_wf(
             Err(anyhow!(error_msg))
         }
         Expr::Sym(symbol_id) => {
-            // Check if the identifier is an input parameter of the function
-            if tr.is_param_with_correct_direction(*symbol_id, Dir::In) {
+            // The only kind of identifier which is allowed on
+            // the RHS of an assignment is an input parameter
+            // All other kinds of identifiers are forbidden
+            if tr.is_param_with_direction(*symbol_id, Dir::In) {
                 Ok(())
             } else {
-                // Check if the identifier is a DUT input port
-                check_if_symbol_is_dut_port(
-                    *symbol_id,
-                    Dir::In,
-                    LocationId::Expr(*rhs_expr_id),
-                    tr,
-                    symbol_table,
-                    handler,
-                    LangFeature::Assignments,
-                )
+                // Output parameters are not allowed to appear on the RHS of assignments
+                if tr.is_param_with_direction(*symbol_id, Dir::Out) {
+                    let error_msg = format!(
+                        "`{}` is an output parameter of the function `{}`, but output parameters are not allowed to appear on the RHS of assignments",
+                        serialize_expr(tr, symbol_table, rhs_expr_id),
+                        tr.name
+                    );
+                    handler.emit_diagnostic_expr(tr, rhs_expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                } else {
+                    // Only output fields of structs are allowed to appear on the RHS of assignments
+                    if symbol_table[symbol_id].parent().is_some() {
+                        check_if_symbol_is_dut_port(
+                            *symbol_id,
+                            Dir::Out,
+                            LocationId::Expr(*rhs_expr_id),
+                            tr,
+                            symbol_table,
+                            handler,
+                            LangFeature::Assignments,
+                        )
+                    } else {
+                        // Generic error message for invalid identifiers
+                        // (e.g. the user referred to a non-existent variable)
+                        let error_msg = format!(
+                            "Invalid identifier {} on the RHS of an assignment",
+                            symbol_table[symbol_id].name()
+                        );
+                        handler.emit_diagnostic_expr(tr, rhs_expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
+                }
             }
         }
         Expr::Binary(BinOp::Concat, expr_id1, expr_id2) => {

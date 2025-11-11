@@ -19,7 +19,7 @@ RHS ::= rhs_expr
    | rhs_expr[i:j]          (bit-slice)
    | rhs_expr ++ rhs_expr   (where `++` is concatenation)
 
-rhs_expr ::= DUT input port | input parameter to a function | constant
+rhs_expr ::= input parameter to a function | constant
 ```
 - We also permit `LHS := X`, where `LHS` still a DUT input port & `X` is a distinguished `DontCare` symbol 
 that indicates the value of `LHS` is irrelevant at the current cycle.

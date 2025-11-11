@@ -252,8 +252,11 @@ impl fmt::Display for ThreadError {
             } => {
                 write!(
                     f,
-                    "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
-                    thread_idx, symbol_name, current_value, new_value
+                    "Thread {} attempted conflicting assignment to '{}': current={}, new={}",
+                    thread_idx,
+                    symbol_name,
+                    serialize_bitvec(current_value, false),
+                    serialize_bitvec(new_value, false)
                 )
             }
             ThreadError::ExecutionLimitExceeded { max_steps } => {

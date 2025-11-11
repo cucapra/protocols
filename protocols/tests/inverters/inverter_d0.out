@@ -1,6 +1,6 @@
-error: `DUT.s` is a output field of the struct `DUT`, but only input fields are allowed to appear in assignments)
-  ┌─ inverters/inverter_d0.prot:7:12
+error: Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(11111111111111111111111111111111), new=ValueOwned(00000000000000000000000000000000)
+  ┌─ inverters/inverter_d0.prot:7:3
   │
 7 │   DUT.a := DUT.s;
-  │            ^^^^^ `DUT.s` is a output field of the struct `DUT`, but only input fields are allowed to appear in assignments)
+  │   ^^^^^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(11111111111111111111111111111111), new=ValueOwned(00000000000000000000000000000000)
 
