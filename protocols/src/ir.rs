@@ -179,7 +179,7 @@ impl Transaction {
 
     /// Determines if `symbol_id` is a function parameter with the desired `direction`
     /// (e.g. check if an identifier corresponds to an input parameter of the function)
-    pub fn is_param_with_correct_direction(&self, symbol_id: SymbolId, direction: Dir) -> bool {
+    pub fn is_param_with_direction(&self, symbol_id: SymbolId, direction: Dir) -> bool {
         self.get_parameters_by_direction(direction)
             .contains(&symbol_id)
     }
