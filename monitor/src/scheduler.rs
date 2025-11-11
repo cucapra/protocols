@@ -350,6 +350,8 @@ impl Scheduler {
                                 thread.thread_id
                             );
                             for (transaction, symbol_table) in &self.possible_transactions {
+                                // Note: we use the new transaction's
+                                // `next_stmt_mapping` when creating a new thread
                                 let new_thread = Thread::new(
                                     transaction.clone(),
                                     symbol_table.clone(),
