@@ -3,7 +3,7 @@ use crate::scheduler::TodoItem;
 use crate::{diagnostic::*, setup::bv};
 use anyhow::anyhow;
 use baa::BitVecValue;
-use pest::{error::InputLocation, iterators::Pair, Parser};
+use pest::{Parser, error::InputLocation, iterators::Pair};
 use pest_derive::Parser;
 use rustc_hash::FxHashMap;
 

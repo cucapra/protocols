@@ -8,7 +8,6 @@
 use baa::BitVecValue;
 use log::info;
 use rustc_hash::FxHashMap;
-use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;

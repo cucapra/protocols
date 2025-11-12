@@ -8,7 +8,7 @@ use crate::{interpreter::ExprValue, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
-use std::{collections::HashMap, io::Write};
+use std::io::Write;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
 pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Result<String> {
