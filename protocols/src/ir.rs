@@ -3,9 +3,11 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
 
@@ -162,16 +164,24 @@ impl Transaction {
         arg_types
     }
 
-    /// Retrieves the `SymbolId`s of all the output parameters of a transaction,
-    /// returning an `Iterator`
-    pub fn get_output_param_symbols(&self) -> impl Iterator<Item = SymbolId> {
-        self.args.iter().filter_map(|arg| {
-            if arg.dir == Dir::Out {
+    /// Retrieves the `SymbolId`s of all the parameters of a transaction
+    /// that have a specified `direction`,
+    /// returning an `Iterator` over the `SymbolId`s of the parameters
+    pub fn get_parameters_by_direction(&self, direction: Dir) -> impl Iterator<Item = SymbolId> {
+        self.args.iter().filter_map(move |arg| {
+            if arg.dir == direction {
                 Some(arg.symbol)
             } else {
                 None
             }
         })
+    }
+
+    /// Determines if `symbol_id` is a function parameter with the desired `direction`
+    /// (e.g. check if an identifier corresponds to an input parameter of the function)
+    pub fn is_param_with_direction(&self, symbol_id: SymbolId, direction: Dir) -> bool {
+        self.get_parameters_by_direction(direction)
+            .contains(&symbol_id)
     }
 
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
@@ -247,6 +257,19 @@ pub enum Dir {
     Out,
 }
 
+/// Implementing the `Not` trait allows us to use the unary negation operator
+/// on the `Dir` type, e.g. `!In = Out`
+impl std::ops::Not for Dir {
+    type Output = Dir;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Dir::In => Dir::Out,
+            Dir::Out => Dir::In,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Type {
     BitVec(u32),
@@ -256,6 +279,11 @@ pub enum Type {
 }
 
 impl Type {
+    /// Checks whether two types are *equivalent*,
+    /// i.e. if two bit-vector types have the same length,
+    /// or if two `struct`s have the same `StructId`.
+    /// NB: this function returns `false` if either type is `Unknown`,
+    /// or if any of the aforementioned cases don't hold.
     pub fn is_equivalent(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
@@ -285,6 +313,16 @@ pub enum Stmt {
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct ExprId(u32);
 entity_impl!(ExprId, "expr");
+
+/// Enum representing a location in the IR that can be
+/// either an expression or a statement.
+/// (This is used in generic error-reporting functions that can
+/// accept both `ExprId`s & `StmtId`s.)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LocationId {
+    Expr(ExprId),
+    Stmt(StmtId),
+}
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BinOp {
@@ -370,9 +408,27 @@ impl Struct {
     pub fn pins(&self) -> &Vec<Field> {
         &self.pins
     }
+
+    /// Retrieves the names of all the fields of a `Struct` that
+    /// have a given `direction` (either `Dir::In` or `Dir::Out`),
+    /// returning an `Iterator` of field name `String`s.
+    /// (Note: the names returned here are *not* fully-qualified -- instead
+    /// it is the caller's responsibility to qualify the field names
+    /// by the name of the struct *instance*. We do not do this in this
+    /// method as we only have access to the name of the *struct type*
+    /// here, as opposed to the name of the *struct instance*.)
+    pub fn get_fields_by_direction(&self, direction: Dir) -> impl Iterator<Item = String> {
+        self.pins.iter().filter_map(move |field| {
+            if field.dir == direction {
+                Some(field.name.clone())
+            } else {
+                None
+            }
+        })
+    }
 }
 
-/// Datatype representing A `Field` in a `Struct`, contains:
+/// Datatype representing a `Field` in a `Struct`, contains:
 /// - The name of the field
 /// - The direction (`In` or `Out`)
 /// - The `Type` of the field
@@ -391,7 +447,6 @@ impl Field {
     pub fn name(&self) -> &str {
         &self.name
     }
-
     pub fn dir(&self) -> Dir {
         self.dir
     }

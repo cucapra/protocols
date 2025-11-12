@@ -1,0 +1,6 @@
+error: The two expressions did not evaluate to the same value
+   ┌─ brave_new_world/bit_truncation/bit_truncation_fft.prot:10:15
+   │
+10 │     assert_eq(data_out, dut.output_data);
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^ LHS Value: ValueOwned(11111111111), RHS Value: ValueOwned(00000000000)
+

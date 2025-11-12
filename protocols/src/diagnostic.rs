@@ -116,24 +116,27 @@ pub struct DiagnosticHandler {
     /// `no_error_locations` indicates whether to suppress location info
     /// (i.e. `fileid` and `Label`s) in error messages
     no_error_locations: bool,
+    /// `emit_warnings` indicates whether to emit warning-level diagnostics
+    emit_warnings: bool,
 }
 
 impl Default for DiagnosticHandler {
-    /// Default `DiagnosticHandler` does not emit colored error messages
-    /// and includes location info in error locations
+    /// Default `DiagnosticHandler` does not emit colored error messages,
+    /// includes location info in error locations, and emits warnings
     fn default() -> Self {
-        Self::new(ColorChoice::Never, false)
+        Self::new(ColorChoice::Never, false, true)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new(color_choice: ColorChoice, error_locations: bool) -> Self {
+    pub fn new(color_choice: ColorChoice, error_locations: bool, emit_warnings: bool) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: HashSet::new(),
             error_string: String::new(),
             color_choice,
             no_error_locations: error_locations,
+            emit_warnings,
         }
     }
 
@@ -173,6 +176,10 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         // need to check errors to avoid recursive duplication of error message
         if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
             return;
@@ -209,6 +216,10 @@ impl DiagnosticHandler {
         pair: &Pair<'_, R>,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         let start = pair.as_span().start();
         let end = pair.as_span().end();
         let buffer = &mut self.create_buffer();
@@ -238,6 +249,10 @@ impl DiagnosticHandler {
         end: usize,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         let buffer = &mut self.create_buffer();
         let label = Label {
             message: Some(message.to_string()),
@@ -265,6 +280,10 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         // need to check errors to avoid recursive duplication of error message
         if !self.reported_errs.insert(ErrorKey::StmtKey(*stmt_id)) {
             return;
@@ -288,6 +307,25 @@ impl DiagnosticHandler {
             let error_msg = String::from_utf8_lossy(buffer.as_slice());
             self.error_string.push_str(&error_msg);
             print!("{}", error_msg);
+        }
+    }
+
+    /// Emits a diagnostic message for either an expression or a statement
+    /// based on the `LocationId` variant
+    pub fn emit_diagnostic(
+        &mut self,
+        tr: &Transaction,
+        location_id: &LocationId,
+        message: &str,
+        level: Level,
+    ) {
+        match location_id {
+            LocationId::Expr(expr_id) => {
+                self.emit_diagnostic_expr(tr, expr_id, message, level);
+            }
+            LocationId::Stmt(stmt_id) => {
+                self.emit_diagnostic_stmt(tr, stmt_id, message, level);
+            }
         }
     }
 
@@ -372,6 +410,10 @@ impl DiagnosticHandler {
     }
 
     pub fn emit_general_message(&mut self, message: &str, level: Level) {
+        // Skip warnings if emit_warnings is false
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
         let buffer = &mut self.create_buffer();
         let diagnostic = Diagnostic {
             title: format!("{:?}", level),

@@ -1,0 +1,19 @@
+// ARGS: --wave tinyaes128/aes128.fst --instances aes_128:TinyAES128 --display-hex
+struct TinyAES128 {
+  in key: u128,
+  in state: u128,
+  out out: u128,
+}
+
+fn aes128<dut : TinyAES128>(in key: u128, in state: u128, out out: u128) {
+  dut.state := state;
+  dut.key := key;
+  step();
+  fork();
+  dut.state := X;
+  dut.key := X;
+  // twenty cycles to complete
+  step(20);
+  assert_eq(dut.out, out);
+  step();
+}

@@ -1,3 +1,3 @@
-// ARGS: --verilog identities/identity_d1/identity_d1.v --protocol identities/identity_d1/identity_d1.prot
-// RETURN: 101
+// ARGS: --verilog identities/identity_d1/identity_d1.v --protocol identities/identity_d1/slicing_invalid.prot
+// RETURN: 1
 slicing_invalid(1, 1);

@@ -1,0 +1,2 @@
+// ARGS: --verilog=brave_new_world/bit_truncation/bit_truncation_fft_fix.v --protocol=brave_new_world/bit_truncation/bit_truncation_fft.prot --module round11_rne_unsigned_fixed
+bit_truncation_fft(8386560, 2047);

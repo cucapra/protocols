@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -363,8 +363,10 @@ impl Interpreter {
                         let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
                         let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
 
-                        let out_params: Vec<SymbolId> =
-                            self.transaction.get_output_param_symbols().collect();
+                        let out_params: Vec<SymbolId> = self
+                            .transaction
+                            .get_parameters_by_direction(Dir::Out)
+                            .collect();
                         for out_param_symbol in out_params {
                             if out_param_symbol == symbol_id1 {
                                 info!("{} is an output param of the transaction", name1);
@@ -459,13 +461,17 @@ impl Interpreter {
         match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
-                info!(
-                    "`{}` evaluates to Concrete Value `{}`",
-                    serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
-                    serialize_bitvec(&rhs_value, ctx.display_hex)
-                );
+
                 match rhs_expr {
                     Expr::Const(_) | Expr::Sym(_) => {
+                        if let Expr::Sym(_) = rhs_expr {
+                            info!(
+                                "`{}` evaluates to Concrete Value `{}`",
+                                serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
+                                serialize_bitvec(&rhs_value, ctx.display_hex)
+                            );
+                        }
+
                         // If the `rhs` is a constant or an identifier,
                         // we compare it with the trace's value for the LHS
                         if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {

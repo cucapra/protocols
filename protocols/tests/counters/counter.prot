@@ -5,6 +5,10 @@ struct Counter {
     out s: u64,
 }
 
+// Update (11/9): this protocol is considered to be ill-formed
+// because the guard for the while-loop refer to an
+// input port of the DUT, which is forbidden (see `well-formedness.md`)
+
 fn count_up<dut: Counter>(in a: u64) {
     // Loading dut with values
     dut.a := a;
@@ -12,9 +16,9 @@ fn count_up<dut: Counter>(in a: u64) {
     while !(dut.s == dut.a) {
         step(1);
     }
-    // now, dut.s == dut.a. we want s > a (one step), and
-    // then, if we step once more, dut.s should equal 0
-    step(2);
+    // now, dut.s == dut.a. Since s >= a, stepping once
+    // more should result with dut.0 equal 0
+    step(1);
     assert_eq(dut.s, 64'b0);
     
     fork();

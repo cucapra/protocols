@@ -1,6 +1,6 @@
-error: Invalid slice operation: [15:31] on width 32
-   ┌─ identities/identity_d1/identity_d1.prot:47:13
+error: Invalid slice operation: [15:31] on width 32 (MSB 15 is less than LSB 31, which is the other way round)
+   ┌─ identities/identity_d1/slicing_invalid.prot:11:13
    │
-47 │   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices!
-   │             ^ Invalid slice operation: [15:31] on width 32
+11 │   assert_eq(s[15:31], DUT.s[15:31]); // illegal slices! (should be `s[31:15]`)
+   │             ^^^^^^^^ Invalid slice operation: [15:31] on width 32 (MSB 15 is less than LSB 31, which is the other way round)
 

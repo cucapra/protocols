@@ -1,0 +1,6 @@
+error: `dut.b` is a input field of the struct `dut`, but only output fields are allowed to appear in conditions in if-statements / while-loops)
+   ┌─ identities/dual_identity_d1/dual_identity_d1.prot:43:9
+   │
+43 │     if (dut.b == b) {
+   │         ^^^^^ `dut.b` is a input field of the struct `dut`, but only output fields are allowed to appear in conditions in if-statements / while-loops)
+

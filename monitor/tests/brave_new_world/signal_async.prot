@@ -1,0 +1,20 @@
+// ARGS: --wave brave_new_world/signal_async.fst --instances signal_async_fix:SignalAsyncSpec
+struct SignalAsyncSpec {
+    in request: u1,
+    in input_data: u32, 
+    out final_resp: u32,
+    out final_resp_valid: u1,
+}
+
+fn signal_async<dut: SignalAsyncSpec>(in data_in: u32, out data_out: u32) {
+    dut.request := 1'b0;
+    step(1);
+    dut.request := 1'b1;
+    dut.input_data := data_in;
+    while !(dut.final_resp_valid) {
+        step(1);
+    }
+    assert_eq(data_out, dut.final_resp);
+    fork();
+    step();
+}

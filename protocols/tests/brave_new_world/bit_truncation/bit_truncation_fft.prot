@@ -1,0 +1,13 @@
+// corresponds with tests/brave_new_world/bit_truncation/bit_truncation_fft_{bug,fix}.tx
+struct BitTruncationFFT {
+    in input_data: u27,
+    out output_data: u11,
+}
+
+fn bit_truncation_fft<dut: BitTruncationFFT>(in data_in: u27, out data_out: u11) {
+    dut.input_data := data_in;
+    step();
+    assert_eq(data_out, dut.output_data);
+    fork();
+    step();
+}
