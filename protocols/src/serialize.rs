@@ -7,6 +7,7 @@
 use crate::{interpreter::ExprValue, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
+use rustc_hash::FxHashMap;
 use std::{collections::HashMap, io::Write};
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
@@ -91,7 +92,7 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
 /// The `display_hex` argument indicates whether to display integer literals
 /// using hexadeimcal (if `false`, we default to using decimal).
 pub fn serialize_args_mapping(
-    args_mapping: &HashMap<SymbolId, BitVecValue>,
+    args_mapping: &FxHashMap<SymbolId, BitVecValue>,
     symbol_table: &SymbolTable,
     display_hex: bool,
 ) -> String {

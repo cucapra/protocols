@@ -3,9 +3,9 @@ use crate::scheduler::TodoItem;
 use crate::{diagnostic::*, setup::bv};
 use anyhow::anyhow;
 use baa::BitVecValue;
-use pest::{Parser, error::InputLocation, iterators::Pair};
+use pest::{error::InputLocation, iterators::Pair, Parser};
 use pest_derive::Parser;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Parser)]
 #[grammar = "transactions.pest"]
@@ -16,7 +16,7 @@ struct TransactionsParser;
 pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-    transaction_arg_types: HashMap<String, Vec<Type>>,
+    transaction_arg_types: FxHashMap<String, Vec<Type>>,
 ) -> anyhow::Result<Vec<TodoItem>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;

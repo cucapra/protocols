@@ -2,14 +2,13 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use std::collections::HashMap;
-
 use baa::BitVecValue;
 use protocols::{
     ir::{StmtId, SymbolId, SymbolTable, Transaction},
     scheduler::NextStmtMap,
     serialize::serialize_stmt,
 };
+use rustc_hash::FxHashMap;
 
 use crate::global_context::GlobalContext;
 
@@ -36,11 +35,11 @@ pub struct Thread {
     pub next_stmt_map: NextStmtMap,
 
     /// Map storing the inferred values for the input and output arguments
-    pub args_mapping: HashMap<SymbolId, BitVecValue>,
+    pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
 
     /// Maps each `SymbolId` to a bit-string,
     /// where the `i`-th bit is 1 if it is known & 0 otherwise
-    pub known_bits: HashMap<SymbolId, BitVecValue>,
+    pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
     /// The current statement in the `Transaction`, identified by its `StmtId`
     pub current_stmt_id: StmtId,
@@ -82,8 +81,8 @@ impl Thread {
             thread_id,
             transaction: transaction.clone(),
             next_stmt_map,
-            args_mapping: HashMap::new(),
-            known_bits: HashMap::new(),
+            args_mapping: FxHashMap::default(),
+            known_bits: FxHashMap::default(),
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,

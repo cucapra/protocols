@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -9,6 +9,7 @@ use protocols::{
     scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };
+use rustc_hash::FxHashMap;
 
 use crate::{
     global_context::GlobalContext,
@@ -19,8 +20,8 @@ pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
-    pub args_mapping: HashMap<SymbolId, BitVecValue>,
-    pub known_bits: HashMap<SymbolId, BitVecValue>,
+    pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
+    pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
@@ -36,8 +37,8 @@ impl Interpreter {
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
-        args_mapping: HashMap<SymbolId, BitVecValue>,
-        known_bits: HashMap<SymbolId, BitVecValue>,
+        args_mapping: FxHashMap<SymbolId, BitVecValue>,
+        known_bits: FxHashMap<SymbolId, BitVecValue>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
@@ -65,8 +66,8 @@ impl Interpreter {
         ctx: &GlobalContext,
         trace_cycle_count: u32,
     ) -> Self {
-        let mut args_mapping = HashMap::new();
-        let mut known_bits = HashMap::new();
+        let mut args_mapping = FxHashMap::default();
+        let mut known_bits = FxHashMap::default();
 
         for port_key in ctx.trace.port_map.keys() {
             // We assume that there is only one `Instance` at the moment
