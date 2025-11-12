@@ -20,6 +20,7 @@ pub struct Interpreter {
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
     pub args_mapping: HashMap<SymbolId, BitVecValue>,
+    pub known_bits: HashMap<SymbolId, BitVecValue>,
 
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
@@ -28,18 +29,21 @@ pub struct Interpreter {
 
 impl Interpreter {
     /// Performs a context switch in the `Interpreter` by setting its
-    /// `Transaction`, `SymbolTable` and `args_mapping` to the specified arguments
+    /// `Transaction`, `SymbolTable`, `args_mapping`
+    /// and `known_bits` to the specified arguments
     pub fn context_switch(
         &mut self,
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
         args_mapping: HashMap<SymbolId, BitVecValue>,
+        known_bits: HashMap<SymbolId, BitVecValue>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
         self.args_mapping = args_mapping;
+        self.known_bits = known_bits;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -62,6 +66,7 @@ impl Interpreter {
         trace_cycle_count: u32,
     ) -> Self {
         let mut args_mapping = HashMap::new();
+        let mut known_bits = HashMap::new();
 
         for port_key in ctx.trace.port_map.keys() {
             // We assume that there is only one `Instance` at the moment
@@ -78,7 +83,12 @@ impl Interpreter {
                     err
                 )
             });
+            let bitwidth = current_value.width();
             args_mapping.insert(*pin_id, current_value);
+
+            // Insert a bitstring of all `1`s into `known_bits`,
+            // with length equal to the bit-width of `current_value`
+            known_bits.insert(*pin_id, BitVecValue::ones(bitwidth));
         }
 
         info!(
@@ -86,12 +96,15 @@ impl Interpreter {
             serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
         );
 
+        info!("initial known_bits:\n{:?}", known_bits);
+
         Self {
             transaction: transaction.clone(),
             symbol_table,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
             trace_cycle_count,
+            known_bits,
         }
     }
 

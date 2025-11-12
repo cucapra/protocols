@@ -327,10 +327,16 @@ impl Scheduler {
             symbol_table,
             next_stmt_map,
             args_mapping,
+            known_bits,
             ..
         } = thread.clone();
-        self.interpreter
-            .context_switch(transaction, symbol_table, next_stmt_map, args_mapping);
+        self.interpreter.context_switch(
+            transaction,
+            symbol_table,
+            next_stmt_map,
+            args_mapping,
+            known_bits,
+        );
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
