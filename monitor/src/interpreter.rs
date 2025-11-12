@@ -36,7 +36,6 @@ impl Interpreter {
         next_stmt_map: NextStmtMap,
         args_mapping: HashMap<SymbolId, BitVecValue>,
     ) {
-        info!("Performing context switch...");
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
@@ -511,53 +510,35 @@ impl Interpreter {
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
                 let expr = &self.transaction[rhs_expr_id];
-                match expr {
-                    Expr::Sym(rhs_symbol_id) => {
-                        let symbol_name =
-                            self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
+                if let Expr::Sym(rhs_symbol_id) = expr {
+                    let symbol_name =
+                        self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
+                    info!(
+                        "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
+                        symbol_name, rhs_symbol_id
+                    );
+                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        self.args_mapping
+                            .insert(*rhs_symbol_id, trace_value.clone());
                         info!(
-                            "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
-                            symbol_name, rhs_symbol_id
+                            "Updated args_mapping to map {} |-> {}",
+                            symbol_name,
+                            serialize_bitvec(&trace_value, ctx.display_hex)
                         );
-                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
-                            self.args_mapping
-                                .insert(*rhs_symbol_id, trace_value.clone());
-                            info!(
-                                "Updated args_mapping to map {} |-> {}",
-                                symbol_name,
-                                serialize_bitvec(&trace_value, ctx.display_hex)
-                            );
-                            Ok(())
-                        } else {
-                            Err(ExecutionError::symbol_not_found(
-                                *lhs_symbol_id,
-                                symbol_name,
-                                "trace".to_string(),
-                                *rhs_expr_id,
-                            ))
-                        }
+                        Ok(())
+                    } else {
+                        Err(ExecutionError::symbol_not_found(
+                            *lhs_symbol_id,
+                            symbol_name,
+                            "trace".to_string(),
+                            *rhs_expr_id,
+                        ))
                     }
-                    Expr::Slice(expr_id, start, end) => {
-                        println!(
-                            "Current args mapping: {}",
-                            serialize_args_mapping(
-                                &self.args_mapping,
-                                &self.symbol_table,
-                                ctx.display_hex
-                            )
-                        );
-
-                        todo!(
-                            "Unhandled expr pattern {}[{}:{}] which results in SymbolNotFound error",
-                            serialize_expr(&self.transaction, &self.symbol_table, expr_id),
-                            start,
-                            end
-                        );
-                    }
-                    _ => todo!(
+                } else {
+                    todo!(
                         "Unhandled expr pattern {} which results in SymbolNotFound error",
                         serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
-                    ),
+                    )
                 }
             }
             Err(e) => todo!("Unhandled error {}", e),
