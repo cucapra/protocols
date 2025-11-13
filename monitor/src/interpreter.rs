@@ -615,10 +615,13 @@ impl Interpreter {
                                         // Update `known_bits` with `rhs_symbol_id |-> known_mask`
                                         self.known_bits.insert(*rhs_symbol_id, known_mask.clone());
 
+                                        let slice_width = msb - lsb + 1;
                                         info!(
                                             "Updated known_bits to map {} |-> {}",
                                             symbol_name,
-                                            known_mask.to_bit_str()
+                                            known_mask
+                                                .zero_extend(width - slice_width)
+                                                .to_bit_str()
                                         );
 
                                         Ok(())
