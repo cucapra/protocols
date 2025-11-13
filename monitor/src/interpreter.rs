@@ -572,7 +572,7 @@ impl Interpreter {
                             ))
                         }
                     }
-                    Expr::Slice(rhs_expr_id, _, _) => {
+                    Expr::Slice(rhs_expr_id, msb, lsb) => {
                         let rhs_expr = &self.transaction[rhs_expr_id];
                         match rhs_expr {
                             Expr::Sym(rhs_symbol_id) => {
@@ -582,9 +582,17 @@ impl Interpreter {
                                     "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
                                     symbol_name, rhs_symbol_id
                                 );
-                                if let Ok(_trace_value) =
+
+                                // Look up the trace value corresponding
+                                // to the LHS
+                                if let Ok(trace_value) =
                                     ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
                                 {
+                                    // Slice the value we get from the trace,
+                                    // then insert it into the args_mapping
+                                    let sliced_value = trace_value.slice(*msb, *lsb);
+                                    self.args_mapping.insert(*rhs_symbol_id, sliced_value);
+
                                     // TODO: actually perform the bit-slice
                                     // before updating the args_mapping
 
@@ -599,9 +607,15 @@ impl Interpreter {
                                     ))
                                 }
                             }
-                            _ => todo!(
-                                "Illegal bit-slice operation, figure out what error to emit here"
-                            ),
+                            _ => {
+                                // Illegal bit-slice operation
+                                // (this will already have been caught by the type-checker)
+                                Err(ExecutionError::arithmetic_error(
+                                    "BITSLICE".to_string(),
+                                    "Invalid bitslice operation".to_string(),
+                                    *rhs_expr_id,
+                                ))
+                            }
                         }
                     }
                     _ => {
