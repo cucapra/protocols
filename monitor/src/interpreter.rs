@@ -255,21 +255,72 @@ impl Interpreter {
                     )),
                 }
             }
-            Expr::Slice(expr_id, msb, lsb) => {
-                let expr_val = self.evaluate_expr(expr_id, ctx)?;
+            Expr::Slice(sliced_expr_id, msb, lsb) => {
+                let sliced_expr = &self.transaction[sliced_expr_id];
+
+                // Before evaluating the slice, we first need to
+                // check whether all bits in the slice are currently known
+                // (i.e. are set to 1 in `self.known_bits`)
+                if let Expr::Sym(sliced_symbol_id) = sliced_expr {
+                    let symbol_name = self.symbol_table[sliced_symbol_id].name();
+
+                    // Check whether `[msb:lsb]` are all 1s in the
+                    // known-bits map
+                    if let Some(known_bits) = self.known_bits.get(sliced_symbol_id) {
+                        let all_bits_known_in_slice =
+                            (*lsb..=*msb).all(|idx| known_bits.is_bit_set(idx));
+                        if !all_bits_known_in_slice {
+                            // Some bits in the slice are not known yet,
+                            // so we report an error
+                            return Err(ExecutionError::symbol_not_found(
+                                *sliced_symbol_id,
+                                symbol_name.to_string(),
+                                format!(
+                                    "known_bits (some bits in slice {}[{}:{}] are not yet known)",
+                                    symbol_name, msb, lsb
+                                ),
+                                *sliced_expr_id,
+                            ));
+                        }
+                    } else {
+                        // Report an error since we are trying to slice
+                        // a `symbol_id` where the provenance of the bits
+                        // is unknown (i.e. it is absent from `self.known_bits`)
+                        return Err(ExecutionError::symbol_not_found(
+                            *sliced_symbol_id,
+                            symbol_name.to_string(),
+                            "known_bits".to_string(),
+                            *sliced_expr_id,
+                        ));
+                    }
+                } else {
+                    return Err(ExecutionError::arithmetic_error(
+                        "BITSLICE".to_string(),
+                        "Illegal bitslice operation".to_string(),
+                        *sliced_expr_id,
+                    ));
+                }
+
+                let expr_val = self.evaluate_expr(sliced_expr_id, ctx)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => {
                         let width = bvv.width();
+                        // Check whether `msb` & `lsb` are in bounds
                         if *msb < width && *lsb <= *msb {
                             Ok(ExprValue::Concrete(bvv.slice(*msb, *lsb)))
                         } else {
-                            Err(ExecutionError::invalid_slice(*expr_id, *msb, *lsb, width))
+                            Err(ExecutionError::invalid_slice(
+                                *sliced_expr_id,
+                                *msb,
+                                *lsb,
+                                width,
+                            ))
                         }
                     }
                     ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
                         "slice".to_string(),
                         "slice expression".to_string(),
-                        *expr_id,
+                        *sliced_expr_id,
                     )),
                 }
             }
@@ -625,6 +676,11 @@ impl Interpreter {
                         if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
                             self.args_mapping
                                 .insert(*rhs_symbol_id, trace_value.clone());
+                            info!(
+                                "Updated args_mapping to map {} |-> {}",
+                                symbol_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex)
+                            );
 
                             // All the bits are known, so we insert a bit-string of
                             // all 1s into the `known_bits` map
@@ -635,11 +691,6 @@ impl Interpreter {
                             self.known_bits
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
 
-                            info!(
-                                "Updated args_mapping to map {} |-> {}",
-                                symbol_name,
-                                serialize_bitvec(&trace_value, ctx.display_hex)
-                            );
                             Ok(())
                         } else {
                             Err(ExecutionError::symbol_not_found(
