@@ -537,47 +537,80 @@ impl Interpreter {
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
-                if let Expr::Sym(rhs_symbol_id) = rhs_expr {
-                    let symbol_name =
-                        self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
-                    info!(
-                        "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
-                        symbol_name, rhs_symbol_id
-                    );
-                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
-                        self.args_mapping
-                            .insert(*rhs_symbol_id, trace_value.clone());
-
-                        // All the bits are known, so we insert a bit-string of
-                        // all 1s into the `known_bits` map
-                        // From type-checking, we know that the bitwidth of the
-                        // LHS & RHS must be the same (otherwise the type-checker
-                        // would have rejected the program)
-                        let width = trace_value.width();
-                        self.known_bits
-                            .insert(*rhs_symbol_id, BitVecValue::ones(width));
-
+                match rhs_expr {
+                    Expr::Sym(rhs_symbol_id) => {
+                        let symbol_name =
+                            self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
                         info!(
-                            "Updated args_mapping to map {} |-> {}",
-                            symbol_name,
-                            serialize_bitvec(&trace_value, ctx.display_hex)
+                            "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
+                            symbol_name, rhs_symbol_id
                         );
-                        Ok(())
-                    } else {
-                        Err(ExecutionError::symbol_not_found(
-                            *lhs_symbol_id,
-                            symbol_name,
-                            "trace".to_string(),
-                            *rhs_expr_id,
-                        ))
+                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                            self.args_mapping
+                                .insert(*rhs_symbol_id, trace_value.clone());
+
+                            // All the bits are known, so we insert a bit-string of
+                            // all 1s into the `known_bits` map
+                            // From type-checking, we know that the bitwidth of the
+                            // LHS & RHS must be the same (otherwise the type-checker
+                            // would have rejected the program)
+                            let width = trace_value.width();
+                            self.known_bits
+                                .insert(*rhs_symbol_id, BitVecValue::ones(width));
+
+                            info!(
+                                "Updated args_mapping to map {} |-> {}",
+                                symbol_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex)
+                            );
+                            Ok(())
+                        } else {
+                            Err(ExecutionError::symbol_not_found(
+                                *lhs_symbol_id,
+                                symbol_name,
+                                "trace".to_string(),
+                                *rhs_expr_id,
+                            ))
+                        }
                     }
-                } else if let Expr::Slice(_, _, _) = rhs_expr {
-                    todo!("handle case when RHS is a bit-slice that we've not seen before")
-                } else {
-                    todo!(
-                        "Unhandled expr pattern {} which results in SymbolNotFound error",
-                        serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
-                    )
+                    Expr::Slice(rhs_expr_id, _, _) => {
+                        let rhs_expr = &self.transaction[rhs_expr_id];
+                        match rhs_expr {
+                            Expr::Sym(rhs_symbol_id) => {
+                                let symbol_name =
+                                    self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
+                                info!(
+                                    "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
+                                    symbol_name, rhs_symbol_id
+                                );
+                                if let Ok(_trace_value) =
+                                    ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
+                                {
+                                    // TODO: actually perform the bit-slice
+                                    // before updating the args_mapping
+
+                                    // TODO: update known_bits
+                                    Ok(())
+                                } else {
+                                    Err(ExecutionError::symbol_not_found(
+                                        *lhs_symbol_id,
+                                        symbol_name,
+                                        "trace".to_string(),
+                                        *rhs_expr_id,
+                                    ))
+                                }
+                            }
+                            _ => todo!(
+                                "Illegal bit-slice operation, figure out what error to emit here"
+                            ),
+                        }
+                    }
+                    _ => {
+                        todo!(
+                            "Unhandled expr pattern {} which results in SymbolNotFound error",
+                            serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
+                        )
+                    }
                 }
             }
             Err(e) => todo!("Unhandled error {}", e),
