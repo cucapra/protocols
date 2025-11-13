@@ -473,11 +473,11 @@ impl Interpreter {
         match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
-
-                // TODO: need to handle assigning to a known bit-slice
-
                 match rhs_expr {
                     Expr::Const(_) | Expr::Sym(_) => {
+                        // We only print out the following log for the case
+                        // where a variable evaluates to a value, since the
+                        // constant case is trivial
                         if let Expr::Sym(_) = rhs_expr {
                             info!(
                                 "`{}` evaluates to Concrete Value `{}`",
@@ -523,8 +523,86 @@ impl Interpreter {
                             ))
                         }
                     }
-                    Expr::Slice(_, _, _) => {
-                        todo!("Handle case when RHS is a bit-slice that evaluates to a value")
+                    Expr::Slice(sliced_expr_id, msb, lsb) => {
+                        // In this case, we are taking a bitslice
+                        // of an identifier that we've previously seen before
+                        // (i.e. the identifier exists as a key
+                        // in the `args_mapping`)
+
+                        let sliced_expr = &self.transaction[sliced_expr_id];
+                        match sliced_expr {
+                            Expr::Sym(sliced_symbol_id) => {
+                                let symbol_name = &self.symbol_table[sliced_symbol_id].name();
+                                info!(
+                                    "`{}`[{}:{}] evaluates to Concrete Value `{}`",
+                                    symbol_name,
+                                    msb,
+                                    lsb,
+                                    serialize_bitvec(&rhs_value, ctx.display_hex)
+                                );
+
+                                // Compare `rhs_value` (the value that
+                                // `slice_expr[msb:lsb]` evaluates to)
+                                // with the actual trace value
+                                // (Note that we don't need to perform any
+                                // further bit-slicing here, since we've
+                                // already evaluated `slice_expr[msb:lsb]`
+
+                                if let Ok(trace_value) =
+                                    ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
+                                {
+                                    // If they're different, we report an error
+                                    if rhs_value != trace_value {
+                                        Err(ExecutionError::value_disagrees_with_trace(
+                                            *rhs_expr_id,
+                                            rhs_value,
+                                            trace_value,
+                                            *lhs_symbol_id, // Use LHS symbol for error reporting
+                                            lhs.to_string(),
+                                            self.trace_cycle_count,
+                                        ))
+                                    } else {
+                                        // The value matches the trace data,
+                                        // so all we have to do is update
+                                        // `known_bits` for `sliced_symbol_id`
+                                        // by setting bits `[msb:lsb]` to 1
+                                        let known_mask = self
+                                            .known_bits
+                                            .get_mut(sliced_symbol_id)
+                                            .unwrap_or_else(|| {
+                                                panic!(
+                                                    "Missing entry in `known_bits` for {}",
+                                                    symbol_name
+                                                )
+                                            });
+                                        for idx in *lsb..=*msb {
+                                            known_mask.set_bit(idx);
+                                        }
+                                        Ok(())
+                                    }
+                                } else {
+                                    info!(
+                                        "Unable to find value for `{}` in trace at cycle {:?}",
+                                        lhs, self.trace_cycle_count
+                                    );
+                                    Err(ExecutionError::symbol_not_found(
+                                        *lhs_symbol_id,
+                                        lhs.to_string(),
+                                        "trace".to_string(),
+                                        *rhs_expr_id,
+                                    ))
+                                }
+                            }
+                            _ => {
+                                // Illegal bit-slice operation
+                                // (this will already have been caught by the type-checker)
+                                Err(ExecutionError::arithmetic_error(
+                                    "BITSLICE".to_string(),
+                                    "Illegal bitslice operation".to_string(),
+                                    *rhs_expr_id,
+                                ))
+                            }
+                        }
                     }
                     _ => todo!(
                         "Unhandled expr pattern {} which evaluates to {}",
@@ -572,12 +650,12 @@ impl Interpreter {
                             ))
                         }
                     }
-                    Expr::Slice(rhs_expr_id, msb, lsb) => {
-                        let rhs_expr = &self.transaction[rhs_expr_id];
-                        match rhs_expr {
-                            Expr::Sym(rhs_symbol_id) => {
-                                let symbol_name =
-                                    self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
+                    Expr::Slice(sliced_expr_id, msb, lsb) => {
+                        let sliced_expr = &self.transaction[sliced_expr_id];
+                        match sliced_expr {
+                            Expr::Sym(sliced_symbol_id) => {
+                                let symbol_name = self.symbol_table[sliced_symbol_id]
+                                    .full_name(&self.symbol_table);
                                 info!(
                                     "RHS of assignment is a bit-slice on an identifier `{}[{}:{}]` where `{}` is not in the args_mapping (adding it now...)",
                                     symbol_name, msb, lsb, symbol_name
@@ -588,12 +666,12 @@ impl Interpreter {
                                 if let Ok(trace_value) =
                                     ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
                                 {
-                                    // Look up the width of `rhs_symbol_id`
+                                    // Look up the width of `sliced_symbol_id`
                                     // based on its type in the `SymbolTable`.
                                     // Call this the `expected_width` (the width
                                     // is dictated by the type)
                                     let expected_width =
-                                        self.symbol_table[rhs_symbol_id].tpe().bitwidth();
+                                        self.symbol_table[sliced_symbol_id].tpe().bitwidth();
                                     info!("{} has type u{}", symbol_name, expected_width);
 
                                     // The `learned_value` is the `trace_value`,
@@ -608,7 +686,7 @@ impl Interpreter {
                                     // We will later update `self.known_bits`
                                     // to track which bits are valid to use
                                     self.args_mapping
-                                        .insert(*rhs_symbol_id, learned_value.clone());
+                                        .insert(*sliced_symbol_id, learned_value.clone());
 
                                     info!(
                                         "Updated args_mapping to map {} |-> {} (0b{})",
@@ -627,7 +705,8 @@ impl Interpreter {
                                         known_mask.set_bit(idx);
                                     }
                                     // Update `known_bits` with `rhs_symbol_id |-> known_mask`
-                                    self.known_bits.insert(*rhs_symbol_id, known_mask.clone());
+                                    self.known_bits
+                                        .insert(*sliced_symbol_id, known_mask.clone());
 
                                     // For clarity when logging, we zero-extend
                                     // the value in the `known_mask`
@@ -643,7 +722,7 @@ impl Interpreter {
                                         *lhs_symbol_id,
                                         symbol_name,
                                         "trace".to_string(),
-                                        *rhs_expr_id,
+                                        *sliced_expr_id,
                                     ))
                                 }
                             }
@@ -652,8 +731,8 @@ impl Interpreter {
                                 // (this will already have been caught by the type-checker)
                                 Err(ExecutionError::arithmetic_error(
                                     "BITSLICE".to_string(),
-                                    "Invalid bitslice operation".to_string(),
-                                    *rhs_expr_id,
+                                    "Illegal bitslice operation".to_string(),
+                                    *sliced_expr_id,
                                 ))
                             }
                         }
