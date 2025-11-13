@@ -579,8 +579,8 @@ impl Interpreter {
                                 let symbol_name =
                                     self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
                                 info!(
-                                    "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
-                                    symbol_name, rhs_symbol_id
+                                    "RHS of assignment is a bit-slice on an identifier `{}[{}:{}]` where `{}` is not in the args_mapping (adding it now...)",
+                                    symbol_name, msb, lsb, symbol_name
                                 );
 
                                 // Look up the trace value corresponding
@@ -594,7 +594,14 @@ impl Interpreter {
                                         // Slice the value we get from the trace,
                                         // then insert it into the args_mapping
                                         let sliced_value = trace_value.slice(*msb, *lsb);
-                                        self.args_mapping.insert(*rhs_symbol_id, sliced_value);
+                                        self.args_mapping
+                                            .insert(*rhs_symbol_id, sliced_value.clone());
+
+                                        info!(
+                                            "Updated args_mapping to map {} |-> {} (sliced value)",
+                                            symbol_name,
+                                            serialize_bitvec(&sliced_value, ctx.display_hex)
+                                        );
 
                                         // Create a `BitVecValue` `known_mask`
                                         // with the same width as `trace_value`,
@@ -606,7 +613,14 @@ impl Interpreter {
                                             known_mask.set_bit(idx);
                                         }
                                         // Update `known_bits` with `rhs_symbol_id |-> known_mask`
-                                        self.known_bits.insert(*rhs_symbol_id, known_mask);
+                                        self.known_bits.insert(*rhs_symbol_id, known_mask.clone());
+
+                                        info!(
+                                            "Updated known_bits to map {} |-> {}",
+                                            symbol_name,
+                                            known_mask.to_bit_str()
+                                        );
+
                                         Ok(())
                                     } else {
                                         Err(ExecutionError::invalid_slice(
