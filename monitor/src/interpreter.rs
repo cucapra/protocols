@@ -590,7 +590,8 @@ impl Interpreter {
                                 {
                                     // Look up the width of `rhs_symbol_id`
                                     // based on its type in the `SymbolTable`.
-                                    // Call this the `expected_width`
+                                    // Call this the `expected_width` (the width
+                                    // is dictated by the type)
                                     let expected_width =
                                         self.symbol_table[rhs_symbol_id].tpe().bitwidth();
                                     info!("{} has type u{}", symbol_name, expected_width);
@@ -602,25 +603,22 @@ impl Interpreter {
                                         trace_value.zero_extend(expected_width - actual_width);
 
                                     // Note: we insert the entirety of the
-                                    // learned value  into `args_mapping`
+                                    // `learned_value`` into `args_mapping`
                                     // (not just the portion that is sliced).
                                     // We will later update `self.known_bits`
                                     // to track which bits are valid to use
                                     self.args_mapping
                                         .insert(*rhs_symbol_id, learned_value.clone());
 
-                                    let slice_width = msb - lsb + 1;
                                     info!(
                                         "Updated args_mapping to map {} |-> {} (0b{})",
                                         symbol_name,
                                         serialize_bitvec(&learned_value, ctx.display_hex),
-                                        learned_value
-                                            .zero_extend(expected_width - slice_width)
-                                            .to_bit_str()
+                                        learned_value.to_bit_str()
                                     );
 
                                     // Create a `BitVecValue` `known_mask`
-                                    // with the same width as `trace_value`,
+                                    // with the `expected_width`,
                                     // where bits `[msb:lsb]` are 1,
                                     // and all other bits are 0 (this indicates
                                     // which bits are "known" from the trace)
@@ -636,9 +634,7 @@ impl Interpreter {
                                     info!(
                                         "Updated known_bits to map {} |-> {}",
                                         symbol_name,
-                                        known_mask
-                                            .zero_extend(expected_width - slice_width)
-                                            .to_bit_str()
+                                        known_mask.to_bit_str()
                                     );
 
                                     Ok(())
