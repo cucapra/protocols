@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
-    errors::{ExecutionError, ExecutionResult, SymbolError},
+    errors::{EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
     ir::{BinOp, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
@@ -588,51 +588,60 @@ impl Interpreter {
                                 if let Ok(trace_value) =
                                     ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
                                 {
-                                    let width = trace_value.width();
-                                    // Check whether the slice is valid
-                                    if *msb < width && *lsb <= *msb {
-                                        // Slice the value we get from the trace,
-                                        // then insert it into the args_mapping
-                                        let sliced_value = trace_value.slice(*msb, *lsb);
-                                        self.args_mapping
-                                            .insert(*rhs_symbol_id, sliced_value.clone());
+                                    // Look up the width of `rhs_symbol_id`
+                                    // based on its type in the `SymbolTable`.
+                                    // Call this the `expected_width`
+                                    let expected_width =
+                                        self.symbol_table[rhs_symbol_id].tpe().bitwidth();
+                                    info!("{} has type u{}", symbol_name, expected_width);
 
-                                        info!(
-                                            "Updated args_mapping to map {} |-> {} (sliced value)",
-                                            symbol_name,
-                                            serialize_bitvec(&sliced_value, ctx.display_hex)
-                                        );
+                                    // The `learned_value` is the `trace_value`,
+                                    // zero-extended so that it has the `expected_width`
+                                    let actual_width = trace_value.width();
+                                    let learned_value =
+                                        trace_value.zero_extend(expected_width - actual_width);
 
-                                        // Create a `BitVecValue` `known_mask`
-                                        // with the same width as `trace_value`,
-                                        // where bits `[msb:lsb]` are 1,
-                                        // and all other bits are 0 (this indicates
-                                        // which bits are "known" from the trace)
-                                        let mut known_mask = BitVecValue::zero(width);
-                                        for idx in *lsb..=*msb {
-                                            known_mask.set_bit(idx);
-                                        }
-                                        // Update `known_bits` with `rhs_symbol_id |-> known_mask`
-                                        self.known_bits.insert(*rhs_symbol_id, known_mask.clone());
+                                    // Note: we insert the entirety of the
+                                    // learned value  into `args_mapping`
+                                    // (not just the portion that is sliced).
+                                    // We will later update `self.known_bits`
+                                    // to track which bits are valid to use
+                                    self.args_mapping
+                                        .insert(*rhs_symbol_id, learned_value.clone());
 
-                                        let slice_width = msb - lsb + 1;
-                                        info!(
-                                            "Updated known_bits to map {} |-> {}",
-                                            symbol_name,
-                                            known_mask
-                                                .zero_extend(width - slice_width)
-                                                .to_bit_str()
-                                        );
+                                    let slice_width = msb - lsb + 1;
+                                    info!(
+                                        "Updated args_mapping to map {} |-> {} (0b{})",
+                                        symbol_name,
+                                        serialize_bitvec(&learned_value, ctx.display_hex),
+                                        learned_value
+                                            .zero_extend(expected_width - slice_width)
+                                            .to_bit_str()
+                                    );
 
-                                        Ok(())
-                                    } else {
-                                        Err(ExecutionError::invalid_slice(
-                                            *rhs_expr_id,
-                                            *msb,
-                                            *lsb,
-                                            width,
-                                        ))
+                                    // Create a `BitVecValue` `known_mask`
+                                    // with the same width as `trace_value`,
+                                    // where bits `[msb:lsb]` are 1,
+                                    // and all other bits are 0 (this indicates
+                                    // which bits are "known" from the trace)
+                                    let mut known_mask = BitVecValue::zero(expected_width);
+                                    for idx in *lsb..=*msb {
+                                        known_mask.set_bit(idx);
                                     }
+                                    // Update `known_bits` with `rhs_symbol_id |-> known_mask`
+                                    self.known_bits.insert(*rhs_symbol_id, known_mask.clone());
+
+                                    // For clarity when logging, we zero-extend
+                                    // the value in the `known_mask`
+                                    info!(
+                                        "Updated known_bits to map {} |-> {}",
+                                        symbol_name,
+                                        known_mask
+                                            .zero_extend(expected_width - slice_width)
+                                            .to_bit_str()
+                                    );
+
+                                    Ok(())
                                 } else {
                                     Err(ExecutionError::symbol_not_found(
                                         *lhs_symbol_id,
@@ -660,6 +669,20 @@ impl Interpreter {
                         )
                     }
                 }
+            }
+            Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice {
+                expr_id,
+                start,
+                end,
+                width,
+            })) => {
+                panic!(
+                    "Evaluation Error: Invalid slice {}[{}:{}] (actual width is {})",
+                    serialize_expr(&self.transaction, &self.symbol_table, &expr_id),
+                    start,
+                    end,
+                    width
+                )
             }
             Err(e) => todo!("Unhandled error {}", e),
         }

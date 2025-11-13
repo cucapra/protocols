@@ -6,7 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
@@ -293,6 +293,16 @@ impl Type {
             _ => false,
         }
     }
+
+    /// Computes the bitwidth of a `Type`. Note: this function panics
+    /// if the `Type` is *not* a `BitVec`.
+    pub fn bitwidth(&self) -> u32 {
+        match self {
+            Type::BitVec(width) => *width,
+            Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -458,11 +468,7 @@ impl Field {
     /// Computes the bitwidth of a `Field`. Note: this function panics
     /// if the `Type` of a `Field` is *not* a `BitVec`.
     pub fn bitwidth(&self) -> u32 {
-        match self.tpe {
-            Type::BitVec(width) => width,
-            Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
-            Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
-        }
+        self.tpe.bitwidth()
     }
 }
 

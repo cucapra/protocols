@@ -210,7 +210,7 @@ impl fmt::Display for EvaluationError {
             } => {
                 write!(
                     f,
-                    "Invalid slice operation on expr {:?}: [{}:{}] on width {}",
+                    "Invalid slice operation on expr {}: [{}:{}] on width {}",
                     expr_id, start, end, width
                 )
             }
