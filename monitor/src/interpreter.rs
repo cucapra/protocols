@@ -346,7 +346,7 @@ impl Interpreter {
         );
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
-                self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
+                self.evaluate_assign(symbol_id, expr_id, ctx)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
@@ -465,7 +465,6 @@ impl Interpreter {
     ///   - For any other expr pattern, we do `todo!(...)`
     fn evaluate_assign(
         &mut self,
-        _stmt_id: &StmtId,
         lhs_symbol_id: &SymbolId,
         rhs_expr_id: &ExprId,
         ctx: &GlobalContext,
