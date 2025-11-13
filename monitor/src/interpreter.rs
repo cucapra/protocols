@@ -475,6 +475,8 @@ impl Interpreter {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
 
+                // TODO: need to handle assigning to a known bit-slice
+
                 match rhs_expr {
                     Expr::Const(_) | Expr::Sym(_) => {
                         if let Expr::Sym(_) = rhs_expr {
@@ -499,6 +501,14 @@ impl Interpreter {
                                     self.trace_cycle_count,
                                 ))
                             } else {
+                                // Update the `known_bits` mapping for the RHS
+                                // with all 1s (since the RHS is an input parameter
+                                // whose value we are learning)
+                                if let Expr::Sym(rhs_symbol_id) = rhs_expr {
+                                    let width = trace_value.width();
+                                    self.known_bits
+                                        .insert(*rhs_symbol_id, BitVecValue::ones(width));
+                                }
                                 Ok(())
                             }
                         } else {
@@ -514,6 +524,9 @@ impl Interpreter {
                             ))
                         }
                     }
+                    Expr::Slice(_, _, _) => {
+                        todo!("Handle case when RHS is a bit-slice that evaluates to a value")
+                    }
                     _ => todo!(
                         "Unhandled expr pattern {} which evaluates to {}",
                         serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
@@ -523,8 +536,8 @@ impl Interpreter {
             }
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
-                let expr = &self.transaction[rhs_expr_id];
-                if let Expr::Sym(rhs_symbol_id) = expr {
+                let rhs_expr = &self.transaction[rhs_expr_id];
+                if let Expr::Sym(rhs_symbol_id) = rhs_expr {
                     let symbol_name =
                         self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
                     info!(
@@ -535,7 +548,7 @@ impl Interpreter {
                         self.args_mapping
                             .insert(*rhs_symbol_id, trace_value.clone());
 
-                        // All the bits are known, so insert a bit-string of
+                        // All the bits are known, so we insert a bit-string of
                         // all 1s into the `known_bits` map
                         // From type-checking, we know that the bitwidth of the
                         // LHS & RHS must be the same (otherwise the type-checker
@@ -558,6 +571,8 @@ impl Interpreter {
                             *rhs_expr_id,
                         ))
                     }
+                } else if let Expr::Slice(_, _, _) = rhs_expr {
+                    todo!("handle case when RHS is a bit-slice that we've not seen before")
                 } else {
                     todo!(
                         "Unhandled expr pattern {} which results in SymbolNotFound error",
