@@ -534,6 +534,16 @@ impl Interpreter {
                     if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
                         self.args_mapping
                             .insert(*rhs_symbol_id, trace_value.clone());
+
+                        // All the bits are known, so insert a bit-string of
+                        // all 1s into the `known_bits` map
+                        // From type-checking, we know that the bitwidth of the
+                        // LHS & RHS must be the same (otherwise the type-checker
+                        // would have rejected the program)
+                        let width = trace_value.width();
+                        self.known_bits
+                            .insert(*rhs_symbol_id, BitVecValue::ones(width));
+
                         info!(
                             "Updated args_mapping to map {} |-> {}",
                             symbol_name,
