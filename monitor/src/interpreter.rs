@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
     errors::{ExecutionError, ExecutionResult, SymbolError},
@@ -588,16 +588,34 @@ impl Interpreter {
                                 if let Ok(trace_value) =
                                     ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
                                 {
-                                    // Slice the value we get from the trace,
-                                    // then insert it into the args_mapping
-                                    let sliced_value = trace_value.slice(*msb, *lsb);
-                                    self.args_mapping.insert(*rhs_symbol_id, sliced_value);
+                                    let width = trace_value.width();
+                                    // Check whether the slice is valid
+                                    if *msb < width && *lsb <= *msb {
+                                        // Slice the value we get from the trace,
+                                        // then insert it into the args_mapping
+                                        let sliced_value = trace_value.slice(*msb, *lsb);
+                                        self.args_mapping.insert(*rhs_symbol_id, sliced_value);
 
-                                    // TODO: actually perform the bit-slice
-                                    // before updating the args_mapping
-
-                                    // TODO: update known_bits
-                                    Ok(())
+                                        // Create a `BitVecValue` `known_mask`
+                                        // with the same width as `trace_value`,
+                                        // where bits `[msb:lsb]` are 1,
+                                        // and all other bits are 0 (this indicates
+                                        // which bits are "known" from the trace)
+                                        let mut known_mask = BitVecValue::zero(width);
+                                        for idx in *lsb..=*msb {
+                                            known_mask.set_bit(idx);
+                                        }
+                                        // Update `known_bits` with `rhs_symbol_id |-> known_mask`
+                                        self.known_bits.insert(*rhs_symbol_id, known_mask);
+                                        Ok(())
+                                    } else {
+                                        Err(ExecutionError::invalid_slice(
+                                            *rhs_expr_id,
+                                            *msb,
+                                            *lsb,
+                                            width,
+                                        ))
+                                    }
                                 } else {
                                     Err(ExecutionError::symbol_not_found(
                                         *lhs_symbol_id,
