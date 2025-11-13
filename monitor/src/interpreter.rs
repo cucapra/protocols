@@ -412,57 +412,7 @@ impl Interpreter {
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr_id1, expr_id2) => {
-                let e1 = &self.transaction[expr_id1];
-                let e2 = &self.transaction[expr_id2];
-                match (e1, e2) {
-                    // If the two args to `assert_eq`s are both identifiers,
-                    // one of them is an output param of the transaction,
-                    // & the other is a DUT output port
-                    (Expr::Sym(symbol_id1), Expr::Sym(symbol_id2)) => {
-                        // We deference the two `SymbolId`s in order to
-                        // avoid borrow-checker issues here
-                        let symbol_id1 = *symbol_id1;
-                        let symbol_id2 = *symbol_id2;
-
-                        let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
-                        let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
-
-                        let out_params: Vec<SymbolId> = self
-                            .transaction
-                            .get_parameters_by_direction(Dir::Out)
-                            .collect();
-                        for out_param_symbol in out_params {
-                            if out_param_symbol == symbol_id1 {
-                                info!("{} is an output param of the transaction", name1);
-                                self.map_output_param_to_trace(
-                                    symbol_id1, symbol_id2, &name1, &name2, *expr_id2, ctx,
-                                )?;
-                            } else if out_param_symbol == symbol_id2 {
-                                info!("{} is an output param of the transaction", name2);
-                                self.map_output_param_to_trace(
-                                    symbol_id2, symbol_id1, &name2, &name1, *expr_id1, ctx,
-                                )?;
-                            }
-                        }
-                        Ok(self.next_stmt_map[stmt_id])
-                    }
-                    (_, _) => {
-                        // Handle other exprs that are supplied to `assert_eq`,
-                        // e.g. bit-slices
-                        if self.evaluate_expr(expr_id1, ctx).is_err() {
-                            info!("{} is ???", self.format_expr(expr_id1))
-                        }
-                        if self.evaluate_expr(expr_id2, ctx).is_err() {
-                            info!("{} is ???", self.format_expr(expr_id2))
-                        }
-                        info!(
-                            "Skipping assertion `{}` ({})",
-                            self.format_stmt(stmt_id),
-                            stmt_id
-                        );
-                        Ok(self.next_stmt_map[stmt_id])
-                    }
-                }
+                self.evaluate_assert_eq(stmt_id, expr_id1, expr_id2, ctx)
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
@@ -470,6 +420,69 @@ impl Interpreter {
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }
+            }
+        }
+    }
+
+    /// Evaluates an `assert_eq` statement identified by `stmt_id`,
+    /// where `expr_id1` & `expr_id2` refer to the two arguments (expressions)
+    /// supplied to `assert_eq`
+    fn evaluate_assert_eq(
+        &mut self,
+        stmt_id: &StmtId,
+        expr_id1: &ExprId,
+        expr_id2: &ExprId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<Option<StmtId>> {
+        let e1 = &self.transaction[expr_id1];
+        let e2 = &self.transaction[expr_id2];
+        match (e1, e2) {
+            // If the two args to `assert_eq`s are both identifiers,
+            // one of them is an output param of the transaction,
+            // & the other is a DUT output port
+            (Expr::Sym(symbol_id1), Expr::Sym(symbol_id2)) => {
+                // We deference the two `SymbolId`s in order to
+                // avoid borrow-checker issues here
+                let symbol_id1 = *symbol_id1;
+                let symbol_id2 = *symbol_id2;
+
+                let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
+                let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
+
+                let out_params: Vec<SymbolId> = self
+                    .transaction
+                    .get_parameters_by_direction(Dir::Out)
+                    .collect();
+                for out_param_symbol in out_params {
+                    if out_param_symbol == symbol_id1 {
+                        info!("{} is an output param of the transaction", name1);
+                        self.map_output_param_to_trace(
+                            symbol_id1, symbol_id2, &name1, &name2, *expr_id2, ctx,
+                        )?;
+                    } else if out_param_symbol == symbol_id2 {
+                        info!("{} is an output param of the transaction", name2);
+                        self.map_output_param_to_trace(
+                            symbol_id2, symbol_id1, &name2, &name1, *expr_id1, ctx,
+                        )?;
+                    }
+                }
+                Ok(self.next_stmt_map[stmt_id])
+            }
+            (_, _) => {
+                // Handle other exprs that are supplied to `assert_eq`,
+                // e.g. bit-slices
+                if self.evaluate_expr(expr_id1, ctx).is_err() {
+                    info!("{} is ???", self.format_expr(expr_id1))
+                }
+                if self.evaluate_expr(expr_id2, ctx).is_err() {
+                    info!("{} is ???", self.format_expr(expr_id2))
+                }
+                info!(
+                    "Skipping assertion `{}` ({})",
+                    self.format_stmt(stmt_id),
+                    stmt_id
+                );
+                Ok(self.next_stmt_map[stmt_id])
             }
         }
     }
