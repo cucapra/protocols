@@ -176,7 +176,8 @@ impl SignalTrace for WaveSignalTrace {
         let offset = signal
             .get_offset(self.step)
             .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
-        let value = signal.get_value_at(&offset, 0);
+        // get the last value in the time step (this is to deal with delta cycles)
+        let value = signal.get_value_at(&offset, offset.elements);
         let bit_str = value
             .to_bit_string()
             .with_context(|| format!("Unable to convert {value} to bit-string"))?;
