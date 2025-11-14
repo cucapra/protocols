@@ -261,37 +261,43 @@ impl Interpreter {
                 // Before evaluating the slice, we first need to
                 // check whether all bits in the slice are currently known
                 // (i.e. are set to 1 in `self.known_bits`)
+                // Note: we only do this for the function's (output) parameters
+                // (i.e. if `sliced_symbol_id` has *no* parent in the `SymbolTable`)
+                // We don't do this for DUT (output) ports, since if they are
+                // mentioned in `assert_eq`, we can just read them from the trace
                 if let Expr::Sym(sliced_symbol_id) = sliced_expr {
-                    let symbol_name = self.symbol_table[sliced_symbol_id].name();
+                    if self.symbol_table[sliced_symbol_id].parent().is_none() {
+                        let symbol_name = self.symbol_table[sliced_symbol_id].name();
 
-                    // Check whether `[msb:lsb]` are all 1s in the
-                    // known-bits map
-                    if let Some(known_bits) = self.known_bits.get(sliced_symbol_id) {
-                        let all_bits_known_in_slice =
-                            (*lsb..=*msb).all(|idx| known_bits.is_bit_set(idx));
-                        if !all_bits_known_in_slice {
-                            // Some bits in the slice are not known yet,
-                            // so we report an error
+                        // Check whether `[msb:lsb]` are all 1s in the
+                        // known-bits map
+                        if let Some(known_bits) = self.known_bits.get(sliced_symbol_id) {
+                            let all_bits_known_in_slice =
+                                (*lsb..=*msb).all(|idx| known_bits.is_bit_set(idx));
+                            if !all_bits_known_in_slice {
+                                // Some bits in the slice are not known yet,
+                                // so we report an error
+                                return Err(ExecutionError::symbol_not_found(
+                                    *sliced_symbol_id,
+                                    symbol_name.to_string(),
+                                    format!(
+                                        "known_bits (some bits in slice {}[{}:{}] are not yet known)",
+                                        symbol_name, msb, lsb
+                                    ),
+                                    *sliced_expr_id,
+                                ));
+                            }
+                        } else {
+                            // Report an error since we are trying to slice
+                            // a `symbol_id` where the provenance of the bits
+                            // is unknown (i.e. it is absent from `self.known_bits`)
                             return Err(ExecutionError::symbol_not_found(
                                 *sliced_symbol_id,
                                 symbol_name.to_string(),
-                                format!(
-                                    "known_bits (some bits in slice {}[{}:{}] are not yet known)",
-                                    symbol_name, msb, lsb
-                                ),
+                                "known_bits".to_string(),
                                 *sliced_expr_id,
                             ));
                         }
-                    } else {
-                        // Report an error since we are trying to slice
-                        // a `symbol_id` where the provenance of the bits
-                        // is unknown (i.e. it is absent from `self.known_bits`)
-                        return Err(ExecutionError::symbol_not_found(
-                            *sliced_symbol_id,
-                            symbol_name.to_string(),
-                            "known_bits".to_string(),
-                            *sliced_expr_id,
-                        ));
                     }
                 } else {
                     return Err(ExecutionError::arithmetic_error(
