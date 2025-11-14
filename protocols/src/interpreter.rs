@@ -18,8 +18,6 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
-use std::collections::HashMap;
-
 #[derive(Debug, Clone)]
 pub enum InputValue {
     OldValue(BitVecValue),
@@ -75,13 +73,12 @@ pub struct Evaluator<'a> {
     st: &'a SymbolTable,
     sim: Interpreter,
 
-    // TODO: can change to be secondarymaps for efficiency
-    args_mapping: HashMap<SymbolId, BitVecValue>,
-    input_mapping: HashMap<SymbolId, ExprRef>,
-    output_mapping: HashMap<SymbolId, Output>,
+    args_mapping: FxHashMap<SymbolId, BitVecValue>,
+    input_mapping: FxHashMap<SymbolId, ExprRef>,
+    output_mapping: FxHashMap<SymbolId, Output>,
 
     // tracks the input pins and their values
-    input_vals: HashMap<SymbolId, InputValue>,
+    input_vals: FxHashMap<SymbolId, InputValue>,
 
     assertions_enabled: bool,
 
@@ -98,7 +95,7 @@ impl<'a> Evaluator<'a> {
 
     /// Creates a new `Evaluator`
     pub fn new(
-        args: HashMap<&str, BitVecValue>,
+        args: FxHashMap<&str, BitVecValue>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
         ctx: &'a patronus::expr::Context,
@@ -112,8 +109,8 @@ impl<'a> Evaluator<'a> {
         let dut = tr.type_param.unwrap();
         let dut_symbols = &st.get_children(&dut);
 
-        let mut input_mapping = HashMap::new();
-        let mut output_mapping = HashMap::new();
+        let mut input_mapping = FxHashMap::default();
+        let mut output_mapping = FxHashMap::default();
 
         for input in &sys.inputs {
             info!(
@@ -161,7 +158,7 @@ impl<'a> Evaluator<'a> {
         let mut rng = StdRng::seed_from_u64(0);
 
         // Initialize the input pins with DontCares that are randomly assigned
-        let mut input_vals = HashMap::new();
+        let mut input_vals = FxHashMap::default();
         for symbol_id in input_mapping.keys() {
             // get the width from the type of the symbol
             match st[symbol_id].tpe() {
@@ -200,9 +197,9 @@ impl<'a> Evaluator<'a> {
     /// Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
-        args: HashMap<&str, BitVecValue>,
-    ) -> HashMap<SymbolId, BitVecValue> {
-        let mut args_mapping = HashMap::new();
+        args: FxHashMap<&str, BitVecValue>,
+    ) -> FxHashMap<SymbolId, BitVecValue> {
+        let mut args_mapping = FxHashMap::default();
         for (name, value) in &args {
             if let Some(symbol_id) = st.symbol_id_from_name(name) {
                 args_mapping.insert(symbol_id, (*value).clone());
@@ -222,7 +219,7 @@ impl<'a> Evaluator<'a> {
         self.next_stmt_map = todo.next_stmt_map;
     }
 
-    pub fn input_vals(&self) -> HashMap<SymbolId, InputValue> {
+    pub fn input_vals(&self) -> FxHashMap<SymbolId, InputValue> {
         self.input_vals.clone()
     }
 

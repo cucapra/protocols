@@ -1,14 +1,15 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::hash_map::Entry;
 
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
-    errors::{ExecutionError, ExecutionResult, SymbolError},
+    errors::{EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
     ir::{BinOp, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };
+use rustc_hash::FxHashMap;
 
 use crate::{
     global_context::GlobalContext,
@@ -19,7 +20,8 @@ pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
-    pub args_mapping: HashMap<SymbolId, BitVecValue>,
+    pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
+    pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
@@ -28,18 +30,21 @@ pub struct Interpreter {
 
 impl Interpreter {
     /// Performs a context switch in the `Interpreter` by setting its
-    /// `Transaction`, `SymbolTable` and `args_mapping` to the specified arguments
+    /// `Transaction`, `SymbolTable`, `args_mapping`
+    /// and `known_bits` to the specified arguments
     pub fn context_switch(
         &mut self,
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
-        args_mapping: HashMap<SymbolId, BitVecValue>,
+        args_mapping: FxHashMap<SymbolId, BitVecValue>,
+        known_bits: FxHashMap<SymbolId, BitVecValue>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
         self.args_mapping = args_mapping;
+        self.known_bits = known_bits;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -61,7 +66,8 @@ impl Interpreter {
         ctx: &GlobalContext,
         trace_cycle_count: u32,
     ) -> Self {
-        let mut args_mapping = HashMap::new();
+        let mut args_mapping = FxHashMap::default();
+        let mut known_bits = FxHashMap::default();
 
         for port_key in ctx.trace.port_map.keys() {
             // We assume that there is only one `Instance` at the moment
@@ -78,7 +84,12 @@ impl Interpreter {
                     err
                 )
             });
+            let bitwidth = current_value.width();
             args_mapping.insert(*pin_id, current_value);
+
+            // Insert a bitstring of all `1`s into `known_bits`,
+            // with length equal to the bit-width of `current_value`
+            known_bits.insert(*pin_id, BitVecValue::ones(bitwidth));
         }
 
         info!(
@@ -86,12 +97,15 @@ impl Interpreter {
             serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
         );
 
+        info!("initial known_bits:\n{:?}", known_bits);
+
         Self {
             transaction: transaction.clone(),
             symbol_table,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
             trace_cycle_count,
+            known_bits,
         }
     }
 
@@ -241,21 +255,74 @@ impl Interpreter {
                     )),
                 }
             }
-            Expr::Slice(expr_id, msb, lsb) => {
-                let expr_val = self.evaluate_expr(expr_id, ctx)?;
+            Expr::Slice(sliced_expr_id, msb, lsb) => {
+                let sliced_expr = &self.transaction[sliced_expr_id];
+
+                // Before evaluating the slice, we first need to
+                // check whether all bits in the slice are currently known
+                // (i.e. are set to 1 in `self.known_bits`)
+                // Note: we only do this for the function's (output) parameters
+                // (i.e. if `sliced_symbol_id` has *no* parent in the `SymbolTable`)
+                // We don't do this for DUT (output) ports, since if they are
+                // mentioned in `assert_eq`, we can just read them from the trace
+                if let Expr::Sym(sliced_symbol_id) = sliced_expr {
+                    if self.symbol_table[sliced_symbol_id].parent().is_none() {
+                        let symbol_name = self.symbol_table[sliced_symbol_id].name();
+
+                        // Check whether `[msb:lsb]` are all 1s in the
+                        // known-bits map
+                        if let Some(known_bits) = self.known_bits.get(sliced_symbol_id) {
+                            let all_bits_known_in_slice =
+                                (*lsb..=*msb).all(|idx| known_bits.is_bit_set(idx));
+                            if !all_bits_known_in_slice {
+                                // Some bits in the slice are not known yet,
+                                // so we report an error
+                                return Err(ExecutionError::symbol_not_found(
+                                    *sliced_symbol_id,
+                                    symbol_name.to_string(),
+                                    format!(
+                                        "known_bits (some bits in slice {}[{}:{}] are not yet known)",
+                                        symbol_name, msb, lsb
+                                    ),
+                                    *sliced_expr_id,
+                                ));
+                            }
+                        } else {
+                            // Report an error since we are trying to slice
+                            // a `symbol_id` where the provenance of the bits
+                            // is unknown (i.e. it is absent from `self.known_bits`)
+                            return Err(ExecutionError::symbol_not_found(
+                                *sliced_symbol_id,
+                                symbol_name.to_string(),
+                                "known_bits".to_string(),
+                                *sliced_expr_id,
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(ExecutionError::illegal_slice(*sliced_expr_id, *msb, *lsb));
+                }
+
+                let expr_val = self.evaluate_expr(sliced_expr_id, ctx)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => {
                         let width = bvv.width();
+                        // Check whether `msb` & `lsb` are in bounds
                         if *msb < width && *lsb <= *msb {
                             Ok(ExprValue::Concrete(bvv.slice(*msb, *lsb)))
                         } else {
-                            Err(ExecutionError::invalid_slice(*expr_id, *msb, *lsb, width))
+                            Err(ExecutionError::invalid_slice(
+                                *sliced_expr_id,
+                                *msb,
+                                *lsb,
+                                width,
+                            ))
                         }
                     }
                     ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
                         "slice".to_string(),
                         "slice expression".to_string(),
-                        *expr_id,
+                        *sliced_expr_id,
                     )),
                 }
             }
@@ -332,7 +399,7 @@ impl Interpreter {
         );
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
-                self.evaluate_assign(stmt_id, symbol_id, expr_id, ctx)?;
+                self.evaluate_assign(symbol_id, expr_id, ctx)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
@@ -347,47 +414,98 @@ impl Interpreter {
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr_id1, expr_id2) => {
-                let e1 = &self.transaction[expr_id1];
-                let e2 = &self.transaction[expr_id2];
-                match (e1, e2) {
-                    // If the two args to `assert_eq`s are both identifiers,
-                    // one of them is an output param of the transaction,
-                    // & the other is a DUT output port
-                    (Expr::Sym(symbol_id1), Expr::Sym(symbol_id2)) => {
-                        // We deference the two `SymbolId`s in order to
-                        // avoid borrow-checker issues here
-                        let symbol_id1 = *symbol_id1;
-                        let symbol_id2 = *symbol_id2;
+                self.evaluate_assert_eq(stmt_id, expr_id1, expr_id2, ctx)
+            }
+            Stmt::Block(stmt_ids) => {
+                if stmt_ids.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(stmt_ids[0]))
+                }
+            }
+        }
+    }
 
-                        let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
-                        let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
+    /// Evaluates an `assert_eq` statement identified by `stmt_id`,
+    /// where `expr_id1` & `expr_id2` refer to the two arguments (expressions)
+    /// supplied to `assert_eq`
+    fn evaluate_assert_eq(
+        &mut self,
+        stmt_id: &StmtId,
+        expr_id1: &ExprId,
+        expr_id2: &ExprId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<Option<StmtId>> {
+        let e1 = &self.transaction[expr_id1];
+        let e2 = &self.transaction[expr_id2];
+        match (e1, e2) {
+            // If the two args to `assert_eq`s are both identifiers,
+            // one of them is an output param of the transaction,
+            // & the other is a DUT output port
+            (Expr::Sym(symbol_id1), Expr::Sym(symbol_id2)) => {
+                // We deference the two `SymbolId`s in order to
+                // avoid borrow-checker issues here
+                let symbol_id1 = *symbol_id1;
+                let symbol_id2 = *symbol_id2;
 
-                        let out_params: Vec<SymbolId> = self
-                            .transaction
-                            .get_parameters_by_direction(Dir::Out)
-                            .collect();
-                        for out_param_symbol in out_params {
-                            if out_param_symbol == symbol_id1 {
-                                info!("{} is an output param of the transaction", name1);
-                                self.map_output_param_to_trace(
-                                    symbol_id1, symbol_id2, &name1, &name2, *expr_id2, ctx,
-                                )?;
-                            } else if out_param_symbol == symbol_id2 {
-                                info!("{} is an output param of the transaction", name2);
-                                self.map_output_param_to_trace(
-                                    symbol_id2, symbol_id1, &name2, &name1, *expr_id1, ctx,
-                                )?;
-                            }
-                        }
+                let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
+                let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
+
+                let out_params: Vec<SymbolId> = self
+                    .transaction
+                    .get_parameters_by_direction(Dir::Out)
+                    .collect();
+                for out_param_symbol in out_params {
+                    if out_param_symbol == symbol_id1 {
+                        info!("{} is an output param of the transaction", name1);
+                        self.map_output_param_to_trace(
+                            symbol_id1, symbol_id2, &name1, &name2, *expr_id2, ctx,
+                        )?;
+                    } else if out_param_symbol == symbol_id2 {
+                        info!("{} is an output param of the transaction", name2);
+                        self.map_output_param_to_trace(
+                            symbol_id2, symbol_id1, &name2, &name1, *expr_id1, ctx,
+                        )?;
+                    }
+                }
+                Ok(self.next_stmt_map[stmt_id])
+            }
+            (_, _) => {
+                // Handle other exprs that are supplied to `assert_eq`
+                // e.g. bit-slices
+
+                let eval_result1 = self.evaluate_expr(expr_id1, ctx);
+                let eval_result2 = self.evaluate_expr(expr_id2, ctx);
+
+                match (eval_result1.clone(), eval_result2.clone()) {
+                    (
+                        Ok(ExprValue::Concrete(value1)),
+                        Err(ExecutionError::Symbol(SymbolError::NotFound { .. })),
+                    ) => {
+                        self.infer_value_from_assertion(expr_id2, expr_id1, &value1, ctx)?;
                         Ok(self.next_stmt_map[stmt_id])
                     }
-                    (_, _) => {
-                        // Handle other exprs that are supplied to `assert_eq`,
-                        // e.g. bit-slices
-                        if self.evaluate_expr(expr_id1, ctx).is_err() {
+                    (
+                        Err(ExecutionError::Symbol(SymbolError::NotFound { .. })),
+                        Ok(ExprValue::Concrete(value2)),
+                    ) => {
+                        self.infer_value_from_assertion(expr_id1, expr_id2, &value2, ctx)?;
+                        Ok(self.next_stmt_map[stmt_id])
+                    }
+                    // For other cases, we skip the assertion for now
+                    (Ok(_), Ok(_)) => {
+                        info!(
+                            "Skipping assertion `{}` ({})",
+                            self.format_stmt(stmt_id),
+                            stmt_id
+                        );
+                        Ok(self.next_stmt_map[stmt_id])
+                    }
+                    _ => {
+                        if eval_result1.is_err() {
                             info!("{} is ???", self.format_expr(expr_id1))
                         }
-                        if self.evaluate_expr(expr_id2, ctx).is_err() {
+                        if eval_result2.is_err() {
                             info!("{} is ???", self.format_expr(expr_id2))
                         }
                         info!(
@@ -399,13 +517,126 @@ impl Interpreter {
                     }
                 }
             }
-            Stmt::Block(stmt_ids) => {
-                if stmt_ids.is_empty() {
-                    Ok(None)
-                } else {
-                    Ok(Some(stmt_ids[0]))
+        }
+    }
+
+    /// Infers the value of an unknown expression from an assertion.
+    /// - `unknown_expr_id` is the expr whose value we're inferring
+    /// - `known_expr_id` is the (known) expr with value `known_value`
+    fn infer_value_from_assertion(
+        &mut self,
+        unknown_expr_id: &ExprId,
+        known_expr_id: &ExprId,
+        known_value: &BitVecValue,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<()> {
+        let unknown_expr = &self.transaction[unknown_expr_id];
+
+        match unknown_expr {
+            Expr::Slice(sliced_expr_id, msb, lsb) => {
+                let sliced_expr = &self.transaction[sliced_expr_id];
+                match sliced_expr {
+                    Expr::Sym(sliced_symbol_id) => {
+                        let symbol_name =
+                            self.symbol_table[sliced_symbol_id].full_name(&self.symbol_table);
+                        info!(
+                            "Inferring value for `{}[{}:{}]` from assertion with `{}`",
+                            symbol_name,
+                            msb,
+                            lsb,
+                            self.format_expr(known_expr_id)
+                        );
+
+                        // Check if `symbol_name` is an output parameter
+                        let out_params: Vec<SymbolId> = self
+                            .transaction
+                            .get_parameters_by_direction(Dir::Out)
+                            .collect();
+                        if !out_params.contains(sliced_symbol_id) {
+                            Ok(())
+                        } else {
+                            // Get the expected width from the symbol's type
+                            let expected_width =
+                                self.symbol_table[sliced_symbol_id].tpe().bitwidth();
+
+                            // If `sliced_symbol_id` isn't in either of
+                            // `args_mapping` or `known_bits`, map it to the
+                            // bit-vector of all zeroes
+                            self.args_mapping
+                                .entry(*sliced_symbol_id)
+                                .or_insert_with(|| BitVecValue::zero(expected_width));
+                            self.known_bits
+                                .entry(*sliced_symbol_id)
+                                .or_insert_with(|| BitVecValue::zero(expected_width));
+
+                            // Get the current value and known_bits
+                            let mut current_value = self.args_mapping[sliced_symbol_id].clone();
+                            let mut known_bits = self.known_bits[sliced_symbol_id].clone();
+
+                            // Update bits `[msb:lsb]` w/ the known value
+                            for i in 0..=(msb - lsb) {
+                                let bit_pos = lsb + i;
+                                if known_value.is_bit_set(i) {
+                                    current_value.set_bit(bit_pos);
+                                } else {
+                                    current_value.clear_bit(bit_pos);
+                                }
+                                // Mark this bit as known
+                                known_bits.set_bit(bit_pos);
+                            }
+
+                            // Update `args_mapping` and `known_bits` to point
+                            // to the updated values & known bits
+                            self.args_mapping
+                                .insert(*sliced_symbol_id, current_value.clone());
+                            self.known_bits
+                                .insert(*sliced_symbol_id, known_bits.clone());
+
+                            info!(
+                                "Updated args_mapping: {} |-> {} (0b{})",
+                                symbol_name,
+                                serialize_bitvec(&current_value, ctx.display_hex),
+                                current_value.to_bit_str()
+                            );
+                            info!(
+                                "Updated known_bits: {} |-> {}",
+                                symbol_name,
+                                known_bits.to_bit_str()
+                            );
+
+                            Ok(())
+                        }
+                    }
+                    _ => Ok(()),
                 }
             }
+            Expr::Sym(symbol_id) => {
+                // Fetch all the output parameters of the function
+                let out_params: Vec<SymbolId> = self
+                    .transaction
+                    .get_parameters_by_direction(Dir::Out)
+                    .collect();
+
+                // If `symbol_id` is an output parameter that is currently
+                // absent from `args_mapping`, insert the binding
+                // `symbol_id |-> known_value` into `args_mapping`,
+                // and update `known_bits` to be all ones
+                if out_params.contains(symbol_id) {
+                    let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+                    if let Entry::Vacant(e) = self.args_mapping.entry(*symbol_id) {
+                        e.insert(known_value.clone());
+                        let width = known_value.width();
+                        self.known_bits.insert(*symbol_id, BitVecValue::ones(width));
+                        info!(
+                            "Extended args_mapping with {} |-> {}",
+                            symbol_name,
+                            serialize_bitvec(known_value, ctx.display_hex)
+                        );
+                    }
+                }
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 
@@ -451,7 +682,6 @@ impl Interpreter {
     ///   - For any other expr pattern, we do `todo!(...)`
     fn evaluate_assign(
         &mut self,
-        _stmt_id: &StmtId,
         lhs_symbol_id: &SymbolId,
         rhs_expr_id: &ExprId,
         ctx: &GlobalContext,
@@ -460,9 +690,11 @@ impl Interpreter {
         match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
-
                 match rhs_expr {
                     Expr::Const(_) | Expr::Sym(_) => {
+                        // We only print out the following log for the case
+                        // where a variable evaluates to a value, since the
+                        // constant case is trivial
                         if let Expr::Sym(_) = rhs_expr {
                             info!(
                                 "`{}` evaluates to Concrete Value `{}`",
@@ -485,6 +717,14 @@ impl Interpreter {
                                     self.trace_cycle_count,
                                 ))
                             } else {
+                                // Update the `known_bits` mapping for the RHS
+                                // with all 1s (since the RHS is an input parameter
+                                // whose value we are learning)
+                                if let Expr::Sym(rhs_symbol_id) = rhs_expr {
+                                    let width = trace_value.width();
+                                    self.known_bits
+                                        .insert(*rhs_symbol_id, BitVecValue::ones(width));
+                                }
                                 Ok(())
                             }
                         } else {
@@ -500,6 +740,83 @@ impl Interpreter {
                             ))
                         }
                     }
+                    Expr::Slice(sliced_expr_id, msb, lsb) => {
+                        // In this case, we are taking a bitslice
+                        // of an identifier that we've previously seen before
+                        // (i.e. the identifier exists as a key
+                        // in the `args_mapping`)
+
+                        let sliced_expr = &self.transaction[sliced_expr_id];
+                        match sliced_expr {
+                            Expr::Sym(sliced_symbol_id) => {
+                                let symbol_name = &self.symbol_table[sliced_symbol_id].name();
+                                info!(
+                                    "`{}`[{}:{}] evaluates to Concrete Value `{}`",
+                                    symbol_name,
+                                    msb,
+                                    lsb,
+                                    serialize_bitvec(&rhs_value, ctx.display_hex)
+                                );
+
+                                // Compare `rhs_value` (the value that
+                                // `slice_expr[msb:lsb]` evaluates to)
+                                // with the actual trace value
+                                // (Note that we don't need to perform any
+                                // further bit-slicing here, since we've
+                                // already evaluated `slice_expr[msb:lsb]`
+
+                                if let Ok(trace_value) =
+                                    ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
+                                {
+                                    // If they're different, we report an error
+                                    if rhs_value != trace_value {
+                                        Err(ExecutionError::value_disagrees_with_trace(
+                                            *rhs_expr_id,
+                                            rhs_value,
+                                            trace_value,
+                                            *lhs_symbol_id, // Use LHS symbol for error reporting
+                                            lhs.to_string(),
+                                            self.trace_cycle_count,
+                                        ))
+                                    } else {
+                                        // The value matches the trace data,
+                                        // so all we have to do is update
+                                        // `known_bits` for `sliced_symbol_id`
+                                        // by setting bits `[msb:lsb]` to 1
+                                        let known_mask = self
+                                            .known_bits
+                                            .get_mut(sliced_symbol_id)
+                                            .unwrap_or_else(|| {
+                                                panic!(
+                                                    "Missing entry in `known_bits` for {}",
+                                                    symbol_name
+                                                )
+                                            });
+                                        for idx in *lsb..=*msb {
+                                            known_mask.set_bit(idx);
+                                        }
+                                        Ok(())
+                                    }
+                                } else {
+                                    info!(
+                                        "Unable to find value for `{}` in trace at cycle {:?}",
+                                        lhs, self.trace_cycle_count
+                                    );
+                                    Err(ExecutionError::symbol_not_found(
+                                        *lhs_symbol_id,
+                                        lhs.to_string(),
+                                        "trace".to_string(),
+                                        *rhs_expr_id,
+                                    ))
+                                }
+                            }
+                            _ => {
+                                // Illegal bit-slice operation
+                                // (this will already have been caught by the type-checker)
+                                Err(ExecutionError::illegal_slice(*rhs_expr_id, *msb, *lsb))
+                            }
+                        }
+                    }
                     _ => todo!(
                         "Unhandled expr pattern {} which evaluates to {}",
                         serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
@@ -509,37 +826,156 @@ impl Interpreter {
             }
             Ok(ExprValue::DontCare) => Ok(()),
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
-                let expr = &self.transaction[rhs_expr_id];
-                if let Expr::Sym(rhs_symbol_id) = expr {
-                    let symbol_name =
-                        self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
-                    info!(
-                        "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
-                        symbol_name, rhs_symbol_id
-                    );
-                    if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
-                        self.args_mapping
-                            .insert(*rhs_symbol_id, trace_value.clone());
+                let rhs_expr = &self.transaction[rhs_expr_id];
+                match rhs_expr {
+                    Expr::Sym(rhs_symbol_id) => {
+                        let symbol_name =
+                            self.symbol_table[rhs_symbol_id].full_name(&self.symbol_table);
                         info!(
-                            "Updated args_mapping to map {} |-> {}",
-                            symbol_name,
-                            serialize_bitvec(&trace_value, ctx.display_hex)
+                            "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
+                            symbol_name, rhs_symbol_id
                         );
-                        Ok(())
-                    } else {
-                        Err(ExecutionError::symbol_not_found(
-                            *lhs_symbol_id,
-                            symbol_name,
-                            "trace".to_string(),
-                            *rhs_expr_id,
-                        ))
+                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                            self.args_mapping
+                                .insert(*rhs_symbol_id, trace_value.clone());
+                            info!(
+                                "Updated args_mapping to map {} |-> {}",
+                                symbol_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex)
+                            );
+
+                            // All the bits are known, so we insert a bit-string of
+                            // all 1s into the `known_bits` map
+                            // From type-checking, we know that the bitwidth of the
+                            // LHS & RHS must be the same (otherwise the type-checker
+                            // would have rejected the program)
+                            let width = trace_value.width();
+                            self.known_bits
+                                .insert(*rhs_symbol_id, BitVecValue::ones(width));
+
+                            Ok(())
+                        } else {
+                            Err(ExecutionError::symbol_not_found(
+                                *lhs_symbol_id,
+                                symbol_name,
+                                "trace".to_string(),
+                                *rhs_expr_id,
+                            ))
+                        }
                     }
-                } else {
-                    todo!(
-                        "Unhandled expr pattern {} which results in SymbolNotFound error",
-                        serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
-                    )
+                    // The case below corresponds to a bit-slice
+                    // where the identifier being sliced hasn't been
+                    // encountered before (i.e. is not in the args_mapping)
+                    Expr::Slice(sliced_expr_id, msb, lsb) => {
+                        let sliced_expr = &self.transaction[sliced_expr_id];
+                        match sliced_expr {
+                            Expr::Sym(sliced_symbol_id) => {
+                                let symbol_name = self.symbol_table[sliced_symbol_id]
+                                    .full_name(&self.symbol_table);
+                                info!(
+                                    "RHS of assignment is a bit-slice on an identifier `{}[{}:{}]` where `{}` is not in the args_mapping (adding it now...)",
+                                    symbol_name, msb, lsb, symbol_name
+                                );
+
+                                // Look up the trace value corresponding
+                                // to the LHS
+                                if let Ok(trace_value) =
+                                    ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
+                                {
+                                    // Look up the width of `sliced_symbol_id`
+                                    // based on its type in the `SymbolTable`.
+                                    // Call this the `expected_width`
+                                    // (the width is dictated by the type)
+                                    let expected_width =
+                                        self.symbol_table[sliced_symbol_id].tpe().bitwidth();
+                                    info!("{} has type u{}", symbol_name, expected_width);
+
+                                    // If `sliced_symbol_id` isn't currently
+                                    // in either of `args_mapping` & `known_bits`,
+                                    // map it to the bit-vector of all zeroes
+                                    self.args_mapping
+                                        .entry(*sliced_symbol_id)
+                                        .or_insert_with(|| BitVecValue::zero(expected_width));
+                                    self.known_bits
+                                        .entry(*sliced_symbol_id)
+                                        .or_insert_with(|| BitVecValue::zero(expected_width));
+
+                                    // We have to clone these values in order
+                                    // to satisfy the borrower checker
+                                    let mut current_value =
+                                        self.args_mapping[sliced_symbol_id].clone();
+                                    let mut current_known_bits =
+                                        self.known_bits[sliced_symbol_id].clone();
+
+                                    // Update bits `[msb:lsb]` w/ the trace value
+                                    for i in 0..=(msb - lsb) {
+                                        let bit_pos = lsb + i;
+                                        if trace_value.is_bit_set(i) {
+                                            current_value.set_bit(bit_pos);
+                                        } else {
+                                            current_value.clear_bit(bit_pos);
+                                        }
+                                        // Mark this bit as known
+                                        current_known_bits.set_bit(bit_pos);
+                                    }
+
+                                    // Update `args_mapping` and `known_bits`
+                                    self.args_mapping
+                                        .insert(*sliced_symbol_id, current_value.clone());
+                                    self.known_bits
+                                        .insert(*sliced_symbol_id, current_known_bits.clone());
+
+                                    info!(
+                                        "Updated args_mapping to map {} |-> {} (0b{})",
+                                        symbol_name,
+                                        serialize_bitvec(&current_value, ctx.display_hex),
+                                        current_value.to_bit_str()
+                                    );
+
+                                    info!(
+                                        "Updated known_bits to map {} |-> {}",
+                                        symbol_name,
+                                        current_known_bits.to_bit_str()
+                                    );
+
+                                    Ok(())
+                                } else {
+                                    Err(ExecutionError::symbol_not_found(
+                                        *lhs_symbol_id,
+                                        symbol_name,
+                                        "trace".to_string(),
+                                        *sliced_expr_id,
+                                    ))
+                                }
+                            }
+                            _ => {
+                                // Illegal bit-slice operation
+                                // (this will already have been caught by the type-checker)
+                                Err(ExecutionError::illegal_slice(*sliced_expr_id, *msb, *lsb))
+                            }
+                        }
+                    }
+                    _ => {
+                        todo!(
+                            "Unhandled expr pattern {} which results in SymbolNotFound error",
+                            serialize_expr(&self.transaction, &self.symbol_table, rhs_expr_id),
+                        )
+                    }
                 }
+            }
+            Err(ExecutionError::Evaluation(EvaluationError::InvalidSlice {
+                expr_id,
+                start,
+                end,
+                width,
+            })) => {
+                panic!(
+                    "Evaluation Error: Invalid slice {}[{}:{}] (actual width is {})",
+                    serialize_expr(&self.transaction, &self.symbol_table, &expr_id),
+                    start,
+                    end,
+                    width
+                )
             }
             Err(e) => todo!("Unhandled error {}", e),
         }

@@ -2,8 +2,6 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use std::collections::HashSet;
-
 use anyhow::anyhow;
 use log::info;
 use protocols::ir::{Stmt, SymbolTable, Transaction};
@@ -65,9 +63,11 @@ pub fn threads_with_start_time(queue: &Queue, start_cycle: u32) -> Queue {
 }
 
 /// Finds all the unique start cycles of all the threads in the same queue
-pub fn unique_start_cycles(queue: &Queue) -> HashSet<u32> {
-    let start_cycles: Vec<u32> = queue.iter().map(|thread| thread.start_cycle).collect();
-    HashSet::from_iter(start_cycles)
+pub fn unique_start_cycles(queue: &Queue) -> Vec<u32> {
+    let mut start_cycles: Vec<u32> = queue.iter().map(|thread| thread.start_cycle).collect();
+    start_cycles.sort();
+    start_cycles.dedup();
+    start_cycles
 }
 
 /// Scheduler for handling the multiple threads in the monitor
@@ -327,10 +327,16 @@ impl Scheduler {
             symbol_table,
             next_stmt_map,
             args_mapping,
+            known_bits,
             ..
         } = thread.clone();
-        self.interpreter
-            .context_switch(transaction, symbol_table, next_stmt_map, args_mapping);
+        self.interpreter.context_switch(
+            transaction,
+            symbol_table,
+            next_stmt_map,
+            args_mapping,
+            known_bits,
+        );
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {

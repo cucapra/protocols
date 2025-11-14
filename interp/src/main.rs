@@ -2,17 +2,16 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use std::collections::HashMap;
-
 use clap::ColorChoice;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{SymbolTable, Transaction, Type};
+use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
 use protocols::setup::{assert_ok, setup_test_environment};
 use protocols::transactions_parser::parse_transactions_file;
 use protocols::typecheck::type_check;
+use rustc_hash::FxHashMap;
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]
@@ -100,7 +99,7 @@ fn main() -> anyhow::Result<()> {
         parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
 
     // Maps a transaction's name to its argument types
-    let mut transaction_arg_types: HashMap<String, Vec<Type>> = HashMap::new();
+    let mut transaction_arg_types = FxHashMap::default();
     for (tx, symbol_table) in &transactions_and_symbols {
         transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
     }

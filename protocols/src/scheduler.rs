@@ -8,7 +8,6 @@
 use baa::BitVecValue;
 use log::info;
 use rustc_hash::FxHashMap;
-use std::collections::HashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
@@ -24,7 +23,7 @@ use patronus::system::TransitionSystem;
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
 pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
-type ArgMap<'a> = HashMap<&'a str, BitVecValue>;
+type ArgMap<'a> = FxHashMap<&'a str, BitVecValue>;
 
 /// A `TodoItem` corresponds to a function call in a transaction `.tx` file
 pub type TodoItem = (String, Vec<BitVecValue>);
@@ -173,7 +172,7 @@ impl<'a> Scheduler<'a> {
 
             // setup the arguments for the transaction
             let args = todos[idx].1.clone();
-            let mut args_map = HashMap::new();
+            let mut args_map = FxHashMap::default();
 
             for (i, arg) in args.iter().enumerate() {
                 let identifier = st[tr.args[i].symbol()].name();
@@ -262,8 +261,8 @@ impl<'a> Scheduler<'a> {
             // initially there are no previous values.
             // we always need to cycle at least twice to check convergence,
             // and the first time we will get a previous input val.
-            let mut previous_input_vals: Option<HashMap<SymbolId, InputValue>> = None;
-            let mut active_input_vals: HashMap<SymbolId, InputValue>;
+            let mut previous_input_vals: Option<FxHashMap<SymbolId, InputValue>> = None;
+            let mut active_input_vals: FxHashMap<SymbolId, InputValue>;
 
             // fixed point iteration with assertions off
             self.evaluator.disable_assertions();

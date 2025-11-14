@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use std::{collections::HashSet, io::Write};
+use std::io::Write;
 
 use baa::BitVecValue;
 use clap::ColorChoice;
@@ -17,6 +17,7 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
 use pest::RuleType;
 use pest::iterators::Pair;
+use rustc_hash::FxHashSet;
 
 use crate::ir::*;
 
@@ -109,7 +110,7 @@ impl Diagnostic {
 
 pub struct DiagnosticHandler {
     files: SimpleFiles<String, String>,
-    reported_errs: HashSet<ErrorKey>,
+    reported_errs: FxHashSet<ErrorKey>,
     error_string: String,
     /// `color_choice` indicates whether to emit error messages w/ ANSI colors
     color_choice: ColorChoice,
@@ -132,7 +133,7 @@ impl DiagnosticHandler {
     pub fn new(color_choice: ColorChoice, error_locations: bool, emit_warnings: bool) -> Self {
         Self {
             files: SimpleFiles::new(),
-            reported_errs: HashSet::new(),
+            reported_errs: FxHashSet::default(),
             error_string: String::new(),
             color_choice,
             no_error_locations: error_locations,
