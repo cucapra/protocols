@@ -1,0 +1,16 @@
+// ARGS: --wave brave_new_world/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid
+struct UseWithoutValid {
+    in data: u32,
+    in data_val: u1,
+    out sum: u32,
+}
+
+fn use_without_valid<dut: UseWithoutValid>(in data: u32, out data_out: u32) {
+    dut.data := data;
+    step(2);
+    dut.data_val := 1'b1;
+    step(1);
+    assert_eq(data_out, dut.sum);
+    fork();
+    step(1);
+}
