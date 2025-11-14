@@ -53,9 +53,12 @@ pub enum WaveSamplingMode<'a> {
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     pub port_map: FxHashMap<PortKey, SignalRef>,
-    // `step` is logical step
-    step: u32,
-    // TODO: add an extra field called `time_step` (clock time in the waveform)
+
+    /// The current (logical) `step()` in the Protocols specification
+    logical_step: u32,
+
+    /// The actual clock time-step in the waveform
+    time_step: u32,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -90,7 +93,13 @@ impl WaveSignalTrace {
         Ok(Self {
             wave,
             port_map,
-            step: 0,
+
+            // At the beginning, zero `step()` calls have happened,
+            // so `logical_step` is initialized to 0
+            logical_step: 0,
+
+            // We assume that the waveform begins with clock time = 0
+            time_step: 0,
         })
     }
 }
@@ -161,10 +170,10 @@ impl SignalTrace for WaveSignalTrace {
         // The no. of times we can call `step` is 1 less than the
         // total no. of cycles available in the signal trace
         let total_steps = (self.wave.time_table().len() - 1) as u32;
-        if self.step < total_steps {
-            self.step += 1;
+        if self.logical_step < total_steps {
+            self.logical_step += 1;
         }
-        if self.step == total_steps {
+        if self.logical_step == total_steps {
             StepResult::Done
         } else {
             StepResult::Ok
@@ -187,11 +196,13 @@ impl SignalTrace for WaveSignalTrace {
             .wave
             .get_signal(*signal_ref)
             .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
-        // Currently, this finds the closest `TimeIdx` that is <= to our desired time (`self.step`)
-        // TODO: replace the `self.step` argument with `self.time_step`
-        let offset = signal
-            .get_offset(self.step)
-            .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
+        // Currently, this finds the closest `TimeIdx` that is <= to the desired (clock) time
+        let offset = signal.get_offset(self.time_step).with_context(|| {
+            format!(
+                "Unable to get offset for time-table index {}",
+                self.time_step
+            )
+        })?;
         // get the last value in the time step (this is to deal with delta cycles)
         let value = signal.get_value_at(&offset, offset.elements - 1);
         let bit_str = value
