@@ -3,12 +3,17 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design};
+use crate::{designs::Design, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
+
+// TODO: add an extra (optional) CLI flag for the monitor
+// `--sample_posedge = clk`
+// which tells the monitor which signal to treat as the clock and to sample on
+// every rising edge
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]
@@ -30,6 +35,7 @@ pub trait SignalTrace {
 }
 
 /// Determines how signals from a waveform a sampled
+/// TODO: change the arg of RisingEdge to a SignalRef
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum WaveSamplingMode<'a> {
@@ -47,7 +53,9 @@ pub enum WaveSamplingMode<'a> {
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     pub port_map: FxHashMap<PortKey, SignalRef>,
+    // `step` is logical step
     step: u32,
+    // TODO: add an extra field called `time_step` (clock time in the waveform)
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -145,6 +153,10 @@ fn find_instances(
 impl SignalTrace for WaveSignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
+    /// TODO: pattern-match on the `SamplingMode`
+    /// - keep the existing logic for `SamplingMode::Direct`
+    /// - If `RisingEdge`, increment the logic step and find out the correct `time_step` to go to
+    /// - Don't need to handle `FallingEdge` for now
     fn step(&mut self) -> StepResult {
         // The no. of times we can call `step` is 1 less than the
         // total no. of cycles available in the signal trace
@@ -159,25 +171,29 @@ impl SignalTrace for WaveSignalTrace {
         }
     }
 
-    // Returns value of a design input / output at the current step
+    /// Returns value of a design input / output at the current (logical) step
     fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue> {
         let key = PortKey {
             instance_id,
             pin_id: pin,
         };
+        // Get the Wellen `SignalRef`-erence
         let signal_ref = self
             .port_map
             .get(&key)
             .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
+        // Get the actual `Signal`
         let signal = self
             .wave
             .get_signal(*signal_ref)
             .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
+        // Currently, this finds the closest `TimeIdx` that is <= to our desired time (`self.step`)
+        // TODO: replace the `self.step` argument with `self.time_step`
         let offset = signal
             .get_offset(self.step)
             .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
         // get the last value in the time step (this is to deal with delta cycles)
-        let value = signal.get_value_at(&offset, offset.elements);
+        let value = signal.get_value_at(&offset, offset.elements - 1);
         let bit_str = value
             .to_bit_string()
             .with_context(|| format!("Unable to convert {value} to bit-string"))?;
