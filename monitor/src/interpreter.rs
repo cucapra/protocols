@@ -615,17 +615,18 @@ impl Interpreter {
                 }
             }
             Expr::Sym(symbol_id) => {
-                // Handle the case where the unknown expression is just a symbol
-                // This case has the same logic as `map_output_param_to_trace`
+                // Fetch all the output parameters of the function
                 let out_params: Vec<SymbolId> = self
                     .transaction
                     .get_parameters_by_direction(Dir::Out)
                     .collect();
 
+                // If `symbol_id` is an output parameter that is currently
+                // absent from `args_mapping`, insert the binding
+                // `symbol_id |-> known_value` into `args_mapping`,
+                // and update `known_bits` to be all ones
                 if out_params.contains(symbol_id) {
                     let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
-                    info!("{} is an output param of the transaction", symbol_name);
-
                     if let Entry::Vacant(e) = self.args_mapping.entry(*symbol_id) {
                         e.insert(known_value.clone());
                         let width = known_value.width();
@@ -870,6 +871,9 @@ impl Interpreter {
                             ))
                         }
                     }
+                    // The case below corresponds to a bit-slice
+                    // where the identifier being sliced hasn't been
+                    // encountered before (i.e. is not in the args_mapping)
                     Expr::Slice(sliced_expr_id, msb, lsb) => {
                         let sliced_expr = &self.transaction[sliced_expr_id];
                         match sliced_expr {
