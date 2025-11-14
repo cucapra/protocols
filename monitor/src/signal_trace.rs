@@ -50,6 +50,7 @@ pub enum WaveSamplingMode<'a> {
 
 /// Waveform dump based implementation of a signal trace.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     pub port_map: FxHashMap<PortKey, SignalRef>,
@@ -59,6 +60,12 @@ pub struct WaveSignalTrace {
 
     /// The actual clock time-step in the waveform
     time_step: u32,
+
+    /// An (optional) reference to the signal to treat as the clock signal
+    /// (to be sampled on every rising clockedge)
+    /// Note that this field is only `Some` if the user passes an argument
+    /// to the optional `--sample_posedge` CLI argument
+    clock_signal: Option<SignalRef>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -83,7 +90,8 @@ impl WaveSignalTrace {
         let mut wave = wellen::simple::read(filename)?;
 
         // find instances in the waveform hierarchy
-        let port_map = find_instances(wave.hierarchy(), designs, instances, sample_posedge);
+        let (port_map, clock_signal) =
+            find_instances(wave.hierarchy(), designs, instances, sample_posedge);
 
         // load all relavant signal references into memory
         let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
@@ -99,20 +107,26 @@ impl WaveSignalTrace {
             // so `logical_step` is initialized to 0
             logical_step: 0,
 
-            // We assume that the waveform begins with clock time = 0
+            // The waveform begins with `TimeIdx = 0`
             time_step: 0,
+
+            clock_signal,
         })
     }
 }
 
-/// check instances and build port map
+/// Checks instances and returns a pair consisting of the (port map, optional clock signal)
+/// (the latter is only `Some` if `sample_posedge` corresponds to a valid signal)
 fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
     instances: &[Instance],
     sample_posedge: Option<String>,
-) -> FxHashMap<PortKey, SignalRef> {
+) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
     let mut port_map = FxHashMap::default();
+
+    let mut clock_signal: Option<SignalRef> = None;
+
     for (inst_id, inst) in instances.iter().enumerate() {
         // fetch the design from the hashmap (the design tells us what pins to expect)
         let design = &designs[&inst.design_name];
@@ -138,6 +152,27 @@ fn find_instances(
                     // TODO: figure out how to set up `sample_posedge` to
                     // refer to the clock signal (if one is specified)
 
+                    match sample_posedge {
+                        Some(ref signal_name) => {
+                            let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
+                            match clock_signal_parts.last() {
+                                Some(signal_name) => {
+                                    match hierachy.lookup_var(&clock_signal_parts, signal_name) {
+                                        Some(var_ref) => {
+                                            let signal_ref = hierachy[var_ref].signal_ref();
+                                            clock_signal = Some(signal_ref);
+                                        }
+                                        None => panic!(
+                                            "Unable to find signal {signal_name} in waveform"
+                                        ),
+                                    }
+                                }
+                                None => panic!("Malformed signal {signal_name}"),
+                            }
+                        }
+                        None => (),
+                    }
+
                     // Check that bit widths match
                     assert_eq!(waveform_bits, pin.bitwidth());
 
@@ -161,7 +196,7 @@ fn find_instances(
             panic!("Failed to find instance {}", inst.name);
         }
     }
-    port_map
+    (port_map, clock_signal)
 }
 
 impl SignalTrace for WaveSignalTrace {
