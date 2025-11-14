@@ -1,4 +1,4 @@
-// ARGS: --wave serv/serv_regfile.fst --instances serv_regfile:Regfile 
+// ARGS: --wave serv/serv_regfile.fst --instances serv_regfile:Regfile --display-hex
 struct Regfile {
   in i_go: u1,
   out o_ready: u1,
