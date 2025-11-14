@@ -74,6 +74,7 @@ impl WaveSignalTrace {
         mode: WaveSamplingMode,
         designs: &FxHashMap<String, Design>,
         instances: &[Instance],
+        sample_posedge: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
         match mode {
             WaveSamplingMode::Direct => {} // ok
@@ -82,7 +83,7 @@ impl WaveSignalTrace {
         let mut wave = wellen::simple::read(filename)?;
 
         // find instances in the waveform hierarchy
-        let port_map = find_instances(wave.hierarchy(), designs, instances);
+        let port_map = find_instances(wave.hierarchy(), designs, instances, sample_posedge);
 
         // load all relavant signal references into memory
         let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
@@ -109,6 +110,7 @@ fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
     instances: &[Instance],
+    sample_posedge: Option<String>,
 ) -> FxHashMap<PortKey, SignalRef> {
     let mut port_map = FxHashMap::default();
     for (inst_id, inst) in instances.iter().enumerate() {
@@ -132,6 +134,9 @@ fn find_instances(
                         pin_id: *pin_id,
                     };
                     let waveform_bits = hierachy[var].length().expect("not a bit vector");
+
+                    // TODO: figure out how to set up `sample_posedge` to
+                    // refer to the clock signal (if one is specified)
 
                     // Check that bit widths match
                     assert_eq!(waveform_bits, pin.bitwidth());
@@ -186,7 +191,7 @@ impl SignalTrace for WaveSignalTrace {
             instance_id,
             pin_id: pin,
         };
-        // Get the Wellen `SignalRef`-erence
+        // Get the Wellen `SignalRef` (akin to `SignalId`)
         let signal_ref = self
             .port_map
             .get(&key)
@@ -197,12 +202,9 @@ impl SignalTrace for WaveSignalTrace {
             .get_signal(*signal_ref)
             .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
         // Currently, this finds the closest `TimeIdx` that is <= to the desired (clock) time
-        let offset = signal.get_offset(self.time_step).with_context(|| {
-            format!(
-                "Unable to get offset for time-table index {}",
-                self.time_step
-            )
-        })?;
+        let offset = signal
+            .get_offset(self.time_step)
+            .with_context(|| format!("Unable to get offset for time_step {}", self.time_step))?;
         // get the last value in the time step (this is to deal with delta cycles)
         let value = signal.get_value_at(&offset, offset.elements - 1);
         let bit_str = value

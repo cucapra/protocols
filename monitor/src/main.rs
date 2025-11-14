@@ -10,7 +10,7 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::global_context::GlobalContext;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
@@ -55,6 +55,12 @@ struct Cli {
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
+
+    /// Optional argument which specifies the name of the
+    /// signal to sample on a rising edge (posedge). If enabled, this
+    /// flag acts as the "clock" signal for the monitor.
+    #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
+    sample_posedge: Option<String>,
 }
 
 #[allow(unused_variables)]
@@ -107,8 +113,14 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
-        .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
+    let trace = WaveSignalTrace::open(
+        &cli.wave,
+        WaveSamplingMode::Direct,
+        &designs,
+        &instances,
+        cli.sample_posedge,
+    )
+    .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // TODO: figure out how to avoid hard-coding this
     let dut_struct_name = &instances[0].design_name;
