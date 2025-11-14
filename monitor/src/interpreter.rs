@@ -300,11 +300,7 @@ impl Interpreter {
                         }
                     }
                 } else {
-                    return Err(ExecutionError::arithmetic_error(
-                        "BITSLICE".to_string(),
-                        "Illegal bitslice operation".to_string(),
-                        *sliced_expr_id,
-                    ));
+                    return Err(ExecutionError::illegal_slice(*sliced_expr_id, *msb, *lsb));
                 }
 
                 let expr_val = self.evaluate_expr(sliced_expr_id, ctx)?;
@@ -817,11 +813,7 @@ impl Interpreter {
                             _ => {
                                 // Illegal bit-slice operation
                                 // (this will already have been caught by the type-checker)
-                                Err(ExecutionError::arithmetic_error(
-                                    "BITSLICE".to_string(),
-                                    "Illegal bitslice operation".to_string(),
-                                    *rhs_expr_id,
-                                ))
+                                Err(ExecutionError::illegal_slice(*rhs_expr_id, *msb, *lsb))
                             }
                         }
                     }
@@ -959,11 +951,7 @@ impl Interpreter {
                             _ => {
                                 // Illegal bit-slice operation
                                 // (this will already have been caught by the type-checker)
-                                Err(ExecutionError::arithmetic_error(
-                                    "BITSLICE".to_string(),
-                                    "Illegal bitslice operation".to_string(),
-                                    *sliced_expr_id,
-                                ))
+                                Err(ExecutionError::illegal_slice(*sliced_expr_id, *msb, *lsb))
                             }
                         }
                     }

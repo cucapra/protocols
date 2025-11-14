@@ -7,7 +7,7 @@
 
 use crate::diagnostic::{DiagnosticHandler, Level};
 use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
-use crate::serialize::serialize_bitvec;
+use crate::serialize::{serialize_bitvec, serialize_expr};
 use baa::BitVecValue;
 use std::fmt;
 
@@ -53,6 +53,14 @@ pub enum EvaluationError {
         start: u32,
         end: u32,
         width: u32,
+    },
+    /// Illegal slice operation
+    /// (i.e. applying a bit-slice onto a constant / a struct,
+    /// both of which are currently not allowed)
+    IllegalSlice {
+        expr_id: ExprId,
+        start: u32,
+        end: u32,
     },
     /// (For monitor only) When the value of an expression on the RHS
     /// of an assignment disagreess with the actual observed trace value
@@ -212,6 +220,17 @@ impl fmt::Display for EvaluationError {
                     f,
                     "Invalid slice operation on expr {}: [{}:{}] on width {}",
                     expr_id, start, end, width
+                )
+            }
+            EvaluationError::IllegalSlice {
+                expr_id,
+                start,
+                end,
+            } => {
+                write!(
+                    f,
+                    "Illegal slice operation on expr {}: attempted to slice bits [{}:{}] on an expression of a  non-bitvector type",
+                    expr_id, start, end
                 )
             }
         }
@@ -450,6 +469,14 @@ impl ExecutionError {
         })
     }
 
+    pub fn illegal_slice(expr_id: ExprId, start: u32, end: u32) -> Self {
+        ExecutionError::Evaluation(EvaluationError::IllegalSlice {
+            expr_id,
+            start,
+            end,
+        })
+    }
+
     pub fn assertion_failed(
         expr1_id: ExprId,
         expr2_id: ExprId,
@@ -523,7 +550,7 @@ impl DiagnosticEmitter {
         handler: &mut DiagnosticHandler,
         error: &EvaluationError,
         transaction: &Transaction,
-        _symbol_table: &SymbolTable,
+        symbol_table: &SymbolTable,
     ) {
         match error {
             EvaluationError::DontCareOperation {
@@ -573,6 +600,22 @@ impl DiagnosticEmitter {
                     &format!(
                         "Invalid slice operation: [{}:{}] on width {}",
                         start, end, width
+                    ),
+                    Level::Error,
+                );
+            }
+            EvaluationError::IllegalSlice {
+                expr_id,
+                start,
+                end,
+            } => {
+                let expr_str = serialize_expr(transaction, symbol_table, expr_id);
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!(
+                        "Illegal slice operation {}[{}:{}]: expected {} to have a non-bitvector type but this is not the case",
+                        expr_str, start, end, expr_str
                     ),
                     Level::Error,
                 );
