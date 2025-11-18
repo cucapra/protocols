@@ -1,0 +1,32 @@
+// ARGS: --wave brave_new_world/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA
+struct FailureToUpdateSHA {
+    in reset: u1,
+    in start: u1,
+    in finish: u1,
+    in almfull: u1,
+    in result_valid: u1,
+    out valid: u1,
+    out data: u32,
+}
+
+fn failure_to_update_sha<dut: FailureToUpdateSHA>() {
+    dut.reset := 1'b1;
+    step(1);
+
+    dut.reset := 1'b0;
+    dut.start := 1'b1;
+    step(1);
+
+    dut.finish := 1'b1;
+    dut.result_valid := 1'b1;
+    step(1);
+
+
+    dut.finish := 1'b0;
+    dut.result_valid := 1'b0;
+    dut.almfull := 1'b1;
+    step(1);
+    assert_eq(dut.valid, 1'b0);
+    fork();
+    step(1);
+}
