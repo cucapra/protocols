@@ -10,7 +10,7 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
+use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::GlobalContext;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
