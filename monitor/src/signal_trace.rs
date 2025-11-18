@@ -10,11 +10,6 @@ use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
 
-// TODO: add an extra (optional) CLI flag for the monitor
-// `--sample_posedge = clk`
-// which tells the monitor which signal to treat as the clock and to sample on
-// every rising edge
-
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]
 pub enum StepResult {
@@ -34,17 +29,18 @@ pub trait SignalTrace {
     fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
 }
 
-/// Determines how signals from a waveform a sampled
-/// TODO: change the arg of RisingEdge to a SignalRef
+/// The `WaveSamplingMode` determines how signals from a waveform are sampled
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum WaveSamplingMode<'a> {
-    /// sample on the rising edge of the signal specified by its hierarchical name
-    RisingEdge(&'a str),
-    /// sample on the falling edge of the signal specified by its hierarchical name
-    FallingEdge(&'a str),
-    /// Interpret every time step as a new clock step. This generally only works for waveforms
-    /// produced by the patronus simulator.
+pub enum WaveSamplingMode {
+    /// Sample on the rising edge of the signal, specified by its
+    /// signal identifier (a `SignalRef`)
+    RisingEdge(SignalRef),
+    /// Sample on the falling edge of the signal, specified by its
+    /// signal identifier (a `SignalRef`)
+    FallingEdge(SignalRef),
+    /// Interpret every time step as a new clock step. This generally only works
+    /// for waveforms produced by the Patronus simulator.
     Direct,
 }
 
@@ -54,6 +50,9 @@ pub enum WaveSamplingMode<'a> {
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     pub port_map: FxHashMap<PortKey, SignalRef>,
+
+    /// The sampling mode to be used on the waveform
+    sampling_mode: WaveSamplingMode,
 
     /// The current (logical) `step()` in the Protocols specification
     logical_step: u32,
@@ -78,20 +77,23 @@ pub struct PortKey {
 impl WaveSignalTrace {
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
-        mode: WaveSamplingMode,
         designs: &FxHashMap<String, Design>,
         instances: &[Instance],
         sample_posedge: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
-        match mode {
-            WaveSamplingMode::Direct => {} // ok
-            m => todo!("Unsupported sampling mode: {m:?}"),
-        }
         let mut wave = wellen::simple::read(filename)?;
 
         // find instances in the waveform hierarchy
         let (port_map, clock_signal) =
             find_instances(wave.hierarchy(), designs, instances, sample_posedge);
+
+        // Determine the sampling mode based on whether the user
+        // supplied an argument for `--sample_posedge`
+        let sampling_mode = if let Some(signal_ref) = clock_signal {
+            WaveSamplingMode::RisingEdge(signal_ref)
+        } else {
+            WaveSamplingMode::Direct
+        };
 
         // load all relavant signal references into memory
         let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
@@ -102,6 +104,7 @@ impl WaveSignalTrace {
         Ok(Self {
             wave,
             port_map,
+            sampling_mode,
 
             // At the beginning, zero `step()` calls have happened,
             // so `logical_step` is initialized to 0
@@ -149,9 +152,8 @@ fn find_instances(
                     };
                     let waveform_bits = hierachy[var].length().expect("not a bit vector");
 
-                    // TODO: figure out how to set up `sample_posedge` to
+                    // Set up `sample_posedge` to
                     // refer to the clock signal (if one is specified)
-
                     match sample_posedge {
                         Some(ref signal_name) => {
                             let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
