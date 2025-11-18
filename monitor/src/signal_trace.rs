@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design};
+use crate::{designs::Design, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
@@ -154,25 +154,22 @@ fn find_instances(
 
                     // Set up `sample_posedge` to
                     // refer to the clock signal (if one is specified)
-                    match sample_posedge {
-                        Some(ref signal_name) => {
-                            let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
-                            match clock_signal_parts.last() {
-                                Some(signal_name) => {
-                                    match hierachy.lookup_var(&clock_signal_parts, signal_name) {
-                                        Some(var_ref) => {
-                                            let signal_ref = hierachy[var_ref].signal_ref();
-                                            clock_signal = Some(signal_ref);
-                                        }
-                                        None => panic!(
-                                            "Unable to find signal {signal_name} in waveform"
-                                        ),
+                    if let Some(ref signal_name) = sample_posedge {
+                        let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
+                        match clock_signal_parts.last() {
+                            Some(signal_name) => {
+                                match hierachy.lookup_var(&clock_signal_parts, signal_name) {
+                                    Some(var_ref) => {
+                                        let signal_ref = hierachy[var_ref].signal_ref();
+                                        clock_signal = Some(signal_ref);
+                                    }
+                                    None => {
+                                        panic!("Unable to find signal {signal_name} in waveform")
                                     }
                                 }
-                                None => panic!("Malformed signal {signal_name}"),
                             }
+                            None => panic!("Malformed signal {signal_name}"),
                         }
-                        None => (),
                     }
 
                     // Check that bit widths match
