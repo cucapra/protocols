@@ -8,7 +8,7 @@ use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, Signal, SignalRef};
+use wellen::{Hierarchy, SignalRef};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]
@@ -124,11 +124,19 @@ impl WaveSignalTrace {
         })
     }
 
-    fn get_value(&self, signal: &Signal, time_step: u32) -> String {
+    /// Helper function that returns the string representation of a
+    /// `SignalValue` associated with a particular `SignalRef`
+    /// at a given `time_step`
+    fn get_value(&self, signal_ref: SignalRef, time_step: u32) -> String {
+        // Get the clock signal
+        let signal = self
+            .wave
+            .get_signal(signal_ref)
+            .unwrap_or_else(|| panic!("Unable to get signal for SignalRef {:?}", signal_ref));
         let offset = signal
             .get_offset(time_step)
             .unwrap_or_else(|| panic!("Unable to get offset for time_step {}", time_step));
-        // get the last value in the time step (this is to deal with delta cycles)
+        // Get the last value in the time step (this is to deal with delta cycles)
         let value = signal.get_value_at(&offset, offset.elements - 1);
         value
             .to_bit_string()
@@ -231,8 +239,12 @@ impl SignalTrace for WaveSignalTrace {
             // A `Direct` sampling mode means a `logical_step` maps 1:1
             // to a `time_step` in the waveform
             WaveSamplingMode::Direct => {
+                // If we haven't reached the end of the waveform yet
+                // (i.e. if `self.logical_step < total_steps`)
+                // increment the `logical_step` & `time_step` together
                 if self.logical_step < total_steps {
                     self.logical_step += 1;
+                    self.time_step += 1;
                 }
                 if self.logical_step == total_steps {
                     StepResult::Done
@@ -244,13 +256,8 @@ impl SignalTrace for WaveSignalTrace {
                 // Increment the logical step
                 self.logical_step += 1;
 
-                // Get the clock signal
-                let signal = self.wave.get_signal(clock_signal_ref).unwrap_or_else(|| {
-                    panic!("Unable to get signal for SignalRef {:?}", clock_signal_ref)
-                });
-
                 // Find the current signal value
-                let prev_value = self.get_value(signal, self.time_step);
+                let prev_value = self.get_value(clock_signal_ref, self.time_step);
 
                 // As long as the time-step is in bounds...
                 while self.time_step < total_steps {
@@ -259,7 +266,7 @@ impl SignalTrace for WaveSignalTrace {
                     // If yes, we have encountered a rising clock-edge
                     // and hvae found the new `time_step` for the waveform
                     self.time_step += 1;
-                    let new_value = self.get_value(signal, self.time_step);
+                    let new_value = self.get_value(clock_signal_ref, self.time_step);
                     if prev_value == "0" && new_value == "1" {
                         return StepResult::Ok;
                     }
@@ -288,20 +295,9 @@ impl SignalTrace for WaveSignalTrace {
             .port_map
             .get(&key)
             .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
-        // Get the actual `Signal`
-        let signal = self
-            .wave
-            .get_signal(*signal_ref)
-            .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
-        // Currently, this finds the closest `TimeIdx` that is <= to the desired (clock) time
-        let offset = signal
-            .get_offset(self.time_step)
-            .with_context(|| format!("Unable to get offset for time_step {}", self.time_step))?;
-        // get the last value in the time step (this is to deal with delta cycles)
-        let value = signal.get_value_at(&offset, offset.elements - 1);
-        let bit_str = value
-            .to_bit_string()
-            .with_context(|| format!("Unable to convert {value} to bit-string"))?;
+
+        let bit_str = self.get_value(*signal_ref, self.time_step);
+
         Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {
             panic!(
                 "Unable to convert bit-string {bit_str} to BitVecValue, {:?}",
