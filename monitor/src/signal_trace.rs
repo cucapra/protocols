@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{designs::Design, Instance};
+use crate::{Instance, designs::Design};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
@@ -75,6 +75,10 @@ pub struct PortKey {
 }
 
 impl WaveSignalTrace {
+    /// Opens a waveform at the specified `filename` with the given
+    /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
+    /// as an argument to determine the `WaveSamplingMode` (whether it is
+    /// `Direct` or `RisingEdge`).
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
         designs: &FxHashMap<String, Design>,
@@ -87,8 +91,9 @@ impl WaveSignalTrace {
         let (port_map, clock_signal) =
             find_instances(wave.hierarchy(), designs, instances, sample_posedge);
 
-        // Determine the sampling mode based on whether the user
-        // supplied an argument for `--sample_posedge`
+        // Determine the sampling mode based on the vavlue received
+        // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
+        // for now (`FallingEdge` is currently unsupported).
         let sampling_mode = if let Some(signal_ref) = clock_signal {
             WaveSamplingMode::RisingEdge(signal_ref)
         } else {
