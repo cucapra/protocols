@@ -104,6 +104,10 @@ impl WaveSignalTrace {
 
         // load all relavant signal references into memory
         let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
+        // Add clock signal if present
+        if let Some(clk_sig) = clock_signal {
+            signals.push(clk_sig);
+        }
         signals.sort();
         signals.dedup();
         wave.load_signals(&signals);
@@ -182,15 +186,27 @@ fn find_instances(
                     // refer to the clock signal (if one is specified)
                     if let Some(ref signal_name) = sample_posedge {
                         let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
+
+                        // The clock signal should be in the same scope as the instance
+                        // So we look it up directly in the instance_scope
                         match clock_signal_parts.last() {
-                            Some(signal_name) => {
-                                match hierachy.lookup_var(&clock_signal_parts, signal_name) {
-                                    Some(var_ref) => {
-                                        let signal_ref = hierachy[var_ref].signal_ref();
-                                        clock_signal = Some(signal_ref);
-                                    }
-                                    None => {
-                                        panic!("Unable to find signal {signal_name} in waveform")
+                            Some(var_name) => {
+                                if let Some(var) = instance_scope
+                                    .vars(hierachy)
+                                    .find(|v| hierachy[*v].name(hierachy) == *var_name)
+                                {
+                                    let signal_ref = hierachy[var].signal_ref();
+                                    clock_signal = Some(signal_ref);
+                                } else {
+                                    // If not found in instance scope, use `lookup_var`
+                                    match hierachy.lookup_var(&clock_signal_parts, var_name) {
+                                        Some(var_ref) => {
+                                            let signal_ref = hierachy[var_ref].signal_ref();
+                                            clock_signal = Some(signal_ref);
+                                        }
+                                        None => {
+                                            panic!("Unable to find signal {var_name} in waveform")
+                                        }
                                     }
                                 }
                             }
@@ -227,10 +243,6 @@ fn find_instances(
 impl SignalTrace for WaveSignalTrace {
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
-    /// TODO: pattern-match on the `SamplingMode`
-    /// - keep the existing logic for `SamplingMode::Direct`
-    /// - If `RisingEdge`, increment the logic step and find out the correct `time_step` to go to
-    /// - Don't need to handle `FallingEdge` for now
     fn step(&mut self) -> StepResult {
         // The no. of times we can call `step` is 1 less than the
         // total no. of cycles available in the signal trace
@@ -252,19 +264,20 @@ impl SignalTrace for WaveSignalTrace {
                     StepResult::Ok
                 }
             }
+            // Sample on the next rising edge of `clock_signal_ref`
             WaveSamplingMode::RisingEdge(clock_signal_ref) => {
-                // Increment the logical step
+                // First, increment the logical step
                 self.logical_step += 1;
 
-                // Find the current signal value
-                let prev_value = self.get_value(clock_signal_ref, self.time_step);
-
-                // As long as the time-step is in bounds...
+                // Next, as long as the time-step is in bounds...
                 while self.time_step < total_steps {
-                    // Increment the `time_step`, and check whether
+                    // ...first fetch the current signal value before incrementing
+                    let prev_value = self.get_value(clock_signal_ref, self.time_step);
+
+                    // Then, increment the `time_step`, and check whether
                     // the prevous value is 0 while the new value is 1
                     // If yes, we have encountered a rising clock-edge
-                    // and hvae found the new `time_step` for the waveform
+                    // and have found the new `time_step` for the waveform
                     self.time_step += 1;
                     let new_value = self.get_value(clock_signal_ref, self.time_step);
                     if prev_value == "0" && new_value == "1" {
@@ -296,6 +309,8 @@ impl SignalTrace for WaveSignalTrace {
             .get(&key)
             .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
 
+        // Obtain the `SignalValue` at the current `time_step`
+        // (represented as a bit-string)
         let bit_str = self.get_value(*signal_ref, self.time_step);
 
         Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {

@@ -59,6 +59,8 @@ struct Cli {
     /// Optional argument which specifies the name of the
     /// signal to sample on a rising edge (posedge). If enabled, this
     /// flag acts as the "clock" signal for the monitor.
+    /// Note: the full path to the signal should be passed as this argument,
+    /// e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace.
     #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
     sample_posedge: Option<String>,
 }
