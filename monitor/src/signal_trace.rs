@@ -8,7 +8,7 @@ use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, SignalRef};
+use wellen::{Hierarchy, Signal, SignalRef};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]
@@ -123,6 +123,17 @@ impl WaveSignalTrace {
             clock_signal,
         })
     }
+
+    fn get_value(&self, signal: &Signal, time_step: u32) -> String {
+        let offset = signal
+            .get_offset(time_step)
+            .unwrap_or_else(|| panic!("Unable to get offset for time_step {}", time_step));
+        // get the last value in the time step (this is to deal with delta cycles)
+        let value = signal.get_value_at(&offset, offset.elements - 1);
+        value
+            .to_bit_string()
+            .unwrap_or_else(|| panic!("Unable to convert {value} to bit-string"))
+    }
 }
 
 /// Checks instances and returns a pair consisting of the (port map, optional clock signal)
@@ -229,45 +240,34 @@ impl SignalTrace for WaveSignalTrace {
                     StepResult::Ok
                 }
             }
-            WaveSamplingMode::RisingEdge(signal_ref) => {
+            WaveSamplingMode::RisingEdge(clock_signal_ref) => {
                 // Increment the logical step
                 self.logical_step += 1;
 
                 // Get the clock signal
-                let signal = self.wave.get_signal(signal_ref).unwrap_or_else(|| {
-                    panic!("Unable to get signal for SignalRef {:?}", signal_ref)
+                let signal = self.wave.get_signal(clock_signal_ref).unwrap_or_else(|| {
+                    panic!("Unable to get signal for SignalRef {:?}", clock_signal_ref)
                 });
 
-                // Iterate through signal changes to find the next rising edge
-                // by using Wellen's `Signal::iter_changes` library
-                // Assumption: this function only returns time indices where the
-                // `SignalValue` changes,
-                // so we just need to find the next change where the value is 1
-                let mut found_next_edge = false;
-                for (time_idx, value) in signal.iter_changes() {
-                    // Skip time indices that are <= the current time step
-                    if time_idx <= self.time_step {
-                        continue;
-                    }
+                // Find the current signal value
+                let prev_value = self.get_value(signal, self.time_step);
 
-                    // Since this is a change, if the new value is 1,
-                    // it's a rising edge (0 -> 1)
-                    // TODO: is there a better way of checking
-                    // if the `SignalValue` is equal to 1?
-                    if let Some(bit_str) = value.to_bit_string() {
-                        if bit_str == "1" {
-                            self.time_step = time_idx;
-                            found_next_edge = true;
-                            break;
-                        }
+                // As long as the time-step is in bounds...
+                while self.time_step < total_steps {
+                    // Increment the `time_step`, and check whether
+                    // the prevous value is 0 while the new value is 1
+                    // If yes, we have encountered a rising clock-edge
+                    // and hvae found the new `time_step` for the waveform
+                    self.time_step += 1;
+                    let new_value = self.get_value(signal, self.time_step);
+                    if prev_value == "0" && new_value == "1" {
+                        return StepResult::Ok;
                     }
                 }
-
-                if !found_next_edge {
-                    StepResult::Done
-                } else {
-                    StepResult::Ok
-                }
+                // If we reach this point, we cannot increment the `time_step`
+                // any further, so we return `Done` to indicate that
+                // we've reached the end of the waveform
+                StepResult::Done
             }
             WaveSamplingMode::FallingEdge(_) => {
                 todo!("Handle WaveSamplingMode::FallingEdge when stepping WaveSignalTrace")
