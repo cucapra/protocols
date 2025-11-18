@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design};
+use crate::{designs::Design, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
@@ -25,8 +25,10 @@ pub trait SignalTrace {
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult;
 
-    /// returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
+    /// Returns value of a design input / output at the current step.
+    /// Returns `Err` if the `pin` doesn't exist in the port map
+    /// for the given instance.
+    fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue>;
 }
 
 /// The `WaveSamplingMode` determines how signals from a waveform are sampled
@@ -214,17 +216,68 @@ impl SignalTrace for WaveSignalTrace {
         // The no. of times we can call `step` is 1 less than the
         // total no. of cycles available in the signal trace
         let total_steps = (self.wave.time_table().len() - 1) as u32;
-        if self.logical_step < total_steps {
-            self.logical_step += 1;
-        }
-        if self.logical_step == total_steps {
-            StepResult::Done
-        } else {
-            StepResult::Ok
+        match self.sampling_mode {
+            // A `Direct` sampling mode means a `logical_step` maps 1:1
+            // to a `time_step` in the waveform
+            WaveSamplingMode::Direct => {
+                if self.logical_step < total_steps {
+                    self.logical_step += 1;
+                }
+                if self.logical_step == total_steps {
+                    StepResult::Done
+                } else {
+                    StepResult::Ok
+                }
+            }
+            WaveSamplingMode::RisingEdge(signal_ref) => {
+                // Increment the logical step
+                self.logical_step += 1;
+
+                // Get the clock signal
+                let signal = self.wave.get_signal(signal_ref).unwrap_or_else(|| {
+                    panic!("Unable to get signal for SignalRef {:?}", signal_ref)
+                });
+
+                // Iterate through signal changes to find the next rising edge
+                // by using Wellen's `Signal::iter_changes` library
+                // Assumption: this function only returns time indices where the
+                // `SignalValue` changes,
+                // so we just need to find the next change where the value is 1
+                let mut found_next_edge = false;
+                for (time_idx, value) in signal.iter_changes() {
+                    // Skip time indices that are <= the current time step
+                    if time_idx <= self.time_step {
+                        continue;
+                    }
+
+                    // Since this is a change, if the new value is 1,
+                    // it's a rising edge (0 -> 1)
+                    // TODO: is there a better way of checking
+                    // if the `SignalValue` is equal to 1?
+                    if let Some(bit_str) = value.to_bit_string() {
+                        if bit_str == "1" {
+                            self.time_step = time_idx;
+                            found_next_edge = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !found_next_edge {
+                    StepResult::Done
+                } else {
+                    StepResult::Ok
+                }
+            }
+            WaveSamplingMode::FallingEdge(_) => {
+                todo!("Handle WaveSamplingMode::FallingEdge when stepping WaveSignalTrace")
+            }
         }
     }
 
-    /// Returns value of a design input / output at the current (logical) step
+    /// Returns value of a design input / output at the current (logical) step.
+    /// Returns `Err` if the `pin` doesn't exist in the port map
+    /// for the given instance.
     fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue> {
         let key = PortKey {
             instance_id,
