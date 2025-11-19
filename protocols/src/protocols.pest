@@ -2,6 +2,7 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 WHITESPACE = _{ " " | NEWLINE }
 COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
@@ -60,7 +61,7 @@ if = { "if" ~ expr ~ "{" ~ stmt* ~ "}" }
 else = { "else" ~ "{" ~ stmt* ~ "}" }
 cond = { if ~ else? }
 
-// Annotations
+// Annotations on top of functions (only `idle` is supported right now)
 annotation = { "#[" ~ annotation_name ~ "]" }
 annotation_name = { "idle" }
 
