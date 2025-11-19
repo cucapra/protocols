@@ -407,11 +407,20 @@ impl Scheduler {
                         "Thread {:?} finished successfully, adding to `finished` queue",
                         thread.thread_id
                     );
-                    println!(
-                        "{}",
-                        self.interpreter
-                            .serialize_reconstructed_transaction(&self.ctx)
-                    );
+                    // Don't print out the inferred transaction if the user
+                    // has marked it as `idle`
+                    if self.interpreter.transaction.is_idle {
+                        info!(
+                            "Omitting idle transaction `{}` from trace",
+                            self.interpreter.transaction.name
+                        );
+                    } else {
+                        println!(
+                            "{}",
+                            self.interpreter
+                                .serialize_reconstructed_transaction(&self.ctx)
+                        );
+                    }
                     self.finished.push(thread.clone());
                     break;
                 }
