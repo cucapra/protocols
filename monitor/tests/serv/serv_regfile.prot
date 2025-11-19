@@ -266,7 +266,10 @@ fn read_write<R: Regfile>(
   step();
 }
 
-// this transaction describes what happens when the register file is not in use
+// This transaction describes what happens when the register file is not in use
+// We mark this protocol as `idle` to avoid excessive `idle()` transcations 
+// showing up in the trace produced by the monitor
+#[idle]
 fn idle<R: Regfile>() {
   R.i_go := 1'b0;
   R.i_rd_en := 1'b0;
