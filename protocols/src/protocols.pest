@@ -60,8 +60,12 @@ if = { "if" ~ expr ~ "{" ~ stmt* ~ "}" }
 else = { "else" ~ "{" ~ stmt* ~ "}" }
 cond = { if ~ else? }
 
+// Annotations
+annotation = { "#[" ~ annotation_name ~ "]" }
+annotation_name = { "idle" }
+
 // Structs
 struct_def = { "struct" ~ path_id ~ "{" ~ arglist? ~ "}" }
 
-fun = { "fn" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
+fun = { annotation? ~ "fn" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
 file = { SOI ~ (fun | struct_def)* ~ EOI }

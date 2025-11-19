@@ -27,6 +27,9 @@ pub struct Transaction {
     /// Optional type parameter (identified by its `SymbolId`)
     pub type_param: Option<SymbolId>,
 
+    /// Whether the transaction has been marked as `idle` with `#[idle]`
+    pub is_idle: bool,
+
     /// Maps `ExprId`s to their corresponding `Expr`s
     exprs: PrimaryMap<ExprId, Expr>,
 
@@ -52,6 +55,7 @@ impl Transaction {
             args: Vec::default(),
             body: block_id,
             type_param: None, // guranteed to become Some after parsing by grammar constraints
+            is_idle: false,
             exprs,
             dont_care_id,
             stmts,
