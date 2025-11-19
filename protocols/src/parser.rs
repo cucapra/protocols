@@ -3,6 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::ir::Stmt;
 use baa::BitVecValue;
@@ -221,8 +222,25 @@ impl ParserContext<'_> {
         match pair.as_rule() {
             Rule::fun => {
                 let mut inner_rules = pair.clone().into_inner();
-                let id_pair =
-                    self.expect_rule(inner_rules.next(), &pair, "Expected function identifier")?;
+
+                // Check for optional annotation
+                let first_rule = self.expect_rule(
+                    inner_rules.next(),
+                    &pair,
+                    "Expected function identifier or annotation",
+                )?;
+                let id_pair = if first_rule.as_rule() == Rule::annotation {
+                    // Parse annotation - currently we only support #[idle]
+                    self.tr.is_idle = true;
+                    self.expect_rule(
+                        inner_rules.next(),
+                        &pair,
+                        "Expected function identifier after annotation",
+                    )?
+                } else {
+                    first_rule
+                };
+
                 let id = id_pair.as_str();
                 self.tr.name = id.to_string();
 
