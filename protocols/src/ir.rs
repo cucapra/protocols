@@ -55,7 +55,7 @@ impl Transaction {
             args: Vec::default(),
             body: block_id,
             type_param: None, // guaranteed to become Some after parsing by grammar constraints
-            is_idle: false,   // By default, transactions are *not* be marked as `idle`
+            is_idle: false,   // By default, transactions are *not* marked as `idle`
             exprs,
             dont_care_id,
             stmts,
