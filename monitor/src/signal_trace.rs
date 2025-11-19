@@ -25,29 +25,48 @@ pub trait SignalTrace {
     /// (This should map 1:1 to a `step` in the Protocol)
     fn step(&mut self) -> StepResult;
 
-    /// returns value of a design input / output at the current step
-    fn get(&self, instance_id: u32, io: SymbolId) -> anyhow::Result<BitVecValue>;
+    /// Returns value of a design input / output at the current step.
+    /// Returns `Err` if the `pin` doesn't exist in the port map
+    /// for the given instance.
+    fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue>;
 }
 
-/// Determines how signals from a waveform a sampled
+/// The `WaveSamplingMode` determines how signals from a waveform are sampled
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum WaveSamplingMode<'a> {
-    /// sample on the rising edge of the signal specified by its hierarchical name
-    RisingEdge(&'a str),
-    /// sample on the falling edge of the signal specified by its hierarchical name
-    FallingEdge(&'a str),
-    /// Interpret every time step as a new clock step. This generally only works for waveforms
-    /// produced by the patronus simulator.
+pub enum WaveSamplingMode {
+    /// Sample on the rising edge of the signal, specified by its
+    /// signal identifier (a `SignalRef`)
+    RisingEdge(SignalRef),
+    /// Sample on the falling edge of the signal, specified by its
+    /// signal identifier (a `SignalRef`)
+    FallingEdge(SignalRef),
+    /// Interpret every time step as a new clock step. This generally only works
+    /// for waveforms produced by the Patronus simulator.
     Direct,
 }
 
 /// Waveform dump based implementation of a signal trace.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     pub port_map: FxHashMap<PortKey, SignalRef>,
-    step: u32,
+
+    /// The sampling mode to be used on the waveform
+    sampling_mode: WaveSamplingMode,
+
+    /// The current (logical) `step()` in the Protocols specification
+    logical_step: u32,
+
+    /// The actual clock time-step in the waveform
+    time_step: u32,
+
+    /// An (optional) reference to the signal to treat as the clock signal
+    /// (to be sampled on every rising clockedge)
+    /// Note that this field is only `Some` if the user passes an argument
+    /// to the optional `--sample_posedge` CLI argument
+    clock_signal: Option<SignalRef>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -58,23 +77,37 @@ pub struct PortKey {
 }
 
 impl WaveSignalTrace {
+    /// Opens a waveform at the specified `filename` with the given
+    /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
+    /// as an argument to determine the `WaveSamplingMode` (whether it is
+    /// `Direct` or `RisingEdge`).
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
-        mode: WaveSamplingMode,
         designs: &FxHashMap<String, Design>,
         instances: &[Instance],
+        sample_posedge: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
-        match mode {
-            WaveSamplingMode::Direct => {} // ok
-            m => todo!("Unsupported sampling mode: {m:?}"),
-        }
         let mut wave = wellen::simple::read(filename)?;
 
         // find instances in the waveform hierarchy
-        let port_map = find_instances(wave.hierarchy(), designs, instances);
+        let (port_map, clock_signal) =
+            find_instances(wave.hierarchy(), designs, instances, sample_posedge);
+
+        // Determine the sampling mode based on the vavlue received
+        // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
+        // for now (`FallingEdge` is currently unsupported).
+        let sampling_mode = if let Some(signal_ref) = clock_signal {
+            WaveSamplingMode::RisingEdge(signal_ref)
+        } else {
+            WaveSamplingMode::Direct
+        };
 
         // load all relavant signal references into memory
         let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
+        // Add clock signal if present
+        if let Some(clk_sig) = clock_signal {
+            signals.push(clk_sig);
+        }
         signals.sort();
         signals.dedup();
         wave.load_signals(&signals);
@@ -82,18 +115,51 @@ impl WaveSignalTrace {
         Ok(Self {
             wave,
             port_map,
-            step: 0,
+            sampling_mode,
+
+            // At the beginning, zero `step()` calls have happened,
+            // so `logical_step` is initialized to 0
+            logical_step: 0,
+
+            // The waveform begins with `TimeIdx = 0`
+            time_step: 0,
+
+            clock_signal,
         })
+    }
+
+    /// Helper function that returns the string representation of a
+    /// `SignalValue` associated with a particular `SignalRef`
+    /// at a given `time_step`
+    fn get_value(&self, signal_ref: SignalRef, time_step: u32) -> String {
+        // Get the clock signal
+        let signal = self
+            .wave
+            .get_signal(signal_ref)
+            .unwrap_or_else(|| panic!("Unable to get signal for SignalRef {:?}", signal_ref));
+        let offset = signal
+            .get_offset(time_step)
+            .unwrap_or_else(|| panic!("Unable to get offset for time_step {}", time_step));
+        // Get the last value in the time step (this is to deal with delta cycles)
+        let value = signal.get_value_at(&offset, offset.elements - 1);
+        value
+            .to_bit_string()
+            .unwrap_or_else(|| panic!("Unable to convert {value} to bit-string"))
     }
 }
 
-/// check instances and build port map
+/// Checks instances and returns a pair consisting of the (port map, optional clock signal)
+/// (the latter is only `Some` if `sample_posedge` corresponds to a valid signal)
 fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
     instances: &[Instance],
-) -> FxHashMap<PortKey, SignalRef> {
+    sample_posedge: Option<String>,
+) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
     let mut port_map = FxHashMap::default();
+
+    let mut clock_signal: Option<SignalRef> = None;
+
     for (inst_id, inst) in instances.iter().enumerate() {
         // fetch the design from the hashmap (the design tells us what pins to expect)
         let design = &designs[&inst.design_name];
@@ -115,6 +181,38 @@ fn find_instances(
                         pin_id: *pin_id,
                     };
                     let waveform_bits = hierachy[var].length().expect("not a bit vector");
+
+                    // Set up `sample_posedge` to
+                    // refer to the clock signal (if one is specified)
+                    if let Some(ref signal_name) = sample_posedge {
+                        let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
+
+                        // The clock signal should be in the same scope as the instance
+                        // So we look it up directly in the instance_scope
+                        match clock_signal_parts.last() {
+                            Some(var_name) => {
+                                if let Some(var) = instance_scope
+                                    .vars(hierachy)
+                                    .find(|v| hierachy[*v].name(hierachy) == *var_name)
+                                {
+                                    let signal_ref = hierachy[var].signal_ref();
+                                    clock_signal = Some(signal_ref);
+                                } else {
+                                    // If not found in instance scope, use `lookup_var`
+                                    match hierachy.lookup_var(&clock_signal_parts, var_name) {
+                                        Some(var_ref) => {
+                                            let signal_ref = hierachy[var_ref].signal_ref();
+                                            clock_signal = Some(signal_ref);
+                                        }
+                                        None => {
+                                            panic!("Unable to find signal {var_name} in waveform")
+                                        }
+                                    }
+                                }
+                            }
+                            None => panic!("Malformed signal {signal_name}"),
+                        }
+                    }
 
                     // Check that bit widths match
                     assert_eq!(waveform_bits, pin.bitwidth());
@@ -139,7 +237,7 @@ fn find_instances(
             panic!("Failed to find instance {}", inst.name);
         }
     }
-    port_map
+    (port_map, clock_signal)
 }
 
 impl SignalTrace for WaveSignalTrace {
@@ -149,38 +247,72 @@ impl SignalTrace for WaveSignalTrace {
         // The no. of times we can call `step` is 1 less than the
         // total no. of cycles available in the signal trace
         let total_steps = (self.wave.time_table().len() - 1) as u32;
-        if self.step < total_steps {
-            self.step += 1;
-        }
-        if self.step == total_steps {
-            StepResult::Done
-        } else {
-            StepResult::Ok
+        match self.sampling_mode {
+            // A `Direct` sampling mode means a `logical_step` maps 1:1
+            // to a `time_step` in the waveform
+            WaveSamplingMode::Direct => {
+                // If we haven't reached the end of the waveform yet
+                // (i.e. if `self.logical_step < total_steps`)
+                // increment the `logical_step` & `time_step` together
+                if self.logical_step < total_steps {
+                    self.logical_step += 1;
+                    self.time_step += 1;
+                }
+                if self.logical_step == total_steps {
+                    StepResult::Done
+                } else {
+                    StepResult::Ok
+                }
+            }
+            // Sample on the next rising edge of `clock_signal_ref`
+            WaveSamplingMode::RisingEdge(clock_signal_ref) => {
+                // First, increment the logical step
+                self.logical_step += 1;
+
+                // Next, as long as the time-step is in bounds...
+                while self.time_step < total_steps {
+                    // ...first fetch the current signal value before incrementing
+                    let prev_value = self.get_value(clock_signal_ref, self.time_step);
+
+                    // Then, increment the `time_step`, and check whether
+                    // the prevous value is 0 while the new value is 1
+                    // If yes, we have encountered a rising clock-edge
+                    // and have found the new `time_step` for the waveform
+                    self.time_step += 1;
+                    let new_value = self.get_value(clock_signal_ref, self.time_step);
+                    if prev_value == "0" && new_value == "1" {
+                        return StepResult::Ok;
+                    }
+                }
+                // If we reach this point, we cannot increment the `time_step`
+                // any further, so we return `Done` to indicate that
+                // we've reached the end of the waveform
+                StepResult::Done
+            }
+            WaveSamplingMode::FallingEdge(_) => {
+                todo!("Handle WaveSamplingMode::FallingEdge when stepping WaveSignalTrace")
+            }
         }
     }
 
-    // Returns value of a design input / output at the current step
+    /// Returns value of a design input / output at the current (logical) step.
+    /// Returns `Err` if the `pin` doesn't exist in the port map
+    /// for the given instance.
     fn get(&self, instance_id: u32, pin: SymbolId) -> anyhow::Result<BitVecValue> {
         let key = PortKey {
             instance_id,
             pin_id: pin,
         };
+        // Get the Wellen `SignalRef` (akin to `SignalId`)
         let signal_ref = self
             .port_map
             .get(&key)
             .with_context(|| format!("Key {:?} doesn't exist in port map", key))?;
-        let signal = self
-            .wave
-            .get_signal(*signal_ref)
-            .with_context(|| format!("Unable to get signal for pin_id {pin}"))?;
-        let offset = signal
-            .get_offset(self.step)
-            .with_context(|| format!("Unable to get offset for time-table index {}", self.step))?;
-        // get the last value in the time step (this is to deal with delta cycles)
-        let value = signal.get_value_at(&offset, offset.elements - 1);
-        let bit_str = value
-            .to_bit_string()
-            .with_context(|| format!("Unable to convert {value} to bit-string"))?;
+
+        // Obtain the `SignalValue` at the current `time_step`
+        // (represented as a bit-string)
+        let bit_str = self.get_value(*signal_ref, self.time_step);
+
         Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {
             panic!(
                 "Unable to convert bit-string {bit_str} to BitVecValue, {:?}",

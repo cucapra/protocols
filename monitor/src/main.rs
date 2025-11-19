@@ -13,7 +13,7 @@ mod thread;
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::GlobalContext;
 use crate::scheduler::Scheduler;
-use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
+use crate::signal_trace::WaveSignalTrace;
 use anyhow::Context;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
@@ -55,6 +55,14 @@ struct Cli {
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
+
+    /// Optional argument which specifies the name of the
+    /// signal to sample on a rising edge (posedge). If enabled, this
+    /// flag acts as the "clock" signal for the monitor.
+    /// Note: the full path to the signal should be passed as this argument,
+    /// e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace.
+    #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
+    sample_posedge: Option<String>,
 }
 
 #[allow(unused_variables)]
@@ -107,7 +115,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
+    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge)
         .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // TODO: figure out how to avoid hard-coding this
