@@ -1,4 +1,4 @@
-// ARGS: --wave wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time
+// ARGS: --wave wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns
 //
 // This implementation of an AXI-Streaming Protocol is a bit different from the WAL version.
 
