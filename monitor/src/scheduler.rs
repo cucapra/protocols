@@ -50,7 +50,11 @@ fn format_thread(thread: &Thread, ctx: &GlobalContext) -> String {
         thread.thread_id,
         start_info,
         thread.transaction.name,
-        serialize_stmt(&thread.transaction, &thread.symbol_table, &thread.current_stmt_id),
+        serialize_stmt(
+            &thread.transaction,
+            &thread.symbol_table,
+            &thread.current_stmt_id
+        ),
         thread.current_stmt_id
     )
 }
@@ -282,7 +286,10 @@ impl Scheduler {
             // Print all the threads that finished & failed during the most recent step
             if !self.failed.is_empty() {
                 if self.ctx.show_waveform_time {
-                    let time_str = self.ctx.trace.format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
+                    let time_str = self
+                        .ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
                     info!(
                         "Threads that failed at time {}: {}",
                         time_str,
@@ -300,7 +307,10 @@ impl Scheduler {
 
             if !self.finished.is_empty() {
                 if self.ctx.show_waveform_time {
-                    let time_str = self.ctx.trace.format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
+                    let time_str = self
+                        .ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
                     info!(
                         "Threads that finished at time {}: {}",
                         time_str,
@@ -336,14 +346,17 @@ impl Scheduler {
                 // `trace_cycle_count` in the interpreter)
                 let step_result = self.ctx.trace.step();
 
+                // TODO: I think the issue is we jump from 11620ns to 12628ns
+                // and we miss the period when ready and valid are both 1 during this period
+
                 self.cycle_count += 1;
                 self.interpreter.trace_cycle_count += 1;
                 if self.ctx.show_waveform_time {
-                    let time_str = self.ctx.trace.format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
-                    info!(
-                        "Advancing to time {}, setting current = next",
-                        time_str
-                    );
+                    let time_str = self
+                        .ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
+                    info!("Advancing to time {}, setting current = next", time_str);
                 } else {
                     info!(
                         "Advancing to cycle {}, setting current = next",
