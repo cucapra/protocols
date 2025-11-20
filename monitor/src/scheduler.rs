@@ -407,6 +407,9 @@ impl Scheduler {
                         "Thread {:?} finished successfully, adding to `finished` queue",
                         thread.thread_id
                     );
+
+                    let end_time_step = self.ctx.trace.time_step();
+
                     // Don't print out the inferred transaction if the user
                     // has marked it as `idle`
                     if self.interpreter.transaction.is_idle {
@@ -415,11 +418,25 @@ impl Scheduler {
                             self.interpreter.transaction.name
                         );
                     } else {
-                        println!(
-                            "{}",
-                            self.interpreter
-                                .serialize_reconstructed_transaction(&self.ctx)
-                        );
+                        let transaction_str = self
+                            .interpreter
+                            .serialize_reconstructed_transaction(&self.ctx);
+                        if self.ctx.show_waveform_time {
+                            let start_time = self
+                                .ctx
+                                .trace
+                                .format_time(thread.start_time_step, self.ctx.time_unit);
+                            let end_time = self
+                                .ctx
+                                .trace
+                                .format_time(end_time_step, self.ctx.time_unit);
+                            println!(
+                                "{}  // [time: {} -> {}]",
+                                transaction_str, start_time, end_time
+                            );
+                        } else {
+                            println!("{}", transaction_str)
+                        }
                     }
                     self.finished.push(thread.clone());
                     break;

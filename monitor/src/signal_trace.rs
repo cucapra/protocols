@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design};
+use crate::{Instance, designs::Design, global_context::TimeUnit};
 use anyhow::Context;
 use baa::BitVecValue;
 use protocols::ir::SymbolId;
@@ -77,6 +77,121 @@ pub struct PortKey {
 }
 
 impl WaveSignalTrace {
+    /// Returns the actual clock time-step index in the waveform
+    pub fn time_step(&self) -> u32 {
+        self.time_step
+    }
+
+    /// Returns the actual time value (in the waveform's time units) for a given time_step index
+    pub fn time_value(&self, time_step: u32) -> u64 {
+        self.wave.time_table()[time_step as usize]
+    }
+
+    /// Returns the maximum time value in the waveform (in femtoseconds)
+    pub fn max_time(&self) -> u64 {
+        if self.wave.time_table().is_empty() {
+            return 0;
+        }
+
+        let max_time_value = self.wave.time_table()[self.wave.time_table().len() - 1];
+
+        // Convert to femtoseconds based on timescale
+        if let Some(timescale) = self.wave.hierarchy().timescale() {
+            match timescale.unit {
+                wellen::TimescaleUnit::FemtoSeconds => max_time_value,
+                wellen::TimescaleUnit::PicoSeconds => max_time_value * 1_000,
+                wellen::TimescaleUnit::NanoSeconds => max_time_value * 1_000_000,
+                wellen::TimescaleUnit::MicroSeconds => max_time_value * 1_000_000_000,
+                wellen::TimescaleUnit::MilliSeconds => max_time_value * 1_000_000_000_000,
+                wellen::TimescaleUnit::Seconds => max_time_value * 1_000_000_000_000_000,
+                _ => max_time_value,
+            }
+        } else {
+            max_time_value
+        }
+    }
+
+    /// Formats a time value from the waveform into a human-readable string
+    /// using the specified `time_step` (or auto-selecting based on maximum time)
+    pub fn format_time(&self, time_step: u32, time_unit: TimeUnit) -> String {
+        let time_value = self.time_value(time_step);
+
+        // Convert the time value to femtoseconds (the base unit) using the
+        // timescale in the waveform (if one exists)
+        let time_fs = if let Some(timescale) = self.wave.hierarchy().timescale() {
+            match timescale.unit {
+                wellen::TimescaleUnit::FemtoSeconds => time_value,
+                wellen::TimescaleUnit::PicoSeconds => time_value * 1_000,
+                wellen::TimescaleUnit::NanoSeconds => time_value * 1_000_000,
+                wellen::TimescaleUnit::MicroSeconds => time_value * 1_000_000_000,
+                wellen::TimescaleUnit::MilliSeconds => time_value * 1_000_000_000_000,
+                wellen::TimescaleUnit::Seconds => time_value * 1_000_000_000_000_000,
+                _ => time_value,
+            }
+        } else {
+            time_value
+        };
+
+        // Format based on the specified unit
+        Self::format_time_with_unit(time_fs, time_unit, self.max_time())
+    }
+
+    /// Formats a time value using the specified unit (or auto-selecting based on max_time)
+    fn format_time_with_unit(
+        time_fs: u64,
+        time_unit: crate::global_context::TimeUnit,
+        max_time_fs: u64,
+    ) -> String {
+        use crate::global_context::TimeUnit;
+
+        const FS_PER_PS: u64 = 1_000;
+        const FS_PER_NS: u64 = 1_000_000;
+        const FS_PER_US: u64 = 1_000_000_000;
+        const FS_PER_MS: u64 = 1_000_000_000_000;
+        const FS_PER_S: u64 = 1_000_000_000_000_000;
+
+        /// Helper function to format a time value with up to `max_decimals`
+        /// // decimal places
+        fn format_minimal(value: f64, divisor: u64, unit: &str, max_decimals: usize) -> String {
+            let scaled = value / divisor as f64;
+            // Check whether the scaled time value is a whole number
+            if (scaled - scaled.round()).abs() < 1e-10 {
+                format!("{}{}", scaled as u64, unit)
+            } else {
+                // Format with up to max_decimals, removing trailing zeros
+                let formatted = format!("{:.prec$}", scaled, prec = max_decimals);
+                // Remove trailing zeros and decimal point if not needed
+                let trimmed = formatted.trim_end_matches('0').trim_end_matches('.');
+                format!("{}{}", trimmed, unit)
+            }
+        }
+
+        match time_unit {
+            TimeUnit::FemtoSeconds => format!("{}fs", time_fs),
+            TimeUnit::PicoSeconds => format_minimal(time_fs as f64, FS_PER_PS, "ps", 3),
+            TimeUnit::NanoSeconds => format_minimal(time_fs as f64, FS_PER_NS, "ns", 3),
+            TimeUnit::MicroSeconds => format_minimal(time_fs as f64, FS_PER_US, "us", 3),
+            TimeUnit::MilliSeconds => format_minimal(time_fs as f64, FS_PER_MS, "ms", 6),
+            TimeUnit::Seconds => format_minimal(time_fs as f64, FS_PER_S, "s", 6),
+            TimeUnit::Auto => {
+                // Auto-select based on maximum time
+                if max_time_fs >= FS_PER_S {
+                    format_minimal(time_fs as f64, FS_PER_S, "s", 6)
+                } else if max_time_fs >= FS_PER_MS {
+                    format_minimal(time_fs as f64, FS_PER_MS, "ms", 6)
+                } else if max_time_fs >= FS_PER_US {
+                    format_minimal(time_fs as f64, FS_PER_US, "us", 3)
+                } else if max_time_fs >= FS_PER_NS {
+                    format_minimal(time_fs as f64, FS_PER_NS, "ns", 3)
+                } else if max_time_fs >= FS_PER_PS {
+                    format_minimal(time_fs as f64, FS_PER_PS, "ps", 3)
+                } else {
+                    format!("{}fs", time_fs)
+                }
+            }
+        }
+    }
+
     /// Opens a waveform at the specified `filename` with the given
     /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
     /// as an argument to determine the `WaveSamplingMode` (whether it is

@@ -11,7 +11,7 @@ mod signal_trace;
 mod thread;
 
 use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
-use crate::global_context::GlobalContext;
+use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
 use anyhow::Context;
@@ -63,6 +63,17 @@ struct Cli {
     /// e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace.
     #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
     sample_posedge: Option<String>,
+
+    /// If enabled, displays the start & end waveform time for each inferred transaction
+    #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
+    show_waveform_time: bool,
+
+    /// Specifies the time unit for displaying waveform times.
+    /// Can only be used with --show-waveform-time.
+    /// Valid options: fs, ps, ns, us, ms, s, auto
+    /// Default is 'auto' which selects the unit based on the maximum time in the waveform.
+    #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
+    time_unit: Option<String>,
 }
 
 #[allow(unused_variables)]
@@ -124,9 +135,27 @@ fn main() -> anyhow::Result<()> {
         .get(dut_struct_name)
         .with_context(|| format!("Missing Design for {}", dut_struct_name))?;
 
+    // Parse the time unit (defaults to `Auto` if not specified)
+    let time_unit = if let Some(ref time_unit_str) = cli.time_unit {
+        TimeUnit::from_str(time_unit_str).with_context(|| {
+            format!(
+                "Invalid time unit: '{}'. Valid options: fs, ps, ns, us, ms, s, auto",
+                time_unit_str
+            )
+        })?
+    } else {
+        TimeUnit::Auto
+    };
+
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
-    let ctx = GlobalContext::new(trace, design.clone(), cli.display_hex);
+    let ctx = GlobalContext::new(
+        trace,
+        design.clone(),
+        cli.display_hex,
+        cli.show_waveform_time,
+        time_unit,
+    );
     let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
     // Actually run the scheduler

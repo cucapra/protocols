@@ -1,12 +1,12 @@
-send_data(0)
-send_data(1)
-send_data(2)
-send_data(3)
-send_data(4)
-send_data(9)
-send_data(10)
-send_data(11)
-send_data(12)
-send_data(13)
-send_data(16)
-send_data(19)
+send_data(0)  // [time: 804ns -> 820ns]
+send_data(1)  // [time: 1508ns -> 1524ns]
+send_data(2)  // [time: 2212ns -> 2228ns]
+send_data(3)  // [time: 2916ns -> 2932ns]
+send_data(4)  // [time: 3620ns -> 6636ns]
+send_data(9)  // [time: 7140ns -> 7420ns]
+send_data(10)  // [time: 7844ns -> 7860ns]
+send_data(11)  // [time: 8548ns -> 8564ns]
+send_data(12)  // [time: 9252ns -> 9268ns]
+send_data(13)  // [time: 9956ns -> 11636ns]
+send_data(16)  // [time: 12068ns -> 13940ns]
+send_data(19)  // [time: 14180ns -> 14196ns]
