@@ -109,9 +109,14 @@ impl Scheduler {
     /// Prints the internal state of the scheduler
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
     pub fn print_scheduler_state(&self) {
+        let time_step = self.ctx.trace.time_step();
         info!(
             "{}\n{}\n{}\n{}\n{}",
-            format_args!("SCHULEDER STATE, CYCLE {}:", self.cycle_count),
+            format_args!(
+                "SCHULEDER STATE, CYCLE {} (TIME {}):",
+                self.cycle_count,
+                self.ctx.trace.format_time(time_step, self.ctx.time_unit)
+            ),
             format_args!("Current: {}", format_queue(&self.current)),
             format_args!("Next: {}", format_queue(&self.next)),
             format_args!("Failed: {}", format_queue(&self.failed)),
