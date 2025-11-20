@@ -22,8 +22,16 @@ pub struct Thread {
     // The thread's ID
     pub thread_id: u32,
 
-    /// The cycle in which the thread was started
+    /// The logical scheduling cycle in which the thread was started
+    /// (This corresponds to the `logical_step` field in `WaveSignalTrace`,
+    /// i.e. the no. of logical `step()` calls encountered in the program
+    /// before this thread started)
     pub start_cycle: u32,
+
+    /// The actual clock time-step in the waveform
+    /// at which the thread began. (This corresponds to the `time_step`
+    /// field in `WaveSignalTrace`.)
+    pub start_time_step: u32,
 
     /// The `Transaction` that this `Thread` is running
     pub transaction: Transaction,
@@ -86,6 +94,7 @@ impl Thread {
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,
+            start_time_step: ctx.trace.time_step(),
         }
     }
 }

@@ -77,6 +77,11 @@ pub struct PortKey {
 }
 
 impl WaveSignalTrace {
+    /// Returns the actual clock time-step in the waveform
+    pub fn time_step(&self) -> u32 {
+        self.time_step
+    }
+
     /// Opens a waveform at the specified `filename` with the given
     /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
     /// as an argument to determine the `WaveSamplingMode` (whether it is

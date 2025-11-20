@@ -407,6 +407,9 @@ impl Scheduler {
                         "Thread {:?} finished successfully, adding to `finished` queue",
                         thread.thread_id
                     );
+
+                    let end_time_step = self.ctx.trace.time_step();
+
                     // Don't print out the inferred transaction if the user
                     // has marked it as `idle`
                     if self.interpreter.transaction.is_idle {
@@ -416,9 +419,11 @@ impl Scheduler {
                         );
                     } else {
                         println!(
-                            "{}",
+                            "{}  // [time_step: {} -> {}]",
                             self.interpreter
-                                .serialize_reconstructed_transaction(&self.ctx)
+                                .serialize_reconstructed_transaction(&self.ctx),
+                            thread.start_time_step,
+                            end_time_step
                         );
                     }
                     self.finished.push(thread.clone());
