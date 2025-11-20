@@ -418,13 +418,17 @@ impl Scheduler {
                             self.interpreter.transaction.name
                         );
                     } else {
-                        println!(
-                            "{}  // [time_step: {} -> {}]",
-                            self.interpreter
-                                .serialize_reconstructed_transaction(&self.ctx),
-                            thread.start_time_step,
-                            end_time_step
-                        );
+                        let transaction_str = self
+                            .interpreter
+                            .serialize_reconstructed_transaction(&self.ctx);
+                        if self.ctx.show_waveform_time {
+                            println!(
+                                "{}  // [time_step: {} -> {}]",
+                                transaction_str, thread.start_time_step, end_time_step
+                            );
+                        } else {
+                            println!("{}", transaction_str)
+                        }
                     }
                     self.finished.push(thread.clone());
                     break;

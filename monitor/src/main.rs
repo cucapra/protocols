@@ -63,6 +63,10 @@ struct Cli {
     /// e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace.
     #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
     sample_posedge: Option<String>,
+
+    /// If enabled, displays the start & end waveform time for each inferred transaction
+    #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
+    show_waveform_time: bool,
 }
 
 #[allow(unused_variables)]
@@ -126,7 +130,12 @@ fn main() -> anyhow::Result<()> {
 
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
-    let ctx = GlobalContext::new(trace, design.clone(), cli.display_hex);
+    let ctx = GlobalContext::new(
+        trace,
+        design.clone(),
+        cli.display_hex,
+        cli.show_waveform_time,
+    );
     let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
     // Actually run the scheduler

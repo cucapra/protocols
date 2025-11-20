@@ -24,6 +24,10 @@ pub struct GlobalContext {
     /// Indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
     pub display_hex: bool,
+
+    /// Indicates whether to display the start & end waveform time for each
+    /// inferred transaction
+    pub show_waveform_time: bool,
 }
 
 impl GlobalContext {
@@ -31,7 +35,12 @@ impl GlobalContext {
     /// `design` and `display_hex` flag. The `display_hex` argument
     /// indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
-    pub fn new(trace: WaveSignalTrace, design: Design, display_hex: bool) -> Self {
+    pub fn new(
+        trace: WaveSignalTrace,
+        design: Design,
+        display_hex: bool,
+        show_waveform_time: bool,
+    ) -> Self {
         // We assume that there is only one `Instance` at the moment,
         // so we just use the first `PortKey`'s `instance_id`
         let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;
@@ -41,6 +50,7 @@ impl GlobalContext {
             design,
             instance_id,
             display_hex,
+            show_waveform_time,
         }
     }
 }
