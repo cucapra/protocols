@@ -19,17 +19,40 @@ type Queue = Vec<Thread>;
 /// Formats a queue's contents into a pretty-printed string
 /// Note: we can't implement the `Display` trait for `Queue` since
 /// `Queue` is just a type alias
-fn format_queue(queue: &Queue) -> String {
+fn format_queue(queue: &Queue, ctx: &GlobalContext) -> String {
     if !queue.is_empty() {
         let formatted_queue = queue
             .iter()
-            .map(|thread| format!("{}", thread))
+            .map(|thread| format_thread(thread, ctx))
             .collect::<Vec<String>>()
             .join("\n\t");
         format!("\n\t{}", formatted_queue)
     } else {
         "<EMPTY>".to_string()
     }
+}
+
+/// Formats a single thread with context-aware timing information
+fn format_thread(thread: &Thread, ctx: &GlobalContext) -> String {
+    use protocols::serialize::serialize_stmt;
+
+    let start_info = if ctx.show_waveform_time {
+        format!(
+            "Start time: {}",
+            ctx.trace.format_time(thread.start_time_step, ctx.time_unit)
+        )
+    } else {
+        format!("Start cycle: {}", thread.start_cycle)
+    };
+
+    format!(
+        "THREAD {}: {{ {}, Transaction: `{}`, Current stmt: `{}` ({}) }}",
+        thread.thread_id,
+        start_info,
+        thread.transaction.name,
+        serialize_stmt(&thread.transaction, &thread.symbol_table, &thread.current_stmt_id),
+        thread.current_stmt_id
+    )
 }
 
 /// Formats a queue's contents into a *compact* pretty-printed string
@@ -110,17 +133,21 @@ impl Scheduler {
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
     pub fn print_scheduler_state(&self) {
         let time_step = self.ctx.trace.time_step();
+        let header = if self.ctx.show_waveform_time {
+            format!(
+                "SCHEDULER STATE, TIME {}:",
+                self.ctx.trace.format_time(time_step, self.ctx.time_unit)
+            )
+        } else {
+            format!("SCHEDULER STATE, CYCLE {}:", self.cycle_count)
+        };
         info!(
             "{}\n{}\n{}\n{}\n{}",
-            format_args!(
-                "SCHULEDER STATE, CYCLE {} (TIME {}):",
-                self.cycle_count,
-                self.ctx.trace.format_time(time_step, self.ctx.time_unit)
-            ),
-            format_args!("Current: {}", format_queue(&self.current)),
-            format_args!("Next: {}", format_queue(&self.next)),
-            format_args!("Failed: {}", format_queue(&self.failed)),
-            format_args!("Finished: {}", format_queue(&self.finished))
+            header,
+            format_args!("Current: {}", format_queue(&self.current, &self.ctx)),
+            format_args!("Next: {}", format_queue(&self.next, &self.ctx)),
+            format_args!("Failed: {}", format_queue(&self.failed, &self.ctx)),
+            format_args!("Finished: {}", format_queue(&self.finished, &self.ctx))
         );
     }
 
@@ -254,20 +281,38 @@ impl Scheduler {
 
             // Print all the threads that finished & failed during the most recent step
             if !self.failed.is_empty() {
-                info!(
-                    "Threads that failed in cycle {}: {}",
-                    self.cycle_count,
-                    format_queue_compact(&self.failed)
-                );
+                if self.ctx.show_waveform_time {
+                    let time_str = self.ctx.trace.format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
+                    info!(
+                        "Threads that failed at time {}: {}",
+                        time_str,
+                        format_queue_compact(&self.failed)
+                    );
+                } else {
+                    info!(
+                        "Threads that failed in cycle {}: {}",
+                        self.cycle_count,
+                        format_queue_compact(&self.failed)
+                    );
+                }
                 self.failed.clear();
             }
 
             if !self.finished.is_empty() {
-                info!(
-                    "Threads that finished in cycle {}: {}",
-                    self.cycle_count,
-                    format_queue_compact(&self.finished)
-                );
+                if self.ctx.show_waveform_time {
+                    let time_str = self.ctx.trace.format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
+                    info!(
+                        "Threads that finished at time {}: {}",
+                        time_str,
+                        format_queue_compact(&self.finished)
+                    );
+                } else {
+                    info!(
+                        "Threads that finished in cycle {}: {}",
+                        self.cycle_count,
+                        format_queue_compact(&self.finished)
+                    );
+                }
                 self.finished.clear();
             }
 
@@ -293,10 +338,18 @@ impl Scheduler {
 
                 self.cycle_count += 1;
                 self.interpreter.trace_cycle_count += 1;
-                info!(
-                    "Advancing to cycle {}, setting current = next",
-                    self.cycle_count
-                );
+                if self.ctx.show_waveform_time {
+                    let time_str = self.ctx.trace.format_time(self.ctx.trace.time_step(), self.ctx.time_unit);
+                    info!(
+                        "Advancing to time {}, setting current = next",
+                        time_str
+                    );
+                } else {
+                    info!(
+                        "Advancing to cycle {}, setting current = next",
+                        self.cycle_count
+                    );
+                }
 
                 if let StepResult::Done = step_result {
                     // If `StepResult = Done`, the trace has ended.
