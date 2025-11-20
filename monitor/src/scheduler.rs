@@ -422,9 +422,17 @@ impl Scheduler {
                             .interpreter
                             .serialize_reconstructed_transaction(&self.ctx);
                         if self.ctx.show_waveform_time {
+                            let start_time = self
+                                .ctx
+                                .trace
+                                .format_time(thread.start_time_step, self.ctx.time_unit);
+                            let end_time = self
+                                .ctx
+                                .trace
+                                .format_time(end_time_step, self.ctx.time_unit);
                             println!(
-                                "{}  // [time_step: {} -> {}]",
-                                transaction_str, thread.start_time_step, end_time_step
+                                "{}  // [time: {} -> {}]",
+                                transaction_str, start_time, end_time
                             );
                         } else {
                             println!("{}", transaction_str)
