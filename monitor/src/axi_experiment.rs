@@ -6,6 +6,7 @@ mod tests {
     use protocols::ir::{Dir, Field, SymbolTable, Type};
     use rustc_hash::FxHashMap;
 
+    // cargo test test_axi_rising_edge_sampling -- --nocapture
     #[test]
     fn test_axi_rising_edge_sampling() {
         // Set up the symbol table and symbol IDs
@@ -64,8 +65,8 @@ mod tests {
         let instance_id = 0;
 
         // Track the waveform times where both valid and ready are 1, along with the data value
-        let mut handshake_times = Vec::new();
-        let mut handshake_data = Vec::new();
+        let mut waveform_times = Vec::new();
+        let mut data_values = Vec::new();
 
         loop {
             // Get the current values of valid, ready, and data
@@ -79,10 +80,10 @@ mod tests {
                 .get(instance_id, data_id)
                 .expect("Failed to get data signal");
 
-            // Check if both are 1 (handshake occurs)
+            // Check if both ready and valid are 1
             if valid_val.to_u64() == Some(1) && ready_val.to_u64() == Some(1) {
-                handshake_times.push(trace.time_value(trace.time_step()));
-                handshake_data.push(data_val.to_u64().unwrap_or(0));
+                waveform_times.push(trace.time_value(trace.time_step()));
+                data_values.push(data_val.to_u64().unwrap_or(0));
             }
 
             // Advance to the next rising edge
@@ -92,25 +93,15 @@ mod tests {
             }
         }
 
-        // Based on the axis.prot protocol, we expect handshakes to occur at specific cycles
-        // The send_data transactions should complete when both valid and ready are high
-        // From the output we saw: send_data(0), send_data(1), ..., send_data(19)
-        // Let's verify we detected the expected number of handshakes
+        println!("Data values: {:?}", data_values);
 
-        println!("Handshake times (fs): {:?}", handshake_times);
-        println!("Handshake data values: {:?}", handshake_data);
-
-        // Print each handshake with its time and data value
-        println!("\nDetailed handshakes:");
-        for (&time_fs, &data_val) in handshake_times.iter().zip(handshake_data.iter()) {
+        println!("\nTime for each data value:");
+        for (&time_fs, &data_val) in waveform_times.iter().zip(data_values.iter()) {
             // Convert fs to ns for readability
-            let time_ns = time_fs as f64 / 1_000_000.0;
+            let time_ns = time_fs / 1_000_000;
             println!(" time: {}ns, data = {}", time_ns, data_val);
         }
 
-        assert_eq!(
-            handshake_data,
-            vec![0, 1, 2, 3, 8, 9, 10, 11, 12, 15, 18, 19]
-        );
+        assert_eq!(data_values, vec![0, 1, 2, 3, 8, 9, 10, 11, 12, 15, 18, 19]);
     }
 }
