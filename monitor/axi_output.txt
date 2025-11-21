@@ -1,2 +1,0 @@
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
-     Running `/Users/eyn5/Documents/2025fa/protocols/target/debug/protocols-monitor -p wal/advanced/axis.prot --wave wal/advanced/uart-axi.fst --instances 'uut_rx:AXIS' --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --verbose --color never`
