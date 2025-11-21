@@ -6,6 +6,7 @@
 use crate::{Instance, designs::Design, global_context::TimeUnit};
 use anyhow::Context;
 use baa::BitVecValue;
+use log::info;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};
@@ -384,6 +385,8 @@ impl SignalTrace for WaveSignalTrace {
                 // First, increment the logical step
                 self.logical_step += 1;
 
+                let old_time = self.time_value(self.time_step) / 1_000_000;
+
                 // Next, as long as the time-step is in bounds...
                 while self.time_step < total_steps {
                     // ...first fetch the current signal value before incrementing
@@ -396,6 +399,10 @@ impl SignalTrace for WaveSignalTrace {
                     self.time_step += 1;
                     let new_value = self.get_value(clock_signal_ref, self.time_step);
                     if prev_value == "0" && new_value == "1" {
+                        let new_time = self.time_value(self.time_step) / 1_000_000;
+
+                        info!("Advanced clock time from {old_time}ns -> {new_time}ns");
+
                         return StepResult::Ok;
                     }
                 }

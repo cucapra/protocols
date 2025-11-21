@@ -7,3 +7,4 @@ test_run/
 .vscode/*
 .surfer/
 monitor/target
+monitor/tests/axi_output.txt

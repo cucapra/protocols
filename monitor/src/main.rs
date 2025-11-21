@@ -3,6 +3,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+mod axi_experiment;
 mod designs;
 mod global_context;
 mod interpreter;
