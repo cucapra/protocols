@@ -341,13 +341,10 @@ impl Scheduler {
                 // (the latter is done via `std::mem::take`)
                 self.current = std::mem::take(&mut self.next);
 
-                // Then, advance the trace to the next `step` and update
+                // First, advance the trace to the next `step` and update
                 // the scheduler's `cycle_count` (along with the corresponding
                 // `trace_cycle_count` in the interpreter)
                 let step_result = self.ctx.trace.step();
-
-                // TODO: I think the issue is we jump from 11620ns to 12628ns
-                // and we miss the period when ready and valid are both 1 during this period
 
                 self.cycle_count += 1;
                 self.interpreter.trace_cycle_count += 1;
@@ -426,6 +423,13 @@ impl Scheduler {
                                 thread.thread_id,
                                 thread.transaction.clone().name,
                             );
+
+                            // Update the thread's `end_time_step` field
+                            // If this `step()` in the program is the very last
+                            // statement in a function, then this field captures
+                            // the end-time of the transaction
+                            thread.end_time_step = Some(self.ctx.trace.time_step());
+
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
@@ -479,7 +483,10 @@ impl Scheduler {
                         thread.thread_id
                     );
 
-                    let end_time_step = self.ctx.trace.time_step();
+                    // Use the end time captured at fork(), or fall back to current time
+                    let end_time_step = thread
+                        .end_time_step
+                        .unwrap_or_else(|| self.ctx.trace.time_step());
 
                     // Don't print out the inferred transaction if the user
                     // has marked it as `idle`
