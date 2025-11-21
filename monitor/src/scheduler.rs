@@ -483,7 +483,14 @@ impl Scheduler {
                         thread.thread_id
                     );
 
-                    // Use the end time captured at fork(), or fall back to current time
+                    // If the thread's `end_time_step` is `None`, use the
+                    // current `time_step` of the trace as a fallback.
+                    // (In practice, `thread.end_time_step` will be
+                    // set to `Some(...)` every time we encounter a `step()`
+                    // in the program, and well-formedness constraints for our
+                    // DSL dicatate that every function must contain at least one `step()`,
+                    // so `thread.end_time_step` will always be `Some(...)` by the
+                    // time we reach this point.)
                     let end_time_step = thread
                         .end_time_step
                         .unwrap_or_else(|| self.ctx.trace.time_step());
