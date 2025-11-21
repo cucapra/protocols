@@ -509,8 +509,8 @@ impl Scheduler {
                                 .trace
                                 .format_time(end_time_step, self.ctx.time_unit);
                             println!(
-                                "{}  // [time: {} -> {}]",
-                                transaction_str, start_time, end_time
+                                "{}  // [time: {} -> {}] (thread {})",
+                                transaction_str, start_time, end_time, thread.thread_id
                             );
                         } else {
                             println!("{}", transaction_str)
