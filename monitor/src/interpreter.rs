@@ -1095,8 +1095,8 @@ impl Interpreter {
 
         let loop_guard = &self.transaction[loop_guard_id];
 
-        // Most common case: guard is `!(comparison)`
-        // When we exit, NOT(guard) = comparison is true
+        // Most common case: guard is `!(expr1 == expr2)`
+        // When we exit, `expr1 == expr2` is true, so we enforce it as a constraint
         match loop_guard {
             Expr::Unary(UnaryOp::Not, inner_expr_id) => {
                 // The negated guard is just the inner expression
@@ -1114,7 +1114,6 @@ impl Interpreter {
                                 self.symbol_table[symbol_id].full_name(&self.symbol_table);
 
                             // Check the trace value at the current clock edge
-                            // Similar to how evaluate_assign works (lines 719-729)
                             match ctx.trace.get(ctx.instance_id, *symbol_id) {
                                 Ok(trace_value) => {
                                     if trace_value != *expected_value {
@@ -1134,75 +1133,6 @@ impl Interpreter {
                                             self.trace_cycle_count,
                                         ));
                                     } else {
-                                        // Check that all other constraints in the args_mapping hold
-                                        // for (arg_symbol_id, expected_arg_value) in
-                                        //     &self.args_mapping
-                                        // {
-                                        //     let arg_name = self
-                                        //         .symbol_table
-                                        //         .full_name_from_symbol_id(arg_symbol_id);
-
-                                        //     let dut_pin_symbol_id = self
-                                        //         .args_to_pins
-                                        //         .get(arg_symbol_id)
-                                        //         .unwrap_or_else(|| panic!("Unable to find DUT pin corresponding to function parameter {arg_name}"));
-
-                                        //     let dut_pin_name = self
-                                        //         .symbol_table
-                                        //         .full_name_from_symbol_id(dut_pin_symbol_id);
-
-                                        //     info!(
-                                        //         "Found that function param {} corresponds to {}, checking trace value for {} now...",
-                                        //         arg_name, dut_pin_name, dut_pin_name
-                                        //     );
-
-                                        //     match ctx.trace.get(ctx.instance_id, *dut_pin_symbol_id)
-                                        //     {
-                                        //         Ok(actual_arg_value)
-                                        //             if actual_arg_value != *expected_arg_value =>
-                                        //         {
-                                        //             info!(
-                                        //                 "Constraint failed: Expected {} to have value {} but got {} instead",
-                                        //                 symbol_name,
-                                        //                 serialize_bitvec(expected_arg_value, ctx.display_hex),
-                                        //                 serialize_bitvec(&actual_arg_value, ctx.display_hex),
-                                        //             );
-                                        //             return Err(
-                                        //                 ExecutionError::value_disagrees_with_trace(
-                                        //                     *inner_expr_id, // Dummy expr id for now
-                                        //                     expected_arg_value.clone(),
-                                        //                     actual_arg_value,
-                                        //                     *dut_pin_symbol_id,
-                                        //                     dut_pin_name,
-                                        //                     self.trace_cycle_count,
-                                        //                 ),
-                                        //             );
-                                        //         }
-                                        //         Ok(actual_arg_value) => {
-                                        //             info!(
-                                        //                 "{} has trace value {}, as expected",
-                                        //                 dut_pin_name,
-                                        //                 serialize_bitvec(
-                                        //                     &actual_arg_value,
-                                        //                     ctx.display_hex
-                                        //                 )
-                                        //             )
-                                        //         }
-                                        //         Err(_) => {
-                                        //             info!(
-                                        //                 "Unable to get trace value for {} at cycle {:?}",
-                                        //                 dut_pin_name, self.trace_cycle_count
-                                        //             );
-                                        //             return Err(ExecutionError::symbol_not_found(
-                                        //                 *dut_pin_symbol_id,
-                                        //                 dut_pin_name,
-                                        //                 "trace".to_string(),
-                                        //                 *inner_expr_id,
-                                        //             ));
-                                        //         }
-                                        //     }
-                                        // }
-
                                         info!(
                                             "Loop exit constraint OK: {} = {}",
                                             symbol_name,
@@ -1233,16 +1163,13 @@ impl Interpreter {
                 } else {
                     info!("Inner expression is not an equality");
                 }
-                // Could extend this to handle other comparison operators (!=, <, >, etc.)
             }
             Expr::Binary(BinOp::Equal, _, _) => {
-                info!("Guard is a direct equality (not negated)");
-                // Guard is `comparison`, so when we exit, `NOT(comparison)` is true
-                // For `==`, this means `!=` - which is harder to use as a constraint
-                // Skip for now, or could handle specific cases
+                info!("Guard is a direct equality (not negated), currently not handled");
+                // We don't handle this for now
             }
             _ => {
-                info!("Guard is neither Not(Eq) nor Eq");
+                info!("Guard is neither Not(Eq) nor Eq, currently not handled");
             }
         }
 
