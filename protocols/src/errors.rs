@@ -630,7 +630,11 @@ impl DiagnosticEmitter {
             } => {
                 let message = format!(
                     "Expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
-                    symbol_name, symbol_id, serialize_bitvec(value, false), serialize_bitvec(trace_value, false), cycle_count
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(value, false),
+                    serialize_bitvec(trace_value, false),
+                    cycle_count
                 );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
             }
