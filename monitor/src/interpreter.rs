@@ -1045,104 +1045,10 @@ impl Interpreter {
                     Ok(Some(*do_block_id))
                 } else {
                     // Exit the loop, executing the statement that follows it immediately
-                    // Add the negation of the loop guard as a constraint to `args_mapping`
-                    self.infer_constraint_from_loop_exit(loop_guard_id, ctx)?;
                     Ok(self.next_stmt_map[while_id])
                 }
             }
         }
-    }
-
-    /// When exiting a while loop with guard `guard_expr`, we know `guard_expr` is false.
-    /// This function tries to extract an equality constraint from `NOT(guard_expr)`.
-    ///
-    /// For example, if guard is `!(D.m_axis_tready == 1'b1)` and we exit the loop,
-    /// we know `!(D.m_axis_tready == 1'b1)` is false,
-    /// so we enforce its negation, `D.m_axis_tready == 1'b1` as a constraint.
-    fn infer_constraint_from_loop_exit(
-        &mut self,
-        loop_guard_id: &ExprId,
-        ctx: &GlobalContext,
-    ) -> ExecutionResult<()> {
-        info!("Inside `infer_constraint_from_loop_exit`");
-
-        let loop_guard = &self.transaction[loop_guard_id];
-
-        // Most common case: guard is `!(expr1 == expr2)`
-        // When we exit, `expr1 == expr2` is true, so we enforce it as a constraint
-        match loop_guard {
-            Expr::Unary(UnaryOp::Not, inner_expr_id) => {
-                // The negated guard is just the inner expression
-                let guard_expr = &self.transaction[inner_expr_id].clone();
-
-                // Check if the constraint is an equality
-                if let Expr::Binary(BinOp::Equal, expr_id1, expr_id2) = guard_expr {
-                    let expr1 = &self.transaction[expr_id1].clone();
-                    let expr2 = &self.transaction[expr_id2].clone();
-
-                    match (expr1, expr2) {
-                        (Expr::Sym(symbol_id), Expr::Const(expected_value))
-                        | (Expr::Const(expected_value), Expr::Sym(symbol_id)) => {
-                            let symbol_name =
-                                self.symbol_table[symbol_id].full_name(&self.symbol_table);
-
-                            // Check the trace value at the current clock edge
-                            match ctx.trace.get(ctx.instance_id, *symbol_id) {
-                                Ok(trace_value) => {
-                                    if trace_value != *expected_value {
-                                        info!(
-                                            "Loop exit constraint FAILED: {} = {} (trace) != {} (expected)",
-                                            symbol_name,
-                                            serialize_bitvec(&trace_value, ctx.display_hex),
-                                            serialize_bitvec(expected_value, ctx.display_hex)
-                                        );
-                                        return Err(ExecutionError::value_disagrees_with_trace(
-                                            *inner_expr_id,
-                                            expected_value.clone(),
-                                            trace_value,
-                                            *symbol_id,
-                                            symbol_name,
-                                            self.trace_cycle_count,
-                                        ));
-                                    } else {
-                                        info!(
-                                            "Loop exit constraint OK: {} = {}",
-                                            symbol_name,
-                                            serialize_bitvec(expected_value, ctx.display_hex)
-                                        );
-                                    }
-                                }
-                                Err(_) => {
-                                    info!(
-                                        "Unable to get trace value for {} at cycle {:?}",
-                                        symbol_name, self.trace_cycle_count
-                                    );
-                                    return Err(ExecutionError::symbol_not_found(
-                                        *symbol_id,
-                                        symbol_name,
-                                        "trace".to_string(),
-                                        *inner_expr_id,
-                                    ));
-                                }
-                            }
-                        }
-                        _ => {
-                            info!("Unsupported pair of expr patterns in loop guard");
-                        }
-                    }
-                } else {
-                    info!("Inner expression is not an equality");
-                }
-            }
-            Expr::Binary(BinOp::Equal, _, _) => {
-                info!("Guard is a direct equality (not negated), currently not handled");
-            }
-            _ => {
-                info!("Guard is neither Not(Eq) nor Eq, currently not handled");
-            }
-        }
-
-        Ok(())
     }
 
     /// Prints the reconstructed transaction
