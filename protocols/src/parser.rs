@@ -27,9 +27,11 @@ lazy_static::lazy_static! {
 
         // Precedence is defined lowest to highest
         PrattParser::new()
+            .op(Op::infix(or, Left))       // Lowest precedence
+            .op(Op::infix(and, Left))
             .op(Op::infix(eq, Left))
             .op(Op::infix(concat, Left))
-            .op(Op::prefix(not))
+            .op(Op::prefix(not))            // Highest precedence
     };
 }
 
@@ -142,6 +144,8 @@ impl ParserContext<'_> {
                 let start = lhs_unwrap.start();
                 let end = lhs_unwrap.end();
                 let op = match op.as_rule() {
+                    Rule::or => BinOp::Or,
+                    Rule::and => BinOp::And,
                     Rule::eq => BinOp::Equal,
                     Rule::concat => BinOp::Concat,
                     rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),

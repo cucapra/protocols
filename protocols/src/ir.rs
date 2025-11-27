@@ -6,7 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
@@ -342,6 +342,8 @@ pub enum LocationId {
 pub enum BinOp {
     Equal,
     Concat,
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

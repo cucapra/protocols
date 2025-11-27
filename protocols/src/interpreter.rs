@@ -333,6 +333,38 @@ impl<'a> Evaluator<'a> {
                             }
                         }
                     },
+                    BinOp::And => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err(ExecutionError::dont_care_operation(
+                                "AND".to_string(),
+                                "binary expression".to_string(),
+                                *expr_id,
+                            ))
+                        }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            if lhs.is_true() && rhs.is_true() {
+                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                            } else {
+                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
+                            }
+                        }
+                    },
+                    BinOp::Or => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err(ExecutionError::dont_care_operation(
+                                "OR".to_string(),
+                                "binary expression".to_string(),
+                                *expr_id,
+                            ))
+                        }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            if lhs.is_true() || rhs.is_true() {
+                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                            } else {
+                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
+                            }
+                        }
+                    },
                 }
             }
             Expr::Unary(unary_op, expr_id) => {

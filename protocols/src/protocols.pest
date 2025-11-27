@@ -30,7 +30,9 @@ primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     not = { "!" }
-bin_op = _{ eq | concat }
+bin_op = _{ or | and | eq | concat }
+    or = { "||" }
+    and = { "&&" }
     eq = { "==" }
     concat = { "+" }
 

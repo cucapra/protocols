@@ -1056,11 +1056,110 @@ impl Interpreter {
         }
     }
 
-    /// When exiting a while loop with guard `guard_expr`, we know `guard_expr` is false.
-    /// This function tries to extract an equality constraint from `NOT(guard_expr)`.
+    /// Recursively verifies a constraint expression against the trace.
+    /// Handles equality checks, conjunctions (&&), and disjunctions (||).
     ///
-    /// For example, if guard is `!(D.m_axis_tready == 1'b1)` and we exit the loop,
-    /// we know `!(D.m_axis_tready == 1'b1)` is false, so `D.m_axis_tready == 1'b1` is true.
+    /// For `A == B`, verifies that the trace value matches the expected value.
+    /// For `A && B`, recursively verifies both A and B.
+    /// For `A || B`, recursively verifies at least one of A or B.
+    fn verify_constraint_against_trace(
+        &mut self,
+        constraint_expr_id: &ExprId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<()> {
+        let constraint_expr = &self.transaction[constraint_expr_id];
+
+        match constraint_expr.clone() {
+            // Handle equality: symbol == value or value == symbol
+            Expr::Binary(BinOp::Equal, expr_id1, expr_id2) => {
+                let expr1 = self.transaction[&expr_id1].clone();
+                let expr2 = self.transaction[&expr_id2].clone();
+
+                // Evaluate both sides of the equality
+                let lhs_val = self.evaluate_expr(&expr_id1, ctx)?;
+                let rhs_val = self.evaluate_expr(&expr_id2, ctx)?;
+
+                match (&lhs_val, &rhs_val) {
+                    (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                        if lhs != rhs {
+                            info!(
+                                "Loop exit constraint FAILED: {} != {}",
+                                serialize_bitvec(lhs, ctx.display_hex),
+                                serialize_bitvec(rhs, ctx.display_hex)
+                            );
+                            // Try to get more context for error message
+                            if let Expr::Sym(symbol_id) = &expr1 {
+                                let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+                                return Err(ExecutionError::value_disagrees_with_trace(
+                                    *constraint_expr_id,
+                                    rhs.clone(),
+                                    lhs.clone(),
+                                    *symbol_id,
+                                    symbol_name,
+                                    self.trace_cycle_count,
+                                ));
+                            } else if let Expr::Sym(symbol_id) = &expr2 {
+                                let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+                                return Err(ExecutionError::value_disagrees_with_trace(
+                                    *constraint_expr_id,
+                                    lhs.clone(),
+                                    rhs.clone(),
+                                    *symbol_id,
+                                    symbol_name,
+                                    self.trace_cycle_count,
+                                ));
+                            } else {
+                                return Err(ExecutionError::invalid_condition(
+                                    "loop exit constraint".to_string(),
+                                    *constraint_expr_id,
+                                ));
+                            }
+                        } else {
+                            info!(
+                                "Loop exit constraint OK: {} = {}",
+                                serialize_bitvec(lhs, ctx.display_hex),
+                                serialize_bitvec(rhs, ctx.display_hex)
+                            );
+                        }
+                    }
+                    _ => {
+                        info!("Loop exit constraint: DontCare values in equality, skipping check");
+                    }
+                }
+            }
+            // Handle conjunction: A && B (both must be true)
+            Expr::Binary(BinOp::And, lhs_id, rhs_id) => {
+                info!("Verifying conjunction: checking both sub-constraints");
+                self.verify_constraint_against_trace(&lhs_id, ctx)?;
+                self.verify_constraint_against_trace(&rhs_id, ctx)?;
+            }
+            // Handle disjunction: A || B (at least one must be true)
+            Expr::Binary(BinOp::Or, lhs_id, rhs_id) => {
+                info!("Verifying disjunction: checking if at least one sub-constraint holds");
+                let lhs_result = self.verify_constraint_against_trace(&lhs_id, ctx);
+                let rhs_result = self.verify_constraint_against_trace(&rhs_id, ctx);
+
+                // At least one must succeed
+                if lhs_result.is_err() && rhs_result.is_err() {
+                    return Err(lhs_result.unwrap_err());
+                }
+            }
+            _ => {
+                info!("DEBUG: Unsupported constraint expression type");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// When exiting a while loop with guard `guard_expr`, we know `guard_expr` is false.
+    /// This function tries to extract a constraint from `NOT(guard_expr)` and verifies it against the trace.
+    ///
+    /// For example:
+    /// - If guard is `!(D.m_axis_tready == 1'b1)` and we exit the loop,
+    ///   we know `D.m_axis_tready == 1'b1` is true.
+    /// - If guard is `!(A && B && C)` and we exit the loop,
+    ///   we know `A && B && C` is true, so we verify A, B, and C all hold.
     fn infer_constraint_from_loop_exit(
         &mut self,
         loop_guard_id: &ExprId,
@@ -1068,87 +1167,25 @@ impl Interpreter {
     ) -> ExecutionResult<()> {
         info!("Inside `infer_constraint_from_loop_exit`");
 
-        let loop_guard = &self.transaction[loop_guard_id];
+        let loop_guard = self.transaction[loop_guard_id].clone();
 
-        // Most common case: guard is `!(comparison)`
-        // When we exit, NOT(guard) = comparison is true
+        // Most common case: guard is `!(constraint)`
+        // When we exit, NOT(guard) = constraint is true
         match loop_guard {
             Expr::Unary(UnaryOp::Not, inner_expr_id) => {
                 // The negated guard is just the inner expression
-                let guard_expr = &self.transaction[inner_expr_id].clone();
-
-                // Check if the constraint is an equality
-                if let Expr::Binary(BinOp::Equal, expr_id1, expr_id2) = guard_expr {
-                    let expr1 = &self.transaction[expr_id1].clone();
-                    let expr2 = &self.transaction[expr_id2].clone();
-
-                    match (expr1, expr2) {
-                        (Expr::Sym(symbol_id), Expr::Const(expected_value))
-                        | (Expr::Const(expected_value), Expr::Sym(symbol_id)) => {
-                            let symbol_name =
-                                self.symbol_table[symbol_id].full_name(&self.symbol_table);
-
-                            // Check the trace value at the current clock edge
-                            // Similar to how evaluate_assign works (lines 719-729)
-                            match ctx.trace.get(ctx.instance_id, *symbol_id) {
-                                Ok(trace_value) => {
-                                    if trace_value != *expected_value {
-                                        info!(
-                                            "Loop exit constraint FAILED: {} = {} (trace) != {} (expected)",
-                                            symbol_name,
-                                            serialize_bitvec(&trace_value, ctx.display_hex),
-                                            serialize_bitvec(expected_value, ctx.display_hex)
-                                        );
-                                        // Return error - the loop guard's negation is not satisfied
-                                        return Err(ExecutionError::value_disagrees_with_trace(
-                                            *inner_expr_id,
-                                            expected_value.clone(),
-                                            trace_value,
-                                            *symbol_id,
-                                            symbol_name,
-                                            self.trace_cycle_count,
-                                        ));
-                                    } else {
-                                        info!(
-                                            "Loop exit constraint OK: {} = {}",
-                                            symbol_name,
-                                            serialize_bitvec(expected_value, ctx.display_hex)
-                                        );
-                                    }
-                                }
-                                Err(_) => {
-                                    info!(
-                                        "Unable to get trace value for {} at cycle {:?}",
-                                        symbol_name, self.trace_cycle_count
-                                    );
-                                    // If we can't read the trace, we can't verify the constraint
-                                    // This might happen at the end of the waveform
-                                    return Err(ExecutionError::symbol_not_found(
-                                        *symbol_id,
-                                        symbol_name,
-                                        "trace".to_string(),
-                                        *inner_expr_id,
-                                    ));
-                                }
-                            }
-                        }
-                        _ => {
-                            eprintln!("DEBUG: Unsupported pair of expr patterns in loop guard");
-                        }
-                    }
-                } else {
-                    eprintln!("DEBUG: Inner expression is not an equality");
-                }
-                // Could extend this to handle other comparison operators (!=, <, >, etc.)
+                // This could be an equality, conjunction, or other expression
+                info!("Loop guard is negated, verifying inner constraint");
+                self.verify_constraint_against_trace(&inner_expr_id, ctx)?;
             }
             Expr::Binary(BinOp::Equal, _, _) => {
-                eprintln!("DEBUG: Guard is a direct equality (not negated)");
+                info!("DEBUG: Guard is a direct equality (not negated)");
                 // Guard is `comparison`, so when we exit, `NOT(comparison)` is true
                 // For `==`, this means `!=` - which is harder to use as a constraint
                 // Skip for now, or could handle specific cases
             }
             _ => {
-                eprintln!("DEBUG: Guard is neither Not(Eq) nor Eq");
+                info!("DEBUG: Guard is neither Not(...) nor Eq");
             }
         }
 

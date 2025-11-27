@@ -147,6 +147,22 @@ pub fn check_if_symbol_is_dut_port(
     }
 }
 
+/// Helper function to check if a symbol is a DUT port with any direction (input or output)
+/// without emitting diagnostics. Returns true if it's a port (input or output), false otherwise.
+fn is_dut_port(
+    symbol_id: SymbolId,
+    tr: &Transaction,
+    symbol_table: &SymbolTable,
+) -> bool {
+    // Check if this is a struct field
+    if let (Some(struct_id), Some(parent_symbol_id)) = (tr.type_param, symbol_table[symbol_id].parent()) {
+        if let Type::Struct(_) = symbol_table[parent_symbol_id].tpe() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Checks whether the condition (guard) for an if-statement / while-loop
 /// conforms to the well-formedness (WF) requirements.
 /// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
@@ -161,20 +177,23 @@ pub fn check_condition_wf(
     match expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
-            // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_direction(*symbol_id, Dir::Out) {
+            // Allow both input and output parameters/ports in conditions
+            // Check if it's a function parameter (input or output)
+            if tr.is_param_with_direction(*symbol_id, Dir::Out)
+                || tr.is_param_with_direction(*symbol_id, Dir::In) {
+                Ok(())
+            } else if is_dut_port(*symbol_id, tr, symbol_table) {
+                // It's a DUT port (input or output), which is allowed
                 Ok(())
             } else {
-                // Check if the identifier is a DUT output port
-                check_if_symbol_is_dut_port(
-                    *symbol_id,
-                    Dir::Out,
-                    LocationId::Expr(*expr_id),
-                    tr,
-                    symbol_table,
-                    handler,
-                    LangFeature::Conditionals,
-                )
+                // Not a parameter or DUT port, emit error
+                let symbol_full_name = symbol_table.full_name_from_symbol_id(symbol_id);
+                let error_msg = format!(
+                    "{} is a function argument, but {} cannot mention function arguments",
+                    symbol_full_name, LangFeature::Conditionals
+                );
+                handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Expr::DontCare => {
