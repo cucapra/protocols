@@ -121,6 +121,9 @@ mod tests {
     // cargo test test_axi-truncated -- --nocapture
     #[test]
     fn test_axi_truncated() {
-        axi_experiment_helper("tests/wal/advanced/uart-axi-minimal.fst", vec![15, 18, 19]);
+        axi_experiment_helper(
+            "tests/wal/advanced/uart-axi-truncated.fst",
+            vec![15, 18, 19],
+        );
     }
 }
