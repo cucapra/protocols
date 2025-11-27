@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
-    errors::{EvaluationError, ExecutionError, ExecutionResult, SymbolError},
+    errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
     ir::{BinOp, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
@@ -23,6 +23,9 @@ pub struct Interpreter {
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
+    // Maps function parameters to DUT pins
+    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
+
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
@@ -39,12 +42,14 @@ impl Interpreter {
         next_stmt_map: NextStmtMap,
         args_mapping: FxHashMap<SymbolId, BitVecValue>,
         known_bits: FxHashMap<SymbolId, BitVecValue>,
+        args_to_pins: FxHashMap<SymbolId, SymbolId>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
         self.args_mapping = args_mapping;
         self.known_bits = known_bits;
+        self.args_to_pins = args_to_pins;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -106,6 +111,7 @@ impl Interpreter {
             args_mapping,
             trace_cycle_count,
             known_bits,
+            args_to_pins: FxHashMap::default(),
         }
     }
 
@@ -161,6 +167,7 @@ impl Interpreter {
                                         serialize_bitvec(&value, ctx.display_hex)
                                     );
                                     self.args_mapping.insert(arg.symbol(), value.clone());
+
                                     break;
                                 }
                             }
@@ -237,40 +244,6 @@ impl Interpreter {
                                 ))
                             } else {
                                 Ok(ExprValue::Concrete(lhs.concat(rhs)))
-                            }
-                        }
-                    },
-                    BinOp::And => match (&lhs_val, &rhs_val) {
-                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                            Err(ExecutionError::dont_care_operation(
-                                "AND".to_string(),
-                                "binary expression".to_string(),
-                                *expr_id,
-                            ))
-                        }
-                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            // Logical AND: both must be true (non-zero)
-                            if lhs.is_true() && rhs.is_true() {
-                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
-                            } else {
-                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
-                            }
-                        }
-                    },
-                    BinOp::Or => match (&lhs_val, &rhs_val) {
-                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                            Err(ExecutionError::dont_care_operation(
-                                "OR".to_string(),
-                                "binary expression".to_string(),
-                                *expr_id,
-                            ))
-                        }
-                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            // Logical OR: at least one must be true (non-zero)
-                            if lhs.is_true() || rhs.is_true() {
-                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
-                            } else {
-                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
                             }
                         }
                     },
@@ -526,6 +499,28 @@ impl Interpreter {
                         self.infer_value_from_assertion(expr_id1, expr_id2, &value2, ctx)?;
                         Ok(self.next_stmt_map[stmt_id])
                     }
+                    (Ok(ExprValue::Concrete(value1)), Ok(ExprValue::Concrete(value2))) => {
+                        if value1 != value2 {
+                            info!(
+                                "Assertion `{}` failed: {} != {}",
+                                self.format_stmt(stmt_id),
+                                serialize_bitvec(&value1, ctx.display_hex),
+                                serialize_bitvec(&value2, ctx.display_hex),
+                            );
+                            return Err(ExecutionError::Assertion(
+                                AssertionError::EqualityFailed {
+                                    expr1_id: *expr_id1,
+                                    expr2_id: *expr_id2,
+                                    value1,
+                                    value2,
+                                },
+                            ));
+                        } else {
+                            info!("Assertion `{}` passed", self.format_stmt(stmt_id),);
+                            Ok(self.next_stmt_map[stmt_id])
+                        }
+                    }
+
                     // For other cases, we skip the assertion for now
                     (Ok(_), Ok(_)) => {
                         info!(
@@ -731,7 +726,7 @@ impl Interpreter {
         rhs_expr_id: &ExprId,
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
-        let lhs = self.symbol_table.full_name_from_symbol_id(lhs_symbol_id);
+        let lhs_name = self.symbol_table.full_name_from_symbol_id(lhs_symbol_id);
         match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
@@ -758,7 +753,7 @@ impl Interpreter {
                                     rhs_value,
                                     trace_value,
                                     *lhs_symbol_id, // Use LHS symbol for error reporting
-                                    lhs.to_string(),
+                                    lhs_name.to_string(),
                                     self.trace_cycle_count,
                                 ))
                             } else {
@@ -775,11 +770,11 @@ impl Interpreter {
                         } else {
                             info!(
                                 "Unable to find value for `{}` in trace at cycle {:?}",
-                                lhs, self.trace_cycle_count
+                                lhs_name, self.trace_cycle_count
                             );
                             Err(ExecutionError::symbol_not_found(
                                 *lhs_symbol_id,
-                                lhs.to_string(),
+                                lhs_name.to_string(),
                                 "trace".to_string(),
                                 *rhs_expr_id,
                             ))
@@ -820,7 +815,7 @@ impl Interpreter {
                                             rhs_value,
                                             trace_value,
                                             *lhs_symbol_id, // Use LHS symbol for error reporting
-                                            lhs.to_string(),
+                                            lhs_name.to_string(),
                                             self.trace_cycle_count,
                                         ))
                                     } else {
@@ -845,11 +840,11 @@ impl Interpreter {
                                 } else {
                                     info!(
                                         "Unable to find value for `{}` in trace at cycle {:?}",
-                                        lhs, self.trace_cycle_count
+                                        lhs_name, self.trace_cycle_count
                                     );
                                     Err(ExecutionError::symbol_not_found(
                                         *lhs_symbol_id,
-                                        lhs.to_string(),
+                                        lhs_name.to_string(),
                                         "trace".to_string(),
                                         *rhs_expr_id,
                                     ))
@@ -897,6 +892,16 @@ impl Interpreter {
                             let width = trace_value.width();
                             self.known_bits
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
+
+                            // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
+                            // into the `args_to_pins` map
+                            // (the RHS is the function parameter,
+                            // the LHS is a DUT pin)
+                            self.args_to_pins.insert(*rhs_symbol_id, *lhs_symbol_id);
+                            info!(
+                                "Updated args_to_pins to map {} |-> {}",
+                                symbol_name, lhs_name
+                            );
 
                             Ok(())
                         } else {
@@ -981,6 +986,16 @@ impl Interpreter {
                                         "Updated known_bits to map {} |-> {}",
                                         symbol_name,
                                         current_known_bits.to_bit_str()
+                                    );
+
+                                    // Insert a mapping `sliced_symbol_id` |-> `lhs_symbol_id`
+                                    // into the `args_to_pins` map
+                                    // (the RHS is the function parameter,
+                                    // the LHS is a DUT pin)
+                                    self.args_to_pins.insert(*sliced_symbol_id, *lhs_symbol_id);
+                                    info!(
+                                        "Updated args_to_pins to map {} |-> {}",
+                                        symbol_name, lhs_name
                                     );
 
                                     Ok(())
@@ -1109,6 +1124,75 @@ impl Interpreter {
                                             self.trace_cycle_count,
                                         ));
                                     } else {
+                                        // Check that all other constraints in the args_mapping hold
+                                        // for (arg_symbol_id, expected_arg_value) in
+                                        //     &self.args_mapping
+                                        // {
+                                        //     let arg_name = self
+                                        //         .symbol_table
+                                        //         .full_name_from_symbol_id(arg_symbol_id);
+
+                                        //     let dut_pin_symbol_id = self
+                                        //         .args_to_pins
+                                        //         .get(arg_symbol_id)
+                                        //         .unwrap_or_else(|| panic!("Unable to find DUT pin corresponding to function parameter {arg_name}"));
+
+                                        //     let dut_pin_name = self
+                                        //         .symbol_table
+                                        //         .full_name_from_symbol_id(dut_pin_symbol_id);
+
+                                        //     info!(
+                                        //         "Found that function param {} corresponds to {}, checking trace value for {} now...",
+                                        //         arg_name, dut_pin_name, dut_pin_name
+                                        //     );
+
+                                        //     match ctx.trace.get(ctx.instance_id, *dut_pin_symbol_id)
+                                        //     {
+                                        //         Ok(actual_arg_value)
+                                        //             if actual_arg_value != *expected_arg_value =>
+                                        //         {
+                                        //             info!(
+                                        //                 "Constraint failed: Expected {} to have value {} but got {} instead",
+                                        //                 symbol_name,
+                                        //                 serialize_bitvec(expected_arg_value, ctx.display_hex),
+                                        //                 serialize_bitvec(&actual_arg_value, ctx.display_hex),
+                                        //             );
+                                        //             return Err(
+                                        //                 ExecutionError::value_disagrees_with_trace(
+                                        //                     *inner_expr_id, // Dummy expr id for now
+                                        //                     expected_arg_value.clone(),
+                                        //                     actual_arg_value,
+                                        //                     *dut_pin_symbol_id,
+                                        //                     dut_pin_name,
+                                        //                     self.trace_cycle_count,
+                                        //                 ),
+                                        //             );
+                                        //         }
+                                        //         Ok(actual_arg_value) => {
+                                        //             info!(
+                                        //                 "{} has trace value {}, as expected",
+                                        //                 dut_pin_name,
+                                        //                 serialize_bitvec(
+                                        //                     &actual_arg_value,
+                                        //                     ctx.display_hex
+                                        //                 )
+                                        //             )
+                                        //         }
+                                        //         Err(_) => {
+                                        //             info!(
+                                        //                 "Unable to get trace value for {} at cycle {:?}",
+                                        //                 dut_pin_name, self.trace_cycle_count
+                                        //             );
+                                        //             return Err(ExecutionError::symbol_not_found(
+                                        //                 *dut_pin_symbol_id,
+                                        //                 dut_pin_name,
+                                        //                 "trace".to_string(),
+                                        //                 *inner_expr_id,
+                                        //             ));
+                                        //         }
+                                        //     }
+                                        // }
+
                                         info!(
                                             "Loop exit constraint OK: {} = {}",
                                             symbol_name,
@@ -1133,22 +1217,22 @@ impl Interpreter {
                             }
                         }
                         _ => {
-                            eprintln!("DEBUG: Unsupported pair of expr patterns in loop guard");
+                            info!("Unsupported pair of expr patterns in loop guard");
                         }
                     }
                 } else {
-                    eprintln!("DEBUG: Inner expression is not an equality");
+                    info!("Inner expression is not an equality");
                 }
                 // Could extend this to handle other comparison operators (!=, <, >, etc.)
             }
             Expr::Binary(BinOp::Equal, _, _) => {
-                eprintln!("DEBUG: Guard is a direct equality (not negated)");
+                info!("Guard is a direct equality (not negated)");
                 // Guard is `comparison`, so when we exit, `NOT(comparison)` is true
                 // For `==`, this means `!=` - which is harder to use as a constraint
                 // Skip for now, or could handle specific cases
             }
             _ => {
-                eprintln!("DEBUG: Guard is neither Not(Eq) nor Eq");
+                info!("Guard is neither Not(Eq) nor Eq");
             }
         }
 

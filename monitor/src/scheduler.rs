@@ -408,6 +408,7 @@ impl Scheduler {
             next_stmt_map,
             args_mapping,
             known_bits,
+            args_to_pins,
             ..
         } = thread.clone();
         self.interpreter.context_switch(
@@ -416,15 +417,17 @@ impl Scheduler {
             next_stmt_map,
             args_mapping,
             known_bits,
+            args_to_pins,
         );
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
             match self.interpreter.evaluate_stmt(&current_stmt_id, &self.ctx) {
                 Ok(Some(next_stmt_id)) => {
-                    // Update the thread-local `args_mapping` to be the resultant
-                    // arg map in the interpreter
+                    // Update the thread-local `args_mapping` & `args_to_pins` maps
+                    // to be the resultant maps in the interpreter
                     thread.args_mapping = self.interpreter.args_mapping.clone();
+                    thread.args_to_pins = self.interpreter.args_to_pins.clone();
 
                     // Check whether the next statement is `Step` or `Fork`
                     // This determines if we need to move threads to/from different queues

@@ -59,6 +59,9 @@ pub struct Thread {
 
     /// The current statement in the `Transaction`, identified by its `StmtId`
     pub current_stmt_id: StmtId,
+
+    /// Maps function parameters to DUT ports
+    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
 }
 
 /// Pretty-prints a `Thread`
@@ -104,6 +107,7 @@ impl Thread {
             start_cycle,
             start_time_step: ctx.trace.time_step(),
             end_time_step: None, // Set when fork() is called
+            args_to_pins: FxHashMap::default(),
         }
     }
 }

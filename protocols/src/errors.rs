@@ -180,11 +180,11 @@ impl fmt::Display for EvaluationError {
             } => {
                 write!(
                     f,
-                    "Attempted to assign value {} (expr_id {}) to {} (symbol_id {}) but the trace value {} at cycle {} is different",
-                    serialize_bitvec(value, false),
+                    "At expr_id {}, we expected {} (symbol_id {}) to have value {}, but the trace value {} at cycle {} is different",
                     expr_id,
                     symbol_name,
                     symbol_id,
+                    serialize_bitvec(value, false),
                     serialize_bitvec(trace_value, false),
                     cycle_count
                 )
@@ -629,8 +629,8 @@ impl DiagnosticEmitter {
                 cycle_count,
             } => {
                 let message = format!(
-                    "Attempted to assign {:?} to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
-                    value, symbol_name, symbol_id, trace_value, cycle_count
+                    "Expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
+                    symbol_name, symbol_id, serialize_bitvec(value, false), serialize_bitvec(trace_value, false), cycle_count
                 );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
             }

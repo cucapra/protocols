@@ -9,11 +9,12 @@ struct AXIS {
 }
 
 fn send_data<D: AXIS>(in data: u8) {
+    D.m_axis_tdata := data;
+    D.m_axis_tvalid := 1'b1;
     while (!(D.m_axis_tready == 1'b1)) {
         step();
     }
-    D.m_axis_tdata := data;
-    D.m_axis_tvalid := 1'b1;
+    assert_eq(D.m_axis_tready, 1'b1);
     // one cycle for the data transfer to take place
     step();
     // TODO: can we get rid of this boiler plate code?
@@ -28,7 +29,7 @@ fn send_data<D: AXIS>(in data: u8) {
 #[idle]
 fn idle<D: AXIS>() {
     D.m_axis_tvalid := 1'b0;
-    // D.data is implicitly X
+    // D.data is implicitly Xi
     step();
     // TODO: can we get rid of this boiler plate code?
     D.m_axis_tdata := X;
