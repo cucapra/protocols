@@ -517,14 +517,12 @@ impl Interpreter {
                                 serialize_bitvec(&value1, ctx.display_hex),
                                 serialize_bitvec(&value2, ctx.display_hex),
                             );
-                            Err(ExecutionError::Assertion(
-                                AssertionError::EqualityFailed {
-                                    expr1_id: *expr_id1,
-                                    expr2_id: *expr_id2,
-                                    value1,
-                                    value2,
-                                },
-                            ))
+                            Err(ExecutionError::Assertion(AssertionError::EqualityFailed {
+                                expr1_id: *expr_id1,
+                                expr2_id: *expr_id2,
+                                value1,
+                                value2,
+                            }))
                         } else {
                             info!("Assertion `{}` passed", self.format_stmt(stmt_id),);
                             Ok(self.next_stmt_map[stmt_id])
