@@ -227,9 +227,9 @@ impl Interpreter {
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
                             if lhs.width() != rhs.width() {
                                 Err(ExecutionError::arithmetic_error(
-                                    "And".to_string(),
+                                    "Concat".to_string(),
                                     format!(
-                                        "Width mismatch in AND operation: lhs width = {}, rhs width = {}",
+                                        "Width mismatch in CONCAT operation: lhs width = {}, rhs width = {}",
                                         lhs.width(),
                                         rhs.width()
                                     ),
@@ -237,6 +237,40 @@ impl Interpreter {
                                 ))
                             } else {
                                 Ok(ExprValue::Concrete(lhs.concat(rhs)))
+                            }
+                        }
+                    },
+                    BinOp::And => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err(ExecutionError::dont_care_operation(
+                                "AND".to_string(),
+                                "binary expression".to_string(),
+                                *expr_id,
+                            ))
+                        }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            // Logical AND: both must be true (non-zero)
+                            if lhs.is_true() && rhs.is_true() {
+                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                            } else {
+                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
+                            }
+                        }
+                    },
+                    BinOp::Or => match (&lhs_val, &rhs_val) {
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                            Err(ExecutionError::dont_care_operation(
+                                "OR".to_string(),
+                                "binary expression".to_string(),
+                                *expr_id,
+                            ))
+                        }
+                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
+                            // Logical OR: at least one must be true (non-zero)
+                            if lhs.is_true() || rhs.is_true() {
+                                Ok(ExprValue::Concrete(BitVecValue::new_true()))
+                            } else {
+                                Ok(ExprValue::Concrete(BitVecValue::new_false()))
                             }
                         }
                     },
@@ -618,12 +652,22 @@ impl Interpreter {
                     .get_parameters_by_direction(Dir::Out)
                     .collect();
 
+                let out_param_strs = out_params
+                    .iter()
+                    .map(|symbol_id| self.symbol_table[symbol_id].name().to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                info!("out_params = {}", out_param_strs);
+
                 // If `symbol_id` is an output parameter that is currently
                 // absent from `args_mapping`, insert the binding
                 // `symbol_id |-> known_value` into `args_mapping`,
                 // and update `known_bits` to be all ones
                 if out_params.contains(symbol_id) {
                     let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+
+                    info!("Identified {} as an output parameter", symbol_name);
+
                     if let Entry::Vacant(e) = self.args_mapping.entry(*symbol_id) {
                         e.insert(known_value.clone());
                         let width = known_value.width();
@@ -1004,11 +1048,111 @@ impl Interpreter {
                     Ok(Some(*do_block_id))
                 } else {
                     // Exit the loop, executing the statement that follows it immediately
-                    // TODO: need to add constraint of the negation of the loop guard
+                    // Add the negation of the loop guard as a constraint to `args_mapping`
+                    self.infer_constraint_from_loop_exit(loop_guard_id, ctx)?;
                     Ok(self.next_stmt_map[while_id])
                 }
             }
         }
+    }
+
+    /// When exiting a while loop with guard `guard_expr`, we know `guard_expr` is false.
+    /// This function tries to extract an equality constraint from `NOT(guard_expr)`.
+    ///
+    /// For example, if guard is `!(D.m_axis_tready == 1'b1)` and we exit the loop,
+    /// we know `!(D.m_axis_tready == 1'b1)` is false, so `D.m_axis_tready == 1'b1` is true.
+    fn infer_constraint_from_loop_exit(
+        &mut self,
+        loop_guard_id: &ExprId,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<()> {
+        info!("Inside `infer_constraint_from_loop_exit`");
+
+        let loop_guard = &self.transaction[loop_guard_id];
+
+        // Most common case: guard is `!(comparison)`
+        // When we exit, NOT(guard) = comparison is true
+        match loop_guard {
+            Expr::Unary(UnaryOp::Not, inner_expr_id) => {
+                // The negated guard is just the inner expression
+                let guard_expr = &self.transaction[inner_expr_id].clone();
+
+                // Check if the constraint is an equality
+                if let Expr::Binary(BinOp::Equal, expr_id1, expr_id2) = guard_expr {
+                    let expr1 = &self.transaction[expr_id1].clone();
+                    let expr2 = &self.transaction[expr_id2].clone();
+
+                    match (expr1, expr2) {
+                        (Expr::Sym(symbol_id), Expr::Const(expected_value))
+                        | (Expr::Const(expected_value), Expr::Sym(symbol_id)) => {
+                            let symbol_name =
+                                self.symbol_table[symbol_id].full_name(&self.symbol_table);
+
+                            // Check the trace value at the current clock edge
+                            // Similar to how evaluate_assign works (lines 719-729)
+                            match ctx.trace.get(ctx.instance_id, *symbol_id) {
+                                Ok(trace_value) => {
+                                    if trace_value != *expected_value {
+                                        info!(
+                                            "Loop exit constraint FAILED: {} = {} (trace) != {} (expected)",
+                                            symbol_name,
+                                            serialize_bitvec(&trace_value, ctx.display_hex),
+                                            serialize_bitvec(expected_value, ctx.display_hex)
+                                        );
+                                        // Return error - the loop guard's negation is not satisfied
+                                        return Err(ExecutionError::value_disagrees_with_trace(
+                                            *inner_expr_id,
+                                            expected_value.clone(),
+                                            trace_value,
+                                            *symbol_id,
+                                            symbol_name,
+                                            self.trace_cycle_count,
+                                        ));
+                                    } else {
+                                        info!(
+                                            "Loop exit constraint OK: {} = {}",
+                                            symbol_name,
+                                            serialize_bitvec(expected_value, ctx.display_hex)
+                                        );
+                                    }
+                                }
+                                Err(_) => {
+                                    info!(
+                                        "Unable to get trace value for {} at cycle {:?}",
+                                        symbol_name, self.trace_cycle_count
+                                    );
+                                    // If we can't read the trace, we can't verify the constraint
+                                    // This might happen at the end of the waveform
+                                    return Err(ExecutionError::symbol_not_found(
+                                        *symbol_id,
+                                        symbol_name,
+                                        "trace".to_string(),
+                                        *inner_expr_id,
+                                    ));
+                                }
+                            }
+                        }
+                        _ => {
+                            eprintln!("DEBUG: Unsupported pair of expr patterns in loop guard");
+                        }
+                    }
+                } else {
+                    eprintln!("DEBUG: Inner expression is not an equality");
+                }
+                // Could extend this to handle other comparison operators (!=, <, >, etc.)
+            }
+            Expr::Binary(BinOp::Equal, _, _) => {
+                eprintln!("DEBUG: Guard is a direct equality (not negated)");
+                // Guard is `comparison`, so when we exit, `NOT(comparison)` is true
+                // For `==`, this means `!=` - which is harder to use as a constraint
+                // Skip for now, or could handle specific cases
+            }
+            _ => {
+                eprintln!("DEBUG: Guard is neither Not(Eq) nor Eq");
+            }
+        }
+
+        Ok(())
     }
 
     /// Prints the reconstructed transaction

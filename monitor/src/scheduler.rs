@@ -237,11 +237,23 @@ impl Scheduler {
                 // ...and there shouldn't be any other threads in `next`
                 let next = threads_with_start_time(&self.next, start_cycle);
                 if !next.is_empty() {
-                    return Err(anyhow!(
-                        "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
-                        finished_thread.thread_id,
-                        finished_thread.start_cycle
-                    ));
+                    if self.ctx.show_waveform_time {
+                        let time_str = self
+                            .ctx
+                            .trace
+                            .format_time(finished_thread.start_time_step, self.ctx.time_unit);
+                        return Err(anyhow!(
+                            "Thread {} finished but there are other threads with the same start time {} in the `next` queue",
+                            finished_thread.thread_id,
+                            time_str
+                        ));
+                    } else {
+                        return Err(anyhow!(
+                            "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
+                            finished_thread.thread_id,
+                            finished_thread.start_cycle
+                        ));
+                    }
                 }
             }
 
