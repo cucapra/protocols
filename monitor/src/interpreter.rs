@@ -23,9 +23,6 @@ pub struct Interpreter {
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
-    // Maps function parameters to DUT pins
-    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
-
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
@@ -42,14 +39,12 @@ impl Interpreter {
         next_stmt_map: NextStmtMap,
         args_mapping: FxHashMap<SymbolId, BitVecValue>,
         known_bits: FxHashMap<SymbolId, BitVecValue>,
-        args_to_pins: FxHashMap<SymbolId, SymbolId>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
         self.args_mapping = args_mapping;
         self.known_bits = known_bits;
-        self.args_to_pins = args_to_pins;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -111,7 +106,6 @@ impl Interpreter {
             args_mapping,
             trace_cycle_count,
             known_bits,
-            args_to_pins: FxHashMap::default(),
         }
     }
 
@@ -901,16 +895,6 @@ impl Interpreter {
                             self.known_bits
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
 
-                            // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
-                            // into the `args_to_pins` map
-                            // (the RHS is the function parameter,
-                            // the LHS is a DUT pin)
-                            self.args_to_pins.insert(*rhs_symbol_id, *lhs_symbol_id);
-                            info!(
-                                "Updated args_to_pins to map {} |-> {}",
-                                symbol_name, lhs_name
-                            );
-
                             Ok(())
                         } else {
                             Err(ExecutionError::symbol_not_found(
@@ -996,16 +980,6 @@ impl Interpreter {
                                         current_known_bits.to_bit_str()
                                     );
 
-                                    // Insert a mapping `sliced_symbol_id` |-> `lhs_symbol_id`
-                                    // into the `args_to_pins` map
-                                    // (the RHS is the function parameter,
-                                    // the LHS is a DUT pin)
-                                    self.args_to_pins.insert(*sliced_symbol_id, *lhs_symbol_id);
-                                    info!(
-                                        "Updated args_to_pins to map {} |-> {}",
-                                        symbol_name, lhs_name
-                                    );
-
                                     Ok(())
                                 } else {
                                     Err(ExecutionError::symbol_not_found(
@@ -1083,7 +1057,8 @@ impl Interpreter {
     /// This function tries to extract an equality constraint from `NOT(guard_expr)`.
     ///
     /// For example, if guard is `!(D.m_axis_tready == 1'b1)` and we exit the loop,
-    /// we know `!(D.m_axis_tready == 1'b1)` is false, so `D.m_axis_tready == 1'b1` is true.
+    /// we know `!(D.m_axis_tready == 1'b1)` is false,
+    /// so we enforce its negation, `D.m_axis_tready == 1'b1` as a constraint.
     fn infer_constraint_from_loop_exit(
         &mut self,
         loop_guard_id: &ExprId,
@@ -1121,7 +1096,6 @@ impl Interpreter {
                                             serialize_bitvec(&trace_value, ctx.display_hex),
                                             serialize_bitvec(expected_value, ctx.display_hex)
                                         );
-                                        // Return error - the loop guard's negation is not satisfied
                                         return Err(ExecutionError::value_disagrees_with_trace(
                                             *inner_expr_id,
                                             expected_value.clone(),
@@ -1143,8 +1117,6 @@ impl Interpreter {
                                         "Unable to get trace value for {} at cycle {:?}",
                                         symbol_name, self.trace_cycle_count
                                     );
-                                    // If we can't read the trace, we can't verify the constraint
-                                    // This might happen at the end of the waveform
                                     return Err(ExecutionError::symbol_not_found(
                                         *symbol_id,
                                         symbol_name,
@@ -1164,7 +1136,6 @@ impl Interpreter {
             }
             Expr::Binary(BinOp::Equal, _, _) => {
                 info!("Guard is a direct equality (not negated), currently not handled");
-                // We don't handle this for now
             }
             _ => {
                 info!("Guard is neither Not(Eq) nor Eq, currently not handled");
