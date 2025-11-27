@@ -14,6 +14,8 @@ fn send_data<D: AXIS>(in data: u8) {
     while (!(D.m_axis_tready == 1'b1)) {
         step();
     }
+    // Enforce expected values for the ready & valid signals after the loop
+    D.m_axis_tvalid := 1'b1;
     assert_eq(D.m_axis_tready, 1'b1);
     // one cycle for the data transfer to take place
     step();

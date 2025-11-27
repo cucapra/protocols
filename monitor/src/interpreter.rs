@@ -135,12 +135,21 @@ impl Interpreter {
                 }
                 // Otherwise, try to fetch the value from the trace
                 else if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
-                    info!(
-                        "Trace @ cycle {}: `{}` has value {}",
-                        self.trace_cycle_count,
-                        name,
-                        serialize_bitvec(&value, ctx.display_hex)
-                    );
+                    if ctx.show_waveform_time {
+                        info!(
+                            "Trace @ time {}: `{}` has value {}",
+                            ctx.trace.format_time(ctx.trace.time_step(), ctx.time_unit),
+                            name,
+                            serialize_bitvec(&value, ctx.display_hex)
+                        );
+                    } else {
+                        info!(
+                            "Trace @ cycle {}: `{}` has value {}",
+                            self.trace_cycle_count,
+                            name,
+                            serialize_bitvec(&value, ctx.display_hex)
+                        );
+                    }
                     // Check if the symbol we're referring to
                     // is the DUT pin corresponding to an output parameter
 
@@ -499,6 +508,7 @@ impl Interpreter {
                         self.infer_value_from_assertion(expr_id1, expr_id2, &value2, ctx)?;
                         Ok(self.next_stmt_map[stmt_id])
                     }
+                    // Check whether the two arguments to the assertion are equal
                     (Ok(ExprValue::Concrete(value1)), Ok(ExprValue::Concrete(value2))) => {
                         if value1 != value2 {
                             info!(
