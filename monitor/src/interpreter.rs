@@ -520,7 +520,8 @@ impl Interpreter {
         }
     }
 
-    /// Infers the value of an unknown expression from an assertion.
+    /// Infers the value of an unknown expression from an assertion,
+    /// and inserts a binding for it into the `args_mapping`.
     /// - `unknown_expr_id` is the expr whose value we're inferring
     /// - `known_expr_id` is the (known) expr with value `known_value`
     fn infer_value_from_assertion(
@@ -999,8 +1000,11 @@ impl Interpreter {
             )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_true() {
+                    // Proceed to the next iteration of the loop
                     Ok(Some(*do_block_id))
                 } else {
+                    // Exit the loop, executing the statement that follows it immediately
+                    // TODO: need to add constraint of the negation of the loop guard
                     Ok(self.next_stmt_map[while_id])
                 }
             }
