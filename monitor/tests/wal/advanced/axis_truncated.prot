@@ -9,13 +9,13 @@ struct AXIS {
 }
 
 fn send_data<D: AXIS>(in data: u8) {
-    D.m_axis_tdata := data;
     D.m_axis_tvalid := 1'b1;
     while (!(D.m_axis_tready == 1'b1)) {
         step();
     }
     // Enforce expected values for the ready & valid signals after the loop
     D.m_axis_tvalid := 1'b1;
+    D.m_axis_tdata := data;
     assert_eq(D.m_axis_tready, 1'b1);
     // one cycle for the data transfer to take place
     step();
