@@ -197,7 +197,10 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
 }
 
 /// Pretty-prints an error message (ExprIds/StmtIds are rendered with respect
-/// to a `Transaction` and `SymbolTable` in which they reside)
+/// to a `Transaction` and `SymbolTable` in which they reside).
+/// Note: at the moment, this function only adds extra information for
+/// the `ValueDisagreesWithTrace` error message (this was used for debugging
+/// the monitor). Otherwise, it falls-back on the `Display` instance for the errror.
 pub fn serialize_error(tr: &Transaction, st: &SymbolTable, err: ExecutionError) -> String {
     match err {
         ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
