@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -335,7 +335,10 @@ impl Scheduler {
                                         );
                                     }
                                 } else {
-                                    info!("Skipping args_mapping check for {} since not all bits are known", param_name);
+                                    info!(
+                                        "Skipping args_mapping check for {} since not all bits are known",
+                                        param_name
+                                    );
                                 }
                             }
                             Err(_) => {
