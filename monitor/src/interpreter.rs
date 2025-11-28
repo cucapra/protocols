@@ -14,6 +14,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace},
+    thread::Thread,
 };
 
 pub struct Interpreter {
@@ -40,23 +41,14 @@ impl Interpreter {
     /// Performs a context switch in the `Interpreter` by setting its
     /// `Transaction`, `SymbolTable`, `args_mapping`, `known_bits`, and `constraints`
     /// to the specified arguments
-    pub fn context_switch(
-        &mut self,
-        transaction: Transaction,
-        symbol_table: SymbolTable,
-        next_stmt_map: NextStmtMap,
-        args_mapping: FxHashMap<SymbolId, BitVecValue>,
-        known_bits: FxHashMap<SymbolId, BitVecValue>,
-        constraints: FxHashMap<SymbolId, BitVecValue>,
-        args_to_pins: FxHashMap<SymbolId, SymbolId>,
-    ) {
-        self.transaction = transaction;
-        self.symbol_table = symbol_table;
-        self.next_stmt_map = next_stmt_map;
-        self.args_mapping = args_mapping;
-        self.known_bits = known_bits;
-        self.constraints = constraints;
-        self.args_to_pins = args_to_pins;
+    pub fn context_switch(&mut self, thread: &Thread) {
+        self.transaction = thread.transaction.clone();
+        self.symbol_table = thread.symbol_table.clone();
+        self.next_stmt_map = thread.next_stmt_map.clone();
+        self.args_mapping = thread.args_mapping.clone();
+        self.known_bits = thread.known_bits.clone();
+        self.constraints = thread.constraints.clone();
+        self.args_to_pins = thread.args_to_pins.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -898,9 +890,19 @@ impl Interpreter {
             Ok(ExprValue::DontCare) => {
                 // If the LHS is a DUT (input) port (e.g. `DUT.a`) and we
                 // encountered a DontCare assignment `DUT.a := X`,
-                // remove any constraints for it
+                // remove any constraints for it and any parameter bindings
                 if self.symbol_table[*lhs_symbol_id].parent().is_some() {
                     self.constraints.remove(lhs_symbol_id);
+
+                    // Also remove any parameter bindings that map to this port
+                    // (e.g., if we had `data -> D.m_axis_tdata`, remove it)
+                    self.args_to_pins
+                        .retain(|_param_id, port_id| *port_id != *lhs_symbol_id);
+
+                    info!(
+                        "Cleared constraints and parameter bindings for {} due to DontCare assignment",
+                        self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
+                    );
                 }
                 Ok(())
             }

@@ -3,10 +3,8 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use anyhow::anyhow;
-use baa::{BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
-    errors::{ExecutionError, ExecutionResult},
     ir::{Stmt, SymbolTable, Transaction},
     serialize::serialize_bitvec,
 };
@@ -205,72 +203,6 @@ impl Scheduler {
         }
     }
 
-    fn get_trace_time_string(&self, ctx: &GlobalContext) -> String {
-        if ctx.show_waveform_time {
-            ctx.trace.format_time(ctx.trace.time_step(), ctx.time_unit)
-        } else {
-            format!("cycle {}", self.interpreter.trace_cycle_count)
-        }
-    }
-
-    /// Verifies that all constraints in the `constraints` map still hold
-    /// against the current trace values. This is called after each `step()`
-    /// to ensure that assignments like `D.m_axis_tvalid := 1'b1` continue
-    /// to hold after stepping to a new cycle.
-    pub fn check_constraints(
-        &self,
-        thread: &Thread,
-        symbol_table: &SymbolTable,
-        ctx: &GlobalContext,
-    ) -> ExecutionResult<()> {
-        info!("Inside `check_constraints`...");
-        for (symbol_id, expected_value) in &thread.constraints {
-            let symbol_name = symbol_table.full_name_from_symbol_id(symbol_id);
-
-            match ctx.trace.get(ctx.instance_id, *symbol_id) {
-                Ok(trace_value) => {
-                    if trace_value != *expected_value {
-                        info!(
-                            "Constraint FAILED: {} = {} (trace) != {} (expected)",
-                            symbol_name,
-                            serialize_bitvec(&trace_value, ctx.display_hex),
-                            serialize_bitvec(expected_value, ctx.display_hex)
-                        );
-                        return Err(ExecutionError::constraint_violation(
-                            *symbol_id,
-                            symbol_name,
-                            expected_value.clone(),
-                            trace_value,
-                            self.get_trace_time_string(ctx),
-                        ));
-                    } else {
-                        info!(
-                            "Constraint OK: {} = {}",
-                            symbol_name,
-                            serialize_bitvec(expected_value, ctx.display_hex)
-                        );
-                    }
-                }
-                Err(_) => {
-                    info!(
-                        "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
-                        symbol_name, self.interpreter.trace_cycle_count
-                    );
-                    // If we can't read the symbol from the trace, treat it as a constraint violation
-                    // (The constraint can't hold if the signal doesn't exist in the trace)
-                    return Err(ExecutionError::constraint_violation(
-                        *symbol_id,
-                        symbol_name,
-                        expected_value.clone(),
-                        BitVecValue::from_u64(0, expected_value.width()), // Placeholder for missing trace value
-                        self.get_trace_time_string(ctx),
-                    ));
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Runs the scheduler by repeating the following steps.
     /// 1. Pops a thread from the `current` queue and runs it till the next step.
     ///    We keep doing this while the `current` queue is non-empty.
@@ -289,20 +221,95 @@ impl Scheduler {
             // and are synchronized (i.e. `current` is empty)
 
             // Check constraints for all threads in the `next` queue.
-            // These threads have called step() and have more work to do.
-            // Threads that finished (final step) are not in `next`, so they won't be checked.
+            // These threads have called `step()` and have more work to do.
+            // Threads that finished (i.e. they executed the `step()` statement at t
+            // the end of a function) are not in `next`, so they won't be checked.
             let mut failed_constraint_checks = Vec::new();
-            for thread in &self.next {
-                // Check constraints using the thread's own symbol table
-                if let Err(err) = self.check_constraints(thread, &thread.symbol_table, &self.ctx) {
-                    info!(
-                        "Thread {} failed constraint check: {}",
-                        thread.thread_id, err
-                    );
-                    failed_constraint_checks.push(thread.clone());
+
+            for thread in self.next.iter_mut() {
+                // Check that all constraints in the `constraints` map still hold
+                // against the current trace values. This is called after each `step()`
+                // to ensure that assignments like `D.m_axis_tvalid := 1'b1` continue
+                // to hold after stepping to a new cycle.
+                for (symbol_id, expected_value) in &thread.constraints {
+                    let symbol_name = thread.symbol_table.full_name_from_symbol_id(symbol_id);
+
+                    match self.ctx.trace.get(self.ctx.instance_id, *symbol_id) {
+                        Ok(trace_value) => {
+                            if trace_value != *expected_value {
+                                info!(
+                                    "Constraint FAILED: {} = {} (trace) != {} (expected)",
+                                    symbol_name,
+                                    serialize_bitvec(&trace_value, self.ctx.display_hex),
+                                    serialize_bitvec(expected_value, self.ctx.display_hex)
+                                );
+                                failed_constraint_checks.push(thread.clone());
+                            } else {
+                                info!(
+                                    "Constraint OK: {} = {}",
+                                    symbol_name,
+                                    serialize_bitvec(expected_value, self.ctx.display_hex)
+                                );
+                            }
+                        }
+                        Err(_) => {
+                            info!(
+                                "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
+                                symbol_name, self.interpreter.trace_cycle_count
+                            );
+                            // If we can't read the symbol from the trace, treat it as a constraint violation
+                            // (The constraint can't hold if the signal doesn't exist in the trace)
+                            failed_constraint_checks.push(thread.clone());
+                        }
+                    }
                 }
 
-                // TODO: also check if the key-value bindings in `args_mapping` still hold here?
+                // Check that all parameter bindings in the `args_to_pins` map still hold
+                // against the current trace values. This is called after each `step()`
+                // to ensure that parameters inferred from DUT ports (like `data` from `D.m_axis_tdata`)
+                // still match the trace after stepping to a new cycle.
+                for (param_id, port_id) in &thread.args_to_pins {
+                    let param_name = thread.symbol_table.full_name_from_symbol_id(param_id);
+                    let port_name = thread.symbol_table.full_name_from_symbol_id(port_id);
+
+                    // Get the parameter value from args_mapping
+                    if let Some(param_value) = thread.args_mapping.get(param_id) {
+                        // Get the current port value from the trace
+                        match self.ctx.trace.get(self.ctx.instance_id, *port_id) {
+                            Ok(trace_value) => {
+                                if trace_value != *param_value {
+                                    info!(
+                                        "Parameter binding FAILED: {} (param) = {} but {} (port) = {} (trace)",
+                                        param_name,
+                                        serialize_bitvec(param_value, self.ctx.display_hex),
+                                        port_name,
+                                        serialize_bitvec(&trace_value, self.ctx.display_hex)
+                                    );
+                                    info!(
+                                        "Updating {} |-> {} in args_mapping",
+                                        param_name,
+                                        serialize_bitvec(&trace_value, self.ctx.display_hex)
+                                    );
+                                    thread.args_mapping.insert(*param_id, trace_value);
+                                } else {
+                                    info!(
+                                        "Parameter binding OK: {} = {} = {}",
+                                        param_name,
+                                        port_name,
+                                        serialize_bitvec(param_value, self.ctx.display_hex)
+                                    );
+                                }
+                            }
+                            Err(_) => {
+                                info!(
+                                    "Unable to verify parameter binding {} -> {} - port not found in trace",
+                                    param_name, port_name
+                                );
+                                failed_constraint_checks.push(thread.clone());
+                            }
+                        }
+                    }
+                }
             }
 
             // Remove threads that failed constraint checks from `next` and add to `failed`
@@ -496,25 +503,7 @@ impl Scheduler {
 
         // Perform a context switch (use the argument thread's `Transaction`
         // & associated `SymbolTable` / `NextStmtMap`)
-        let Thread {
-            transaction,
-            symbol_table,
-            next_stmt_map,
-            args_mapping,
-            known_bits,
-            constraints,
-            args_to_pins,
-            ..
-        } = thread.clone();
-        self.interpreter.context_switch(
-            transaction,
-            symbol_table,
-            next_stmt_map,
-            args_mapping,
-            known_bits,
-            constraints,
-            args_to_pins,
-        );
+        self.interpreter.context_switch(&thread);
 
         let mut current_stmt_id = thread.current_stmt_id;
 
