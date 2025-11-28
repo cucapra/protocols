@@ -16,11 +16,13 @@ fn add<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
 
   step();
   
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
 
   assert_eq(s, DUT.s);
   step();
@@ -36,11 +38,13 @@ fn sub<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
 
   step();
 
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
 
   assert_eq(s, DUT.s);
   step();
@@ -56,11 +60,13 @@ fn and<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
 
   step();
 
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
   
   assert_eq(s, DUT.s);
   step();
@@ -76,11 +82,13 @@ fn or<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
 
   step();
 
   DUT.a := X;
   DUT.b := X;
+  DUT.op := X;
   
   assert_eq(s, DUT.s);
   step();
