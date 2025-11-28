@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -329,7 +329,8 @@ impl Scheduler {
                                     // waveform value, we update the inferred value to be
                                     // the waveform value at the current time-step.
                                     // (This is needed so that the monitor can adapt to waveform
-                                    // signals that change during execution, e.g. the AXI example
+                                    // signals that change during execution or require some variable amount of
+                                    // time before they can be sampled, e.g. the AXI example
                                     // where the `data` port should only be sampled when both
                                     // `ready` and `valid` are 1.)
                                     if trace_value != *param_value {
