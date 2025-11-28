@@ -900,7 +900,7 @@ impl Interpreter {
                         .retain(|_param_id, port_id| *port_id != *lhs_symbol_id);
 
                     info!(
-                        "Cleared constraints and parameter bindings for {} due to DontCare assignment",
+                        "Cleared bindings for {} in `constraints` and `args_to_pins` due to DontCare assignment",
                         self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
                     );
                 }

@@ -236,9 +236,19 @@ impl Scheduler {
 
                     match self.ctx.trace.get(self.ctx.instance_id, *symbol_id) {
                         Ok(trace_value) => {
+                            let time_str = if self.ctx.show_waveform_time {
+                                self.ctx
+                                    .trace
+                                    .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                            } else {
+                                format!("cycle {}", self.interpreter.trace_cycle_count)
+                            };
                             if trace_value != *expected_value {
                                 info!(
-                                    "Constraint FAILED: {} = {} (trace) != {} (expected)",
+                                    "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
+                                    thread.thread_id,
+                                    thread.transaction.name,
+                                    time_str,
                                     symbol_name,
                                     serialize_bitvec(&trace_value, self.ctx.display_hex),
                                     serialize_bitvec(expected_value, self.ctx.display_hex)
@@ -246,7 +256,10 @@ impl Scheduler {
                                 failed_constraint_checks.push(thread.clone());
                             } else {
                                 info!(
-                                    "Constraint OK: {} = {}",
+                                    "Constraint OK for thread {} (`{}`) at {}: {} = {}",
+                                    thread.thread_id,
+                                    thread.transaction.name,
+                                    time_str,
                                     symbol_name,
                                     serialize_bitvec(expected_value, self.ctx.display_hex)
                                 );
