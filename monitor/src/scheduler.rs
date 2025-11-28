@@ -3,8 +3,13 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use anyhow::anyhow;
+use baa::{BitVecOps, BitVecValue};
 use log::info;
-use protocols::ir::{Stmt, SymbolTable, Transaction};
+use protocols::{
+    errors::{ExecutionError, ExecutionResult},
+    ir::{Stmt, SymbolTable, Transaction},
+    serialize::serialize_bitvec,
+};
 
 use crate::{
     global_context::GlobalContext,
@@ -200,6 +205,72 @@ impl Scheduler {
         }
     }
 
+    fn get_trace_time_string(&self, ctx: &GlobalContext) -> String {
+        if ctx.show_waveform_time {
+            ctx.trace.format_time(ctx.trace.time_step(), ctx.time_unit)
+        } else {
+            format!("cycle {}", self.interpreter.trace_cycle_count)
+        }
+    }
+
+    /// Verifies that all constraints in the `constraints` map still hold
+    /// against the current trace values. This is called after each `step()`
+    /// to ensure that assignments like `D.m_axis_tvalid := 1'b1` continue
+    /// to hold after stepping to a new cycle.
+    pub fn check_constraints(
+        &self,
+        thread: &Thread,
+        symbol_table: &SymbolTable,
+        ctx: &GlobalContext,
+    ) -> ExecutionResult<()> {
+        info!("Inside `check_constraints`...");
+        for (symbol_id, expected_value) in &thread.constraints {
+            let symbol_name = symbol_table.full_name_from_symbol_id(symbol_id);
+
+            match ctx.trace.get(ctx.instance_id, *symbol_id) {
+                Ok(trace_value) => {
+                    if trace_value != *expected_value {
+                        info!(
+                            "Constraint FAILED: {} = {} (trace) != {} (expected)",
+                            symbol_name,
+                            serialize_bitvec(&trace_value, ctx.display_hex),
+                            serialize_bitvec(expected_value, ctx.display_hex)
+                        );
+                        return Err(ExecutionError::constraint_violation(
+                            *symbol_id,
+                            symbol_name,
+                            expected_value.clone(),
+                            trace_value,
+                            self.get_trace_time_string(ctx),
+                        ));
+                    } else {
+                        info!(
+                            "Constraint OK: {} = {}",
+                            symbol_name,
+                            serialize_bitvec(expected_value, ctx.display_hex)
+                        );
+                    }
+                }
+                Err(_) => {
+                    info!(
+                        "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
+                        symbol_name, self.interpreter.trace_cycle_count
+                    );
+                    // If we can't read the symbol from the trace, treat it as a constraint violation
+                    // (The constraint can't hold if the signal doesn't exist in the trace)
+                    return Err(ExecutionError::constraint_violation(
+                        *symbol_id,
+                        symbol_name,
+                        expected_value.clone(),
+                        BitVecValue::from_u64(0, expected_value.width()), // Placeholder for missing trace value
+                        self.get_trace_time_string(ctx),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Runs the scheduler by repeating the following steps.
     /// 1. Pops a thread from the `current` queue and runs it till the next step.
     ///    We keep doing this while the `current` queue is non-empty.
@@ -216,6 +287,29 @@ impl Scheduler {
 
             // At this point, all threads have been executed till their next `step`
             // and are synchronized (i.e. `current` is empty)
+
+            // Check constraints for all threads in the `next` queue.
+            // These threads have called step() and have more work to do.
+            // Threads that finished (final step) are not in `next`, so they won't be checked.
+            let mut failed_constraint_checks = Vec::new();
+            for thread in &self.next {
+                // Check constraints
+                if let Err(err) =
+                    self.check_constraints(thread, &self.interpreter.symbol_table, &self.ctx)
+                {
+                    info!(
+                        "Thread {} failed constraint check: {}",
+                        thread.thread_id, err
+                    );
+                    failed_constraint_checks.push(thread.clone());
+                }
+            }
+
+            // Remove threads that failed constraint checks from `next` and add to `failed`
+            for failed_thread in failed_constraint_checks {
+                self.next.retain(|t| t.thread_id != failed_thread.thread_id);
+                self.failed.push(failed_thread);
+            }
 
             // Find the unique start cycles of all threads in the `finished` queue
             let finished_threads_start_cycles = unique_start_cycles(&self.finished);
@@ -408,6 +502,7 @@ impl Scheduler {
             next_stmt_map,
             args_mapping,
             known_bits,
+            constraints,
             ..
         } = thread.clone();
         self.interpreter.context_switch(
@@ -416,15 +511,18 @@ impl Scheduler {
             next_stmt_map,
             args_mapping,
             known_bits,
+            constraints,
         );
+
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
             match self.interpreter.evaluate_stmt(&current_stmt_id, &self.ctx) {
                 Ok(Some(next_stmt_id)) => {
-                    // Update the thread-local `args_mapping`
-                    // to be the resultant map in the interpreter
+                    // Update the thread-local `args_mapping` and `constraints`
+                    // to be the resultant maps in the interpreter
                     thread.args_mapping = self.interpreter.args_mapping.clone();
+                    thread.constraints = self.interpreter.constraints.clone();
 
                     // Check whether the next statement is `Step` or `Fork`
                     // This determines if we need to move threads to/from different queues

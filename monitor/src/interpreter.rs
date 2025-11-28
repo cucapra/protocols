@@ -23,6 +23,11 @@ pub struct Interpreter {
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
+    /// Constraints on DUT input port values that must hold after stepping.
+    /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
+    /// and verified after each `step()` to ensure the constraint still holds.
+    pub constraints: FxHashMap<SymbolId, BitVecValue>,
+
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
@@ -30,8 +35,8 @@ pub struct Interpreter {
 
 impl Interpreter {
     /// Performs a context switch in the `Interpreter` by setting its
-    /// `Transaction`, `SymbolTable`, `args_mapping`
-    /// and `known_bits` to the specified arguments
+    /// `Transaction`, `SymbolTable`, `args_mapping`, `known_bits`, and `constraints`
+    /// to the specified arguments
     pub fn context_switch(
         &mut self,
         transaction: Transaction,
@@ -39,12 +44,14 @@ impl Interpreter {
         next_stmt_map: NextStmtMap,
         args_mapping: FxHashMap<SymbolId, BitVecValue>,
         known_bits: FxHashMap<SymbolId, BitVecValue>,
+        constraints: FxHashMap<SymbolId, BitVecValue>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
         self.next_stmt_map = next_stmt_map;
         self.args_mapping = args_mapping;
         self.known_bits = known_bits;
+        self.constraints = constraints;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -104,8 +111,9 @@ impl Interpreter {
             symbol_table,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-            trace_cycle_count,
             known_bits,
+            constraints: FxHashMap::default(),
+            trace_cycle_count,
         }
     }
 
@@ -404,8 +412,9 @@ impl Interpreter {
         let transaction = self.transaction.clone();
         let stmt = &transaction[stmt_id];
         info!(
-            "Examining statement `{}`",
-            serialize_stmt(&self.transaction, &self.symbol_table, stmt_id)
+            "Examining statement `{}` ({})",
+            serialize_stmt(&self.transaction, &self.symbol_table, stmt_id),
+            stmt_id
         );
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
@@ -767,6 +776,20 @@ impl Interpreter {
                                     self.known_bits
                                         .insert(*rhs_symbol_id, BitVecValue::ones(width));
                                 }
+
+                                // If LHS is a DUT input port (has a parent) and RHS is a constant,
+                                // add this as a constraint that must hold after stepping
+                                if let Expr::Const(_) = rhs_expr {
+                                    if self.symbol_table[*lhs_symbol_id].parent().is_some() {
+                                        info!(
+                                            "Adding constraint: {} must equal {}",
+                                            lhs_name,
+                                            serialize_bitvec(&rhs_value, ctx.display_hex)
+                                        );
+                                        self.constraints.insert(*lhs_symbol_id, rhs_value.clone());
+                                    }
+                                }
+
                                 Ok(())
                             }
                         } else {
@@ -866,7 +889,15 @@ impl Interpreter {
                     ),
                 }
             }
-            Ok(ExprValue::DontCare) => Ok(()),
+            Ok(ExprValue::DontCare) => {
+                // If the LHS is a DUT (input) port (e.g. `DUT.a`) and we
+                // encountered a DontCare assignment `DUT.a := X`,
+                // remove any constraints for it
+                if self.symbol_table[*lhs_symbol_id].parent().is_some() {
+                    self.constraints.remove(lhs_symbol_id);
+                }
+                Ok(())
+            }
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
                 match rhs_expr {
@@ -1044,6 +1075,25 @@ impl Interpreter {
                     // Proceed to the next iteration of the loop
                     Ok(Some(*do_block_id))
                 } else {
+                    let next_stmt_str = match self.next_stmt_map[while_id] {
+                        Some(next_stmt_id) => {
+                            format!(
+                                "{} ({})",
+                                serialize_stmt(
+                                    &self.transaction,
+                                    &self.symbol_table,
+                                    &next_stmt_id
+                                ),
+                                next_stmt_id
+                            )
+                        }
+                        None => "No next stmt".to_string(),
+                    };
+                    info!(
+                        "Loop guard `{}` evaluated to false, exiting loop, next stmt: `{}`",
+                        serialize_expr(&self.transaction, &self.symbol_table, loop_guard_id),
+                        next_stmt_str,
+                    );
                     // Exit the loop, executing the statement that follows it immediately
                     Ok(self.next_stmt_map[while_id])
                 }

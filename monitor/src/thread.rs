@@ -57,6 +57,9 @@ pub struct Thread {
     /// where the `i`-th bit is 1 if it is known & 0 otherwise
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
+    /// Constraints on DUT input port values that must hold after stepping
+    pub constraints: FxHashMap<SymbolId, BitVecValue>,
+
     /// The current statement in the `Transaction`, identified by its `StmtId`
     pub current_stmt_id: StmtId,
 }
@@ -99,6 +102,7 @@ impl Thread {
             next_stmt_map,
             args_mapping: FxHashMap::default(),
             known_bits: FxHashMap::default(),
+            constraints: FxHashMap::default(),
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,
