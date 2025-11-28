@@ -933,6 +933,7 @@ impl Interpreter {
                             let width = trace_value.width();
                             self.known_bits
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
+                            info!("Updated known_bits to map {} |-> 111...1", symbol_name);
 
                             // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
                             // into the `args_to_pins` map

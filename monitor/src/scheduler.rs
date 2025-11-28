@@ -2,7 +2,8 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
+use baa::BitVecOps;
 use log::info;
 use protocols::{
     ir::{Stmt, SymbolTable, Transaction},
@@ -227,6 +228,16 @@ impl Scheduler {
             let mut failed_constraint_checks = Vec::new();
 
             for thread in self.next.iter_mut() {
+                // If any constraints failed, figure out the right time-step/cycle
+                // to display in the logs
+                let time_str = if self.ctx.show_waveform_time {
+                    self.ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                } else {
+                    format!("cycle {}", self.interpreter.trace_cycle_count)
+                };
+
                 // Check that all constraints in the `constraints` map still hold
                 // against the current trace values. This is called after each `step()`
                 // to ensure that assignments like `D.m_axis_tvalid := 1'b1` continue
@@ -236,13 +247,6 @@ impl Scheduler {
 
                     match self.ctx.trace.get(self.ctx.instance_id, *symbol_id) {
                         Ok(trace_value) => {
-                            let time_str = if self.ctx.show_waveform_time {
-                                self.ctx
-                                    .trace
-                                    .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
-                            } else {
-                                format!("cycle {}", self.interpreter.trace_cycle_count)
-                            };
                             if trace_value != *expected_value {
                                 info!(
                                     "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
@@ -290,11 +294,24 @@ impl Scheduler {
                         // Get the current port value from the trace
                         match self.ctx.trace.get(self.ctx.instance_id, *port_id) {
                             Ok(trace_value) => {
-                                if trace_value != *param_value {
+                                // Check whether all bits are known or if only
+                                // some of them are known (e.g. due to a bit-slice)
+                                let known_bits =
+                                    thread.known_bits.get(param_id).ok_or_else(|| {
+                                        anyhow!(
+                                            "Unable to find {} in `known_bits` map of thread {} ({})",
+                                            param_name,
+                                            thread.thread_id,
+                                            thread.transaction.name
+                                        )}).context(format!("known_bits = {:?}", thread.known_bits))?;
+                                let all_bits_known = known_bits.is_all_ones();
+
+                                if all_bits_known && trace_value != *param_value {
                                     info!(
-                                        "Parameter binding FAILED for thread {} (`{}`): {} (param) = {} but {} (port) = {} (trace)",
+                                        "Parameter binding FAILED for thread {} (`{}`) at {}: {} (param) = {} but {} (port) = {} (trace)",
                                         thread.thread_id,
                                         thread.transaction.name,
+                                        time_str,
                                         param_name,
                                         serialize_bitvec(param_value, self.ctx.display_hex),
                                         port_name,
@@ -532,6 +549,7 @@ impl Scheduler {
                     // Update thread-local maps
                     // to be the resultant maps in the interpreter
                     thread.args_mapping = self.interpreter.args_mapping.clone();
+                    thread.known_bits = self.interpreter.known_bits.clone();
                     thread.constraints = self.interpreter.constraints.clone();
                     thread.args_to_pins = self.interpreter.args_to_pins.clone();
 
