@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -310,16 +310,6 @@ impl Scheduler {
 
                                 if all_bits_known && trace_value.width() == param_value.width() {
                                     if trace_value != *param_value {
-                                        info!(
-                                            "args_mapping check FAILED for thread {} (`{}`) at {}: {} (param) = {} but {} (port) = {} (trace)",
-                                            thread.thread_id,
-                                            thread.transaction.name,
-                                            time_str,
-                                            param_name,
-                                            serialize_bitvec(param_value, self.ctx.display_hex),
-                                            port_name,
-                                            serialize_bitvec(&trace_value, self.ctx.display_hex)
-                                        );
                                         info!(
                                             "Updating {} |-> {} in args_mapping",
                                             param_name,
