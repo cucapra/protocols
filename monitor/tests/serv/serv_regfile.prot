@@ -262,6 +262,10 @@ fn read_write<R: Regfile>(
   assert_eq(R.o_rs2, rs2_data[31]);
   assert_eq(R.o_ready, 1'b0);
   step();
+  // At this point, the data transfer has completed, so we explicitly
+  // indicate that these two pins are `DontCare`
+  R.i_go := X;
+  R.i_rd_en := X;
   fork();
   step();
 }

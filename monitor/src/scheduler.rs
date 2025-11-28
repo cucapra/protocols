@@ -281,7 +281,7 @@ impl Scheduler {
                     }
                 }
 
-                // Check that all parameter bindings in the `args_to_pins` map still hold
+                // Check that all args_mappings in the `args_to_pins` map still hold
                 // against the current trace values. This is called after each `step()`
                 // to ensure that parameters inferred from DUT ports (like `data` from `D.m_axis_tdata`)
                 // still match the trace after stepping to a new cycle.
@@ -306,35 +306,41 @@ impl Scheduler {
                                         )}).context(format!("known_bits = {:?}", thread.known_bits))?;
                                 let all_bits_known = known_bits.is_all_ones();
 
-                                if all_bits_known && trace_value != *param_value {
-                                    info!(
-                                        "Parameter binding FAILED for thread {} (`{}`) at {}: {} (param) = {} but {} (port) = {} (trace)",
-                                        thread.thread_id,
-                                        thread.transaction.name,
-                                        time_str,
-                                        param_name,
-                                        serialize_bitvec(param_value, self.ctx.display_hex),
-                                        port_name,
-                                        serialize_bitvec(&trace_value, self.ctx.display_hex)
-                                    );
-                                    info!(
-                                        "Updating {} |-> {} in args_mapping",
-                                        param_name,
-                                        serialize_bitvec(&trace_value, self.ctx.display_hex)
-                                    );
-                                    thread.args_mapping.insert(*param_id, trace_value);
+                                // TODO: need to handle the case when not all bits are known
+
+                                if all_bits_known && trace_value.width() == param_value.width() {
+                                    if trace_value != *param_value {
+                                        info!(
+                                            "args_mapping check FAILED for thread {} (`{}`) at {}: {} (param) = {} but {} (port) = {} (trace)",
+                                            thread.thread_id,
+                                            thread.transaction.name,
+                                            time_str,
+                                            param_name,
+                                            serialize_bitvec(param_value, self.ctx.display_hex),
+                                            port_name,
+                                            serialize_bitvec(&trace_value, self.ctx.display_hex)
+                                        );
+                                        info!(
+                                            "Updating {} |-> {} in args_mapping",
+                                            param_name,
+                                            serialize_bitvec(&trace_value, self.ctx.display_hex)
+                                        );
+                                        thread.args_mapping.insert(*param_id, trace_value);
+                                    } else {
+                                        info!(
+                                            "args_mapping OK: {} = {} = {}",
+                                            param_name,
+                                            port_name,
+                                            serialize_bitvec(param_value, self.ctx.display_hex)
+                                        );
+                                    }
                                 } else {
-                                    info!(
-                                        "Parameter binding OK: {} = {} = {}",
-                                        param_name,
-                                        port_name,
-                                        serialize_bitvec(param_value, self.ctx.display_hex)
-                                    );
+                                    info!("Skipping args_mapping check for {} since not all bits are known", param_name);
                                 }
                             }
                             Err(_) => {
                                 info!(
-                                    "Unable to verify parameter binding {} -> {} - port not found in trace",
+                                    "Unable to verify args_mapping {} -> {} - port not found in trace",
                                     param_name, port_name
                                 );
                                 failed_constraint_checks.push(thread.clone());
