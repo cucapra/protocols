@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use log::info;
 use protocols::{
     ir::{Stmt, SymbolTable, Transaction},
-    serialize::serialize_bitvec,
+    serialize::{serialize_bitvec, serialize_error},
 };
 
 use crate::{
@@ -631,7 +631,9 @@ impl Scheduler {
                 Err(err) => {
                     info!(
                         "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
-                        thread.thread_id, thread.transaction.name, err
+                        thread.thread_id,
+                        thread.transaction.name,
+                        serialize_error(&thread.transaction, &thread.symbol_table, err)
                     );
                     self.failed.push(thread);
                     self.print_scheduler_state();

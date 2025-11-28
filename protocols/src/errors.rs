@@ -189,7 +189,7 @@ impl fmt::Display for EvaluationError {
             } => {
                 write!(
                     f,
-                    "At expr_id {}, we expected {} (symbol_id {}) to have value {}, but the trace value {} at cycle {} is different",
+                    "At expr_id {}, we expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
                     expr_id,
                     symbol_name,
                     symbol_id,
