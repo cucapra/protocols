@@ -28,6 +28,9 @@ pub struct Interpreter {
     /// and verified after each `step()` to ensure the constraint still holds.
     pub constraints: FxHashMap<SymbolId, BitVecValue>,
 
+    // Maps function parameters to DUT pins
+    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
+
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
@@ -45,6 +48,7 @@ impl Interpreter {
         args_mapping: FxHashMap<SymbolId, BitVecValue>,
         known_bits: FxHashMap<SymbolId, BitVecValue>,
         constraints: FxHashMap<SymbolId, BitVecValue>,
+        args_to_pins: FxHashMap<SymbolId, SymbolId>,
     ) {
         self.transaction = transaction;
         self.symbol_table = symbol_table;
@@ -52,6 +56,7 @@ impl Interpreter {
         self.args_mapping = args_mapping;
         self.known_bits = known_bits;
         self.constraints = constraints;
+        self.args_to_pins = args_to_pins;
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -114,6 +119,7 @@ impl Interpreter {
             known_bits,
             constraints: FxHashMap::default(),
             trace_cycle_count,
+            args_to_pins: FxHashMap::default(),
         }
     }
 
@@ -926,6 +932,16 @@ impl Interpreter {
                             self.known_bits
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
 
+                            // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
+                            // into the `args_to_pins` map
+                            // (the RHS is the function parameter,
+                            // the LHS is a DUT pin)
+                            self.args_to_pins.insert(*rhs_symbol_id, *lhs_symbol_id);
+                            info!(
+                                "Updated args_to_pins to map {} |-> {}",
+                                symbol_name, lhs_name
+                            );
+
                             Ok(())
                         } else {
                             Err(ExecutionError::symbol_not_found(
@@ -1009,6 +1025,16 @@ impl Interpreter {
                                         "Updated known_bits to map {} |-> {}",
                                         symbol_name,
                                         current_known_bits.to_bit_str()
+                                    );
+
+                                    // Insert a mapping `sliced_symbol_id` |-> `lhs_symbol_id`
+                                    // into the `args_to_pins` map
+                                    // (the RHS is the function parameter,
+                                    // the LHS is a DUT pin)
+                                    self.args_to_pins.insert(*sliced_symbol_id, *lhs_symbol_id);
+                                    info!(
+                                        "Updated args_to_pins to map {} |-> {}",
+                                        symbol_name, lhs_name
                                     );
 
                                     Ok(())
