@@ -289,8 +289,17 @@ impl Scheduler {
                     let param_name = thread.symbol_table.full_name_from_symbol_id(param_id);
                     let port_name = thread.symbol_table.full_name_from_symbol_id(port_id);
 
-                    // Get the parameter value from args_mapping
+                    // Get the (existing) inferred parameter value from args_mapping
                     if let Some(param_value) = thread.args_mapping.get(param_id) {
+                        // Compute the current time-step/cycle (for logging purposes)
+                        let time_str = if self.ctx.show_waveform_time {
+                            self.ctx
+                                .trace
+                                .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                        } else {
+                            format!("cycle {}", self.interpreter.trace_cycle_count)
+                        };
+
                         // Get the current port value from the trace
                         match self.ctx.trace.get(self.ctx.instance_id, *port_id) {
                             Ok(trace_value) => {
@@ -308,12 +317,27 @@ impl Scheduler {
 
                                 // TODO: need to handle the case when not all bits are known
 
+                                // If all bits are known and the two sides of the assignment have the
+                                // same bit-width, check whether the inferred values for function parameters
+                                // abide by the waveform data.
+                                // (We add the bit-width check for simplicity so we don't have
+                                // to handle re-assignments to the same port that involve bit-slices for now,
+                                // as is the case for the SERV example.)
                                 if all_bits_known && trace_value.width() == param_value.width() {
+                                    // If there are any discrepancies between the existing
+                                    // inferred value for a function parameter and its
+                                    // waveform value, we update the inferred value to be
+                                    // the waveform value at the current time-step.
+                                    // (This is needed so that the monitor can adapt to waveform
+                                    // signals that change during execution, e.g. the AXI example
+                                    // where the `data` port should only be sampled when both
+                                    // `ready` and `valid` are 1.)
                                     if trace_value != *param_value {
                                         info!(
-                                            "Updating {} |-> {} in args_mapping",
+                                            "Updating {} |-> {} in args_mapping based on waveform data at {}",
                                             param_name,
-                                            serialize_bitvec(&trace_value, self.ctx.display_hex)
+                                            serialize_bitvec(&trace_value, self.ctx.display_hex),
+                                            time_str
                                         );
                                         thread.args_mapping.insert(*param_id, trace_value);
                                     } else {
@@ -333,8 +357,8 @@ impl Scheduler {
                             }
                             Err(_) => {
                                 info!(
-                                    "Unable to verify args_mapping {} -> {} - port not found in trace",
-                                    param_name, port_name
+                                    "Unable to verify args_mapping {} -> {} at {}, as {} is not found in the trace",
+                                    param_name, port_name, time_str, param_name
                                 );
                                 failed_constraint_checks.push(thread.clone());
                             }
