@@ -944,6 +944,14 @@ impl Interpreter {
                                 symbol_name, lhs_name
                             );
 
+                            // If there is an existing cosntraint for the DUT port (e.g. `DUT.a`)
+                            // this means it was previously assigned some constant (e.g. `DUT.a := 5`),
+                            // but now we are overwriting it with an assignment to an input parameter
+                            // (e.g. `DUT.a := <input_param>`), so we should remove the constraint
+                            if self.constraints.contains_key(lhs_symbol_id) {
+                                self.constraints.remove(lhs_symbol_id);
+                            }
+
                             Ok(())
                         } else {
                             Err(ExecutionError::symbol_not_found(

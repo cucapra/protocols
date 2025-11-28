@@ -292,7 +292,9 @@ impl Scheduler {
                             Ok(trace_value) => {
                                 if trace_value != *param_value {
                                     info!(
-                                        "Parameter binding FAILED: {} (param) = {} but {} (port) = {} (trace)",
+                                        "Parameter binding FAILED for thread {} (`{}`): {} (param) = {} but {} (port) = {} (trace)",
+                                        thread.thread_id,
+                                        thread.transaction.name,
                                         param_name,
                                         serialize_bitvec(param_value, self.ctx.display_hex),
                                         port_name,
@@ -327,6 +329,10 @@ impl Scheduler {
 
             // Remove threads that failed constraint checks from `next` and add to `failed`
             for failed_thread in failed_constraint_checks {
+                info!(
+                    "Moving thread {} (`{}`) to `failed` as it failed a constraint check",
+                    failed_thread.thread_id, failed_thread.transaction.name
+                );
                 self.next.retain(|t| t.thread_id != failed_thread.thread_id);
                 self.failed.push(failed_thread);
             }
