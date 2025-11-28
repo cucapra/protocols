@@ -293,16 +293,16 @@ impl Scheduler {
             // Threads that finished (final step) are not in `next`, so they won't be checked.
             let mut failed_constraint_checks = Vec::new();
             for thread in &self.next {
-                // Check constraints
-                if let Err(err) =
-                    self.check_constraints(thread, &self.interpreter.symbol_table, &self.ctx)
-                {
+                // Check constraints using the thread's own symbol table
+                if let Err(err) = self.check_constraints(thread, &thread.symbol_table, &self.ctx) {
                     info!(
                         "Thread {} failed constraint check: {}",
                         thread.thread_id, err
                     );
                     failed_constraint_checks.push(thread.clone());
                 }
+
+                // TODO: also check if the key-value bindings in `args_mapping` still hold here?
             }
 
             // Remove threads that failed constraint checks from `next` and add to `failed`
