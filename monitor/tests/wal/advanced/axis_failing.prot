@@ -1,0 +1,22 @@
+// ARGS: --wave wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns
+// RETURN: 1
+
+// Version of `axis_minimal.prot` with the `send_data` function removed
+
+struct AXIS {
+    out m_axis_tready: u1,
+    in m_axis_tvalid: u1,
+    in m_axis_tdata: u8,
+}
+
+#[idle]
+fn idle<D: AXIS>() {
+    D.m_axis_tvalid := 1'b0;
+    // D.data is implicitly X
+    step();
+    // TODO: can we get rid of this boiler plate code?
+    D.m_axis_tdata := X;
+    D.m_axis_tvalid := X;
+    fork();
+    step();
+}

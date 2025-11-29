@@ -39,6 +39,10 @@ impl TimeUnit {
 /// - other immutable fields
 #[derive(Debug)]
 pub struct GlobalContext {
+    /// The name of the waveform file supplied by the user
+    /// (Only used for error-reporting purposes)
+    pub waveform_file: String,
+
     /// The waveform supplied by the user
     pub trace: WaveSignalTrace,
 
@@ -67,6 +71,7 @@ impl GlobalContext {
     /// indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
     pub fn new(
+        waveform_file: String,
         trace: WaveSignalTrace,
         design: Design,
         display_hex: bool,
@@ -78,6 +83,7 @@ impl GlobalContext {
         let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;
 
         Self {
+            waveform_file,
             trace,
             design,
             instance_id,

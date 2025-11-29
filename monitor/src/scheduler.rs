@@ -2,12 +2,12 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
     ir::{Stmt, SymbolTable, Transaction},
-    serialize::{serialize_bitvec, serialize_error},
+    serialize::{serialize_bitvec, serialize_error, serialize_stmt},
 };
 
 use crate::{
@@ -38,8 +38,6 @@ fn format_queue(queue: &Queue, ctx: &GlobalContext) -> String {
 
 /// Formats a single thread with context-aware timing information
 fn format_thread(thread: &Thread, ctx: &GlobalContext) -> String {
-    use protocols::serialize::serialize_stmt;
-
     let start_info = if ctx.show_waveform_time {
         format!(
             "Start time: {}",
@@ -131,7 +129,7 @@ pub struct Scheduler {
     /// Flag indicating whether the trace has ended
     trace_ended: bool,
 
-    /// All possible transactions (along with their corresponding transactions)
+    /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
     possible_transactions: Vec<(Transaction, SymbolTable)>,
 }
@@ -443,11 +441,13 @@ impl Scheduler {
                     && paused.is_empty()
                     && self.next.is_empty()
                 {
-                    return Err(anyhow!(
+                    info!(
                         "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
                         start_cycle,
                         failed.len()
-                    ));
+                    );
+
+                    return self.emit_error();
                 }
             }
 
@@ -470,7 +470,15 @@ impl Scheduler {
                         format_queue_compact(&self.failed)
                     );
                 }
-                self.failed.clear();
+
+                let no_transactions_match =
+                    self.current.is_empty() && self.next.is_empty() && self.finished.is_empty();
+
+                if no_transactions_match {
+                    return self.emit_error();
+                } else {
+                    self.failed.clear();
+                }
             }
 
             if !self.finished.is_empty() {
@@ -544,6 +552,23 @@ impl Scheduler {
             }
         }
         Ok(())
+    }
+
+    /// Helper function that emits an error (and terminates the monitor with
+    /// non-zero exit code). The caller should only call this function
+    /// when it is determined that no transactions match the provided waveform.
+    pub fn emit_error(&self) -> anyhow::Result<()> {
+        let error_msg = anyhow!(
+            "Failure: No transactions match the waveform in `{}`.\nPossible transactions: {}",
+            self.ctx.waveform_file,
+            self.possible_transactions
+                .iter()
+                .map(|(tr, _)| tr.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        println!("{}", error_msg);
+        Err(error_msg)
     }
 
     /// Keeps running a `thread` until:

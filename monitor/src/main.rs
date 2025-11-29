@@ -11,7 +11,7 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
@@ -151,6 +151,7 @@ fn main() -> anyhow::Result<()> {
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
     let ctx = GlobalContext::new(
+        cli.wave,
         trace,
         design.clone(),
         cli.display_hex,
