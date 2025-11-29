@@ -396,13 +396,13 @@ impl Scheduler {
                             .ctx
                             .trace
                             .format_time(finished_thread.start_time_step, self.ctx.time_unit);
-                        return Err(anyhow!(
+                        return self.emit_error().with_context(|| anyhow!(
                             "Thread {} finished but there are other threads with the same start time {} in the `next` queue",
                             finished_thread.thread_id,
                             time_str
                         ));
                     } else {
-                        return Err(anyhow!(
+                        return self.emit_error().with_context(|| anyhow!(
                             "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
                             finished_thread.thread_id,
                             finished_thread.start_cycle
@@ -441,13 +441,11 @@ impl Scheduler {
                     && paused.is_empty()
                     && self.next.is_empty()
                 {
-                    info!(
+                    return self.emit_error().with_context(|| anyhow!(
                         "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
                         start_cycle,
                         failed.len()
-                    );
-
-                    return self.emit_error();
+                    ));
                 }
             }
 
@@ -471,6 +469,8 @@ impl Scheduler {
                     );
                 }
 
+                // If there are a non-zero no. of failed threads,
+                // and no other threads have finished successfully /
                 let no_transactions_match =
                     self.current.is_empty() && self.next.is_empty() && self.finished.is_empty();
 
