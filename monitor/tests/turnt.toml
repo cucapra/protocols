@@ -1,3 +1,5 @@
+# We run Cargo in quiet mode to prevent build messages from 
+# appearing in the output for Turnt tests
 [envs.monitor]
-command = "cargo run --package protocols-monitor -- -p {filename} {args}"
+command = "cargo run --quiet --package protocols-monitor -- -p {filename} {args}"
 output.out = "-"

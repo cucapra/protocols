@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -558,8 +558,17 @@ impl Scheduler {
     /// non-zero exit code). The caller should only call this function
     /// when it is determined that no transactions match the provided waveform.
     pub fn emit_error(&self) -> anyhow::Result<()> {
+        let time_str = if self.ctx.show_waveform_time {
+            self.ctx
+                .trace
+                .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+        } else {
+            format!("cycle {}", self.interpreter.trace_cycle_count)
+        };
+
         let error_msg = anyhow!(
-            "Failure: No transactions match the waveform in `{}`.\nPossible transactions: [{}]",
+            "Failure at {}: No transactions match the waveform in `{}`.\nPossible transactions: [{}]",
+            time_str,
             self.ctx.waveform_file,
             self.possible_transactions
                 .iter()

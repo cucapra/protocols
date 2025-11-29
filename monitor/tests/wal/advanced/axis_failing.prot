@@ -1,5 +1,6 @@
 // ARGS: --wave wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns
 // RETURN: 1
+// OUT: err 2
 
 // Version of `axis_minimal.prot` with the `send_data` function removed
 

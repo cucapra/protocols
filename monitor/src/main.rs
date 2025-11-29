@@ -15,7 +15,7 @@ use crate::designs::{collects_design_names, find_designs, parse_instance, Instan
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -162,8 +162,8 @@ fn main() -> anyhow::Result<()> {
 
     // Actually run the scheduler
     if let Err(error_msg) = scheduler.run() {
-        println!("{error_msg}");
-        return Err(error_msg);
+        eprintln!("{error_msg}");
+        return Err(anyhow!("Monitor failed due to no matching transactions"));
     }
     Ok(())
 }
