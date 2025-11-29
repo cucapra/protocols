@@ -11,7 +11,7 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
@@ -161,5 +161,9 @@ fn main() -> anyhow::Result<()> {
     let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
     // Actually run the scheduler
-    scheduler.run()
+    if let Err(error_msg) = scheduler.run() {
+        println!("{error_msg}");
+        return Err(error_msg);
+    }
+    Ok(())
 }

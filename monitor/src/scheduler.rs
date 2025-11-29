@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -559,7 +559,7 @@ impl Scheduler {
     /// when it is determined that no transactions match the provided waveform.
     pub fn emit_error(&self) -> anyhow::Result<()> {
         let error_msg = anyhow!(
-            "Failure: No transactions match the waveform in `{}`.\nPossible transactions: {}",
+            "Failure: No transactions match the waveform in `{}`.\nPossible transactions: [{}]",
             self.ctx.waveform_file,
             self.possible_transactions
                 .iter()
@@ -567,7 +567,6 @@ impl Scheduler {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        println!("{}", error_msg);
         Err(error_msg)
     }
 
