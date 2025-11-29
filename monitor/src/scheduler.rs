@@ -740,13 +740,13 @@ impl Scheduler {
     /// (ExprIds/StmtIds are rendered with respect
     /// to a `Transaction` and `SymbolTable` in which they reside).
     /// Remarks:
-    /// - at the moment, this function only adds extra information for
-    /// the `ValueDisagreesWithTrace` error message (this was used for debugging
-    /// the monitor). Otherwise, it falls-back on the error's `Display` instance.
+    /// - At the moment, this function only adds extra information for
+    ///   the `ValueDisagreesWithTrace` error message (this was used for debugging
+    ///   the monitor). Otherwise, it falls-back on the error's `Display` instance.
     /// - We put this function here and not in `serialize.rs` of the
-    /// `protocols` crate, since it depends on some monitor-speciifc functionality
-    /// (e.g. whether to display the time of the error in time units or
-    /// in no. of cycles).
+    ///   `protocols` crate, since it depends on some monitor-speciifc functionality
+    ///   (e.g. whether to display the time of the error in time units or
+    ///   in no. of cycles).
     pub fn serialize_monitor_error(&self, err: ExecutionError) -> String {
         match err {
             ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
