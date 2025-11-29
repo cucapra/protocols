@@ -15,7 +15,7 @@ use crate::designs::{Instance, collects_design_names, find_designs, parse_instan
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -151,6 +151,7 @@ fn main() -> anyhow::Result<()> {
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
     let ctx = GlobalContext::new(
+        cli.wave,
         trace,
         design.clone(),
         cli.display_hex,
@@ -160,5 +161,9 @@ fn main() -> anyhow::Result<()> {
     let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
     // Actually run the scheduler
-    scheduler.run()
+    if let Err(error_msg) = scheduler.run() {
+        eprintln!("{error_msg}");
+        return Err(anyhow!("Monitor failed due to no matching transactions"));
+    }
+    Ok(())
 }

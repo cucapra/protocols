@@ -6,8 +6,9 @@ use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
+    errors::{EvaluationError, ExecutionError},
     ir::{Stmt, SymbolTable, Transaction},
-    serialize::{serialize_bitvec, serialize_error},
+    serialize::{serialize_bitvec, serialize_stmt},
 };
 
 use crate::{
@@ -38,8 +39,6 @@ fn format_queue(queue: &Queue, ctx: &GlobalContext) -> String {
 
 /// Formats a single thread with context-aware timing information
 fn format_thread(thread: &Thread, ctx: &GlobalContext) -> String {
-    use protocols::serialize::serialize_stmt;
-
     let start_info = if ctx.show_waveform_time {
         format!(
             "Start time: {}",
@@ -131,7 +130,7 @@ pub struct Scheduler {
     /// Flag indicating whether the trace has ended
     trace_ended: bool,
 
-    /// All possible transactions (along with their corresponding transactions)
+    /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
     possible_transactions: Vec<(Transaction, SymbolTable)>,
 }
@@ -398,13 +397,13 @@ impl Scheduler {
                             .ctx
                             .trace
                             .format_time(finished_thread.start_time_step, self.ctx.time_unit);
-                        return Err(anyhow!(
+                        return self.emit_error().with_context(|| anyhow!(
                             "Thread {} finished but there are other threads with the same start time {} in the `next` queue",
                             finished_thread.thread_id,
                             time_str
                         ));
                     } else {
-                        return Err(anyhow!(
+                        return self.emit_error().with_context(|| anyhow!(
                             "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
                             finished_thread.thread_id,
                             finished_thread.start_cycle
@@ -443,7 +442,7 @@ impl Scheduler {
                     && paused.is_empty()
                     && self.next.is_empty()
                 {
-                    return Err(anyhow!(
+                    return self.emit_error().with_context(|| anyhow!(
                         "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
                         start_cycle,
                         failed.len()
@@ -470,7 +469,20 @@ impl Scheduler {
                         format_queue_compact(&self.failed)
                     );
                 }
-                self.failed.clear();
+
+                // If there are a non-zero no. of failed threads,
+                // and there are no threads that finished succesfully /
+                // no threads waiting to be run / no threads that are currently still running,
+                // then we know that *all* threads have failed. In which case, we emit
+                // an error message indicating that no transactions match the given waveform.
+                let no_transactions_match =
+                    self.current.is_empty() && self.next.is_empty() && self.finished.is_empty();
+
+                if no_transactions_match {
+                    return self.emit_error();
+                } else {
+                    self.failed.clear();
+                }
             }
 
             if !self.finished.is_empty() {
@@ -544,6 +556,31 @@ impl Scheduler {
             }
         }
         Ok(())
+    }
+
+    /// Helper function that emits an error (and terminates the monitor with
+    /// non-zero exit code). The caller should only call this function
+    /// when it is determined that no transactions match the provided waveform.
+    pub fn emit_error(&self) -> anyhow::Result<()> {
+        let time_str = if self.ctx.show_waveform_time {
+            self.ctx
+                .trace
+                .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+        } else {
+            format!("cycle {}", self.interpreter.trace_cycle_count)
+        };
+
+        let error_msg = anyhow!(
+            "Failure at {}: No transactions match the waveform in `{}`.\nPossible transactions: [{}]",
+            time_str,
+            self.ctx.waveform_file,
+            self.possible_transactions
+                .iter()
+                .map(|(tr, _)| tr.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        Err(error_msg)
     }
 
     /// Keeps running a `thread` until:
@@ -689,13 +726,55 @@ impl Scheduler {
                         "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
                         thread.thread_id,
                         thread.transaction.name,
-                        serialize_error(&thread.transaction, &thread.symbol_table, err)
+                        self.serialize_monitor_error(err)
                     );
                     self.failed.push(thread);
                     self.print_scheduler_state();
                     break;
                 }
             }
+        }
+    }
+
+    /// Pretty-prints an error message for the monitor
+    /// (ExprIds/StmtIds are rendered with respect
+    /// to a `Transaction` and `SymbolTable` in which they reside).
+    /// Remarks:
+    /// - At the moment, this function only adds extra information for
+    ///   the `ValueDisagreesWithTrace` error message (this was used for debugging
+    ///   the monitor). Otherwise, it falls-back on the error's `Display` instance.
+    /// - We put this function here and not in `serialize.rs` of the
+    ///   `protocols` crate, since it depends on some monitor-speciifc functionality
+    ///   (e.g. whether to display the time of the error in time units or
+    ///   in no. of cycles).
+    pub fn serialize_monitor_error(&self, err: ExecutionError) -> String {
+        match err {
+            ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
+                expr_id: _,
+                value,
+                trace_value,
+                symbol_id,
+                symbol_name,
+                cycle_count,
+            }) => {
+                let time_str = if self.ctx.show_waveform_time {
+                    self.ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                } else {
+                    format!("cycle {}", cycle_count)
+                };
+
+                format!(
+                    "At {}: we expected {} ({}) to have value {}, but the trace value {} is different",
+                    time_str,
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(&value, false),
+                    serialize_bitvec(&trace_value, false),
+                )
+            }
+            _ => format!("{err}"),
         }
     }
 }

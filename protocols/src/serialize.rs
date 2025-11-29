@@ -4,11 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::{
-    errors::{EvaluationError, ExecutionError},
-    interpreter::ExprValue,
-    ir::*,
-};
+use crate::{interpreter::ExprValue, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
@@ -193,36 +189,6 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_expr(tr, st, expr_id2)
             )
         }
-    }
-}
-
-/// Pretty-prints an error message (ExprIds/StmtIds are rendered with respect
-/// to a `Transaction` and `SymbolTable` in which they reside).
-/// Note: at the moment, this function only adds extra information for
-/// the `ValueDisagreesWithTrace` error message (this was used for debugging
-/// the monitor). Otherwise, it falls-back on the `Display` instance for the errror.
-pub fn serialize_error(tr: &Transaction, st: &SymbolTable, err: ExecutionError) -> String {
-    match err {
-        ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
-            expr_id,
-            value,
-            trace_value,
-            symbol_id,
-            symbol_name,
-            cycle_count,
-        }) => {
-            format!(
-                "At {} ({}), we expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
-                serialize_expr(tr, st, &expr_id),
-                expr_id,
-                symbol_name,
-                symbol_id,
-                serialize_bitvec(&value, false),
-                serialize_bitvec(&trace_value, false),
-                cycle_count
-            )
-        }
-        _ => format!("{err}"),
     }
 }
 
