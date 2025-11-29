@@ -72,6 +72,15 @@ pub enum EvaluationError {
         symbol_name: String,
         cycle_count: u32,
     },
+    /// (For monitor only) When a constraint established by an assignment
+    /// no longer holds after stepping to a new cycle
+    ConstraintViolation {
+        symbol_id: SymbolId,
+        symbol_name: String,
+        expected_value: BitVecValue,
+        trace_value: BitVecValue,
+        error_time_string: String,
+    },
 }
 
 /// Thread-specific execution errors
@@ -180,11 +189,11 @@ impl fmt::Display for EvaluationError {
             } => {
                 write!(
                     f,
-                    "Attempted to assign value {} (expr_id {}) to {} (symbol_id {}) but the trace value {} at cycle {} is different",
-                    serialize_bitvec(value, false),
+                    "At expr_id {}, we expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
                     expr_id,
                     symbol_name,
                     symbol_id,
+                    serialize_bitvec(value, false),
                     serialize_bitvec(trace_value, false),
                     cycle_count
                 )
@@ -231,6 +240,23 @@ impl fmt::Display for EvaluationError {
                     f,
                     "Illegal slice operation on expr {}: attempted to slice bits [{}:{}] on an expression of a  non-bitvector type",
                     expr_id, start, end
+                )
+            }
+            EvaluationError::ConstraintViolation {
+                symbol_id,
+                symbol_name,
+                expected_value,
+                trace_value,
+                error_time_string: error_time,
+            } => {
+                write!(
+                    f,
+                    "Constraint violation: {} (symbol_id {}) expected value {} but trace has value {} at {}",
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(expected_value, false),
+                    serialize_bitvec(trace_value, false),
+                    error_time
                 )
             }
         }
@@ -364,6 +390,22 @@ impl ExecutionError {
             symbol_id,
             symbol_name,
             cycle_count,
+        })
+    }
+
+    pub fn constraint_violation(
+        symbol_id: SymbolId,
+        symbol_name: String,
+        expected_value: BitVecValue,
+        trace_value: BitVecValue,
+        error_time_string: String,
+    ) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ConstraintViolation {
+            symbol_id,
+            symbol_name,
+            expected_value,
+            trace_value,
+            error_time_string,
         })
     }
 
@@ -629,10 +671,31 @@ impl DiagnosticEmitter {
                 cycle_count,
             } => {
                 let message = format!(
-                    "Attempted to assign {:?} to {} (symbol_id {}) but the trace value {:?} at cycle {} is different",
-                    value, symbol_name, symbol_id, trace_value, cycle_count
+                    "Expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(value, false),
+                    serialize_bitvec(trace_value, false),
+                    cycle_count
                 );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
+            }
+            EvaluationError::ConstraintViolation {
+                symbol_id,
+                symbol_name,
+                expected_value,
+                trace_value,
+                error_time_string: error_time,
+            } => {
+                let message = format!(
+                    "Constraint violation: {} (symbol_id {}) expected value {} but trace has {} at {}",
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(expected_value, false),
+                    serialize_bitvec(trace_value, false),
+                    error_time
+                );
+                handler.emit_general_message(&message, Level::Error);
             }
         }
     }

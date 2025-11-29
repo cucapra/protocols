@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
-    errors::{EvaluationError, ExecutionError, ExecutionResult, SymbolError},
+    errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
     ir::{BinOp, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
     scheduler::NextStmtMap,
@@ -14,6 +14,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace},
+    thread::Thread,
 };
 
 pub struct Interpreter {
@@ -23,6 +24,14 @@ pub struct Interpreter {
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
 
+    /// Constraints on DUT input port values that must hold after stepping.
+    /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
+    /// and verified after each `step()` to ensure the constraint still holds.
+    pub constraints: FxHashMap<SymbolId, BitVecValue>,
+
+    // Maps function parameters to DUT pins
+    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
+
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
@@ -30,21 +39,16 @@ pub struct Interpreter {
 
 impl Interpreter {
     /// Performs a context switch in the `Interpreter` by setting its
-    /// `Transaction`, `SymbolTable`, `args_mapping`
-    /// and `known_bits` to the specified arguments
-    pub fn context_switch(
-        &mut self,
-        transaction: Transaction,
-        symbol_table: SymbolTable,
-        next_stmt_map: NextStmtMap,
-        args_mapping: FxHashMap<SymbolId, BitVecValue>,
-        known_bits: FxHashMap<SymbolId, BitVecValue>,
-    ) {
-        self.transaction = transaction;
-        self.symbol_table = symbol_table;
-        self.next_stmt_map = next_stmt_map;
-        self.args_mapping = args_mapping;
-        self.known_bits = known_bits;
+    /// `Transaction`, `SymbolTable`, `args_mapping`, `known_bits`, and `constraints`
+    /// to the specified arguments
+    pub fn context_switch(&mut self, thread: &Thread) {
+        self.transaction = thread.transaction.clone();
+        self.symbol_table = thread.symbol_table.clone();
+        self.next_stmt_map = thread.next_stmt_map.clone();
+        self.args_mapping = thread.args_mapping.clone();
+        self.known_bits = thread.known_bits.clone();
+        self.constraints = thread.constraints.clone();
+        self.args_to_pins = thread.args_to_pins.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -104,8 +108,10 @@ impl Interpreter {
             symbol_table,
             next_stmt_map: transaction.next_stmt_mapping(),
             args_mapping,
-            trace_cycle_count,
             known_bits,
+            constraints: FxHashMap::default(),
+            trace_cycle_count,
+            args_to_pins: FxHashMap::default(),
         }
     }
 
@@ -129,12 +135,21 @@ impl Interpreter {
                 }
                 // Otherwise, try to fetch the value from the trace
                 else if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
-                    info!(
-                        "Trace @ cycle {}: `{}` has value {}",
-                        self.trace_cycle_count,
-                        name,
-                        serialize_bitvec(&value, ctx.display_hex)
-                    );
+                    if ctx.show_waveform_time {
+                        info!(
+                            "Trace @ time {}: `{}` has value {}",
+                            ctx.trace.format_time(ctx.trace.time_step(), ctx.time_unit),
+                            name,
+                            serialize_bitvec(&value, ctx.display_hex)
+                        );
+                    } else {
+                        info!(
+                            "Trace @ cycle {}: `{}` has value {}",
+                            self.trace_cycle_count,
+                            name,
+                            serialize_bitvec(&value, ctx.display_hex)
+                        );
+                    }
                     // Check if the symbol we're referring to
                     // is the DUT pin corresponding to an output parameter
 
@@ -161,6 +176,7 @@ impl Interpreter {
                                         serialize_bitvec(&value, ctx.display_hex)
                                     );
                                     self.args_mapping.insert(arg.symbol(), value.clone());
+
                                     break;
                                 }
                             }
@@ -227,9 +243,9 @@ impl Interpreter {
                         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
                             if lhs.width() != rhs.width() {
                                 Err(ExecutionError::arithmetic_error(
-                                    "And".to_string(),
+                                    "Concat".to_string(),
                                     format!(
-                                        "Width mismatch in AND operation: lhs width = {}, rhs width = {}",
+                                        "Width mismatch in CONCAT operation: lhs width = {}, rhs width = {}",
                                         lhs.width(),
                                         rhs.width()
                                     ),
@@ -394,8 +410,9 @@ impl Interpreter {
         let transaction = self.transaction.clone();
         let stmt = &transaction[stmt_id];
         info!(
-            "Examining statement `{}`",
-            serialize_stmt(&self.transaction, &self.symbol_table, stmt_id)
+            "Examining statement `{}` ({})",
+            serialize_stmt(&self.transaction, &self.symbol_table, stmt_id),
+            stmt_id
         );
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
@@ -492,6 +509,27 @@ impl Interpreter {
                         self.infer_value_from_assertion(expr_id1, expr_id2, &value2, ctx)?;
                         Ok(self.next_stmt_map[stmt_id])
                     }
+                    // Check whether the two arguments to the assertion are equal
+                    (Ok(ExprValue::Concrete(value1)), Ok(ExprValue::Concrete(value2))) => {
+                        if value1 != value2 {
+                            info!(
+                                "Assertion `{}` failed: {} != {}",
+                                self.format_stmt(stmt_id),
+                                serialize_bitvec(&value1, ctx.display_hex),
+                                serialize_bitvec(&value2, ctx.display_hex),
+                            );
+                            Err(ExecutionError::Assertion(AssertionError::EqualityFailed {
+                                expr1_id: *expr_id1,
+                                expr2_id: *expr_id2,
+                                value1,
+                                value2,
+                            }))
+                        } else {
+                            info!("Assertion `{}` passed", self.format_stmt(stmt_id),);
+                            Ok(self.next_stmt_map[stmt_id])
+                        }
+                    }
+
                     // For other cases, we skip the assertion for now
                     (Ok(_), Ok(_)) => {
                         info!(
@@ -520,7 +558,8 @@ impl Interpreter {
         }
     }
 
-    /// Infers the value of an unknown expression from an assertion.
+    /// Infers the value of an unknown expression from an assertion,
+    /// and inserts a binding for it into the `args_mapping`.
     /// - `unknown_expr_id` is the expr whose value we're inferring
     /// - `known_expr_id` is the (known) expr with value `known_value`
     fn infer_value_from_assertion(
@@ -617,12 +656,22 @@ impl Interpreter {
                     .get_parameters_by_direction(Dir::Out)
                     .collect();
 
+                let out_param_strs = out_params
+                    .iter()
+                    .map(|symbol_id| self.symbol_table[symbol_id].name().to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                info!("out_params = {}", out_param_strs);
+
                 // If `symbol_id` is an output parameter that is currently
                 // absent from `args_mapping`, insert the binding
                 // `symbol_id |-> known_value` into `args_mapping`,
                 // and update `known_bits` to be all ones
                 if out_params.contains(symbol_id) {
                     let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+
+                    info!("Identified {} as an output parameter", symbol_name);
+
                     if let Entry::Vacant(e) = self.args_mapping.entry(*symbol_id) {
                         e.insert(known_value.clone());
                         let width = known_value.width();
@@ -686,7 +735,7 @@ impl Interpreter {
         rhs_expr_id: &ExprId,
         ctx: &GlobalContext,
     ) -> ExecutionResult<()> {
-        let lhs = self.symbol_table.full_name_from_symbol_id(lhs_symbol_id);
+        let lhs_name = self.symbol_table.full_name_from_symbol_id(lhs_symbol_id);
         match self.evaluate_expr(rhs_expr_id, ctx) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
@@ -713,7 +762,7 @@ impl Interpreter {
                                     rhs_value,
                                     trace_value,
                                     *lhs_symbol_id, // Use LHS symbol for error reporting
-                                    lhs.to_string(),
+                                    lhs_name.to_string(),
                                     self.trace_cycle_count,
                                 ))
                             } else {
@@ -725,16 +774,30 @@ impl Interpreter {
                                     self.known_bits
                                         .insert(*rhs_symbol_id, BitVecValue::ones(width));
                                 }
+
+                                // If LHS is a DUT input port (has a parent) and RHS is a constant,
+                                // add this as a constraint that must hold after stepping
+                                if let Expr::Const(_) = rhs_expr {
+                                    if self.symbol_table[*lhs_symbol_id].parent().is_some() {
+                                        info!(
+                                            "Adding constraint: {} must equal {}",
+                                            lhs_name,
+                                            serialize_bitvec(&rhs_value, ctx.display_hex)
+                                        );
+                                        self.constraints.insert(*lhs_symbol_id, rhs_value.clone());
+                                    }
+                                }
+
                                 Ok(())
                             }
                         } else {
                             info!(
                                 "Unable to find value for `{}` in trace at cycle {:?}",
-                                lhs, self.trace_cycle_count
+                                lhs_name, self.trace_cycle_count
                             );
                             Err(ExecutionError::symbol_not_found(
                                 *lhs_symbol_id,
-                                lhs.to_string(),
+                                lhs_name.to_string(),
                                 "trace".to_string(),
                                 *rhs_expr_id,
                             ))
@@ -775,7 +838,7 @@ impl Interpreter {
                                             rhs_value,
                                             trace_value,
                                             *lhs_symbol_id, // Use LHS symbol for error reporting
-                                            lhs.to_string(),
+                                            lhs_name.to_string(),
                                             self.trace_cycle_count,
                                         ))
                                     } else {
@@ -800,11 +863,11 @@ impl Interpreter {
                                 } else {
                                     info!(
                                         "Unable to find value for `{}` in trace at cycle {:?}",
-                                        lhs, self.trace_cycle_count
+                                        lhs_name, self.trace_cycle_count
                                     );
                                     Err(ExecutionError::symbol_not_found(
                                         *lhs_symbol_id,
-                                        lhs.to_string(),
+                                        lhs_name.to_string(),
                                         "trace".to_string(),
                                         *rhs_expr_id,
                                     ))
@@ -824,7 +887,25 @@ impl Interpreter {
                     ),
                 }
             }
-            Ok(ExprValue::DontCare) => Ok(()),
+            Ok(ExprValue::DontCare) => {
+                // If the LHS is a DUT (input) port (e.g. `DUT.a`) and we
+                // encountered a DontCare assignment `DUT.a := X`,
+                // remove any constraints for it and any parameter bindings
+                if self.symbol_table[*lhs_symbol_id].parent().is_some() {
+                    self.constraints.remove(lhs_symbol_id);
+
+                    // Also remove any parameter bindings that map to this port
+                    // (e.g., if we had `data -> D.m_axis_tdata`, remove it)
+                    self.args_to_pins
+                        .retain(|_param_id, port_id| *port_id != *lhs_symbol_id);
+
+                    info!(
+                        "Cleared bindings for {} in `constraints` and `args_to_pins` due to DontCare assignment",
+                        self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
+                    );
+                }
+                Ok(())
+            }
             Err(ExecutionError::Symbol(SymbolError::NotFound { .. })) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
                 match rhs_expr {
@@ -852,6 +933,25 @@ impl Interpreter {
                             let width = trace_value.width();
                             self.known_bits
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
+                            info!("Updated known_bits to map {} |-> 111...1", symbol_name);
+
+                            // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
+                            // into the `args_to_pins` map
+                            // (the RHS is the function parameter,
+                            // the LHS is a DUT pin)
+                            self.args_to_pins.insert(*rhs_symbol_id, *lhs_symbol_id);
+                            info!(
+                                "Updated args_to_pins to map {} |-> {}",
+                                symbol_name, lhs_name
+                            );
+
+                            // If there is an existing cosntraint for the DUT port (e.g. `DUT.a`)
+                            // this means it was previously assigned some constant (e.g. `DUT.a := 5`),
+                            // but now we are overwriting it with an assignment to an input parameter
+                            // (e.g. `DUT.a := <input_param>`), so we should remove the constraint
+                            if self.constraints.contains_key(lhs_symbol_id) {
+                                self.constraints.remove(lhs_symbol_id);
+                            }
 
                             Ok(())
                         } else {
@@ -938,6 +1038,16 @@ impl Interpreter {
                                         current_known_bits.to_bit_str()
                                     );
 
+                                    // Insert a mapping `sliced_symbol_id` |-> `lhs_symbol_id`
+                                    // into the `args_to_pins` map
+                                    // (the RHS is the function parameter,
+                                    // the LHS is a DUT pin)
+                                    self.args_to_pins.insert(*sliced_symbol_id, *lhs_symbol_id);
+                                    info!(
+                                        "Updated args_to_pins to map {} |-> {}",
+                                        symbol_name, lhs_name
+                                    );
+
                                     Ok(())
                                 } else {
                                     Err(ExecutionError::symbol_not_found(
@@ -999,8 +1109,29 @@ impl Interpreter {
             )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_true() {
+                    // Proceed to the next iteration of the loop
                     Ok(Some(*do_block_id))
                 } else {
+                    let next_stmt_str = match self.next_stmt_map[while_id] {
+                        Some(next_stmt_id) => {
+                            format!(
+                                "{} ({})",
+                                serialize_stmt(
+                                    &self.transaction,
+                                    &self.symbol_table,
+                                    &next_stmt_id
+                                ),
+                                next_stmt_id
+                            )
+                        }
+                        None => "No next stmt".to_string(),
+                    };
+                    info!(
+                        "Loop guard `{}` evaluated to false, exiting loop, next stmt: `{}`",
+                        serialize_expr(&self.transaction, &self.symbol_table, loop_guard_id),
+                        next_stmt_str,
+                    );
+                    // Exit the loop, executing the statement that follows it immediately
                     Ok(self.next_stmt_map[while_id])
                 }
             }

@@ -6,9 +6,7 @@ mod tests {
     use protocols::ir::{Dir, Field, SymbolTable, Type};
     use rustc_hash::FxHashMap;
 
-    // cargo test test_axi_rising_edge_sampling -- --nocapture
-    #[test]
-    fn test_axi_rising_edge_sampling() {
+    fn axi_experiment_helper(waveform_file: &str, expected_values: Vec<u64>) {
         // Set up the symbol table and symbol IDs
         let mut symbol_table = SymbolTable::default();
 
@@ -54,7 +52,7 @@ mod tests {
 
         // Load the waveform with rising edge sampling on uut_rx.clk
         let mut trace = WaveSignalTrace::open(
-            &"tests/wal/advanced/uart-axi.fst",
+            &waveform_file,
             &designs,
             &instances,
             Some("uut_rx.clk".to_string()),
@@ -102,6 +100,30 @@ mod tests {
             println!(" time: {}ns, data = {}", time_ns, data_val);
         }
 
-        assert_eq!(data_values, vec![0, 1, 2, 3, 8, 9, 10, 11, 12, 15, 18, 19]);
+        assert_eq!(data_values, expected_values);
+    }
+
+    // cargo test test_axi_rising_edge_sampling -- --nocapture
+    #[test]
+    fn test_axi_rising_edge_sampling() {
+        axi_experiment_helper(
+            "tests/wal/advanced/uart-axi.fst",
+            vec![0, 1, 2, 3, 8, 9, 10, 11, 12, 15, 18, 19],
+        );
+    }
+
+    // cargo test test_axi_minimal -- --nocapture
+    #[test]
+    fn test_axi_minimal() {
+        axi_experiment_helper("tests/wal/advanced/uart-axi-minimal.fst", vec![15]);
+    }
+
+    // cargo test test_axi-truncated -- --nocapture
+    #[test]
+    fn test_axi_truncated() {
+        axi_experiment_helper(
+            "tests/wal/advanced/uart-axi-truncated.fst",
+            vec![15, 18, 19],
+        );
     }
 }

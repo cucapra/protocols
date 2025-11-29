@@ -16,7 +16,8 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
     out rd_data: u32,
     in insn: u32,
   ) {
-  p.resetn := 1'b1;
+  // `pcpi_mul` does not modify the `reset` pin, so we can set it to DontCare
+  p.resetn := X;
   p.pcpi_valid := 1'b1;
   p.pcpi_insn := insn;
   p.pcpi_rs1 := rs1_data;
@@ -38,6 +39,8 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
   assert_eq(p.pcpi_rd, rd_data);
 
   step();
+  // We don't care about the value of `valid` now, since the data transfer has occurred
+  p.pcpi_valid := X; 
   fork();
   step();
 }
@@ -45,6 +48,8 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
 fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
   step();
+  // We make explicit the fact that `reset` is `DontCare` after one cycle
+  p.resetn := X; 
   fork();
   step();
 }

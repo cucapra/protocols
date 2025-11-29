@@ -9,9 +9,10 @@ A protocol is described using an `fn` definition containing a list of imperative
 
 **Installing dependencies**
 - Run `brew install yosys` to install [Yosys](https://yosyshq.readthedocs.io/projects/yosys/en/latest/)
-- Run `brew install just` to install [Just](https://github.com/casey/just)
-- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main) 
+- Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
+- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), which we use for [snapshot testing](https://www.cs.cornell.edu/~asampson/blog/turnt.html)
   - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
+- Run `npm install -g faucet` to install [Faucet](https://github.com/tape-testing/faucet), which summarizes test outputs from Turnt in a human-readable manner
 
 **Building / testing**:
 - Run `cargo build` to build

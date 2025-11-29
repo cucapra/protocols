@@ -2,9 +2,13 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
+use baa::BitVecOps;
 use log::info;
-use protocols::ir::{Stmt, SymbolTable, Transaction};
+use protocols::{
+    ir::{Stmt, SymbolTable, Transaction},
+    serialize::{serialize_bitvec, serialize_error},
+};
 
 use crate::{
     global_context::GlobalContext,
@@ -217,6 +221,158 @@ impl Scheduler {
             // At this point, all threads have been executed till their next `step`
             // and are synchronized (i.e. `current` is empty)
 
+            // Check constraints for all threads in the `next` queue.
+            // These threads have called `step()` and have more work to do.
+            // Threads that finished (i.e. they executed the `step()` statement at t
+            // the end of a function) are not in `next`, so they won't be checked.
+            let mut failed_constraint_checks = Vec::new();
+
+            for thread in self.next.iter_mut() {
+                // If any constraints failed, figure out the right time-step/cycle
+                // to display in the logs
+                let time_str = if self.ctx.show_waveform_time {
+                    self.ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                } else {
+                    format!("cycle {}", self.interpreter.trace_cycle_count)
+                };
+
+                // Check that all constraints in the `constraints` map still hold
+                // against the current trace values. This is called after each `step()`
+                // to ensure that assignments like `D.m_axis_tvalid := 1'b1` continue
+                // to hold after stepping to a new cycle.
+                for (symbol_id, expected_value) in &thread.constraints {
+                    let symbol_name = thread.symbol_table.full_name_from_symbol_id(symbol_id);
+
+                    match self.ctx.trace.get(self.ctx.instance_id, *symbol_id) {
+                        Ok(trace_value) => {
+                            if trace_value != *expected_value {
+                                info!(
+                                    "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
+                                    thread.thread_id,
+                                    thread.transaction.name,
+                                    time_str,
+                                    symbol_name,
+                                    serialize_bitvec(&trace_value, self.ctx.display_hex),
+                                    serialize_bitvec(expected_value, self.ctx.display_hex)
+                                );
+                                failed_constraint_checks.push(thread.clone());
+                            } else {
+                                info!(
+                                    "Constraint OK for thread {} (`{}`) at {}: {} = {}",
+                                    thread.thread_id,
+                                    thread.transaction.name,
+                                    time_str,
+                                    symbol_name,
+                                    serialize_bitvec(expected_value, self.ctx.display_hex)
+                                );
+                            }
+                        }
+                        Err(_) => {
+                            info!(
+                                "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
+                                symbol_name, self.interpreter.trace_cycle_count
+                            );
+                            // If we can't read the symbol from the trace, treat it as a constraint violation
+                            // (The constraint can't hold if the signal doesn't exist in the trace)
+                            failed_constraint_checks.push(thread.clone());
+                        }
+                    }
+                }
+
+                // Check that all args_mappings in the `args_to_pins` map still hold
+                // against the current trace values. This is called after each `step()`
+                // to ensure that parameters inferred from DUT ports (like `data` from `D.m_axis_tdata`)
+                // still match the trace after stepping to a new cycle.
+                for (param_id, port_id) in &thread.args_to_pins {
+                    let param_name = thread.symbol_table.full_name_from_symbol_id(param_id);
+                    let port_name = thread.symbol_table.full_name_from_symbol_id(port_id);
+
+                    // Get the (existing) inferred parameter value from args_mapping
+                    if let Some(param_value) = thread.args_mapping.get(param_id) {
+                        // Compute the current time-step/cycle (for logging purposes)
+                        let time_str = if self.ctx.show_waveform_time {
+                            self.ctx
+                                .trace
+                                .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                        } else {
+                            format!("cycle {}", self.interpreter.trace_cycle_count)
+                        };
+
+                        // Get the current port value from the trace
+                        match self.ctx.trace.get(self.ctx.instance_id, *port_id) {
+                            Ok(trace_value) => {
+                                // Check whether all bits are known or if only
+                                // some of them are known (e.g. due to a bit-slice)
+                                let known_bits =
+                                    thread.known_bits.get(param_id).ok_or_else(|| {
+                                        anyhow!(
+                                            "Unable to find {} in `known_bits` map of thread {} ({})",
+                                            param_name,
+                                            thread.thread_id,
+                                            thread.transaction.name
+                                        )}).context(format!("known_bits = {:?}", thread.known_bits))?;
+                                let all_bits_known = known_bits.is_all_ones();
+
+                                // TODO: need to handle the case when not all bits are known
+
+                                // If all bits are known and the two sides of the assignment have the
+                                // same bit-width, check whether the inferred values for function parameters
+                                // abide by the waveform data.
+                                // (We add the bit-width check for simplicity so we don't have
+                                // to handle re-assignments to the same port that involve bit-slices for now,
+                                // as is the case for the SERV example.)
+                                if all_bits_known && trace_value.width() == param_value.width() {
+                                    // If there are any discrepancies between the existing
+                                    // inferred value for a function parameter and its
+                                    // waveform value, we update the inferred value to be
+                                    // the waveform value at the current time-step.
+                                    if trace_value != *param_value {
+                                        info!(
+                                            "Updating {} |-> {} in args_mapping based on waveform data at {}",
+                                            param_name,
+                                            serialize_bitvec(&trace_value, self.ctx.display_hex),
+                                            time_str
+                                        );
+                                        thread.args_mapping.insert(*param_id, trace_value);
+                                    } else {
+                                        info!(
+                                            "args_mapping OK: {} = {} = {}",
+                                            param_name,
+                                            port_name,
+                                            serialize_bitvec(param_value, self.ctx.display_hex)
+                                        );
+                                    }
+                                } else {
+                                    info!(
+                                        "Skipping args_mapping check for {} since not all bits are known",
+                                        param_name
+                                    );
+                                }
+                            }
+                            Err(_) => {
+                                info!(
+                                    "Unable to verify args_mapping {} -> {} at {}, as {} is not found in the trace",
+                                    param_name, port_name, time_str, param_name
+                                );
+                                failed_constraint_checks.push(thread.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Remove threads that failed constraint checks from `next` and add to `failed`
+            for failed_thread in failed_constraint_checks {
+                info!(
+                    "Moving thread {} (`{}`) to `failed` as it failed a constraint check",
+                    failed_thread.thread_id, failed_thread.transaction.name
+                );
+                self.next.retain(|t| t.thread_id != failed_thread.thread_id);
+                self.failed.push(failed_thread);
+            }
+
             // Find the unique start cycles of all threads in the `finished` queue
             let finished_threads_start_cycles = unique_start_cycles(&self.finished);
 
@@ -237,11 +393,23 @@ impl Scheduler {
                 // ...and there shouldn't be any other threads in `next`
                 let next = threads_with_start_time(&self.next, start_cycle);
                 if !next.is_empty() {
-                    return Err(anyhow!(
-                        "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
-                        finished_thread.thread_id,
-                        finished_thread.start_cycle
-                    ));
+                    if self.ctx.show_waveform_time {
+                        let time_str = self
+                            .ctx
+                            .trace
+                            .format_time(finished_thread.start_time_step, self.ctx.time_unit);
+                        return Err(anyhow!(
+                            "Thread {} finished but there are other threads with the same start time {} in the `next` queue",
+                            finished_thread.thread_id,
+                            time_str
+                        ));
+                    } else {
+                        return Err(anyhow!(
+                            "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
+                            finished_thread.thread_id,
+                            finished_thread.start_cycle
+                        ));
+                    }
                 }
             }
 
@@ -390,29 +558,19 @@ impl Scheduler {
 
         // Perform a context switch (use the argument thread's `Transaction`
         // & associated `SymbolTable` / `NextStmtMap`)
-        let Thread {
-            transaction,
-            symbol_table,
-            next_stmt_map,
-            args_mapping,
-            known_bits,
-            ..
-        } = thread.clone();
-        self.interpreter.context_switch(
-            transaction,
-            symbol_table,
-            next_stmt_map,
-            args_mapping,
-            known_bits,
-        );
+        self.interpreter.context_switch(&thread);
+
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
             match self.interpreter.evaluate_stmt(&current_stmt_id, &self.ctx) {
                 Ok(Some(next_stmt_id)) => {
-                    // Update the thread-local `args_mapping` to be the resultant
-                    // arg map in the interpreter
+                    // Update thread-local maps
+                    // to be the resultant maps in the interpreter
                     thread.args_mapping = self.interpreter.args_mapping.clone();
+                    thread.known_bits = self.interpreter.known_bits.clone();
+                    thread.constraints = self.interpreter.constraints.clone();
+                    thread.args_to_pins = self.interpreter.args_to_pins.clone();
 
                     // Check whether the next statement is `Step` or `Fork`
                     // This determines if we need to move threads to/from different queues
@@ -529,7 +687,9 @@ impl Scheduler {
                 Err(err) => {
                     info!(
                         "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
-                        thread.thread_id, thread.transaction.name, err
+                        thread.thread_id,
+                        thread.transaction.name,
+                        serialize_error(&thread.transaction, &thread.symbol_table, err)
                     );
                     self.failed.push(thread);
                     self.print_scheduler_state();
