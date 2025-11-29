@@ -328,11 +328,6 @@ impl Scheduler {
                                     // inferred value for a function parameter and its
                                     // waveform value, we update the inferred value to be
                                     // the waveform value at the current time-step.
-                                    // (This is needed so that the monitor can adapt to waveform
-                                    // signals that change during execution or require some variable amount of
-                                    // time before they can be sampled, e.g. the AXI example
-                                    // where the `data` port should only be sampled when both
-                                    // `ready` and `valid` are 1.)
                                     if trace_value != *param_value {
                                         info!(
                                             "Updating {} |-> {} in args_mapping based on waveform data at {}",
