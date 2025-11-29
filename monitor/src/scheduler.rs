@@ -2,12 +2,13 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
+    errors::{EvaluationError, ExecutionError},
     ir::{Stmt, SymbolTable, Transaction},
-    serialize::{serialize_bitvec, serialize_error, serialize_stmt},
+    serialize::{serialize_bitvec, serialize_stmt},
 };
 
 use crate::{
@@ -725,13 +726,55 @@ impl Scheduler {
                         "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
                         thread.thread_id,
                         thread.transaction.name,
-                        serialize_error(&thread.transaction, &thread.symbol_table, err)
+                        self.serialize_monitor_error(err)
                     );
                     self.failed.push(thread);
                     self.print_scheduler_state();
                     break;
                 }
             }
+        }
+    }
+
+    /// Pretty-prints an error message for the monitor
+    /// (ExprIds/StmtIds are rendered with respect
+    /// to a `Transaction` and `SymbolTable` in which they reside).
+    /// Remarks:
+    /// - at the moment, this function only adds extra information for
+    /// the `ValueDisagreesWithTrace` error message (this was used for debugging
+    /// the monitor). Otherwise, it falls-back on the error's `Display` instance.
+    /// - We put this function here and not in `serialize.rs` of the
+    /// `protocols` crate, since it depends on some monitor-speciifc functionality
+    /// (e.g. whether to display the time of the error in time units or
+    /// in no. of cycles).
+    pub fn serialize_monitor_error(&self, err: ExecutionError) -> String {
+        match err {
+            ExecutionError::Evaluation(EvaluationError::ValueDisagreesWithTrace {
+                expr_id: _,
+                value,
+                trace_value,
+                symbol_id,
+                symbol_name,
+                cycle_count,
+            }) => {
+                let time_str = if self.ctx.show_waveform_time {
+                    self.ctx
+                        .trace
+                        .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                } else {
+                    format!("cycle {}", cycle_count)
+                };
+
+                format!(
+                    "At {}: we expected {} ({}) to have value {}, but the trace value {} is different",
+                    time_str,
+                    symbol_name,
+                    symbol_id,
+                    serialize_bitvec(&value, false),
+                    serialize_bitvec(&trace_value, false),
+                )
+            }
+            _ => format!("{err}"),
         }
     }
 }
