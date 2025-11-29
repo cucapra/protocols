@@ -470,7 +470,10 @@ impl Scheduler {
                 }
 
                 // If there are a non-zero no. of failed threads,
-                // and no other threads have finished successfully /
+                // and there are no threads that finished succesfully /
+                // no threads waiting to be run / no threads that are currently still running,
+                // then we know that *all* threads have failed. In which case, we emit
+                // an error message indicating that no transactions match the given waveform.
                 let no_transactions_match =
                     self.current.is_empty() && self.next.is_empty() && self.finished.is_empty();
 
