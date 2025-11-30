@@ -1,0 +1,37 @@
+
+// Adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/paper/FifoPaperExampleSpec.scala#L8
+struct Fifo {
+    in dataIn: u32,
+    in valid: u1,
+    in pushDontPop: u1,
+    out dataOut: u32 
+}
+
+// The following functions are adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/paper/FifoPaperExampleSpec.scala#L72
+fn push<DUT: Fifo>(in input: u32) {
+    DUT.pushDontPop := 1'b1;
+    DUT.valid := 1'b1;
+    DUT.dataIn := input;
+    step();
+    fork();
+    step();
+}
+
+fn pop<DUT: Fifo>(out output: u32) {
+    DUT.pushDontPop := 1'b0;
+    DUT.valid := 1'b1;
+    assert_eq(DUT.dataOut, output);
+    step();
+    fork();
+    step();
+}
+
+#[idle]
+fn idle<DUT: Fifo>() {
+    DUT.valid := 1'b0;
+    step();
+    DUT.dataIn := X;
+    DUT.pushDontPop := X;
+    fork();
+    step();
+}
