@@ -1,0 +1,6 @@
+// ARGS: --verilog=fifo/bsg_fifo_1rw_large.v --protocol=fifo/fifo.prot --module bsg_fifo_1rw_large
+push(3);
+push(4);
+idle();
+pop(4);
+pop(3);
