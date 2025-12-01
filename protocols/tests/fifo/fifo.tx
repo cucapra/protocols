@@ -2,5 +2,5 @@
 push(3);
 push(4);
 idle();
-pop(4);
 pop(3);
+pop(4);
