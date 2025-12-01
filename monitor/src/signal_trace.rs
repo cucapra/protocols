@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design, global_context::TimeUnit};
+use crate::{designs::Design, global_context::TimeUnit, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
@@ -331,7 +331,14 @@ fn find_instances(
                     }
 
                     // Check that bit widths match
-                    assert_eq!(waveform_bits, pin.bitwidth());
+                    assert_eq!(
+                        waveform_bits,
+                        pin.bitwidth(),
+                        "Bit-width of {} doesn't match expected width of {}, which is {}",
+                        waveform_bits,
+                        pin.name(),
+                        pin.bitwidth()
+                    );
 
                     // Store the internal Wellen reference to the signal
                     port_map.insert(key, hierachy[var].signal_ref());
