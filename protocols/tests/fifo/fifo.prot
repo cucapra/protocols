@@ -1,5 +1,6 @@
 
 // Adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/paper/FifoPaperExampleSpec.scala#L8
+// Names of the struct fields match the corresponding inputs/outputs in the Verilog file
 struct Fifo {
     in data_i: u32,
     in v_i: u1,             // Indicates if the data is valid
@@ -22,6 +23,8 @@ fn push<DUT: Fifo>(in input: u32) {
     step();
 }
 
+// Note: the results of the `pop` are only visible after one cycle
+// because the memory read happens at the clock transition
 fn pop<DUT: Fifo>(out output: u32) {
     DUT.enq_not_deq_i := 1'b0;
     DUT.v_i := 1'b1;
