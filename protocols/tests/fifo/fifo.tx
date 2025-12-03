@@ -1,4 +1,4 @@
-// ARGS: --verilog=fifo/bsg_fifo_1rw_large.v --protocol=fifo/fifo.prot --module bsg_fifo_1rw_large
+// ARGS: --verilog fifo/bsg_fifo_1rw_large.v fifo/fifo_wrapper.v --protocol=fifo/fifo.prot --module fifo_wrapper
 push(3);
 push(4);
 idle();

@@ -1,4 +1,4 @@
-// ARGS: --wave fifo/fifo.fst --instances bsg_fifo_1rw_large:Fifo
+// ARGS: --wave fifo/fifo.fst --instances fifo_wrapper:Fifo
 struct Fifo {
     in data_i: u32,
     in v_i: u1,             // Indicates if the data is valid
