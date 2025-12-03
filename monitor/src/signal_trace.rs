@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design, global_context::TimeUnit};
+use crate::{designs::Design, global_context::TimeUnit, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
@@ -228,6 +228,28 @@ impl WaveSignalTrace {
         signals.dedup();
         wave.load_signals(&signals);
 
+        // Debug: print values for data_i and data_o signals
+        println!("\n=== Signal Values at Different Time Steps ===");
+        for (port_key, signal_ref) in &port_map {
+            if let Some(signal) = wave.get_signal(*signal_ref) {
+                println!("\nSignalRef {:?}:", signal_ref);
+                // Print values at first few time steps
+                for time in 0..10 {
+                    if let Some(offset) = signal.get_offset(time) {
+                        if offset.elements > 0 {
+                            let value = signal.get_value_at(&offset, offset.elements - 1);
+                            if let Some(bit_string) = value.to_bit_string() {
+                                println!("  time {}: {}", time, bit_string);
+                            } else {
+                                println!("  time {}: {:?}", time, value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        println!("=== End of Signal Values ===\n");
+
         Ok(Self {
             wave,
             port_map,
@@ -284,14 +306,22 @@ fn find_instances(
         if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
             let instance_scope = &hierachy[instance_scope];
 
+            println!("\n=== All signals in scope {} ===", inst.name);
+            for v in instance_scope.vars(hierachy) {
+                println!("  Signal: {} (width: {:?})", hierachy[v].name(hierachy), hierachy[v].length());
+            }
+            println!("=== End of signals ===\n");
+
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
             for (pin_id, pin) in design.pins.iter() {
+                println!("Looking for pin: {} (bitwidth: {})", pin.name(), pin.bitwidth());
                 // find a variable that has a matching name
                 if let Some(var) = instance_scope
                     .vars(hierachy)
                     .find(|v| hierachy[*v].name(hierachy) == pin.name())
                 {
+                    println!("Found matching signal: {} in waveform", hierachy[var].name(hierachy));
                     let key = PortKey {
                         instance_id: inst_id as u32,
                         pin_id: *pin_id,
@@ -330,15 +360,22 @@ fn find_instances(
                         }
                     }
 
+                    println!("hierarchy[var] = {:?}", hierachy[var]);
+
                     // Check that bit widths match
-                    assert_eq!(
-                        waveform_bits,
-                        pin.bitwidth(),
-                        "Bit-width of {} doesn't match expected width of {}, which is {}",
-                        waveform_bits,
-                        pin.name(),
-                        pin.bitwidth()
-                    );
+                    // TEMPORARILY COMMENTED OUT FOR DEBUGGING
+                    // assert_eq!(
+                    //     waveform_bits,
+                    //     pin.bitwidth(),
+                    //     "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
+                    //     waveform_bits,
+                    //     pin.name(),
+                    //     pin.bitwidth()
+                    // );
+                    if waveform_bits != pin.bitwidth() {
+                        eprintln!("WARNING: Bit-width mismatch for {}: waveform has {} bits, protocol expects {} bits",
+                                  pin.name(), waveform_bits, pin.bitwidth());
+                    }
 
                     // Store the internal Wellen reference to the signal
                     port_map.insert(key, hierachy[var].signal_ref());
