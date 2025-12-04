@@ -228,6 +228,25 @@ impl WaveSignalTrace {
         signals.dedup();
         wave.load_signals(&signals);
 
+        // Debug: print values for data_i and data_o signals
+        println!("\n=== Signal Values ===");
+        for (_port_key, signal_ref) in &port_map {
+            if let Some(signal) = wave.get_signal(*signal_ref) {
+                println!("\nSignalRef {:?}:", signal_ref);
+                for time in 0..10 {
+                    if let Some(offset) = signal.get_offset(time) {
+                        if offset.elements > 0 {
+                            let value = signal.get_value_at(&offset, offset.elements - 1);
+                            if let Some(bit_string) = value.to_bit_string() {
+                                println!("  time {}: {}", time, bit_string);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        println!("=== End ===\n");
+
         Ok(Self {
             wave,
             port_map,
