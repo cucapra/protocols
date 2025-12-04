@@ -40,7 +40,6 @@ fn pop<DUT: Fifo>(out output: u32) {
     }
 }
 
-#[idle]
 fn idle<DUT: Fifo>() {
     DUT.v_i := 1'b0;
     step();
