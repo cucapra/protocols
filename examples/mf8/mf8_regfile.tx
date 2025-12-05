@@ -1,0 +1,11 @@
+// ARGS: --verilog mf8/mf8_reg.v --protocol mf8/mf8_regfile.prot --module mf8_reg
+
+// Arguments are:
+// in rd_addr: u5,
+// in rr_addr: u5,
+// in wr: u1,
+// in data_in: u8
+// out rd_data: u8,
+// out rr_data: u8
+
+// TODO: come up with example transactions
