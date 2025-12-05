@@ -27,6 +27,12 @@ fn pop<DUT: Fifo>(out output: u32) {
     DUT.v_i := 1'b1;
     step();
     fork();
+    
+    // NOTE: the two lines below are new 
+    // Input signals don't matter after the 1st cycle
+    DUT.enq_not_deq_i := X;
+    DUT.v_i := X;
+
     // The output data is undefined if the FIFO is empty,
     // so we only check equality if the empty bit is not true
     if !(DUT.empty_o == 1'b1) {

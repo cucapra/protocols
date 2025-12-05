@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -674,8 +674,8 @@ impl Scheduler {
                 }
                 Ok(None) => {
                     info!(
-                        "Thread {:?} finished successfully, adding to `finished` queue",
-                        thread.thread_id
+                        "Thread {:?} (`{}`) finished successfully, adding to `finished` queue",
+                        thread.thread_id, thread.transaction.name
                     );
 
                     // If the thread's `end_time_step` is `None`, use the
