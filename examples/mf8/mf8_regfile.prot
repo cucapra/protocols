@@ -28,6 +28,11 @@ fn read_write<DUT: Mf8RegFile>(
     assert_eq(DUT.rr_data, rr_data);
     step();
 
+    DUT.rd_addr := X;
+    DUT.rr_addr := X;
+    DUT.write_en := X;
+    DUT.write_data := X;
+
     fork();
     step();
 }
