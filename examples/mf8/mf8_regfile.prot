@@ -1,37 +1,37 @@
 struct Mf8RegFile {
-    in rd_addr: u5,
-    in rr_addr: u5, 
-    in write_en: u1,
-    in write_data: u8,
+    in Rd_Addr: u5,
+    in Rr_Addr: u5, 
+    in Wr: u1,
+    in Data_In: u8,
 
-    out rd_data: u8,
-    out rr_data: u8,
-    out z_reg: u16
+    out Rd_Data: u8,
+    out Rr_Data: u8,
+    out Z: u16,
 }
 
 // https://github.com/ekiwi/transactional-verification-with-protocols/blob/039fb8d5beafb3c4a464e5dac3dc8a3e00b69f04/enginev/check_mf8_reg.py#L28
 fn read_write<DUT: Mf8RegFile>(
     in rd_addr: u5,
     in rr_addr: u5,
-    in wr: u1,
-    in data_in: u8
+    in write_en: u1,
+    in write_data: u8,
     out rd_data: u8,
     out rr_data: u8
 ) {
-    DUT.rd_addr := rd_addr;
-    DUT.rr_addr := rr_addr;
+    DUT.Rd_Addr := rd_addr;
+    DUT.Rr_Addr := rr_addr;
     step();
 
-    DUT.write_en := wr;
-    DUT.write_data := data_in;
-    assert_eq(DUT.rd_data, rd_data);
-    assert_eq(DUT.rr_data, rr_data);
+    DUT.Wr := write_en;
+    DUT.Data_In := write_data;
+    assert_eq(DUT.Rd_Data, rd_data);
+    assert_eq(DUT.Rr_Data, rr_data);
     step();
 
-    DUT.rd_addr := X;
-    DUT.rr_addr := X;
-    DUT.write_en := X;
-    DUT.write_data := X;
+    DUT.Rd_Addr := X;
+    DUT.Rr_Addr := X;
+    DUT.Wr := X;
+    DUT.Data_In := X;
 
     fork();
     step();
