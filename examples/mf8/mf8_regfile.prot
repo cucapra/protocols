@@ -11,11 +11,11 @@ struct Mf8RegFile {
 
 // https://github.com/ekiwi/transactional-verification-with-protocols/blob/039fb8d5beafb3c4a464e5dac3dc8a3e00b69f04/enginev/check_mf8_reg.py#L28
 fn read_write<DUT: Mf8RegFile>(
-    in rd_addr: u5,
-    in rr_addr: u5,
-    in write_en: u1,             // write-enable bit
-    in write_data: u8,           // 
-    out rd_data: u8,
+    in rd_addr: u5,              // Address of a register that supports both reads/writes
+    in rr_addr: u5,              // Address of a read-only register
+    in write_en: u1,             // If 1, write to `rd_addr`
+    in write_data: u8,           // The actual value to be written to the regsister 
+    out rd_data: u8,        
     out rr_data: u8
 ) {
     DUT.Rd_Addr := rd_addr;
