@@ -42,15 +42,13 @@ fn pop<DUT: Fifo>(out output: u32) {
     DUT.v_i := X;
     DUT.reset_i := X;
     DUT.data_i := X;
-
-    // The output data is undefined if the FIFO is empty,
-    // so we only check equality if the empty bit is not true
-    if !(DUT.empty_o == 1'b1) {
-        assert_eq(DUT.data_o, output); 
-        step();
-    } else {
-        step();
-    }
+    
+    // Note: according to the descsription of the FIFO implementation 
+    // on the Paso paper (see pg. 3), if we call `pop` on an empty FIFO, 
+    // `DUT.data_o` is undefined, otherwise it contains the value
+    // of the popped value
+    assert_eq(DUT.data_o, output); 
+    step();
 }
 
 fn idle<DUT: Fifo>() {
