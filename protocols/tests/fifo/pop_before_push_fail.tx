@@ -3,7 +3,7 @@
 
 reset();
 push(4);
-pop(4);
+pop(4); 
 idle();
-pop(4); // this line should fail
-push(4);
+pop(3); // this line should fail since we're trying to `pop` a non-existent value
+push(3);
