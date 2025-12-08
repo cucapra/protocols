@@ -3,9 +3,20 @@
 // Arguments are:
 // in rd_addr: u5,
 // in rr_addr: u5,
-// in wr: u1,
-// in data_in: u8
+// in write_en: u1,
+// in write_data: u8,
 // out rd_data: u8,
 // out rr_data: u8
 
-// TODO: come up with example transactions
+// Assume the register initially contains 0xF0
+// Write 0x42 to register 5 
+read_write(5, 0, 1, 0x42, 0xF0, 0xF0);
+
+// Read register 5 via Rd  
+read_write(5, 0, 0, 0, 0x42, 0xF0);
+
+// Write to register 10 and read both ports
+read_write(10, 5, 1, 0xFF, 0xF0, 0x42);
+
+// Read both registers via different ports
+read_write(5, 10, 0, 0, 0x42, 0xFF);
