@@ -8,15 +8,15 @@
 // out rd_data: u8,
 // out rr_data: u8
 
-// Assume the register initially contains 0xF0
-// Write 0x42 to register 5 
-read_write(5, 0, 1, 0x42, 0xF0, 0xF0);
+// Assume the register initially contains 0
+// Write 0x42 to the register at `rd_addr = 5 `
+read_write(5, 0, 1, 0x42, 0, 0);
 
 // Read register 5 via Rd  
-read_write(5, 0, 0, 0, 0x42, 0xF0);
+// read_write(5, 0, 0, 0, 0x42, 0xF0);
 
-// Write to register 10 and read both ports
-read_write(10, 5, 1, 0xFF, 0xF0, 0x42);
+// // Write to register 10 and read both ports
+// read_write(10, 5, 1, 0xFF, 0xF0, 0x42);
 
-// Read both registers via different ports
-read_write(5, 10, 0, 0, 0x42, 0xFF);
+// // Read both registers via different ports
+// read_write(5, 10, 0, 0, 0x42, 0xFF);

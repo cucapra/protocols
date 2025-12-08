@@ -13,8 +13,8 @@ struct Mf8RegFile {
 fn read_write<DUT: Mf8RegFile>(
     in rd_addr: u5,
     in rr_addr: u5,
-    in write_en: u1,
-    in write_data: u8,
+    in write_en: u1,             // write-enable bit
+    in write_data: u8,           // 
     out rd_data: u8,
     out rr_data: u8
 ) {
