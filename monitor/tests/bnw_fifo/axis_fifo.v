@@ -121,6 +121,12 @@ localparam DEST_OFFSET = ID_OFFSET   + (ID_ENABLE   ? ID_WIDTH   : 0);
 localparam USER_OFFSET = DEST_OFFSET + (DEST_ENABLE ? DEST_WIDTH : 0);
 localparam WIDTH       = USER_OFFSET + (USER_ENABLE ? USER_WIDTH : 0);
 
+// Ring Buffer Pointers - Use (ADDR_WIDTH+1) bits for full/empty detection
+// - ADDR_WIDTH bits: Memory address (wraps around 0 to 2^ADDR_WIDTH-1)
+// - Extra MSB bit: Wrap-around tracking to distinguish full from empty
+// Example: ADDR_WIDTH=2 means 4 memory locations, but pointers count 0-7
+//   When wr_ptr=4 and rd_ptr=0: MSB differs (1 vs 0), lower bits match (00 vs 00) → FULL
+//   When wr_ptr=0 and rd_ptr=0: All bits match → EMPTY
 reg [ADDR_WIDTH:0] wr_ptr_reg = {ADDR_WIDTH+1{1'b0}};
 reg [ADDR_WIDTH:0] wr_ptr_next;
 reg [ADDR_WIDTH:0] wr_ptr_cur_reg = {ADDR_WIDTH+1{1'b0}};
@@ -130,6 +136,8 @@ reg [ADDR_WIDTH:0] rd_ptr_reg = {ADDR_WIDTH+1{1'b0}};
 reg [ADDR_WIDTH:0] rd_ptr_next;
 reg [ADDR_WIDTH:0] rd_addr_reg = {ADDR_WIDTH+1{1'b0}};
 
+// Ring Buffer Memory - Capacity = 2^ADDR_WIDTH entries
+// Example: ADDR_WIDTH=2 → 4 entries (addresses 0,1,2,3 wrap around)
 reg [WIDTH-1:0] mem[(2**ADDR_WIDTH)-1:0];
 reg [WIDTH-1:0] mem_read_data_reg;
 reg mem_read_data_valid_reg = 1'b0;
@@ -141,14 +149,18 @@ reg [WIDTH-1:0] m_axis_reg;
 reg m_axis_tvalid_reg = 1'b0;
 reg m_axis_tvalid_next;
 
-// full when first MSB different but rest same
+// Ring Buffer Full/Empty Detection using extra MSB bit:
+// FULL: Write pointer wrapped around and caught up to read pointer
+//   - MSB bit differs (write pointer wrapped once more than read pointer)
+//   - Lower ADDR_WIDTH bits match (same memory address)
+//   Example: wr_ptr=3'b100 (4), rd_ptr=3'b000 (0) → both point to addr 0, but wr wrapped
 wire full = ((wr_ptr_reg[ADDR_WIDTH] != rd_ptr_reg[ADDR_WIDTH]) &&
              (wr_ptr_reg[ADDR_WIDTH-1:0] == rd_ptr_reg[ADDR_WIDTH-1:0]));
 wire full_cur = ((wr_ptr_cur_reg[ADDR_WIDTH] != rd_ptr_reg[ADDR_WIDTH]) &&
                  (wr_ptr_cur_reg[ADDR_WIDTH-1:0] == rd_ptr_reg[ADDR_WIDTH-1:0]));
-// empty when pointers match exactly
+// EMPTY: Write and read pointers are exactly equal (including MSB)
 wire empty = wr_ptr_reg == rd_ptr_reg;
-// overflow within packet
+// overflow within packet (current write pointer caught up to committed write pointer)
 wire full_wr = ((wr_ptr_reg[ADDR_WIDTH] != wr_ptr_cur_reg[ADDR_WIDTH]) &&
                 (wr_ptr_reg[ADDR_WIDTH-1:0] == wr_ptr_cur_reg[ADDR_WIDTH-1:0]));
 
@@ -279,6 +291,8 @@ always @(posedge clk) begin
 
     if (write) begin
         // PUSH: Write data to memory
+        // Ring buffer wrap-around: Use only lower ADDR_WIDTH bits as memory index
+        // Example: wr_addr_reg=3'b100 (4) → mem[0] (wraps to address 0)
         mem[wr_addr_reg[ADDR_WIDTH-1:0]] <= s_axis;
     end
     // else: IDLE - no memory write
@@ -322,6 +336,8 @@ always @(posedge clk) begin
 
     if (read) begin
         // POP: Read data from memory to intermediate register
+        // Ring buffer wrap-around: Use only lower ADDR_WIDTH bits as memory index
+        // Example: rd_addr_reg=3'b100 (4) → mem[0] (wraps to address 0)
         mem_read_data_reg <= mem[rd_addr_reg[ADDR_WIDTH-1:0]];
     end
     // else: IDLE - no memory read
