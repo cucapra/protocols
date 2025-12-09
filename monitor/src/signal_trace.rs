@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design, global_context::TimeUnit};
+use crate::{designs::Design, global_context::TimeUnit, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
@@ -96,17 +96,19 @@ impl WaveSignalTrace {
 
         let max_time_value = self.wave.time_table()[self.wave.time_table().len() - 1];
 
-        // Convert to femtoseconds based on timescale
+        // Convert to femtoseconds based on timescale (including factor)
         if let Some(timescale) = self.wave.hierarchy().timescale() {
-            match timescale.unit {
-                wellen::TimescaleUnit::FemtoSeconds => max_time_value,
-                wellen::TimescaleUnit::PicoSeconds => max_time_value * 1_000,
-                wellen::TimescaleUnit::NanoSeconds => max_time_value * 1_000_000,
-                wellen::TimescaleUnit::MicroSeconds => max_time_value * 1_000_000_000,
-                wellen::TimescaleUnit::MilliSeconds => max_time_value * 1_000_000_000_000,
-                wellen::TimescaleUnit::Seconds => max_time_value * 1_000_000_000_000_000,
-                _ => max_time_value,
-            }
+            let base_conversion = match timescale.unit {
+                wellen::TimescaleUnit::FemtoSeconds => 1,
+                wellen::TimescaleUnit::PicoSeconds => 1_000,
+                wellen::TimescaleUnit::NanoSeconds => 1_000_000,
+                wellen::TimescaleUnit::MicroSeconds => 1_000_000_000,
+                wellen::TimescaleUnit::MilliSeconds => 1_000_000_000_000,
+                wellen::TimescaleUnit::Seconds => 1_000_000_000_000_000,
+                _ => 1,
+            };
+            // Multiply by both the timescale factor and the base conversion
+            max_time_value * timescale.factor as u64 * base_conversion
         } else {
             max_time_value
         }
@@ -118,17 +120,19 @@ impl WaveSignalTrace {
         let time_value = self.time_value(time_step);
 
         // Convert the time value to femtoseconds (the base unit) using the
-        // timescale in the waveform (if one exists)
+        // timescale in the waveform (if one exists), including the factor
         let time_fs = if let Some(timescale) = self.wave.hierarchy().timescale() {
-            match timescale.unit {
-                wellen::TimescaleUnit::FemtoSeconds => time_value,
-                wellen::TimescaleUnit::PicoSeconds => time_value * 1_000,
-                wellen::TimescaleUnit::NanoSeconds => time_value * 1_000_000,
-                wellen::TimescaleUnit::MicroSeconds => time_value * 1_000_000_000,
-                wellen::TimescaleUnit::MilliSeconds => time_value * 1_000_000_000_000,
-                wellen::TimescaleUnit::Seconds => time_value * 1_000_000_000_000_000,
-                _ => time_value,
-            }
+            let base_conversion = match timescale.unit {
+                wellen::TimescaleUnit::FemtoSeconds => 1,
+                wellen::TimescaleUnit::PicoSeconds => 1_000,
+                wellen::TimescaleUnit::NanoSeconds => 1_000_000,
+                wellen::TimescaleUnit::MicroSeconds => 1_000_000_000,
+                wellen::TimescaleUnit::MilliSeconds => 1_000_000_000_000,
+                wellen::TimescaleUnit::Seconds => 1_000_000_000_000_000,
+                _ => 1,
+            };
+            // Multiply by both the timescale factor and the base conversion
+            time_value * timescale.factor as u64 * base_conversion
         } else {
             time_value
         };
