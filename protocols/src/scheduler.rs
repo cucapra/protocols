@@ -511,14 +511,9 @@ impl<'a> Scheduler<'a> {
                     // Check if the last executed statement was `step()`
                     if let Stmt::Step = thread.todo.tr[current_stmt_id] {
                         if forks_enabled && !thread.has_forked {
-                            // Throw an error if forks are enabled but the
-                            // thread finished without making any calls to `fork()`
-                            info!(
-                                "  ERROR: thread did not make any calls to `fork()`, terminating thread"
+                            todo!(
+                                "Figure out what to do since we are now relaxing the requirement that fork() has to be called exactly once"
                             );
-                            let error =
-                                ExecutionError::finished_without_fork(thread_id, transaction_name);
-                            self.results[thread_id] = Err(error);
                         } else {
                             // Thread completed execution successfully
                             info!("  Execution complete, no more statements.");
