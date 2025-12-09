@@ -186,9 +186,6 @@ impl<'a> Scheduler<'a> {
     }
 
     // Instance method that uses self fields and returns a Todo
-    fn next_todo(&self, idx: usize) -> Option<Todo<'a>> {
-        Self::next_todo_helper(&self.todos, idx, &self.irs)
-    }
 
     /// Creates a new `Scheduler` struct and takes the following arguments:
     /// - A list of transactions and their associated symbol tables (`transactions_and_symbols`)
@@ -400,22 +397,31 @@ impl<'a> Scheduler<'a> {
     }
 
     /// Spawns a new thread (adds it to the `next_threads` queue) based
-    /// on the value of `self.next_todo`. The `explicit_fork` boolean param
+    /// on the value of `self.next_todo`. The `explicit_fork` arg
     /// tracks whether we are forking explicitly or implicitly.
-    fn spawn_new_thread(&mut self, explicit_fork: bool) {
-        match self.next_todo(self.next_todo_idx) {
+    /// Note: This function takes all the fields it modifies as explicit
+    /// mutable reference arguments (as opposed to making this function
+    /// `&mut self`) in order to avoid borrow-checker issues at the call-site.
+    fn spawn_new_thread(
+        next_threads: &mut Vec<Thread<'a>>,
+        next_todo_idx: &mut usize,
+        todos: &[TodoItem],
+        irs: &[TransactionInfo<'a>],
+        explicit_fork: bool,
+    ) {
+        match Self::next_todo_helper(todos, *next_todo_idx, irs) {
             Some(todo) => {
-                let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
-                self.next_threads.push(new_thread);
+                let new_thread = Thread::initialize_thread(todo, *next_todo_idx);
+                next_threads.push(new_thread);
                 if explicit_fork {
                     info!(
                         "Enqueued forked thread; queue size = {}",
-                        self.next_threads.len()
+                        next_threads.len()
                     );
                 } else {
                     info!(
                         "Enqueued implicitly forked thread; queue size = {}",
-                        self.next_threads.len()
+                        next_threads.len()
                     );
                 }
             }
@@ -427,7 +433,7 @@ impl<'a> Scheduler<'a> {
                 }
             }
         }
-        self.next_todo_idx += 1;
+        *next_todo_idx += 1;
     }
 
     /// Runs a single thread (indicated by its `thread_idx`) until the next step to synchronize on
@@ -498,8 +504,13 @@ impl<'a> Scheduler<'a> {
                             }
 
                             info!("  `Fork` at stmt_id {}, spawning new thread…", next_id);
-                            // TODO: figure out how to deal with borrow checker issues
-                            self.spawn_new_thread(true);
+                            Self::spawn_new_thread(
+                                &mut self.next_threads,
+                                &mut self.next_todo_idx,
+                                &self.todos,
+                                &self.irs,
+                                true,
+                            );
                             // Mark this thread as having forked
                             info!(
                                 "  Marking thread {} (todo_idx {}) as having forked.",
@@ -529,7 +540,13 @@ impl<'a> Scheduler<'a> {
                     if let Stmt::Step = thread.todo.tr[current_stmt_id] {
                         if forks_enabled && !thread.has_forked {
                             // Spawn a new thread implicitly
-                            self.spawn_new_thread(false);
+                            Self::spawn_new_thread(
+                                &mut self.next_threads,
+                                &mut self.next_todo_idx,
+                                &self.todos,
+                                &self.irs,
+                                false,
+                            );
                         } else {
                             // Thread completed execution successfully
                             info!("  Execution complete, no more statements.");
@@ -564,7 +581,13 @@ impl<'a> Scheduler<'a> {
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked && forks_enabled && self.results[thread.todo_idx].is_ok() {
             // Pass `false` to `spawn_new_thread` to trigger implicit fork
-            self.spawn_new_thread(false);
+            Self::spawn_new_thread(
+                &mut self.next_threads,
+                &mut self.next_todo_idx,
+                &self.todos,
+                &self.irs,
+                false,
+            );
         }
     }
 }
