@@ -357,7 +357,11 @@ fn find_instances(
                 }
             }
         } else {
-            panic!("Failed to find instance {}", inst.name);
+            panic!(
+                "Failed to find instance {}. First scope: {:#?}",
+                inst.name,
+                hierachy.first_scope().unwrap().full_name(hierachy)
+            );
         }
     }
     (port_map, clock_signal)

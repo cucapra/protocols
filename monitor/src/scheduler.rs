@@ -381,10 +381,14 @@ impl Scheduler {
                 let finished = threads_with_start_time(&self.finished, start_cycle);
                 if finished.len() > 1 {
                     return Err(anyhow!(
-                        "Expected the no. of threads that started in cycle {} & ended in cycle {} to be at most 1, but instead there were {}",
+                        "Expected the no. of threads that started in cycle {} & ended in cycle {} to be at most 1, but instead there were {} ({:?})",
                         start_cycle,
                         self.cycle_count,
-                        finished.len()
+                        finished.len(),
+                        finished
+                            .iter()
+                            .map(|t| t.transaction.name.clone())
+                            .collect::<Vec<_>>()
                     ));
                 }
                 let finished_thread = &finished[0];

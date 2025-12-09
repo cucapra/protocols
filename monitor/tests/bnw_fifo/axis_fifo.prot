@@ -1,0 +1,140 @@
+// ARGS: --wave bnw_fifo/axis_fifo.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
+struct AxisFifo {
+    in rst: u1,
+    in s_axis_tdata: u8,
+    in s_axis_tkeep: u1,
+    in s_axis_tvalid: u1,
+    in s_axis_tlast: u1,
+    in s_axis_tid: u8,
+    in s_axis_tdest: u8,
+    in s_axis_tuser: u1,
+    in m_axis_tready: u1,
+
+    out s_axis_tready: u1,    // Output: slave ready signal
+    out m_axis_tdata: u8,
+    out m_axis_tkeep: u1,
+    out m_axis_tvalid: u1,
+    out m_axis_tlast: u1,
+    out m_axis_tid: u8,
+    out m_axis_tdest: u8,
+    out m_axis_tuser: u1,
+}
+
+// PUSH: Write data to FIFO via AXI-Stream slave interface
+// Performs an AXI handshake when s_axis_tvalid && s_axis_tready
+fn push<DUT: AxisFifo>(
+    in data: u8,
+    in keep: u1,
+    in last: u1,
+    in id: u8,
+    in dest: u8,
+    in user: u1
+) {
+    DUT.s_axis_tdata := data;
+    DUT.s_axis_tkeep := keep;
+    DUT.s_axis_tvalid := 1'b1;
+    DUT.s_axis_tlast := last;
+    DUT.s_axis_tid := id;
+    DUT.s_axis_tdest := dest;
+    DUT.s_axis_tuser := user;
+
+    // Wait for FIFO to be ready to accept data
+    while (!(DUT.s_axis_tready == 1'b1)) {
+        step();
+    }
+
+    // One cycle for the transfer to complete
+    step();
+
+    // Release inputs after transaction
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+
+    fork();
+    step();
+}
+
+// POP: Read data from FIFO via AXI-Stream master interface
+// Performs an AXI handshake when m_axis_tvalid && m_axis_tready
+fn pop<DUT: AxisFifo>(
+    out data: u8,
+    out keep: u1,
+    out last: u1,
+    out id: u8,
+    out dest: u8,
+    out user: u1
+) {
+    DUT.m_axis_tready := 1'b1;
+
+    // Wait for FIFO to have valid data available
+    while (!(DUT.m_axis_tvalid == 1'b1)) {
+        step();
+    }
+
+    // One cycle for the transfer to complete
+    step();
+
+    // Capture output data
+    assert_eq(DUT.m_axis_tdata, data);
+    assert_eq(DUT.m_axis_tkeep, keep);
+    assert_eq(DUT.m_axis_tlast, last);
+    assert_eq(DUT.m_axis_tid, id);
+    assert_eq(DUT.m_axis_tdest, dest);
+    assert_eq(DUT.m_axis_tuser, user);
+
+    // Release inputs after transaction
+    DUT.m_axis_tready := X;
+
+    fork();
+    step();
+}
+
+// IDLE: No transaction occurs
+// Both valid signals are deasserted
+#[idle]
+fn idle<DUT: AxisFifo>() {
+    DUT.rst := 1'b0;
+    DUT.s_axis_tvalid := 1'b0;
+    DUT.m_axis_tready := 1'b0;
+    step();
+
+    // Release all inputs
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+    DUT.m_axis_tready := X;
+
+    fork();
+    step();
+}
+
+// RESET: Assert reset signal to initialize FIFO
+fn reset<DUT: AxisFifo>() {
+    DUT.rst := 1'b1;
+    DUT.s_axis_tvalid := 1'b0;
+    DUT.m_axis_tready := 1'b0;
+    step();
+
+    // Release all inputs
+    DUT.rst := X;
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+    DUT.m_axis_tready := X;
+
+    fork();
+    step();
+}
