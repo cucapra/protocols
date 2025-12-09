@@ -121,7 +121,6 @@ fn pop<DUT: AxisFifo>(
 
 // IDLE: No transaction occurs
 // Both valid signals are deasserted
-#[idle]
 fn idle<DUT: AxisFifo>() {
     DUT.rst := 1'b0;
     DUT.s_axis_tvalid := 1'b0;
