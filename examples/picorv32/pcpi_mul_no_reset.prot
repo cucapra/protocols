@@ -46,9 +46,6 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
   assert_eq(p.pcpi_wr, 1'b1);
   assert_eq(p.pcpi_rd, rd_data);
 
-  // TODO: do we need/want this step?
-  step();
-  fork();
   step();
 }
 
