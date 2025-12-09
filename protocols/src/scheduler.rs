@@ -399,9 +399,39 @@ impl<'a> Scheduler<'a> {
         }
     }
 
+    /// Spawns a new thread (adds it to the `next_threads` queue) based
+    /// on the value of `self.next_todo`. The `explicit_fork` boolean param
+    /// tracks whether we are forking explicitly or implicitly.
+    fn spawn_new_thread(&mut self, explicit_fork: bool) {
+        match self.next_todo(self.next_todo_idx) {
+            Some(todo) => {
+                let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+                self.next_threads.push(new_thread);
+                if explicit_fork {
+                    info!(
+                        "Enqueued forked thread; queue size = {}",
+                        self.next_threads.len()
+                    );
+                } else {
+                    info!(
+                        "Enqueued implicitly forked thread; queue size = {}",
+                        self.next_threads.len()
+                    );
+                }
+            }
+            None => {
+                if explicit_fork {
+                    info!("No more todos to fork, skipping fork.");
+                } else {
+                    info!("No more todos to fork, skipping implicit fork.");
+                }
+            }
+        }
+        self.next_todo_idx += 1;
+    }
+
     /// Runs a single thread (indicated by its `thread_idx`) until the next step to synchronize on
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize, forks_enabled: bool) {
-        let next_todo_option = self.next_todo(self.next_todo_idx);
         let thread = &mut self.active_threads[thread_idx];
         let mut current_stmt_id = thread.current_step;
 
@@ -468,21 +498,8 @@ impl<'a> Scheduler<'a> {
                             }
 
                             info!("  `Fork` at stmt_id {}, spawning new thread…", next_id);
-                            match next_todo_option.clone() {
-                                Some(todo) => {
-                                    let new_thread =
-                                        Thread::initialize_thread(todo, self.next_todo_idx);
-                                    self.next_threads.push(new_thread);
-                                    info!(
-                                        "    enqueued forked thread; queue size = {}",
-                                        self.next_threads.len()
-                                    );
-                                }
-                                None => {
-                                    info!("    no more todos to fork, skipping fork.");
-                                }
-                            }
-                            self.next_todo_idx += 1;
+                            // TODO: figure out how to deal with borrow checker issues
+                            self.spawn_new_thread(true);
                             // Mark this thread as having forked
                             info!(
                                 "  Marking thread {} (todo_idx {}) as having forked.",
@@ -511,9 +528,8 @@ impl<'a> Scheduler<'a> {
                     // Check if the last executed statement was `step()`
                     if let Stmt::Step = thread.todo.tr[current_stmt_id] {
                         if forks_enabled && !thread.has_forked {
-                            todo!(
-                                "Figure out what to do since we are now relaxing the requirement that fork() has to be called exactly once"
-                            );
+                            // Spawn a new thread implicitly
+                            self.spawn_new_thread(false);
                         } else {
                             // Thread completed execution successfully
                             info!("  Execution complete, no more statements.");
@@ -547,20 +563,8 @@ impl<'a> Scheduler<'a> {
         // fork if a thread has completed successfully
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked && forks_enabled && self.results[thread.todo_idx].is_ok() {
-            match next_todo_option.clone() {
-                Some(todo) => {
-                    let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
-                    self.next_threads.push(new_thread);
-                    info!(
-                        "    enqueued implicitly forked thread; queue size = {}",
-                        self.next_threads.len()
-                    );
-                }
-                None => {
-                    info!("    no more todos to fork, skipping implicit fork.");
-                }
-            }
-            self.next_todo_idx += 1;
+            // Pass `false` to `spawn_new_thread` to trigger implicit fork
+            self.spawn_new_thread(false);
         }
     }
 }
