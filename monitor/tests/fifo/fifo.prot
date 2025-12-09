@@ -1,0 +1,75 @@
+// ARGS: --wave fifo/fifo.fst --instances fifo_wrapper:Fifo
+
+// Names of the struct fields match the corresponding inputs/outputs in the Verilog file
+struct Fifo {
+    in data_i: u32,
+    in v_i: u1,             // Indicates if the data is valid
+    in enq_not_deq_i: u1,   // Indicates if we're enqueueing and not dequeueing
+    in reset_i: u1,
+    out full_o: u1,         // Indicates if the FIFO is full
+    out empty_o: u1,        // Indicates if the FIFO is empty
+    out data_o: u32 
+}
+
+// The following functions are adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/paper/FifoPaperExampleSpec.scala#L72
+fn push<DUT: Fifo>(in input: u32) {
+    DUT.reset_i := 1'b0;
+    DUT.enq_not_deq_i := 1'b1;
+    DUT.v_i := 1'b1;
+    DUT.data_i := input;
+    step();
+
+    DUT.enq_not_deq_i := X;
+    DUT.v_i := X;
+    DUT.data_i := X; 
+    DUT.reset_i := X;
+    
+    fork();
+    step();
+}
+
+// Note: the results of the `pop` are only visible after one cycle
+// because the memory read happens at the clock transition
+fn pop<DUT: Fifo>(out output: u32) {
+    DUT.reset_i := 1'b0;
+    DUT.enq_not_deq_i := 1'b0;
+    DUT.v_i := 1'b1;
+    step();
+    fork();
+
+    // Input signals don't matter after the 1st cycle
+    DUT.enq_not_deq_i := X;
+    DUT.v_i := X;
+    DUT.reset_i := X;
+    DUT.data_i := X;
+    
+    // Note: according to the descsription of the FIFO implementation 
+    // on the Paso paper (see pg. 3), if we call `pop` on an empty FIFO, 
+    // `DUT.data_o` is undefined, otherwise it contains the value
+    // of the popped value
+    assert_eq(DUT.data_o, output); 
+    step();
+}
+
+fn idle<DUT: Fifo>() {
+    DUT.v_i := 1'b0;
+    DUT.reset_i := 1'b0;
+    step();
+    DUT.data_i := X;
+    DUT.enq_not_deq_i := X;
+    DUT.v_i := X;
+    fork();
+    step();
+}
+
+// Sets the `reset` bit to 1
+fn reset<DUT: Fifo>() {
+    DUT.reset_i := 1'b1;
+    step();
+    DUT.reset_i := X;
+    DUT.v_i := X;
+    DUT.data_i := X;
+    DUT.enq_not_deq_i := X;
+    fork();
+    step();
+}

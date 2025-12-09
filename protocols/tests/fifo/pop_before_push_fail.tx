@@ -1,0 +1,9 @@
+// ARGS: --verilog fifo/bsg_mem_1rw_sync.v fifo/bsg_mem_1rw_sync_synth.v fifo/bsg_circular_ptr.v fifo/bsg_fifo_1rw_large.v fifo/fifo_wrapper.v --protocol=fifo/fifo.prot --module fifo_wrapper
+// RETURN: 101
+
+reset();
+push(4);
+pop(4); 
+idle();
+pop(3); // this line should fail since we're trying to `pop` a non-existent value
+push(3);

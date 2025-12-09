@@ -331,7 +331,14 @@ fn find_instances(
                     }
 
                     // Check that bit widths match
-                    assert_eq!(waveform_bits, pin.bitwidth());
+                    assert_eq!(
+                        waveform_bits,
+                        pin.bitwidth(),
+                        "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
+                        waveform_bits,
+                        pin.name(),
+                        pin.bitwidth()
+                    );
 
                     // Store the internal Wellen reference to the signal
                     port_map.insert(key, hierachy[var].signal_ref());

@@ -1,0 +1,6 @@
+error: The two expressions did not evaluate to the same value
+   ┌─ fifo/fifo.prot:51:15
+   │
+51 │     assert_eq(DUT.data_o, output); 
+   │               ^^^^^^^^^^^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000000010), RHS Value: ValueOwned(00000000000000000000000000000011)
+
