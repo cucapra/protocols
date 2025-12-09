@@ -1,3 +1,5 @@
+// From https://github.com/ngernest/rtl-repair/blob/asplos24/benchmarks/fpga-debugging/axis-fifo-d12/axis_fifo.v
+
 /*
 
 Copyright (c) 2013-2018 Alex Forencich
