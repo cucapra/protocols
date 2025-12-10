@@ -1,4 +1,4 @@
-// ARGS: --wave bnw_fifo/axis_fifo_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
+// ARGS: --wave bnw_fifo_failure_to_update/axis_fifo_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
 
 // AXI-Stream FIFO with frame-level atomicity (FIXED VERSION)
 // Maps to axis_fifo.v module I/O ports
