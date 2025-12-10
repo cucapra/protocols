@@ -31,13 +31,12 @@ struct AxisFifo {
 }
 
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
-// Performs both AXI handshakes simultaneously (dual-port FIFO operation)
-//
+// 
 // Push Arguments (input):
-//   push_data, push_keep, push_last, push_id, push_dest, push_user - Data to write
-//
+// `push_data, push_keep, push_last, push_id, push_dest, push_user` - Data to write
+// 
 // Pop Arguments (output, verified with assert_eq):
-//   pop_data, pop_keep, pop_last, pop_id, pop_dest, pop_user - Expected data read
+// `pop_data, pop_keep, pop_last, pop_id, pop_dest, pop_user` - Expected data read
 fn push_and_pop<DUT: AxisFifo>(
     // Push parameters
     in push_data: u8,
@@ -54,7 +53,7 @@ fn push_and_pop<DUT: AxisFifo>(
     out pop_dest: u8,
     out pop_user: u1
 ) {
-    // Set up push side (write)
+    // Indicate that receiver is ready for the PUSH
     DUT.s_axis_tdata := push_data;
     DUT.s_axis_tkeep := push_keep;
     DUT.s_axis_tvalid := 1'b1;
@@ -63,20 +62,20 @@ fn push_and_pop<DUT: AxisFifo>(
     DUT.s_axis_tdest := push_dest;
     DUT.s_axis_tuser := push_user;
 
-    // Set up pop side (read)
+    // Indicate that sender is ready for the POP
     DUT.m_axis_tready := 1'b1;
 
-    // Wait for push handshake to be ready
+    // Wait till receiver's ready bit is 1 so that we can perform the PUSH
     while (!(DUT.s_axis_tready == 1'b1)) {
         step();
     }
 
-    // Wait for pop handshake to be ready
+    // Wait until sender's valid bit is 1 so that we can perform the POP 
     while (!(DUT.m_axis_tvalid == 1'b1)) {
         step();
     }
 
-    // One cycle for both transfers to complete
+    // One cycle for both data transfers to complete
     step();
 
     // Verify pop outputs
@@ -87,7 +86,7 @@ fn push_and_pop<DUT: AxisFifo>(
     assert_eq(DUT.m_axis_tdest, pop_dest);
     assert_eq(DUT.m_axis_tuser, pop_user);
 
-    // Release all inputs after transaction
+    // Mark all inputs as DontCare
     DUT.s_axis_tdata := X;
     DUT.s_axis_tkeep := X;
     DUT.s_axis_tvalid := X;
@@ -102,7 +101,7 @@ fn push_and_pop<DUT: AxisFifo>(
 }
 
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
-// Performs an AXI handshake when s_axis_tvalid && s_axis_tready
+// Performs data transfer when s_axis_tvalid and s_axis_tready are both 1
 //
 // Arguments:
 //   data - Payload byte to write to FIFO
@@ -149,7 +148,7 @@ fn push<DUT: AxisFifo>(
 }
 
 // POP: Read data from FIFO via AXI-Stream sender interface
-// Performs an AXI handshake when m_axis_tvalid && m_axis_tready
+// Data transfer occurs when `m_axis_tvalid` and `m_axis_tready` are both 1
 //
 // Output Arguments (verified with assert_eq):
 //   data - Expected payload byte from FIFO

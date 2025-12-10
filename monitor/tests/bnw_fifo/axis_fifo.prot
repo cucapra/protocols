@@ -101,7 +101,7 @@ fn push_and_pop<DUT: AxisFifo>(
 }
 
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
-// Performs an AXI handshake when s_axis_tvalid && s_axis_tready
+// Performs data transfer when s_axis_tvalid and s_axis_tready are both 1
 //
 // Arguments:
 //   data - Payload byte to write to FIFO
