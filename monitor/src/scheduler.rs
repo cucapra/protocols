@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -388,9 +388,15 @@ impl Scheduler {
                         format!("cycle {}", start_cycle)
                     };
                     let end_time = if self.ctx.show_waveform_time {
-                        self.ctx
-                            .trace
-                            .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                        self.ctx.trace.format_time(
+                            finished[0].end_time_step.unwrap_or_else(|| {
+                                panic!(
+                                    "Thread {} (`{}`) missing end_time_step",
+                                    finished[0].thread_id, finished[0].transaction.name
+                                )
+                            }),
+                            self.ctx.time_unit,
+                        )
                     } else {
                         format!("cycle {}", self.cycle_count)
                     };
