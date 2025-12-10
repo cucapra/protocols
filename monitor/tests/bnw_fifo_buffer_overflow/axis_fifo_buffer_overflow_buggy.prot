@@ -1,4 +1,5 @@
-// ARGS: --wave bnw_fifo_buffer_overflow/axis_fifo_buffer_overflow_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
+// ARGS: --wave bnw_fifo_buffer_overflow/buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
+// RETURN: 101
 
 // AXI-Stream FIFO with frame-level atomicity
 // Maps to axis_fifo.v module I/O ports
