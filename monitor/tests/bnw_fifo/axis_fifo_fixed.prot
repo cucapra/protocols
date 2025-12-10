@@ -1,5 +1,4 @@
 // ARGS: --wave bnw_fifo/axis_fifo_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
-// RETURN: 1
 
 // AXI-Stream FIFO with frame-level atomicity (FIXED VERSION)
 // Maps to axis_fifo.v module I/O ports
@@ -126,6 +125,9 @@ fn push<DUT: AxisFifo>(
     DUT.s_axis_tdest := dest;
     DUT.s_axis_tuser := user;
 
+    // Ensure pop control port is disabled (mutually exclusive with pop)
+    DUT.m_axis_tready := 1'b0;
+
     // Wait for FIFO to be ready to accept data
     while (!(DUT.s_axis_tready == 1'b1)) {
         step();
@@ -166,6 +168,9 @@ fn pop<DUT: AxisFifo>(
     out user: u1
 ) {
     DUT.m_axis_tready := 1'b1;
+
+    // Ensure push control port is disabled (mutually exclusive with push)
+    DUT.s_axis_tvalid := 1'b0;
 
     // Wait for FIFO to have valid data available
     while (!(DUT.m_axis_tvalid == 1'b1)) {
