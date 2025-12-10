@@ -380,10 +380,25 @@ impl Scheduler {
                 // ...there should only be at most one of them in `finished`
                 let finished = threads_with_start_time(&self.finished, start_cycle);
                 if finished.len() > 1 {
+                    let start_time = if self.ctx.show_waveform_time {
+                        self.ctx
+                            .trace
+                            .format_time(finished[0].start_time_step, self.ctx.time_unit)
+                    } else {
+                        format!("cycle {}", start_cycle)
+                    };
+                    let end_time = if self.ctx.show_waveform_time {
+                        self.ctx
+                            .trace
+                            .format_time(self.ctx.trace.time_step(), self.ctx.time_unit)
+                    } else {
+                        format!("cycle {}", self.cycle_count)
+                    };
+
                     return Err(anyhow!(
-                        "Expected the no. of threads that started in cycle {} & ended in cycle {} to be at most 1, but instead there were {} ({:?})",
-                        start_cycle,
-                        self.cycle_count,
+                        "Expected the no. of threads that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
+                        start_time,
+                        end_time,
                         finished.len(),
                         finished
                             .iter()

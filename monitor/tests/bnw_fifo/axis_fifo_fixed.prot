@@ -30,6 +30,77 @@ struct AxisFifo {
     out m_axis_tuser: u1,         // sender user-defined sideband
 }
 
+// PUSH_AND_POP: Concurrent push and pop in the same cycle
+// Performs both AXI handshakes simultaneously (dual-port FIFO operation)
+//
+// Push Arguments (input):
+//   push_data, push_keep, push_last, push_id, push_dest, push_user - Data to write
+//
+// Pop Arguments (output, verified with assert_eq):
+//   pop_data, pop_keep, pop_last, pop_id, pop_dest, pop_user - Expected data read
+fn push_and_pop<DUT: AxisFifo>(
+    // Push parameters
+    in push_data: u8,
+    in push_keep: u1,
+    in push_last: u1,
+    in push_id: u8,
+    in push_dest: u8,
+    in push_user: u1,
+    // Pop parameters
+    out pop_data: u8,
+    out pop_keep: u1,
+    out pop_last: u1,
+    out pop_id: u8,
+    out pop_dest: u8,
+    out pop_user: u1
+) {
+    // Set up push side (write)
+    DUT.s_axis_tdata := push_data;
+    DUT.s_axis_tkeep := push_keep;
+    DUT.s_axis_tvalid := 1'b1;
+    DUT.s_axis_tlast := push_last;
+    DUT.s_axis_tid := push_id;
+    DUT.s_axis_tdest := push_dest;
+    DUT.s_axis_tuser := push_user;
+
+    // Set up pop side (read)
+    DUT.m_axis_tready := 1'b1;
+
+    // Wait for push handshake to be ready
+    while (!(DUT.s_axis_tready == 1'b1)) {
+        step();
+    }
+
+    // Wait for pop handshake to be ready
+    while (!(DUT.m_axis_tvalid == 1'b1)) {
+        step();
+    }
+
+    // One cycle for both transfers to complete
+    step();
+
+    // Verify pop outputs
+    assert_eq(DUT.m_axis_tdata, pop_data);
+    assert_eq(DUT.m_axis_tkeep, pop_keep);
+    assert_eq(DUT.m_axis_tlast, pop_last);
+    assert_eq(DUT.m_axis_tid, pop_id);
+    assert_eq(DUT.m_axis_tdest, pop_dest);
+    assert_eq(DUT.m_axis_tuser, pop_user);
+
+    // Release all inputs after transaction
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+    DUT.m_axis_tready := X;
+
+    fork();
+    step();
+}
+
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
 // Performs an AXI handshake when s_axis_tvalid && s_axis_tready
 //
