@@ -110,12 +110,6 @@ pub enum ThreadError {
     },
     /// Thread execution limit exceeded (for infinite loop protection)
     ExecutionLimitExceeded { max_steps: usize },
-    /// The thread finished executing without calling `fork()`
-    /// (it is required to make exactly one call to `fork()`)
-    FinishedWithoutFork {
-        thread_idx: usize,
-        transaction_name: String,
-    },
     /// The last executed statement in the thread is not `step()`
     /// (we explicitly require protocols to end with the
     /// execution of a `step()` statement).
@@ -307,16 +301,6 @@ impl fmt::Display for ThreadError {
             ThreadError::ExecutionLimitExceeded { max_steps } => {
                 write!(f, "Threads exceeded execution limit of {} steps", max_steps,)
             }
-            ThreadError::FinishedWithoutFork {
-                thread_idx,
-                transaction_name,
-            } => {
-                write!(
-                    f,
-                    "Thread {} (transaction '{}') is missing a call `fork()` (all threads must have exactly one `fork()` call)",
-                    thread_idx, transaction_name
-                )
-            }
             ThreadError::DidntEndWithStep {
                 thread_idx,
                 transaction_name,
@@ -406,13 +390,6 @@ impl ExecutionError {
             expected_value,
             trace_value,
             error_time_string,
-        })
-    }
-
-    pub fn finished_without_fork(thread_id: usize, transaction_name: String) -> Self {
-        ExecutionError::Thread(ThreadError::FinishedWithoutFork {
-            thread_idx: thread_id,
-            transaction_name,
         })
     }
 
@@ -763,19 +740,6 @@ impl DiagnosticEmitter {
                 handler.emit_general_message(
                     &format!("Threads exceeded execution limit of {} steps", max_steps),
                     Level::Error,
-                );
-            }
-            ThreadError::FinishedWithoutFork {
-                thread_idx,
-                transaction_name,
-            } => {
-                handler.emit_general_message(
-                    &format!(
-                        "Thread {} (transaction '{}') missing a call to `fork()` (all threads must have exactly one call to `fork()`)", 
-                        thread_idx,
-                        transaction_name
-                    ),
-                    Level::Error
                 );
             }
             ThreadError::DidntEndWithStep {

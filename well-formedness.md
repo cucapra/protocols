@@ -62,7 +62,6 @@ cond_expr ::=
 | We assign to a read-only symbol                                                                                              | `ThreadError::ReadOnlyAssignment`    |
 | A thread attempts to `fork` more than once                                                                                   | `ThreadError::DoubleFork`            |
 | A thread calls `fork` before calling `step`                                                                                  | `ThreadError::ForkBeforeStep`        |
-| A thread finished executing without calling `fork()` (all threads are required to make exactly one call to `fork()`)         | `ThreadError::FinishedWithoutFork`   |
 | The last executed statement in a thread is not `step()` (threads are required to finish their execution by calling `step()`) | `ThreadError::DidntEndWithStep`      |
 | Performing an operation on a `DontCare`                                                                                      | `EvaluationError::DontCareOperation` |
 | A `DontCare` value is used as the guard for a loop / if-statement                                                            | `EvaluationError::DontCare`          |
