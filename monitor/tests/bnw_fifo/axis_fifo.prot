@@ -36,6 +36,8 @@ fn push_and_pop<DUT: AxisFifo>(
     in push_data: u8,
     out pop_data: u8,
 ) {
+    DUT.rst := 1'b0;
+
     // Indicate that receiver is ready for the PUSH
     DUT.s_axis_tdata := push_data;
     DUT.s_axis_tvalid := 1'b1;
@@ -82,10 +84,15 @@ fn push_and_pop<DUT: AxisFifo>(
 fn push<DUT: AxisFifo>(
     in data: u8,
 ) {
+    DUT.rst := 1'b0;
+
+    // Update the data field and set receiver's valid bit to 1 to indicate 
+    // that data transfer can occur
     DUT.s_axis_tdata := data;    
+    DUT.s_axis_tvalid := 1'b1;
 
     // Ensure that the sender's ready bit is 0 
-    // This prevents a `POP` from happening
+    // This prevents a `POP` from happening at the same time
     DUT.m_axis_tready := 1'b0;
 
     // Wait for FIFO to be ready to accept data
@@ -122,6 +129,7 @@ fn push<DUT: AxisFifo>(
 fn pop<DUT: AxisFifo>(
     out data: u8,
 ) {
+    DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;
 
     // Ensure that the receiver's valid bit is 0 
@@ -171,8 +179,6 @@ fn idle<DUT: AxisFifo>() {
 // RESET: Assert reset signal to initialize FIFO
 fn reset<DUT: AxisFifo>() {
     DUT.rst := 1'b1;
-    DUT.s_axis_tvalid := 1'b0;
-    DUT.m_axis_tready := 1'b0;
     step();
 
     // Release all inputs

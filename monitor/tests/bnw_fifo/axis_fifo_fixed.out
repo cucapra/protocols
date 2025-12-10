@@ -1,4 +1,4 @@
-push(1)  // [time: 0ns -> 25ns] (thread 1)
+reset()  // [time: 0ns -> 25ns] (thread 4)
 push(1)  // [time: 25ns -> 50ns] (thread 6)
 push(1)  // [time: 50ns -> 75ns] (thread 11)
 push(2)  // [time: 75ns -> 100ns] (thread 16)
