@@ -2,7 +2,7 @@
 // RETURN: 1
 
 // AXI-Stream FIFO with frame-level atomicity
-// Maps to axis_fifo.v module I/O ports
+// Maps to axis_fifo_fixed.v module I/O ports
 struct AxisFifo {
     // Control signals
     in rst: u1,                   // Active-high reset signal
