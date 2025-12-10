@@ -1,4 +1,4 @@
-// ARGS: --wave brave_new_world/signal_async.fst --instances signal_async_fix:SignalAsyncSpec
+// ARGS: --wave brave_new_world_francis/signal_async.fst --instances signal_async_fix:SignalAsyncSpec
 struct SignalAsyncSpec {
     in request: u1,
     in input_data: u32, 

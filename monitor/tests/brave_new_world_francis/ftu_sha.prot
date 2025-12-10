@@ -1,4 +1,4 @@
-// ARGS: --wave brave_new_world/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA
+// ARGS: --wave brave_new_world_francis/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA
 struct FailureToUpdateSHA {
     in reset: u1,
     in start: u1,

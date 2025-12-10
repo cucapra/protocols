@@ -7,6 +7,14 @@ interp:
 monitor:
   turnt --env monitor $(find . -type f -name '*.prot') | faucet
 
+# Run Turnt tests for the monitor based on the Brave New World artifacts
+bnw_monitor:
+  turnt --env monitor $(find monitor/tests/fpga-debugging -type f -name '*.prot') | faucet  
+
+# Only test Francis's Brave New World (synthetic) examples on the monitor
+francis_bnw_monitor:
+  turnt --env monitor $(find monitor/tests/brave_new_world_francis -type f -name '*.prot') | faucet   
+
 # Only test the monitor on the AXI streaming example (from WAL)
 axis:
   turnt --env monitor $(find monitor/tests/wal/advanced -type f -name '*.prot') | faucet 
@@ -26,10 +34,6 @@ identities:
 # Only test the `multi` examples
 multi:
   turnt --env interp $(find protocols/tests/multi -type f -name '*.tx') | faucet 
-
-# Only test the Brave New World examples
-brave:
-  turnt --env interp $(find protocols/tests/brave_new_world -type f -name '*.tx') | faucet 
 
 # Only test the `picorv` examples
 picorv:

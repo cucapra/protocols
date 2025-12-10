@@ -1,4 +1,4 @@
-// ARGS: --wave brave_new_world/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid
+// ARGS: --wave brave_new_world_francis/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid
 struct UseWithoutValid {
     in data: u32,
     in data_val: u1,
