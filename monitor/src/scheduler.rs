@@ -417,23 +417,20 @@ impl Scheduler {
                 // ...and there shouldn't be any other threads in `next`
                 let next = threads_with_start_time(&self.next, start_cycle);
                 if !next.is_empty() {
-                    if self.ctx.show_waveform_time {
-                        let time_str = self
-                            .ctx
+                    let start_time_str = if self.ctx.show_waveform_time {
+                        self.ctx
                             .trace
-                            .format_time(finished_thread.start_time_step, self.ctx.time_unit);
-                        return self.emit_error().with_context(|| anyhow!(
-                            "Thread {} finished but there are other threads with the same start time {} in the `next` queue",
-                            finished_thread.thread_id,
-                            time_str
-                        ));
+                            .format_time(finished_thread.start_time_step, self.ctx.time_unit)
                     } else {
-                        return self.emit_error().with_context(|| anyhow!(
-                            "Thread {} finished but there are other threads with the same start cycle {} in the `next` queue",
+                        format!("cycle {}", finished_thread.start_cycle)
+                    };
+                    return self.emit_error().with_context(|| anyhow!(
+                            "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
                             finished_thread.thread_id,
-                            finished_thread.start_cycle
+                            finished_thread.transaction.name,
+                            start_time_str,
+                            next.iter().map(|t| t.transaction.name.clone()).collect::<Vec<_>>()
                         ));
-                    }
                 }
             }
 
