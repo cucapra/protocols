@@ -1,7 +1,7 @@
-// ARGS: --wave bnw_fifo_failure_to_update/fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
+// ARGS: --wave fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns
 
-// AXI-Stream FIFO with frame-level atomicity (FIXED VERSION)
-// Maps to fixed.v module I/O ports
+// AXI-Stream FIFO with frame-level atomicity
+// Maps to d4_buggy.v module I/O ports
 struct AxisFifo {
     // Control signals
     in rst: u1,                   // Active-high reset signal
@@ -156,6 +156,7 @@ fn pop<DUT: AxisFifo>(
 
 // IDLE: No transaction occurs
 // Both valid signals are deasserted
+#[idle]
 fn idle<DUT: AxisFifo>() {
     DUT.rst := 1'b0;
     DUT.s_axis_tvalid := 1'b0;

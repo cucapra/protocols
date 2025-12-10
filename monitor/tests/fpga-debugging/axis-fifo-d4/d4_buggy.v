@@ -141,12 +141,22 @@ reg [WIDTH-1:0] m_axis_reg;
 reg m_axis_tvalid_reg = 1'b0;
 reg m_axis_tvalid_next;
 
-// full when first MSB different but rest same
+// BUFFER FULLNESS INDICATORS:
+//
+// full: Committed write pointer (wr_ptr_reg) has wrapped around to read pointer
+//   - Indicates buffer is full based on COMMITTED frames
+//   - Only updated when tlast=1 (end of frame)
+//   - Problem: Does NOT reflect space used by in-progress multi-beat frame!
 wire full = ((wr_ptr_reg[ADDR_WIDTH] != rd_ptr_reg[ADDR_WIDTH]) &&
              (wr_ptr_reg[ADDR_WIDTH-1:0] == rd_ptr_reg[ADDR_WIDTH-1:0]));
-// empty when pointers match exactly
+
+// empty: Write and read pointers are equal (no data in buffer)
 wire empty = wr_ptr_reg == rd_ptr_reg;
-// overflow within packet
+
+// full_cur: Current write pointer (wr_ptr_cur_reg) has wrapped to read pointer
+//   - Indicates ACTUAL buffer fullness including in-progress frame
+//   - Updated every cycle as frame is being written
+//   - Correctly detects when current frame would overflow the buffer
 wire full_cur = ((wr_ptr_reg[ADDR_WIDTH] != wr_ptr_cur_reg[ADDR_WIDTH]) &&
                  (wr_ptr_reg[ADDR_WIDTH-1:0] == wr_ptr_cur_reg[ADDR_WIDTH-1:0]));
 
@@ -164,6 +174,21 @@ reg bad_frame_next;
 reg good_frame_reg = 1'b0;
 reg good_frame_next;
 
+// BUG: Uses `full` instead of `full_cur` for ready signal
+// This causes buffer overflow because:
+// 1. `full` is only updated when frame completes (tlast=1)
+// 2. While writing a multi-beat frame, `full` stays 0 even though buffer fills up
+// 3. s_axis_tready stays high, accepting more data than buffer can hold
+// 4. wr_ptr_cur_reg wraps around and overwrites unread data → OVERFLOW!
+//
+// Example: Buffer has 4 slots, contains [A, B, _, _]
+//   - wr_ptr_reg=2 (next commit position), rd_ptr_reg=0
+//   - full=0 (wr_ptr_reg hasn't wrapped to rd_ptr_reg)
+//   - Start writing 4-beat frame [C, D, E, F]:
+//     * Write C at index 2: wr_ptr_cur_reg=3, full_cur=0, s_axis_tready=1 ✓
+//     * Write D at index 3: wr_ptr_cur_reg=4, full_cur=0, s_axis_tready=1 ✓
+//     * Write E at index 0: wr_ptr_cur_reg=5, full_cur=1, but s_axis_tready=1! ✗
+//     * E overwrites A! → BUFFER OVERFLOW
 assign s_axis_tready = (!full || DROP_WHEN_FULL);
 
 generate

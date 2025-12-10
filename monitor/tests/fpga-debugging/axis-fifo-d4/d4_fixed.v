@@ -141,14 +141,27 @@ reg [WIDTH-1:0] m_axis_reg;
 reg m_axis_tvalid_reg = 1'b0;
 reg m_axis_tvalid_next;
 
-// full when first MSB different but rest same
+// BUFFER FULLNESS INDICATORS:
+//
+// full: Committed write pointer (wr_ptr_reg) has wrapped around to read pointer
+//   - Indicates buffer is full based on COMMITTED frames (frames that completed with tlast=1)
+//   - Used in non-FRAME_FIFO mode
 wire full = ((wr_ptr_reg[ADDR_WIDTH] != rd_ptr_reg[ADDR_WIDTH]) &&
              (wr_ptr_reg[ADDR_WIDTH-1:0] == rd_ptr_reg[ADDR_WIDTH-1:0]));
+
+// full_cur: Current write pointer has wrapped to read pointer
+//   - Indicates ACTUAL buffer fullness including in-progress frame
+//   - Updated every cycle as frame is being written
+//   - Prevents buffer overflow in FRAME_FIFO mode
 wire full_cur = ((wr_ptr_cur_reg[ADDR_WIDTH] != rd_ptr_reg[ADDR_WIDTH]) &&
                  (wr_ptr_cur_reg[ADDR_WIDTH-1:0] == rd_ptr_reg[ADDR_WIDTH-1:0]));
-// empty when pointers match exactly
+
+// empty: Write and read pointers are equal
 wire empty = wr_ptr_reg == rd_ptr_reg;
-// overflow within packet
+
+// full_wr: Current write pointer has wrapped to committed write pointer
+//   - Indicates overflow within the current frame (wr_ptr_cur caught up to wr_ptr)
+//   - Used to allow completing an overflowed frame before refusing more data
 wire full_wr = ((wr_ptr_reg[ADDR_WIDTH] != wr_ptr_cur_reg[ADDR_WIDTH]) &&
                 (wr_ptr_reg[ADDR_WIDTH-1:0] == wr_ptr_cur_reg[ADDR_WIDTH-1:0]));
 
@@ -166,6 +179,10 @@ reg bad_frame_next;
 reg good_frame_reg = 1'b0;
 reg good_frame_next;
 
+// FIX: Use full_cur instead of full for FRAME_FIFO mode
+// - full_cur reflects real-time buffer occupancy (including in-progress frame)
+// - Prevents buffer overflow by deasserting ready when buffer would overflow
+// - full_wr allows completing a frame that already caused overflow
 assign s_axis_tready = FRAME_FIFO ? (!full_cur || full_wr || DROP_WHEN_FULL) : !full;
 
 generate
