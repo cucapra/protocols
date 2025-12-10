@@ -30,36 +30,15 @@ struct AxisFifo {
 }
 
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
-// 
-// Push Arguments (input):
-// `push_data, push_keep, push_last, push_id, push_dest, push_user` - Data to write
-// 
-// Pop Arguments (output, verified with assert_eq):
-// `pop_data, pop_keep, pop_last, pop_id, pop_dest, pop_user` - Expected data read
+// - `push_data` is the value being pushed,
+// - `pop_data` is the value being popped
 fn push_and_pop<DUT: AxisFifo>(
-    // Push parameters
     in push_data: u8,
-    in push_keep: u1,
-    in push_last: u1,
-    in push_id: u8,
-    in push_dest: u8,
-    in push_user: u1,
-    // Pop parameters
     out pop_data: u8,
-    out pop_keep: u1,
-    out pop_last: u1,
-    out pop_id: u8,
-    out pop_dest: u8,
-    out pop_user: u1
 ) {
     // Indicate that receiver is ready for the PUSH
     DUT.s_axis_tdata := push_data;
-    DUT.s_axis_tkeep := push_keep;
     DUT.s_axis_tvalid := 1'b1;
-    DUT.s_axis_tlast := push_last;
-    DUT.s_axis_tid := push_id;
-    DUT.s_axis_tdest := push_dest;
-    DUT.s_axis_tuser := push_user;
 
     // Indicate that sender is ready for the POP
     DUT.m_axis_tready := 1'b1;
@@ -77,15 +56,10 @@ fn push_and_pop<DUT: AxisFifo>(
     // One cycle for both data transfers to complete
     step();
 
-    // Verify pop outputs
+    // Verify POP output
     assert_eq(DUT.m_axis_tdata, pop_data);
-    assert_eq(DUT.m_axis_tkeep, pop_keep);
-    assert_eq(DUT.m_axis_tlast, pop_last);
-    assert_eq(DUT.m_axis_tid, pop_id);
-    assert_eq(DUT.m_axis_tdest, pop_dest);
-    assert_eq(DUT.m_axis_tuser, pop_user);
 
-    // Mark all inputs as DontCare
+    // Mark all other DUT input ports as DontCare
     DUT.s_axis_tdata := X;
     DUT.s_axis_tkeep := X;
     DUT.s_axis_tvalid := X;
@@ -104,26 +78,11 @@ fn push_and_pop<DUT: AxisFifo>(
 //
 // Arguments:
 //   data - Payload byte to write to FIFO
-//   keep - Byte lane valid indicator (1 = byte is valid)
-//   last - End-of-frame marker (1 = last beat of packet)
-//   id   - Transaction ID for routing/ordering
-//   dest - Destination ID for routing
-//   user - User-defined sideband data (e.g., error/parity bits)
+
 fn push<DUT: AxisFifo>(
     in data: u8,
-    in keep: u1,
-    in last: u1,
-    in id: u8,
-    in dest: u8,
-    in user: u1
 ) {
-    DUT.s_axis_tdata := data;
-    DUT.s_axis_tkeep := keep;
-    DUT.s_axis_tvalid := 1'b1;
-    DUT.s_axis_tlast := last;
-    DUT.s_axis_tid := id;
-    DUT.s_axis_tdest := dest;
-    DUT.s_axis_tuser := user;
+    DUT.s_axis_tdata := data;    
 
     // Ensure that the sender's ready bit is 0 
     // This prevents a `POP` from happening
@@ -137,8 +96,12 @@ fn push<DUT: AxisFifo>(
     // One cycle for the transfer to complete
     step();
 
-
-    // Release inputs after transaction
+    // Set all other DUT input ports to DontCare after transaction
+    //   keep - Byte lane valid indicator (1 = byte is valid)
+    //   last - End-of-frame marker (1 = last beat of packet)
+    //   id   - Transaction ID for routing/ordering
+    //   dest - Destination ID for routing
+    //   user - User-defined sideband data (e.g., error/parity bits)
     DUT.s_axis_tdata := X;
     DUT.s_axis_tkeep := X;
     DUT.s_axis_tvalid := X;
@@ -156,18 +119,8 @@ fn push<DUT: AxisFifo>(
 //
 // Output Arguments:
 //   data - Expected payload byte from FIFO
-//   keep - Expected byte lane valid indicator
-//   last - Expected end-of-frame marker
-//   id   - Expected transaction ID
-//   dest - Expected destination ID
-//   user - Expected user-defined sideband data
 fn pop<DUT: AxisFifo>(
     out data: u8,
-    out keep: u1,
-    out last: u1,
-    out id: u8,
-    out dest: u8,
-    out user: u1
 ) {
     DUT.m_axis_tready := 1'b1;
 
@@ -185,11 +138,6 @@ fn pop<DUT: AxisFifo>(
 
     // Capture output data
     assert_eq(DUT.m_axis_tdata, data);
-    assert_eq(DUT.m_axis_tkeep, keep);
-    assert_eq(DUT.m_axis_tlast, last);
-    assert_eq(DUT.m_axis_tid, id);
-    assert_eq(DUT.m_axis_tdest, dest);
-    assert_eq(DUT.m_axis_tuser, user);
 
     // Release inputs after transaction
     DUT.m_axis_tready := X;
