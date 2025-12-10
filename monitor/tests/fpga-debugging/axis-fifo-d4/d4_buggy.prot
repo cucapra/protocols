@@ -13,7 +13,7 @@ struct AxisFifo {
     in s_axis_tlast: u1,          // receiver last signal (marks end of frame/packet)
     in s_axis_tid: u8,            // receiver transaction ID (for routing/ordering)
     in s_axis_tdest: u8,          // receiver destination ID (routing information)
-    in s_axis_tuser: u1,          // receiver user-defined sideband (e.g., error flags)
+    in s_axis_tuser: u1,          // receiver user-defined metadata (e.g., error flags)
 
     // AXI-Stream sender Interface (FIFO output/read side)
     in m_axis_tready: u1,         // sender ready signal (receiver can accept data)
@@ -26,7 +26,7 @@ struct AxisFifo {
     out m_axis_tlast: u1,         // sender last signal (end of frame)
     out m_axis_tid: u8,           // sender transaction ID
     out m_axis_tdest: u8,         // sender destination ID
-    out m_axis_tuser: u1,         // sender user-defined sideband
+    out m_axis_tuser: u1,         // sender user-defined metadata
 }
 
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
@@ -75,6 +75,41 @@ fn push_and_pop<DUT: AxisFifo>(
     step();
 }
 
+// PUSH_REJECTED: Attempts a PUSH that is rejected as the FIFO is full
+// Occurs when `s_axis_tvalid = 1` but `s_axis_tready = 0` 
+// (i.e. the FIFO is not ready to receive data)
+// Note: This protocol does not appear in the inferred transaction trace 
+// for the buggy waveform (`d4_buggy.fst`), since the bug allows buffer overflow
+//
+// Arguments:
+//   data - Data that was attempted to be pushed (but rejected)
+fn push_rejected<DUT: AxisFifo>(
+    in data: u8,
+) {
+    DUT.rst := 1'b0;
+    DUT.s_axis_tdata := data;
+    DUT.s_axis_tvalid := 1'b1;
+    DUT.m_axis_tready := 1'b0;
+
+    // Check that FIFO is refusing the data (s_axis_tready = 0)
+    assert_eq(DUT.s_axis_tready, 1'b0);
+
+    // One cycle to observe the rejection
+    step();
+
+    // Release inputs
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+
+    fork();
+    step();
+}
+
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
 // Performs data transfer when s_axis_tvalid and s_axis_tready are both 1
 //
@@ -108,7 +143,7 @@ fn push<DUT: AxisFifo>(
     //   last - End-of-frame marker (1 = last beat of packet)
     //   id   - Transaction ID for routing/ordering
     //   dest - Destination ID for routing
-    //   user - User-defined sideband data (e.g., error/parity bits)
+    //   user - User-defined metadata 
     DUT.s_axis_tdata := X;
     DUT.s_axis_tkeep := X;
     DUT.s_axis_tvalid := X;
