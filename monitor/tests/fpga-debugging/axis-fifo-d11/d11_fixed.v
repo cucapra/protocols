@@ -97,9 +97,21 @@ assign output_axis_tvalid = output_axis_tvalid_reg;
 // write
 always @(posedge clk) begin
     if (rst) begin
+        // Fix: All write-related state variables are properly reset
+        // This ensures clean state after reset:
+        //
+        // wr_ptr = 0:      Committed write pointer (points to next frame start)
+        // wr_ptr_cur = 0:  Current write pointer (advances during frame write)
+        // drop_frame = 0:  Clear drop mode flag
+        //
+        // With all three reset, the FIFO returns to initial state:
+        // - full_cur will correctly compute as false (buffer is empty)
+        // - drop_frame=0 means not in drop mode
+        // - input_axis_tready will be high, allowing new writes
+        // - New push transactions can proceed normally after reset
         wr_ptr <= 0;
-        wr_ptr_cur <= 0;
-        drop_frame <= 0;
+        wr_ptr_cur <= 0;   // FIXED: Current write pointer properly reset
+        drop_frame <= 0;   // FIXED: Drop frame flag properly reset
     end else if (write) begin
         if (full | full_cur | drop_frame) begin
             // buffer full, hold current pointer, drop packet at end

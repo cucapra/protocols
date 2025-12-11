@@ -97,7 +97,27 @@ assign output_axis_tvalid = output_axis_tvalid_reg;
 // write
 always @(posedge clk) begin
     if (rst) begin
+        // Bug: Only wr_ptr is reset, whereas wr_ptr_cur and drop_frame aren't reset
+        // This causes 2 problems:
+        //
+        // 1. Outdated wr_ptr_cur value:
+        //    - Before reset: wr_ptr_cur may have advanced while writing an incomplete frame
+        //    - After reset: wr_ptr=0 (reset), but wr_ptr_cur retains old value (e.g., 3)
+        //    - Result: full_cur = ((wr_ptr[MSB] != wr_ptr_cur[MSB]) && (wr_ptr[...] == wr_ptr_cur[...]))
+        //              may incorrectly evaluate to true, falsely indicating buffer is full
+        //
+        // 2. Outdated drop_frame flag:
+        //    - Before reset: drop_frame=1 if buffer filled up during incomplete frame write
+        //    - After reset: wr_ptr=0 (reset), but drop_frame=1 (still set)
+        //    - Result: Line 102 condition (full | full_cur | drop_frame) is true
+        //              → FIFO immediately enters drop mode even though buffer is empty
+        //              → input_axis_tready stays low, blocking all new writes
+        //
+        // Consequence: After reset, FIFO cannot accept any new data (no push transactions)
+        // because it incorrectly thinks it's in drop mode or full state
         wr_ptr <= 0;
+        // wr_ptr_cur <= 0;  // MISSING! Should be here
+        // drop_frame <= 0;  // MISSING! Should be here
     end else if (write) begin
         if (full | full_cur | drop_frame) begin
             // buffer full, hold current pointer, drop packet at end
