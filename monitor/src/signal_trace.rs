@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design, global_context::TimeUnit};
+use crate::{designs::Design, global_context::TimeUnit, Instance};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
@@ -356,7 +356,7 @@ fn find_instances(
                         "Failed to find pin {}. Available pins in waveform for instance {} are {}",
                         pin.name(),
                         inst.name,
-                        available_vars.join(", ")
+                        available_vars.join(",\n")
                     );
                 }
             }

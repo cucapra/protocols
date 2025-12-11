@@ -1,6 +1,6 @@
-// ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo:AxisFifo --sample-posedge TOP.test_axis_async_fifo.clk --show-waveform-time --time-unit ns
+// ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:AxisFifo --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns
 
-// AXI-Stream FIFO with frame-level atomicity (FIXED VERSION)
+// AXI-Stream asynchronous FIFO 
 // Maps to c4_buggy.v module I/O ports
 struct AxisFifo {
     // Control signals
