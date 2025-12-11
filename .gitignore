@@ -8,3 +8,4 @@ test_run/
 .surfer/
 monitor/target
 monitor/tests/axi_output.txt
+*.json
