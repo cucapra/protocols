@@ -179,16 +179,16 @@ reg good_frame_next;
 // 1. `full` is only updated when frame completes (tlast=1)
 // 2. While writing a multi-beat frame, `full` stays 0 even though buffer fills up
 // 3. s_axis_tready stays high, accepting more data than buffer can hold
-// 4. wr_ptr_cur_reg wraps around and overwrites unread data → OVERFLOW!
-//
+// 4. wr_ptr_cur_reg wraps around and overwrites unread data -> Buffer overflow
+
 // Example: Buffer has 4 slots, contains [A, B, _, _]
 //   - wr_ptr_reg=2 (next commit position), rd_ptr_reg=0
 //   - full=0 (wr_ptr_reg hasn't wrapped to rd_ptr_reg)
 //   - Start writing 4-beat frame [C, D, E, F]:
-//     * Write C at index 2: wr_ptr_cur_reg=3, full_cur=0, s_axis_tready=1 ✓
-//     * Write D at index 3: wr_ptr_cur_reg=4, full_cur=0, s_axis_tready=1 ✓
-//     * Write E at index 0: wr_ptr_cur_reg=5, full_cur=1, but s_axis_tready=1! ✗
-//     * E overwrites A! → BUFFER OVERFLOW
+//     * Write C at index 2: wr_ptr_cur_reg=3, full_cur=0, s_axis_tready=1 (OK)
+//     * Write D at index 3: wr_ptr_cur_reg=4, full_cur=0, s_axis_tready=1 (OK)
+//     * Write E at index 0: wr_ptr_cur_reg=5, full_cur=1, but s_axis_tready=1! (Bug)
+//     * E overwrites A! → Buffer overflow occurs
 assign s_axis_tready = (!full || DROP_WHEN_FULL);
 
 generate
