@@ -74,9 +74,6 @@ jobs:
         run: |
           rustup toolchain install ${{ env.RUST_VERSION }} --component clippy
           rustup default ${{ env.RUST_VERSION }}
-      - uses: YosysHQ/setup-oss-cad-suite@v3
-        with:
-          version: '2024-05-07'
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -95,8 +92,6 @@ jobs:
         run: |
           wget https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine_1.19.0_amd64.deb
           sudo dpkg -i hyperfine_1.19.0_amd64.deb
-      - name: Install Python dependencies
-        run: uv pip install --system matplotlib
       - name: Build monitor (release)
         run: cargo build --release --package protocols-monitor
       - name: Restore baseline benchmark results
