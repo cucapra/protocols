@@ -75,41 +75,6 @@ fn push_and_pop<DUT: AxisFifo>(
     step();
 }
 
-// PUSH_REJECTED: Attempts a PUSH that is rejected as the FIFO is full
-// Occurs when `s_axis_tvalid = 1` but `s_axis_tready = 0` 
-// (i.e. the FIFO is not ready to receive data)
-// Note: This protocol does not appear in the inferred transaction trace 
-// for the buggy waveform (`d4_buggy.fst`), since the bug allows buffer overflow
-//
-// Arguments:
-//   data - Data that was attempted to be pushed (but rejected)
-fn push_rejected<DUT: AxisFifo>(
-    in data: u8,
-) {
-    DUT.rst := 1'b0;
-    DUT.s_axis_tdata := data;
-    DUT.s_axis_tvalid := 1'b1;
-    DUT.m_axis_tready := 1'b0;
-
-    // Check that FIFO is refusing the data (s_axis_tready = 0)
-    assert_eq(DUT.s_axis_tready, 1'b0);
-
-    // One cycle to observe the rejection
-    step();
-
-    // Release inputs
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-
-    fork();
-    step();
-}
-
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
 // Performs data transfer when s_axis_tvalid and s_axis_tready are both 1
 //
