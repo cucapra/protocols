@@ -1,4 +1,4 @@
-// ARGS: --wave brave_new_world/bit_truncation_sha.fst --instances bit_truncation_sha_fixed:bit_truncation_sha
+// ARGS: --wave brave_new_world_francis/bit_truncation_sha.fst --instances bit_truncation_sha_fixed:bit_truncation_sha
 struct bit_truncation_sha {
     in right: u64,
     out left: u42,

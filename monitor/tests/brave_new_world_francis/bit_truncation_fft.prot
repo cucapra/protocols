@@ -1,4 +1,4 @@
-// ARGS: --wave brave_new_world/bit_truncation_fft.fst --instances round11_rne_unsigned_fixed:BitTruncationFFT
+// ARGS: --wave brave_new_world_francis/bit_truncation_fft.fst --instances round11_rne_unsigned_fixed:BitTruncationFFT
 struct BitTruncationFFT {
     in input_data: u27,
     out output_data: u11,

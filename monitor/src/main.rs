@@ -163,7 +163,7 @@ fn main() -> anyhow::Result<()> {
     // Actually run the scheduler
     if let Err(error_msg) = scheduler.run() {
         eprintln!("{error_msg}");
-        return Err(anyhow!("Monitor failed due to no matching transactions"));
+        return Err(anyhow!("Monitor failed"));
     }
     Ok(())
 }
