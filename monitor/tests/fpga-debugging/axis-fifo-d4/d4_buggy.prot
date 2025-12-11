@@ -1,7 +1,7 @@
-// ARGS: --wave bnw_fifo/axis_fifo_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
+// ARGS: --wave fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns
 
-// AXI-Stream FIFO with frame-level atomicity (FIXED VERSION)
-// Maps to axis_fifo.v module I/O ports
+// AXI-Stream FIFO with frame-level atomicity
+// Maps to d4_buggy.v module I/O ports
 struct AxisFifo {
     // Control signals
     in rst: u1,                   // Active-high reset signal
@@ -13,7 +13,7 @@ struct AxisFifo {
     in s_axis_tlast: u1,          // receiver last signal (marks end of frame/packet)
     in s_axis_tid: u8,            // receiver transaction ID (for routing/ordering)
     in s_axis_tdest: u8,          // receiver destination ID (routing information)
-    in s_axis_tuser: u1,          // receiver user-defined sideband (e.g., error flags)
+    in s_axis_tuser: u1,          // receiver user-defined metadata (e.g., error flags)
 
     // AXI-Stream sender Interface (FIFO output/read side)
     in m_axis_tready: u1,         // sender ready signal (receiver can accept data)
@@ -26,7 +26,7 @@ struct AxisFifo {
     out m_axis_tlast: u1,         // sender last signal (end of frame)
     out m_axis_tid: u8,           // sender transaction ID
     out m_axis_tdest: u8,         // sender destination ID
-    out m_axis_tuser: u1,         // sender user-defined sideband
+    out m_axis_tuser: u1,         // sender user-defined metadata
 }
 
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
@@ -108,7 +108,7 @@ fn push<DUT: AxisFifo>(
     //   last - End-of-frame marker (1 = last beat of packet)
     //   id   - Transaction ID for routing/ordering
     //   dest - Destination ID for routing
-    //   user - User-defined sideband data (e.g., error/parity bits)
+    //   user - User-defined metadata 
     DUT.s_axis_tdata := X;
     DUT.s_axis_tkeep := X;
     DUT.s_axis_tvalid := X;
@@ -156,6 +156,7 @@ fn pop<DUT: AxisFifo>(
 
 // IDLE: No transaction occurs
 // Both valid signals are deasserted
+#[idle]
 fn idle<DUT: AxisFifo>() {
     DUT.rst := 1'b0;
     DUT.s_axis_tvalid := 1'b0;
