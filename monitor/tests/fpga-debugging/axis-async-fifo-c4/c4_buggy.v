@@ -104,6 +104,30 @@ wire read = (output_axis_tready | ~output_axis_tvalid_reg) & ~empty;
 
 assign {output_axis_tlast, output_axis_tuser, output_axis_tdata} = data_out_reg;
 
+// Bug: Reset-Data Asynchrony
+// `input_axis_tready` is NOT dependent on input_rst_sync3, allowing data to be accepted during reset
+//
+// The reset synchronization code in lines 135-145 creates a 3-cycle delay:
+//   Cycle 0: async_rst deasserts, but input_rst_sync1/2/3 are all still 1
+//   Cycle 1: input_rst_sync1 becomes 0, but input_rst_sync2/3 is still 1
+//   Cycle 2: input_rst_sync2 becomes 0, but input_rst_sync3 is still 1
+//   Cycle 3: input_rst_sync3 becomes 0 (reset complete)
+//
+// During cycles 1-2, this buggy assignment allows data to be accepted:
+// ```
+// input_axis_tready = ~full // can be 1 if FIFO not full
+// ```
+// - `write = input_axis_tvalid & ~full` (line 102) can evaluate to 1
+// - However, the write pointer `input_rst_sync3` (used in line 162 in `if (input_rst_sync3) ...`)
+//   hasn't been initialized yet.
+// As a consequence, data can be written to uninitialized FIFO state during the reset.
+//
+// Inferred transaction-level trace by the monitor (`c4_buggy.out`):
+//   Time 0-25ns:   reset() - async_rst is 1
+//   Time 25-50ns:  idle() - input_rst_sync3 still high (reset being synced)
+//   Time 50-100ns: push_and_pop(2,2) - Data is accepted too early (bug)
+//                  At 50ns, input_rst_sync3 may still be 1, but tready = 1 allows for writes
+//                  This violates the invariant that no data should be accepted during reset sync
 assign input_axis_tready = ~full;
 assign output_axis_tvalid = output_axis_tvalid_reg;
 

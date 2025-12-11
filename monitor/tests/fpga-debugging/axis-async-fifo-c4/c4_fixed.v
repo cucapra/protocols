@@ -104,6 +104,36 @@ wire read = (output_axis_tready | ~output_axis_tvalid_reg) & ~empty;
 
 assign {output_axis_tlast, output_axis_tuser, output_axis_tdata} = data_out_reg;
 
+// Fix: Reset-Data Synchronization
+// `input_axis_tready` is now dependent ~input_rst_sync3, preventing data acceptance during reset
+//
+// The reset synchronization code in lines 139-149 creates a 3-cycle delay:
+//   Cycle 0: async_rst deasserts, but input_rst_sync1/2/3 are all still 1
+//   Cycle 1: input_rst_sync1 becomes 0, but input_rst_sync2/3 are still 1
+//   Cycle 2: input_rst_sync2 becomes 0, but input_rst_sync3 is still 1
+//   Cycle 3: input_rst_sync3 becomes 0 (reset complete)
+//
+// The fix in the line below ensures that data is only accepted after the reset completes:
+// ```verilog
+// input_axis_tready = ~full & ~input_rst_sync3
+// ```
+// - During cycles 0-2: input_rst_sync3 = 1, so tready = 0 (blocks all writes)
+// - Starting cycle 3: input_rst_sync3 = 0, so tready depends only on ~full
+// - `write = input_axis_tvalid & ~full` (line 102) can only be 1 after reset sync completes
+// - The write pointer `wr_ptr_next` is guaranteed to be properly initialized before any writes
+//
+// Correct behavior: No data acceptance until FIFO is fully initialized
+//
+// Inferred transaction-level trace by the monitor (`c4_fixed.out`):
+//   Time 0-25ns:    reset() - async_rst is 1
+//   Time 25-50ns:   idle() - input_rst_sync3 still 1, tready = 0 (this is OK)
+//   Time 50-75ns:   push(1) - First write after reset sync completes
+//                   Data pushed to FIFO but not yet readable on the output side
+//   Time 100-150ns: push_and_pop(3,3) - Normal operation begins
+//                   Both push and pop can now complete (output side also synced)
+//
+// By making `tready` dependent on `~input_rst_sync3`, the FIFO correctly 
+// rejects writes during the reset synchronization period, as desired.
 assign input_axis_tready = ~full  & ~input_rst_sync3;
 assign output_axis_tvalid = output_axis_tvalid_reg;
 
