@@ -89,31 +89,6 @@ module axis_fifo #
 );
 
 
-/* DISABLED Simulation Only Construct
-// check configuration
-initial begin
-    if (FRAME_FIFO && !LAST_ENABLE) begin
-        $error("Error: FRAME_FIFO set requires LAST_ENABLE set");
-        $finish;
-    end
-
-    if (DROP_BAD_FRAME && !FRAME_FIFO) begin
-        $error("Error: DROP_BAD_FRAME set requires FRAME_FIFO set");
-        $finish;
-    end
-
-    if (DROP_WHEN_FULL && !FRAME_FIFO) begin
-        $error("Error: DROP_WHEN_FULL set requires FRAME_FIFO set");
-        $finish;
-    end
-
-    if (DROP_BAD_FRAME && (USER_BAD_FRAME_MASK & {USER_WIDTH{1'b1}}) == 0) begin
-        $error("Error: Invalid USER_BAD_FRAME_MASK value");
-        $finish;
-    end
-end
-*/
-
 localparam KEEP_OFFSET = DATA_WIDTH;
 localparam LAST_OFFSET = KEEP_OFFSET + (KEEP_ENABLE ? KEEP_WIDTH : 0);
 localparam ID_OFFSET   = LAST_OFFSET + (LAST_ENABLE ? 1          : 0);

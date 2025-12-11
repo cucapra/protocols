@@ -89,31 +89,6 @@ module axis_fifo #
 );
 
 
-/* DISABLED Simulation Only Construct
-// check configuration
-initial begin
-    if (FRAME_FIFO && !LAST_ENABLE) begin
-        $error("Error: FRAME_FIFO set requires LAST_ENABLE set");
-        $finish;
-    end
-
-    if (DROP_BAD_FRAME && !FRAME_FIFO) begin
-        $error("Error: DROP_BAD_FRAME set requires FRAME_FIFO set");
-        $finish;
-    end
-
-    if (DROP_WHEN_FULL && !FRAME_FIFO) begin
-        $error("Error: DROP_WHEN_FULL set requires FRAME_FIFO set");
-        $finish;
-    end
-
-    if (DROP_BAD_FRAME && (USER_BAD_FRAME_MASK & {USER_WIDTH{1'b1}}) == 0) begin
-        $error("Error: Invalid USER_BAD_FRAME_MASK value");
-        $finish;
-    end
-end
-*/
-
 localparam KEEP_OFFSET = DATA_WIDTH;
 localparam LAST_OFFSET = KEEP_OFFSET + (KEEP_ENABLE ? KEEP_WIDTH : 0);
 localparam ID_OFFSET   = LAST_OFFSET + (LAST_ENABLE ? 1          : 0);
@@ -121,6 +96,12 @@ localparam DEST_OFFSET = ID_OFFSET   + (ID_ENABLE   ? ID_WIDTH   : 0);
 localparam USER_OFFSET = DEST_OFFSET + (DEST_ENABLE ? DEST_WIDTH : 0);
 localparam WIDTH       = USER_OFFSET + (USER_ENABLE ? USER_WIDTH : 0);
 
+// Ring Buffer Pointers - Use (ADDR_WIDTH+1) bits for full/empty detection
+// - ADDR_WIDTH bits: Memory address (wraps around 0 to 2^ADDR_WIDTH-1)
+// - Extra MSB bit: Wrap-around tracking to distinguish full from empty
+// Example: ADDR_WIDTH=2 means 4 memory locations, but pointers count 0-7
+//   When wr_ptr=4 and rd_ptr=0: MSB differs (1 vs 0), lower bits match (00 vs 00) → FULL
+//   When wr_ptr=0 and rd_ptr=0: All bits match → EMPTY
 reg [ADDR_WIDTH:0] wr_ptr_reg = {ADDR_WIDTH+1{1'b0}};
 reg [ADDR_WIDTH:0] wr_ptr_next;
 reg [ADDR_WIDTH:0] wr_ptr_cur_reg = {ADDR_WIDTH+1{1'b0}};
@@ -130,6 +111,8 @@ reg [ADDR_WIDTH:0] rd_ptr_reg = {ADDR_WIDTH+1{1'b0}};
 reg [ADDR_WIDTH:0] rd_ptr_next;
 reg [ADDR_WIDTH:0] rd_addr_reg = {ADDR_WIDTH+1{1'b0}};
 
+// Ring Buffer Memory - Capacity = 2^ADDR_WIDTH entries
+// Example: ADDR_WIDTH=2 → 4 entries (addresses 0,1,2,3 wrap around)
 reg [WIDTH-1:0] mem[(2**ADDR_WIDTH)-1:0];
 reg [WIDTH-1:0] mem_read_data_reg;
 reg mem_read_data_valid_reg = 1'b0;
@@ -214,15 +197,6 @@ assign status_bad_frame = bad_frame_reg;
 assign status_good_frame = good_frame_reg;
 
 
-/* DISABLED Simulation Only Construct
-always @(posedge clk) begin
-    if (!rst) begin
-        if ((s_axis_tvalid && s_axis_tready) && !(m_axis_tvalid && m_axis_tready) && wr_ptr_cur_reg[ADDR_WIDTH] != rd_ptr_reg[ADDR_WIDTH] && wr_ptr_cur_reg[ADDR_WIDTH-1:0] == rd_ptr_reg[ADDR_WIDTH-1:0])
-            $error("buffer overflow");
-    end
-end
-*/
-
 // Write logic
 always @* begin
     write = 1'b0;
@@ -240,11 +214,11 @@ always @* begin
         if (!full || DROP_WHEN_FULL) begin
             // not full, perform write
             if (!FRAME_FIFO) begin
-                // normal FIFO mode
+                // PUSH: normal FIFO mode - unconditional write
                 write = 1'b1;
                 wr_ptr_next = wr_ptr_reg + 1;
             end else if (full || full_cur || drop_frame_reg) begin
-                // full, packet overflow, or currently dropping frame
+                // IDLE: full, packet overflow, or currently dropping frame
                 // drop frame
                 drop_frame_next = 1'b1;
                 if (s_axis_tlast) begin
@@ -254,6 +228,7 @@ always @* begin
                     overflow_next = 1'b1;
                 end
             end else begin
+                // PUSH: frame FIFO mode - write to memory
                 write = 1'b1;
                 wr_ptr_cur_next = wr_ptr_cur_reg + 1;
                 if (s_axis_tlast) begin
@@ -275,6 +250,7 @@ end
 
 always @(posedge clk) begin
     if (rst) begin
+        // RESET: Initialize write-side registers
         wr_ptr_reg <= {ADDR_WIDTH+1{1'b0}};
         wr_ptr_cur_reg <= {ADDR_WIDTH+1{1'b0}};
 
@@ -283,6 +259,7 @@ always @(posedge clk) begin
         bad_frame_reg <= 1'b0;
         good_frame_reg <= 1'b0;
     end else begin
+        // Update write state (PUSH or IDLE)
         wr_ptr_reg <= wr_ptr_next;
         wr_ptr_cur_reg <= wr_ptr_cur_next;
 
@@ -299,6 +276,9 @@ always @(posedge clk) begin
     end
 
     if (write) begin
+        // PUSH: Write data to memory
+        // Ring buffer wrap-around: Use only lower ADDR_WIDTH bits as memory index
+        // Example: wr_addr_reg=3'b100 (4) → mem[0] (wraps to address 0)
         mem[wr_addr_reg[ADDR_WIDTH-1:0]] <= s_axis;
     end
 end
