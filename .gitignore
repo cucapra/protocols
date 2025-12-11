@@ -9,3 +9,5 @@ test_run/
 monitor/target
 monitor/tests/axi_output.txt
 *.json
+*.png
+*.csv
