@@ -1,3 +1,5 @@
+// Taken from https://github.com/ngernest/rtl-repair/blob/asplos24/benchmarks/fpga-debugging/axis-async-fifo-c4/axis_async_fifo.v
+
 /*
 
 Copyright (c) 2014 Alex Forencich

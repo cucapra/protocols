@@ -1,3 +1,5 @@
+// Taken from https://github.com/ngernest/rtl-repair/blob/asplos24/benchmarks/fpga-debugging/axis-async-fifo-c4/axis_fifo_wrapper.v
+
 `timescale 1ns / 1ps
 
 module axis_fifo_wrapper
