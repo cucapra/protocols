@@ -356,7 +356,7 @@ fn find_instances(
                         "Failed to find pin {}. Available pins in waveform for instance {} are {}",
                         pin.name(),
                         inst.name,
-                        available_vars.join(", ")
+                        available_vars.join(",\n")
                     );
                 }
             }
