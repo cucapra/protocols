@@ -39,10 +39,12 @@ def main():
         cmd = [
             "hyperfine",
             # Disable shell startup to avoid noise in measurements
-            "--shell=none",   
+            "--shell=none",
             "--export-json", "tmp_hyperfine.json",
             # 3 warmup runs to run benchmarks on a warm cache
-            "--warmup", "3",  
+            "--warmup", "3",
+            # Minimal output for CI
+            "--style", "basic",
             f"turnt --env monitor {pf}",
         ]
 
