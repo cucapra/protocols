@@ -43,8 +43,8 @@ def main():
             "--export-json", "tmp_hyperfine.json",
             # 3 warmup runs to run benchmarks on a warm cache
             "--warmup", "3",
-            # Minimal output for CI
-            "--style", "basic",
+            # Suppress hyperfine output (results are checked separately)
+            "--style", "none",
             f"turnt --env monitor {pf}",
         ]
 
