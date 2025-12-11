@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+Benchmarks the monitor on a range of test files using Hyperfine 
+(measuring CPU wall-clock time, averaged over 10 runs) and 
+creates a CSV with the results.
+"""
+
 # Note: before running this script, first run 
 # `cargo build --release --package protocols-monitor` 
 
@@ -8,7 +15,7 @@ import glob
 import os
 
 TEST_ROOT = "monitor/tests"
-OUTPUT_CSV = "benchmark_results.csv"
+OUTPUT_CSV = "benchmark_results/benchmark_results.csv"
 
 def main():
     # Find all .prot files recursively under monitor/tests/
@@ -26,11 +33,16 @@ def main():
     for pf in prot_files:
         print(f"Benchmarking {pf} ...")
 
+        
+        # By default, Hyperfine executes the monitor for at least 10 
+        # times on each test file
         cmd = [
             "hyperfine",
-            "--shell=none",
+            # Disable shell startup to avoid noise in measurements
+            "--shell=none",   
             "--export-json", "tmp_hyperfine.json",
-            "--warmup", "3",
+            # 3 warmup runs to run benchmarks on a warm cache
+            "--warmup", "3",  
             f"turnt --env monitor {pf}",
         ]
 
@@ -53,6 +65,7 @@ def main():
         rows.append([pf, base, mean_time, stddev, min_time, max_time])
 
     # ---- Write CSV ----
+    os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["file_path", "test_name", "mean", "stddev", "min", "max"])

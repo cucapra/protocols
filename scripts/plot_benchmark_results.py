@@ -1,9 +1,14 @@
+#!/usr/bin/env python3
+"""
+Plots the data in `INPUT_CSV` as a scatter plot, saving it in `OUTPUT_PNG`
+"""
+
 import csv
 import math
 import matplotlib.pyplot as plt
 
-INPUT_CSV = "benchmark_results.csv"
-OUTPUT_PNG = "benchmark_plot.png"
+INPUT_CSV = "benchmark_results/benchmark_results.csv"
+OUTPUT_PNG = "benchmark_results/benchmark_plot.png"
 
 def main():
     names = []
