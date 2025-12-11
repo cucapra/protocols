@@ -1,7 +1,7 @@
 // ARGS: --wave fpga-debugging/axis-fifo-d11/d11_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns
 
 // AXI-Stream FIFO with frame-level atomicity
-// Maps to d11_fixed.v module I/O ports
+// Maps to d11_buggy.v module I/O ports
 struct AxisFifo {
     // Control signals
     in rst: u1,                   // Active-high reset signal
