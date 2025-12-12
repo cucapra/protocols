@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Benchmarks the monitor on a range of test files using Hyperfine 
-(measuring CPU wall-clock time, averaged over 10 runs) and 
+Benchmarks the monitor on a range of test files using Hyperfine
+(measuring CPU wall-clock time, averaged over 10 runs) and
 creates a CSV with the results.
 """
 
-# Note: before running this script, first run 
-# `cargo build --release --package protocols-monitor` 
+# Note: before running this script, first run
+# `cargo build --release --package protocols-monitor`
 
 import csv
 import json
@@ -30,22 +30,27 @@ def main():
     rows = []
 
     for pf in tqdm(prot_files, desc="Benchmarking", unit="file"):
-        # By default, Hyperfine executes the monitor for at least 10 
+        # By default, Hyperfine executes the monitor for at least 10
         # times on each test file
         cmd = [
             "hyperfine",
             # Disable shell startup to avoid noise in measurements
             "--shell=none",
             "--export-json", "tmp_hyperfine.json",
-            # Warmup runs to ensure caches are fully populated
+            # Five warmup runs to run benchmarks on warm cache & avoid 
+            # outliers between runs
             "--warmup", "5",
             # Suppress hyperfine output (results are checked separately)
             "--style", "none",
-            # Run the monitor in benchmarking mode (uses `cargo run --release`)
-            f"turnt --env monitor-bench {pf}",
+            # Ignore non-zero exit codes (some tests are expected to fail)
+            "--ignore-failure",
+            # Run Turnt with `--print` to run the monitor executable directly
+            # without Turnt's comparison overhead
+            f"turnt --print --env monitor-bench {pf}",
         ]
 
-        subprocess.run(cmd, check=True)
+        # Suppress Turnt's output to avoid measurement overhead
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Load hyperfine JSON
         with open("tmp_hyperfine.json") as f:
