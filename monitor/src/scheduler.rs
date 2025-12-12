@@ -577,6 +577,13 @@ impl Scheduler {
                 break;
             }
         }
+
+        // Print the no. of logical steps (clock cycles) taken
+        // by the monitor if the corresponding CLI flag has been set
+        if self.ctx.print_num_steps {
+            eprintln!("{}", self.cycle_count);
+        }
+
         Ok(())
     }
 
