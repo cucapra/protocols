@@ -45,7 +45,7 @@ def main():
             # Suppress hyperfine output (results are checked separately)
             "--style", "none",
             # Run the monitor in benchmarking mode (uses `cargo run --release`)
-            f"turnt --env monitor_bench {pf}",
+            f"turnt --env monitor-bench {pf}",
         ]
 
         subprocess.run(cmd, check=True)

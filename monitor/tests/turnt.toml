@@ -6,8 +6,8 @@ output.out = "-"
 
 # When benchmarking, use the `release` profile when doing `cargo run`,
 # and print the no. of `step`s to stderr (which is then redirected to a `.prof` file)
-[envs.monitor_bench]
-command = "cargo run --release --quiet --package protocols-monitor -- -p {filename} {args}"
+[envs.monitor-bench]
+command = "cargo run --release --quiet --package protocols-monitor -- -p {filename} {args} --print-num-steps"
 output.out = "-"
 output.prof = "2"
 
