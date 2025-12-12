@@ -25,6 +25,7 @@ def load_results(csv_path):
                 "stddev_per_step": float(row["stddev_per_step"]),
                 "min_per_step": float(row["min_per_step"]),
                 "max_per_step": float(row["max_per_step"]),
+                "steps_per_sec": float(row["steps_per_sec"]),
             }
     return results
 
@@ -49,41 +50,41 @@ def main():
 
     for test_name in sorted(current.keys()):
         if test_name not in baseline:
-            print(f"NEW: {test_name}: {current[test_name]['mean_per_step']*1000:.2f}ms/step")
+            steps_per_sec = current[test_name]['steps_per_sec']
+            print(f"NEW: {test_name}: {steps_per_sec:.2f} steps/sec")
             continue
 
-        baseline_mean = baseline[test_name]["mean_per_step"]
-        current_mean = current[test_name]["mean_per_step"]
+        # Read pre-computed throughput (steps per second)
+        baseline_throughput = baseline[test_name]["steps_per_sec"]
+        current_throughput = current[test_name]["steps_per_sec"]
 
-        # Calculate percentage change
-        pct_change = ((current_mean - baseline_mean) / baseline_mean) * 100
-
-        # Convert to milliseconds per step for display
-        baseline_ms = baseline_mean * 1000
-        current_ms = current_mean * 1000
+        # Calculate percentage change (positive = improvement, negative = regression)
+        pct_change = ((current_throughput - baseline_throughput) / baseline_throughput) * 100
 
         status = "="
-        if pct_change > REGRESSION_THRESHOLD * 100:
+        if pct_change < -REGRESSION_THRESHOLD * 100:
+            # Throughput decreased by more than threshold = regression
             status = "REGRESSION"
-            regressions.append((test_name, baseline_ms, current_ms, pct_change))
-        elif pct_change < -REGRESSION_THRESHOLD * 100:
+            regressions.append((test_name, baseline_throughput, current_throughput, pct_change))
+        elif pct_change > REGRESSION_THRESHOLD * 100:
+            # Throughput increased by more than threshold = improvement
             status = "IMPROVEMENT"
-            improvements.append((test_name, baseline_ms, current_ms, pct_change))
+            improvements.append((test_name, baseline_throughput, current_throughput, pct_change))
 
-        print(f"{status:12} {test_name:30} {baseline_ms:7.2f}ms/step -> {current_ms:7.2f}ms/step ({pct_change:+6.2f}%)")
+        print(f"{status:12} {test_name:30} {baseline_throughput:7.2f} -> {current_throughput:7.2f} steps/sec ({pct_change:+6.2f}%)")
 
     print()
 
     if regressions:
         print(f"\nFound {len(regressions)} performance regression(s):")
-        for test_name, baseline_ms, current_ms, pct_change in regressions:
-            print(f"  - {test_name}: {baseline_ms:.2f}ms/step -> {current_ms:.2f}ms/step ({pct_change:+.2f}%)")
+        for test_name, baseline_throughput, current_throughput, pct_change in regressions:
+            print(f"  - {test_name}: {baseline_throughput:.2f} -> {current_throughput:.2f} steps/sec ({pct_change:+.2f}%)")
         return 1
 
     if improvements:
         print(f"\nFound {len(improvements)} performance improvement(s):")
-        for test_name, baseline_ms, current_ms, pct_change in improvements:
-            print(f"  - {test_name}: {baseline_ms:.2f}ms/step -> {current_ms:.2f}ms/step ({pct_change:+.2f}%)")
+        for test_name, baseline_throughput, current_throughput, pct_change in improvements:
+            print(f"  - {test_name}: {baseline_throughput:.2f} -> {current_throughput:.2f} steps/sec ({pct_change:+.2f}%)")
 
     print("\nNo performance regressions detected!")
     return 0

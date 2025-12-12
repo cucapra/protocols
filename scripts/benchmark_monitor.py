@@ -79,17 +79,20 @@ def main():
         min_time_per_step = min_time / num_steps
         max_time_per_step = max_time / num_steps
 
+        # Compute throughput (steps per second)
+        steps_per_sec = 1.0 / mean_time_per_step
+
         base = os.path.basename(pf)
         if base.endswith(".prot"):
             base = base[:-5]  # strip .prot
 
-        rows.append([pf, base, num_steps, mean_time_per_step, stddev_per_step, min_time_per_step, max_time_per_step])
+        rows.append([pf, base, num_steps, mean_time_per_step, stddev_per_step, min_time_per_step, max_time_per_step, steps_per_sec])
 
     # ---- Write CSV ----
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["file_path", "test_name", "num_steps", "mean_per_step", "stddev_per_step", "min_per_step", "max_per_step"])
+        writer.writerow(["file_path", "test_name", "num_steps", "mean_per_step", "stddev_per_step", "min_per_step", "max_per_step", "steps_per_sec"])
         writer.writerows(rows)
 
     print(f"\nWrote results to {OUTPUT_CSV}")
