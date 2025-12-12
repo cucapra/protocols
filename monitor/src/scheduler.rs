@@ -401,6 +401,7 @@ impl Scheduler {
                         format!("cycle {}", self.cycle_count)
                     };
 
+                    self.print_step_count();
                     return Err(anyhow!(
                         "Expected the no. of threads that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
                         start_time,
@@ -580,17 +581,23 @@ impl Scheduler {
 
         // Print the no. of logical steps (clock cycles) taken
         // by the monitor if the corresponding CLI flag has been set
-        if self.ctx.print_num_steps {
-            eprintln!("{}", self.cycle_count);
-        }
+        self.print_step_count();
 
         Ok(())
+    }
+
+    /// Helper function to print the number of steps taken
+    fn print_step_count(&self) {
+        if self.ctx.print_num_steps {
+            eprintln!("No. of steps taken: {}", self.cycle_count);
+        }
     }
 
     /// Helper function that emits an error (and terminates the monitor with
     /// non-zero exit code). The caller should only call this function
     /// when it is determined that no transactions match the provided waveform.
     pub fn emit_error(&self) -> anyhow::Result<()> {
+        self.print_step_count();
         let time_str = if self.ctx.show_waveform_time {
             self.ctx
                 .trace

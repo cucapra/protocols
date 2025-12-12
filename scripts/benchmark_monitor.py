@@ -13,6 +13,7 @@ import json
 import subprocess
 import glob
 import os
+from tqdm import tqdm
 
 TEST_ROOT = "monitor/tests"
 OUTPUT_CSV = "benchmark_results/benchmark_results.csv"
@@ -26,13 +27,9 @@ def main():
         print(f"No .prot files found under {TEST_ROOT}/")
         return
 
-    print(f"Found {len(prot_files)} .prot files.\n")
-
     rows = []
 
-    for pf in prot_files:
-        print(f"Benchmarking {pf} ...")
-        
+    for pf in tqdm(prot_files, desc="Benchmarking", unit="file"):
         # By default, Hyperfine executes the monitor for at least 10 
         # times on each test file
         cmd = [
@@ -40,8 +37,8 @@ def main():
             # Disable shell startup to avoid noise in measurements
             "--shell=none",
             "--export-json", "tmp_hyperfine.json",
-            # 3 warmup runs to run benchmarks on a warm cache
-            "--warmup", "3",
+            # Warmup runs to ensure caches are fully populated
+            "--warmup", "5",
             # Suppress hyperfine output (results are checked separately)
             "--style", "none",
             # Run the monitor in benchmarking mode (uses `cargo run --release`)
@@ -62,8 +59,14 @@ def main():
 
         # Read the number of steps from the .prof file
         prof_file = pf.replace(".prot", ".prof")
+        if not os.path.exists(prof_file):
+            # Skip tests without .prof files (e.g., tests expected to fail)
+            continue
         with open(prof_file) as f:
-            num_steps = int(f.read().strip())
+            prof_content = f.read().strip()
+            # Parse "No. of steps taken: <num>" format
+            # Extract the number at the end of the string
+            num_steps = int(prof_content.split(":")[-1].strip())
 
         # Normalize times by number of steps
         mean_time_per_step = mean_time / num_steps
