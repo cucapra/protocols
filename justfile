@@ -1,13 +1,13 @@
-# Run all turnt --parallel tests for the interpreter in parallel
+# Run all Turnt tests for the interpreter in parallel
 # (Output is piped through Faucet to clearly distinguish passing/failing tests)
 interp:
   turnt --parallel --env interp $(find . -type f -name '*.tx') | faucet
 
-# Run all turnt --parallel tests for the monitor in parallel
+# Run all Turnt tests for the monitor in parallel
 monitor:
   turnt --parallel --env monitor $(find . -type f -name '*.prot') | faucet
 
-# Run turnt --parallel tests for the monitor based on the Brave New World artifacts
+# Run Turnt tests for the monitor based on the Brave New World artifacts
 bnw_monitor:
   turnt --parallel --env monitor $(find monitor/tests/fpga-debugging -type f -name '*.prot') | faucet  
 
@@ -39,15 +39,15 @@ multi:
 picorv:
   turnt --parallel --env interp $(find examples/picorv32 -type f -name '*.tx') | faucet 
 
-# Runs all turnt --parallel tests for both the interpreter & monitor
+# Runs all Turnt tests for both the interpreter & monitor
 turnt:
   @just interp  
   @just monitor
 
-# Runs all unit tests (via Cargo) & snapshot tests (via turnt --parallel)
+# Runs all unit tests (via Cargo) & snapshot tests (via Turnt)
 test:
   cargo test 
-  @just turnt --parallel
+  @just turnt
 
 # Builds HTML documentation by running `cargo doc`
 doc:
