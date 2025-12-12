@@ -75,6 +75,11 @@ struct Cli {
     /// Default is 'auto' which selects the unit based on the maximum time in the waveform.
     #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
     time_unit: Option<String>,
+
+    /// Optional flag: if enabled, prints the no. of (logical) steps
+    /// (i.e. clock cycles) taken by the montior
+    #[arg(long, value_name = "PRINT_NUM_STEPS_TAKEN")]
+    print_num_steps: bool,
 }
 
 #[allow(unused_variables)]
@@ -157,6 +162,7 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
         cli.show_waveform_time,
         time_unit,
+        cli.print_num_steps,
     );
     let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 

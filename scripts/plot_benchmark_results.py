@@ -12,33 +12,31 @@ OUTPUT_PNG = "benchmark_results/benchmark_plot.png"
 
 def main():
     names = []
-    means_ms = []
+    steps_per_sec = []
 
     with open(INPUT_CSV) as f:
         reader = csv.DictReader(f)
         for row in reader:
             names.append(row["test_name"])
-            # Convert seconds to milliseconds
-            means_ms.append(float(row["mean"]) * 1000.0)
+            # Read pre-computed throughput (steps per second)
+            steps_per_sec.append(float(row["steps_per_sec"]))
 
-    # Determine min/max time, round them to nearest 10 ms boundaries
-    min_ms = min(means_ms)
-    max_ms = max(means_ms)
-    ymin = math.floor(min_ms / 10.0) * 10.0
-    ymax = math.ceil(max_ms / 10.0) * 10.0
+    # Determine min/max values on the y-axis, round them to nearest multiple of 10
+    min_steps_per_sec = min(steps_per_sec)
+    max_steps_per_sec = max(steps_per_sec)
+    ymin = math.floor(min_steps_per_sec / 10.0) * 10.0
+    ymax = math.ceil(max_steps_per_sec / 10.0) * 10.0
 
-    # Create ticks every 10 ms
-    yticks = list(range(int(ymin), int(ymax) + 1, 10))
+    # Create ticks for every 200 units on the y-axis
+    yticks = list(range(int(ymin), int(ymax) + 1, 200))
 
-    plt.figure(figsize=(12, 6))
-    plt.scatter(names, means_ms)
+    plt.figure(figsize=(12, 8))
+    plt.scatter(names, steps_per_sec)
 
-    plt.title("Mean monitor execution time on benchmarks (lower is better)")
+    plt.title("Monitor throughput on benchmarks (higher is better)")
     plt.xlabel("Test File")
-    plt.ylabel("Mean wall-clock time over 10 executions (ms)")
+    plt.ylabel("Mean no. of Steps (clock cycles) per second")
     plt.xticks(rotation=45, ha="right")
-
-    # Apply explicit 10 ms ticks
     plt.yticks(yticks)
 
     plt.grid(zorder=1, linestyle="--", alpha=0.6)

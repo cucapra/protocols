@@ -32,9 +32,9 @@ jobs:
     - name: Run unit tests (Debug)
       run: cargo test --verbose
     - name: Run Turnt tests for interpreter
-      run: turnt --env interp $(find . -type f -name '*.tx')
+      run: turnt --parallel --env interp $(find . -type f -name '*.tx')
     - name: Run Turnt tests for monitor
-      run: turnt --env monitor $(find . -type f -name '*.prot')
+      run: turnt --parallel --env monitor $(find . -type f -name '*.prot')
 
   msrv:
     name: Check Minimum Rust Version for protocols library

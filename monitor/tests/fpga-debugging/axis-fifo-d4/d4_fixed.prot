@@ -1,7 +1,5 @@
 // ARGS: --wave fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns
 // RETURN: 1
-// OUT: out -
-// OUT: err 2
 
 // AXI-Stream FIFO with frame-level atomicity
 // Maps to d4_fixed.v module I/O ports
