@@ -32,7 +32,6 @@ def main():
 
     for pf in prot_files:
         print(f"Benchmarking {pf} ...")
-
         
         # By default, Hyperfine executes the monitor for at least 10 
         # times on each test file
@@ -45,7 +44,8 @@ def main():
             "--warmup", "3",
             # Suppress hyperfine output (results are checked separately)
             "--style", "none",
-            f"turnt --env monitor {pf}",
+            # Run the monitor in benchmarking mode (uses `cargo run --release`)
+            f"turnt --env monitor_bench {pf}",
         ]
 
         subprocess.run(cmd, check=True)
