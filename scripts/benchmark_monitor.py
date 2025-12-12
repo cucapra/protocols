@@ -60,17 +60,28 @@ def main():
         min_time = result["min"]
         max_time = result["max"]
 
+        # Read the number of steps from the .prof file
+        prof_file = pf.replace(".prot", ".prof")
+        with open(prof_file) as f:
+            num_steps = int(f.read().strip())
+
+        # Normalize times by number of steps
+        mean_time_per_step = mean_time / num_steps
+        stddev_per_step = stddev / num_steps
+        min_time_per_step = min_time / num_steps
+        max_time_per_step = max_time / num_steps
+
         base = os.path.basename(pf)
         if base.endswith(".prot"):
             base = base[:-5]  # strip .prot
 
-        rows.append([pf, base, mean_time, stddev, min_time, max_time])
+        rows.append([pf, base, num_steps, mean_time_per_step, stddev_per_step, min_time_per_step, max_time_per_step])
 
     # ---- Write CSV ----
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["file_path", "test_name", "mean", "stddev", "min", "max"])
+        writer.writerow(["file_path", "test_name", "num_steps", "mean_per_step", "stddev_per_step", "min_per_step", "max_per_step"])
         writer.writerows(rows)
 
     print(f"\nWrote results to {OUTPUT_CSV}")

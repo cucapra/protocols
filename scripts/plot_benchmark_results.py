@@ -18,24 +18,24 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             names.append(row["test_name"])
-            # Convert seconds to milliseconds
-            means_ms.append(float(row["mean"]) * 1000.0)
+            # Convert seconds per step to microseconds per step
+            means_ms.append(float(row["mean_per_step"]) * 1000000.0)
 
-    # Determine min/max time, round them to nearest 10 ms boundaries
-    min_ms = min(means_ms)
-    max_ms = max(means_ms)
-    ymin = math.floor(min_ms / 10.0) * 10.0
-    ymax = math.ceil(max_ms / 10.0) * 10.0
+    # Determine min/max time, round them to nearest 10 µs boundaries
+    min_us = min(means_ms)
+    max_us = max(means_ms)
+    ymin = math.floor(min_us / 10.0) * 10.0
+    ymax = math.ceil(max_us / 10.0) * 10.0
 
-    # Create ticks every 10 ms
+    # Create ticks every 10 µs
     yticks = list(range(int(ymin), int(ymax) + 1, 10))
 
     plt.figure(figsize=(12, 6))
     plt.scatter(names, means_ms)
 
-    plt.title("Mean monitor execution time on benchmarks (lower is better)")
+    plt.title("Mean monitor execution time per step on benchmarks (lower is better)")
     plt.xlabel("Test File")
-    plt.ylabel("Mean wall-clock time over 10 executions (ms)")
+    plt.ylabel("Mean wall-clock time per step (µs)")
     plt.xticks(rotation=45, ha="right")
 
     # Apply explicit 10 ms ticks
@@ -47,7 +47,8 @@ def main():
 
     print(f"Saved plot to {OUTPUT_PNG}")
     
-    plt.close()
+    # Display the figure
+    plt.show()
 
 if __name__ == "__main__":
     main()
