@@ -1,0 +1,7 @@
+reset()  // [time: 0ns -> 25ns] (thread 4)
+idle()  // [time: 25ns -> 50ns] (thread 8)
+push_and_pop(2, 2)  // [time: 50ns -> 100ns] (thread 10)
+push_and_pop(3, 3)  // [time: 100ns -> 125ns] (thread 15)
+push_and_pop(4, 4)  // [time: 125ns -> 150ns] (thread 20)
+push_and_pop(5, 5)  // [time: 150ns -> 175ns] (thread 25)
+push_and_pop(6, 6)  // [time: 175ns -> 200ns] (thread 30)
