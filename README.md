@@ -32,7 +32,10 @@ $ uv run scripts/benchmark_monitor.py
 $ uv run scripts/plot_benchmark_results.py 
 ```
 - This produces a CSV and a scatter plot measuring the performance of the monitor in 
-  `benchmark_results.benchmark_results.csv` and `benchmark_results.benchmark_plot.png` respectively
+  `benchmark_results/benchmark_results.csv` and `benchmark_results/benchmark_plot.png` respectively
+
+- Some of the benchmarks correspond to real-world bugs taken from the [artifact for *Debugging in the Brave New World of Reconfigurable Hardware* (Ma et al. ASPLOS '22)](https://github.com/efeslab/asplos22-hardware-debugging-artifact) -- these can be found in the `monitor/tests/fpga-debugging` sub-directory 
+  (more details in the `README` of the sub-directories corresponding to each bug)
 
 **Interpreter-specific dependencies**:
 - Run `brew install yosys` to install [Yosys](https://yosyshq.readthedocs.io/projects/yosys/en/latest/)
