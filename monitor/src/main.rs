@@ -11,11 +11,11 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -135,11 +135,20 @@ fn main() -> anyhow::Result<()> {
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge)
         .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
-    // TODO: figure out how to avoid hard-coding this
-    let dut_struct_name = &instances[0].design_name;
-    let design = designs
-        .get(dut_struct_name)
-        .with_context(|| format!("Missing Design for {}", dut_struct_name))?;
+    // Support multiple structs & designs
+    let struct_names: Vec<String> = instances
+        .iter()
+        .map(|inst| inst.design_name.clone())
+        .collect();
+
+    let dut_designs: Vec<&Design> = struct_names
+        .iter()
+        .map(|struct_name| {
+            designs
+                .get(struct_name)
+                .unwrap_or_else(|| panic!("Missing Design for {}", struct_name))
+        })
+        .collect();
 
     // Parse the time unit (defaults to `Auto` if not specified)
     let time_unit = if let Some(ref time_unit_str) = cli.time_unit {
@@ -155,6 +164,7 @@ fn main() -> anyhow::Result<()> {
 
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
+    // TODO: figure out how many GlobalContexts we need
     let ctx = GlobalContext::new(
         cli.wave,
         trace,
