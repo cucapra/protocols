@@ -26,24 +26,15 @@ jobs:
     - name: Update Rust to ${{ matrix.toolchain }}
       run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
     - uses: actions/checkout@v4
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.13'
-    - uses: YosysHQ/setup-oss-cad-suite@v3
-      with:
-        version: '2024-05-07'
+    - uses: ./.github/actions/setup-test-environment
     - name: Build
       run: cargo build --verbose
     - name: Run unit tests (Debug)
       run: cargo test --verbose
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-    - name: Install Turnt 
-      run: uv tool install turnt
     - name: Run Turnt tests for interpreter
-      run: turnt --env interp $(find . -type f -name '*.tx') 
-    - name: Run Turnt tests for monitor 
-      run: turnt --env monitor $(find . -type f -name '*.prot')
+      run: turnt --parallel --env interp $(find . -type f -name '*.tx')
+    - name: Run Turnt tests for monitor
+      run: turnt --parallel --env monitor $(find . -type f -name '*.prot')
 
   msrv:
     name: Check Minimum Rust Version for protocols library
@@ -83,8 +74,30 @@ jobs:
         run: |
           rustup toolchain install ${{ env.RUST_VERSION }} --component clippy
           rustup default ${{ env.RUST_VERSION }}
-      - uses: YosysHQ/setup-oss-cad-suite@v3
-        with:
-          version: '2024-05-07'
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history to access baseline
+      - uses: ./.github/actions/setup-test-environment
+      - name: Install hyperfine
+        run: |
+          wget https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine_1.19.0_amd64.deb
+          sudo dpkg -i hyperfine_1.19.0_amd64.deb
+      - name: Build monitor (release)
+        run: cargo build --release --package protocols-monitor
+      - name: Restore baseline benchmark results
+        run: |
+          git show origin/main:benchmark_results/benchmark_results.csv > benchmark_results/baseline_results.csv 2>/dev/null || echo "No baseline found"
+      - name: Run benchmarks
+        run: uv run scripts/benchmark_monitor.py
+      - name: Check for performance regressions
+        run: uv run scripts/check_performance_regression.py

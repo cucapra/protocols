@@ -1,5 +1,14 @@
-# We run Cargo in quiet mode to prevent build messages from 
+# We run Cargo in quiet mode to prevent build messages from
 # appearing in the output for Turnt tests
 [envs.monitor]
 command = "cargo run --quiet --package protocols-monitor -- -p {filename} {args}"
 output.out = "-"
+output.err = "2"
+
+# When benchmarking, use the `release` profile when doing `cargo run`,
+# and print the no. of `step`s to stderr (which is then redirected to a `.prof` file)
+[envs.monitor-bench]
+command = "cargo run --release --quiet --package protocols-monitor -- -p {filename} {args} --print-num-steps"
+output.out = "-"
+output.prof = "2"
+

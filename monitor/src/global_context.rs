@@ -63,6 +63,10 @@ pub struct GlobalContext {
 
     /// The time unit to use for displaying waveform times
     pub time_unit: TimeUnit,
+
+    /// Indicates whether to print the no. of logical steps (i.e. clock cycles)
+    /// taken by the monitor
+    pub print_num_steps: bool,
 }
 
 impl GlobalContext {
@@ -77,6 +81,7 @@ impl GlobalContext {
         display_hex: bool,
         show_waveform_time: bool,
         time_unit: TimeUnit,
+        print_num_steps: bool,
     ) -> Self {
         // We assume that there is only one `Instance` at the moment,
         // so we just use the first `PortKey`'s `instance_id`
@@ -90,6 +95,7 @@ impl GlobalContext {
             display_hex,
             show_waveform_time,
             time_unit,
+            print_num_steps,
         }
     }
 }
