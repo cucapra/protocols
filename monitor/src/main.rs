@@ -6,6 +6,7 @@
 mod axi_experiment;
 mod designs;
 mod global_context;
+mod global_scheduler;
 mod interpreter;
 mod scheduler;
 mod signal_trace;
@@ -136,14 +137,10 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // Support multiple structs & designs
-    let struct_names: Vec<String> = instances
+    let dut_designs: Vec<&Design> = instances
         .iter()
-        .map(|inst| inst.design_name.clone())
-        .collect();
-
-    let dut_designs: Vec<&Design> = struct_names
-        .iter()
-        .map(|struct_name| {
+        .map(|inst| {
+            let struct_name = &inst.design_name;
             designs
                 .get(struct_name)
                 .unwrap_or_else(|| panic!("Missing Design for {}", struct_name))
@@ -164,16 +161,16 @@ fn main() -> anyhow::Result<()> {
 
     // Initialize the `GlobalContext` (shared across all threads)
     // & the scheduler
-    // TODO: figure out how many GlobalContexts we need
     let ctx = GlobalContext::new(
         cli.wave,
         trace,
-        design.clone(),
+        dut_designs[0].clone(),
         cli.display_hex,
         cli.show_waveform_time,
         time_unit,
         cli.print_num_steps,
     );
+
     let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
     // Actually run the scheduler
