@@ -1,8 +1,9 @@
 // ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:AxisFifo --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns
 
 // AXI-Stream asynchronous FIFO 
-// Maps to c4_fixed.v module I/O ports
-struct AxisFifo {
+// Struct fields map to module I/O ports in `c4_fixed.v`
+
+struct Sender {
     // Control signals
     in rst: u1,                   // Active-high reset signal
 
@@ -14,12 +15,11 @@ struct AxisFifo {
     in s_axis_tid: u8,            // receiver transaction ID (for routing/ordering)
     in s_axis_tdest: u8,          // receiver destination ID (routing information)
     in s_axis_tuser: u1,          // receiver user-defined sideband (e.g., error flags)
-
+ 
     // AXI-Stream sender Interface (FIFO output/read side)
     in m_axis_tready: u1,         // sender ready signal (receiver can accept data)
 
-    // Outputs
-    out s_axis_tready: u1,        // receiver ready signal (FIFO can accept data)
+    // Output fields for the sender
     out m_axis_tdata: u8,         // sender data bus (payload)
     out m_axis_tkeep: u1,         // sender byte-lane keeper
     out m_axis_tvalid: u1,        // sender valid signal (FIFO has valid data)
@@ -27,52 +27,39 @@ struct AxisFifo {
     out m_axis_tid: u8,           // sender transaction ID
     out m_axis_tdest: u8,         // sender destination ID
     out m_axis_tuser: u1,         // sender user-defined sideband
+
+    // Output fields for the receiver
+    out s_axis_tready: u1,        // receiver ready signal (FIFO can accept data)  
 }
 
-// PUSH_AND_POP: Concurrent push and pop in the same cycle
-// - `push_data` is the value being pushed,
-// - `pop_data` is the value being popped
-fn push_and_pop<DUT: AxisFifo>(
-    in push_data: u8,
-    out pop_data: u8,
-) {
-    DUT.rst := 1'b0;
+// Only `Receiver` supports `pop`
+struct Receiver{
+    // Control signals
+    in rst: u1,                   // Active-high reset signal
 
-    // Indicate that receiver is ready for the PUSH
-    DUT.s_axis_tdata := push_data;
-    DUT.s_axis_tvalid := 1'b1;
+    // AXI-Stream receiver Interface (FIFO input/write side)
+    in s_axis_tdata: u8,          // receiver data bus (payload)
+    in s_axis_tkeep: u1,          // receiver byte-lane keeper (valid bytes indicator)
+    in s_axis_tvalid: u1,         // receiver valid signal (initiator has valid data)
+    in s_axis_tlast: u1,          // receiver last signal (marks end of frame/packet)
+    in s_axis_tid: u8,            // receiver transaction ID (for routing/ordering)
+    in s_axis_tdest: u8,          // receiver destination ID (routing information)
+    in s_axis_tuser: u1,          // receiver user-defined sideband (e.g., error flags)
+ 
+    // AXI-Stream sender Interface (FIFO output/read side)
+    in m_axis_tready: u1,         // sender ready signal (receiver can accept data)
 
-    // Indicate that sender is ready for the POP
-    DUT.m_axis_tready := 1'b1;
+    // Output fields for the sender
+    out m_axis_tdata: u8,         // sender data bus (payload)
+    out m_axis_tkeep: u1,         // sender byte-lane keeper
+    out m_axis_tvalid: u1,        // sender valid signal (FIFO has valid data)
+    out m_axis_tlast: u1,         // sender last signal (end of frame)
+    out m_axis_tid: u8,           // sender transaction ID
+    out m_axis_tdest: u8,         // sender destination ID
+    out m_axis_tuser: u1,         // sender user-defined sideband
 
-    // Wait till receiver's ready bit is 1 so that we can perform the PUSH
-    while (!(DUT.s_axis_tready == 1'b1)) {
-        step();
-    }
-
-    // Wait until sender's valid bit is 1 so that we can perform the POP 
-    while (!(DUT.m_axis_tvalid == 1'b1)) {
-        step();
-    }
-
-    // One cycle for both data transfers to complete
-    step();
-
-    // Verify POP output
-    assert_eq(DUT.m_axis_tdata, pop_data);
-
-    // Mark all other DUT input ports as DontCare
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-    DUT.m_axis_tready := X;
-
-    fork();
-    step();
+    // Output fields for the receiver
+    out s_axis_tready: u1,        // receiver ready signal (FIFO can accept data)  
 }
 
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
@@ -81,7 +68,7 @@ fn push_and_pop<DUT: AxisFifo>(
 // Arguments:
 //   data - Payload byte to write to FIFO
 
-fn push<DUT: AxisFifo>(
+fn push<DUT: Sender>(
     in data: u8,
 ) {
     DUT.rst := 1'b0;
@@ -126,7 +113,7 @@ fn push<DUT: AxisFifo>(
 //
 // Output Arguments:
 //   data - Expected payload byte from FIFO
-fn pop<DUT: AxisFifo>(
+fn pop<DUT: Sender>(
     out data: u8,
 ) {
     DUT.rst := 1'b0;
@@ -156,11 +143,8 @@ fn pop<DUT: AxisFifo>(
 
 // IDLE: No transaction occurs
 // No handshakes are completing
-fn idle<DUT: AxisFifo>() {
+fn idle<DUT: Sender>() {
     DUT.rst := 1'b0;
-
-    // Check that no push handshake completes
-    assert_eq(DUT.s_axis_tready, 1'b0);
 
     // Check that no pop handshake completes
     assert_eq(DUT.m_axis_tvalid, 1'b0);
@@ -170,8 +154,19 @@ fn idle<DUT: AxisFifo>() {
     step();
 }
 
+fn idle<DUT: Receiver>() {
+    DUT.rst := 1'b0; 
+    
+    // Check that no push handshake completes
+    assert_eq(DUT.s_axis_tready, 1'b0);
+
+    step();
+    fork();
+    step();
+}
+
 // RESET: Assert reset signal to initialize FIFO
-fn reset<DUT: AxisFifo>() {
+fn reset<DUT: Sender>() {
     DUT.rst := 1'b1;
     
     step();
