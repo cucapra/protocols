@@ -12,11 +12,11 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -41,8 +41,9 @@ struct Cli {
     wave: String,
 
     /// A mapping of DUT struct in the protocol file to an instance in the signal trace.
-    /// Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
-    #[arg(short, long)]
+    /// Multiple arguments can be passed if they're seperated by whitespace.
+    /// Format is: `${instance_name}:${dut_struct_name}`
+    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
     instances: Vec<String>,
 
     /// Users can specify `-v` or `--verbose` to toggle logging

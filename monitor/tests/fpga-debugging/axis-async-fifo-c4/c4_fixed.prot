@@ -1,4 +1,4 @@
-// ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:AxisFifo --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns
+// ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns
 
 // AXI-Stream asynchronous FIFO 
 // Struct fields map to module I/O ports in `c4_fixed.v`
@@ -167,6 +167,27 @@ fn idle<DUT: Receiver>() {
 
 // RESET: Assert reset signal to initialize FIFO
 fn reset<DUT: Sender>() {
+    DUT.rst := 1'b1;
+    
+    step();
+    
+    // Release all inputs
+    DUT.rst := X;
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+    DUT.m_axis_tready := X;
+
+    fork();
+    step();
+}
+
+// RESET: Assert reset signal to initialize FIFO
+fn reset<DUT: Receiver>() {
     DUT.rst := 1'b1;
     
     step();
