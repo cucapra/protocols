@@ -10,7 +10,7 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::global_context::GlobalContext;
+use crate::{global_context::GlobalContext, signal_trace::WaveSignalTrace};
 
 /// The local context associated with an individual thread,
 /// storing information such as:
@@ -96,6 +96,7 @@ impl Thread {
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
         thread_id: u32,
         start_cycle: u32,
     ) -> Self {
@@ -109,7 +110,7 @@ impl Thread {
             symbol_table,
             current_stmt_id: transaction.body,
             start_cycle,
-            start_time_step: ctx.trace.time_step(),
+            start_time_step: trace.time_step(),
             end_time_step: None, // Set when fork() is called
             args_to_pins: FxHashMap::default(),
         }

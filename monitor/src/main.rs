@@ -12,11 +12,11 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
+use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -133,7 +133,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge)
+    let mut trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge)
         .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // Support multiple structs & designs
@@ -159,24 +159,82 @@ fn main() -> anyhow::Result<()> {
         TimeUnit::Auto
     };
 
-    // Initialize the `GlobalContext` (shared across all threads)
-    // & the scheduler
-    let ctx = GlobalContext::new(
-        cli.wave,
-        trace,
-        dut_designs[0].clone(),
-        cli.display_hex,
-        cli.show_waveform_time,
-        time_unit,
-        cli.print_num_steps,
-    );
+    // Check if we have multiple structs/designs
+    if dut_designs.len() == 1 {
+        // Single-struct mode: use the existing single scheduler approach (backward compatibility)
+        let ctx = GlobalContext::new(
+            cli.wave.clone(),
+            dut_designs[0].clone(),
+            0, // instance_id for the first instance
+            cli.display_hex,
+            cli.show_waveform_time,
+            time_unit,
+            cli.print_num_steps,
+        );
 
-    let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
+        // Use empty string for struct_name in single-struct mode (backward compatibility)
+        let mut scheduler =
+            Scheduler::initialize(transactions_symbol_tables, ctx, &trace, String::new());
 
-    // Actually run the scheduler
-    if let Err(error_msg) = scheduler.run() {
-        eprintln!("{error_msg}");
-        return Err(anyhow!("Monitor failed"));
+        // Actually run the scheduler
+        if let Err(error_msg) = scheduler.run(&mut trace) {
+            eprintln!("{error_msg}");
+            return Err(anyhow!("Monitor failed"));
+        }
+    } else {
+        // Multi-struct mode: create a GlobalScheduler with one scheduler per design
+        use crate::global_scheduler::GlobalScheduler;
+
+        let mut schedulers = Vec::new();
+
+        for (inst_id, design) in dut_designs.iter().enumerate() {
+            // Filter transactions that belong to this design
+            let design_transactions: Vec<(Transaction, SymbolTable)> = design
+                .transaction_ids
+                .iter()
+                .map(|&idx| transactions_symbol_tables[idx].clone())
+                .collect();
+
+            if design_transactions.is_empty() {
+                continue; // Skip designs with no transactions
+            }
+
+            // Create a GlobalContext for this design
+            let ctx = GlobalContext::new(
+                cli.wave.clone(),
+                (*design).clone(),
+                inst_id as u32,
+                cli.display_hex,
+                cli.show_waveform_time,
+                time_unit,
+                cli.print_num_steps,
+            );
+
+            // Create a scheduler for this design, using the design name as the struct name
+            let scheduler =
+                Scheduler::initialize(design_transactions, ctx, &trace, design.name.clone());
+
+            schedulers.push(scheduler);
+        }
+
+        // Create a GlobalContext for the GlobalScheduler (using the first design as a default)
+        let global_ctx = GlobalContext::new(
+            cli.wave,
+            dut_designs[0].clone(),
+            0,
+            cli.display_hex,
+            cli.show_waveform_time,
+            time_unit,
+            cli.print_num_steps,
+        );
+
+        let mut global_scheduler = GlobalScheduler::new(schedulers, global_ctx, trace);
+
+        if let Err(error_msg) = global_scheduler.run() {
+            eprintln!("{error_msg}");
+            return Err(anyhow!("Monitor failed"));
+        }
     }
+
     Ok(())
 }

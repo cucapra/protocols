@@ -2,15 +2,23 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{global_context::GlobalContext, scheduler::Scheduler, signal_trace::WaveSignalTrace};
+use crate::{
+    global_context::GlobalContext,
+    scheduler::Scheduler,
+    signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
+};
+use log::info;
 
-struct GlobalScheduler {
+pub struct GlobalScheduler {
     schedulers: Vec<Scheduler>,
     ctx: GlobalContext,
+
+    /// The waveform supplied by the user (shared across all schedulers)
     trace: WaveSignalTrace,
 }
 
 impl GlobalScheduler {
+    /// Creates a brand new `GlobalScheduler`
     pub fn new(schedulers: Vec<Scheduler>, ctx: GlobalContext, trace: WaveSignalTrace) -> Self {
         Self {
             schedulers,
@@ -19,5 +27,100 @@ impl GlobalScheduler {
         }
     }
 
-    // TODO: figure out how to initialize all schedulers
+    /// Runs all the schedulers in a round-robin fashion
+    pub fn run(&mut self) -> anyhow::Result<()> {
+        if self.schedulers.is_empty() {
+            return Ok(());
+        }
+
+        let mut trace_ended = false;
+
+        loop {
+            // Run each local scheduler's current phase
+            for scheduler in &mut self.schedulers {
+                if !scheduler.is_done() {
+                    scheduler.run_current_phase(&self.trace)?;
+                }
+            }
+
+            // Check if all active schedulers need to step
+            let all_done = self.schedulers.iter().all(|s| s.is_done());
+            if all_done {
+                info!("All schedulers finished!");
+                break;
+            }
+
+            let all_need_step = self
+                .schedulers
+                .iter()
+                .filter(|s| !s.is_done())
+                .all(|s| s.needs_step());
+
+            if all_need_step {
+                // If trace has already ended, we can't proceed
+                if trace_ended {
+                    info!("Trace has ended, schedulers can't proceed. Terminating.");
+                    break;
+                }
+
+                // Step 3: Advance the trace (only once for all schedulers)
+                let step_result = self.trace.step();
+
+                if self.ctx.show_waveform_time {
+                    let time_str = self
+                        .trace
+                        .format_time(self.trace.time_step(), self.ctx.time_unit);
+                    info!("GlobalScheduler: Advancing to time {}", time_str);
+                } else {
+                    info!("GlobalScheduler: Advancing to next cycle");
+                }
+
+                // Advance all schedulers to their next cycle
+                for scheduler in &mut self.schedulers {
+                    if scheduler.needs_step() {
+                        scheduler.advance_to_next_cycle();
+                    }
+                }
+
+                // Check if trace ended
+                if let StepResult::Done = step_result {
+                    info!("No steps remaining in signal trace");
+                    trace_ended = true;
+                    // Mark all schedulers as having trace ended
+                    for scheduler in &mut self.schedulers {
+                        scheduler.mark_trace_ended();
+                    }
+                }
+            } else {
+                // Some schedulers are done but some need to call `step()`
+                // (This should not happen in practice)
+                if trace_ended {
+                    info!("Trace has ended, remaining schedulers can't proceed. Terminating.");
+                    break;
+                }
+
+                info!(
+                    "Warning: Schedulers are not synchronized. Advancing those that need to step."
+                );
+
+                let step_result = self.trace.step();
+
+                for scheduler in &mut self.schedulers {
+                    if scheduler.needs_step() {
+                        scheduler.advance_to_next_cycle();
+                    }
+                }
+
+                if let StepResult::Done = step_result {
+                    info!("No steps remaining in signal trace");
+                    trace_ended = true;
+                    for scheduler in &mut self.schedulers {
+                        scheduler.mark_trace_ended();
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

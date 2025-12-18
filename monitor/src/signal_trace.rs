@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{designs::Design, global_context::TimeUnit, Instance};
+use crate::{Instance, designs::Design, global_context::TimeUnit};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
