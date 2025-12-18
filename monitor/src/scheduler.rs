@@ -24,11 +24,11 @@ type Queue = Vec<Thread>;
 /// Formats a queue's contents into a pretty-printed string
 /// Note: we can't implement the `Display` trait for `Queue` since
 /// `Queue` is just a type alias
-fn format_queue(queue: &Queue, ctx: &GlobalContext, trace: &WaveSignalTrace) -> String {
+fn format_queue(queue: &Queue, ctx: &GlobalContext, trace: &WaveSignalTrace, struct_name: &str) -> String {
     if !queue.is_empty() {
         let formatted_queue = queue
             .iter()
-            .map(|thread| format_thread(thread, ctx, trace))
+            .map(|thread| format_thread(thread, ctx, trace, struct_name))
             .collect::<Vec<String>>()
             .join("\n\t");
         format!("\n\t{}", formatted_queue)
@@ -38,7 +38,7 @@ fn format_queue(queue: &Queue, ctx: &GlobalContext, trace: &WaveSignalTrace) -> 
 }
 
 /// Formats a single thread with context-aware timing information
-fn format_thread(thread: &Thread, ctx: &GlobalContext, trace: &WaveSignalTrace) -> String {
+fn format_thread(thread: &Thread, ctx: &GlobalContext, trace: &WaveSignalTrace, struct_name: &str) -> String {
     let start_info = if ctx.show_waveform_time {
         format!(
             "Start time: {}",
@@ -48,11 +48,17 @@ fn format_thread(thread: &Thread, ctx: &GlobalContext, trace: &WaveSignalTrace) 
         format!("Start cycle: {}", thread.start_cycle)
     };
 
+    let transaction_name = if ctx.multiple_structs {
+        format!("{}::{}", struct_name, thread.transaction.name)
+    } else {
+        thread.transaction.name.clone()
+    };
+
     format!(
         "THREAD {}: {{ {}, Transaction: `{}`, Current stmt: `{}` ({}) }}",
         thread.thread_id,
         start_info,
-        thread.transaction.name,
+        transaction_name,
         serialize_stmt(
             &thread.transaction,
             &thread.symbol_table,
@@ -163,10 +169,10 @@ impl Scheduler {
         info!(
             "{}\n{}\n{}\n{}\n{}",
             header,
-            format_args!("Current: {}", format_queue(&self.current, &ctx, trace)),
-            format_args!("Next: {}", format_queue(&self.next, &ctx, trace)),
-            format_args!("Failed: {}", format_queue(&self.failed, &ctx, trace)),
-            format_args!("Finished: {}", format_queue(&self.finished, &ctx, trace))
+            format_args!("Current: {}", format_queue(&self.current, &ctx, trace, &self.struct_name)),
+            format_args!("Next: {}", format_queue(&self.next, &ctx, trace, &self.struct_name)),
+            format_args!("Failed: {}", format_queue(&self.failed, &ctx, trace, &self.struct_name)),
+            format_args!("Finished: {}", format_queue(&self.finished, &ctx, trace, &self.struct_name))
         );
     }
 
@@ -409,7 +415,7 @@ impl Scheduler {
 
     /// Validates that threads in the `finished` and `failed` queues
     /// behave as expected
-    fn validate_finished_and_failed_threads(
+    pub fn validate_finished_and_failed_threads(
         &mut self,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
