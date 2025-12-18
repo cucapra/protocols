@@ -10,25 +10,21 @@ use crate::{
 use log::info;
 
 pub struct GlobalScheduler {
-    schedulers: Vec<Scheduler>,
-    ctx: GlobalContext,
+    pub schedulers: Vec<Scheduler>,
 
     /// The waveform supplied by the user (shared across all schedulers)
     trace: WaveSignalTrace,
 }
 
 impl GlobalScheduler {
-    /// Creates a brand new `GlobalScheduler`
-    pub fn new(schedulers: Vec<Scheduler>, ctx: GlobalContext, trace: WaveSignalTrace) -> Self {
-        Self {
-            schedulers,
-            ctx,
-            trace,
-        }
+    /// Creates an new `GlobalScheduler`.
+    /// Note: all the `Scheduler`s are expected to be initialized beforehand.
+    pub fn new(schedulers: Vec<Scheduler>, trace: WaveSignalTrace) -> Self {
+        Self { schedulers, trace }
     }
 
     /// Runs all the schedulers in a round-robin fashion
-    pub fn run(&mut self) -> anyhow::Result<()> {
+    pub fn run(&mut self, ctx: &GlobalContext) -> anyhow::Result<()> {
         if self.schedulers.is_empty() {
             return Ok(());
         }
@@ -42,23 +38,23 @@ impl GlobalScheduler {
                 // period in the waveform). Thus, we do `let _ = ...` here
                 // to avoid an error in an individual scheduler
                 // from causing the entire monitor executable to fail
-                let _ = scheduler.run_current_phase(&self.trace);
+                let _ = scheduler.run_current_phase(&self.trace, ctx);
             }
 
             // Advance the trace (only once for all schedulers)
             let step_result = self.trace.step();
 
-            if self.ctx.show_waveform_time {
+            if ctx.show_waveform_time {
                 let time_str = self
                     .trace
-                    .format_time(self.trace.time_step(), self.ctx.time_unit);
+                    .format_time(self.trace.time_step(), ctx.time_unit);
                 info!("GlobalScheduler: Advancing to time {}", time_str);
             } else {
                 info!("GlobalScheduler: Advancing to next cycle");
             }
 
             // Advance all schedulers to their next cycle
-            for scheduler in &mut self.schedulers {
+            for scheduler in self.schedulers.iter_mut() {
                 info!(
                     "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
                     scheduler.struct_name

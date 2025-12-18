@@ -2,8 +2,6 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::designs::Design;
-
 /// Time unit for displaying waveform times
 #[derive(Debug, Clone, Copy)]
 pub enum TimeUnit {
@@ -44,9 +42,6 @@ pub struct GlobalContext {
     /// (Only used for error-reporting purposes)
     pub waveform_file: String,
 
-    /// The design under test
-    pub design: Design,
-
     /// The `instance_id` corresponding to the DUT instance
     pub instance_id: u32,
 
@@ -64,6 +59,9 @@ pub struct GlobalContext {
     /// Indicates whether to print the no. of logical steps (i.e. clock cycles)
     /// taken by the monitor
     pub print_num_steps: bool,
+
+    /// Indicates if there are multiple (more than 1) structs in the source file
+    pub multiple_structs: bool,
 }
 
 impl GlobalContext {
@@ -72,21 +70,21 @@ impl GlobalContext {
     /// using hexadecimal (if `false`, we default to using decimal).
     pub fn new(
         waveform_file: String,
-        design: Design,
         instance_id: u32,
         display_hex: bool,
         show_waveform_time: bool,
         time_unit: TimeUnit,
         print_num_steps: bool,
+        multiple_structs: bool,
     ) -> Self {
         Self {
             waveform_file,
-            design,
             instance_id,
             display_hex,
             show_waveform_time,
             time_unit,
             print_num_steps,
+            multiple_structs,
         }
     }
 }
