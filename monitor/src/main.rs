@@ -12,12 +12,12 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
+use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -192,8 +192,13 @@ fn main() -> anyhow::Result<()> {
         }
 
         // Create a scheduler for this design, using the design name as the struct name
-        let scheduler =
-            Scheduler::initialize(design_transactions, &ctx, &trace, design.name.clone());
+        let scheduler = Scheduler::initialize(
+            design_transactions,
+            &ctx,
+            &trace,
+            design.name.clone(),
+            design.symbol_id,
+        );
 
         schedulers.push(scheduler);
     }

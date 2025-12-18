@@ -35,6 +35,9 @@ pub struct Interpreter {
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
+
+    /// The SymbolId of the DUT (design under test)
+    pub dut_symbol_id: SymbolId,
 }
 
 impl Interpreter {
@@ -70,6 +73,7 @@ impl Interpreter {
         ctx: &GlobalContext,
         trace: &WaveSignalTrace,
         trace_cycle_count: u32,
+        dut_symbol_id: SymbolId,
     ) -> Self {
         let mut args_mapping = FxHashMap::default();
         let mut known_bits = FxHashMap::default();
@@ -113,6 +117,7 @@ impl Interpreter {
             constraints: FxHashMap::default(),
             trace_cycle_count,
             args_to_pins: FxHashMap::default(),
+            dut_symbol_id,
         }
     }
 
@@ -157,7 +162,7 @@ impl Interpreter {
 
                     // Concretely, we check if the identifier begins with
                     // the name of the DUT (e.g. check if "DUT.s" begins with "DUT.")
-                    let dut_prefix = format!("{}.", self.symbol_table[ctx.design.symbol_id].name());
+                    let dut_prefix = format!("{}.", self.symbol_table[self.dut_symbol_id].name());
                     if name.starts_with(&dut_prefix) {
                         let pin_name = &name[dut_prefix.len()..];
 

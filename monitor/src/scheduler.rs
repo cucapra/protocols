@@ -2,12 +2,12 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
-    ir::{Stmt, SymbolTable, Transaction},
+    ir::{Stmt, SymbolId, SymbolTable, Transaction},
     serialize::{serialize_bitvec, serialize_stmt},
 };
 
@@ -168,6 +168,7 @@ impl Scheduler {
         ctx: &GlobalContext,
         trace: &WaveSignalTrace,
         struct_name: String,
+        dut_symbol_id: SymbolId,
     ) -> Self {
         let cycle_count = 0;
         let mut thread_id = 0;
@@ -200,6 +201,7 @@ impl Scheduler {
             &ctx,
             trace,
             cycle_count,
+            dut_symbol_id,
         );
         Self {
             current: current_threads,
