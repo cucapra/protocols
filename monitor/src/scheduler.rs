@@ -138,6 +138,16 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
+    // Helper function that prefixes a transaction's name with the name of a struct
+    // if the source file contains multiple struct
+    pub fn format_transaction_name(&self, ctx: &GlobalContext, transaction_name: String) -> String {
+        if ctx.multiple_structs {
+            format!("{}::{}", self.struct_name, transaction_name)
+        } else {
+            transaction_name
+        }
+    }
+
     /// Prints the internal state of the scheduler
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
     pub fn print_scheduler_state(&self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
@@ -557,7 +567,7 @@ impl Scheduler {
     /// 2. When the `current` queue is empty, it sets `current` to `next`
     ///    (marking all suspended threads as ready for execution),
     ///    then advances the trace to the next step.
-    pub fn run(&mut self, trace: &mut WaveSignalTrace, ctx: &GlobalContext) -> anyhow::Result<()> {
+    pub fn _run(&mut self, trace: &mut WaveSignalTrace, ctx: &GlobalContext) -> anyhow::Result<()> {
         loop {
             self.print_scheduler_state(trace, ctx);
 
@@ -1103,22 +1113,20 @@ impl Scheduler {
                         let transaction_str = self
                             .interpreter
                             .serialize_reconstructed_transaction(&ctx, trace);
+
                         // Add struct name prefix for multi-struct scenarios
-                        let prefixed_transaction = if !self.struct_name.is_empty() {
-                            format!("{}::{}", self.struct_name, transaction_str)
-                        } else {
-                            transaction_str
-                        };
+                        let transaction_name = self.format_transaction_name(&ctx, transaction_str);
+
                         if ctx.show_waveform_time {
                             let start_time =
                                 trace.format_time(thread.start_time_step, ctx.time_unit);
                             let end_time = trace.format_time(end_time_step, ctx.time_unit);
                             println!(
                                 "{}  // [time: {} -> {}] (thread {})",
-                                prefixed_transaction, start_time, end_time, thread.thread_id
+                                transaction_name, start_time, end_time, thread.thread_id
                             );
                         } else {
-                            println!("{}", prefixed_transaction)
+                            println!("{}", transaction_name)
                         }
                     }
                     self.finished.push(thread.clone());
