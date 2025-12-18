@@ -29,6 +29,8 @@ impl GlobalScheduler {
             return Ok(());
         }
 
+        let mut trace_ended = false;
+
         loop {
             // Run each local scheduler's current phase
             for scheduler in self.schedulers.iter_mut() {
@@ -39,6 +41,26 @@ impl GlobalScheduler {
                 // to avoid an error in an individual scheduler
                 // from causing the entire monitor executable to fail
                 let _ = scheduler.run_current_phase(&self.trace, ctx);
+            }
+
+            // If we've reached the end of the trace,
+            // print the final state of each individual scheduler,
+            // then exit the loop
+            if trace_ended {
+                for scheduler in &self.schedulers {
+                    if scheduler.next.is_empty() {
+                        info!(
+                            "Trace has ended, threads in `next` can't proceed, terminating scheduler for `{}` w/ final state:",
+                            scheduler.struct_name
+                        );
+                        scheduler.print_scheduler_state(&self.trace, ctx);
+                    }
+
+                    // Print the no. of logical steps (clock cycles) taken
+                    // by the scheduler if the corresponding CLI flag has been set
+                    scheduler.print_step_count(ctx);
+                }
+                break;
             }
 
             // Advance the trace (only once for all schedulers)
@@ -59,7 +81,7 @@ impl GlobalScheduler {
                     "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
                     scheduler.struct_name
                 );
-                scheduler.advance_to_next_cycle();
+                scheduler.advance_to_next_cycle(&ctx, &self.trace);
             }
 
             // Check if trace ended (if it finished, then we exit out the loop)
@@ -69,9 +91,12 @@ impl GlobalScheduler {
                 for scheduler in self.schedulers.iter_mut() {
                     scheduler.mark_trace_ended();
                 }
-                break;
+                trace_ended = true;
             }
         }
+
+        // No more threads to run in each of the schedulers
+        info!("Monitor finished!");
 
         Ok(())
     }

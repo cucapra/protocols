@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -106,7 +106,7 @@ pub struct Scheduler {
     current: Queue,
 
     /// Queue of suspended threads (to be run during the next step)
-    next: Queue,
+    pub next: Queue,
 
     /// Threads that have finished successfully
     finished: Queue,
@@ -238,84 +238,120 @@ impl Scheduler {
             self.run_thread_till_next_step(thread, trace, ctx);
         }
 
-        // Check constraints for all threads in the `next` queue
-        let mut failed_constraint_checks = vec![];
+        // Check constraints for all threads in the `next` queue.
+        // These threads have called `step()` and have more work to do.
+        // Threads that finished (i.e. they executed the `step()` statement at
+        // the end of a function) are not in `next`, so they won't be checked.
+        let mut failed_constraint_checks = Vec::new();
 
         for thread in self.next.iter_mut() {
+            // If any constraints failed, figure out the right time-step/cycle
+            // to display in the logs
             let time_str = if ctx.show_waveform_time {
                 trace.format_time(trace.time_step(), ctx.time_unit)
             } else {
                 format!("cycle {}", self.interpreter.trace_cycle_count)
             };
 
-            // Check constraints
+            // Check that all constraints in the `constraints` map still hold
+            // against the current trace values. This is called after each `step()`
+            // to ensure that assignments like `D.m_axis_tvalid := 1'b1` continue
+            // to hold after stepping to a new cycle.
             for (symbol_id, expected_value) in &thread.constraints {
                 let symbol_name = thread.symbol_table.full_name_from_symbol_id(symbol_id);
 
                 match trace.get(ctx.instance_id, *symbol_id) {
                     Ok(trace_value) => {
                         if trace_value != *expected_value {
-                            let formatted_transaction = if !self.struct_name.is_empty() {
-                                format!("{}::{}", self.struct_name, thread.transaction.name)
-                            } else {
-                                thread.transaction.name.clone()
-                            };
-
                             info!(
-                                "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
+                                    "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
+                                    thread.thread_id,
+                                    thread.transaction.name,
+                                    time_str,
+                                    symbol_name,
+                                    serialize_bitvec(&trace_value, ctx.display_hex),
+                                    serialize_bitvec(expected_value, ctx.display_hex)
+                                );
+                            failed_constraint_checks.push(thread.clone());
+                        } else {
+                            info!(
+                                "Constraint OK for thread {} (`{}`) at {}: {} = {}",
                                 thread.thread_id,
-                                formatted_transaction,
+                                thread.transaction.name,
                                 time_str,
                                 symbol_name,
-                                serialize_bitvec(&trace_value, ctx.display_hex),
                                 serialize_bitvec(expected_value, ctx.display_hex)
                             );
-                            failed_constraint_checks.push(thread.clone());
                         }
                     }
-                    Err(err) => {
+                    Err(_) => {
+                        info!(
+                                "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
+                                symbol_name, self.interpreter.trace_cycle_count
+                            );
+                        // If we can't read the symbol from the trace, treat it as a constraint violation
+                        // (The constraint can't hold if the signal doesn't exist in the trace)
                         failed_constraint_checks.push(thread.clone());
-                        return Err(anyhow!(
-                            "Failed to get value for {} from trace: {}",
-                            symbol_name,
-                            err
-                        ));
                     }
                 }
             }
 
-            // Update args_mapping based on waveform data
+            // Check that all args_mappings in the `args_to_pins` map still hold
+            // against the current trace values. This is called after each `step()`
+            // to ensure that parameters inferred from DUT ports (like `data` from `D.m_axis_tdata`)
+            // still match the trace after stepping to a new cycle.
             for (param_id, port_id) in &thread.args_to_pins {
                 let param_name = thread.symbol_table.full_name_from_symbol_id(param_id);
                 let port_name = thread.symbol_table.full_name_from_symbol_id(port_id);
 
+                // Get the (existing) inferred parameter value from args_mapping
                 if let Some(param_value) = thread.args_mapping.get(param_id) {
+                    // Compute the current time-step/cycle (for logging purposes)
                     let time_str = if ctx.show_waveform_time {
                         trace.format_time(trace.time_step(), ctx.time_unit)
                     } else {
                         format!("cycle {}", self.interpreter.trace_cycle_count)
                     };
 
+                    // Get the current port value from the trace
                     match trace.get(ctx.instance_id, *port_id) {
                         Ok(trace_value) => {
-                            let known_bits = thread.known_bits.get(param_id).ok_or_else(|| {
-                                anyhow!(
-                                    "Unable to find {} in `known_bits` map of thread {} ({})",
-                                    param_name,
-                                    thread.thread_id,
-                                    thread.transaction.name
-                                )
-                            })?;
+                            // Check whether all bits are known or if only
+                            // some of them are known (e.g. due to a bit-slice)
+                            let known_bits = thread
+                                .known_bits
+                                .get(param_id)
+                                .ok_or_else(|| {
+                                    anyhow!(
+                                        "Unable to find {} in `known_bits` map of thread {} ({})",
+                                        param_name,
+                                        thread.thread_id,
+                                        thread.transaction.name
+                                    )
+                                })
+                                .context(format!("known_bits = {:?}", thread.known_bits))?;
                             let all_bits_known = known_bits.is_all_ones();
 
+                            // TODO: need to handle the case when not all bits are known
+
+                            // If all bits are known and the two sides of the assignment have the
+                            // same bit-width, check whether the inferred values for function parameters
+                            // abide by the waveform data.
+                            // (We add the bit-width check for simplicity so we don't have
+                            // to handle re-assignments to the same port that involve bit-slices for now,
+                            // as is the case for the SERV example.)
                             if all_bits_known && trace_value.width() == param_value.width() {
+                                // If there are any discrepancies between the existing
+                                // inferred value for a function parameter and its
+                                // waveform value, we update the inferred value to be
+                                // the waveform value at the current time-step.
                                 if trace_value != *param_value {
                                     info!(
-                                        "Updating {} |-> {} in args_mapping based on waveform data at {}",
-                                        param_name,
-                                        serialize_bitvec(&trace_value, ctx.display_hex),
-                                        time_str
-                                    );
+                                            "Updating {} |-> {} in args_mapping based on waveform data at {}",
+                                            param_name,
+                                            serialize_bitvec(&trace_value, ctx.display_hex),
+                                            time_str
+                                        );
                                     thread.args_mapping.insert(*param_id, trace_value);
                                 } else {
                                     info!(
@@ -325,24 +361,33 @@ impl Scheduler {
                                         serialize_bitvec(param_value, ctx.display_hex)
                                     );
                                 }
+                            } else {
+                                info!(
+                                        "Skipping args_mapping check for {} since not all bits are known",
+                                        param_name
+                                    );
                             }
                         }
-                        Err(err) => {
-                            return Err(anyhow!(
-                                "Failed to get value for {} from trace: {}",
-                                port_name,
-                                err
-                            ));
+                        Err(_) => {
+                            info!(
+                                    "Unable to verify args_mapping {} -> {} at {}, as {} is not found in the trace",
+                                    param_name, port_name, time_str, param_name
+                                );
+                            failed_constraint_checks.push(thread.clone());
                         }
                     }
                 }
             }
         }
 
-        // Move failed threads to the failed queue
-        for failed_thread in &failed_constraint_checks {
+        // Remove threads that failed constraint checks from `next` and add to `failed`
+        for failed_thread in failed_constraint_checks {
+            info!(
+                "Moving thread {} (`{}`) to `failed` as it failed a constraint check",
+                failed_thread.thread_id, failed_thread.transaction.name
+            );
             self.next.retain(|t| t.thread_id != failed_thread.thread_id);
-            self.failed.push(failed_thread.clone());
+            self.failed.push(failed_thread);
         }
 
         // Check that threads in the `finished` and `failed` queues
@@ -359,54 +404,148 @@ impl Scheduler {
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
     ) -> anyhow::Result<()> {
-        // Clear finished threads and print if needed
-        if !self.finished.is_empty() {
-            if ctx.print_num_steps {
-                info!("Finished: {}", format_queue_compact(&self.finished));
-            }
-            self.finished.clear();
-        }
-
-        // Check finished threads follow expected patterns
+        // Find the unique start cycles of all threads in the `finished` queue
         let finished_threads_start_cycles = unique_start_cycles(&self.finished);
+
+        // Out of all threads that started in the same cycle & finished in the most recent step...
         for start_cycle in finished_threads_start_cycles {
+            // ...there should only be at most one of them in `finished`
             let finished = threads_with_start_time(&self.finished, start_cycle);
             if finished.len() > 1 {
                 let start_time = if ctx.show_waveform_time {
                     trace.format_time(finished[0].start_time_step, ctx.time_unit)
+                } else {
+                    format!("cycle {}", start_cycle)
+                };
+                let end_time = if ctx.show_waveform_time {
+                    trace.format_time(
+                        finished[0].end_time_step.unwrap_or_else(|| {
+                            panic!(
+                                "Thread {} (`{}`) missing end_time_step",
+                                finished[0].thread_id, finished[0].transaction.name
+                            )
+                        }),
+                        ctx.time_unit,
+                    )
                 } else {
                     format!("cycle {}", self.cycle_count)
                 };
 
                 self.print_step_count(ctx);
                 return Err(anyhow!(
-                    "Expected at most 1 thread to finish at {}, but {} finished: {:?}",
-                    start_time,
-                    finished.len(),
-                    finished
-                        .iter()
-                        .map(|t| t.transaction.name.clone())
-                        .collect::<Vec<_>>()
-                ));
+                        "Expected the no. of threads that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
+                        start_time,
+                        end_time,
+                        finished.len(),
+                        finished
+                            .iter()
+                            .map(|t| t.transaction.name.clone())
+                            .collect::<Vec<_>>()
+                    ));
+            }
+            let finished_thread = &finished[0];
+
+            // ...and there shouldn't be any other threads in `next`
+            let next = threads_with_start_time(&self.next, start_cycle);
+            if !next.is_empty() {
+                let start_time_str = if ctx.show_waveform_time {
+                    trace.format_time(finished_thread.start_time_step, ctx.time_unit)
+                } else {
+                    format!("cycle {}", finished_thread.start_cycle)
+                };
+                return self.emit_error(trace, ctx).with_context(|| anyhow!(
+                            "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
+                            finished_thread.thread_id,
+                            finished_thread.transaction.name,
+                            start_time_str,
+                            next.iter().map(|t| t.transaction.name.clone()).collect::<Vec<_>>()
+                        ));
             }
         }
 
-        // Check failed threads
+        // Next, find the unique start cycles of all threads in `failed`
         let failed_threads_start_cycles = unique_start_cycles(&self.failed);
+
+        // Out of all threads that started in the same cycle & failed in the most recent step...
         for start_cycle in failed_threads_start_cycles {
+            // ...if `failed` is non-empty, but `next` and `finished` are non-empty,
+            // then we should emit an error
+            // (The expected behavior is that all but one threads that started in
+            // the same cycle should fail, but here we have the case where
+            // *all* the threads that started in the same cycle failed)
             let failed = threads_with_start_time(&self.failed, start_cycle);
             let finished = threads_with_start_time(&self.finished, start_cycle);
-            let next = threads_with_start_time(&self.next, start_cycle);
+            let paused = threads_with_start_time(&self.next, start_cycle);
 
-            if !failed.is_empty() && finished.is_empty() && next.is_empty() {
-                return self.emit_error(trace, ctx).with_context(|| {
-                    anyhow!(
-                        "All {} threads that started in cycle {} failed",
-                        failed.len(),
-                        start_cycle
-                    )
-                });
+            // We also need to check whether the `next` queue contains
+            // any threads (regardless of their start time) before emitting
+            // an error. The reason is for protocols that currently end in
+            // `step(); fork(); step()` (to comply with the well-formedness
+            // constraints), there can be an edge case where a thread `t`
+            // that started in an EARLIER cycle has been paused
+            // (i.e. `t` is in `next`), but all
+            // other threads started at the CURRENT `start_cycle` have failed.
+            // In this case, we still need to try to run `t` since it may
+            // succeed, even though all threads from the current cycle failed.
+            // (Example: `picorv32/unsigned_mul.prot`)
+            if failed.len() > 1 && finished.is_empty() && paused.is_empty() && self.next.is_empty()
+            {
+                return self.emit_error(trace, ctx).with_context(|| anyhow!(
+                        "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
+                        start_cycle,
+                        failed.len()
+                    ));
             }
+        }
+
+        // Print all the threads that finished & failed during the most recent step
+        if !self.failed.is_empty() {
+            if ctx.show_waveform_time {
+                let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+                info!(
+                    "Threads that failed at time {}: {}",
+                    time_str,
+                    format_queue_compact(&self.failed)
+                );
+            } else {
+                info!(
+                    "Threads that failed in cycle {}: {}",
+                    self.cycle_count,
+                    format_queue_compact(&self.failed)
+                );
+            }
+
+            // If there are a non-zero no. of failed threads,
+            // and there are no threads that finished succesfully /
+            // no threads waiting to be run / no threads that are currently still running,
+            // then we know that *all* threads have failed. In which case, we emit
+            // an error message indicating that no transactions match the given waveform.
+            let no_transactions_match =
+                self.current.is_empty() && self.next.is_empty() && self.finished.is_empty();
+
+            if no_transactions_match {
+                return self.emit_error(trace, ctx);
+            } else {
+                self.failed.clear();
+            }
+        }
+
+        if !self.finished.is_empty() {
+            if ctx.show_waveform_time {
+                let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+                info!(
+                    "Threads that finished at time {}: {}",
+                    time_str,
+                    format_queue_compact(&self.finished)
+                );
+            } else {
+                info!(
+                    "Threads that finished in cycle {}: {}",
+                    self.cycle_count,
+                    format_queue_compact(&self.finished)
+                );
+            }
+            self.finished.clear();
         }
 
         Ok(())
@@ -431,7 +570,7 @@ impl Scheduler {
 
             // Check constraints for all threads in the `next` queue.
             // These threads have called `step()` and have more work to do.
-            // Threads that finished (i.e. they executed the `step()` statement at t
+            // Threads that finished (i.e. they executed the `step()` statement at
             // the end of a function) are not in `next`, so they won't be checked.
             let mut failed_constraint_checks = Vec::new();
 
@@ -779,20 +918,34 @@ impl Scheduler {
     }
 
     /// Helper function to print the number of steps taken
-    fn print_step_count(&self, ctx: &GlobalContext) {
+    pub fn print_step_count(&self, ctx: &GlobalContext) {
         if ctx.print_num_steps {
-            eprintln!("No. of steps taken: {}", self.cycle_count);
+            eprintln!(
+                "No. of steps taken by {} scheduler: {}",
+                self.struct_name, self.cycle_count
+            );
         }
     }
 
     /// Advances to the next cycle by moving next queue to current and incrementing cycle count
-    /// (This function should only be called after `trace.step()` has been called)
-    pub fn advance_to_next_cycle(&mut self) {
-        // Note that `std::mem::take` also clears the `next` queue
-        // behind the scenes
+    /// (This function should only be called after `trace.step()` has been called in `GlobalScheduler`)
+    pub fn advance_to_next_cycle(&mut self, ctx: &GlobalContext, trace: &WaveSignalTrace) {
+        // Mark all suspended threads as ready for execution
+        // by setting `current` to `next`, and setting `next = []`
+        // (the latter is done via `std::mem::take`)
         self.current = std::mem::take(&mut self.next);
         self.cycle_count += 1;
         self.interpreter.trace_cycle_count += 1;
+
+        if ctx.show_waveform_time {
+            let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+            info!("Advancing to time {}, setting current = next", time_str);
+        } else {
+            info!(
+                "Advancing to cycle {}, setting current = next",
+                self.cycle_count
+            );
+        }
     }
 
     /// Marks the trace as having ended
