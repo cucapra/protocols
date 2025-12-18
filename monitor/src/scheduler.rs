@@ -10,7 +10,7 @@ use protocols::{
     ir::{Stmt, SymbolId, SymbolTable, Transaction},
     serialize::{serialize_bitvec, serialize_stmt},
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     global_context::GlobalContext,
@@ -18,6 +18,24 @@ use crate::{
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
 };
+
+/// Error types that can occur during scheduler execution
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum SchedulerError {
+    NoTransactionsMatch {
+        struct_name: String,
+        error_context: anyhow::Error,
+    },
+    /// Other errors (e.g., internal errors, validation failures)
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for SchedulerError {
+    fn from(err: anyhow::Error) -> Self {
+        SchedulerError::Other(err)
+    }
+}
 
 /// `Queue` is just a type alias for `Vec<Thread>`
 type Queue = Vec<Thread>;
@@ -149,6 +167,11 @@ pub struct Scheduler {
     /// same start cycle finish simultaneously)
     forked_start_cycles: FxHashSet<u32>,
 
+    /// Tracks which thread finished for each start cycle in the current phase
+    /// Maps start_cycle -> (thread_id, transaction_name)
+    /// (Used to detect when multiple threads from the same start cycle try to finish)
+    finished_threads: FxHashMap<u32, (u32, String)>,
+
     /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
     possible_transactions: Vec<(Transaction, SymbolTable)>,
@@ -257,6 +280,7 @@ impl Scheduler {
             num_threads: thread_id,
             trace_ended: false,
             forked_start_cycles: FxHashSet::default(),
+            finished_threads: FxHashMap::default(),
             possible_transactions: transactions,
             struct_name,
         }
@@ -270,21 +294,22 @@ impl Scheduler {
         &mut self,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SchedulerError> {
         info!(
             "Inside `Scheduler::run_current_phase` for {} scheduler",
             self.struct_name
         );
 
-        // Clear the forked_start_cycles set at the beginning of each phase
-        // to track which start cycles fork in THIS phase
+        // Clear the tracking sets at the beginning of each phase
+        // to track which start cycles fork/finish in THIS phase
         self.forked_start_cycles.clear();
+        self.finished_threads.clear();
 
         self.print_scheduler_state(trace, ctx);
 
         // Run all threads in the current queue
         while let Some(thread) = self.current.pop() {
-            self.run_thread_till_next_step(thread, trace, ctx);
+            self.run_thread_till_next_step(thread, trace, ctx)?;
         }
 
         // Check constraints for all threads in the `next` queue.
@@ -452,7 +477,7 @@ impl Scheduler {
         &mut self,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), SchedulerError> {
         // Find the unique start cycles of all threads in the `finished` queue
         let finished_threads_start_cycles = unique_start_cycles(&self.finished);
 
@@ -480,9 +505,9 @@ impl Scheduler {
                     format!("cycle {}", self.cycle_count)
                 };
 
-                self.print_step_count(ctx);
-                return Err(anyhow!(
-                        "Expected the no. of threads that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
+                return Err(SchedulerError::Other(anyhow!(
+                        "Scheduler for `{}`: Expected the no. of threads for that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
+                        self.struct_name,
                         start_time,
                         end_time,
                         finished.len(),
@@ -490,7 +515,7 @@ impl Scheduler {
                             .iter()
                             .map(|t| t.transaction.name.clone())
                             .collect::<Vec<_>>()
-                    ));
+                    )));
             }
             let finished_thread = &finished[0];
 
@@ -502,13 +527,18 @@ impl Scheduler {
                 } else {
                     format!("cycle {}", finished_thread.start_cycle)
                 };
-                return self.emit_error(trace, ctx).with_context(|| anyhow!(
+                let error_context = anyhow!(
                             "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
                             finished_thread.thread_id,
                             finished_thread.transaction.name,
                             start_time_str,
                             next.iter().map(|t| t.transaction.name.clone()).collect::<Vec<_>>()
-                        ));
+                        );
+
+                return Err(SchedulerError::NoTransactionsMatch {
+                    struct_name: self.struct_name.clone(),
+                    error_context,
+                });
             }
         }
 
@@ -539,11 +569,16 @@ impl Scheduler {
             // (Example: `picorv32/unsigned_mul.prot`)
             if failed.len() > 1 && finished.is_empty() && paused.is_empty() && self.next.is_empty()
             {
-                return self.emit_error(trace, ctx).with_context(|| anyhow!(
+                let error_context = anyhow!(
                         "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
                         start_cycle,
                         failed.len()
-                    ));
+                    );
+
+                return Err(SchedulerError::NoTransactionsMatch {
+                    struct_name: self.struct_name.clone(),
+                    error_context,
+                });
             }
         }
 
@@ -573,7 +608,10 @@ impl Scheduler {
                 self.current.is_empty() && self.next.is_empty() && self.finished.is_empty();
 
             if no_transactions_match {
-                return self.emit_error(trace, ctx);
+                return Err(SchedulerError::NoTransactionsMatch {
+                    struct_name: self.struct_name.clone(),
+                    error_context: anyhow!("All threads failed for {}", self.struct_name),
+                });
             } else {
                 self.failed.clear();
             }
@@ -611,7 +649,8 @@ impl Scheduler {
             self.print_scheduler_state(trace, ctx);
 
             while let Some(thread) = self.current.pop() {
-                self.run_thread_till_next_step(thread, trace, ctx);
+                self.run_thread_till_next_step(thread, trace, ctx)
+                    .map_err(|e| anyhow::anyhow!("Scheduler error: {:?}", e))?;
             }
 
             // At this point, all threads have been executed till their next `step`
@@ -1053,6 +1092,7 @@ impl Scheduler {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        eprintln!("{}", error_msg);
         Err(error_msg)
     }
 
@@ -1065,7 +1105,7 @@ impl Scheduler {
         mut thread: Thread,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
-    ) {
+    ) -> Result<(), SchedulerError> {
         info!(
             "Running thread {} (transaction `{}`) till next `step()`...",
             thread.thread_id,
@@ -1112,7 +1152,7 @@ impl Scheduler {
                             thread.current_stmt_id = next_stmt_id;
                             self.next.push(thread);
                             self.print_scheduler_state(trace, ctx);
-                            break;
+                            return Ok(());
                         }
                         Stmt::Fork => {
                             // Check if another thread from the same start cycle has already forked
@@ -1172,10 +1212,31 @@ impl Scheduler {
                     }
                 }
                 Ok(None) => {
+                    // Check if another thread from the same start cycle has already finished
+                    // in this phase. If so, return an error to let GlobalScheduler decide how to handle it.
+                    // if let Some((first_thread_id, first_transaction_name)) =
+                    //     self.finished_threads.get(&thread.start_cycle)
+                    // {
+                    //     return Err(SchedulerError::MultipleThreadsFinished {
+                    //         struct_name: self.struct_name.clone(),
+                    //         start_cycle: thread.start_cycle,
+                    //         first_thread_id: *first_thread_id,
+                    //         first_transaction_name: first_transaction_name.clone(),
+                    //         second_thread_id: thread.thread_id,
+                    //         second_transaction_name: thread.transaction.name.clone(),
+                    //     });
+                    // }
+
                     info!(
                         "Thread {} (`{}`) finished successfully, adding to `finished` queue",
                         thread.thread_id,
                         self.format_transaction_name(ctx, thread.transaction.name.clone())
+                    );
+
+                    // Record this thread as having finished for this start cycle
+                    self.finished_threads.insert(
+                        thread.start_cycle,
+                        (thread.thread_id, thread.transaction.name.clone()),
                     );
 
                     // If the thread's `end_time_step` is `None`, use the
@@ -1216,7 +1277,7 @@ impl Scheduler {
                         }
                     }
                     self.finished.push(thread.clone());
-                    break;
+                    return Ok(());
                 }
                 Err(err) => {
                     info!(
@@ -1227,7 +1288,7 @@ impl Scheduler {
                     );
                     self.failed.push(thread);
                     self.print_scheduler_state(trace, ctx);
-                    break;
+                    return Ok(());
                 }
             }
         }

@@ -142,6 +142,7 @@ fn idle<DUT: Sender>() {
     assert_eq(DUT.m_axis_tvalid, 1'b0);
 
     step();
+
     fork();
     step();
 }
@@ -153,33 +154,13 @@ fn idle<DUT: Receiver>() {
     assert_eq(DUT.s_axis_tready, 1'b0);
 
     step();
+
     fork();
     step();
 }
 
 // RESET: Assert reset signal to initialize FIFO
 fn reset<DUT: Sender>() {
-    DUT.rst := 1'b1;
-    
-    step();
-    
-    // Release all inputs
-    DUT.rst := X;
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-    DUT.m_axis_tready := X;
-
-    fork();
-    step();
-}
-
-// RESET: Assert reset signal to initialize FIFO
-fn reset<DUT: Receiver>() {
     DUT.rst := 1'b1;
     
     step();

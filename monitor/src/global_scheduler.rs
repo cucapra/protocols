@@ -4,9 +4,10 @@
 
 use crate::{
     global_context::GlobalContext,
-    scheduler::Scheduler,
+    scheduler::{Scheduler, SchedulerError},
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
 };
+use anyhow::{anyhow, Context};
 use log::info;
 
 pub struct GlobalScheduler {
@@ -34,13 +35,33 @@ impl GlobalScheduler {
         loop {
             // Run each local scheduler's current phase
             for scheduler in self.schedulers.iter_mut() {
-                // Note that individual schedulers can fail (which is OK
-                // in a multi-struct setting, since there may not be
-                // transactions for a particular struct that apply at a given
-                // period in the waveform). Thus, we do `let _ = ...` here
-                // to avoid an error in an individual scheduler
-                // from causing the entire monitor executable to fail
-                let _ = scheduler.run_current_phase(&self.trace, ctx);
+                match scheduler.run_current_phase(&self.trace, ctx) {
+                    Ok(()) => {
+                        // Scheduler ran successfully
+                    }
+                    Err(SchedulerError::NoTransactionsMatch {
+                        struct_name,
+                        error_context,
+                    }) => {
+                        if !ctx.multiple_structs {
+                            eprintln!("{}", error_context);
+                            return scheduler
+                                .emit_error(&self.trace, ctx)
+                                .context(anyhow!("Error in scheduler for {}", struct_name));
+                        } else {
+                            info!(
+                                "Error in scheduler for {}: {:#}",
+                                struct_name, error_context
+                            );
+                        }
+                    }
+                    Err(SchedulerError::Other(err)) => {
+                        // Other errors (validation failures, internal errors, etc.)
+                        // In multi-struct mode, we log these as warnings and continue
+                        // This allows other schedulers to continue even if one fails
+                        info!("Scheduler error for `{}`: {:#}", scheduler.struct_name, err);
+                    }
+                }
             }
 
             // If we've reached the end of the trace,
