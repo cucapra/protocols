@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -136,6 +136,7 @@ pub struct Scheduler {
 
     /// The name of the struct this scheduler is monitoring
     /// (Used for prefixing transaction names in multi-struct scenarios)
+    /// Note: if there is just one single struct, this string is empty
     struct_name: String,
 }
 
@@ -251,10 +252,16 @@ impl Scheduler {
                 match trace.get(self.ctx.instance_id, *symbol_id) {
                     Ok(trace_value) => {
                         if trace_value != *expected_value {
+                            let formatted_transaction = if !self.struct_name.is_empty() {
+                                format!("{}::{}", self.struct_name, thread.transaction.name)
+                            } else {
+                                thread.transaction.name.clone()
+                            };
+
                             info!(
                                 "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
                                 thread.thread_id,
-                                thread.transaction.name,
+                                formatted_transaction,
                                 time_str,
                                 symbol_name,
                                 serialize_bitvec(&trace_value, self.ctx.display_hex),

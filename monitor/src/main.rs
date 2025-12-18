@@ -12,11 +12,12 @@ mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
+use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -162,7 +163,7 @@ fn main() -> anyhow::Result<()> {
 
     // Check if we have multiple structs/designs
     if dut_designs.len() == 1 {
-        // Single-struct mode: use the existing single scheduler approach (backward compatibility)
+        // Single-struct mode: use the existing single scheduler approach
         let ctx = GlobalContext::new(
             cli.wave.clone(),
             dut_designs[0].clone(),
@@ -173,7 +174,8 @@ fn main() -> anyhow::Result<()> {
             cli.print_num_steps,
         );
 
-        // Use empty string for struct_name in single-struct mode (backward compatibility)
+        // If there's just one struct, we use an empty-string as the struct name
+        // (to avoid printing the struct name for every inferred transaction)
         let mut scheduler =
             Scheduler::initialize(transactions_symbol_tables, ctx, &trace, String::new());
 
@@ -184,9 +186,7 @@ fn main() -> anyhow::Result<()> {
         }
     } else {
         // Multi-struct mode: create a GlobalScheduler with one scheduler per design
-        use crate::global_scheduler::GlobalScheduler;
-
-        let mut schedulers = Vec::new();
+        let mut schedulers = vec![];
 
         for (inst_id, design) in dut_designs.iter().enumerate() {
             // Filter transactions that belong to this design

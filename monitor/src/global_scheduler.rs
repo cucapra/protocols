@@ -37,7 +37,7 @@ impl GlobalScheduler {
 
         loop {
             // Run each local scheduler's current phase
-            for scheduler in &mut self.schedulers {
+            for scheduler in self.schedulers.iter_mut() {
                 if !scheduler.is_done() {
                     // Note that individual schedulers can fail (which is OK
                     // in a multi-struct setting, since there may not be
@@ -49,20 +49,21 @@ impl GlobalScheduler {
                 }
             }
 
-            // Check if all active schedulers need to step
-            let all_done = self.schedulers.iter().all(|s| s.is_done());
-            if all_done {
+            // Check if all active schedulers have finished
+            let all_schedulers_done = self.schedulers.iter().all(|s| s.is_done());
+            if all_schedulers_done {
                 info!("All schedulers finished!");
                 break;
             }
 
-            let all_need_step = self
+            // Check whether all schedulers need to step
+            let all_schedulers_need_step = self
                 .schedulers
                 .iter()
                 .filter(|s| !s.is_done())
                 .all(|s| s.needs_step());
 
-            if all_need_step {
+            if all_schedulers_need_step {
                 // If trace has already ended, we can't proceed
                 if trace_ended {
                     info!("Trace has ended, schedulers can't proceed. Terminating.");
@@ -83,6 +84,7 @@ impl GlobalScheduler {
 
                 // Advance all schedulers to their next cycle
                 for scheduler in &mut self.schedulers {
+                    info!("GlobalScheduler: Advancing each scheduler to the next cycle");
                     if scheduler.needs_step() {
                         scheduler.advance_to_next_cycle();
                     }
