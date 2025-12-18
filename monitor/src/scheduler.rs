@@ -10,6 +10,7 @@ use protocols::{
     ir::{Stmt, SymbolId, SymbolTable, Transaction},
     serialize::{serialize_bitvec, serialize_stmt},
 };
+use rustc_hash::FxHashSet;
 
 use crate::{
     global_context::GlobalContext,
@@ -143,6 +144,11 @@ pub struct Scheduler {
     /// Flag indicating whether the trace has ended
     trace_ended: bool,
 
+    /// Tracks which start cycles have already called fork() in the current phase
+    /// (Used to prevent duplicate thread spawning when multiple threads from the
+    /// same start cycle finish simultaneously)
+    forked_start_cycles: FxHashSet<u32>,
+
     /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
     possible_transactions: Vec<(Transaction, SymbolTable)>,
@@ -250,6 +256,7 @@ impl Scheduler {
             cycle_count,
             num_threads: thread_id,
             trace_ended: false,
+            forked_start_cycles: FxHashSet::default(),
             possible_transactions: transactions,
             struct_name,
         }
@@ -268,6 +275,10 @@ impl Scheduler {
             "Inside `Scheduler::run_current_phase` for {} scheduler",
             self.struct_name
         );
+
+        // Clear the forked_start_cycles set at the beginning of each phase
+        // to track which start cycles fork in THIS phase
+        self.forked_start_cycles.clear();
 
         self.print_scheduler_state(trace, ctx);
 
@@ -1104,34 +1115,51 @@ impl Scheduler {
                             break;
                         }
                         Stmt::Fork => {
-                            // For each possible transaction, fork one new thread for it,
-                            // i.e. add it to the `current` queue
-                            // This means if there are `n` possible transactions,
-                            // we push `n` threads to the `current` queue.
-                            info!(
-                                "Thread {:?} called `fork()`, creating new threads...",
-                                thread.thread_id
-                            );
-                            for (transaction, symbol_table) in &self.possible_transactions {
-                                // Note: we use the new transaction's
-                                // `next_stmt_mapping` when creating a new thread
-                                let new_thread = Thread::new(
-                                    transaction.clone(),
-                                    symbol_table.clone(),
-                                    transaction.next_stmt_mapping(),
-                                    self.num_threads,
-                                    self.cycle_count,
-                                    trace.time_step(),
-                                );
-                                self.num_threads += 1;
-                                info!(
-                                    "Adding new thread {:?} (`{}`) to `current` queue",
-                                    new_thread.thread_id, new_thread.transaction.name
-                                );
-                                self.current.push(new_thread);
-                            }
+                            // Check if another thread from the same start cycle has already forked
+                            // in the current cycle for this scheduler.
+                            // If so, skip the fork to avoid creating duplicate threads.
+                            let already_forked =
+                                self.forked_start_cycles.contains(&thread.start_cycle);
 
-                            self.print_scheduler_state(trace, ctx);
+                            if already_forked {
+                                info!(
+                                    "Thread {:?} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
+                                    thread.thread_id,
+                                    thread.start_cycle
+                                );
+                            } else {
+                                // For each possible transaction, fork one new thread for it,
+                                // i.e. add it to the `current` queue
+                                // This means if there are `n` possible transactions,
+                                // we push `n` threads to the `current` queue.
+                                info!(
+                                    "Thread {:?} called `fork()`, creating new threads...",
+                                    thread.thread_id
+                                );
+                                for (transaction, symbol_table) in &self.possible_transactions {
+                                    // Note: we use the new transaction's
+                                    // `next_stmt_mapping` when creating a new thread
+                                    let new_thread = Thread::new(
+                                        transaction.clone(),
+                                        symbol_table.clone(),
+                                        transaction.next_stmt_mapping(),
+                                        self.num_threads,
+                                        self.cycle_count,
+                                        trace.time_step(),
+                                    );
+                                    self.num_threads += 1;
+                                    info!(
+                                        "Adding new thread {:?} (`{}`) to `current` queue",
+                                        new_thread.thread_id, new_thread.transaction.name
+                                    );
+                                    self.current.push(new_thread);
+                                }
+
+                                // Mark this start cycle as having forked
+                                self.forked_start_cycles.insert(thread.start_cycle);
+
+                                self.print_scheduler_state(trace, ctx);
+                            }
 
                             // Continue from the fork statement onwards
                             current_stmt_id = next_stmt_id;
