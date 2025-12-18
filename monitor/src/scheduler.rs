@@ -989,7 +989,8 @@ impl Scheduler {
                 self.num_threads += 1;
                 info!(
                     "Adding new thread {} (`{}`) to `next` queue",
-                    new_thread.thread_id, new_thread.transaction.name
+                    new_thread.thread_id,
+                    self.format_transaction_name(ctx, new_thread.transaction.name.clone())
                 );
                 self.next.push(new_thread);
             }
@@ -1056,7 +1057,8 @@ impl Scheduler {
     ) {
         info!(
             "Running thread {} (transaction `{}`) till next `step()`...",
-            thread.thread_id, thread.transaction.name
+            thread.thread_id,
+            self.format_transaction_name(ctx, thread.transaction.name.clone())
         );
 
         // Perform a context switch (use the argument thread's `Transaction`
@@ -1143,8 +1145,9 @@ impl Scheduler {
                 }
                 Ok(None) => {
                     info!(
-                        "Thread {:?} (`{}`) finished successfully, adding to `finished` queue",
-                        thread.thread_id, thread.transaction.name
+                        "Thread {} (`{}`) finished successfully, adding to `finished` queue",
+                        thread.thread_id,
+                        self.format_transaction_name(ctx, thread.transaction.name.clone())
                     );
 
                     // If the thread's `end_time_step` is `None`, use the
