@@ -78,10 +78,6 @@ fn push<DUT: Sender>(
     DUT.s_axis_tdata := data;    
     DUT.s_axis_tvalid := 1'b1;
 
-    // Ensure that the sender's ready bit is 0 
-    // This prevents a `POP` from happening at the same time
-    DUT.m_axis_tready := 1'b0;
-
     // Wait for FIFO to be ready to accept data
     while (!(DUT.s_axis_tready == 1'b1)) {
         step();
@@ -118,10 +114,6 @@ fn pop<DUT: Receiver>(
 ) {
     DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;
-
-    // Ensure that the receiver's valid bit is 0 
-    // (This ensures that `PUSH`es are disabled)
-    DUT.s_axis_tvalid := 1'b0;
 
     // Wait for FIFO to have valid data available
     while (!(DUT.m_axis_tvalid == 1'b1)) {
