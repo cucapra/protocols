@@ -24,7 +24,12 @@ type Queue = Vec<Thread>;
 /// Formats a queue's contents into a pretty-printed string
 /// Note: we can't implement the `Display` trait for `Queue` since
 /// `Queue` is just a type alias
-fn format_queue(queue: &Queue, ctx: &GlobalContext, trace: &WaveSignalTrace, struct_name: &str) -> String {
+fn format_queue(
+    queue: &Queue,
+    ctx: &GlobalContext,
+    trace: &WaveSignalTrace,
+    struct_name: &str,
+) -> String {
     if !queue.is_empty() {
         let formatted_queue = queue
             .iter()
@@ -38,7 +43,12 @@ fn format_queue(queue: &Queue, ctx: &GlobalContext, trace: &WaveSignalTrace, str
 }
 
 /// Formats a single thread with context-aware timing information
-fn format_thread(thread: &Thread, ctx: &GlobalContext, trace: &WaveSignalTrace, struct_name: &str) -> String {
+fn format_thread(
+    thread: &Thread,
+    ctx: &GlobalContext,
+    trace: &WaveSignalTrace,
+    struct_name: &str,
+) -> String {
     let start_info = if ctx.show_waveform_time {
         format!(
             "Start time: {}",
@@ -169,10 +179,22 @@ impl Scheduler {
         info!(
             "{}\n{}\n{}\n{}\n{}",
             header,
-            format_args!("Current: {}", format_queue(&self.current, &ctx, trace, &self.struct_name)),
-            format_args!("Next: {}", format_queue(&self.next, &ctx, trace, &self.struct_name)),
-            format_args!("Failed: {}", format_queue(&self.failed, &ctx, trace, &self.struct_name)),
-            format_args!("Finished: {}", format_queue(&self.finished, &ctx, trace, &self.struct_name))
+            format_args!(
+                "Current: {}",
+                format_queue(&self.current, &ctx, trace, &self.struct_name)
+            ),
+            format_args!(
+                "Next: {}",
+                format_queue(&self.next, &ctx, trace, &self.struct_name)
+            ),
+            format_args!(
+                "Failed: {}",
+                format_queue(&self.failed, &ctx, trace, &self.struct_name)
+            ),
+            format_args!(
+                "Finished: {}",
+                format_queue(&self.finished, &ctx, trace, &self.struct_name)
+            )
         );
     }
 
@@ -946,6 +968,33 @@ impl Scheduler {
     /// Advances to the next cycle by moving next queue to current and incrementing cycle count
     /// (This function should only be called after `trace.step()` has been called in `GlobalScheduler`)
     pub fn advance_to_next_cycle(&mut self, ctx: &GlobalContext, trace: &WaveSignalTrace) {
+        // If next queue is empty and we're in multi-struct mode,
+        // spawn new threads for this cycle.
+        // This is necessary in multi-struct mode where schedulers need to continuously
+        // try to discover transactions even if all previous threads failed
+        if self.next.is_empty() && ctx.multiple_structs {
+            info!(
+                "Next queue is empty for `{}` scheduler, spawning new threads for cycle {}",
+                self.struct_name, self.cycle_count
+            );
+            for (transaction, symbol_table) in &self.possible_transactions {
+                let new_thread = Thread::new(
+                    transaction.clone(),
+                    symbol_table.clone(),
+                    transaction.next_stmt_mapping(),
+                    self.num_threads,
+                    self.cycle_count,
+                    trace.time_step(),
+                );
+                self.num_threads += 1;
+                info!(
+                    "Adding new thread {} (`{}`) to `next` queue",
+                    new_thread.thread_id, new_thread.transaction.name
+                );
+                self.next.push(new_thread);
+            }
+        }
+
         // Mark all suspended threads as ready for execution
         // by setting `current` to `next`, and setting `next = []`
         // (the latter is done via `std::mem::take`)
