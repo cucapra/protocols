@@ -39,7 +39,13 @@ impl GlobalScheduler {
             // Run each local scheduler's current phase
             for scheduler in &mut self.schedulers {
                 if !scheduler.is_done() {
-                    scheduler.run_current_phase(&self.trace)?;
+                    // Note that individual schedulers can fail (which is OK
+                    // in a multi-struct setting, since there may not be
+                    // transactions for a particular struct that apply at a given
+                    // period in the waveform). Thus, we do `let _ = ...` here
+                    // to avoid an error in an individual scheduler
+                    // from causing the entire monitor executable to fail
+                    let _ = scheduler.run_current_phase(&self.trace);
                 }
             }
 
@@ -63,7 +69,7 @@ impl GlobalScheduler {
                     break;
                 }
 
-                // Step 3: Advance the trace (only once for all schedulers)
+                // Advance the trace (only once for all schedulers)
                 let step_result = self.trace.step();
 
                 if self.ctx.show_waveform_time {

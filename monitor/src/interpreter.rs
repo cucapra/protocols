@@ -374,7 +374,9 @@ impl Interpreter {
             // instead of using `contains_key` + `insert`)
             if let Entry::Vacant(e) = self.args_mapping.entry(out_param_symbol) {
                 e.insert(value.clone());
-                let out_param_name = self.symbol_table.full_name_from_symbol_id(&out_param_symbol);
+                let out_param_name = self
+                    .symbol_table
+                    .full_name_from_symbol_id(&out_param_symbol);
                 info!(
                     "Extended args_mapping with {} |-> {}",
                     out_param_name,

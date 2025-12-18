@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -222,8 +222,8 @@ impl Scheduler {
         }
     }
 
-    /// Runs the current phase: executes all threads in the current queue
-    /// and checks constraints for threads in the `next`` queue.
+    /// Runs the current phase: executes all threads in the `current` queue
+    /// and checks constraints for threads in the `next` queue.
     /// This function is used by `GlobalScheduler` to coordinate execution
     /// between multiple schedulers
     pub fn run_current_phase(&mut self, trace: &WaveSignalTrace) -> anyhow::Result<()> {
@@ -235,7 +235,7 @@ impl Scheduler {
         }
 
         // Check constraints for all threads in the `next` queue
-        let mut failed_constraint_checks = Vec::new();
+        let mut failed_constraint_checks = vec![];
 
         for thread in self.next.iter_mut() {
             let time_str = if self.ctx.show_waveform_time {
