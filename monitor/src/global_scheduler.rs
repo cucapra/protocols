@@ -33,99 +33,47 @@ impl GlobalScheduler {
             return Ok(());
         }
 
-        let mut trace_ended = false;
-
         loop {
             // Run each local scheduler's current phase
             for scheduler in self.schedulers.iter_mut() {
-                if !scheduler.is_done() {
-                    // Note that individual schedulers can fail (which is OK
-                    // in a multi-struct setting, since there may not be
-                    // transactions for a particular struct that apply at a given
-                    // period in the waveform). Thus, we do `let _ = ...` here
-                    // to avoid an error in an individual scheduler
-                    // from causing the entire monitor executable to fail
-                    let _ = scheduler.run_current_phase(&self.trace);
-                }
+                // Note that individual schedulers can fail (which is OK
+                // in a multi-struct setting, since there may not be
+                // transactions for a particular struct that apply at a given
+                // period in the waveform). Thus, we do `let _ = ...` here
+                // to avoid an error in an individual scheduler
+                // from causing the entire monitor executable to fail
+                let _ = scheduler.run_current_phase(&self.trace);
             }
 
-            // Check if all active schedulers have finished
-            let all_schedulers_done = self.schedulers.iter().all(|s| s.is_done());
-            if all_schedulers_done {
-                info!("All schedulers finished!");
-                break;
-            }
+            // Advance the trace (only once for all schedulers)
+            let step_result = self.trace.step();
 
-            // Check whether all schedulers need to step
-            let all_schedulers_need_step = self
-                .schedulers
-                .iter()
-                .filter(|s| !s.is_done())
-                .all(|s| s.needs_step());
-
-            if all_schedulers_need_step {
-                // If trace has already ended, we can't proceed
-                if trace_ended {
-                    info!("Trace has ended, schedulers can't proceed. Terminating.");
-                    break;
-                }
-
-                // Advance the trace (only once for all schedulers)
-                let step_result = self.trace.step();
-
-                if self.ctx.show_waveform_time {
-                    let time_str = self
-                        .trace
-                        .format_time(self.trace.time_step(), self.ctx.time_unit);
-                    info!("GlobalScheduler: Advancing to time {}", time_str);
-                } else {
-                    info!("GlobalScheduler: Advancing to next cycle");
-                }
-
-                // Advance all schedulers to their next cycle
-                for scheduler in &mut self.schedulers {
-                    info!("GlobalScheduler: Advancing each scheduler to the next cycle");
-                    if scheduler.needs_step() {
-                        scheduler.advance_to_next_cycle();
-                    }
-                }
-
-                // Check if trace ended
-                if let StepResult::Done = step_result {
-                    info!("No steps remaining in signal trace");
-                    trace_ended = true;
-                    // Mark all schedulers as having trace ended
-                    for scheduler in &mut self.schedulers {
-                        scheduler.mark_trace_ended();
-                    }
-                }
+            if self.ctx.show_waveform_time {
+                let time_str = self
+                    .trace
+                    .format_time(self.trace.time_step(), self.ctx.time_unit);
+                info!("GlobalScheduler: Advancing to time {}", time_str);
             } else {
-                // Some schedulers are done but some need to call `step()`
-                // (This should not happen in practice)
-                if trace_ended {
-                    info!("Trace has ended, remaining schedulers can't proceed. Terminating.");
-                    break;
-                }
+                info!("GlobalScheduler: Advancing to next cycle");
+            }
 
+            // Advance all schedulers to their next cycle
+            for scheduler in &mut self.schedulers {
                 info!(
-                    "Warning: Schedulers are not synchronized. Advancing those that need to step."
+                    "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
+                    scheduler.struct_name
                 );
+                scheduler.advance_to_next_cycle();
+            }
 
-                let step_result = self.trace.step();
-
-                for scheduler in &mut self.schedulers {
-                    if scheduler.needs_step() {
-                        scheduler.advance_to_next_cycle();
-                    }
+            // Check if trace ended (if it finished, then we exit out the loop)
+            if let StepResult::Done = step_result {
+                info!("GlobalScheduler: No steps remaining in signal trace");
+                // Mark all schedulers as having trace ended
+                for scheduler in self.schedulers.iter_mut() {
+                    scheduler.mark_trace_ended();
                 }
-
-                if let StepResult::Done = step_result {
-                    info!("No steps remaining in signal trace");
-                    trace_ended = true;
-                    for scheduler in &mut self.schedulers {
-                        scheduler.mark_trace_ended();
-                    }
-                }
+                break;
             }
         }
 

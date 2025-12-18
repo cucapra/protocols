@@ -137,7 +137,7 @@ pub struct Scheduler {
     /// The name of the struct this scheduler is monitoring
     /// (Used for prefixing transaction names in multi-struct scenarios)
     /// Note: if there is just one single struct, this string is empty
-    struct_name: String,
+    pub struct_name: String,
 }
 
 impl Scheduler {
@@ -779,20 +779,6 @@ impl Scheduler {
         if self.ctx.print_num_steps {
             eprintln!("No. of steps taken: {}", self.cycle_count);
         }
-    }
-
-    /// Returns true if the scheduler is completely done,
-    /// i.e. both the `current` and `next` queues are empty
-    pub fn is_done(&self) -> bool {
-        self.current.is_empty() && self.next.is_empty()
-    }
-
-    /// Returns true if the scheduler needs to advance to the next time step
-    /// (i.e. `current` is empty but `next` still contains threads,
-    /// i.e. there are threads whose execution has been suspended
-    /// and still need to be run to completion)
-    pub fn needs_step(&self) -> bool {
-        self.current.is_empty() && !self.next.is_empty()
     }
 
     /// Advances to the next cycle by moving next queue to current and incrementing cycle count
