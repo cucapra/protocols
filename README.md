@@ -1,5 +1,5 @@
 # Protocols
-**Protocols** is a DSL for specifying & testing hardware designs at the cycle-level RTL level.
+**Protocols** is a DSL for specifying & testing hardware communication protocols at the cycle-level register-transfer level (RTL).
 A protocol is described using an `fn` definition containing a list of imperative statements:
 - `symbol := RHS` assigns the value of the `RHS` expression to the DUT input port `symbol`. The right-hand side expression may be an arbitrary value, represented by `X` ("don't care").
 - `step(n)`  advances the clock by `n` cycles (`n > 0`)
@@ -20,8 +20,9 @@ These tools are all implemented in Rust, with some auxiliary benchmarking script
 Note: the installation instructions below assume a macOS environment.
 - Ensure you have Homebrew and `uv` installed 
   - If not, follow these instructions to install [Homebrew](https://brew.sh) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
-- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), which we use for [snapshot tests](https://www.cs.cornell.edu/~asampson/blog/turnt.html), which compare the output of our tools to expected outputs stored in dedicated files 
+- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), a command-line tool we use for [snapshot tests](https://www.cs.cornell.edu/~asampson/blog/turnt.html), which compare the output of our tools to expected outputs stored in dedicated files 
 - Run `npm install -g faucet` to install [Faucet](https://github.com/tape-testing/faucet), which summarizes test outputs from Turnt in a human-readable manner
 
 **Dependencies for benchmarking the monitor**:
