@@ -1191,7 +1191,7 @@ impl Scheduler {
                     info!(
                         "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
                         thread.thread_id,
-                        thread.transaction.name,
+                        self.format_transaction_name(ctx, thread.transaction.name.clone()),
                         self.serialize_monitor_error(err, trace, ctx)
                     );
                     self.failed.push(thread);
