@@ -133,13 +133,25 @@ fn pop<DUT: Receiver>(
     step();
 }
 
-// IDLE: No transaction occurs
-// No handshakes are completing
+// IDLE: No transaction occurs on the monitored interface
+// For Sender: no push transaction (no data being written to FIFO)
+// For Receiver: no pop transaction (no data being read from FIFO)
+
 fn idle<DUT: Sender>() {
     DUT.rst := 1'b0;
 
-    // Check that no pop handshake completes
-    assert_eq(DUT.m_axis_tvalid, 1'b0);
+    // Ensure no push handshake by setting valid = 0
+    // (Push handshake requires s_axis_tvalid && s_axis_tready)
+    DUT.s_axis_tvalid := 1'b0;
+
+    // All other input signals are don't care when valid = 0
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
+    DUT.m_axis_tready := X;
 
     step();
 
@@ -148,10 +160,20 @@ fn idle<DUT: Sender>() {
 }
 
 fn idle<DUT: Receiver>() {
-    DUT.rst := 1'b0; 
-    
-    // Check that no push handshake completes
-    assert_eq(DUT.s_axis_tready, 1'b0);
+    DUT.rst := 1'b0;
+
+    // Ensure no pop handshake by setting ready = 0
+    // (Pop handshake requires m_axis_tvalid && m_axis_tready)
+    DUT.m_axis_tready := 1'b0;
+
+    // All other input signals are don't care when ready = 0
+    DUT.s_axis_tdata := X;
+    DUT.s_axis_tkeep := X;
+    DUT.s_axis_tvalid := X;
+    DUT.s_axis_tlast := X;
+    DUT.s_axis_tid := X;
+    DUT.s_axis_tdest := X;
+    DUT.s_axis_tuser := X;
 
     step();
 
