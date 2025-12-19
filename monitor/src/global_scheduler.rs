@@ -7,7 +7,7 @@ use crate::{
     scheduler::{Scheduler, SchedulerError},
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
 };
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use log::info;
 
 pub struct GlobalScheduler {
@@ -33,9 +33,9 @@ impl GlobalScheduler {
         let mut trace_ended = false;
 
         loop {
-            // Run each local scheduler's current phase
+            // Run each local scheduler's current cycle
             for scheduler in self.schedulers.iter_mut() {
-                match scheduler.run_current_phase(&self.trace, ctx) {
+                match scheduler.run_current_cycle(&self.trace, ctx) {
                     Ok(()) => {
                         // Scheduler ran successfully
                     }
@@ -102,7 +102,7 @@ impl GlobalScheduler {
                     "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
                     scheduler.struct_name
                 );
-                scheduler.advance_to_next_cycle(&ctx, &self.trace);
+                scheduler.advance_to_next_cycle(ctx, &self.trace);
             }
 
             // Check if trace ended (if it finished, then we exit out the loop)

@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -162,13 +162,13 @@ pub struct Scheduler {
     /// Flag indicating whether the trace has ended
     trace_ended: bool,
 
-    /// Tracks which start cycles have already called fork() in the current phase
+    /// Tracks which start cycles have already called fork() in the current cycle
     /// (Used to prevent duplicate thread spawning when multiple threads from the
     /// same start cycle finish simultaneously)
     forked_start_cycles: FxHashSet<u32>,
 
-    /// Tracks which thread (if any) has finished in the current phase
-    /// Only one thread per struct should finish per phase
+    /// Tracks which thread (if any) has finished in the current cycle
+    /// Only one thread per struct should finish per cycle
     finished_thread: Option<(u32, u32, String)>, // (start_cycle, thread_id, transaction_name)
 
     /// All possible transactions (along with their corresponding `SymbolTable`s)
@@ -209,19 +209,19 @@ impl Scheduler {
             header,
             format_args!(
                 "Current: {}",
-                format_queue(&self.current, &ctx, trace, &self.struct_name)
+                format_queue(&self.current, ctx, trace, &self.struct_name)
             ),
             format_args!(
                 "Next: {}",
-                format_queue(&self.next, &ctx, trace, &self.struct_name)
+                format_queue(&self.next, ctx, trace, &self.struct_name)
             ),
             format_args!(
                 "Failed: {}",
-                format_queue(&self.failed, &ctx, trace, &self.struct_name)
+                format_queue(&self.failed, ctx, trace, &self.struct_name)
             ),
             format_args!(
                 "Finished: {}",
-                format_queue(&self.finished, &ctx, trace, &self.struct_name)
+                format_queue(&self.finished, ctx, trace, &self.struct_name)
             )
         );
     }
@@ -264,7 +264,7 @@ impl Scheduler {
         let interpreter = Interpreter::new(
             initial_transaction,
             initial_symbol_table,
-            &ctx,
+            ctx,
             trace,
             cycle_count,
             dut_symbol_id,
@@ -285,22 +285,22 @@ impl Scheduler {
         }
     }
 
-    /// Runs the current phase: executes all threads in the `current` queue
+    /// Runs the current cycle: executes all threads in the `current` queue
     /// and checks constraints for threads in the `next` queue.
     /// This function is used by `GlobalScheduler` to coordinate execution
     /// between multiple schedulers
-    pub fn run_current_phase(
+    pub fn run_current_cycle(
         &mut self,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
     ) -> Result<(), SchedulerError> {
         info!(
-            "Inside `Scheduler::run_current_phase` for {} scheduler",
+            "Inside `Scheduler::run_current_cycle` for {} scheduler",
             self.struct_name
         );
 
-        // Clear the tracking sets at the beginning of each phase
-        // to track which start cycles fork/finish in THIS phase
+        // Clear auxiliary fields at the beginning of each cycle
+        // to track which start cycles fork/finish in THIS cycle
         self.forked_start_cycles.clear();
         self.finished_thread = None;
 
@@ -337,14 +337,14 @@ impl Scheduler {
                     Ok(trace_value) => {
                         if trace_value != *expected_value {
                             info!(
-                                    "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
-                                    thread.thread_id,
-                                    thread.transaction.name,
-                                    time_str,
-                                    symbol_name,
-                                    serialize_bitvec(&trace_value, ctx.display_hex),
-                                    serialize_bitvec(expected_value, ctx.display_hex)
-                                );
+                                "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
+                                thread.thread_id,
+                                thread.transaction.name,
+                                time_str,
+                                symbol_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex),
+                                serialize_bitvec(expected_value, ctx.display_hex)
+                            );
                             failed_constraint_checks.push(thread.clone());
                         } else {
                             info!(
@@ -359,9 +359,9 @@ impl Scheduler {
                     }
                     Err(_) => {
                         info!(
-                                "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
-                                symbol_name, self.interpreter.trace_cycle_count
-                            );
+                            "Unable to verify constraint for {} at cycle {:?} - symbol not found in trace",
+                            symbol_name, self.interpreter.trace_cycle_count
+                        );
                         // If we can't read the symbol from the trace, treat it as a constraint violation
                         // (The constraint can't hold if the signal doesn't exist in the trace)
                         failed_constraint_checks.push(thread.clone());
@@ -420,11 +420,11 @@ impl Scheduler {
                                 // the waveform value at the current time-step.
                                 if trace_value != *param_value {
                                     info!(
-                                            "Updating {} |-> {} in args_mapping based on waveform data at {}",
-                                            param_name,
-                                            serialize_bitvec(&trace_value, ctx.display_hex),
-                                            time_str
-                                        );
+                                        "Updating {} |-> {} in args_mapping based on waveform data at {}",
+                                        param_name,
+                                        serialize_bitvec(&trace_value, ctx.display_hex),
+                                        time_str
+                                    );
                                     thread.args_mapping.insert(*param_id, trace_value);
                                 } else {
                                     info!(
@@ -436,16 +436,16 @@ impl Scheduler {
                                 }
                             } else {
                                 info!(
-                                        "Skipping args_mapping check for {} since not all bits are known",
-                                        param_name
-                                    );
+                                    "Skipping args_mapping check for {} since not all bits are known",
+                                    param_name
+                                );
                             }
                         }
                         Err(_) => {
                             info!(
-                                    "Unable to verify args_mapping {} -> {} at {}, as {} is not found in the trace",
-                                    param_name, port_name, time_str, param_name
-                                );
+                                "Unable to verify args_mapping {} -> {} at {}, as {} is not found in the trace",
+                                param_name, port_name, time_str, param_name
+                            );
                             failed_constraint_checks.push(thread.clone());
                         }
                     }
@@ -505,16 +505,16 @@ impl Scheduler {
                 };
 
                 return Err(SchedulerError::Other(anyhow!(
-                        "Scheduler for `{}`: Expected the no. of threads for that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
-                        self.struct_name,
-                        start_time,
-                        end_time,
-                        finished.len(),
-                        finished
-                            .iter()
-                            .map(|t| t.transaction.name.clone())
-                            .collect::<Vec<_>>()
-                    )));
+                    "Scheduler for `{}`: Expected the no. of threads for that started at {} & ended at {} to be at most 1, but instead there were {} ({:?})",
+                    self.struct_name,
+                    start_time,
+                    end_time,
+                    finished.len(),
+                    finished
+                        .iter()
+                        .map(|t| t.transaction.name.clone())
+                        .collect::<Vec<_>>()
+                )));
             }
             let finished_thread = &finished[0];
 
@@ -527,12 +527,14 @@ impl Scheduler {
                     format!("cycle {}", finished_thread.start_cycle)
                 };
                 let error_context = anyhow!(
-                            "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
-                            finished_thread.thread_id,
-                            finished_thread.transaction.name,
-                            start_time_str,
-                            next.iter().map(|t| t.transaction.name.clone()).collect::<Vec<_>>()
-                        );
+                    "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
+                    finished_thread.thread_id,
+                    finished_thread.transaction.name,
+                    start_time_str,
+                    next.iter()
+                        .map(|t| t.transaction.name.clone())
+                        .collect::<Vec<_>>()
+                );
 
                 return Err(SchedulerError::NoTransactionsMatch {
                     struct_name: self.struct_name.clone(),
@@ -569,10 +571,10 @@ impl Scheduler {
             if failed.len() > 1 && finished.is_empty() && paused.is_empty() && self.next.is_empty()
             {
                 let error_context = anyhow!(
-                        "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
-                        start_cycle,
-                        failed.len()
-                    );
+                    "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
+                    start_cycle,
+                    failed.len()
+                );
 
                 return Err(SchedulerError::NoTransactionsMatch {
                     struct_name: self.struct_name.clone(),
@@ -1120,7 +1122,7 @@ impl Scheduler {
         loop {
             match self
                 .interpreter
-                .evaluate_stmt(&current_stmt_id, &ctx, trace)
+                .evaluate_stmt(&current_stmt_id, ctx, trace)
             {
                 Ok(Some(next_stmt_id)) => {
                     // Update thread-local maps
@@ -1163,8 +1165,7 @@ impl Scheduler {
                             if already_forked {
                                 info!(
                                     "Thread {:?} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
-                                    thread.thread_id,
-                                    thread.start_cycle
+                                    thread.thread_id, thread.start_cycle
                                 );
                             } else {
                                 // For each possible transaction, fork one new thread for it,
@@ -1262,10 +1263,10 @@ impl Scheduler {
                     } else {
                         let transaction_str = self
                             .interpreter
-                            .serialize_reconstructed_transaction(&ctx, trace);
+                            .serialize_reconstructed_transaction(ctx, trace);
 
                         // Add struct name prefix for multi-struct scenarios
-                        let transaction_name = self.format_transaction_name(&ctx, transaction_str);
+                        let transaction_name = self.format_transaction_name(ctx, transaction_str);
 
                         if ctx.show_waveform_time {
                             let start_time =
