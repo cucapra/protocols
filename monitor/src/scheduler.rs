@@ -10,7 +10,7 @@ use protocols::{
     ir::{Stmt, SymbolId, SymbolTable, Transaction},
     serialize::{serialize_bitvec, serialize_stmt},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use crate::{
     global_context::GlobalContext,
@@ -167,10 +167,9 @@ pub struct Scheduler {
     /// same start cycle finish simultaneously)
     forked_start_cycles: FxHashSet<u32>,
 
-    /// Tracks which thread finished for each start cycle in the current phase
-    /// Maps start_cycle -> (thread_id, transaction_name)
-    /// (Used to detect when multiple threads from the same start cycle try to finish)
-    finished_threads: FxHashMap<u32, (u32, String)>,
+    /// Tracks which thread (if any) has finished in the current phase
+    /// Only one thread per struct should finish per phase
+    finished_thread: Option<(u32, u32, String)>, // (start_cycle, thread_id, transaction_name)
 
     /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
@@ -280,7 +279,7 @@ impl Scheduler {
             num_threads: thread_id,
             trace_ended: false,
             forked_start_cycles: FxHashSet::default(),
-            finished_threads: FxHashMap::default(),
+            finished_thread: None,
             possible_transactions: transactions,
             struct_name,
         }
@@ -303,7 +302,7 @@ impl Scheduler {
         // Clear the tracking sets at the beginning of each phase
         // to track which start cycles fork/finish in THIS phase
         self.forked_start_cycles.clear();
-        self.finished_threads.clear();
+        self.finished_thread = None;
 
         self.print_scheduler_state(trace, ctx);
 
@@ -1212,20 +1211,23 @@ impl Scheduler {
                     }
                 }
                 Ok(None) => {
-                    // Check if another thread from the same start cycle has already finished
-                    // in this phase. If so, return an error to let GlobalScheduler decide how to handle it.
-                    // if let Some((first_thread_id, first_transaction_name)) =
-                    //     self.finished_threads.get(&thread.start_cycle)
-                    // {
-                    //     return Err(SchedulerError::MultipleThreadsFinished {
-                    //         struct_name: self.struct_name.clone(),
-                    //         start_cycle: thread.start_cycle,
-                    //         first_thread_id: *first_thread_id,
-                    //         first_transaction_name: first_transaction_name.clone(),
-                    //         second_thread_id: thread.thread_id,
-                    //         second_transaction_name: thread.transaction.name.clone(),
-                    //     });
-                    // }
+                    // Check if another thread has already finished in this cycle.
+                    // Invariant: Only one thread per struct can finish per cycle
+                    if let Some((first_start_cycle, first_thread_id, first_transaction_name)) =
+                        &self.finished_thread
+                    {
+                        info!(
+                            "Thread {} (`{}`) would have finished, but another thread (thread {} `{}` from start_cycle {}) already finished in this cycle. Marking as failed.",
+                            thread.thread_id,
+                            self.format_transaction_name(ctx, thread.transaction.name.clone()),
+                            first_thread_id,
+                            self.format_transaction_name(ctx, first_transaction_name.to_string()),
+                            first_start_cycle
+                        );
+                        self.failed.push(thread);
+                        self.print_scheduler_state(trace, ctx);
+                        return Ok(());
+                    }
 
                     info!(
                         "Thread {} (`{}`) finished successfully, adding to `finished` queue",
@@ -1233,11 +1235,12 @@ impl Scheduler {
                         self.format_transaction_name(ctx, thread.transaction.name.clone())
                     );
 
-                    // Record this thread as having finished for this start cycle
-                    self.finished_threads.insert(
+                    // Record this thread as having finished in this cycle
+                    self.finished_thread = Some((
                         thread.start_cycle,
-                        (thread.thread_id, thread.transaction.name.clone()),
-                    );
+                        thread.thread_id,
+                        thread.transaction.name.clone(),
+                    ));
 
                     // If the thread's `end_time_step` is `None`, use the
                     // current `time_step` of the trace as a fallback.
