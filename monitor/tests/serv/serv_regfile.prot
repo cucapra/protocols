@@ -279,4 +279,14 @@ fn idle<R: Regfile>() {
   R.i_rd_en := 1'b0;
   assert_eq(R.o_ready, 1'b0);
   step();
+  
+  R.i_go := X;
+  R.i_rd_en := X;
+  R.i_rd_addr := X;
+  R.i_rd := X;
+  R.i_rs1_addr := X;
+  R.i_rs2_addr := X;
+
+  fork();
+  step();
 }

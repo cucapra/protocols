@@ -2,8 +2,6 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{designs::Design, signal_trace::WaveSignalTrace};
-
 /// Time unit for displaying waveform times
 #[derive(Debug, Clone, Copy)]
 pub enum TimeUnit {
@@ -33,24 +31,18 @@ impl TimeUnit {
 }
 
 /// The `GlobalContext` stores fields which are common
-/// to all threads, such as:
-/// - the `WaveSignalTrace` (since all threads are working over the same trace)
+/// to all threads, e.g.:
 /// - the `Design` (since all threads are working over the same `Design`)
-/// - other immutable fields
+/// - other immutable fields (configuration flags)
+///   Note: The `WaveSignalTrace` is owned by `GlobalScheduler` and passed
+///   as needed
 #[derive(Debug)]
 pub struct GlobalContext {
     /// The name of the waveform file supplied by the user
     /// (Only used for error-reporting purposes)
     pub waveform_file: String,
 
-    /// The waveform supplied by the user
-    pub trace: WaveSignalTrace,
-
-    /// The design under test
-    pub design: Design,
-
     /// The `instance_id` corresponding to the DUT instance
-    /// (Note: We assume that there is only one `Instance` at the moment)
     pub instance_id: u32,
 
     /// Indicates whether to print integer literals
@@ -67,35 +59,32 @@ pub struct GlobalContext {
     /// Indicates whether to print the no. of logical steps (i.e. clock cycles)
     /// taken by the monitor
     pub print_num_steps: bool,
+
+    /// Indicates if there are multiple (more than 1) structs in the source file
+    pub multiple_structs: bool,
 }
 
 impl GlobalContext {
-    /// Creates a new `GlobalContext` with the provided `trace`,
-    /// `design` and `display_hex` flag. The `display_hex` argument
-    /// indicates whether to print integer literals
+    /// Creates a new `GlobalContext` with the provided `design` and configuration flags.
+    /// The `display_hex` argument indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
     pub fn new(
         waveform_file: String,
-        trace: WaveSignalTrace,
-        design: Design,
+        instance_id: u32,
         display_hex: bool,
         show_waveform_time: bool,
         time_unit: TimeUnit,
         print_num_steps: bool,
+        multiple_structs: bool,
     ) -> Self {
-        // We assume that there is only one `Instance` at the moment,
-        // so we just use the first `PortKey`'s `instance_id`
-        let instance_id = trace.port_map.keys().collect::<Vec<_>>()[0].instance_id;
-
         Self {
             waveform_file,
-            trace,
-            design,
             instance_id,
             display_hex,
             show_waveform_time,
             time_unit,
             print_num_steps,
+            multiple_structs,
         }
     }
 }

@@ -1,3 +1,5 @@
+All threads failed for AxisFifo
 Failure at 185ns: No transactions match the waveform in `fpga-debugging/axis-fifo-d4/d4_fixed.fst`.
 Possible transactions: [push_and_pop, push, pop, idle, reset]
+Error in scheduler for AxisFifo
 Error: Monitor failed

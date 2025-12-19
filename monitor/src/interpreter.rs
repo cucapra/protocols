@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     global_context::GlobalContext,
-    signal_trace::{PortKey, SignalTrace},
+    signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
     thread::Thread,
 };
 
@@ -35,6 +35,9 @@ pub struct Interpreter {
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
+
+    /// The SymbolId of the DUT (design under test)
+    pub dut_symbol_id: SymbolId,
 }
 
 impl Interpreter {
@@ -68,12 +71,14 @@ impl Interpreter {
         transaction: Transaction,
         symbol_table: SymbolTable,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
         trace_cycle_count: u32,
+        dut_symbol_id: SymbolId,
     ) -> Self {
         let mut args_mapping = FxHashMap::default();
         let mut known_bits = FxHashMap::default();
 
-        for port_key in ctx.trace.port_map.keys() {
+        for port_key in trace.port_map.keys() {
             // We assume that there is only one `Instance` at the moment
             let PortKey {
                 instance_id,
@@ -82,7 +87,7 @@ impl Interpreter {
 
             // Fetch the current value of the `pin_id`
             // (along with the name of the corresponding `Field`)
-            let current_value = ctx.trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
+            let current_value = trace.get(*instance_id, *pin_id).unwrap_or_else(|err| {
                 panic!(
                     "Unable to get value for pin {pin_id} in signal trace, {:?}",
                     err
@@ -112,6 +117,7 @@ impl Interpreter {
             constraints: FxHashMap::default(),
             trace_cycle_count,
             args_to_pins: FxHashMap::default(),
+            dut_symbol_id,
         }
     }
 
@@ -120,6 +126,7 @@ impl Interpreter {
         &mut self,
         expr_id: &ExprId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<ExprValue> {
         let transaction = self.transaction.clone();
         let expr = &transaction[expr_id];
@@ -134,11 +141,11 @@ impl Interpreter {
                     Ok(ExprValue::Concrete(value.clone()))
                 }
                 // Otherwise, try to fetch the value from the trace
-                else if let Ok(value) = ctx.trace.get(ctx.instance_id, *sym_id) {
+                else if let Ok(value) = trace.get(ctx.instance_id, *sym_id) {
                     if ctx.show_waveform_time {
                         info!(
                             "Trace @ time {}: `{}` has value {}",
-                            ctx.trace.format_time(ctx.trace.time_step(), ctx.time_unit),
+                            trace.format_time(trace.time_step(), ctx.time_unit),
                             name,
                             serialize_bitvec(&value, ctx.display_hex)
                         );
@@ -155,7 +162,7 @@ impl Interpreter {
 
                     // Concretely, we check if the identifier begins with
                     // the name of the DUT (e.g. check if "DUT.s" begins with "DUT.")
-                    let dut_prefix = format!("{}.", self.symbol_table[ctx.design.symbol_id].name());
+                    let dut_prefix = format!("{}.", self.symbol_table[self.dut_symbol_id].name());
                     if name.starts_with(&dut_prefix) {
                         let pin_name = &name[dut_prefix.len()..];
 
@@ -203,8 +210,8 @@ impl Interpreter {
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
-                let lhs_val = self.evaluate_expr(lhs_id, ctx)?;
-                let rhs_val = self.evaluate_expr(rhs_id, ctx)?;
+                let lhs_val = self.evaluate_expr(lhs_id, ctx, trace)?;
+                let rhs_val = self.evaluate_expr(rhs_id, ctx, trace)?;
                 match bin_op {
                     BinOp::Equal => match (&lhs_val, &rhs_val) {
                         (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
@@ -259,7 +266,7 @@ impl Interpreter {
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
-                let expr_val = self.evaluate_expr(expr_id, ctx)?;
+                let expr_val = self.evaluate_expr(expr_id, ctx, trace)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => match unary_op {
                         UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
@@ -319,7 +326,7 @@ impl Interpreter {
                     return Err(ExecutionError::illegal_slice(*sliced_expr_id, *msb, *lsb));
                 }
 
-                let expr_val = self.evaluate_expr(sliced_expr_id, ctx)?;
+                let expr_val = self.evaluate_expr(sliced_expr_id, ctx, trace)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => {
                         let width = bvv.width();
@@ -361,18 +368,20 @@ impl Interpreter {
         &mut self,
         out_param_symbol: SymbolId,
         trace_symbol: SymbolId,
-        out_param_name: &str,
-        trace_symbol_name: &str,
         trace_symbol_expr_id: ExprId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<()> {
-        if let Ok(value) = ctx.trace.get(ctx.instance_id, trace_symbol) {
+        if let Ok(value) = trace.get(ctx.instance_id, trace_symbol) {
             // Only modify the args_mapping if `out_param_symbol`
             // is currently *not* present
             // (Clippy suggested checking if the `Entry` is `Vacant`
             // instead of using `contains_key` + `insert`)
             if let Entry::Vacant(e) = self.args_mapping.entry(out_param_symbol) {
                 e.insert(value.clone());
+                let out_param_name = self
+                    .symbol_table
+                    .full_name_from_symbol_id(&out_param_symbol);
                 info!(
                     "Extended args_mapping with {} |-> {}",
                     out_param_name,
@@ -391,9 +400,10 @@ impl Interpreter {
                 serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
             );
 
+            let trace_symbol_name = self.symbol_table.full_name_from_symbol_id(&trace_symbol);
             Err(ExecutionError::symbol_not_found(
                 trace_symbol,
-                trace_symbol_name.to_string(),
+                trace_symbol_name,
                 "trace".to_string(),
                 trace_symbol_expr_id,
             ))
@@ -406,6 +416,7 @@ impl Interpreter {
         &mut self,
         stmt_id: &StmtId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<Option<StmtId>> {
         let transaction = self.transaction.clone();
         let stmt = &transaction[stmt_id];
@@ -416,14 +427,14 @@ impl Interpreter {
         );
         match stmt {
             Stmt::Assign(symbol_id, expr_id) => {
-                self.evaluate_assign(symbol_id, expr_id, ctx)?;
+                self.evaluate_assign(symbol_id, expr_id, ctx, trace)?;
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id, ctx)
+                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id, ctx, trace)
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx)
+                self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx, trace)
             }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.
@@ -431,7 +442,7 @@ impl Interpreter {
                 Ok(self.next_stmt_map[stmt_id])
             }
             Stmt::AssertEq(expr_id1, expr_id2) => {
-                self.evaluate_assert_eq(stmt_id, expr_id1, expr_id2, ctx)
+                self.evaluate_assert_eq(stmt_id, expr_id1, expr_id2, ctx, trace)
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
@@ -452,6 +463,7 @@ impl Interpreter {
         expr_id1: &ExprId,
         expr_id2: &ExprId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<Option<StmtId>> {
         let e1 = &self.transaction[expr_id1];
         let e2 = &self.transaction[expr_id2];
@@ -476,12 +488,12 @@ impl Interpreter {
                     if out_param_symbol == symbol_id1 {
                         info!("{} is an output param of the transaction", name1);
                         self.map_output_param_to_trace(
-                            symbol_id1, symbol_id2, &name1, &name2, *expr_id2, ctx,
+                            symbol_id1, symbol_id2, *expr_id2, ctx, trace,
                         )?;
                     } else if out_param_symbol == symbol_id2 {
                         info!("{} is an output param of the transaction", name2);
                         self.map_output_param_to_trace(
-                            symbol_id2, symbol_id1, &name2, &name1, *expr_id1, ctx,
+                            symbol_id2, symbol_id1, *expr_id1, ctx, trace,
                         )?;
                     }
                 }
@@ -491,8 +503,8 @@ impl Interpreter {
                 // Handle other exprs that are supplied to `assert_eq`
                 // e.g. bit-slices
 
-                let eval_result1 = self.evaluate_expr(expr_id1, ctx);
-                let eval_result2 = self.evaluate_expr(expr_id2, ctx);
+                let eval_result1 = self.evaluate_expr(expr_id1, ctx, trace);
+                let eval_result2 = self.evaluate_expr(expr_id2, ctx, trace);
 
                 match (eval_result1.clone(), eval_result2.clone()) {
                     (
@@ -697,8 +709,9 @@ impl Interpreter {
         then_stmt_id: &StmtId,
         else_stmt_id: &StmtId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<Option<StmtId>> {
-        let res = self.evaluate_expr(cond_expr_id, ctx)?;
+        let res = self.evaluate_expr(cond_expr_id, ctx, trace)?;
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "if".to_string(),
@@ -734,9 +747,10 @@ impl Interpreter {
         lhs_symbol_id: &SymbolId,
         rhs_expr_id: &ExprId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<()> {
         let lhs_name = self.symbol_table.full_name_from_symbol_id(lhs_symbol_id);
-        match self.evaluate_expr(rhs_expr_id, ctx) {
+        match self.evaluate_expr(rhs_expr_id, ctx, trace) {
             Ok(ExprValue::Concrete(rhs_value)) => {
                 let rhs_expr = &self.transaction[rhs_expr_id];
                 match rhs_expr {
@@ -754,7 +768,7 @@ impl Interpreter {
 
                         // If the `rhs` is a constant or an identifier,
                         // we compare it with the trace's value for the LHS
-                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id) {
                             // If they're different, we report an error
                             if rhs_value != trace_value {
                                 Err(ExecutionError::value_disagrees_with_trace(
@@ -828,8 +842,7 @@ impl Interpreter {
                                 // further bit-slicing here, since we've
                                 // already evaluated `slice_expr[msb:lsb]`
 
-                                if let Ok(trace_value) =
-                                    ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
+                                if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id)
                                 {
                                     // If they're different, we report an error
                                     if rhs_value != trace_value {
@@ -916,7 +929,7 @@ impl Interpreter {
                             "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
                             symbol_name, rhs_symbol_id
                         );
-                        if let Ok(trace_value) = ctx.trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id) {
                             self.args_mapping
                                 .insert(*rhs_symbol_id, trace_value.clone());
                             info!(
@@ -979,8 +992,7 @@ impl Interpreter {
 
                                 // Look up the trace value corresponding
                                 // to the LHS
-                                if let Ok(trace_value) =
-                                    ctx.trace.get(ctx.instance_id, *lhs_symbol_id)
+                                if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id)
                                 {
                                     // Look up the width of `sliced_symbol_id`
                                     // based on its type in the `SymbolTable`.
@@ -1100,8 +1112,9 @@ impl Interpreter {
         while_id: &StmtId,
         do_block_id: &StmtId,
         ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
     ) -> ExecutionResult<Option<StmtId>> {
-        let res = self.evaluate_expr(loop_guard_id, ctx)?;
+        let res = self.evaluate_expr(loop_guard_id, ctx, trace)?;
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "while".to_string(),
@@ -1140,7 +1153,11 @@ impl Interpreter {
 
     /// Prints the reconstructed transaction
     /// (i.e. the function call that led to the signal trace)
-    pub fn serialize_reconstructed_transaction(&self, ctx: &GlobalContext) -> String {
+    pub fn serialize_reconstructed_transaction(
+        &self,
+        ctx: &GlobalContext,
+        trace: &WaveSignalTrace,
+    ) -> String {
         // Print the full args_mapping for debugging
         info!(
             "Final args_mapping:\n{}",
@@ -1155,7 +1172,7 @@ impl Interpreter {
             let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
             let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
                 let time_str = if ctx.show_waveform_time {
-                    ctx.trace.format_time(ctx.trace.time_step(), ctx.time_unit)
+                    trace.format_time(trace.time_step(), ctx.time_unit)
                 } else {
                     format!("cycle {}", self.trace_cycle_count) 
                 };

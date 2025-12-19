@@ -416,6 +416,11 @@ impl SignalTrace for WaveSignalTrace {
                     if prev_value == "0" && new_value == "1" {
                         let new_time = self.time_value(self.time_step) / 1_000_000;
 
+                        info!(
+                            "time_value of new_time is {}",
+                            self.time_value(self.time_step)
+                        );
+
                         info!("Advanced clock time from {old_time}ns -> {new_time}ns");
 
                         return StepResult::Ok;

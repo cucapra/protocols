@@ -6,13 +6,15 @@
 mod axi_experiment;
 mod designs;
 mod global_context;
+mod global_scheduler;
 mod interpreter;
 mod scheduler;
 mod signal_trace;
 mod thread;
 
-use crate::designs::{Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
+use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
 use anyhow::{Context, anyhow};
@@ -40,8 +42,9 @@ struct Cli {
     wave: String,
 
     /// A mapping of DUT struct in the protocol file to an instance in the signal trace.
-    /// Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
-    #[arg(short, long)]
+    /// Multiple arguments can be passed if they're seperated by whitespace.
+    /// Format is: `${instance_name}:${dut_struct_name}`
+    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
     instances: Vec<String>,
 
     /// Users can specify `-v` or `--verbose` to toggle logging
@@ -82,7 +85,6 @@ struct Cli {
     print_num_steps: bool,
 }
 
-#[allow(unused_variables)]
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -135,11 +137,16 @@ fn main() -> anyhow::Result<()> {
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge)
         .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
-    // TODO: figure out how to avoid hard-coding this
-    let dut_struct_name = &instances[0].design_name;
-    let design = designs
-        .get(dut_struct_name)
-        .with_context(|| format!("Missing Design for {}", dut_struct_name))?;
+    // Support multiple structs & designs
+    let dut_designs: Vec<&Design> = instances
+        .iter()
+        .map(|inst| {
+            let struct_name = &inst.design_name;
+            designs
+                .get(struct_name)
+                .unwrap_or_else(|| panic!("Missing Design for {}", struct_name))
+        })
+        .collect();
 
     // Parse the time unit (defaults to `Auto` if not specified)
     let time_unit = if let Some(ref time_unit_str) = cli.time_unit {
@@ -153,23 +160,56 @@ fn main() -> anyhow::Result<()> {
         TimeUnit::Auto
     };
 
-    // Initialize the `GlobalContext` (shared across all threads)
-    // & the scheduler
+    // Check if we have multiple structs/designs
+
+    let multiple_structs = dut_designs.len() > 1;
+
+    // Create a GlobalContext that is shared across all schedulers
     let ctx = GlobalContext::new(
         cli.wave,
-        trace,
-        design.clone(),
+        0,
         cli.display_hex,
         cli.show_waveform_time,
         time_unit,
         cli.print_num_steps,
+        multiple_structs,
     );
-    let mut scheduler = Scheduler::initialize(transactions_symbol_tables, ctx);
 
-    // Actually run the scheduler
-    if let Err(error_msg) = scheduler.run() {
+    // Multi-struct mode: create a GlobalScheduler with one scheduler per design
+    let mut schedulers = vec![];
+
+    for design in dut_designs.into_iter() {
+        // Filter transactions that belong to this design
+        let design_transactions: Vec<(Transaction, SymbolTable)> = design
+            .transaction_ids
+            .iter()
+            .map(|&idx| transactions_symbol_tables[idx].clone())
+            .collect();
+
+        if design_transactions.is_empty() {
+            continue; // Skip designs with no transactions
+        }
+
+        // Create a scheduler for this design, using the design name as the struct name
+        let scheduler = Scheduler::initialize(
+            design_transactions,
+            &ctx,
+            &trace,
+            design.name.clone(),
+            design.symbol_id,
+        );
+
+        schedulers.push(scheduler);
+    }
+
+    // Create a `GlobalScheduler` whose `schedulers` field
+    // contains all the initialized schedulers
+    let mut global_scheduler = GlobalScheduler::new(schedulers, trace);
+
+    if let Err(error_msg) = global_scheduler.run(&ctx) {
         eprintln!("{error_msg}");
         return Err(anyhow!("Monitor failed"));
     }
+
     Ok(())
 }
