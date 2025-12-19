@@ -1120,10 +1120,7 @@ impl Scheduler {
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
-            match self
-                .interpreter
-                .evaluate_stmt(&current_stmt_id, ctx, trace)
-            {
+            match self.interpreter.evaluate_stmt(&current_stmt_id, ctx, trace) {
                 Ok(Some(next_stmt_id)) => {
                     // Update thread-local maps
                     // to be the resultant maps in the interpreter
