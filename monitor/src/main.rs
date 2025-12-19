@@ -85,7 +85,6 @@ struct Cli {
     print_num_steps: bool,
 }
 
-#[allow(unused_variables)]
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -179,7 +178,7 @@ fn main() -> anyhow::Result<()> {
     // Multi-struct mode: create a GlobalScheduler with one scheduler per design
     let mut schedulers = vec![];
 
-    for (inst_id, design) in dut_designs.into_iter().enumerate() {
+    for design in dut_designs.into_iter() {
         // Filter transactions that belong to this design
         let design_transactions: Vec<(Transaction, SymbolTable)> = design
             .transaction_ids
