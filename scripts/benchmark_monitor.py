@@ -10,6 +10,7 @@ creates a CSV with the results.
 
 import csv
 import json
+import re
 import subprocess
 import glob
 import os
@@ -67,11 +68,22 @@ def main():
         if not os.path.exists(prof_file):
             # Skip tests without .prof files (e.g., tests expected to fail)
             continue
+
+        # Parse lines beginning with "No. of steps taken..." and extract the integer
+        # Example: "No. of steps taken by AxisFifo scheduler: 74" -> 74
+        num_steps = None
+        pattern = re.compile(r'^No\. of steps taken.*:\s*(\d+)')
+
         with open(prof_file) as f:
-            prof_content = f.read().strip()
-            # Parse "No. of steps taken: <num>" format
-            # Extract the number at the end of the string
-            num_steps = int(prof_content.split(":")[-1].strip())
+            for line in f:
+                match = pattern.match(line)
+                if match:
+                    num_steps = int(match.group(1))
+                    break  # Use the first matching line
+
+        if num_steps is None:
+            # Skip if no step count found
+            continue
 
         # Normalize times by number of steps
         mean_time_per_step = mean_time / num_steps
