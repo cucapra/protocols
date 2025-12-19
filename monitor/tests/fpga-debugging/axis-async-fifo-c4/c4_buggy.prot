@@ -204,23 +204,3 @@ fn reset<DUT: Sender>() {
     fork();
     step();
 }
-
-fn reset<DUT: Receiver>() {
-    DUT.rst := 1'b1;
-    
-    step();
-    
-    // Release all inputs
-    DUT.rst := X;
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-    DUT.m_axis_tready := X;
-
-    fork();
-    step();
-}
