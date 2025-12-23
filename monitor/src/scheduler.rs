@@ -242,6 +242,7 @@ impl Scheduler {
         // end of the `current` queue
         for (transaction, symbol_table) in &transactions {
             let thread = Thread::new(
+                struct_name.clone(),
                 transaction.clone(),
                 symbol_table.clone(),
                 transaction.next_stmt_mapping(),
@@ -669,6 +670,7 @@ impl Scheduler {
             );
             for (transaction, symbol_table) in &self.possible_transactions {
                 let new_thread = Thread::new(
+                    self.struct_name.clone(),
                     transaction.clone(),
                     symbol_table.clone(),
                     transaction.next_stmt_mapping(),
@@ -816,6 +818,7 @@ impl Scheduler {
                                     // Note: we use the new transaction's
                                     // `next_stmt_mapping` when creating a new thread
                                     let new_thread = Thread::new(
+                                        self.struct_name.clone(),
                                         transaction.clone(),
                                         symbol_table.clone(),
                                         transaction.next_stmt_mapping(),
@@ -910,7 +913,10 @@ impl Scheduler {
                             let end_time = trace.format_time(end_time_step, ctx.time_unit);
                             println!(
                                 "{}  // [time: {} -> {}] (thread {})",
-                                transaction_name, start_time, end_time, thread.thread_id
+                                transaction_name,
+                                start_time,
+                                end_time,
+                                thread.global_thread_id(ctx)
                             );
                         } else {
                             println!("{}", transaction_name)
