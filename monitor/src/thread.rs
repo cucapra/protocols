@@ -87,10 +87,15 @@ impl std::fmt::Display for Thread {
 }
 
 impl Thread {
-    /// Creates a new `Thread` that given a `Transaction`, `SymbolTable`,
-    /// `GlobalContext`, `thread_id` & `start_cycle` / `start_time_step`.
-    /// This method also sets up the `args_mapping`
-    /// accordingly based on the pins' values at the beginning of the signal trace.
+    /// Creates a new `Thread` given the following:
+    /// - a `scheduler_name` (the name of the corresponding struct)
+    /// - a `Transaction`
+    /// - a `SymbolTable`
+    /// - a `GlobalContext`
+    /// - a `thread_id`
+    /// - a `start_cycle` / `start_time_step`
+    ///   This method also sets up the `args_mapping`
+    ///   accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
         scheduler_name: String,
         transaction: Transaction,
