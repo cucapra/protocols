@@ -10,6 +10,8 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
+use crate::global_context::GlobalContext;
+
 /// The local context associated with an individual thread,
 /// storing information such as:
 // - Which transaction are we currently running?
@@ -17,7 +19,11 @@ use rustc_hash::FxHashMap;
 // - A mutable map mapping variable names to their values (`args_mapping`)
 #[derive(Debug, Clone)]
 pub struct Thread {
-    // The thread's ID
+    /// Name of the scheduler/struct this thread belongs to
+    /// (Used to create globally unique thread identifiers in multi-struct mode)
+    pub scheduler_name: String,
+
+    // The thread's ID (unique within this scheduler)
     pub thread_id: u32,
 
     /// The logical scheduling cycle in which the thread was started
@@ -81,11 +87,17 @@ impl std::fmt::Display for Thread {
 }
 
 impl Thread {
-    /// Creates a new `Thread` that given a `Transaction`, `SymbolTable`,
-    /// `GlobalContext`, `thread_id` & `start_cycle` / `start_time_step`.
-    /// This method also sets up the `args_mapping`
-    /// accordingly based on the pins' values at the beginning of the signal trace.
+    /// Creates a new `Thread` given the following:
+    /// - a `scheduler_name` (the name of the corresponding struct)
+    /// - a `Transaction`
+    /// - a `SymbolTable`
+    /// - a `GlobalContext`
+    /// - a `thread_id`
+    /// - a `start_cycle` / `start_time_step`
+    ///   This method also sets up the `args_mapping`
+    ///   accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
+        scheduler_name: String,
         transaction: Transaction,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
@@ -94,6 +106,7 @@ impl Thread {
         start_time_step: u32,
     ) -> Self {
         Self {
+            scheduler_name,
             thread_id,
             transaction: transaction.clone(),
             next_stmt_map,
@@ -106,6 +119,18 @@ impl Thread {
             start_time_step,
             end_time_step: None, // Set when fork() is called
             args_to_pins: FxHashMap::default(),
+        }
+    }
+
+    /// Returns an ID for the thread that is unique across all schedulers.
+    /// If there are multiple structs, this function prefixes the thread ID with
+    /// the struct name (same as the scheduler name). Otherwise,
+    /// this functio just returns the regular thread ID.
+    pub fn global_thread_id(&self, ctx: &GlobalContext) -> String {
+        if ctx.multiple_structs {
+            format!("{}::{}", self.scheduler_name, self.thread_id)
+        } else {
+            format!("{}", self.thread_id)
         }
     }
 }
