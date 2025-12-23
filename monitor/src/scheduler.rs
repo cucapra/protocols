@@ -84,7 +84,7 @@ fn format_thread(
 
     format!(
         "THREAD {}: {{ {}, Transaction: `{}`, Current stmt: `{}` ({}) }}",
-        thread.thread_id,
+        thread.global_thread_id(ctx),
         start_info,
         transaction_name,
         serialize_stmt(
@@ -99,14 +99,15 @@ fn format_thread(
 /// Formats a queue's contents into a *compact* pretty-printed string
 /// (i.e. no new-lines, only displays the thread_id and transaction name
 /// for each thread)
-fn format_queue_compact(queue: &Queue) -> String {
+fn format_queue_compact(queue: &Queue, ctx: &GlobalContext) -> String {
     if !queue.is_empty() {
         queue
             .iter()
             .map(|thread| {
                 format!(
                     "Thread {} (`{}`)",
-                    thread.thread_id, thread.transaction.name
+                    thread.global_thread_id(ctx),
+                    thread.transaction.name
                 )
             })
             .collect::<Vec<_>>()
@@ -345,7 +346,7 @@ impl Scheduler {
                         if trace_value != *expected_value {
                             info!(
                                 "Constraint FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (expected)",
-                                thread.thread_id,
+                                thread.global_thread_id(ctx),
                                 thread.transaction.name,
                                 time_str,
                                 symbol_name,
@@ -356,7 +357,7 @@ impl Scheduler {
                         } else {
                             info!(
                                 "Constraint OK for thread {} (`{}`) at {}: {} = {}",
-                                thread.thread_id,
+                                thread.global_thread_id(ctx),
                                 thread.transaction.name,
                                 time_str,
                                 symbol_name,
@@ -405,7 +406,7 @@ impl Scheduler {
                                     anyhow!(
                                         "Unable to find {} in `known_bits` map of thread {} ({})",
                                         param_name,
-                                        thread.thread_id,
+                                        thread.global_thread_id(ctx),
                                         thread.transaction.name
                                     )
                                 })
@@ -464,7 +465,8 @@ impl Scheduler {
         for failed_thread in failed_constraint_checks {
             info!(
                 "Moving thread {} (`{}`) to `failed` as it failed a constraint check",
-                failed_thread.thread_id, failed_thread.transaction.name
+                failed_thread.global_thread_id(ctx),
+                failed_thread.transaction.name
             );
             self.next.retain(|t| t.thread_id != failed_thread.thread_id);
             self.failed.push(failed_thread);
@@ -497,16 +499,15 @@ impl Scheduler {
                 } else {
                     format!("cycle {}", start_cycle)
                 };
-                let end_time = if ctx.show_waveform_time {
-                    trace.format_time(
-                        finished[0].end_time_step.unwrap_or_else(|| {
-                            panic!(
-                                "Thread {} (`{}`) missing end_time_step",
-                                finished[0].thread_id, finished[0].transaction.name
-                            )
-                        }),
-                        ctx.time_unit,
+                let end_time_step = finished[0].end_time_step.unwrap_or_else(|| {
+                    panic!(
+                        "Thread {} (`{}`) missing end_time_step",
+                        finished[0].global_thread_id(ctx),
+                        finished[0].transaction.name
                     )
+                });
+                let end_time = if ctx.show_waveform_time {
+                    trace.format_time(end_time_step, ctx.time_unit)
                 } else {
                     format!("cycle {}", self.cycle_count)
                 };
@@ -535,7 +536,7 @@ impl Scheduler {
                 };
                 let error_context = anyhow!(
                     "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
-                    finished_thread.thread_id,
+                    finished_thread.global_thread_id(ctx),
                     finished_thread.transaction.name,
                     start_time_str,
                     next.iter()
@@ -597,13 +598,13 @@ impl Scheduler {
                 info!(
                     "Threads that failed at time {}: {}",
                     time_str,
-                    format_queue_compact(&self.failed)
+                    format_queue_compact(&self.failed, ctx)
                 );
             } else {
                 info!(
                     "Threads that failed in cycle {}: {}",
                     self.cycle_count,
-                    format_queue_compact(&self.failed)
+                    format_queue_compact(&self.failed, ctx)
                 );
             }
 
@@ -631,13 +632,13 @@ impl Scheduler {
                 info!(
                     "Threads that finished at time {}: {}",
                     time_str,
-                    format_queue_compact(&self.finished)
+                    format_queue_compact(&self.finished, ctx)
                 );
             } else {
                 info!(
                     "Threads that finished in cycle {}: {}",
                     self.cycle_count,
-                    format_queue_compact(&self.finished)
+                    format_queue_compact(&self.finished, ctx)
                 );
             }
             self.finished.clear();
@@ -681,7 +682,7 @@ impl Scheduler {
                 self.num_threads += 1;
                 info!(
                     "Adding new thread {} (`{}`) to `next` queue",
-                    new_thread.thread_id,
+                    new_thread.global_thread_id(ctx),
                     self.format_transaction_name(ctx, new_thread.transaction.name.clone())
                 );
                 self.next.push(new_thread);
@@ -750,7 +751,7 @@ impl Scheduler {
     ) -> Result<(), SchedulerError> {
         info!(
             "Running thread {} (transaction `{}`) till next `step()`...",
-            thread.thread_id,
+            thread.global_thread_id(ctx),
             self.format_transaction_name(ctx, thread.transaction.name.clone())
         );
 
@@ -775,8 +776,8 @@ impl Scheduler {
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
                             info!(
-                                "Thread {:?} (transaction `{}`) called `step()`, moving to `next` queue",
-                                thread.thread_id,
+                                "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
+                                thread.global_thread_id(ctx),
                                 thread.transaction.clone().name,
                             );
 
@@ -802,8 +803,9 @@ impl Scheduler {
 
                             if already_forked {
                                 info!(
-                                    "Thread {:?} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
-                                    thread.thread_id, thread.start_cycle
+                                    "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
+                                    thread.global_thread_id(ctx),
+                                    thread.start_cycle
                                 );
                             } else {
                                 // For each possible transaction, fork one new thread for it,
@@ -811,8 +813,8 @@ impl Scheduler {
                                 // This means if there are `n` possible transactions,
                                 // we push `n` threads to the `current` queue.
                                 info!(
-                                    "Thread {:?} called `fork()`, creating new threads...",
-                                    thread.thread_id
+                                    "Thread {} called `fork()`, creating new threads...",
+                                    thread.global_thread_id(ctx)
                                 );
                                 for (transaction, symbol_table) in &self.possible_transactions {
                                     // Note: we use the new transaction's
@@ -828,8 +830,9 @@ impl Scheduler {
                                     );
                                     self.num_threads += 1;
                                     info!(
-                                        "Adding new thread {:?} (`{}`) to `current` queue",
-                                        new_thread.thread_id, new_thread.transaction.name
+                                        "Adding new thread {} (`{}`) to `current` queue",
+                                        new_thread.global_thread_id(ctx),
+                                        new_thread.transaction.name
                                     );
                                     self.current.push(new_thread);
                                 }
@@ -858,7 +861,7 @@ impl Scheduler {
                     {
                         info!(
                             "Thread {} (`{}`) would have finished, but another thread (thread {} `{}` from start_cycle {}) already finished in this cycle. Marking as failed.",
-                            thread.thread_id,
+                            thread.global_thread_id(ctx),
                             self.format_transaction_name(ctx, thread.transaction.name.clone()),
                             first_thread_id,
                             self.format_transaction_name(ctx, first_transaction_name.to_string()),
@@ -871,7 +874,7 @@ impl Scheduler {
 
                     info!(
                         "Thread {} (`{}`) finished successfully, adding to `finished` queue",
-                        thread.thread_id,
+                        thread.global_thread_id(ctx),
                         self.format_transaction_name(ctx, thread.transaction.name.clone())
                     );
 
@@ -928,7 +931,7 @@ impl Scheduler {
                 Err(err) => {
                     info!(
                         "Thread {} (`{}`) encountered `{}`, adding to `failed` queue",
-                        thread.thread_id,
+                        thread.global_thread_id(ctx),
                         self.format_transaction_name(ctx, thread.transaction.name.clone()),
                         self.serialize_monitor_error(err, trace, ctx)
                     );
