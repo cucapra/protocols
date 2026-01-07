@@ -1,0 +1,32 @@
+struct DualIdentity {
+  in a: u1,
+  in b: u1,
+  out s1: u1,
+  out s2: u1,
+}
+
+fn identity<dut: DualIdentity>(in a: u1, in b: u1) {
+    dut.a := 1'b0;
+    dut.b := 1'b0;
+
+    step();
+
+    assert_eq(dut.s1, 1'b0);
+    assert_eq(dut.s2, 1'b0);    
+
+    if (dut.s2 == 1'b0) {
+        // during fixed point, dut.a is set to a 
+        // even though the else branch is taken at fixed point
+        dut.a := a;
+        dut.b := b;
+    } else {
+        dut.b := b;
+    }
+    
+    
+    assert_eq(dut.s2, b);
+
+    step();
+    fork();
+    step();
+}

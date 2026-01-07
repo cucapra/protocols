@@ -1,0 +1,3 @@
+// ARGS: --verilog identities/dual_identity_d0/dual_identity_d0.v --protocol identities/dual_identity_d0/dual_identity_d0.prot
+// RETURN: 1
+identity(1, 1);
