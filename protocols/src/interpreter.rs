@@ -542,11 +542,6 @@ impl<'a> Evaluator<'a> {
             ));
         }
 
-        // otherwise, proceed with the assignment and forbid all dependent outputs
-        if let Some(deps) = self.output_dependencies.get(symbol_id) {
-            self.forbidden_outputs.extend(deps.iter().copied());
-        }
-
         // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
         // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
         if let Some(value) = self.input_vals.get_mut(symbol_id) {
@@ -555,7 +550,11 @@ impl<'a> Evaluator<'a> {
                     match expr_val {
                         ExprValue::DontCare => {
                             // Do nothing for DontCare
-                            // (we don't want to re-randomize within a cycle because that would prevent convergence)
+
+                            // assigning don't care: proceed with the assignment and forbid all dependent outputs
+                            if let Some(deps) = self.output_dependencies.get(symbol_id) {
+                                self.forbidden_outputs.extend(deps.iter().copied());
+                            }
                         }
                         ExprValue::Concrete(bvv) => {
                             *value = InputValue::NewValue(bvv);
@@ -568,6 +567,11 @@ impl<'a> Evaluator<'a> {
                             &mut self.rng,
                             old_val.width(),
                         ));
+
+                        // assigning don 't care: proceed with the assignment and forbid all dependent outputs
+                        if let Some(deps) = self.output_dependencies.get(symbol_id) {
+                            self.forbidden_outputs.extend(deps.iter().copied());
+                        }
                     }
                     ExprValue::Concrete(bvv) => {
                         *value = InputValue::NewValue(bvv);
@@ -576,7 +580,10 @@ impl<'a> Evaluator<'a> {
                 InputValue::NewValue(current_val) => {
                     match expr_val {
                         ExprValue::DontCare => {
-                            // do nothing
+                            // assigning don't care: proceed with the assignment and forbid all dependent outputs
+                            if let Some(deps) = self.output_dependencies.get(symbol_id) {
+                                self.forbidden_outputs.extend(deps.iter().copied());
+                            }
                         }
                         ExprValue::Concrete(new_val) => {
                             // no width check needed; guaranteed to be the same
