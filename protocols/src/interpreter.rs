@@ -77,6 +77,14 @@ pub struct Evaluator<'a> {
     input_mapping: FxHashMap<SymbolId, ExprRef>,
     output_mapping: FxHashMap<SymbolId, Output>,
 
+    // Combinational dependency tracking
+    input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
+    output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
+
+    // tracks forbidden ports due to combinational dependencies
+    forbidden_inputs: Vec<SymbolId>,
+    forbidden_outputs: Vec<SymbolId>,
+
     // tracks the input pins and their values
     input_vals: FxHashMap<SymbolId, InputValue>,
 
@@ -177,6 +185,40 @@ impl<'a> Evaluator<'a> {
             }
         }
 
+        // Build combinational dependency graphs
+        let mut output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
+        let mut input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
+
+        // Initialize: keys are outputs -> output_dependencies, and inputs -> input_dependencies
+        for symbol_id in output_mapping.keys() {
+            output_dependencies.insert(*symbol_id, Vec::new());
+        }
+        for symbol_id in input_mapping.keys() {
+            input_dependencies.insert(*symbol_id, Vec::new());
+        }
+
+        // For each output, find all inputs in its combinational cone of influence
+        for (out_sym, out) in &output_mapping {
+            let input_exprs =
+                patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
+            for input_expr in input_exprs {
+                // Find the protocol symbol corresponding to this input expression
+                if let Some(input_sym) = input_mapping
+                    .iter()
+                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
+                {
+                    // output_dependencies: output -> Vec<input> (inputs this output depends on)
+                    if let Some(vec) = output_dependencies.get_mut(out_sym) {
+                        vec.push(input_sym);
+                    }
+                    // input_dependencies: input -> Vec<output> (outputs this input affects)
+                    if let Some(vec) = input_dependencies.get_mut(&input_sym) {
+                        vec.push(*out_sym);
+                    }
+                }
+            }
+        }
+
         // Initialize sim, return the transaction!
         sim.init(InitKind::Zero);
 
@@ -188,6 +230,10 @@ impl<'a> Evaluator<'a> {
             args_mapping,
             input_mapping,
             output_mapping,
+            input_dependencies,
+            output_dependencies,
+            forbidden_inputs: Vec::new(),
+            forbidden_outputs: Vec::new(),
             input_vals,
             assertions_enabled: false,
             rng,
@@ -217,6 +263,10 @@ impl<'a> Evaluator<'a> {
         self.st = todo.st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
         self.next_stmt_map = todo.next_stmt_map;
+
+        // Clear forbidden ports when switching to a new context (i.e. new cycle)
+        self.forbidden_inputs.clear();
+        self.forbidden_outputs.clear();
     }
 
     pub fn input_vals(&self) -> FxHashMap<SymbolId, InputValue> {
@@ -232,7 +282,7 @@ impl<'a> Evaluator<'a> {
     }
 
     // Steps the simulator, then modifies `input_vals` to be
-    // `OldValue`s or `DontCares`
+    // `OldValue`s or `DontCare`s
     pub fn sim_step(&mut self) {
         self.sim.step();
 
@@ -264,6 +314,20 @@ impl<'a> Evaluator<'a> {
                         self.sim.get(*expr_ref).try_into().unwrap(),
                     ))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
+                    // Check if observing this output port is forbidden
+                    if self.forbidden_outputs.contains(sym_id) {
+                        return Err(ExecutionError::dont_care_operation(
+                            String::from("OBSERVED FORBIDDEN PORT"),
+                            format!("Cannot observe output '{}' after assigning don't care to a dependent input", name),
+                            *expr_id,
+                        ));
+                    }
+
+                    // Observing an output port forbids assignments to its dependent inputs
+                    if let Some(deps) = self.output_dependencies.get(sym_id) {
+                        self.forbidden_inputs.extend(deps.iter().copied());
+                    }
+
                     Ok(ExprValue::Concrete(
                         self.sim.get((output).expr).try_into().unwrap(),
                     ))
@@ -442,8 +506,19 @@ impl<'a> Evaluator<'a> {
         symbol_id: &SymbolId,
         expr_id: &ExprId,
     ) -> ExecutionResult<()> {
+        // TODO: There is a lot of repeated logic here. is there a way to refactor the matches to reduce this?
         // FIXME: This should return a DontCare or a NewValue
         let expr_val = self.evaluate_expr(expr_id)?;
+
+        // Check if assigning to this input port is forbidden
+        if self.forbidden_inputs.contains(symbol_id) {
+            let name = self.st[symbol_id].name();
+            return Err(ExecutionError::dont_care_operation(
+                String::from("ASSIGNED FORBIDDEN PORT"),
+                format!("Cannot assign to input '{}' after observing a dependent output", name),
+                *expr_id,
+            ));
+        }
 
         // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
         // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
@@ -454,6 +529,11 @@ impl<'a> Evaluator<'a> {
                         ExprValue::DontCare => {
                             // Do nothing for DontCare
                             // (we don't want to re-randomize within a cycle because that would prevent convergence)
+
+                            // Assigning don't care: forbid all dependent outputs
+                            if let Some(deps) = self.input_dependencies.get(symbol_id) {
+                                self.forbidden_outputs.extend(deps.iter().copied());
+                            }
                         }
                         ExprValue::Concrete(bvv) => {
                             *value = InputValue::NewValue(bvv);
@@ -466,6 +546,11 @@ impl<'a> Evaluator<'a> {
                             &mut self.rng,
                             old_val.width(),
                         ));
+
+                        // Assigning don't care: forbid all dependent outputs
+                        if let Some(deps) = self.input_dependencies.get(symbol_id) {
+                            self.forbidden_outputs.extend(deps.iter().copied());
+                        }
                     }
                     ExprValue::Concrete(bvv) => {
                         *value = InputValue::NewValue(bvv);
@@ -475,6 +560,11 @@ impl<'a> Evaluator<'a> {
                     match expr_val {
                         ExprValue::DontCare => {
                             // do nothing
+
+                            // Assigning don't care: forbid all dependent outputs
+                            if let Some(deps) = self.input_dependencies.get(symbol_id) {
+                                self.forbidden_outputs.extend(deps.iter().copied());
+                            }
                         }
                         ExprValue::Concrete(new_val) => {
                             // no width check needed; guaranteed to be the same
