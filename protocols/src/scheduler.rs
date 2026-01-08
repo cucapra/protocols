@@ -33,7 +33,6 @@ pub type TodoItem = (String, Vec<BitVecValue>);
 /// a single transaction.
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
-
 /// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
