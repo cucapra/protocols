@@ -13,7 +13,6 @@ use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::Evaluator;
-use crate::interpreter::InputValue;
 use crate::ir::*;
 
 use patronus::expr::Context;
@@ -35,7 +34,7 @@ pub type TodoItem = (String, Vec<BitVecValue>);
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
 
 /// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
-const MAX_ITERS: usize = 0;
+// const MAX_ITERS: usize = 0;
 
 /// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]

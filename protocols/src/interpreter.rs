@@ -318,7 +318,10 @@ impl<'a> Evaluator<'a> {
                     if self.forbidden_outputs.contains(sym_id) {
                         return Err(ExecutionError::dont_care_operation(
                             String::from("OBSERVED FORBIDDEN PORT"),
-                            format!("Cannot observe output '{}' after assigning don't care to a dependent input", name),
+                            format!(
+                                "Cannot observe output '{}' after assigning don't care to a dependent input",
+                                name
+                            ),
                             *expr_id,
                         ));
                     }
@@ -515,7 +518,10 @@ impl<'a> Evaluator<'a> {
             let name = self.st[symbol_id].name();
             return Err(ExecutionError::dont_care_operation(
                 String::from("ASSIGNED FORBIDDEN PORT"),
-                format!("Cannot assign to input '{}' after observing a dependent output", name),
+                format!(
+                    "Cannot assign to input '{}' after observing a dependent output",
+                    name
+                ),
                 *expr_id,
             ));
         }
