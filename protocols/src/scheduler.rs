@@ -313,9 +313,32 @@ impl<'a> Scheduler<'a> {
             //     iters += 1;
             // }
 
-            // Run all threads once with assertions and forks enabled
+            // Run all threads with assertions and forks enabled
+            // Keep running newly forked threads in the same cycle
             self.evaluator.enable_assertions();
-            self.run_all_active_until_next_step(true);
+            let mut start_idx = 0;
+            loop {
+                let end_idx = self.active_threads.len();
+
+                // Run threads from start_idx to end_idx (only new threads)
+                for i in start_idx..end_idx {
+                    self.run_thread_until_next_step(i, true);
+                }
+
+                // Move newly forked threads from next_threads to active_threads
+                // so they run in the same cycle (important for detecting conflicts)
+                if !self.next_threads.is_empty() {
+                    info!(
+                        "Moving {} threads from next_threads to active_threads",
+                        self.next_threads.len()
+                    );
+                    start_idx = self.active_threads.len(); // Next iteration starts from here
+                    self.active_threads.append(&mut self.next_threads);
+                } else {
+                    // No new threads forked, we're done with this cycle
+                    break;
+                }
+            }
 
             // Move each active thread into inactive or next
             while let Some(mut active_thread) = self.active_threads.pop() {
