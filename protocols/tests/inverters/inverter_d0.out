@@ -1,6 +1,6 @@
-error: Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(11111111111111111111111111111111), new=ValueOwned(00000000000000000000000000000000)
-  ┌─ inverters/inverter_d0.prot:7:3
+error: Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'a' after observing a dependent output
+  ┌─ inverters/inverter_d0.prot:7:12
   │
 7 │   DUT.a := DUT.s;
-  │   ^^^^^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(11111111111111111111111111111111), new=ValueOwned(00000000000000000000000000000000)
+  │            ^^^^^ Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'a' after observing a dependent output
 
