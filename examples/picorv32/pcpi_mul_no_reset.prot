@@ -48,8 +48,6 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
 
   // TODO: do we need/want this step?
   step();
-  fork();
-  step();
 }
 
 fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {

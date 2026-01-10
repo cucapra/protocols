@@ -47,13 +47,9 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
 
   // TODO: do we need/want this step?
   step();
-  fork();
-  step();
 }
 
 fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
-  step();
-  fork();
   step();
 }
