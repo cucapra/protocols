@@ -1,0 +1,32 @@
+struct DualIdentity {
+  in a: u1,
+  in b: u1,
+  out s1: u1,
+  out s2: u1,
+}
+
+fn identity<dut: DualIdentity>(in a: u1, in b: u1) {
+    dut.a := 1'b0;
+    dut.b := 1'b0;
+
+    step();
+
+    // This observes dut.s2 (output), which is combinationally dependent on dut.b (input)
+    // With fixed-point: during convergence, the condition can change as inputs converge
+    //   - Initially b is random/0, so s2 might be 0, taking the if-branch
+    //   - Then we assign b := b (parameter value 1)
+    //   - Next iteration s2 becomes 1, so we take else-branch
+    //   - This oscillates once (I think?) until convergence
+    // With comb dependency tracking: observing s2 in the condition forbids assigning to b
+    //   - Both branches assign to b, so this should error immediately
+    if (dut.s2 == 1'b0) {
+        dut.a := a;
+        dut.b := b;
+    } else {
+        dut.b := b;
+    }
+
+    step();
+    fork();
+    step();
+}

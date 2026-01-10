@@ -13,7 +13,6 @@ use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::Evaluator;
-use crate::interpreter::InputValue;
 use crate::ir::*;
 
 use patronus::expr::Context;
@@ -33,9 +32,6 @@ pub type TodoItem = (String, Vec<BitVecValue>);
 /// This is passed to the interpreter when we want to execute
 /// a single transaction.
 type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
-
-/// The maximum number of iterations to run for convergence before breaking with an ExecutionLimitExceeded error
-const MAX_ITERS: usize = 10000;
 
 /// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]
@@ -258,65 +254,32 @@ impl<'a> Scheduler<'a> {
         );
 
         while !self.active_threads.is_empty() {
-            // initially there are no previous values.
-            // we always need to cycle at least twice to check convergence,
-            // and the first time we will get a previous input val.
-            let mut previous_input_vals: Option<FxHashMap<SymbolId, InputValue>> = None;
-            let mut active_input_vals: FxHashMap<SymbolId, InputValue>;
-
-            // fixed point iteration with assertions off
-            self.evaluator.disable_assertions();
-
-            let mut iters = 0;
+            // Run all threads with assertions and forks enabled
+            // Keep running newly forked threads in the same cycle
+            self.evaluator.enable_assertions();
+            let mut start_idx = 0;
             loop {
-                // run every active thread up to the next step to synchronize on
-                self.run_all_active_until_next_step(iters == 0); // only enable forks on the first iteration
+                let end_idx = self.active_threads.len();
 
-                // if there are threads now in next_threads, we need to move them to active_threads
+                // Run threads from start_idx to end_idx (only new threads)
+                for i in start_idx..end_idx {
+                    self.run_thread_until_next_step(i, true);
+                }
+
+                // Move newly forked threads from next_threads to active_threads
+                // so they run in the same cycle (important for detecting conflicts)
                 if !self.next_threads.is_empty() {
                     info!(
                         "Moving {} threads from next_threads to active_threads",
                         self.next_threads.len()
                     );
+                    start_idx = self.active_threads.len(); // Next iteration starts from here
                     self.active_threads.append(&mut self.next_threads);
+                } else {
+                    // No new threads forked, we're done with this cycle
+                    break;
                 }
-
-                // update the active input vals to reflect the current state
-                // for each thread, get its current input_vals (read-only clone)
-                active_input_vals = self.evaluator.input_vals();
-
-                if let Some(prev_vals) = previous_input_vals {
-                    if prev_vals == active_input_vals {
-                        break;
-                    }
-                }
-
-                // if we've exceeded the max number of iterations before convergence,
-                // return an ExecutionLimitExceeded error on every thread.
-                // we should be able to theoretically show convergence is always possible, however
-                if iters > MAX_ITERS {
-                    for thread in &self.active_threads {
-                        self.results[thread.todo_idx] =
-                            Err(ExecutionError::execution_limit_exceeded(MAX_ITERS));
-                    }
-                    // Emit diagnostics for all errors before returning
-                    self.emit_all_diagnostics();
-                    return self.results.clone();
-                }
-
-                info!("Active Input Vals {:?}", active_input_vals);
-
-                // change the previous input vals to equal the active input vals
-                previous_input_vals = Some(active_input_vals);
-
-                iters += 1;
             }
-
-            // achieved convergence, run one more time with assertions on
-            info!("Achieved Convergence. Running once more with assertions enabled...");
-            self.evaluator.enable_assertions();
-            // Disable forks when we run all threads till the next
-            self.run_all_active_until_next_step(false);
 
             // Move each active thread into inactive or next
             while let Some(mut active_thread) = self.active_threads.pop() {

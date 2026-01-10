@@ -1,0 +1,6 @@
+error: Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'b' after observing a dependent output
+   ┌─ identities/dual_identity_d0/dual_identity_d0.prot:24:18
+   │
+24 │         dut.b := b;
+   │                  ^ Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'b' after observing a dependent output
+
