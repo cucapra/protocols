@@ -86,7 +86,11 @@ pub struct Evaluator<'a> {
     forbidden_outputs: Vec<SymbolId>,
 
     // tracks the input pins and their values
-    input_vals: FxHashMap<SymbolId, InputValue>,
+    sim_input_vals: FxHashMap<SymbolId, InputValue>,
+
+    // tracks the most recent assignment to each input for the current thread for implicit re-application
+    // None = DontCare (X), Some(value) = concrete value to re-apply
+    thread_sticky_inputs: FxHashMap<SymbolId, Option<BitVecValue>>,
 
     assertions_enabled: bool,
 
@@ -166,16 +170,19 @@ impl<'a> Evaluator<'a> {
         let mut rng = StdRng::seed_from_u64(0);
 
         // Initialize the input pins with DontCares that are randomly assigned
-        let mut input_vals = FxHashMap::default();
+        let mut sim_input_vals = FxHashMap::default();
+        let mut thread_sticky_inputs = FxHashMap::default();
         for symbol_id in input_mapping.keys() {
             // get the width from the type of the symbol
             match st[symbol_id].tpe() {
                 Type::BitVec(width) => {
                     // TODO: make this value random
-                    input_vals.insert(
+                    sim_input_vals.insert(
                         *symbol_id,
                         InputValue::DontCare(BitVecValue::random(&mut rng, width)),
                     );
+                    // Initialize held values to None (DontCare)
+                    thread_sticky_inputs.insert(*symbol_id, None);
                 }
                 _ => panic!(
                     "Expected a BitVec type for symbol {}, but found {:?}",
@@ -234,7 +241,8 @@ impl<'a> Evaluator<'a> {
             output_dependencies,
             forbidden_inputs: Vec::new(),
             forbidden_outputs: Vec::new(),
-            input_vals,
+            sim_input_vals,
+            thread_sticky_inputs,
             assertions_enabled: false,
             rng,
         }
@@ -270,7 +278,17 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn input_vals(&self) -> FxHashMap<SymbolId, InputValue> {
-        self.input_vals.clone()
+        self.sim_input_vals.clone()
+    }
+
+    /// Returns the current held input values (for saving to thread state)
+    pub fn get_held_input_vals(&self) -> FxHashMap<SymbolId, Option<BitVecValue>> {
+        self.thread_sticky_inputs.clone()
+    }
+
+    /// Sets the held input values (for restoring from thread state)
+    pub fn set_held_input_vals(&mut self, vals: FxHashMap<SymbolId, Option<BitVecValue>>) {
+        self.thread_sticky_inputs = vals;
     }
 
     pub fn enable_assertions(&mut self) {
@@ -287,8 +305,8 @@ impl<'a> Evaluator<'a> {
         self.sim.step();
 
         // modify the input_vals to all be OldValues or DontCares
-        self.input_vals = self
-            .input_vals
+        self.sim_input_vals = self
+            .sim_input_vals
             .iter()
             .map(|(k, v)| {
                 let new_v = match v {
@@ -528,7 +546,7 @@ impl<'a> Evaluator<'a> {
 
         // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
         // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
-        if let Some(value) = self.input_vals.get_mut(symbol_id) {
+        if let Some(value) = self.sim_input_vals.get_mut(symbol_id) {
             match value {
                 InputValue::DontCare(_) => {
                     match expr_val {
@@ -540,8 +558,14 @@ impl<'a> Evaluator<'a> {
                             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                                 self.forbidden_outputs.extend(deps.iter().copied());
                             }
+
+                            // Track held value as None (DontCare)
+                            self.thread_sticky_inputs.insert(*symbol_id, None);
                         }
                         ExprValue::Concrete(bvv) => {
+                            // Track held value for implicit re-application
+                            self.thread_sticky_inputs
+                                .insert(*symbol_id, Some(bvv.clone()));
                             *value = InputValue::NewValue(bvv);
                         }
                     }
@@ -557,8 +581,14 @@ impl<'a> Evaluator<'a> {
                         if let Some(deps) = self.input_dependencies.get(symbol_id) {
                             self.forbidden_outputs.extend(deps.iter().copied());
                         }
+
+                        // Track held value as None (DontCare)
+                        self.thread_sticky_inputs.insert(*symbol_id, None);
                     }
                     ExprValue::Concrete(bvv) => {
+                        // Track held value for implicit re-application
+                        self.thread_sticky_inputs
+                            .insert(*symbol_id, Some(bvv.clone()));
                         *value = InputValue::NewValue(bvv);
                     }
                 },
@@ -571,6 +601,9 @@ impl<'a> Evaluator<'a> {
                             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                                 self.forbidden_outputs.extend(deps.iter().copied());
                             }
+
+                            // Track held value as None (DontCare)
+                            self.thread_sticky_inputs.insert(*symbol_id, None);
                         }
                         ExprValue::Concrete(new_val) => {
                             // no width check needed; guaranteed to be the same
@@ -586,6 +619,8 @@ impl<'a> Evaluator<'a> {
                                     *stmt_id,
                                 ));
                             }
+                            // Track held value for implicit re-application
+                            self.thread_sticky_inputs.insert(*symbol_id, Some(new_val));
                         }
                     }
                 }
@@ -603,7 +638,8 @@ impl<'a> Evaluator<'a> {
         // Assign into the underlying Patronus sim
         let name = self.st[symbol_id].full_name(self.st);
         if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
-            self.sim.set(*expr_ref, self.input_vals[symbol_id].value());
+            self.sim
+                .set(*expr_ref, self.sim_input_vals[symbol_id].value());
             Ok(())
         }
         // assuming Type Checking works, these statements are unreachable
@@ -683,7 +719,7 @@ impl<'a> Evaluator<'a> {
     /// Resets all input pins to `DontCare` (i.e. randomizes their values)
     pub fn reset_all_input_pins(&mut self) {
         // Reset all input pins
-        for (input_pin, value) in self.input_vals.iter_mut() {
+        for (input_pin, value) in self.sim_input_vals.iter_mut() {
             let symbol_table_entry = &self.st[input_pin];
             let symbol_name = symbol_table_entry.full_name(self.st);
             let ty = symbol_table_entry.tpe();
@@ -698,5 +734,60 @@ impl<'a> Evaluator<'a> {
                 )
             }
         }
+    }
+
+    /// Re-applies held input values at end of a thread's execution for implicit input persistence.
+    ///
+    /// For each input with a held concrete value:
+    /// - If the input is in `forbidden_inputs` (we observed a comb-dependent output),
+    ///   force it to DontCare instead of re-applying the held value.
+    /// - Otherwise, re-apply the held value as a NewValue.
+    ///
+    /// Returns an error if re-application causes a conflicting assignment.
+    pub fn reapply_held_inputs(&mut self) -> ExecutionResult<()> {
+        for (symbol_id, held_value) in self.thread_sticky_inputs.clone().iter() {
+            if let Some(value) = held_value {
+                // Check if this input is forbidden due to observing a comb-dependent output
+                if self.forbidden_inputs.contains(symbol_id) {
+                    // TODO: Could error here instead of forcing DontCare?
+                    info!(
+                        "Forcing input '{}' to DontCare due to combinational dependency",
+                        self.st[symbol_id].name()
+                    );
+                    if let Some(input_val) = self.sim_input_vals.get_mut(symbol_id) {
+                        *input_val =
+                            InputValue::DontCare(BitVecValue::random(&mut self.rng, value.width()));
+                    }
+                    // Also clear the held value since we're forcing DontCare
+                    self.thread_sticky_inputs.insert(*symbol_id, None);
+                } else {
+                    // Re-apply held value as NewValue
+                    if let Some(input_val) = self.sim_input_vals.get_mut(symbol_id) {
+                        match input_val {
+                            InputValue::DontCare(_) | InputValue::OldValue(_) => {
+                                *input_val = InputValue::NewValue(value.clone());
+                                if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
+                                    self.sim.set(*expr_ref, value);
+                                }
+                            }
+                            InputValue::NewValue(current_val) => {
+                                if !current_val.is_equal(value) {
+                                    return Err(ExecutionError::conflicting_assignment(
+                                        *symbol_id,
+                                        self.st[symbol_id].name().to_string(),
+                                        current_val.clone(),
+                                        value.clone(),
+                                        0,
+                                        StmtId::from_u32(0), // dummy id
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // If held_value is None (DontCare), do nothing - input remains as-is
+        }
+        Ok(())
     }
 }
