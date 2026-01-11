@@ -282,12 +282,12 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Returns the current held input values (for saving to thread state)
-    pub fn get_held_input_vals(&self) -> FxHashMap<SymbolId, Option<BitVecValue>> {
+    pub fn get_thread_sticky_inputs(&self) -> FxHashMap<SymbolId, Option<BitVecValue>> {
         self.thread_sticky_inputs.clone()
     }
 
     /// Sets the held input values (for restoring from thread state)
-    pub fn set_held_input_vals(&mut self, vals: FxHashMap<SymbolId, Option<BitVecValue>>) {
+    pub fn set_thread_sticky_inputs(&mut self, vals: FxHashMap<SymbolId, Option<BitVecValue>>) {
         self.thread_sticky_inputs = vals;
     }
 

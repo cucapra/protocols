@@ -16,7 +16,7 @@ use crate::interpreter::Evaluator;
 use crate::ir::*;
 
 /// Per-thread held input values for implicit re-application
-pub type HeldInputVals = FxHashMap<SymbolId, Option<BitVecValue>>;
+pub type StickyInputs = FxHashMap<SymbolId, Option<BitVecValue>>;
 
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
@@ -91,7 +91,7 @@ pub struct Thread<'a> {
     pub todo_idx: usize,
     /// Per-thread held input values for implicit re-application
     /// None = DontCare (X), Some(value) = concrete value to re-apply
-    pub held_input_vals: HeldInputVals,
+    pub thread_sticky_inputs: StickyInputs,
 }
 
 impl<'a> Thread<'a> {
@@ -108,7 +108,7 @@ impl<'a> Thread<'a> {
             prev_fork_stmt_id: None,
             has_stepped: false,
             has_forked: false,
-            held_input_vals: FxHashMap::default(),
+            thread_sticky_inputs: FxHashMap::default(),
         }
     }
 
@@ -383,7 +383,7 @@ impl<'a> Scheduler<'a> {
 
         // Load this thread's held input values into the evaluator
         self.evaluator
-            .set_held_input_vals(thread.held_input_vals.clone());
+            .set_thread_sticky_inputs(thread.thread_sticky_inputs.clone());
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
@@ -413,7 +413,7 @@ impl<'a> Scheduler<'a> {
                             if let Err(e) = self.evaluator.reapply_held_inputs() {
                                 self.results[thread.todo_idx] = Err(e);
                             }
-                            thread.held_input_vals = self.evaluator.get_held_input_vals();
+                            thread.thread_sticky_inputs = self.evaluator.get_thread_sticky_inputs();
                             return;
                         }
 
@@ -432,7 +432,8 @@ impl<'a> Scheduler<'a> {
                                 thread.next_step = None;
                                 // Re-apply held values and save back to thread
                                 let _ = self.evaluator.reapply_held_inputs();
-                                thread.held_input_vals = self.evaluator.get_held_input_vals();
+                                thread.thread_sticky_inputs =
+                                    self.evaluator.get_thread_sticky_inputs();
                                 return;
                             } else if !thread.has_stepped {
                                 info!(
@@ -448,7 +449,8 @@ impl<'a> Scheduler<'a> {
                                 thread.next_step = None;
                                 // Re-apply held values and save back to thread
                                 let _ = self.evaluator.reapply_held_inputs();
-                                thread.held_input_vals = self.evaluator.get_held_input_vals();
+                                thread.thread_sticky_inputs =
+                                    self.evaluator.get_thread_sticky_inputs();
                                 return;
                             }
 
@@ -528,7 +530,7 @@ impl<'a> Scheduler<'a> {
         if let Err(e) = self.evaluator.reapply_held_inputs() {
             self.results[thread.todo_idx] = Err(e);
         }
-        thread.held_input_vals = self.evaluator.get_held_input_vals();
+        thread.thread_sticky_inputs = self.evaluator.get_thread_sticky_inputs();
 
         // Reset all input pins before implicit fork so the new thread starts fresh
         self.evaluator.reset_all_input_pins();
