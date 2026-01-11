@@ -1,0 +1,6 @@
+error: Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000100)
+   ┌─ adders/adder_d2/no_dontcare_conflict.prot:12:3
+   │
+12 │   DUT.a := a;
+   │   ^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=ValueOwned(00000000000000000000000000000001), new=ValueOwned(00000000000000000000000000000100)
+
