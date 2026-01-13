@@ -473,19 +473,9 @@ impl<'a> Scheduler<'a> {
 
                     // Check if the last executed statement was `step()`
                     if let Stmt::Step = thread.todo.tr[current_stmt_id] {
-                        if forks_enabled && !thread.has_forked {
-                            // Throw an error if forks are enabled but the
-                            // thread finished without making any calls to `fork()`
-                            info!(
-                                "  ERROR: thread did not make any calls to `fork()`, terminating thread"
-                            );
-                            let error =
-                                ExecutionError::finished_without_fork(thread_id, transaction_name);
-                            self.results[thread_id] = Err(error);
-                        } else {
-                            // Thread completed execution successfully
-                            info!("  Execution complete, no more statements.");
-                        }
+                        // Thread completed execution successfully
+                        // If the thread hasn't forked yet, implicit fork will happen below
+                        info!("  Execution complete, no more statements.");
                     } else {
                         // Last executed statement wasn't `step()`, report an error
                         info!(
