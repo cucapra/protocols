@@ -740,26 +740,25 @@ impl<'a> Evaluator<'a> {
     ///
     /// For each input with a held concrete value:
     /// - If the input is in `forbidden_inputs` (we observed a comb-dependent output),
-    ///   force it to DontCare instead of re-applying the held value.
+    ///   return an error (same as explicit assignment to a forbidden input).
     /// - Otherwise, re-apply the held value as a NewValue.
     ///
-    /// Returns an error if re-application causes a conflicting assignment.
+    /// Returns an error if re-application would assign to a forbidden input or cause a
+    /// conflicting assignment.
     pub fn reapply_held_inputs(&mut self) -> ExecutionResult<()> {
         for (symbol_id, held_value) in self.thread_sticky_inputs.clone().iter() {
             if let Some(value) = held_value {
                 // Check if this input is forbidden due to observing a comb-dependent output
                 if self.forbidden_inputs.contains(symbol_id) {
-                    // TODO: Could error here instead of forcing DontCare?
-                    info!(
-                        "Forcing input '{}' to DontCare due to combinational dependency",
-                        self.st[symbol_id].name()
-                    );
-                    if let Some(input_val) = self.sim_input_vals.get_mut(symbol_id) {
-                        *input_val =
-                            InputValue::DontCare(BitVecValue::random(&mut self.rng, value.width()));
-                    }
-                    // Also clear the held value since we're forcing DontCare
-                    self.thread_sticky_inputs.insert(*symbol_id, None);
+                    let name = self.st[symbol_id].name();
+                    return Err(ExecutionError::dont_care_operation(
+                        String::from("ASSIGNED FORBIDDEN PORT"),
+                        format!(
+                            "Cannot assign to input '{}' after observing a dependent output",
+                            name
+                        ),
+                        ExprId::from_u32(0), // dummy id for implicit re-application
+                    ));
                 } else {
                     // Re-apply held value as NewValue
                     if let Some(input_val) = self.sim_input_vals.get_mut(symbol_id) {

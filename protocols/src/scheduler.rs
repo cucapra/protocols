@@ -526,9 +526,12 @@ impl<'a> Scheduler<'a> {
             }
         }
 
-        // Re-apply held values and save back to thread after loop ends
-        if let Err(e) = self.evaluator.reapply_held_inputs() {
-            self.results[thread.todo_idx] = Err(e);
+        // Re-apply held values and save back to thread after loop ends.
+        // Only call if no error occurred, to avoid overwriting the original error.
+        if self.results[thread.todo_idx].is_ok() {
+            if let Err(e) = self.evaluator.reapply_held_inputs() {
+                self.results[thread.todo_idx] = Err(e);
+            }
         }
         thread.thread_sticky_inputs = self.evaluator.get_thread_sticky_inputs();
 
