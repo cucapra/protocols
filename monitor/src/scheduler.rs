@@ -926,6 +926,29 @@ impl Scheduler {
                         }
                     }
                     self.finished.push(thread.clone());
+
+                    // Implicit fork: if no thread from this start_cycle has forked yet,
+                    // spawn new threads for all possible transactions
+                    if !self.forked_start_cycles.contains(&thread.start_cycle) {
+                        info!(
+                            "Thread {} finished without explicit fork, performing implicit fork",
+                            thread.global_thread_id(ctx)
+                        );
+                        for (transaction, symbol_table) in &self.possible_transactions {
+                            let new_thread = Thread::new(
+                                self.struct_name.clone(),
+                                transaction.clone(),
+                                symbol_table.clone(),
+                                transaction.next_stmt_mapping(),
+                                self.num_threads,
+                                self.cycle_count,
+                                trace.time_step(),
+                            );
+                            self.num_threads += 1;
+                            self.current.push(new_thread);
+                        }
+                        self.forked_start_cycles.insert(thread.start_cycle);
+                    }
                     return Ok(());
                 }
                 Err(err) => {
