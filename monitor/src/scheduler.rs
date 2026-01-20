@@ -946,7 +946,11 @@ impl Scheduler {
                                 trace.time_step(),
                             );
                             self.num_threads += 1;
-                            self.current.push(new_thread);
+
+                            // Insert these implicitly forked threads
+                            // to the `next` queue, since they run in the
+                            // *next* cycle
+                            self.next.push(new_thread);
                         }
                         self.forked_start_cycles.insert(thread.start_cycle);
                     }
