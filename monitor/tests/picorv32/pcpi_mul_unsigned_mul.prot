@@ -39,17 +39,9 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
   assert_eq(p.pcpi_rd, rd_data);
 
   step();
-  // We don't care about the value of `valid` now, since the data transfer has occurred
-  p.pcpi_valid := X; 
-  fork();
-  step();
 }
 
 fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
-  step();
-  // We make explicit the fact that `reset` is `DontCare` after one cycle
-  p.resetn := X; 
-  fork();
   step();
 }
