@@ -578,7 +578,16 @@ impl Scheduler {
             // In this case, we still need to try to run `t` since it may
             // succeed, even though all threads from the current cycle failed.
             // (Example: `picorv32/unsigned_mul.prot`)
-            if failed.len() > 1 && finished.is_empty() && paused.is_empty() && self.next.is_empty()
+            // We also check that no threads finished successfully this cycle
+            // (regardless of their start cycle) before throwing the error --
+            // this allows us to handle implicitly forked threads that
+            // are spawned at the end of fork-free protocols (when they
+            // reach the final `step()` statement).
+            if failed.len() > 1
+                && finished.is_empty()
+                && paused.is_empty()
+                && self.next.is_empty()
+                && self.finished_thread.is_none()
             {
                 let error_context = anyhow!(
                     "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
