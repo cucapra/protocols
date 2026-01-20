@@ -69,6 +69,12 @@ pub struct Thread {
 
     /// Maps function parameters to DUT ports
     pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
+
+    /// Determines if the thread has called `fork()` yet. Initialized to `false`.
+    /// Since well-formedness dicates that a protocol can only contain
+    /// at most one `fork()`, once this flag is set to `true`,
+    /// it remains `true` for the rest of the thread's execution.
+    pub has_forked: bool,
 }
 
 /// Pretty-prints a `Thread`
@@ -119,6 +125,7 @@ impl Thread {
             start_time_step,
             end_time_step: None, // Set when step() is called
             args_to_pins: FxHashMap::default(),
+            has_forked: false,
         }
     }
 

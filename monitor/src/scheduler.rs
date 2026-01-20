@@ -792,6 +792,8 @@ impl Scheduler {
                             return Ok(());
                         }
                         Stmt::Fork => {
+                            thread.has_forked = true;
+
                             // Check if another thread from the same start cycle has already forked
                             // in the current cycle for this scheduler.
                             // If so, skip the fork to avoid creating duplicate threads.
@@ -924,9 +926,11 @@ impl Scheduler {
                     }
                     self.finished.push(thread.clone());
 
-                    // Implicit fork: if no thread from this start_cycle has forked yet,
+                    // Implicit fork: if this thread hasn't forked yet,
                     // spawn new threads for all possible transactions
-                    if !self.forked_start_cycles.contains(&thread.start_cycle) {
+                    // This handles the case where a protocol just ends in
+                    // `step()` without having previously called `fork()`
+                    if !thread.has_forked {
                         info!(
                             "Thread {} finished without explicit fork, performing implicit fork",
                             thread.global_thread_id(ctx)
