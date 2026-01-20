@@ -312,6 +312,8 @@ impl Scheduler {
         self.print_scheduler_state(trace, ctx);
 
         // Run all threads in the current queue
+        // Reverse so we process in FIFO order (first added = first processed)
+        self.current.reverse();
         while let Some(thread) = self.current.pop() {
             self.run_thread_till_next_step(thread, trace, ctx)?;
         }
@@ -947,10 +949,7 @@ impl Scheduler {
                             );
                             self.num_threads += 1;
 
-                            // Insert these implicitly forked threads
-                            // to the `next` queue, since they run in the
-                            // *next* cycle
-                            self.next.push(new_thread);
+                            self.current.push(new_thread);
                         }
                         self.forked_start_cycles.insert(thread.start_cycle);
                     }
