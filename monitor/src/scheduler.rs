@@ -2,7 +2,9 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use std::collections::VecDeque;
+
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -36,8 +38,11 @@ impl From<anyhow::Error> for SchedulerError {
     }
 }
 
-/// `Queue` is just a type alias for `Vec<Thread>`
-type Queue = Vec<Thread>;
+/// `Queue` is just a type alias for `VecDeque<Thread>`.
+/// We use a `VecDeque` instead of `Vec`, since `VecDeque::pop_back` produces
+/// elements in a FIFO order (which is what we want),
+/// whereas `Vec::pop` returns elements in LIFO order
+type Queue = VecDeque<Thread>;
 
 /// Formats a queue's contents into a pretty-printed string
 /// Note: we can't implement the `Display` trait for `Queue` since
@@ -238,7 +243,7 @@ impl Scheduler {
     ) -> Self {
         let cycle_count = 0;
         let mut thread_id = 0;
-        let mut current_threads = vec![];
+        let mut current_threads = Queue::new();
         // Create a new thread for each transaction, then push it to the
         // end of the `current` queue
         for (transaction, symbol_table) in &transactions {
@@ -251,7 +256,7 @@ impl Scheduler {
                 cycle_count,
                 trace.time_step(),
             );
-            current_threads.push(thread);
+            current_threads.push_back(thread);
             thread_id += 1;
         }
         // Technically, initializing the `interpreter` here is necessary
@@ -272,9 +277,9 @@ impl Scheduler {
         );
         Self {
             current: current_threads,
-            next: vec![],
-            finished: vec![],
-            failed: vec![],
+            next: Queue::new(),
+            finished: Queue::new(),
+            failed: Queue::new(),
             interpreter,
             cycle_count,
             num_threads: thread_id,
@@ -312,9 +317,7 @@ impl Scheduler {
         self.print_scheduler_state(trace, ctx);
 
         // Run all threads in the current queue
-        // Reverse so we process in FIFO order (first added = first processed)
-        self.current.reverse();
-        while let Some(thread) = self.current.pop() {
+        while let Some(thread) = self.current.pop_front() {
             self.run_thread_till_next_step(thread, trace, ctx)?;
         }
 
@@ -471,7 +474,7 @@ impl Scheduler {
                 failed_thread.transaction.name
             );
             self.next.retain(|t| t.thread_id != failed_thread.thread_id);
-            self.failed.push(failed_thread);
+            self.failed.push_back(failed_thread);
         }
 
         // Check that threads in the `finished` and `failed` queues
@@ -684,7 +687,7 @@ impl Scheduler {
                     new_thread.global_thread_id(ctx),
                     self.format_transaction_name(ctx, new_thread.transaction.name.clone())
                 );
-                self.next.push(new_thread);
+                self.next.push_back(new_thread);
             }
         }
 
@@ -789,7 +792,7 @@ impl Scheduler {
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
-                            self.next.push(thread);
+                            self.next.push_back(thread);
                             self.print_scheduler_state(trace, ctx);
                             return Ok(());
                         }
@@ -835,7 +838,7 @@ impl Scheduler {
                                         new_thread.global_thread_id(ctx),
                                         new_thread.transaction.name
                                     );
-                                    self.current.push(new_thread);
+                                    self.current.push_back(new_thread);
                                 }
 
                                 // Mark this start cycle as having forked
@@ -868,7 +871,7 @@ impl Scheduler {
                             self.format_transaction_name(ctx, first_transaction_name.to_string()),
                             first_start_cycle
                         );
-                        self.failed.push(thread);
+                        self.failed.push_back(thread);
                         self.print_scheduler_state(trace, ctx);
                         return Ok(());
                     }
@@ -926,7 +929,7 @@ impl Scheduler {
                             println!("{}", transaction_name)
                         }
                     }
-                    self.finished.push(thread.clone());
+                    self.finished.push_back(thread.clone());
 
                     // Implicit fork: if this thread hasn't forked yet,
                     // spawn new threads for all possible transactions
@@ -949,7 +952,7 @@ impl Scheduler {
                             );
                             self.num_threads += 1;
 
-                            self.current.push(new_thread);
+                            self.current.push_back(new_thread);
                         }
                         self.forked_start_cycles.insert(thread.start_cycle);
                     }
@@ -962,7 +965,7 @@ impl Scheduler {
                         self.format_transaction_name(ctx, thread.transaction.name.clone()),
                         self.serialize_monitor_error(err, trace, ctx)
                     );
-                    self.failed.push(thread);
+                    self.failed.push_back(thread);
                     self.print_scheduler_state(trace, ctx);
                     return Ok(());
                 }
