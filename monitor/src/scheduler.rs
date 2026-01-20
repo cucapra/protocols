@@ -504,13 +504,7 @@ impl Scheduler {
                 } else {
                     format!("cycle {}", start_cycle)
                 };
-                let end_time_step = finished[0].end_time_step.unwrap_or_else(|| {
-                    panic!(
-                        "Thread {} (`{}`) missing end_time_step",
-                        finished[0].global_thread_id(ctx),
-                        finished[0].transaction.name
-                    )
-                });
+                let end_time_step = trace.time_step();
                 let end_time = if ctx.show_waveform_time {
                     trace.format_time(end_time_step, ctx.time_unit)
                 } else {
@@ -792,12 +786,6 @@ impl Scheduler {
                                 thread.transaction.clone().name,
                             );
 
-                            // Update the thread's `end_time_step` field
-                            // If this `step()` in the program is the very last
-                            // statement in a function, then this field captures
-                            // the end-time of the transaction
-                            thread.end_time_step = Some(trace.time_step());
-
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
@@ -898,15 +886,8 @@ impl Scheduler {
                         thread.transaction.name.clone(),
                     ));
 
-                    // If the thread's `end_time_step` is `None`, use the
-                    // current `time_step` of the trace as a fallback.
-                    // (In practice, `thread.end_time_step` will be
-                    // set to `Some(...)` every time we encounter a `step()`
-                    // in the program, and well-formedness constraints for our
-                    // DSL dicatate that every function must contain at least one `step()`,
-                    // so `thread.end_time_step` will always be `Some(...)` by the
-                    // time we reach this point.)
-                    let end_time_step = thread.end_time_step.unwrap_or_else(|| trace.time_step());
+                    // Use the actual time-step from the waveform as the `end_time_step`
+                    let end_time_step = trace.time_step();
 
                     // Don't print out the inferred transaction if the user
                     // has marked it as `idle`
