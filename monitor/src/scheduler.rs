@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -567,12 +567,9 @@ impl Scheduler {
 
             // We also need to check whether the `next` queue contains
             // any threads (regardless of their start time) before emitting
-            // an error. The reason is for protocols that currently end in
-            // `step(); fork(); step()` (to comply with the well-formedness
-            // constraints), there can be an edge case where a thread `t`
-            // that started in an EARLIER cycle has been paused
-            // (i.e. `t` is in `next`), but all
-            // other threads started at the CURRENT `start_cycle` have failed.
+            // an error. A thread `t` that started in an EARLIER cycle
+            // might be paused at an intermediate `step()` (i.e. `t` is in `next`),
+            // while all threads from the CURRENT `start_cycle` have failed.
             // In this case, we still need to try to run `t` since it may
             // succeed, even though all threads from the current cycle failed.
             // (Example: `picorv32/unsigned_mul.prot`)

@@ -117,7 +117,7 @@ impl Thread {
             current_stmt_id: transaction.body,
             start_cycle,
             start_time_step,
-            end_time_step: None, // Set when fork() is called
+            end_time_step: None, // Set when step() is called
             args_to_pins: FxHashMap::default(),
         }
     }
