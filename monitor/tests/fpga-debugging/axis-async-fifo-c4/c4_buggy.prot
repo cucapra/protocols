@@ -88,23 +88,6 @@ fn push<DUT: Sender>(
 
     // One cycle for the transfer to complete
     step();
-
-    // Set all other DUT input ports to DontCare after transaction
-    //   keep - Byte lane valid indicator (1 = byte is valid)
-    //   last - End-of-frame marker (1 = last beat of packet)
-    //   id   - Transaction ID for routing/ordering
-    //   dest - Destination ID for routing
-    //   user - User-defined sideband data (e.g., error/parity bits)
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-
-    fork();
-    step();
 }
 
 // POP: Read data from FIFO via AXI-Stream sender interface
@@ -157,9 +140,6 @@ fn idle<DUT: Sender>() {
     DUT.m_axis_tready := X;
 
     step();
-
-    fork();
-    step();
 }
 
 fn idle<DUT: Receiver>() {
@@ -179,28 +159,10 @@ fn idle<DUT: Receiver>() {
     DUT.s_axis_tuser := X;
 
     step();
-
-    fork();
-    step();
 }
 
 // RESET: Assert reset signal to initialize FIFO
 fn reset<DUT: Sender>() {
     DUT.rst := 1'b1;
-    
-    step();
-    
-    // Release all inputs
-    DUT.rst := X;
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-    DUT.m_axis_tready := X;
-
-    fork();
     step();
 }
