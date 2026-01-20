@@ -18,14 +18,6 @@ fn push<DUT: Fifo>(in input: u32) {
     DUT.v_i := 1'b1;
     DUT.data_i := input;
     step();
-
-    DUT.enq_not_deq_i := X;
-    DUT.v_i := X;
-    DUT.data_i := X; 
-    DUT.reset_i := X;
-    
-    fork();
-    step();
 }
 
 // Note: the results of the `pop` are only visible after one cycle
@@ -55,21 +47,10 @@ fn idle<DUT: Fifo>() {
     DUT.v_i := 1'b0;
     DUT.reset_i := 1'b0;
     step();
-    DUT.data_i := X;
-    DUT.enq_not_deq_i := X;
-    DUT.v_i := X;
-    fork();
-    step();
 }
 
 // Sets the `reset` bit to 1
 fn reset<DUT: Fifo>() {
     DUT.reset_i := 1'b1;
-    step();
-    DUT.reset_i := X;
-    DUT.v_i := X;
-    DUT.data_i := X;
-    DUT.enq_not_deq_i := X;
-    fork();
     step();
 }
