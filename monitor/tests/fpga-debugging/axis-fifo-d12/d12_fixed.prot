@@ -130,8 +130,10 @@ fn pop<DUT: AxisFifo>(
     // Capture output data
     assert_eq(DUT.m_axis_tdata, data);
 
-    // Release inputs after transaction
+    // Release inputs after transaction (i.e. release all constraints)
     DUT.m_axis_tready := X;
+    DUT.s_axis_tvalid := X;  
+    DUT.rst := X;    
 
     fork();
     step();
