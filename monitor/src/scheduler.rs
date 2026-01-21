@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
