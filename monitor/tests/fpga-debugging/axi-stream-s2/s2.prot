@@ -25,11 +25,7 @@ fn reset<DUT: AXISManager>() {
 
     // Release reset
     DUT.M_AXIS_ARESETN := 1'b1;
-
-    // Wait for manager to complete initialization and enter SEND_STREAM state
-    while (!(DUT.M_AXIS_TVALID == 1'b1)) {
-        step();
-    }
+    step();
 
     // Release inputs
     DUT.M_AXIS_ARESETN := X;
