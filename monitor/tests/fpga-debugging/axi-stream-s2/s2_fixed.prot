@@ -11,12 +11,12 @@ struct AXISManager {
     out M_AXIS_TSRB: u4,               // Byte strobe (always 0xF)
     out M_AXIS_TLAST: u1,               // Last word in packet
 
-    // AXI-Stream sub-ordinate input (we control this)
+    // AXI-Stream sub-ordinate input 
     in M_AXIS_TREADY: u1,               // Downstream ready to accept
 }
 
 // RESET: Assert reset (active-low) and wait for manager to be ready
-// The manager waits C_M_START_COUNT cycles in INIT_COUNTER before sending
+// The manager waits 32 cycles (in the Verilog implementation) before sending
 fn reset<DUT: AXISManager>() {
     DUT.M_AXIS_ARESETN := 1'b0;         // Assert reset (active-low)
     DUT.M_AXIS_TREADY := 1'b0;
