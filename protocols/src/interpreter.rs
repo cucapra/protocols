@@ -307,20 +307,20 @@ impl<'a> Evaluator<'a> {
         let is_concrete = matches!(new_val, ThreadInputValue::Concrete(_));
 
         if was_concrete && !is_concrete {
-            // Going from Concrete to DontCare: decrement counts for dependent outputs
-            if let Some(deps) = self.input_dependencies.get(symbol_id) {
-                for dep in deps {
-                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
-                        *count = count.saturating_sub(1);
-                    }
-                }
-            }
-        } else if !was_concrete && is_concrete {
-            // Going from DontCare to Concrete: increment counts for dependent outputs
+            // Going from Concrete to DontCare: increment counts for dependent outputs
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
                     if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
                         *count += 1;
+                    }
+                }
+            }
+        } else if !was_concrete && is_concrete {
+            // Going from DontCare to Concrete: decrement counts for dependent outputs
+            if let Some(deps) = self.input_dependencies.get(symbol_id) {
+                for dep in deps {
+                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                        *count = count.saturating_sub(1);
                     }
                 }
             }
@@ -458,13 +458,13 @@ impl<'a> Evaluator<'a> {
                     ))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
                     // Check if observing this output port is forbidden (count > 0)
-                    // The count is > 0 when a concrete value was assigned to a dependent input
+                    // The count is > 0 when a DontCare value was assigned to a dependent input
                     if let Some(&count) = self.forbidden_output_counts.get(sym_id) {
                         if count > 0 {
                             return Err(ExecutionError::dont_care_operation(
                                 String::from("OBSERVED FORBIDDEN PORT"),
                                 format!(
-                                    "Cannot observe output '{}' after assigning a value to a dependent input",
+                                    "Cannot observe output '{}' after assigning DontCare to a dependent input",
                                     name
                                 ),
                                 *expr_id,
