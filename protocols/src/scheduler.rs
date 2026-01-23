@@ -15,9 +15,6 @@ use crate::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::Evaluator;
 use crate::ir::*;
 
-/// Per-thread held input values for implicit re-application
-pub type StickyInputs = FxHashMap<SymbolId, Option<BitVecValue>>;
-
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
@@ -89,9 +86,6 @@ pub struct Thread<'a> {
     pub prev_fork_stmt_id: Option<StmtId>,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     pub todo_idx: usize,
-    /// Per-thread held input values for implicit re-application
-    /// None = DontCare (X), Some(value) = concrete value to re-apply
-    pub thread_sticky_inputs: StickyInputs,
 }
 
 impl<'a> Thread<'a> {
@@ -108,7 +102,6 @@ impl<'a> Thread<'a> {
             prev_fork_stmt_id: None,
             has_stepped: false,
             has_forked: false,
-            thread_sticky_inputs: FxHashMap::default(),
         }
     }
 
@@ -225,7 +218,7 @@ impl<'a> Scheduler<'a> {
         );
 
         // Initialize evaluator with first transaction
-        let evaluator = Evaluator::new(
+        let mut evaluator = Evaluator::new(
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
@@ -236,6 +229,10 @@ impl<'a> Scheduler<'a> {
 
         let results_size = todos.len();
         let first = Thread::initialize_thread(initial_todo, 0);
+
+        // Initialize first thread with DontCare for all pins
+        evaluator.init_new_thread(0);
+
         info!("Added first thread to active_threads");
         Self {
             irs,
@@ -309,9 +306,7 @@ impl<'a> Scheduler<'a> {
                             active_thread.todo.tr.name
                         );
 
-                        // Set all input pins to `DontCare` after a thread finishes
-                        self.evaluator.reset_all_input_pins();
-
+                        // Thread's inputs already cleared in run_thread_until_next_step
                         self.inactive_threads.push(active_thread)
                     }
                 }
@@ -379,11 +374,21 @@ impl<'a> Scheduler<'a> {
             "Running thread {} from `step()` ({})",
             thread.todo.tr.name, current_stmt_id
         );
-        self.evaluator.context_switch(thread.todo.clone());
+        self.evaluator.context_switch(thread.todo.clone(), thread.todo_idx);
 
-        // Load this thread's held input values into the evaluator
-        self.evaluator
-            .set_thread_sticky_inputs(thread.thread_sticky_inputs.clone());
+        // Check if this is the last statement (no next statement)
+        // If so, skip init_thread_inputs since thread will complete this cycle
+        if self.evaluator.next_stmt(&current_stmt_id).is_some() {
+            // Initialize thread inputs at cycle START (implicit reapplication)
+            if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
+                info!("ERROR during init_thread_inputs: {:?}, terminating thread", e);
+                self.results[thread.todo_idx] = Err(e);
+                thread.next_step = None;
+                return;
+            }
+        } else {
+            info!("Thread at last statement, skipping init_thread_inputs");
+        }
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
@@ -409,11 +414,7 @@ impl<'a> Scheduler<'a> {
                             }
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
-                            // Re-apply held values and save back to thread
-                            if let Err(e) = self.evaluator.reapply_held_inputs() {
-                                self.results[thread.todo_idx] = Err(e);
-                            }
-                            thread.thread_sticky_inputs = self.evaluator.get_thread_sticky_inputs();
+                            // Values already saved in per_thread_input_vals, nothing to do
                             return;
                         }
 
@@ -430,10 +431,6 @@ impl<'a> Scheduler<'a> {
                                 );
                                 self.results[thread.todo_idx] = Err(error);
                                 thread.next_step = None;
-                                // Re-apply held values and save back to thread
-                                let _ = self.evaluator.reapply_held_inputs();
-                                thread.thread_sticky_inputs =
-                                    self.evaluator.get_thread_sticky_inputs();
                                 return;
                             } else if !thread.has_stepped {
                                 info!(
@@ -447,10 +444,6 @@ impl<'a> Scheduler<'a> {
                                 );
                                 self.results[thread.todo_idx] = Err(error);
                                 thread.next_step = None;
-                                // Re-apply held values and save back to thread
-                                let _ = self.evaluator.reapply_held_inputs();
-                                thread.thread_sticky_inputs =
-                                    self.evaluator.get_thread_sticky_inputs();
                                 return;
                             }
 
@@ -459,6 +452,10 @@ impl<'a> Scheduler<'a> {
                                 Some(todo) => {
                                     let new_thread =
                                         Thread::initialize_thread(todo, self.next_todo_idx);
+
+                                    // Initialize new thread with DontCare for all pins
+                                    self.evaluator.init_new_thread(self.next_todo_idx);
+
                                     self.next_threads.push(new_thread);
                                     info!(
                                         "    enqueued forked thread; queue size = {}",
@@ -526,17 +523,12 @@ impl<'a> Scheduler<'a> {
             }
         }
 
-        // Re-apply held values and save back to thread after loop ends.
-        // Only call if no error occurred, to avoid overwriting the original error.
-        if self.results[thread.todo_idx].is_ok() {
-            if let Err(e) = self.evaluator.reapply_held_inputs() {
-                self.results[thread.todo_idx] = Err(e);
-            }
-        }
-        thread.thread_sticky_inputs = self.evaluator.get_thread_sticky_inputs();
+        // Values already saved in per_thread_input_vals, nothing to save back to thread
 
-        // Reset all input pins before implicit fork so the new thread starts fresh
-        self.evaluator.reset_all_input_pins();
+        // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
+        if thread.next_step.is_none() {
+            self.evaluator.clear_thread_inputs(thread.todo_idx);
+        }
 
         // fork if a thread has completed successfully
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
@@ -544,6 +536,10 @@ impl<'a> Scheduler<'a> {
             match next_todo_option.clone() {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+
+                    // Initialize new thread with DontCare for all pins
+                    self.evaluator.init_new_thread(self.next_todo_idx);
+
                     self.next_threads.push(new_thread);
                     info!(
                         "    enqueued implicitly forked thread; queue size = {}",
