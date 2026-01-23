@@ -1,6 +1,1 @@
-error: Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'a' after observing a dependent output
-  ┌─ identities/identity_d0/identity_d0.prot:1:1
-  │
-1 │ struct Identity {
-  │ ^ Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'a' after observing a dependent output
-
+Protocol executed successfully!

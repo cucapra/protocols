@@ -1,6 +1,6 @@
 error: The two expressions did not evaluate to the same value
-   ┌─ brave_new_world/use_without_valid/use_without_valid.prot:15:15
+   ┌─ brave_new_world/use_without_valid/use_without_valid.prot:16:15
    │
-15 │     assert_eq(data_out, dut.sum);
+16 │     assert_eq(data_out, dut.sum);
    │               ^^^^^^^^^^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000000101), RHS Value: ValueOwned(00000000000000000000000000001111)
 
