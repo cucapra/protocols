@@ -1,6 +1,5 @@
-// AXI-Stream manager Protocol
-// Describes the communication behavior of xlnxstream_2018_3 module
-// This is a SOURCE/manager that outputs a sequence of 8 words (1-8)
+// AXI-Stream Manager Protocol
+// This is a source (manager) that outputs a sequence of 8 words (1-8)
 
 struct AXISManager {
     // Control signals
@@ -102,7 +101,8 @@ fn stall<DUT: AXISManager>() {
     DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
     DUT.M_AXIS_TREADY := 1'b0;          // Apply backpressure
 
-    // Wait for manager to have valid data (so we're actually stalling a transfer)
+    // Wait for manager to have valid data
+    // (so that we're actually stalling a data transfer)
     while (!(DUT.M_AXIS_TVALID == 1'b1)) {
         step();
     }
