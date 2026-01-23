@@ -374,14 +374,18 @@ impl<'a> Scheduler<'a> {
             "Running thread {} from `step()` ({})",
             thread.todo.tr.name, current_stmt_id
         );
-        self.evaluator.context_switch(thread.todo.clone(), thread.todo_idx);
+        self.evaluator
+            .context_switch(thread.todo.clone(), thread.todo_idx);
 
         // Check if this is the last statement (no next statement)
         // If so, skip init_thread_inputs since thread will complete this cycle
         if self.evaluator.next_stmt(&current_stmt_id).is_some() {
             // Initialize thread inputs at cycle START (implicit reapplication)
             if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
-                info!("ERROR during init_thread_inputs: {:?}, terminating thread", e);
+                info!(
+                    "ERROR during init_thread_inputs: {:?}, terminating thread",
+                    e
+                );
                 self.results[thread.todo_idx] = Err(e);
                 thread.next_step = None;
                 return;
