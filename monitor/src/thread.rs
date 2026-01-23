@@ -37,14 +37,6 @@ pub struct Thread {
     /// field in `WaveSignalTrace`.)
     pub start_time_step: u32,
 
-    /// The actual clock time-step in the waveform captured at the last step()
-    /// statement before the thread completes. This represents when the transaction
-    /// logically ends, before the final `step()` in the program (required
-    /// by well-formedness constraints) advances the trace.
-    /// This field is updated every time we encounter `step()` in the program
-    /// and is initially set to `None`
-    pub end_time_step: Option<u32>,
-
     /// The `Transaction` that this `Thread` is running
     pub transaction: Transaction,
 
@@ -69,6 +61,12 @@ pub struct Thread {
 
     /// Maps function parameters to DUT ports
     pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
+
+    /// Determines if the thread has called `fork()` yet. Initialized to `false`.
+    /// Since well-formedness dicates that a protocol can only contain
+    /// at most one `fork()`, once this flag is set to `true`,
+    /// it remains `true` for the rest of the thread's execution.
+    pub has_forked: bool,
 }
 
 /// Pretty-prints a `Thread`
@@ -117,8 +115,8 @@ impl Thread {
             current_stmt_id: transaction.body,
             start_cycle,
             start_time_step,
-            end_time_step: None, // Set when fork() is called
             args_to_pins: FxHashMap::default(),
+            has_forked: false,
         }
     }
 
