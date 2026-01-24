@@ -14,16 +14,13 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
     in rs1_data: u32,
     in rs2_data: u32,
     out rd_data: u32,
-    in insn: u32,
   ) {
   // TODO: can we decoupled this from the transaction?
   p.resetn := 1'b1;
 
 
   p.pcpi_valid := 1'b1;
-  // HACK: pass multiplication instruction as input
-  p.pcpi_insn := insn;
-  // p.pcpi_insn := 33554483; // multiplication insn. TODO: allow binary values
+  p.pcpi_insn := 32'b10000000000000000000110011; // multiplication insn
 
 
   p.pcpi_rs1 := rs1_data;
