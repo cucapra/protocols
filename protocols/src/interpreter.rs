@@ -501,12 +501,8 @@ impl<'a> Evaluator<'a> {
                     // The count is > 0 when a DontCare value was assigned to a dependent input
                     if let Some(&count) = self.forbidden_output_counts.get(sym_id) {
                         if count > 0 {
-                            return Err(ExecutionError::dont_care_operation(
-                                String::from("OBSERVED FORBIDDEN PORT"),
-                                format!(
-                                    "Cannot observe output '{}' after assigning DontCare to a dependent input",
-                                    name
-                                ),
+                            return Err(ExecutionError::forbidden_output_observation(
+                                name.to_string(),
                                 *expr_id,
                             ));
                         }
@@ -728,12 +724,8 @@ impl<'a> Evaluator<'a> {
         // Check if assigning to this input port is forbidden (after evaluating RHS)
         if self.forbidden_inputs.contains(symbol_id) {
             let name = self.st[symbol_id].name();
-            return Err(ExecutionError::dont_care_operation(
-                String::from("ASSIGNED FORBIDDEN PORT"),
-                format!(
-                    "Cannot assign to input '{}' after observing a dependent output",
-                    name
-                ),
+            return Err(ExecutionError::forbidden_input_assignment(
+                name.to_string(),
                 *expr_id,
             ));
         }

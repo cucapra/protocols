@@ -46,6 +46,13 @@ pub enum EvaluationError {
         stmt_type: String, // "if" or "while"
         expr_id: ExprId,
     },
+    /// Attempted to assign to an input port after observing a dependent output
+    ForbiddenInputAssignment { input_name: String, expr_id: ExprId },
+    /// Attempted to observe an output port after assigning DontCare to a dependent input
+    ForbiddenOutputObservation {
+        output_name: String,
+        expr_id: ExprId,
+    },
     /// Invalid slice operation.
     /// self.width() >= msb >= lsb >= 0
     InvalidSlice {
@@ -217,6 +224,20 @@ impl fmt::Display for EvaluationError {
                     f,
                     "Cannot evaluate {} condition (expr {:?}): value is DontCare",
                     stmt_type, expr_id
+                )
+            }
+            EvaluationError::ForbiddenInputAssignment { input_name, .. } => {
+                write!(
+                    f,
+                    "Cannot assign to input '{}' after observing a dependent output",
+                    input_name
+                )
+            }
+            EvaluationError::ForbiddenOutputObservation { output_name, .. } => {
+                write!(
+                    f,
+                    "Cannot observe output '{}' after assigning DontCare to a dependent input",
+                    output_name
                 )
             }
             EvaluationError::InvalidSlice {
@@ -490,6 +511,20 @@ impl ExecutionError {
         })
     }
 
+    pub fn forbidden_input_assignment(input_name: String, expr_id: ExprId) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ForbiddenInputAssignment {
+            input_name,
+            expr_id,
+        })
+    }
+
+    pub fn forbidden_output_observation(output_name: String, expr_id: ExprId) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ForbiddenOutputObservation {
+            output_name,
+            expr_id,
+        })
+    }
+
     pub fn arithmetic_error(operation: String, details: String, expr_id: ExprId) -> Self {
         ExecutionError::Evaluation(EvaluationError::ArithmeticError {
             operation,
@@ -630,6 +665,34 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
+            EvaluationError::ForbiddenInputAssignment {
+                input_name,
+                expr_id,
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!(
+                        "Cannot assign to forbidden input '{}' after observing a combinationally dependent output",
+                        input_name
+                    ),
+                    Level::Error,
+                );
+            }
+            EvaluationError::ForbiddenOutputObservation {
+                output_name,
+                expr_id,
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!(
+                        "Cannot observe forbidden output '{}' after assigning DontCare to a combinationally dependent input",
+                        output_name
+                    ),
+                    Level::Error,
+                );
+            }
             EvaluationError::InvalidSlice {
                 expr_id,
                 start,
@@ -751,8 +814,11 @@ impl DiagnosticEmitter {
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
-                        thread_idx, symbol_name, current_value, new_value
+                        "Thread {} attempted conflicting assignment to '{}': current={}, new={}",
+                        thread_idx,
+                        symbol_name,
+                        serialize_bitvec(current_value, false),
+                        serialize_bitvec(new_value, false)
                     ),
                     Level::Error,
                 );

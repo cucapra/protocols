@@ -1,6 +1,6 @@
-error: Cannot perform OBSERVED FORBIDDEN PORT on DontCare value in Cannot observe output 's' after assigning DontCare to a dependent input
-   ┌─ adders/adder_d0/add_d0.prot:30:7
+error: Cannot assign to forbidden input 'a' after observing a combinationally dependent output
+   ┌─ adders/adder_d0/add_d0.prot:31:14
    │
-30 │   if (DUT.s == 32'b0) {
-   │       ^^^^^ Cannot perform OBSERVED FORBIDDEN PORT on DontCare value in Cannot observe output 's' after assigning DontCare to a dependent input
+31 │     DUT.a := a; // this should be illegal
+   │              ^ Cannot assign to forbidden input 'a' after observing a combinationally dependent output
 

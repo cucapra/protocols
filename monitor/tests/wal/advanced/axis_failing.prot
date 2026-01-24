@@ -15,9 +15,4 @@ fn idle<D: AXIS>() {
     D.m_axis_tvalid := 1'b0;
     // D.data is implicitly X
     step();
-    // TODO: can we get rid of this boiler plate code?
-    D.m_axis_tdata := X;
-    D.m_axis_tvalid := X;
-    fork();
-    step();
 }
