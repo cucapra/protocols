@@ -1,9 +1,9 @@
-# Run all Turnt tests for the interpreter in parallel
+# Run all Turnt tests for the interpreter
 # (Output is piped through Faucet to clearly distinguish passing/failing tests)
 interp:
   turnt --env interp $(find . -type f -name '*.tx') 
 
-# Run all Turnt tests for the monitor in parallel
+# Run all Turnt tests for the monitor
 monitor:
   turnt --env monitor $(find . -type f -name '*.prot') 
 
