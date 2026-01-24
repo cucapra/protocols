@@ -265,7 +265,7 @@ impl<'a> Evaluator<'a> {
     /// - Updates per_thread_input_vals
     /// - Updates forbidden_output_counts
     /// - Applies value to sim immediately
-    /// For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
+    /// - For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
     fn apply_input_value(
         &mut self,
         symbol_id: &SymbolId,
