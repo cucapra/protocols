@@ -471,9 +471,12 @@ impl<'a> Evaluator<'a> {
         // For each input pin
         for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
             // Check if ALL active threads have DontCare (none have Concrete)
-            let all_dontcare = active_thread_indices
-                .iter()
-                .all(|&idx| matches!(per_thread_vals.get(&idx), Some((ThreadInputValue::DontCare, _))));
+            let all_dontcare = active_thread_indices.iter().all(|&idx| {
+                matches!(
+                    per_thread_vals.get(&idx),
+                    Some((ThreadInputValue::DontCare, _))
+                )
+            });
 
             // If all threads agree on DontCare, randomize the pin
             if all_dontcare {
