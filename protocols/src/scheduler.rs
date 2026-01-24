@@ -218,7 +218,7 @@ impl<'a> Scheduler<'a> {
         );
 
         // Initialize evaluator with first transaction
-        let mut evaluator = Evaluator::new(
+        let evaluator = Evaluator::new(
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
@@ -229,9 +229,6 @@ impl<'a> Scheduler<'a> {
 
         let results_size = todos.len();
         let first = Thread::initialize_thread(initial_todo, 0);
-
-        // Initialize first thread with DontCare for all pins
-        evaluator.init_new_thread(0);
 
         info!("Added first thread to active_threads");
         Self {
@@ -457,9 +454,6 @@ impl<'a> Scheduler<'a> {
                                     let new_thread =
                                         Thread::initialize_thread(todo, self.next_todo_idx);
 
-                                    // Initialize new thread with DontCare for all pins
-                                    self.evaluator.init_new_thread(self.next_todo_idx);
-
                                     self.next_threads.push(new_thread);
                                     info!(
                                         "    enqueued forked thread; queue size = {}",
@@ -540,9 +534,6 @@ impl<'a> Scheduler<'a> {
             match next_todo_option.clone() {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
-
-                    // Initialize new thread with DontCare for all pins
-                    self.evaluator.init_new_thread(self.next_todo_idx);
 
                     self.next_threads.push(new_thread);
                     info!(

@@ -303,11 +303,12 @@ impl<'a> Evaluator<'a> {
         }
 
         // Handle forbidden_output reference counting
-        let was_concrete = matches!(old_val, Some(ThreadInputValue::Concrete(_)));
-        let is_concrete = matches!(new_val, ThreadInputValue::Concrete(_));
+        let was_dontcare = matches!(old_val, Some(ThreadInputValue::DontCare));
+        let is_dontcare = matches!(new_val, ThreadInputValue::DontCare);
 
-        if was_concrete && !is_concrete {
-            // Going from Concrete to DontCare: increment counts for dependent outputs
+        // Update counts when transitioning to/from DontCare
+        if is_dontcare && !was_dontcare {
+            // Transitioning TO DontCare (from None or Concrete): increment counts
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
                     if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
@@ -315,8 +316,8 @@ impl<'a> Evaluator<'a> {
                     }
                 }
             }
-        } else if !was_concrete && is_concrete {
-            // Going from DontCare to Concrete: decrement counts for dependent outputs
+        } else if !is_dontcare && was_dontcare {
+            // Transitioning FROM DontCare (to Concrete): decrement counts
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
                     if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
@@ -368,21 +369,40 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Initializes input values for a todo from its sticky inputs (implicit re-application)
+    /// On first run, initializes all inputs to DontCare. On subsequent runs, reapplies existing values.
     pub fn init_thread_inputs(&mut self, todo_idx: usize) -> ExecutionResult<()> {
-        // Only reapply inputs that this thread has explicitly assigned
-        // Don't touch inputs not in the map (leave them as previous thread set them)
-        let inputs_to_init: Vec<(SymbolId, ThreadInputValue)> = self
+        // Check if this is the first run for this thread (no entries in map)
+        let is_first_run = self
             .per_thread_input_vals
-            .iter()
-            .filter_map(|(symbol_id, per_thread_vals)| {
-                per_thread_vals
-                    .get(&todo_idx)
-                    .map(|val| (*symbol_id, val.clone()))
-            })
-            .collect();
+            .values()
+            .all(|per_thread_vals| !per_thread_vals.contains_key(&todo_idx));
 
-        for (symbol_id, val) in inputs_to_init {
-            self.apply_input_value(&symbol_id, todo_idx, val, StmtId::from_u32(0))?;
+        if is_first_run {
+            // First run: initialize all inputs to DontCare
+            let all_inputs: Vec<SymbolId> = self.input_mapping.keys().copied().collect();
+            for symbol_id in all_inputs {
+                self.apply_input_value(
+                    &symbol_id,
+                    todo_idx,
+                    ThreadInputValue::DontCare,
+                    StmtId::from_u32(0),
+                )?;
+            }
+        } else {
+            // Subsequent runs: reapply existing values
+            let inputs_to_init: Vec<(SymbolId, ThreadInputValue)> = self
+                .per_thread_input_vals
+                .iter()
+                .filter_map(|(symbol_id, per_thread_vals)| {
+                    per_thread_vals
+                        .get(&todo_idx)
+                        .map(|val| (*symbol_id, val.clone()))
+                })
+                .collect();
+
+            for (symbol_id, val) in inputs_to_init {
+                self.apply_input_value(&symbol_id, todo_idx, val, StmtId::from_u32(0))?;
+            }
         }
 
         Ok(())
@@ -392,16 +412,6 @@ impl<'a> Evaluator<'a> {
     pub fn clear_thread_inputs(&mut self, todo_idx: usize) {
         for per_thread_vals in self.per_thread_input_vals.values_mut() {
             per_thread_vals.remove(&todo_idx);
-        }
-    }
-
-    /// Initialize a new thread with DontCare for all input pins
-    pub fn init_new_thread(&mut self, todo_idx: usize) {
-        for symbol_id in self.input_mapping.keys() {
-            self.per_thread_input_vals
-                .entry(*symbol_id)
-                .or_default()
-                .insert(todo_idx, ThreadInputValue::DontCare);
         }
     }
 
