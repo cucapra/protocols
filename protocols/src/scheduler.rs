@@ -323,8 +323,11 @@ impl<'a> Scheduler<'a> {
                 self.step_count += 1;
                 info!("Advancing to scheduling cycle: {}", self.step_count + 1);
                 if self.step_count >= self.max_steps {
-                    *(self.results.last_mut().unwrap()) =
-                        Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    // Emit error for all active threads
+                    for thread in &self.active_threads {
+                        self.results[thread.todo_idx] =
+                            Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    }
                     // shut down execution by clearing all active threads
                     self.active_threads.clear();
                 }
@@ -371,13 +374,23 @@ impl<'a> Scheduler<'a> {
             "Running thread {} from `step()` ({})",
             thread.todo.tr.name, current_stmt_id
         );
+
+        info!("  BEFORE context_switch");
         self.evaluator
             .context_switch(thread.todo.clone(), thread.todo_idx);
+        info!("  AFTER context_switch");
 
         // Check if this is the last statement (no next statement)
-        // If so, skip init_thread_inputs since thread will complete this cycle
-        if self.evaluator.next_stmt(&current_stmt_id).is_some() {
+        // If so, skip init_thread_inputs UNLESS this is the first cycle (thread hasn't stepped yet)
+        // On the first cycle, we MUST call init_thread_inputs to initialize all inputs to DontCare
+        let should_init = self.evaluator.next_stmt(&current_stmt_id).is_some() || !thread.has_stepped;
+
+        if should_init {
             // Initialize thread inputs at cycle START (implicit reapplication)
+            info!(
+                "  About to call init_thread_inputs for todo_idx={} ({})",
+                thread.todo_idx, thread.todo.tr.name
+            );
             if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
                 info!(
                     "ERROR during init_thread_inputs: {:?}, terminating thread",
@@ -388,7 +401,10 @@ impl<'a> Scheduler<'a> {
                 return;
             }
         } else {
-            info!("Thread at last statement, skipping init_thread_inputs");
+            info!(
+                "Thread {} at last statement (and has stepped), skipping init_thread_inputs",
+                thread.todo.tr.name
+            );
         }
 
         // keep evaluating until we hit a Step, hit the end, or error out:

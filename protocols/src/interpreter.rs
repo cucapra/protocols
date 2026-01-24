@@ -329,7 +329,16 @@ impl<'a> Evaluator<'a> {
 
         // Update per_thread_input_vals
         if let Some(per_thread_vals) = self.per_thread_input_vals.get_mut(symbol_id) {
+            let symbol_name = self.st[*symbol_id].name();
+            let was_present = per_thread_vals.contains_key(&todo_idx);
             per_thread_vals.insert(todo_idx, new_val.clone());
+            log::info!(
+                "apply_input_value: {} for todo_idx={} (was_present={}, new_val={:?})",
+                symbol_name,
+                todo_idx,
+                was_present,
+                new_val
+            );
         }
 
         // Apply value to sim
@@ -351,6 +360,10 @@ impl<'a> Evaluator<'a> {
                             false
                         };
 
+                    let symbol_name = self.st[*symbol_id].name();
+                    log::info!("Applying DontCare for {} (todo_idx={}): any_other_concrete={}",
+                               symbol_name, todo_idx, any_other_concrete);
+
                     // If all other threads have DontCare, randomize
                     if !any_other_concrete {
                         let width = match self.st[*symbol_id].tpe() {
@@ -358,7 +371,10 @@ impl<'a> Evaluator<'a> {
                             _ => panic!("Expected BitVec type for input"),
                         };
                         let random_val = BitVecValue::random(&mut self.rng, width);
+                        log::info!("  Randomizing {} to {:?}", symbol_name, random_val);
                         self.sim.set(*expr_ref, &random_val);
+                    } else {
+                        log::info!("  NOT randomizing {} (another thread has Concrete)", symbol_name);
                     }
                     // Otherwise do nothing - leave the Concrete value in place
                 }
@@ -377,15 +393,28 @@ impl<'a> Evaluator<'a> {
             .values()
             .all(|per_thread_vals| !per_thread_vals.contains_key(&todo_idx));
 
+        log::info!("init_thread_inputs(todo_idx={}): is_first_run={}", todo_idx, is_first_run);
+
+        // Debug: show which inputs have this todo_idx
+        for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
+            if per_thread_vals.contains_key(&todo_idx) {
+                let symbol_name = self.st[*symbol_id].name();
+                log::info!("  {} already has entry for todo_idx={}", symbol_name, todo_idx);
+            }
+        }
+
         if is_first_run {
             // First run: initialize all inputs to DontCare
             let all_inputs: Vec<SymbolId> = self.input_mapping.keys().copied().collect();
+            log::info!("  Initializing {} inputs to DontCare", all_inputs.len());
             for symbol_id in all_inputs {
+                let symbol_name = self.st[symbol_id].name();
+                log::info!("    Setting {} to DontCare (first run)", symbol_name);
                 self.apply_input_value(
                     &symbol_id,
                     todo_idx,
                     ThreadInputValue::DontCare,
-                    StmtId::from_u32(0),
+                    StmtId::from_u32(0), // FIXME: this is a bit of a hack, especially because id=0 is actually valid. switch to an optional?
                 )?;
             }
         } else {
@@ -410,6 +439,7 @@ impl<'a> Evaluator<'a> {
 
     /// Clears a thread's input values (used when a thread completes and a new one starts fresh)
     pub fn clear_thread_inputs(&mut self, todo_idx: usize) {
+        log::info!("Clearing thread inputs for todo_idx={}", todo_idx);
         for per_thread_vals in self.per_thread_input_vals.values_mut() {
             per_thread_vals.remove(&todo_idx);
         }
