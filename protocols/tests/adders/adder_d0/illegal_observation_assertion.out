@@ -1,6 +1,6 @@
-error: Cannot perform OBSERVED FORBIDDEN PORT on DontCare value in Cannot observe output 's' after assigning DontCare to a dependent input
+error: Cannot observe forbidden output 's' after assigning DontCare to a combinationally dependent input
    ┌─ adders/adder_d0/add_d0.prot:25:13
    │
 25 │   assert_eq(DUT.s, s); // this should be illegal
-   │             ^^^^^ Cannot perform OBSERVED FORBIDDEN PORT on DontCare value in Cannot observe output 's' after assigning DontCare to a dependent input
+   │             ^^^^^ Cannot observe forbidden output 's' after assigning DontCare to a combinationally dependent input
 
