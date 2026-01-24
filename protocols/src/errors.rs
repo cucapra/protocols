@@ -751,10 +751,10 @@ impl DiagnosticEmitter {
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
-                        thread_idx, 
-                        symbol_name, 
-                        serialize_bitvec(current_value, false), 
+                        "Thread {} attempted conflicting assignment to '{}': current={}, new={}",
+                        thread_idx,
+                        symbol_name,
+                        serialize_bitvec(current_value, false),
                         serialize_bitvec(new_value, false)
                     ),
                     Level::Error,
