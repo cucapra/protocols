@@ -15,12 +15,11 @@ use codespan_reporting::diagnostic::{
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
-use pest::iterators::Pair;
 use pest::RuleType;
+use pest::iterators::Pair;
 use rustc_hash::FxHashSet;
 
 use crate::ir::*;
-use crate::serialize::serialize_bitvec;
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -397,11 +396,7 @@ impl DiagnosticHandler {
                 locations: self.error_locations(vec![(
                     fileid1,
                     Label {
-                        message: Some(format!(
-                            "LHS Value: {}, RHS Value: {}",
-                            serialize_bitvec(eval1, false),
-                            serialize_bitvec(eval2, false)
-                        )),
+                        message: Some(format!("LHS Value: {:?}, RHS Value: {:?}", eval1, eval2)),
                         range: (start1.min(start2), end1.max(end2)),
                     },
                 )]),
