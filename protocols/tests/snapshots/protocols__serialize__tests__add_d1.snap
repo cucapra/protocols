@@ -50,3 +50,24 @@ fn add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   fork();
   step();
 }
+
+fn add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+fn wait_and_add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  step();
+  fork();
+  step();
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
