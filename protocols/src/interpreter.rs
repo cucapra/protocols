@@ -361,8 +361,12 @@ impl<'a> Evaluator<'a> {
                         };
 
                     let symbol_name = self.st[*symbol_id].name();
-                    log::info!("Applying DontCare for {} (todo_idx={}): any_other_concrete={}",
-                               symbol_name, todo_idx, any_other_concrete);
+                    log::info!(
+                        "Applying DontCare for {} (todo_idx={}): any_other_concrete={}",
+                        symbol_name,
+                        todo_idx,
+                        any_other_concrete
+                    );
 
                     // If all other threads have DontCare, randomize
                     if !any_other_concrete {
@@ -374,7 +378,10 @@ impl<'a> Evaluator<'a> {
                         log::info!("  Randomizing {} to {:?}", symbol_name, random_val);
                         self.sim.set(*expr_ref, &random_val);
                     } else {
-                        log::info!("  NOT randomizing {} (another thread has Concrete)", symbol_name);
+                        log::info!(
+                            "  NOT randomizing {} (another thread has Concrete)",
+                            symbol_name
+                        );
                     }
                     // Otherwise do nothing - leave the Concrete value in place
                 }
@@ -393,13 +400,21 @@ impl<'a> Evaluator<'a> {
             .values()
             .all(|per_thread_vals| !per_thread_vals.contains_key(&todo_idx));
 
-        log::info!("init_thread_inputs(todo_idx={}): is_first_run={}", todo_idx, is_first_run);
+        log::info!(
+            "init_thread_inputs(todo_idx={}): is_first_run={}",
+            todo_idx,
+            is_first_run
+        );
 
         // Debug: show which inputs have this todo_idx
         for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
             if per_thread_vals.contains_key(&todo_idx) {
                 let symbol_name = self.st[*symbol_id].name();
-                log::info!("  {} already has entry for todo_idx={}", symbol_name, todo_idx);
+                log::info!(
+                    "  {} already has entry for todo_idx={}",
+                    symbol_name,
+                    todo_idx
+                );
             }
         }
 
