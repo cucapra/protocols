@@ -383,7 +383,8 @@ impl<'a> Scheduler<'a> {
         // Check if this is the last statement (no next statement)
         // If so, skip init_thread_inputs UNLESS this is the first cycle (thread hasn't stepped yet)
         // On the first cycle, we MUST call init_thread_inputs to initialize all inputs to DontCare
-        let should_init = self.evaluator.next_stmt(&current_stmt_id).is_some() || !thread.has_stepped;
+        let should_init =
+            self.evaluator.next_stmt(&current_stmt_id).is_some() || !thread.has_stepped;
 
         if should_init {
             // Initialize thread inputs at cycle START (implicit reapplication)
