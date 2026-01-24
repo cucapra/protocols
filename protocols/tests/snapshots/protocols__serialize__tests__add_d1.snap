@@ -19,6 +19,17 @@ fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
+fn add_fork_early<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  fork();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  step();
+}
+
 fn add_doesnt_end_in_step<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
