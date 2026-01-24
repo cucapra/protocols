@@ -1,0 +1,6 @@
+error: Thread 1 attempted conflicting assignment to 'a': current=1, new=4
+   ┌─ adders/adder_d1/add_d1.prot:55:3
+   │
+55 │   DUT.a := a;
+   │   ^^^^^^^^^^^ Thread 1 attempted conflicting assignment to 'a': current=1, new=4
+
