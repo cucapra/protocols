@@ -1,6 +1,6 @@
-error: Cannot assign to forbidden input 'a' after observing a combinationally dependent output
+error: Cannot observe forbidden output 's' after assigning DontCare to a combinationally dependent input
   ┌─ inverters/inverter_d0.prot:7:12
   │
 7 │   DUT.a := DUT.s;
-  │            ^^^^^ Cannot assign to forbidden input 'a' after observing a combinationally dependent output
+  │            ^^^^^ Cannot observe forbidden output 's' after assigning DontCare to a combinationally dependent input
 
