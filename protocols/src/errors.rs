@@ -47,10 +47,7 @@ pub enum EvaluationError {
         expr_id: ExprId,
     },
     /// Attempted to assign to an input port after observing a dependent output
-    ForbiddenInputAssignment {
-        input_name: String,
-        expr_id: ExprId,
-    },
+    ForbiddenInputAssignment { input_name: String, expr_id: ExprId },
     /// Attempted to observe an output port after assigning DontCare to a dependent input
     ForbiddenOutputObservation {
         output_name: String,
@@ -668,7 +665,10 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
-            EvaluationError::ForbiddenInputAssignment { input_name, expr_id } => {
+            EvaluationError::ForbiddenInputAssignment {
+                input_name,
+                expr_id,
+            } => {
                 handler.emit_diagnostic_expr(
                     transaction,
                     expr_id,
@@ -679,7 +679,10 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
-            EvaluationError::ForbiddenOutputObservation { output_name, expr_id } => {
+            EvaluationError::ForbiddenOutputObservation {
+                output_name,
+                expr_id,
+            } => {
                 handler.emit_diagnostic_expr(
                     transaction,
                     expr_id,
