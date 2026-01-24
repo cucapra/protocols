@@ -35,7 +35,7 @@ impl ThreadInputValue {
 }
 
 /// Map from thread_id to input value for a single input pin
-pub type PerThreadValues = FxHashMap<usize, ThreadInputValue>;
+pub type PerThreadValues = FxHashMap<usize, (ThreadInputValue, Option<StmtId>)>;
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
 #[derive(PartialEq, Debug, Clone)]
@@ -265,25 +265,26 @@ impl<'a> Evaluator<'a> {
     /// - Updates per_thread_input_vals
     /// - Updates forbidden_output_counts
     /// - Applies value to sim immediately
+    /// For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
     fn apply_input_value(
         &mut self,
         symbol_id: &SymbolId,
         todo_idx: usize,
         new_val: ThreadInputValue,
-        stmt_id: StmtId,
+        stmt_id: Option<StmtId>,
     ) -> ExecutionResult<()> {
         // Get old value for this todo_idx (if any)
         let old_val = self
             .per_thread_input_vals
             .get(symbol_id)
             .and_then(|m| m.get(&todo_idx))
-            .cloned();
+            .map(|(val, _)| val.clone());
 
         // Check for inter-thread conflicts: other threads with different concrete values
         // (Same thread can overwrite its own value, but different threads cannot conflict)
         if let ThreadInputValue::Concrete(ref new_bvv) = new_val {
             if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
-                for (&other_todo_idx, other_val) in per_thread_vals {
+                for (&other_todo_idx, (other_val, _)) in per_thread_vals {
                     if other_todo_idx != todo_idx {
                         if let ThreadInputValue::Concrete(other_bvv) = other_val {
                             if !new_bvv.is_equal(other_bvv) {
@@ -293,7 +294,7 @@ impl<'a> Evaluator<'a> {
                                     other_bvv.clone(),
                                     new_bvv.clone(),
                                     todo_idx,
-                                    stmt_id,
+                                    stmt_id.unwrap(), // Safe to unwrap: conflicts only happen with Concrete values, which always have Some(stmt_id)
                                 ));
                             }
                         }
@@ -331,7 +332,7 @@ impl<'a> Evaluator<'a> {
         if let Some(per_thread_vals) = self.per_thread_input_vals.get_mut(symbol_id) {
             let symbol_name = self.st[*symbol_id].name();
             let was_present = per_thread_vals.contains_key(&todo_idx);
-            per_thread_vals.insert(todo_idx, new_val.clone());
+            per_thread_vals.insert(todo_idx, (new_val.clone(), stmt_id));
             log::info!(
                 "apply_input_value: {} for todo_idx={} (was_present={}, new_val={:?})",
                 symbol_name,
@@ -352,7 +353,7 @@ impl<'a> Evaluator<'a> {
                     // Check if any OTHER thread has Concrete for this pin
                     let any_other_concrete =
                         if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
-                            per_thread_vals.iter().any(|(&other_idx, other_val)| {
+                            per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
                                 other_idx != todo_idx
                                     && matches!(other_val, ThreadInputValue::Concrete(_))
                             })
@@ -429,23 +430,23 @@ impl<'a> Evaluator<'a> {
                     &symbol_id,
                     todo_idx,
                     ThreadInputValue::DontCare,
-                    StmtId::from_u32(0), // FIXME: this is a bit of a hack, especially because id=0 is actually valid. switch to an optional?
+                    None, // DontCare initialization has no associated statement
                 )?;
             }
         } else {
-            // Subsequent runs: reapply existing values
-            let inputs_to_init: Vec<(SymbolId, ThreadInputValue)> = self
+            // Subsequent runs: reapply existing values (implicit assignments)
+            let inputs_to_init: Vec<(SymbolId, ThreadInputValue, Option<StmtId>)> = self
                 .per_thread_input_vals
                 .iter()
                 .filter_map(|(symbol_id, per_thread_vals)| {
                     per_thread_vals
                         .get(&todo_idx)
-                        .map(|val| (*symbol_id, val.clone()))
+                        .map(|(val, stmt_id)| (*symbol_id, val.clone(), *stmt_id))
                 })
                 .collect();
 
-            for (symbol_id, val) in inputs_to_init {
-                self.apply_input_value(&symbol_id, todo_idx, val, StmtId::from_u32(0))?;
+            for (symbol_id, val, stmt_id) in inputs_to_init {
+                self.apply_input_value(&symbol_id, todo_idx, val, stmt_id)?;
             }
         }
 
@@ -472,7 +473,7 @@ impl<'a> Evaluator<'a> {
             // Check if ALL active threads have DontCare (none have Concrete)
             let all_dontcare = active_thread_indices
                 .iter()
-                .all(|&idx| matches!(per_thread_vals.get(&idx), Some(ThreadInputValue::DontCare)));
+                .all(|&idx| matches!(per_thread_vals.get(&idx), Some((ThreadInputValue::DontCare, _))));
 
             // If all threads agree on DontCare, randomize the pin
             if all_dontcare {
@@ -752,7 +753,7 @@ impl<'a> Evaluator<'a> {
         };
 
         // Use helper to check conflicts, update state, and apply to sim
-        self.apply_input_value(symbol_id, todo_idx, new_val, *stmt_id)
+        self.apply_input_value(symbol_id, todo_idx, new_val, Some(*stmt_id))
     }
 
     fn evaluate_while(
