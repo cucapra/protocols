@@ -16,11 +16,6 @@ fn send_data<D: AXIS>(in data: u8) {
     }
     // one cycle for the data transfer to take place
     step();
-    // TODO: can we get rid of this boiler plate code?
-    D.m_axis_tdata := X;
-    D.m_axis_tvalid := X;
-    fork();
-    step();
 }
 
 // We mark this protocol as `idle` to avoid excessive `idle()` transcations 
@@ -29,10 +24,5 @@ fn send_data<D: AXIS>(in data: u8) {
 fn idle<D: AXIS>() {
     D.m_axis_tvalid := 1'b0;
     // D.data is implicitly X
-    step();
-    // TODO: can we get rid of this boiler plate code?
-    D.m_axis_tdata := X;
-    D.m_axis_tvalid := X;
-    fork();
     step();
 }

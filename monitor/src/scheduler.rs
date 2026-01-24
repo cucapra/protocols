@@ -2,6 +2,8 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use std::collections::VecDeque;
+
 use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
@@ -36,8 +38,11 @@ impl From<anyhow::Error> for SchedulerError {
     }
 }
 
-/// `Queue` is just a type alias for `Vec<Thread>`
-type Queue = Vec<Thread>;
+/// `Queue` is just a type alias for `VecDeque<Thread>`.
+/// We use a `VecDeque` instead of `Vec`, since `VecDeque::pop_back` produces
+/// elements in a FIFO order (which is what we want),
+/// whereas `Vec::pop` returns elements in LIFO order
+type Queue = VecDeque<Thread>;
 
 /// Formats a queue's contents into a pretty-printed string
 /// Note: we can't implement the `Display` trait for `Queue` since
@@ -238,7 +243,7 @@ impl Scheduler {
     ) -> Self {
         let cycle_count = 0;
         let mut thread_id = 0;
-        let mut current_threads = vec![];
+        let mut current_threads = Queue::new();
         // Create a new thread for each transaction, then push it to the
         // end of the `current` queue
         for (transaction, symbol_table) in &transactions {
@@ -251,7 +256,7 @@ impl Scheduler {
                 cycle_count,
                 trace.time_step(),
             );
-            current_threads.push(thread);
+            current_threads.push_back(thread);
             thread_id += 1;
         }
         // Technically, initializing the `interpreter` here is necessary
@@ -272,9 +277,9 @@ impl Scheduler {
         );
         Self {
             current: current_threads,
-            next: vec![],
-            finished: vec![],
-            failed: vec![],
+            next: Queue::new(),
+            finished: Queue::new(),
+            failed: Queue::new(),
             interpreter,
             cycle_count,
             num_threads: thread_id,
@@ -312,7 +317,7 @@ impl Scheduler {
         self.print_scheduler_state(trace, ctx);
 
         // Run all threads in the current queue
-        while let Some(thread) = self.current.pop() {
+        while let Some(thread) = self.current.pop_front() {
             self.run_thread_till_next_step(thread, trace, ctx)?;
         }
 
@@ -469,7 +474,7 @@ impl Scheduler {
                 failed_thread.transaction.name
             );
             self.next.retain(|t| t.thread_id != failed_thread.thread_id);
-            self.failed.push(failed_thread);
+            self.failed.push_back(failed_thread);
         }
 
         // Check that threads in the `finished` and `failed` queues
@@ -499,13 +504,7 @@ impl Scheduler {
                 } else {
                     format!("cycle {}", start_cycle)
                 };
-                let end_time_step = finished[0].end_time_step.unwrap_or_else(|| {
-                    panic!(
-                        "Thread {} (`{}`) missing end_time_step",
-                        finished[0].global_thread_id(ctx),
-                        finished[0].transaction.name
-                    )
-                });
+                let end_time_step = trace.time_step();
                 let end_time = if ctx.show_waveform_time {
                     trace.format_time(end_time_step, ctx.time_unit)
                 } else {
@@ -567,16 +566,22 @@ impl Scheduler {
 
             // We also need to check whether the `next` queue contains
             // any threads (regardless of their start time) before emitting
-            // an error. The reason is for protocols that currently end in
-            // `step(); fork(); step()` (to comply with the well-formedness
-            // constraints), there can be an edge case where a thread `t`
-            // that started in an EARLIER cycle has been paused
-            // (i.e. `t` is in `next`), but all
-            // other threads started at the CURRENT `start_cycle` have failed.
+            // an error. A thread `t` that started in an EARLIER cycle
+            // might be paused at an intermediate `step()` (i.e. `t` is in `next`),
+            // while all threads from the CURRENT `start_cycle` have failed.
             // In this case, we still need to try to run `t` since it may
             // succeed, even though all threads from the current cycle failed.
             // (Example: `picorv32/unsigned_mul.prot`)
-            if failed.len() > 1 && finished.is_empty() && paused.is_empty() && self.next.is_empty()
+            // We also check that no threads finished successfully this cycle
+            // (regardless of their start cycle) before throwing the error --
+            // this allows us to handle implicitly forked threads that
+            // are spawned at the end of fork-free protocols (when they
+            // reach the final `step()` statement).
+            if failed.len() > 1
+                && finished.is_empty()
+                && paused.is_empty()
+                && self.next.is_empty()
+                && self.finished_thread.is_none()
             {
                 let error_context = anyhow!(
                     "Out of all threads that started in cycle {}, all but one are expected to fail, but all {} of them failed",
@@ -685,7 +690,7 @@ impl Scheduler {
                     new_thread.global_thread_id(ctx),
                     self.format_transaction_name(ctx, new_thread.transaction.name.clone())
                 );
-                self.next.push(new_thread);
+                self.next.push_back(new_thread);
             }
         }
 
@@ -781,20 +786,16 @@ impl Scheduler {
                                 thread.transaction.clone().name,
                             );
 
-                            // Update the thread's `end_time_step` field
-                            // If this `step()` in the program is the very last
-                            // statement in a function, then this field captures
-                            // the end-time of the transaction
-                            thread.end_time_step = Some(trace.time_step());
-
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
-                            self.next.push(thread);
+                            self.next.push_back(thread);
                             self.print_scheduler_state(trace, ctx);
                             return Ok(());
                         }
                         Stmt::Fork => {
+                            thread.has_forked = true;
+
                             // Check if another thread from the same start cycle has already forked
                             // in the current cycle for this scheduler.
                             // If so, skip the fork to avoid creating duplicate threads.
@@ -834,7 +835,7 @@ impl Scheduler {
                                         new_thread.global_thread_id(ctx),
                                         new_thread.transaction.name
                                     );
-                                    self.current.push(new_thread);
+                                    self.current.push_back(new_thread);
                                 }
 
                                 // Mark this start cycle as having forked
@@ -867,7 +868,7 @@ impl Scheduler {
                             self.format_transaction_name(ctx, first_transaction_name.to_string()),
                             first_start_cycle
                         );
-                        self.failed.push(thread);
+                        self.failed.push_back(thread);
                         self.print_scheduler_state(trace, ctx);
                         return Ok(());
                     }
@@ -885,15 +886,8 @@ impl Scheduler {
                         thread.transaction.name.clone(),
                     ));
 
-                    // If the thread's `end_time_step` is `None`, use the
-                    // current `time_step` of the trace as a fallback.
-                    // (In practice, `thread.end_time_step` will be
-                    // set to `Some(...)` every time we encounter a `step()`
-                    // in the program, and well-formedness constraints for our
-                    // DSL dicatate that every function must contain at least one `step()`,
-                    // so `thread.end_time_step` will always be `Some(...)` by the
-                    // time we reach this point.)
-                    let end_time_step = thread.end_time_step.unwrap_or_else(|| trace.time_step());
+                    // Use the actual time-step from the waveform as the `end_time_step`
+                    let end_time_step = trace.time_step();
 
                     // Don't print out the inferred transaction if the user
                     // has marked it as `idle`
@@ -925,7 +919,33 @@ impl Scheduler {
                             println!("{}", transaction_name)
                         }
                     }
-                    self.finished.push(thread.clone());
+                    self.finished.push_back(thread.clone());
+
+                    // Implicit fork: if this thread hasn't forked yet,
+                    // spawn new threads for all possible transactions
+                    // This handles the case where a protocol just ends in
+                    // `step()` without having previously called `fork()`
+                    if !thread.has_forked {
+                        info!(
+                            "Thread {} finished without explicit fork, performing implicit fork",
+                            thread.global_thread_id(ctx)
+                        );
+                        for (transaction, symbol_table) in &self.possible_transactions {
+                            let new_thread = Thread::new(
+                                self.struct_name.clone(),
+                                transaction.clone(),
+                                symbol_table.clone(),
+                                transaction.next_stmt_mapping(),
+                                self.num_threads,
+                                self.cycle_count,
+                                trace.time_step(),
+                            );
+                            self.num_threads += 1;
+
+                            self.current.push_back(new_thread);
+                        }
+                        self.forked_start_cycles.insert(thread.start_cycle);
+                    }
                     return Ok(());
                 }
                 Err(err) => {
@@ -935,7 +955,7 @@ impl Scheduler {
                         self.format_transaction_name(ctx, thread.transaction.name.clone()),
                         self.serialize_monitor_error(err, trace, ctx)
                     );
-                    self.failed.push(thread);
+                    self.failed.push_back(thread);
                     self.print_scheduler_state(trace, ctx);
                     return Ok(());
                 }
