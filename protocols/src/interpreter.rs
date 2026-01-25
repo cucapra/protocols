@@ -265,7 +265,7 @@ impl<'a> Evaluator<'a> {
     /// - Updates forbidden_output_counts
     /// - Applies value to sim immediately
     /// - For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
-    /// Note: Conflict checking is deferred to `check_for_conflicts` at end of cycle.
+    /// - Note: Conflict checking is deferred to `check_for_conflicts` at end of cycle.
     fn apply_input_value(
         &mut self,
         symbol_id: &SymbolId,

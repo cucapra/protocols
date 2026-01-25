@@ -60,7 +60,7 @@ fn add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-fn wait_and_add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+fn wait_and_add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
   fork();
   step();
@@ -68,6 +68,5 @@ fn wait_and_add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32)
   DUT.b := b;
   step();
   assert_eq(s, DUT.s);
-  fork();
   step();
 }
