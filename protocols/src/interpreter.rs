@@ -261,11 +261,11 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Helper: applies an input value for a given thread.
-    /// - Checks for inter-thread conflicts (different threads cannot assign different concrete values)
     /// - Updates per_thread_input_vals
     /// - Updates forbidden_output_counts
     /// - Applies value to sim immediately
     /// - For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
+    /// Note: Conflict checking is deferred to `check_for_conflicts` at end of cycle.
     fn apply_input_value(
         &mut self,
         symbol_id: &SymbolId,
@@ -279,29 +279,6 @@ impl<'a> Evaluator<'a> {
             .get(symbol_id)
             .and_then(|m| m.get(&todo_idx))
             .map(|(val, _)| val.clone());
-
-        // Check for inter-thread conflicts: other threads with different concrete values
-        // (Same thread can overwrite its own value, but different threads cannot conflict)
-        if let ThreadInputValue::Concrete(ref new_bvv) = new_val {
-            if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
-                for (&other_todo_idx, (other_val, _)) in per_thread_vals {
-                    if other_todo_idx != todo_idx {
-                        if let ThreadInputValue::Concrete(other_bvv) = other_val {
-                            if !new_bvv.is_equal(other_bvv) {
-                                return Err(ExecutionError::conflicting_assignment(
-                                    *symbol_id,
-                                    self.st[symbol_id].name().to_string(),
-                                    other_bvv.clone(),
-                                    new_bvv.clone(),
-                                    todo_idx,
-                                    stmt_id.unwrap(), // Safe to unwrap: conflicts only happen with Concrete values, which always have Some(stmt_id)
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // Handle forbidden_output reference counting
         let was_dontcare = matches!(old_val, Some(ThreadInputValue::DontCare));
@@ -461,32 +438,111 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    /// Checks for conflicting assignments across all threads at end of cycle.
+    /// Returns a list of (thread_idx, error) for each thread involved in a conflict.
+    /// Each thread gets its own error with its own stmt_id so the diagnostic points to the right location.
+    pub fn check_for_conflicts(&self) -> Vec<(usize, ExecutionError)> {
+        let mut errors = Vec::new();
+
+        for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
+            // Collect all concrete values with their thread indices and stmt_ids
+            let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
+                .iter()
+                .filter_map(|(&todo_idx, (val, stmt_id))| {
+                    if let ThreadInputValue::Concrete(bvv) = val {
+                        Some((todo_idx, bvv, *stmt_id))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Check if any two concrete values differ
+            if concrete_vals.len() >= 2 {
+                let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
+                for (other_idx, other_val, other_stmt_id) in &concrete_vals[1..] {
+                    if !first_val.is_equal(*other_val) {
+                        // Create an error for EACH conflicting thread with its own stmt_id
+                        let symbol_name = self.st[*symbol_id].name().to_string();
+
+                        // Error for first thread
+                        errors.push((
+                            *first_idx,
+                            ExecutionError::conflicting_assignment(
+                                *symbol_id,
+                                symbol_name.clone(),
+                                (*other_val).clone(), // the "other" value it conflicts with
+                                (*first_val).clone(), // this thread's value
+                                *first_idx,
+                                first_stmt_id.expect("Concrete values should have stmt_id"),
+                            ),
+                        ));
+
+                        // Error for second thread
+                        errors.push((
+                            *other_idx,
+                            ExecutionError::conflicting_assignment(
+                                *symbol_id,
+                                symbol_name,
+                                (*first_val).clone(), // the "other" value it conflicts with
+                                (*other_val).clone(), // this thread's value
+                                *other_idx,
+                                other_stmt_id.expect("Concrete values should have stmt_id"),
+                            ),
+                        ));
+
+                        // Return after finding first conflict (could extend to find all)
+                        return errors;
+                    }
+                }
+            }
+        }
+        errors
+    }
+
     /// Get the next statement after the given statement
     pub fn next_stmt(&self, stmt_id: &StmtId) -> Option<StmtId> {
         self.next_stmt_map.get(stmt_id).copied().flatten()
     }
 
-    /// Called at end of cycle to randomize pins where all active threads agree on DontCare
-    pub fn finalize_inputs_for_cycle(&mut self, active_thread_indices: &[usize]) {
-        // For each input pin
+    /// Called at end of cycle to finalize input values after conflict checking.
+    /// For each input pin:
+    /// - If any thread has a concrete value, apply it to sim (all concrete values must agree if no conflict)
+    /// - If all threads have DontCare, randomize the pin
+    pub fn finalize_inputs_for_cycle(&mut self) {
+        // Collect the values to apply (can't mutate self.per_thread_input_vals while iterating)
+        let mut values_to_apply: Vec<(SymbolId, Option<BitVecValue>)> = Vec::new();
+
         for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
-            // Check if ALL active threads have DontCare (none have Concrete)
-            let all_dontcare = active_thread_indices.iter().all(|&idx| {
-                matches!(
-                    per_thread_vals.get(&idx),
-                    Some((ThreadInputValue::DontCare, _))
-                )
+            // Find any concrete value (if conflicts were checked, all concrete values must agree)
+            let concrete_val = per_thread_vals.values().find_map(|(val, _)| {
+                if let ThreadInputValue::Concrete(bvv) = val {
+                    Some(bvv.clone())
+                } else {
+                    None
+                }
             });
 
-            // If all threads agree on DontCare, randomize the pin
-            if all_dontcare {
-                if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
-                    let width = match self.st[*symbol_id].tpe() {
-                        Type::BitVec(w) => w,
-                        _ => panic!("Expected BitVec type for input"),
-                    };
-                    let random_val = BitVecValue::random(&mut self.rng, width);
-                    self.sim.set(*expr_ref, &random_val);
+            values_to_apply.push((*symbol_id, concrete_val));
+        }
+
+        // Now apply the values
+        for (symbol_id, concrete_val) in values_to_apply {
+            if let Some(expr_ref) = self.input_mapping.get(&symbol_id) {
+                match concrete_val {
+                    Some(bvv) => {
+                        // Apply the concrete value
+                        self.sim.set(*expr_ref, &bvv);
+                    }
+                    None => {
+                        // All threads have DontCare, randomize
+                        let width = match self.st[symbol_id].tpe() {
+                            Type::BitVec(w) => w,
+                            _ => panic!("Expected BitVec type for input"),
+                        };
+                        let random_val = BitVecValue::random(&mut self.rng, width);
+                        self.sim.set(*expr_ref, &random_val);
+                    }
                 }
             }
         }

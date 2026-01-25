@@ -282,8 +282,25 @@ impl<'a> Scheduler<'a> {
                 }
             }
 
-            // Move each active thread into inactive or next
-            while let Some(mut active_thread) = self.active_threads.pop() {
+            // Check for conflicting assignments after all threads have run
+            let conflict_errors = self.evaluator.check_for_conflicts();
+            if !conflict_errors.is_empty() {
+                info!("Conflicting assignment detected, terminating all threads");
+                // Mark each conflicting thread with its own error (using its own stmt_id)
+                for (thread_idx, error) in conflict_errors {
+                    self.results[thread_idx] = Err(error);
+                }
+                // Clear all threads to stop execution
+                self.active_threads.clear();
+                self.next_threads.clear();
+                break;
+            }
+
+            // No conflicts - finalize input values to sim before stepping
+            self.evaluator.finalize_inputs_for_cycle();
+
+            // Move each active thread into inactive or next (drain preserves order)
+            for mut active_thread in self.active_threads.drain(..) {
                 let next_step: Option<StmtId> = active_thread.next_step;
                 match next_step {
                     Some(next_step_id) => {
