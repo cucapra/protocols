@@ -26,6 +26,8 @@ use crate::ir::*;
 pub enum ErrorKey {
     ExprKey(ExprId),
     StmtKey(StmtId),
+    /// For errors that need to be reported per-thread (e.g., conflicting assignments)
+    StmtKeyWithThread(StmtId, usize),
 }
 
 /// Severity of diagnostic
@@ -281,12 +283,29 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
+        self.emit_diagnostic_stmt_for_thread(tr, stmt_id, message, level, None)
+    }
+
+    /// Like `emit_diagnostic_stmt`, but with an optional thread_idx for per-thread deduplication.
+    /// Use this when the same statement can have different errors for different threads.
+    pub fn emit_diagnostic_stmt_for_thread(
+        &mut self,
+        tr: &Transaction,
+        stmt_id: &StmtId,
+        message: &str,
+        level: Level,
+        thread_idx: Option<usize>,
+    ) {
         // Skip warnings if emit_warnings is false
         if level == Level::Warning && !self.emit_warnings {
             return;
         }
         // need to check errors to avoid recursive duplication of error message
-        if !self.reported_errs.insert(ErrorKey::StmtKey(*stmt_id)) {
+        let key = match thread_idx {
+            Some(idx) => ErrorKey::StmtKeyWithThread(*stmt_id, idx),
+            None => ErrorKey::StmtKey(*stmt_id),
+        };
+        if !self.reported_errs.insert(key) {
             return;
         }
         let buffer = &mut self.create_buffer();
