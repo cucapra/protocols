@@ -1,7 +1,6 @@
 // ARGS: --wave fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns
 
-
-// This is a source (manager) that outputs a sequence of 8 words (1-8)
+// Source (manager) that outputs a sequence of 8 words
 struct AXISManager {
     // Control signals
     in i_aresetn: u1,              // Active-low reset
@@ -12,7 +11,7 @@ struct AXISManager {
     out i_tstrb: u4,               // Byte strobe (always 0xF)
     out i_tlast: u1,               // Last word in packet
 
-    // AXI-Stream sub-ordinate input (we control this)
+    // AXI-Stream sub-ordinate input 
     in i_tready: u1,               // Downstream ready to accept
 }
 
@@ -26,17 +25,11 @@ fn reset<DUT: AXISManager>() {
     // Release reset
     DUT.i_aresetn := 1'b1;
     step();
-
-    // Release inputs
-    DUT.i_aresetn := X;
-    DUT.i_tready := X;
-
-    fork();
-    step();
 }
 
 // RECV: Receive one data word from the AXI-Stream manager
 // Data transfer occurs when i_tvalid and i_tready are both 1
+// Only matches when data is immediately available (i_tvalid = 1)
 //
 // Output Arguments:
 //   data - Expected payload from manager
@@ -46,27 +39,20 @@ fn recv<DUT: AXISManager>(
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b1;          // Signal ready to receive
 
-    // Wait for manager to have valid data
-    while (!(DUT.i_tvalid == 1'b1)) {
-        step();
-    }
+    // Only matches when data is available
+    // (use wait_for_data for cycles when tready=1 but tvalid=0)
+    assert_eq(DUT.i_tvalid, 1'b1);
 
     // Verify output data
     assert_eq(DUT.i_tdata, data);
 
     // One cycle for the transfer to complete
     step();
-
-    // Release inputs
-    DUT.i_aresetn := X;
-    DUT.i_tready := X;
-
-    fork();
-    step();
 }
 
 // RECV_LAST: Receive the last data word (with i_tlast asserted)
 // This verifies both the data and that i_tlast is properly set
+// Only matches when data is immediately available (i_tvalid = 1)
 //
 // Output Arguments:
 //   data - Expected payload from manager (should be the last word)
@@ -76,10 +62,8 @@ fn recv_last<DUT: AXISManager>(
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b1;          // Signal ready to receive
 
-    // Wait for manager to have valid data
-    while (!(DUT.i_tvalid == 1'b1)) {
-        step();
-    }
+    // Only matches when data is available
+    assert_eq(DUT.i_tvalid, 1'b1);
 
     // Verify output data and i_tlast
     assert_eq(DUT.i_tdata, data);
@@ -87,35 +71,30 @@ fn recv_last<DUT: AXISManager>(
 
     // One cycle for the transfer to complete
     step();
-
-    // Release inputs
-    DUT.i_aresetn := X;
-    DUT.i_tready := X;
-
-    fork();
-    step();
 }
 
 // STALL: Assert backpressure (i_tready=0) while manager has valid data
 // This tests that the manager properly holds its outputs stable during stall
+// Only matches when i_tvalid=1 (data is available to stall)
 fn stall<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b0;          // Apply backpressure
 
-    // Wait for manager to have valid data
-    // (so that we're actually stalling a data transfer)
-    while (!(DUT.i_tvalid == 1'b1)) {
-        step();
-    }
+    // Stall only applies when manager has valid data
+    // If i_tvalid=0, this fails and we instead have an `idle` transaction
+    assert_eq(DUT.i_tvalid, 1'b1);
 
-    // Hold for one stall cycle
     step();
+}
 
-    // Release inputs
-    DUT.i_aresetn := X;
-    DUT.i_tready := X;
+// WAIT_FOR_DATA: Receiver is ready but no data is available
+// Used when tready=1 but tvalid=0 (i.e. receiver is polling for data)
+fn wait_for_data<DUT: AXISManager>() {
+    DUT.i_aresetn := 1'b1;         // Keep out of reset
+    DUT.i_tready := 1'b1;          
 
-    fork();
+    // Only matches when no data is available
+    assert_eq(DUT.i_tvalid, 1'b0);
     step();
 }
 
@@ -125,12 +104,5 @@ fn stall<DUT: AXISManager>() {
 fn idle<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b0;          // Not ready
-    step();
-
-    // Release inputs
-    DUT.i_aresetn := X;
-    DUT.i_tready := X;
-
-    fork();
     step();
 }
