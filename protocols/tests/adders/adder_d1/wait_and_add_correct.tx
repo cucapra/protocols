@@ -1,4 +1,4 @@
 // ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/add_d1.prot
-// RETURN: 101
+// RETURN: 0
 wait_and_add(1, 2, 3);
-add_incorrect_implicit(4, 5, 9);
+add(4, 5, 9);
