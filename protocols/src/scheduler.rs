@@ -299,6 +299,9 @@ impl<'a> Scheduler<'a> {
             // No conflicts - finalize input values to sim before stepping
             self.evaluator.finalize_inputs_for_cycle();
 
+            // Collect threads that need implicit forking (can't call self.next_todo during drain)
+            let mut threads_needing_implicit_fork: Vec<usize> = Vec::new();
+
             // Move each active thread into inactive or next (drain preserves order)
             for mut active_thread in self.active_threads.drain(..) {
                 let next_step: Option<StmtId> = active_thread.next_step;
@@ -319,11 +322,37 @@ impl<'a> Scheduler<'a> {
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
+                        // Clear thread inputs
+                        self.evaluator.clear_thread_inputs(active_thread.todo_idx);
 
-                        // Thread's inputs already cleared in run_thread_until_next_step
+                        // Track if this thread needs implicit fork
+                        if !active_thread.has_forked && self.results[active_thread.todo_idx].is_ok()
+                        {
+                            threads_needing_implicit_fork.push(active_thread.todo_idx);
+                        }
+
                         self.inactive_threads.push(active_thread)
                     }
                 }
+            }
+
+            // Process implicit forks after drain is complete
+            for _todo_idx in threads_needing_implicit_fork {
+                let next_todo_option = self.next_todo(self.next_todo_idx);
+                match next_todo_option {
+                    Some(todo) => {
+                        let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+                        self.next_threads.push(new_thread);
+                        info!(
+                            "    enqueued implicitly forked thread; queue size = {}",
+                            self.next_threads.len()
+                        );
+                    }
+                    None => {
+                        info!("    no more todos to fork, skipping implicit fork.");
+                    }
+                }
+                self.next_todo_idx += 1;
             }
 
             // setup the threads for the next cycle
@@ -397,32 +426,19 @@ impl<'a> Scheduler<'a> {
             .context_switch(thread.todo.clone(), thread.todo_idx);
         info!("  AFTER context_switch");
 
-        // Check if this is the last statement (no next statement)
-        // If so, skip init_thread_inputs UNLESS this is the first cycle (thread hasn't stepped yet)
-        // On the first cycle, we MUST call init_thread_inputs to initialize all inputs to DontCare
-        let should_init =
-            self.evaluator.next_stmt(&current_stmt_id).is_some() || !thread.has_stepped;
-
-        if should_init {
-            // Initialize thread inputs at cycle START (implicit reapplication)
+        // Initialize thread inputs at cycle START (implicit reapplication)
+        info!(
+            "  About to call init_thread_inputs for todo_idx={} ({})",
+            thread.todo_idx, thread.todo.tr.name
+        );
+        if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
             info!(
-                "  About to call init_thread_inputs for todo_idx={} ({})",
-                thread.todo_idx, thread.todo.tr.name
+                "ERROR during init_thread_inputs: {:?}, terminating thread",
+                e
             );
-            if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
-                info!(
-                    "ERROR during init_thread_inputs: {:?}, terminating thread",
-                    e
-                );
-                self.results[thread.todo_idx] = Err(e);
-                thread.next_step = None;
-                return;
-            }
-        } else {
-            info!(
-                "Thread {} at last statement (and has stepped), skipping init_thread_inputs",
-                thread.todo.tr.name
-            );
+            self.results[thread.todo_idx] = Err(e);
+            thread.next_step = None;
+            return;
         }
 
         // keep evaluating until we hit a Step, hit the end, or error out:
@@ -448,7 +464,15 @@ impl<'a> Scheduler<'a> {
                                 thread.has_stepped = true;
                             }
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
-                            thread.next_step = Some(next_id);
+
+                            // Check if this is the final step (no statement after it)
+                            // If so, thread completes at this cycle rather than running another useless cycle
+                            if thread.todo.next_stmt_map.get(&next_id) == Some(&None) {
+                                info!("  This is the final step, thread completes.");
+                                thread.next_step = None;
+                            } else {
+                                thread.next_step = Some(next_id);
+                            }
                             // Values already saved in per_thread_input_vals, nothing to do
                             return;
                         }
