@@ -1,0 +1,6 @@
+error: Cannot assign to forbidden input 'a' after observing a combinationally dependent output
+   ┌─ adders/adder_d0/add_d0.prot:31:14
+   │
+31 │     DUT.a := a; // this should be illegal
+   │              ^ Cannot assign to forbidden input 'a' after observing a combinationally dependent output
+

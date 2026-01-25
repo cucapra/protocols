@@ -1,6 +1,6 @@
-error: Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'a' after observing a dependent output
+error: Cannot assign to forbidden input 'a' after observing a combinationally dependent output
   ┌─ inverters/inverter_d0.prot:7:12
   │
 7 │   DUT.a := DUT.s;
-  │            ^^^^^ Cannot perform ASSIGNED FORBIDDEN PORT on DontCare value in Cannot assign to input 'a' after observing a dependent output
+  │            ^^^^^ Cannot assign to forbidden input 'a' after observing a combinationally dependent output
 

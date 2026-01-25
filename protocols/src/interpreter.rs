@@ -8,7 +8,6 @@
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
 use crate::scheduler::Todo;
-use crate::serialize::serialize_type;
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use patronus::expr::ExprRef;
@@ -18,46 +17,25 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
+/// Per-thread input value: either a concrete assignment or DontCare
 #[derive(Debug, Clone)]
-pub enum InputValue {
-    OldValue(BitVecValue),
-    NewValue(BitVecValue),
-    DontCare(BitVecValue),
+pub enum ThreadInputValue {
+    Concrete(BitVecValue),
+    DontCare,
 }
 
-impl PartialEq for InputValue {
-    fn eq(&self, other: &Self) -> bool {
-        use InputValue::*;
+impl ThreadInputValue {
+    pub fn is_concrete(&self) -> bool {
+        matches!(self, ThreadInputValue::Concrete(_))
+    }
 
-        match (self, other) {
-            (OldValue(a), OldValue(b)) => a.is_equal(b),
-            (NewValue(a), NewValue(b)) => a.is_equal(b),
-            (DontCare(a), DontCare(b)) => a.is_equal(b),
-            _ => false,
-        }
+    pub fn is_dont_care(&self) -> bool {
+        matches!(self, ThreadInputValue::DontCare)
     }
 }
 
-impl InputValue {
-    pub fn value(&self) -> &BitVecValue {
-        match self {
-            InputValue::OldValue(bvv) => bvv,
-            InputValue::NewValue(bvv) => bvv,
-            InputValue::DontCare(bvv) => bvv,
-        }
-    }
-
-    /// Returns the bitwidth of an `InputValue`
-    pub fn bitwidth(&self) -> u32 {
-        self.value().width()
-    }
-
-    /// Creates a random `InputValue::DontCare` value with the specified `width`
-    /// using the `rng` provided
-    pub fn dont_care(mut rng: StdRng, width: u32) -> InputValue {
-        InputValue::DontCare(BitVecValue::random(&mut rng, width))
-    }
-}
+/// Map from thread_id to input value for a single input pin
+pub type PerThreadValues = FxHashMap<usize, ThreadInputValue>;
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
 #[derive(PartialEq, Debug, Clone)]
@@ -83,10 +61,14 @@ pub struct Evaluator<'a> {
 
     // tracks forbidden ports due to combinational dependencies
     forbidden_inputs: Vec<SymbolId>,
-    forbidden_outputs: Vec<SymbolId>,
+    forbidden_output_counts: FxHashMap<SymbolId, usize>,
 
-    // tracks the input pins and their values
-    input_vals: FxHashMap<SymbolId, InputValue>,
+    // Per-thread input values for each input pin: input_id -> (thread_id -> value)
+    // This serves as both the current cycle's assignments AND the sticky inputs for implicit re-application
+    per_thread_input_vals: FxHashMap<SymbolId, PerThreadValues>,
+
+    // The current todo_idx being executed
+    current_todo_idx: usize,
 
     assertions_enabled: bool,
 
@@ -163,19 +145,15 @@ impl<'a> Evaluator<'a> {
 
         // For simplicity, we initialize an RNG with the seed 0 when generating
         // random values for `DontCare`s
-        let mut rng = StdRng::seed_from_u64(0);
+        let rng = StdRng::seed_from_u64(0);
 
-        // Initialize the input pins with DontCares that are randomly assigned
-        let mut input_vals = FxHashMap::default();
+        // Initialize per-thread input values (empty maps, populated when threads start)
+        let mut per_thread_input_vals = FxHashMap::default();
         for symbol_id in input_mapping.keys() {
-            // get the width from the type of the symbol
+            // Verify the symbol has a BitVec type
             match st[symbol_id].tpe() {
-                Type::BitVec(width) => {
-                    // TODO: make this value random
-                    input_vals.insert(
-                        *symbol_id,
-                        InputValue::DontCare(BitVecValue::random(&mut rng, width)),
-                    );
+                Type::BitVec(_) => {
+                    per_thread_input_vals.insert(*symbol_id, FxHashMap::default());
                 }
                 _ => panic!(
                     "Expected a BitVec type for symbol {}, but found {:?}",
@@ -195,6 +173,12 @@ impl<'a> Evaluator<'a> {
         }
         for symbol_id in input_mapping.keys() {
             input_dependencies.insert(*symbol_id, Vec::new());
+        }
+
+        // Initialize forbidden output counts to 0
+        let mut forbidden_output_counts = FxHashMap::default();
+        for symbol_id in output_mapping.keys() {
+            forbidden_output_counts.insert(*symbol_id, 0);
         }
 
         // For each output, find all inputs in its combinational cone of influence
@@ -233,8 +217,9 @@ impl<'a> Evaluator<'a> {
             input_dependencies,
             output_dependencies,
             forbidden_inputs: Vec::new(),
-            forbidden_outputs: Vec::new(),
-            input_vals,
+            forbidden_output_counts,
+            per_thread_input_vals,
+            current_todo_idx: 0,
             assertions_enabled: false,
             rng,
         }
@@ -258,19 +243,204 @@ impl<'a> Evaluator<'a> {
 
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
-    pub fn context_switch(&mut self, todo: Todo<'a>) {
+    /// Performs a context switch to execute a different thread
+    pub fn context_switch(&mut self, todo: Todo<'a>, todo_idx: usize) {
         self.tr = todo.tr;
         self.st = todo.st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
         self.next_stmt_map = todo.next_stmt_map;
+        self.current_todo_idx = todo_idx;
 
-        // Clear forbidden ports when switching to a new context (i.e. new cycle)
+        // Clear forbidden ports when switching to a new thread context
         self.forbidden_inputs.clear();
-        self.forbidden_outputs.clear();
+
+        // Reset forbidden output counts to 0
+        for count in self.forbidden_output_counts.values_mut() {
+            *count = 0;
+        }
     }
 
-    pub fn input_vals(&self) -> FxHashMap<SymbolId, InputValue> {
-        self.input_vals.clone()
+    /// Helper: applies an input value for a given thread.
+    /// - Checks for inter-thread conflicts (different threads cannot assign different concrete values)
+    /// - Updates per_thread_input_vals
+    /// - Updates forbidden_output_counts
+    /// - Applies value to sim immediately
+    fn apply_input_value(
+        &mut self,
+        symbol_id: &SymbolId,
+        todo_idx: usize,
+        new_val: ThreadInputValue,
+        stmt_id: StmtId,
+    ) -> ExecutionResult<()> {
+        // Get old value for this todo_idx (if any)
+        let old_val = self
+            .per_thread_input_vals
+            .get(symbol_id)
+            .and_then(|m| m.get(&todo_idx))
+            .cloned();
+
+        // Check for inter-thread conflicts: other threads with different concrete values
+        // (Same thread can overwrite its own value, but different threads cannot conflict)
+        if let ThreadInputValue::Concrete(ref new_bvv) = new_val {
+            if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
+                for (&other_todo_idx, other_val) in per_thread_vals {
+                    if other_todo_idx != todo_idx {
+                        if let ThreadInputValue::Concrete(other_bvv) = other_val {
+                            if !new_bvv.is_equal(other_bvv) {
+                                return Err(ExecutionError::conflicting_assignment(
+                                    *symbol_id,
+                                    self.st[symbol_id].name().to_string(),
+                                    other_bvv.clone(),
+                                    new_bvv.clone(),
+                                    todo_idx,
+                                    stmt_id,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Handle forbidden_output reference counting
+        let was_dontcare = matches!(old_val, Some(ThreadInputValue::DontCare));
+        let is_dontcare = matches!(new_val, ThreadInputValue::DontCare);
+
+        // Update counts when transitioning to/from DontCare
+        if is_dontcare && !was_dontcare {
+            // Transitioning TO DontCare (from None or Concrete): increment counts
+            if let Some(deps) = self.input_dependencies.get(symbol_id) {
+                for dep in deps {
+                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                        *count += 1;
+                    }
+                }
+            }
+        } else if !is_dontcare && was_dontcare {
+            // Transitioning FROM DontCare (to Concrete): decrement counts
+            if let Some(deps) = self.input_dependencies.get(symbol_id) {
+                for dep in deps {
+                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                        *count = count.saturating_sub(1);
+                    }
+                }
+            }
+        }
+
+        // Update per_thread_input_vals
+        if let Some(per_thread_vals) = self.per_thread_input_vals.get_mut(symbol_id) {
+            per_thread_vals.insert(todo_idx, new_val.clone());
+        }
+
+        // Apply value to sim
+        if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
+            match new_val {
+                ThreadInputValue::Concrete(bvv) => {
+                    // Always apply Concrete values immediately
+                    self.sim.set(*expr_ref, &bvv);
+                }
+                ThreadInputValue::DontCare => {
+                    // Check if any OTHER thread has Concrete for this pin
+                    let any_other_concrete =
+                        if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
+                            per_thread_vals.iter().any(|(&other_idx, other_val)| {
+                                other_idx != todo_idx
+                                    && matches!(other_val, ThreadInputValue::Concrete(_))
+                            })
+                        } else {
+                            false
+                        };
+
+                    // If all other threads have DontCare, randomize
+                    if !any_other_concrete {
+                        let width = match self.st[*symbol_id].tpe() {
+                            Type::BitVec(w) => w,
+                            _ => panic!("Expected BitVec type for input"),
+                        };
+                        let random_val = BitVecValue::random(&mut self.rng, width);
+                        self.sim.set(*expr_ref, &random_val);
+                    }
+                    // Otherwise do nothing - leave the Concrete value in place
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Initializes input values for a todo from its sticky inputs (implicit re-application)
+    /// On first run, initializes all inputs to DontCare. On subsequent runs, reapplies existing values.
+    pub fn init_thread_inputs(&mut self, todo_idx: usize) -> ExecutionResult<()> {
+        // Check if this is the first run for this thread (no entries in map)
+        let is_first_run = self
+            .per_thread_input_vals
+            .values()
+            .all(|per_thread_vals| !per_thread_vals.contains_key(&todo_idx));
+
+        if is_first_run {
+            // First run: initialize all inputs to DontCare
+            let all_inputs: Vec<SymbolId> = self.input_mapping.keys().copied().collect();
+            for symbol_id in all_inputs {
+                self.apply_input_value(
+                    &symbol_id,
+                    todo_idx,
+                    ThreadInputValue::DontCare,
+                    StmtId::from_u32(0),
+                )?;
+            }
+        } else {
+            // Subsequent runs: reapply existing values
+            let inputs_to_init: Vec<(SymbolId, ThreadInputValue)> = self
+                .per_thread_input_vals
+                .iter()
+                .filter_map(|(symbol_id, per_thread_vals)| {
+                    per_thread_vals
+                        .get(&todo_idx)
+                        .map(|val| (*symbol_id, val.clone()))
+                })
+                .collect();
+
+            for (symbol_id, val) in inputs_to_init {
+                self.apply_input_value(&symbol_id, todo_idx, val, StmtId::from_u32(0))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Clears a thread's input values (used when a thread completes and a new one starts fresh)
+    pub fn clear_thread_inputs(&mut self, todo_idx: usize) {
+        for per_thread_vals in self.per_thread_input_vals.values_mut() {
+            per_thread_vals.remove(&todo_idx);
+        }
+    }
+
+    /// Get the next statement after the given statement
+    pub fn next_stmt(&self, stmt_id: &StmtId) -> Option<StmtId> {
+        self.next_stmt_map.get(stmt_id).copied().flatten()
+    }
+
+    /// Called at end of cycle to randomize pins where all active threads agree on DontCare
+    pub fn finalize_inputs_for_cycle(&mut self, active_thread_indices: &[usize]) {
+        // For each input pin
+        for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
+            // Check if ALL active threads have DontCare (none have Concrete)
+            let all_dontcare = active_thread_indices
+                .iter()
+                .all(|&idx| matches!(per_thread_vals.get(&idx), Some(ThreadInputValue::DontCare)));
+
+            // If all threads agree on DontCare, randomize the pin
+            if all_dontcare {
+                if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
+                    let width = match self.st[*symbol_id].tpe() {
+                        Type::BitVec(w) => w,
+                        _ => panic!("Expected BitVec type for input"),
+                    };
+                    let random_val = BitVecValue::random(&mut self.rng, width);
+                    self.sim.set(*expr_ref, &random_val);
+                }
+            }
+        }
     }
 
     pub fn enable_assertions(&mut self) {
@@ -281,26 +451,9 @@ impl<'a> Evaluator<'a> {
         self.assertions_enabled = false;
     }
 
-    // Steps the simulator, then modifies `input_vals` to be
-    // `OldValue`s or `DontCare`s
+    /// Steps the simulator
     pub fn sim_step(&mut self) {
         self.sim.step();
-
-        // modify the input_vals to all be OldValues or DontCares
-        self.input_vals = self
-            .input_vals
-            .iter()
-            .map(|(k, v)| {
-                let new_v = match v {
-                    InputValue::NewValue(bvv) => InputValue::OldValue(bvv.clone()),
-                    InputValue::OldValue(bvv) => InputValue::OldValue(bvv.clone()),
-                    InputValue::DontCare(bvv) => {
-                        InputValue::DontCare(BitVecValue::random(&mut self.rng, bvv.width()))
-                    } // re-randomize DontCares
-                };
-                (*k, new_v)
-            })
-            .collect();
     }
 
     fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
@@ -314,16 +467,15 @@ impl<'a> Evaluator<'a> {
                         self.sim.get(*expr_ref).try_into().unwrap(),
                     ))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    // Check if observing this output port is forbidden
-                    if self.forbidden_outputs.contains(sym_id) {
-                        return Err(ExecutionError::dont_care_operation(
-                            String::from("OBSERVED FORBIDDEN PORT"),
-                            format!(
-                                "Cannot observe output '{}' after assigning don't care to a dependent input",
-                                name
-                            ),
-                            *expr_id,
-                        ));
+                    // Check if observing this output port is forbidden (count > 0)
+                    // The count is > 0 when a DontCare value was assigned to a dependent input
+                    if let Some(&count) = self.forbidden_output_counts.get(sym_id) {
+                        if count > 0 {
+                            return Err(ExecutionError::forbidden_output_observation(
+                                name.to_string(),
+                                *expr_id,
+                            ));
+                        }
                     }
 
                     // Observing an output port forbids assignments to its dependent inputs
@@ -471,7 +623,7 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    Ok(None)
+                    Ok(self.next_stmt_map[stmt_id])
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }
@@ -502,133 +654,60 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Evaluates an assignment statement `symbol_id := expr_id`, where `stmt_id`
-    /// is the `StmtId` of the assignment statement
+    /// is the `StmtId` of the assignment statement.
     fn evaluate_assign(
         &mut self,
         stmt_id: &StmtId,
         symbol_id: &SymbolId,
         expr_id: &ExprId,
     ) -> ExecutionResult<()> {
-        // TODO: There is a lot of repeated logic here. is there a way to refactor the matches to reduce this?
-        // FIXME: This should return a DontCare or a NewValue
-        let expr_val = self.evaluate_expr(expr_id)?;
+        // Check if this is an input pin
+        if !self.input_mapping.contains_key(symbol_id) {
+            let name = self.st[symbol_id].full_name(self.st);
+            if self.output_mapping.contains_key(symbol_id) {
+                return Err(ExecutionError::read_only_assignment(
+                    *symbol_id,
+                    name.to_string(),
+                    "outputs".to_string(),
+                    *stmt_id,
+                ));
+            } else if self.args_mapping.contains_key(symbol_id) {
+                return Err(ExecutionError::read_only_assignment(
+                    *symbol_id,
+                    name.to_string(),
+                    "arguments".to_string(),
+                    *stmt_id,
+                ));
+            } else {
+                return Err(ExecutionError::symbol_not_found(
+                    *symbol_id,
+                    name.to_string(),
+                    "symbol mappings".to_string(),
+                    *expr_id,
+                ));
+            }
+        }
 
-        // Check if assigning to this input port is forbidden
+        let expr_val = self.evaluate_expr(expr_id)?;
+        let todo_idx = self.current_todo_idx;
+
+        // Check if assigning to this input port is forbidden (after evaluating RHS)
         if self.forbidden_inputs.contains(symbol_id) {
             let name = self.st[symbol_id].name();
-            return Err(ExecutionError::dont_care_operation(
-                String::from("ASSIGNED FORBIDDEN PORT"),
-                format!(
-                    "Cannot assign to input '{}' after observing a dependent output",
-                    name
-                ),
+            return Err(ExecutionError::forbidden_input_assignment(
+                name.to_string(),
                 *expr_id,
             ));
         }
 
-        // if the symbol is currently a DontCare or OldValue, turn it into a NewValue
-        // if the symbol is currently a NewValue, error out -- two threads are trying to assign to the same input
-        if let Some(value) = self.input_vals.get_mut(symbol_id) {
-            match value {
-                InputValue::DontCare(_) => {
-                    match expr_val {
-                        ExprValue::DontCare => {
-                            // Do nothing for DontCare
-                            // (we don't want to re-randomize within a cycle because that would prevent convergence)
+        // Determine new value
+        let new_val = match expr_val {
+            ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
+            ExprValue::DontCare => ThreadInputValue::DontCare,
+        };
 
-                            // Assigning don't care: forbid all dependent outputs
-                            if let Some(deps) = self.input_dependencies.get(symbol_id) {
-                                self.forbidden_outputs.extend(deps.iter().copied());
-                            }
-                        }
-                        ExprValue::Concrete(bvv) => {
-                            *value = InputValue::NewValue(bvv);
-                        }
-                    }
-                }
-                InputValue::OldValue(old_val) => match expr_val {
-                    ExprValue::DontCare => {
-                        *value = InputValue::DontCare(BitVecValue::random(
-                            &mut self.rng,
-                            old_val.width(),
-                        ));
-
-                        // Assigning don't care: forbid all dependent outputs
-                        if let Some(deps) = self.input_dependencies.get(symbol_id) {
-                            self.forbidden_outputs.extend(deps.iter().copied());
-                        }
-                    }
-                    ExprValue::Concrete(bvv) => {
-                        *value = InputValue::NewValue(bvv);
-                    }
-                },
-                InputValue::NewValue(current_val) => {
-                    match expr_val {
-                        ExprValue::DontCare => {
-                            // do nothing
-
-                            // Assigning don't care: forbid all dependent outputs
-                            if let Some(deps) = self.input_dependencies.get(symbol_id) {
-                                self.forbidden_outputs.extend(deps.iter().copied());
-                            }
-                        }
-                        ExprValue::Concrete(new_val) => {
-                            // no width check needed; guaranteed to be the same
-                            // Otherwise, if `current_val != new_value`,
-                            // report a `ConflictingAssignment` error
-                            if !current_val.is_equal(&new_val) {
-                                return Err(ExecutionError::conflicting_assignment(
-                                    *symbol_id,
-                                    self.st[symbol_id].name().to_string(),
-                                    current_val.clone(),
-                                    new_val,
-                                    0,
-                                    *stmt_id,
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            // assuming Type Checking works, unreachable
-            return Err(ExecutionError::symbol_not_found(
-                *symbol_id,
-                self.st[symbol_id].name().to_string(),
-                "input pins".to_string(),
-                *expr_id,
-            ));
-        }
-
-        // Assign into the underlying Patronus sim
-        let name = self.st[symbol_id].full_name(self.st);
-        if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
-            self.sim.set(*expr_ref, self.input_vals[symbol_id].value());
-            Ok(())
-        }
-        // assuming Type Checking works, these statements are unreachable
-        else if self.output_mapping.contains_key(symbol_id) {
-            Err(ExecutionError::read_only_assignment(
-                *symbol_id,
-                name.to_string(),
-                "outputs".to_string(),
-                *stmt_id,
-            ))
-        } else if self.args_mapping.contains_key(symbol_id) {
-            Err(ExecutionError::read_only_assignment(
-                *symbol_id,
-                name.to_string(),
-                "arguments".to_string(),
-                *stmt_id,
-            ))
-        } else {
-            Err(ExecutionError::symbol_not_found(
-                *symbol_id,
-                name.to_string(),
-                "symbol mappings".to_string(),
-                *expr_id,
-            ))
-        }
+        // Use helper to check conflicts, update state, and apply to sim
+        self.apply_input_value(symbol_id, todo_idx, new_val, *stmt_id)
     }
 
     fn evaluate_while(
@@ -677,26 +756,6 @@ impl<'a> Evaluator<'a> {
             ))
         } else {
             Ok(())
-        }
-    }
-
-    /// Resets all input pins to `DontCare` (i.e. randomizes their values)
-    pub fn reset_all_input_pins(&mut self) {
-        // Reset all input pins
-        for (input_pin, value) in self.input_vals.iter_mut() {
-            let symbol_table_entry = &self.st[input_pin];
-            let symbol_name = symbol_table_entry.full_name(self.st);
-            let ty = symbol_table_entry.tpe();
-
-            if let Type::BitVec(width) = ty {
-                *value = InputValue::dont_care(self.rng.clone(), width);
-            } else {
-                panic!(
-                    "Cannot set pin {} to DontCare as its type {} is not a BitVec",
-                    symbol_name,
-                    serialize_type(self.st, ty)
-                )
-            }
         }
     }
 }

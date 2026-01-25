@@ -50,8 +50,10 @@ fn idle<DUT: Fifo>() {
     step();
 }
 
-// Sets the `reset` bit to 1
+// Sets the `reset` bit to 1 and the `valid` bit to 0
+// (Data is no longer valid after reset)
 fn reset<DUT: Fifo>() {
     DUT.reset_i := 1'b1;
+    DUT.v_i := 1'b0;
     step();
 }
