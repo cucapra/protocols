@@ -229,6 +229,7 @@ impl<'a> Scheduler<'a> {
 
         let results_size = todos.len();
         let first = Thread::initialize_thread(initial_todo, 0);
+
         info!("Added first thread to active_threads");
         Self {
             irs,
@@ -302,9 +303,7 @@ impl<'a> Scheduler<'a> {
                             active_thread.todo.tr.name
                         );
 
-                        // Set all input pins to `DontCare` after a thread finishes
-                        self.evaluator.reset_all_input_pins();
-
+                        // Thread's inputs already cleared in run_thread_until_next_step
                         self.inactive_threads.push(active_thread)
                     }
                 }
@@ -372,7 +371,25 @@ impl<'a> Scheduler<'a> {
             "Running thread {} from `step()` ({})",
             thread.todo.tr.name, current_stmt_id
         );
-        self.evaluator.context_switch(thread.todo.clone());
+        self.evaluator
+            .context_switch(thread.todo.clone(), thread.todo_idx);
+
+        // Check if this is the last statement (no next statement)
+        // If so, skip init_thread_inputs since thread will complete this cycle
+        if self.evaluator.next_stmt(&current_stmt_id).is_some() {
+            // Initialize thread inputs at cycle START (implicit reapplication)
+            if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
+                info!(
+                    "ERROR during init_thread_inputs: {:?}, terminating thread",
+                    e
+                );
+                self.results[thread.todo_idx] = Err(e);
+                thread.next_step = None;
+                return;
+            }
+        } else {
+            info!("Thread at last statement, skipping init_thread_inputs");
+        }
 
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
@@ -398,6 +415,7 @@ impl<'a> Scheduler<'a> {
                             }
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
                             thread.next_step = Some(next_id);
+                            // Values already saved in per_thread_input_vals, nothing to do
                             return;
                         }
 
@@ -435,6 +453,7 @@ impl<'a> Scheduler<'a> {
                                 Some(todo) => {
                                     let new_thread =
                                         Thread::initialize_thread(todo, self.next_todo_idx);
+
                                     self.next_threads.push(new_thread);
                                     info!(
                                         "    enqueued forked thread; queue size = {}",
@@ -502,12 +521,20 @@ impl<'a> Scheduler<'a> {
             }
         }
 
+        // Values already saved in per_thread_input_vals, nothing to save back to thread
+
+        // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
+        if thread.next_step.is_none() {
+            self.evaluator.clear_thread_inputs(thread.todo_idx);
+        }
+
         // fork if a thread has completed successfully
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
         if !thread.has_forked && forks_enabled && self.results[thread.todo_idx].is_ok() {
             match next_todo_option.clone() {
                 Some(todo) => {
                     let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+
                     self.next_threads.push(new_thread);
                     info!(
                         "    enqueued implicitly forked thread; queue size = {}",

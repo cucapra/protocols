@@ -1,0 +1,3 @@
+// ARGS: --verilog adders/adder_d0/add_d0.v --protocol adders/adder_d0/add_d0.prot
+// RETURN: 101
+add_combinational_legal_observation_illegal_assignment(7, 8, 15);

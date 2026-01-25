@@ -1,0 +1,6 @@
+error: Cannot observe forbidden output 's' after assigning DontCare to a combinationally dependent input
+   ┌─ adders/adder_d0/add_d0.prot:12:7
+   │
+12 │   if (DUT.s == 32'b0) { // this should be illegal
+   │       ^^^^^ Cannot observe forbidden output 's' after assigning DontCare to a combinationally dependent input
+

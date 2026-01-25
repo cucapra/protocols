@@ -1,0 +1,25 @@
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+// This protocol demonstrates implicit re-application with combinational dependencies.
+// In cycle 1, we assign a := 0. After step(), we observe s (which equals a combinationally).
+// Implicit re-application wants to re-assert a := 0, but since we observed s (which depends
+// on a), the input a is forbidden. So implicit re-application forces a := X instead.
+// This is correct behavior - we should not re-apply a value that would change the output
+// we already observed for control flow.
+fn passthrough<dut: Identity>() {
+    dut.a := 32'b0;
+    step();
+
+    // Observe s, which is combinationally dependent on a.
+    // This forbids assignments to a for the rest of this cycle.
+    if (dut.s == 32'b0) {
+        // We entered this branch because s == 0.
+        // Implicit re-application would want to do a := 0, but a is forbidden.
+        // So it should force a := X instead.
+    } else {}
+    fork();
+    step();
+}
