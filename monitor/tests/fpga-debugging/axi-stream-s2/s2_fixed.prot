@@ -1,3 +1,5 @@
+// ARGS: --wave fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns
+
 // AXI-Stream Manager Protocol
 // This is a source (manager) that outputs a sequence of 8 words (1-8)
 
