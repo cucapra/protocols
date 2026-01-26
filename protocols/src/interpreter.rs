@@ -8,6 +8,7 @@
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
 use crate::scheduler::Todo;
+use crate::serialize::serialize_bitvec;
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use patronus::expr::ExprRef;
@@ -22,6 +23,15 @@ use rustc_hash::FxHashMap;
 pub enum ThreadInputValue {
     Concrete(BitVecValue),
     DontCare,
+}
+
+impl std::fmt::Display for ThreadInputValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ThreadInputValue::Concrete(bv) => write!(f, "{}", serialize_bitvec(bv, false)),
+            ThreadInputValue::DontCare => write!(f, "DontCare"),
+        }
+    }
 }
 
 impl ThreadInputValue {
@@ -56,18 +66,34 @@ pub struct Evaluator<'a> {
     output_mapping: FxHashMap<SymbolId, Output>,
 
     // Combinational dependency tracking
+    /// Maps `input |-> Vec<output>` (outputs that are affected by this input)
     input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
+
+    /// Maps each `output |-> Vec<input>` (inputs that this output is dependent on)
     output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
 
     // tracks forbidden ports due to combinational dependencies
     forbidden_inputs: Vec<SymbolId>,
+
+    /// The `forbidden_output_counts` map maintains a count for each output pin.
+    /// When a thread assigns an input from `Concrete` to `DontCare`, we increment
+    /// the count for all outputs combinationally dependent on that input.
+    /// When a thread assigns from `DontCare` to `Concrete`, we decrement those counts.
+    /// This reference counting is necessary because multiple input pins can
+    /// affect the same output pin combinationally;
+    /// after setting one input to `Concrete`, we cannot simply clear the
+    /// forbidden status of the output;
+    /// we must decrement its count by one. An output is forbidden to observe
+    /// if its count is greater than zero, meaning at least one input in its
+    /// combinational cone is currently assigned to DontCare.
     forbidden_output_counts: FxHashMap<SymbolId, usize>,
 
     // Per-thread input values for each input pin: input_id -> (thread_id -> value)
     // This serves as both the current cycle's assignments AND the sticky inputs for implicit re-application
     per_thread_input_vals: FxHashMap<SymbolId, PerThreadValues>,
 
-    // The current todo_idx being executed
+    /// The current todo_idx being executed
+    /// (where a `todo` is a transaction with concrete argument values)
     current_todo_idx: usize,
 
     assertions_enabled: bool,
@@ -311,7 +337,7 @@ impl<'a> Evaluator<'a> {
             let was_present = per_thread_vals.contains_key(&todo_idx);
             per_thread_vals.insert(todo_idx, (new_val.clone(), stmt_id));
             log::info!(
-                "apply_input_value: {} for todo_idx={} (was_present={}, new_val={:?})",
+                "apply_input_value: {} for todo_idx={} (was_present={}, new_val={})",
                 symbol_name,
                 todo_idx,
                 was_present,
