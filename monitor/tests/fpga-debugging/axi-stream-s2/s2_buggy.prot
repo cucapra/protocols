@@ -21,10 +21,6 @@ fn reset<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b0;         // Assert reset (active-low)
     DUT.i_tready := 1'b0;
     step();
-
-    // Release reset
-    DUT.i_aresetn := 1'b1;
-    step();
 }
 
 // RECV: Receive one data word from the AXI-Stream manager
