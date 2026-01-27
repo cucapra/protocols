@@ -70,9 +70,9 @@ fn recv_last<DUT: AXISManager>(
 }
 
 // STALL: Assert backpressure (i_tready=0) while manager has valid data
-// This tests that the manager properly holds its outputs stable during stall
-// Only matches when i_tvalid=1 (data is available to stall)
-fn stall<DUT: AXISManager>() {
+// AXI-Stream requires output args (tdata, tlast) to remain stable during stall
+// Only matches when the waveform contains i_tvalid=1 (i.e. there is some valid data and it's available to stall)
+fn stall<DUT: AXISManager>(out data: u32, out last: u1) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b0;          // Apply backpressure
 
@@ -80,7 +80,15 @@ fn stall<DUT: AXISManager>() {
     // If i_tvalid=0, this fails and we instead have an `idle` transaction
     assert_eq(DUT.i_tvalid, 1'b1);
 
+    // Capture output values before the stall cycle
+    assert_eq(DUT.i_tdata, data);
+    assert_eq(DUT.i_tlast, last);
+
     step();
+
+    // Verify outputs remained stable during the stall
+    assert_eq(DUT.i_tdata, data);
+    assert_eq(DUT.i_tlast, last);
 }
 
 // WAIT_FOR_DATA: Receiver is ready but no data is available
@@ -95,10 +103,9 @@ fn wait_for_data<DUT: AXISManager>() {
 }
 
 // IDLE: No transaction - i_tready is deasserted
-// Used when the receiver is not ready to accept data
 #[idle]
 fn idle<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
-    DUT.i_tready := 1'b0;          // Not ready
+    DUT.i_tready := 1'b0;          
     step();
 }
