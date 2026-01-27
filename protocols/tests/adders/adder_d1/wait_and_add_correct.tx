@@ -1,0 +1,4 @@
+// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/add_d1.prot
+// RETURN: 0
+wait_and_add(1, 2, 3);
+add(4, 5, 9);

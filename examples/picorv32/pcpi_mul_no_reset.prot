@@ -1,3 +1,6 @@
+// This file is identical to `pcpi_mul.prot`, except for minor changes 
+// (see comments below)
+
 struct picorv32_pcpi_mul {
   in resetn: u1,
   in pcpi_insn: u32,
@@ -15,10 +18,7 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
     in rs2_data: u32,
     out rd_data: u32,
   ) {
-  // TODO: can we decoupled this from the transaction?
-  p.resetn := 1'b1;
-
-
+  // NOTE: the line `p.resetn := 1'b1` has been removed here  
   p.pcpi_valid := 1'b1;
   p.pcpi_insn := 32'b10000000000000000000110011; // multiplication insn
 
@@ -48,5 +48,8 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
 
 fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
+  step();
+  fork();
+  p.resetn := 1'b1; // NOTE: this line is new!
   step();
 }

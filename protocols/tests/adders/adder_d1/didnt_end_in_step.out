@@ -1,6 +1,6 @@
 error: The last executed statement in Thread 0 (transaction 'add_doesnt_end_in_step') wasn't `step()` (all threads must end their execution with a call to `step()`)
-   ┌─ adders/adder_d1/add_d1.prot:28:3
+   ┌─ adders/adder_d1/add_d1.prot:39:3
    │
-28 │   fork();
+39 │   fork();
    │   ^^^^^^^ last statement wasn't `step()`
 

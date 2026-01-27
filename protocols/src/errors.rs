@@ -113,6 +113,7 @@ pub enum ThreadError {
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_idx: usize,
+        transaction_name: String,
         stmt_id: StmtId,
     },
     /// Thread execution limit exceeded (for infinite loop protection)
@@ -314,12 +315,14 @@ impl fmt::Display for ThreadError {
                 current_value,
                 new_value,
                 thread_idx,
+                transaction_name,
                 ..
             } => {
                 write!(
                     f,
-                    "Thread {} attempted conflicting assignment to '{}': current={}, new={}",
+                    "Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
                     thread_idx,
+                    transaction_name,
                     symbol_name,
                     serialize_bitvec(current_value, false),
                     serialize_bitvec(new_value, false)
@@ -477,6 +480,7 @@ impl ExecutionError {
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_idx: usize,
+        transaction_name: String,
         stmt_id: StmtId,
     ) -> Self {
         ExecutionError::Thread(ThreadError::ConflictingAssignment {
@@ -485,6 +489,7 @@ impl ExecutionError {
             current_value,
             new_value,
             thread_idx,
+            transaction_name,
             stmt_id,
         })
     }
@@ -807,20 +812,23 @@ impl DiagnosticEmitter {
                 current_value,
                 new_value,
                 thread_idx,
+                transaction_name,
                 stmt_id,
                 ..
             } => {
-                handler.emit_diagnostic_stmt(
+                handler.emit_diagnostic_stmt_for_thread(
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} attempted conflicting assignment to '{}': current={}, new={}",
+                        "Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
                         thread_idx,
+                        transaction_name,
                         symbol_name,
                         serialize_bitvec(current_value, false),
                         serialize_bitvec(new_value, false)
                     ),
                     Level::Error,
+                    Some(*thread_idx),
                 );
             }
             ThreadError::ExecutionLimitExceeded { max_steps } => {

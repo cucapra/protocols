@@ -1,0 +1,4 @@
+// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/add_d1.prot
+// RETURN: 101
+add_fork_early(1, 2, 5);
+add_fork_early(4, 5, 10);

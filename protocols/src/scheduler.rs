@@ -5,14 +5,14 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use log::info;
 use rustc_hash::FxHashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
 use crate::errors::{ExecutionError, ExecutionResult};
-use crate::interpreter::Evaluator;
+use crate::interpreter::{Evaluator, ThreadInputValue};
 use crate::ir::*;
 
 use patronus::expr::Context;
@@ -282,8 +282,28 @@ impl<'a> Scheduler<'a> {
                 }
             }
 
-            // Move each active thread into inactive or next
-            while let Some(mut active_thread) = self.active_threads.pop() {
+            // Check for conflicting assignments after all threads have run
+            let conflict_errors = self.check_for_conflicts();
+            if !conflict_errors.is_empty() {
+                info!("Conflicting assignment detected, terminating all threads");
+                // Mark each conflicting thread with its own error (using its own stmt_id)
+                for (thread_idx, error) in conflict_errors {
+                    self.results[thread_idx] = Err(error);
+                }
+                // Clear all threads to stop execution
+                self.active_threads.clear();
+                self.next_threads.clear();
+                break;
+            }
+
+            // No conflicts - finalize input values to sim before stepping
+            self.evaluator.finalize_inputs_for_cycle();
+
+            // Collect threads that need implicit forking (can't call self.next_todo during drain)
+            let mut threads_needing_implicit_fork: Vec<usize> = Vec::new();
+
+            // Move each active thread into inactive or next (drain preserves order)
+            for mut active_thread in self.active_threads.drain(..) {
                 let next_step: Option<StmtId> = active_thread.next_step;
                 match next_step {
                     Some(next_step_id) => {
@@ -302,11 +322,37 @@ impl<'a> Scheduler<'a> {
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
                             active_thread.todo.tr.name
                         );
+                        // Clear thread inputs
+                        self.evaluator.clear_thread_inputs(active_thread.todo_idx);
 
-                        // Thread's inputs already cleared in run_thread_until_next_step
+                        // Track if this thread needs implicit fork
+                        if !active_thread.has_forked && self.results[active_thread.todo_idx].is_ok()
+                        {
+                            threads_needing_implicit_fork.push(active_thread.todo_idx);
+                        }
+
                         self.inactive_threads.push(active_thread)
                     }
                 }
+            }
+
+            // Process implicit forks after drain is complete
+            for _todo_idx in threads_needing_implicit_fork {
+                let next_todo_option = self.next_todo(self.next_todo_idx);
+                match next_todo_option {
+                    Some(todo) => {
+                        let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+                        self.next_threads.push(new_thread);
+                        info!(
+                            "    enqueued implicitly forked thread; queue size = {}",
+                            self.next_threads.len()
+                        );
+                    }
+                    None => {
+                        info!("    no more todos to fork, skipping implicit fork.");
+                    }
+                }
+                self.next_todo_idx += 1;
             }
 
             // setup the threads for the next cycle
@@ -323,8 +369,11 @@ impl<'a> Scheduler<'a> {
                 self.step_count += 1;
                 info!("Advancing to scheduling cycle: {}", self.step_count + 1);
                 if self.step_count >= self.max_steps {
-                    *(self.results.last_mut().unwrap()) =
-                        Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    // Emit error for all active threads
+                    for thread in &self.active_threads {
+                        self.results[thread.todo_idx] =
+                            Err(ExecutionError::MaxStepsReached(self.max_steps));
+                    }
                     // shut down execution by clearing all active threads
                     self.active_threads.clear();
                 }
@@ -336,6 +385,73 @@ impl<'a> Scheduler<'a> {
         // Emit diagnostics for all errors after execution is complete
         self.emit_all_diagnostics();
         self.results.clone()
+    }
+
+    /// Checks for conflicting assignments across all threads at end of cycle.
+    /// Returns a list of (thread_idx, error) for each thread involved in a conflict.
+    fn check_for_conflicts(&self) -> Vec<(usize, ExecutionError)> {
+        let mut errors = Vec::new();
+        let per_thread_input_vals = self.evaluator.per_thread_input_vals();
+        // Safe to use any transaction's symbol table since all transactions must share
+        // the same DUT struct symbols.
+        let st = self.irs[0].1;
+
+        for (symbol_id, per_thread_vals) in per_thread_input_vals {
+            // Collect all concrete values with their thread indices and stmt_ids
+            let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
+                .iter()
+                .filter_map(|(&todo_idx, (val, stmt_id))| {
+                    if let ThreadInputValue::Concrete(bvv) = val {
+                        Some((todo_idx, bvv, *stmt_id))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Check if any two concrete values differ
+            if concrete_vals.len() >= 2 {
+                let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
+                for (second_idx, second_val, second_stmt_id) in &concrete_vals[1..] {
+                    if !first_val.is_equal(*second_val) {
+                        let symbol_name = st[*symbol_id].name().to_string();
+                        let first_transaction_name = self.todos[*first_idx].0.clone();
+                        let second_transaction_name = self.todos[*second_idx].0.clone();
+
+                        // Error for first thread
+                        errors.push((
+                            *first_idx,
+                            ExecutionError::conflicting_assignment(
+                                *symbol_id,
+                                symbol_name.clone(),
+                                (*second_val).clone(),
+                                (*first_val).clone(),
+                                *first_idx,
+                                first_transaction_name,
+                                first_stmt_id.expect("Concrete values should have stmt_id"),
+                            ),
+                        ));
+
+                        // Error for second thread
+                        errors.push((
+                            *second_idx,
+                            ExecutionError::conflicting_assignment(
+                                *symbol_id,
+                                symbol_name,
+                                (*first_val).clone(),
+                                (*second_val).clone(),
+                                *second_idx,
+                                second_transaction_name,
+                                second_stmt_id.expect("Concrete values should have stmt_id"),
+                            ),
+                        ));
+
+                        return errors;
+                    }
+                }
+            }
+        }
+        errors
     }
 
     fn emit_all_diagnostics(&mut self) {
@@ -371,24 +487,25 @@ impl<'a> Scheduler<'a> {
             "Running thread {} from `step()` ({})",
             thread.todo.tr.name, current_stmt_id
         );
+
+        info!("  BEFORE context_switch");
         self.evaluator
             .context_switch(thread.todo.clone(), thread.todo_idx);
+        info!("  AFTER context_switch");
 
-        // Check if this is the last statement (no next statement)
-        // If so, skip init_thread_inputs since thread will complete this cycle
-        if self.evaluator.next_stmt(&current_stmt_id).is_some() {
-            // Initialize thread inputs at cycle START (implicit reapplication)
-            if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
-                info!(
-                    "ERROR during init_thread_inputs: {:?}, terminating thread",
-                    e
-                );
-                self.results[thread.todo_idx] = Err(e);
-                thread.next_step = None;
-                return;
-            }
-        } else {
-            info!("Thread at last statement, skipping init_thread_inputs");
+        // Initialize thread inputs at cycle START (implicit reapplication)
+        info!(
+            "  About to call init_thread_inputs for todo_idx={} ({})",
+            thread.todo_idx, thread.todo.tr.name
+        );
+        if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
+            info!(
+                "ERROR during init_thread_inputs: {:?}, terminating thread",
+                e
+            );
+            self.results[thread.todo_idx] = Err(e);
+            thread.next_step = None;
+            return;
         }
 
         // keep evaluating until we hit a Step, hit the end, or error out:
@@ -414,7 +531,15 @@ impl<'a> Scheduler<'a> {
                                 thread.has_stepped = true;
                             }
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
-                            thread.next_step = Some(next_id);
+
+                            // Check if this is the final step (no statement after it)
+                            // If so, thread completes at this cycle rather than running another useless cycle
+                            if thread.todo.next_stmt_map.get(&next_id) == Some(&None) {
+                                info!("  This is the final step, thread completes.");
+                                thread.next_step = None;
+                            } else {
+                                thread.next_step = Some(next_id);
+                            }
                             // Values already saved in per_thread_input_vals, nothing to do
                             return;
                         }
