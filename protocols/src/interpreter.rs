@@ -44,7 +44,14 @@ impl ThreadInputValue {
     }
 }
 
-/// Map from thread_id to input value for a single input pin
+/// Map from thread index (todo_idx) to input value for a single input pin.
+///
+/// The tuple contains:
+/// - `ThreadInputValue`: The value assigned by this thread (Concrete or DontCare)
+/// - `Option<StmtId>`: The statement that made this assignment, if any. This is `Some(stmt_id)`
+///   for explicit assignments in the protocol code, and `None` for implicit DontCare
+///   initialization at the start of a thread's first cycle. The StmtId is used for error
+///   reporting to show the source location of conflicting assignments.
 pub type PerThreadValues = FxHashMap<usize, (ThreadInputValue, Option<StmtId>)>;
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
