@@ -5,14 +5,14 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use log::info;
 use rustc_hash::FxHashMap;
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
 use crate::errors::{ExecutionError, ExecutionResult};
-use crate::interpreter::Evaluator;
+use crate::interpreter::{Evaluator, ThreadInputValue};
 use crate::ir::*;
 
 use patronus::expr::Context;
@@ -283,7 +283,7 @@ impl<'a> Scheduler<'a> {
             }
 
             // Check for conflicting assignments after all threads have run
-            let conflict_errors = self.evaluator.check_for_conflicts();
+            let conflict_errors = self.check_for_conflicts();
             if !conflict_errors.is_empty() {
                 info!("Conflicting assignment detected, terminating all threads");
                 // Mark each conflicting thread with its own error (using its own stmt_id)
@@ -385,6 +385,73 @@ impl<'a> Scheduler<'a> {
         // Emit diagnostics for all errors after execution is complete
         self.emit_all_diagnostics();
         self.results.clone()
+    }
+
+    /// Checks for conflicting assignments across all threads at end of cycle.
+    /// Returns a list of (thread_idx, error) for each thread involved in a conflict.
+    fn check_for_conflicts(&self) -> Vec<(usize, ExecutionError)> {
+        let mut errors = Vec::new();
+        let per_thread_input_vals = self.evaluator.per_thread_input_vals();
+        // Safe to use any transaction's symbol table since all transactions must share
+        // the same DUT struct symbols.
+        let st = self.irs[0].1;
+
+        for (symbol_id, per_thread_vals) in per_thread_input_vals {
+            // Collect all concrete values with their thread indices and stmt_ids
+            let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
+                .iter()
+                .filter_map(|(&todo_idx, (val, stmt_id))| {
+                    if let ThreadInputValue::Concrete(bvv) = val {
+                        Some((todo_idx, bvv, *stmt_id))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Check if any two concrete values differ
+            if concrete_vals.len() >= 2 {
+                let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
+                for (second_idx, second_val, second_stmt_id) in &concrete_vals[1..] {
+                    if !first_val.is_equal(*second_val) {
+                        let symbol_name = st[*symbol_id].name().to_string();
+                        let first_transaction_name = self.todos[*first_idx].0.clone();
+                        let second_transaction_name = self.todos[*second_idx].0.clone();
+
+                        // Error for first thread
+                        errors.push((
+                            *first_idx,
+                            ExecutionError::conflicting_assignment(
+                                *symbol_id,
+                                symbol_name.clone(),
+                                (*second_val).clone(),
+                                (*first_val).clone(),
+                                *first_idx,
+                                first_transaction_name,
+                                first_stmt_id.expect("Concrete values should have stmt_id"),
+                            ),
+                        ));
+
+                        // Error for second thread
+                        errors.push((
+                            *second_idx,
+                            ExecutionError::conflicting_assignment(
+                                *symbol_id,
+                                symbol_name,
+                                (*first_val).clone(),
+                                (*second_val).clone(),
+                                *second_idx,
+                                second_transaction_name,
+                                second_stmt_id.expect("Concrete values should have stmt_id"),
+                            ),
+                        ));
+
+                        return errors;
+                    }
+                }
+            }
+        }
+        errors
     }
 
     fn emit_all_diagnostics(&mut self) {

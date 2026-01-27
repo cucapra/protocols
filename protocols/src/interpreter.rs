@@ -52,6 +52,8 @@ impl ThreadInputValue {
 ///   for explicit assignments in the protocol code, and `None` for implicit DontCare
 ///   initialization at the start of a thread's first cycle. The StmtId is used for error
 ///   reporting to show the source location of conflicting assignments.
+///
+/// TODO: should this data be stored in the scheduler instead?
 pub type PerThreadValues = FxHashMap<usize, (ThreadInputValue, Option<StmtId>)>;
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
@@ -471,66 +473,10 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    /// Checks for conflicting assignments across all threads at end of cycle.
-    /// Returns a list of (thread_idx, error) for each thread involved in a conflict.
-    /// Each thread gets its own error with its own stmt_id so the diagnostic points to the right location.
-    pub fn check_for_conflicts(&self) -> Vec<(usize, ExecutionError)> {
-        let mut errors = Vec::new();
-
-        for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
-            // Collect all concrete values with their thread indices and stmt_ids
-            let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
-                .iter()
-                .filter_map(|(&todo_idx, (val, stmt_id))| {
-                    if let ThreadInputValue::Concrete(bvv) = val {
-                        Some((todo_idx, bvv, *stmt_id))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            // Check if any two concrete values differ
-            if concrete_vals.len() >= 2 {
-                let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
-                for (other_idx, other_val, other_stmt_id) in &concrete_vals[1..] {
-                    if !first_val.is_equal(*other_val) {
-                        // Create an error for EACH conflicting thread with its own stmt_id
-                        let symbol_name = self.st[*symbol_id].name().to_string();
-
-                        // Error for first thread
-                        errors.push((
-                            *first_idx,
-                            ExecutionError::conflicting_assignment(
-                                *symbol_id,
-                                symbol_name.clone(),
-                                (*other_val).clone(), // the "other" value it conflicts with
-                                (*first_val).clone(), // this thread's value
-                                *first_idx,
-                                first_stmt_id.expect("Concrete values should have stmt_id"),
-                            ),
-                        ));
-
-                        // Error for second thread
-                        errors.push((
-                            *other_idx,
-                            ExecutionError::conflicting_assignment(
-                                *symbol_id,
-                                symbol_name,
-                                (*first_val).clone(), // the "other" value it conflicts with
-                                (*other_val).clone(), // this thread's value
-                                *other_idx,
-                                other_stmt_id.expect("Concrete values should have stmt_id"),
-                            ),
-                        ));
-
-                        // Return after finding first conflict (could extend to find all)
-                        return errors;
-                    }
-                }
-            }
-        }
-        errors
+    /// Returns a reference to the per-thread input values map for conflict checking.
+    /// Used by the scheduler to check for conflicting assignments across threads.
+    pub fn per_thread_input_vals(&self) -> &FxHashMap<SymbolId, PerThreadValues> {
+        &self.per_thread_input_vals
     }
 
     /// Get the next statement after the given statement
