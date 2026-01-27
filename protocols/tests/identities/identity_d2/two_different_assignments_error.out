@@ -1,12 +1,12 @@
-error: Thread 0 attempted conflicting assignment to 'a': current=2, new=1
+error: Thread 0 (`multiple_assign`) attempted conflicting assignment to 'a': current=2, new=1
    ┌─ identities/identity_d2/identity_d2.prot:12:3
    │
 12 │   DUT.a := a;
-   │   ^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=2, new=1
+   │   ^^^^^^^^^^^ Thread 0 (`multiple_assign`) attempted conflicting assignment to 'a': current=2, new=1
 
-error: Thread 1 attempted conflicting assignment to 'a': current=1, new=2
+error: Thread 1 (`multiple_assign`) attempted conflicting assignment to 'a': current=1, new=2
   ┌─ identities/identity_d2/identity_d2.prot:9:3
   │
 9 │   DUT.a := a;
-  │   ^^^^^^^^^^^ Thread 1 attempted conflicting assignment to 'a': current=1, new=2
+  │   ^^^^^^^^^^^ Thread 1 (`multiple_assign`) attempted conflicting assignment to 'a': current=1, new=2
 

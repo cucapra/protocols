@@ -1,12 +1,12 @@
-error: Thread 0 attempted conflicting assignment to 'a': current=4, new=1
+error: Thread 0 (`add`) attempted conflicting assignment to 'a': current=4, new=1
    ┌─ adders/adder_d2/no_dontcare_conflict.prot:12:3
    │
 12 │   DUT.a := a;
-   │   ^^^^^^^^^^^ Thread 0 attempted conflicting assignment to 'a': current=4, new=1
+   │   ^^^^^^^^^^^ Thread 0 (`add`) attempted conflicting assignment to 'a': current=4, new=1
 
-error: Thread 1 attempted conflicting assignment to 'a': current=1, new=4
+error: Thread 1 (`add`) attempted conflicting assignment to 'a': current=1, new=4
    ┌─ adders/adder_d2/no_dontcare_conflict.prot:12:3
    │
 12 │   DUT.a := a;
-   │   ^^^^^^^^^^^ Thread 1 attempted conflicting assignment to 'a': current=1, new=4
+   │   ^^^^^^^^^^^ Thread 1 (`add`) attempted conflicting assignment to 'a': current=1, new=4
 
