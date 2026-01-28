@@ -4,7 +4,6 @@ README taken from https://github.com/efeslab/hardware-bugbase/blob/bugs/s3-incom
 
 **Source:** Verilog-axis(Verilog AXI Stream Components): https://github.com/alexforencich/verilog-axis/commit/9cca78bc7c082b1bff9dd4168fac4841dd47b03b
 
-
 TKEEP is the byte qualifier that indicates whether the content
 of the associated byte of TDATA is processed as part of the data
 stream.
