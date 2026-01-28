@@ -17,7 +17,7 @@ struct AXISManager {
 // RESET: Assert reset (active-low) and wait for manager to be ready
 // The manager waits C_M_START_COUNT cycles in INIT_COUNTER before sending
 fn reset<DUT: AXISManager>() {
-    DUT.rst := 1'b0;         // Assert reset (active-low)
+    DUT.rst := 1'b1;         // Assert reset (active-high)
     DUT.input_axis_tready := 1'b0;
     step();
 }
@@ -31,7 +31,7 @@ fn reset<DUT: AXISManager>() {
 fn recv<DUT: AXISManager>(
     out data: u64,
 ) {
-    DUT.rst := 1'b1;         // Keep out of reset
+    DUT.rst := 1'b0;         // Keep out of reset
     DUT.input_axis_tready := 1'b1;          // Signal ready to receive
 
     // Only matches when data is available
@@ -54,7 +54,7 @@ fn recv<DUT: AXISManager>(
 fn recv_last<DUT: AXISManager>(
     out data: u64,
 ) {
-    DUT.rst := 1'b1;         // Keep out of reset
+    DUT.rst := 1'b0;         // Keep out of reset
     DUT.input_axis_tready := 1'b1;          // Signal ready to receive
 
     // Only matches when data is available
@@ -72,7 +72,7 @@ fn recv_last<DUT: AXISManager>(
 // AXI-Stream requires output args (tdata, tlast) to remain stable during stall
 // Only matches when the waveform contains input_axis_tvalid=1 (i.e. there is some valid data and it's available to stall)
 fn stall<DUT: AXISManager>(out data: u64, out last: u1) {
-    DUT.rst := 1'b1;         // Keep out of reset
+    DUT.rst := 1'b0;         // Keep out of reset
     DUT.input_axis_tready := 1'b0;          // Apply backpressure
 
     // Stall only applies when manager has valid data
@@ -93,7 +93,7 @@ fn stall<DUT: AXISManager>(out data: u64, out last: u1) {
 // WAIT_FOR_DATA: Receiver is ready but no data is available
 // Used when tready=1 but tvalid=0 (i.e. receiver is polling for data)
 fn wait_for_data<DUT: AXISManager>() {
-    DUT.rst := 1'b1;         // Keep out of reset
+    DUT.rst := 1'b0;         // Keep out of reset
     DUT.input_axis_tready := 1'b1;          
 
     // Only matches when no data is available
@@ -104,7 +104,7 @@ fn wait_for_data<DUT: AXISManager>() {
 // IDLE: No transaction - input_axis_tready is deasserted
 #[idle]
 fn idle<DUT: AXISManager>() {
-    DUT.rst := 1'b1;         // Keep out of reset
+    DUT.rst := 1'b0;         // Keep out of reset
     DUT.input_axis_tready := 1'b0;          
     step();
 }
