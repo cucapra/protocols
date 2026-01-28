@@ -187,7 +187,19 @@ fn check_stmt_types(
         }
         Stmt::While(cond, bodyid) => {
             // Guards for while-loops must have type `BitVec(1)`
-            let cond_type = check_expr_types(tr, st, handler, cond)?;
+            let mut cond_type = check_expr_types(tr, st, handler, cond)?;
+
+            // If the condition type is `Unknown`, we infer it to be 1-bit
+            if cond_type == Type::Unknown {
+                cond_type = Type::BitVec(1);
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    "Inferred condition type",
+                    Level::Warning,
+                );
+            }
+
             if let Type::BitVec(1) = cond_type {
                 // If the loop guard typechecks, make sure it is well-formed
                 check_condition_wf(cond, tr, st, handler)?;
@@ -205,7 +217,19 @@ fn check_stmt_types(
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             // Conditions for if-statement must have type `BitVec(1)`
-            let cond_type = check_expr_types(tr, st, handler, cond)?;
+            let mut cond_type = check_expr_types(tr, st, handler, cond)?;
+
+            // If the condition type is `Unknown`, we infer it to be 1-bit
+            if cond_type == Type::Unknown {
+                cond_type = Type::BitVec(1);
+                handler.emit_diagnostic_stmt(
+                    tr,
+                    stmt_id,
+                    "Inferred condition type",
+                    Level::Warning,
+                );
+            }
+
             if let Type::BitVec(1) = cond_type {
                 // If the condition typechecks, make sure it is well-formed
                 check_condition_wf(cond, tr, st, handler)?;
