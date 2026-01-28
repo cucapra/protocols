@@ -177,12 +177,8 @@ pub fn check_condition_wf(
                 )
             }
         }
-        Expr::DontCare => {
-            let error_msg =
-                "DontCare not allowed inside conditions for if-statements & while-loops";
-            handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
-            Err(anyhow!(error_msg))
-        }
+        // conditions can use X to indicate a non-deterministic choice
+        Expr::DontCare => Ok(()),
         Expr::Binary(_, expr_id1, expr_id2) => {
             check_condition_wf(expr_id1, tr, symbol_table, handler)?;
             check_condition_wf(expr_id2, tr, symbol_table, handler)
