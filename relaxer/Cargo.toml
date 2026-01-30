@@ -1,0 +1,19 @@
+[package]
+name = "protocols-relaxer"
+version = "0.1.0"
+description = "relax protocol specifications"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+protocols.workspace = true
+baa.workspace = true
+patronus.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+insta = { version = "1.41.1", features = ["yaml"] }
+strip-ansi-escapes = "0.2"
+
