@@ -56,6 +56,8 @@ fn get_events(json: &Value) -> Vec<Event> {
 }
 
 /// Main entry point for the executable
+/// Example: cargo run -- --json tests/add.json
+/// TODO: add Turnt tests
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let filepath_str = cli.json;
