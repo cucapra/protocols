@@ -1,16 +1,23 @@
-use std::{env, path::Path};
-
+use clap::Parser;
 use serde_json::Value;
+use std::path::Path;
+
+#[derive(Parser)]
+#[command(
+    version,
+    about = "Compiles Filament types to Protocols",
+    disable_version_flag = true
+)]
+struct Cli {
+    /// Path to a JSON file for a Filament interface
+    #[arg(short, long, value_name = "FILAMENT_INTERFACE_JSON_FILE")]
+    json: String,
+}
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.is_empty() {
-        panic!("Missing argument")
-    } else if args.len() >= 2 {
-        panic!("Too many arguments supplied")
-    }
-    let filepath_str = &args[0];
-    let filepath = Path::new(filepath_str);
+    let cli = Cli::parse();
+    let filepath_str = cli.json;
+    let filepath = Path::new(&filepath_str);
 
     if let Some("json") = filepath.extension().and_then(|s| s.to_str()) {
         let file_contents = std::fs::read_to_string(filepath)?;
