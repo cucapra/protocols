@@ -1,7 +1,23 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Ernest Ng <eyn5@cornell.edu>
+
+use anyhow::anyhow;
 use clap::Parser;
-use serde::Deserialize;
+use protocols::ir::Dir;
+use protocols::ir::Struct;
+use protocols::serialize::serialize_struct;
 use serde_json::Value;
-use std::{cmp::max, fmt, path::Path};
+use std::io::stdout;
+use std::{cmp::max, path::Path};
+
+use types::RawParameter;
+
+use types::Events;
+
+use crate::types::Event;
+
+mod types;
 
 /// CLI arguments for the Filament to Protocols compiler
 #[derive(Parser)]
@@ -16,31 +32,30 @@ struct Cli {
     json: String,
 }
 
-/// A Filament event variable
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-struct Event {
-    /// The name of the event
-    name: String,
-
-    /// The delay associated with the event
-    delay: u32,
-}
-
-impl fmt::Display for Event {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<{}: {}>", self.name, self.delay)
+/// Produces a Protocols struct definition based on the Filament interface
+fn generate_struct(json: &Value, name: String) -> Struct {
+    let inputs = json["inputs"]
+        .as_array()
+        .expect("Expected `inputs` to be a JSON array");
+    let mut struct_fields = vec![];
+    for input in inputs {
+        let raw_param: RawParameter = serde_json::from_value(input.clone())
+            .expect("Unable to convert JSON object into input `RawParameter`");
+        let input_field = raw_param.into_field(Dir::In);
+        struct_fields.push(input_field);
     }
-}
-
-/// Tuple struct so that we can implement `Display` for `Vec<Event>`
-/// Rust doesn't allow us to do `impl Display for Vec<Event>` directly due to
-/// the orphan rule (neither `Display` nor `Vec` are defined in this crate).
-struct Events(Vec<Event>);
-
-impl fmt::Display for Events {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let event_strs: Vec<String> = self.0.iter().map(|e| e.to_string()).collect();
-        write!(f, "[{}]", event_strs.join(", "))
+    let outputs = json["outputs"]
+        .as_array()
+        .expect("Expected `outputs` to be a JSON array");
+    for output in outputs {
+        let raw_param: RawParameter = serde_json::from_value(output.clone())
+            .expect("Unable to convert JSON object into output `RawParameter");
+        let output_field = raw_param.into_field(Dir::Out);
+        struct_fields.push(output_field);
+    }
+    Struct {
+        name,
+        pins: struct_fields,
     }
 }
 
@@ -97,8 +112,25 @@ fn main() -> anyhow::Result<()> {
         let events = get_events(&json);
         let max_time = find_max_time(&json);
         println!("events: {}, max_time = {}", events, max_time);
+
+        // Treat the file-stem of the JSON filepath as the name of the
+        // Protocols struct (this involves converting from `OsStr` to `String`)
+        let dut_name: String = filepath.file_stem().map_or_else(
+            || panic!("Unable to extract file stem from filepath"),
+            |os_str| {
+                os_str
+                    .to_str()
+                    .expect("Unable to convert `OsStr` to `&str`")
+                    .to_uppercase()
+            },
+        );
+        let protocols_struct = generate_struct(&json, dut_name);
+
+        serialize_struct(&mut stdout(), &protocols_struct)?;
         Ok(())
     } else {
-        panic!("Invalid extension for file {filepath_str}, expected JSON file");
+        Err(anyhow!(
+            "Invalid extension for file {filepath_str}, expected JSON file"
+        ))
     }
 }
