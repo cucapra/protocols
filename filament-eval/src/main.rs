@@ -1,7 +1,7 @@
 use clap::Parser;
 use serde::Deserialize;
 use serde_json::Value;
-use std::{fmt, path::Path};
+use std::{cmp::max, fmt, path::Path};
 
 /// CLI arguments for the Filament to Protocols compiler
 #[derive(Parser)]
@@ -32,8 +32,21 @@ impl fmt::Display for Event {
     }
 }
 
-/// Extracts all the `Event`s from the Filament interface JSON
-fn get_events(json: &Value) -> Vec<Event> {
+/// Tuple struct so that we can implement `Display` for `Vec<Event>`
+/// Rust doesn't allow us to do `impl Display for Vec<Event>` directly due to
+/// the orphan rule (neither `Display` nor `Vec` are defined in this crate).
+struct Events(Vec<Event>);
+
+impl fmt::Display for Events {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let event_strs: Vec<String> = self.0.iter().map(|e| e.to_string()).collect();
+        write!(f, "[{}]", event_strs.join(", "))
+    }
+}
+
+/// Extracts all the `Event`s from the Filament interface JSON contained
+/// in the `json` argument
+fn get_events(json: &Value) -> Events {
     let interface_ports = json["interfaces"]
         .as_array()
         .expect("Expected `interfaces` to be a JSON array");
@@ -52,7 +65,21 @@ fn get_events(json: &Value) -> Vec<Event> {
         };
         events.push(event);
     }
-    events
+    Events(events)
+}
+
+/// Computes the max time interval out of all the output ports in the Filament type
+/// The argument `json` is the JSON representing the Filament signature.
+fn find_max_time(json: &Value) -> u32 {
+    let outputs = json["outputs"]
+        .as_array()
+        .expect("Expected `outputs` to be a JSON array");
+    let mut max_end_time = 0;
+    for output in outputs {
+        let end_time = output["end"].as_i64().expect("Expected `end` to be an int") as u32;
+        max_end_time = max(max_end_time, end_time);
+    }
+    max_end_time
 }
 
 /// Main entry point for the executable
@@ -68,7 +95,8 @@ fn main() -> anyhow::Result<()> {
         let json: Value = serde_json::from_str(&file_contents)
             .unwrap_or_else(|_| panic!("Unable to read from JSON file {filepath_str}"));
         let events = get_events(&json);
-        println!("events: {:?}", events);
+        let max_time = find_max_time(&json);
+        println!("events: {}, max_time = {}", events, max_time);
         Ok(())
     } else {
         panic!("Invalid extension for file {filepath_str}, expected JSON file");
