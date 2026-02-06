@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
