@@ -1,5 +1,5 @@
 // ARGS: --verilog fifo/bsg_mem_1rw_sync.v fifo/bsg_mem_1rw_sync_synth.v fifo/bsg_circular_ptr.v fifo/bsg_fifo_1rw_large.v fifo/fifo_wrapper.v --protocol=fifo/fifo_bounded_loop.prot --module fifo_wrapper
 reset();
-push_n_times(7, 3);         // push 7 three times
-pop_n_times(7, 2);          // pop only twice
-check_not_empty();     // FIFO is is non-empty (has one element remaining)
+push_n_times(7, 3);         
+pop_n_times(7, 2);          
+check_not_empty();          // FIFO is non-empty (has one element remaining)
