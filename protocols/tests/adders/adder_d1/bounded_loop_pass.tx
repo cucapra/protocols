@@ -1,0 +1,3 @@
+// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/bounded_loop.prot
+add_busy_wait(1, 2, 1, 3);  // Runs busy-waiting loop for 1 iteration
+add_busy_wait(4, 5, 3, 9);  // Runs busy-waiting loop for 3 iterations 
