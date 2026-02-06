@@ -486,6 +486,14 @@ pub mod tests {
     }
 
     #[test]
+    fn test_nested_bounded_loop_transaction() {
+        test_helper(
+            "tests/adders/adder_d1/nested_busy_wait.prot",
+            "nested_bounded_loop",
+        );
+    }
+
+    #[test]
     fn test_simple_if_without_else_transaction() {
         test_helper(
             "tests/identities/dual_identity_d1/if_without_else.prot",

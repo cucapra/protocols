@@ -1,0 +1,26 @@
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+// Nested bounded loops: the outer loop runs `outer_iters` times,
+// and the inner loop runs `inner_iters` times per outer iteration,
+// for a total of `outer_iters * inner_iters` steps.
+// Since inputs are sticky on the adder, the final result is
+// the same regardless of how many steps we take.
+fn nested_busy_wait<DUT: Adder>(in a: u32, in b: u32, in outer_iters: u8, in inner_iters: u8, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  repeat outer_iters iterations {
+    repeat inner_iters iterations {
+      step();
+    }
+    step();
+  }
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
