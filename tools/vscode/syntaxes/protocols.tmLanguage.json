@@ -46,7 +46,7 @@
       "patterns": [
         {
           "name": "keyword.control.protocols",
-          "match": "\\b(if|else|while)\\b"
+          "match": "\\b(if|else|while|repeat|iterations)\\b"
         },
         {
           "name": "keyword.other.protocols",
