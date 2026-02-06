@@ -1,5 +1,5 @@
 error: The two expressions did not evaluate to the same value
-   ┌─ adders/adder_d1/bounded_loop.prot:21:13
+   ┌─ adders/adder_d1/busy_wait.prot:21:13
    │
 21 │   assert_eq(s, DUT.s);
    │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000001111100111), RHS Value: ValueOwned(00000000000000000000000000000011)
