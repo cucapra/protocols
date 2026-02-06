@@ -494,6 +494,14 @@ pub mod tests {
     }
 
     #[test]
+    fn test_loop_with_assigns_transaction() {
+        test_helper(
+            "tests/adders/adder_d1/loop_with_assigns.prot",
+            "loop_with_assigns",
+        );
+    }
+
+    #[test]
     fn test_simple_if_without_else_transaction() {
         test_helper(
             "tests/identities/dual_identity_d1/if_without_else.prot",
