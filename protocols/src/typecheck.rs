@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use std::cmp::Ordering::{Equal, Greater, Less};
 
@@ -203,6 +203,21 @@ fn check_stmt_types(
                 Err(anyhow!(error_msg))
             }
         }
+        Stmt::For(count_expr, bodyid) => {
+            // Typecheck the no. of iterations (which must be a BitVec type of any width)
+            let num_iterations_type = check_expr_types(tr, st, handler, count_expr)?;
+            if let Type::BitVec(_) = num_iterations_type {
+                // Then, type-check the loop body
+                check_stmt_types(tr, st, handler, bodyid)
+            } else {
+                let error_msg = format!(
+                    "Invalid type for no. of iterations in for-loop: expected unsigned integer but got {} instead",
+                    serialize_type(st, num_iterations_type)
+                );
+                handler.emit_diagnostic_expr(tr, count_expr, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             // Conditions for if-statement must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;
@@ -369,6 +384,11 @@ mod tests {
     #[test]
     fn test_simple_while_transaction() {
         test_helper("simple_while", "tests/counters/simple_while.prot");
+    }
+
+    #[test]
+    fn test_simple_for_transaction() {
+        test_helper("simple_for", "tests/counters/simple_for.prot");
     }
 
     // Specific Tests

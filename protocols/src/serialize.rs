@@ -174,6 +174,13 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
+        Stmt::For(expr_id, stmt_id) => {
+            format!(
+                "for {} iterations {{ {} }}",
+                serialize_expr(tr, st, expr_id),
+                serialize_stmt(tr, st, stmt_id)
+            )
+        }
         Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
             format!(
                 "if {} {{ {} }} {{ {} }}",
@@ -223,6 +230,16 @@ pub fn build_statements(
                 "{}while {} {{",
                 "  ".repeat(index),
                 serialize_expr(tr, st, cond)
+            )?;
+            build_statements(out, tr, st, bodyid, index + 1)?;
+            writeln!(out, "{}}}", "  ".repeat(index))?;
+        }
+        Stmt::For(count, bodyid) => {
+            writeln!(
+                out,
+                "{}for {} iterations {{",
+                "  ".repeat(index),
+                serialize_expr(tr, st, count)
             )?;
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
@@ -456,6 +473,13 @@ pub mod tests {
     #[test]
     fn test_simple_while_transaction() {
         test_helper("tests/counters/simple_while.prot", "simple_while");
+    }
+
+    // Simple test to make sure for-loop with a fixed no. of iterations
+    // type-checks and serializes properly
+    #[test]
+    fn test_simple_for_transaction() {
+        test_helper("tests/counters/simple_for.prot", "simple_for");
     }
 
     #[test]

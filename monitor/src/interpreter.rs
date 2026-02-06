@@ -436,6 +436,9 @@ impl Interpreter {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx, trace)
             }
+            Stmt::For(_, _) => {
+                todo!("Bounded loops is not yet implemented in the monitor")
+            }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.
                 // Here, we simply return the next statement to run

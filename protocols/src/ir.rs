@@ -6,7 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
-use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use cranelift_entity::{entity_impl, PrimaryMap, SecondaryMap};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
@@ -144,6 +144,11 @@ impl Transaction {
                         );
                     }
                     Stmt::While(_, body_id) => {
+                        map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
+                    }
+                    // Add a back-edge from the loop body to the current `stmt_id`
+                    // (same as how while-loops are represented in the current AST)
+                    Stmt::For(_, body_id) => {
                         map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
                     }
                     _ => {}
@@ -320,6 +325,8 @@ pub enum Stmt {
     Step,
     Fork,
     While(ExprId, StmtId),
+    // For-loop with fixed no. of iterations
+    For(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
 }

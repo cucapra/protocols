@@ -1,0 +1,6 @@
+---
+source: protocols/src/typecheck.rs
+assertion_line: 309
+expression: content
+---
+

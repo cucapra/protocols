@@ -1,9 +1,10 @@
 ---
-source: src/serialize.rs
+source: protocols/src/serialize.rs
+assertion_line: 373
 expression: content
 ---
-error: Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if
-   ┌─ tests/adders/illegal_fork.prot:13:3
+error: Lexing failed: expected eq or concat
+   ┌─ tests/adders/illegal_fork.prot:13:7
    │
 13 │   fork(1); // forks cannot take an argument - will fail
-   │   ^ Lexing failed: expected assign, step, fork, while_loop, assert_eq, or if
+   │       ^ Lexing failed: expected eq or concat
