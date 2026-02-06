@@ -1,6 +1,5 @@
 ---
 source: protocols/src/serialize.rs
-assertion_line: 373
 expression: content
 ---
 struct Counter {
@@ -8,9 +7,9 @@ struct Counter {
   out s: u64,
 }
 
-fn simple_bounded_loop<dut: Counter>(in a: u64, in iters: u8, out s: u64) {
+fn simple_bounded_loop<dut: Counter>(in a: u64, in num_iterations: u8, out s: u64) {
   dut.a := a;
-  repeat iters iterations {
+  repeat num_iterations iterations {
     step();
   }
   assert_eq(dut.s, s);

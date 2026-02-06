@@ -174,9 +174,9 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
-        Stmt::For(expr_id, stmt_id) => {
+        Stmt::BoundedLoop(expr_id, stmt_id) => {
             format!(
-                "for {} iterations {{ {} }}",
+                "repeat {} iterations {{ {} }}",
                 serialize_expr(tr, st, expr_id),
                 serialize_stmt(tr, st, stmt_id)
             )
@@ -234,10 +234,10 @@ pub fn build_statements(
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
-        Stmt::For(count, bodyid) => {
+        Stmt::BoundedLoop(count, bodyid) => {
             writeln!(
                 out,
-                "{}for {} iterations {{",
+                "{}repeat {} iterations {{",
                 "  ".repeat(index),
                 serialize_expr(tr, st, count)
             )?;
@@ -478,8 +478,11 @@ pub mod tests {
     // Simple test to make sure for-loop with a fixed no. of iterations
     // type-checks and serializes properly
     #[test]
-    fn test_simple_for_transaction() {
-        test_helper("tests/counters/simple_for.prot", "simple_for");
+    fn test_simple_bounded_loop_transaction() {
+        test_helper(
+            "tests/counters/simple_bounded_loop.prot",
+            "simple_bounded_loop",
+        );
     }
 
     #[test]

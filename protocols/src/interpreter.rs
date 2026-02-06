@@ -685,8 +685,8 @@ impl<'a> Evaluator<'a> {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
-            Stmt::For(num_iters_id, loop_body_id) => {
-                self.evaluate_for_loop(num_iters_id, stmt_id, loop_body_id)
+            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
+                self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
@@ -823,10 +823,10 @@ impl<'a> Evaluator<'a> {
     /// Evaluates a for-loop (loop with a fixed no. of iterations).
     /// Arguments are the `ExprId`s/`StmtId`s of the no. of iterations expr,
     /// the entire loop block and the loop body.
-    fn evaluate_for_loop(
+    fn evaluate_bounded_loop(
         &mut self,
         num_iters_id: &ExprId,
-        _for_loop_id: &StmtId,
+        _bounded_loop_id: &StmtId,
         _loop_body_id: &StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
         let num_iters_result = self.evaluate_expr(num_iters_id)?;
@@ -834,7 +834,7 @@ impl<'a> Evaluator<'a> {
             ExprValue::DontCare => {
                 // No. of loop iterations can't be `DontCare`
                 Err(ExecutionError::invalid_condition(
-                    "for".to_string(),
+                    "bounded_loop".to_string(),
                     *num_iters_id,
                 ))
             }
