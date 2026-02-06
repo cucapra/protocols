@@ -1,11 +1,13 @@
 # Protocols
 **Protocols** is a DSL for specifying & testing hardware communication protocols at the cycle-level register-transfer level (RTL).
-A protocol is described using an `fn` definition containing a list of imperative statements:
+A protocol is described using an `fn` definition containing a sequence statements:
 - `symbol := RHS` assigns the value of the `RHS` expression to the DUT input port `symbol`. The right-hand side expression may be an arbitrary value, represented by `X` ("don't care").
 - `step(n)`  advances the clock by `n` cycles (`n > 0`)
 - `fork()`  allows for concurrent protocol execution.
 - `assert_eq(e1, e2)` tests equality between `e1` and `e2`.
 - `while` and `if/else` blocks allow for control flow
+- `repeat num_iters iterations { ... }` is a loop that executes for `num_iters` iterations exactly, where `num_iters` must be 
+  an input parameter supplied to the `fn`
 
 This repository contains:
 - An *interpreter* for the DSL
