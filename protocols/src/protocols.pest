@@ -53,7 +53,8 @@ type_param = { "<" ~ path_id ~ ":" ~ path_id ~ ">" }
 // While loop
 while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
 
-// For loop (fixed no. of iterations)
+// Bounded loop (fixed no. of iterations)
+// Concrete syntax is `repeat num_iterations iterations { ... }`
 bounded_loop = { "repeat" ~ expr ~ "iterations" ~ "{" ~ stmt* ~ "}" }
 
 // Assertions
