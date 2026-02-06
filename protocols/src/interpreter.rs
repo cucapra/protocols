@@ -14,8 +14,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 /// Per-thread input value: either a concrete assignment or DontCare
@@ -222,9 +222,10 @@ impl<'a> Evaluator<'a> {
                 patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
             for input_expr in input_exprs {
                 // Find the protocol symbol corresponding to this input expression
-                if let Some(input_sym) = input_mapping
-                    .iter()
-                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
+                if let Some(input_sym) =
+                    input_mapping
+                        .iter()
+                        .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
                 {
                     // output_dependencies: output -> Vec<input> (inputs this output depends on)
                     if let Some(vec) = output_dependencies.get_mut(out_sym) {
@@ -684,8 +685,8 @@ impl<'a> Evaluator<'a> {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
-            Stmt::For(_, _) => {
-                todo!("Bounded loops not yet implemented in the interpreter")
+            Stmt::For(num_iters_id, loop_body_id) => {
+                self.evaluate_for_loop(num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
@@ -815,6 +816,31 @@ impl<'a> Evaluator<'a> {
                 } else {
                     Ok(self.next_stmt_map[while_id])
                 }
+            }
+        }
+    }
+
+    /// Evaluates a for-loop (loop with a fixed no. of iterations).
+    /// Arguments are the `ExprId`s/`StmtId`s of the no. of iterations expr,
+    /// the entire loop block and the loop body.
+    fn evaluate_for_loop(
+        &mut self,
+        num_iters_id: &ExprId,
+        _for_loop_id: &StmtId,
+        _loop_body_id: &StmtId,
+    ) -> ExecutionResult<Option<StmtId>> {
+        let num_iters_result = self.evaluate_expr(num_iters_id)?;
+        match num_iters_result {
+            ExprValue::DontCare => {
+                // No. of loop iterations can't be `DontCare`
+                Err(ExecutionError::invalid_condition(
+                    "for".to_string(),
+                    *num_iters_id,
+                ))
+            }
+            ExprValue::Concrete(bvv) => {
+                let _value = bvv.to_u64();
+                todo!()
             }
         }
     }
