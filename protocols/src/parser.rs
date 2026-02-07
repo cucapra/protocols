@@ -341,6 +341,7 @@ impl ParserContext<'_> {
                 Rule::assign => self.parse_assign(inner_pair)?,
                 Rule::fork => self.parse_fork(inner_pair)?,
                 Rule::while_loop => self.parse_while(inner_pair)?,
+                Rule::bounded_loop => self.parse_bounded_loop(inner_pair)?,
                 Rule::cond => self.parse_cond(inner_pair)?,
                 Rule::assert_eq => self.parse_assert_eq(inner_pair)?,
                 _ => {
@@ -430,6 +431,19 @@ impl ParserContext<'_> {
         let guard = self.parse_expr(expr_rule.into_inner())?;
         let body = self.parse_stmt_block(inner_rules)?;
         Ok(Stmt::While(guard, body))
+    }
+
+    /// Parses a bounded loop (loop with a fixed no. of iterations)
+    fn parse_bounded_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let expr_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected expression in bounded loop",
+        )?;
+        let num_iterations = self.parse_expr(expr_rule.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::BoundedLoop(num_iterations, body))
     }
 
     fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {

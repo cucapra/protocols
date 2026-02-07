@@ -1,0 +1,29 @@
+// Maps to a Verilog design
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+// Uses a bounded loop that busy-waits for `num_iters` cycles.
+// Since concrete assignments to DUT input ports persist, 
+// calling `step()` multiple times in the loop with the same inputs 
+// should still produce the correct result on the adder. (This allows us to 
+// reuse the same Verilog file as the other `adder_d1` tests.)
+fn add_busy_wait<DUT: Adder>(in a: u32, in b: u32, in num_iters: u8, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  // We want `assert_eq(s, DUT.s)` to hold for every iteration of this loop,
+  // so we cannot put `DUT.a := X; DUT.b := X` in the loop body, since 
+  // that would cause the `assert_eq` to fail on later iterations of the loop
+  repeat num_iters iterations {
+    step();
+    assert_eq(s, DUT.s);
+  }
+  DUT.a := X;
+  DUT.b := X;
+  // Ensure `s = a + b` still holds when we exit the loop
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
