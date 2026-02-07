@@ -15,8 +15,10 @@ fn nested_busy_wait<DUT: Adder>(in a: u32, in b: u32, in outer_iters: u8, in inn
   repeat outer_iters iterations {
     repeat inner_iters iterations {
       step();
+      assert_eq(s, DUT.s);
     }
     step();
+    assert_eq(s, DUT.s);
   }
   DUT.a := X;
   DUT.b := X;
