@@ -65,10 +65,6 @@ pub enum ExprValue {
 
 /// Type aliases for `Todo` indices (where a `Todo` is a protocol with
 /// concrete argument values, e.g. `add(1, 2, 3)`)
-/// TODO: should we change this to a new-type instead, e.g. `struct TodoIdx(u32)`
-/// and use the `entity_impl!` macro (similar to `StmtId`)?
-/// This would require a map to keep track of `TodoIdx |-> todo` bindings though,
-/// so may be more trouble than its worth.
 type TodoIdx = usize;
 
 /// An `Evaluator` evaluates ("interprets") a Protocols program

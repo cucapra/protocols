@@ -15,8 +15,8 @@ use codespan_reporting::diagnostic::{
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
-use pest::iterators::Pair;
 use pest::RuleType;
+use pest::iterators::Pair;
 use rustc_hash::FxHashSet;
 
 use crate::ir::*;
