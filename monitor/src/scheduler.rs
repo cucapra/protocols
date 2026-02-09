@@ -49,8 +49,10 @@ pub enum ThreadResult {
     /// it's post-`fork` state.
     ExplicitFork { parent: Thread },
 
-    /// Thread forked implicitly (e.g. a protocol which ends with `step`
-    /// without ever calling `fork`)
+    /// Thread is laready in the `finished queue and forked implicitly
+    /// (e.g. this thread is a protocol which ends with `step` without
+    /// ever calling `fork`). The caller of a function which returns
+    /// this constructor is responsible for spawning new protocol
     ImplicitFork,
 }
 
@@ -825,44 +827,29 @@ impl Scheduler {
                                     thread.global_thread_id(ctx),
                                     thread.start_cycle
                                 );
+                                // Continue from the fork statement onwards
+                                current_stmt_id = next_stmt_id;
                             } else {
-                                // For each possible transaction, fork one new thread for it,
-                                // i.e. add it to the `current` queue
-                                // This means if there are `n` possible transactions,
-                                // we push `n` threads to the `current` queue.
-                                info!(
-                                    "Thread {} called `fork()`, creating new threads...",
-                                    thread.global_thread_id(ctx)
-                                );
-                                for (transaction, symbol_table) in &self.possible_transactions {
-                                    // Note: we use the new transaction's
-                                    // `next_stmt_mapping` when creating a new thread
-                                    let new_thread = Thread::new(
-                                        self.struct_name.clone(),
-                                        transaction.clone(),
-                                        symbol_table.clone(),
-                                        transaction.next_stmt_mapping(),
-                                        self.num_threads,
-                                        self.cycle_count,
-                                        trace.time_step(),
-                                    );
-                                    self.num_threads += 1;
-                                    info!(
-                                        "Adding new thread {} (`{}`) to `current` queue",
-                                        new_thread.global_thread_id(ctx),
-                                        new_thread.transaction.name
-                                    );
-                                    self.current.push_back(new_thread);
-                                }
+                                // Here, instead of creating a new thread for
+                                // each possible protocol, we indicate to the
+                                // caller that the current thread forked
 
-                                // Mark this start cycle as having forked
+                                // Indicate that the thread's `start_cycle`
+                                // called `fork` in the current cycle
                                 self.forked_start_cycles.insert(thread.start_cycle);
 
-                                self.print_scheduler_state(trace, ctx);
-                            }
+                                // Advance to next statement
+                                thread.current_stmt_id = next_stmt_id;
 
-                            // Continue from the fork statement onwards
-                            current_stmt_id = next_stmt_id;
+                                // Save the parent thread's state before we exit this function
+                                thread.args_mapping = self.interpreter.args_mapping.clone();
+                                thread.known_bits = self.interpreter.known_bits.clone();
+                                thread.constraints = self.interpreter.constraints.clone();
+                                thread.args_to_pins = self.interpreter.args_to_pins.clone();
+
+                                // Indicate to the caller that this thread forked
+                                return Ok(ThreadResult::ExplicitFork { parent: thread });
+                            }
                         }
                         _ => {
                             // Default case: update `current_stmt_id`
@@ -939,7 +926,8 @@ impl Scheduler {
                     self.finished.push_back(thread.clone());
 
                     // Implicit fork: if this thread hasn't forked yet,
-                    // spawn new threads for all possible transactions
+                    // indicate to the caller that an implicit fork
+                    // needs to be performed.
                     // This handles the case where a protocol just ends in
                     // `step()` without having previously called `fork()`
                     if !thread.has_forked {
@@ -947,23 +935,11 @@ impl Scheduler {
                             "Thread {} finished without explicit fork, performing implicit fork",
                             thread.global_thread_id(ctx)
                         );
-                        for (transaction, symbol_table) in &self.possible_transactions {
-                            let new_thread = Thread::new(
-                                self.struct_name.clone(),
-                                transaction.clone(),
-                                symbol_table.clone(),
-                                transaction.next_stmt_mapping(),
-                                self.num_threads,
-                                self.cycle_count,
-                                trace.time_step(),
-                            );
-                            self.num_threads += 1;
-
-                            self.current.push_back(new_thread);
-                        }
                         self.forked_start_cycles.insert(thread.start_cycle);
+                        return Ok(ThreadResult::ImplicitFork);
+                    } else {
+                        return Ok(ThreadResult::Completed);
                     }
-                    return Ok(ThreadResult::Completed);
                 }
                 Err(err) => {
                     info!(
