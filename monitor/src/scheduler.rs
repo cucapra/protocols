@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -36,6 +36,22 @@ impl From<anyhow::Error> for SchedulerError {
     fn from(err: anyhow::Error) -> Self {
         SchedulerError::Other(err)
     }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum ThreadResult {
+    /// Thread completed normally (moved to next/finished/failed queue)
+    Completed,
+
+    /// Thread encountered `fork`. The parent `Thread` is stored as an argument
+    /// to this constructor, with the `parent` `Thread`'s state updated to
+    /// it's post-`fork` state.
+    ExplicitFork { parent: Thread },
+
+    /// Thread forked implicitly (e.g. a protocol which ends with `step`
+    /// without ever calling `fork`)
+    ImplicitFork,
 }
 
 /// `Queue` is just a type alias for `VecDeque<Thread>`.
@@ -754,7 +770,7 @@ impl Scheduler {
         mut thread: Thread,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
-    ) -> Result<(), SchedulerError> {
+    ) -> Result<ThreadResult, SchedulerError> {
         info!(
             "Running thread {} (transaction `{}`) till next `step()`...",
             thread.global_thread_id(ctx),
@@ -792,7 +808,7 @@ impl Scheduler {
                             thread.current_stmt_id = next_stmt_id;
                             self.next.push_back(thread);
                             self.print_scheduler_state(trace, ctx);
-                            return Ok(());
+                            return Ok(ThreadResult::Completed);
                         }
                         Stmt::Fork => {
                             thread.has_forked = true;
@@ -871,7 +887,7 @@ impl Scheduler {
                         );
                         self.failed.push_back(thread);
                         self.print_scheduler_state(trace, ctx);
-                        return Ok(());
+                        return Ok(ThreadResult::Completed);
                     }
 
                     info!(
@@ -947,7 +963,7 @@ impl Scheduler {
                         }
                         self.forked_start_cycles.insert(thread.start_cycle);
                     }
-                    return Ok(());
+                    return Ok(ThreadResult::Completed);
                 }
                 Err(err) => {
                     info!(
@@ -958,7 +974,7 @@ impl Scheduler {
                     );
                     self.failed.push_back(thread);
                     self.print_scheduler_state(trace, ctx);
-                    return Ok(());
+                    return Ok(ThreadResult::Completed);
                 }
             }
         }
