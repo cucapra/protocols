@@ -17,6 +17,7 @@ use crate::{
     thread::Thread,
 };
 
+#[derive(Clone)]
 pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,

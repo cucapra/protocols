@@ -141,6 +141,7 @@ pub fn unique_start_cycles(queue: &Queue) -> Vec<u32> {
 }
 
 /// Scheduler for handling the multiple threads in the monitor
+#[derive(Clone)]
 pub struct Scheduler {
     /// Queue storing threads that are ready (to be run during the current step)
     current: Queue,
