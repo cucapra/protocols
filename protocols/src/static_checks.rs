@@ -44,7 +44,7 @@ impl std::fmt::Display for LangFeature {
 ///   (also used for error message purposes)
 pub fn check_if_symbol_is_dut_port(
     symbol_id: SymbolId,
-    direction: Dir,
+    direction: Option<Dir>,
     location_id: LocationId,
     tr: &Transaction,
     symbol_table: &SymbolTable,
@@ -54,12 +54,19 @@ pub fn check_if_symbol_is_dut_port(
     // Fully-qualify the name of the identifier
     let symbol_full_name = symbol_table.full_name_from_symbol_id(&symbol_id);
 
+    // Helper string for direction in error messages
+    let direction_str = match direction {
+        Some(Dir::In) => "in",
+        Some(Dir::Out) => "out",
+        None => "in/out",
+    };
+
     match (tr.type_param, symbol_table[symbol_id].parent()) {
         (None, _) => {
             let error_msg = format!(
                 "Expected {} to be a struct's {}put field,
                 but the function {} is not parameterized by any structs",
-                symbol_full_name, direction, tr.name
+                symbol_full_name, direction_str, tr.name
             );
             handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
             Err(anyhow!(error_msg))
@@ -77,31 +84,7 @@ pub fn check_if_symbol_is_dut_port(
                     handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
-                LangFeature::Assertions => {
-                    // Only output parameters are allowed in assertions
-                    let is_output_param = tr.is_param_with_direction(symbol_id, Dir::Out);
-                    if is_output_param {
-                        Ok(())
-                    } else {
-                        // Output parameters to functions are forbidden in assertions
-                        let error_msg = format!(
-                            "`{}` is an input parameter of the function `{}`, but `{}` cannot mention input parameters",
-                            symbol_full_name, tr.name, lang_feature
-                        );
-                        handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
-                        Err(anyhow!(error_msg))
-                    }
-                }
-                LangFeature::Conditionals => {
-                    // Input/output parameters of functions are not allowed
-                    // to appear in conditions
-                    let error_msg = format!(
-                        "{} is a function argument, but {} cannot mention function arguments",
-                        symbol_full_name, lang_feature
-                    );
-                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
-                    Err(anyhow!(error_msg))
-                }
+                _ => Ok(())
             }
         }
         (Some(struct_id), Some(parent_symbol_id)) => {
@@ -115,11 +98,19 @@ pub fn check_if_symbol_is_dut_port(
                 let the_struct = &symbol_table[struct_id];
 
                 // Fetch the names of all the DUT ports that have the desired
-                // direction, qualified by the name of the struct *instance*
-                let pins_with_desired_direction = the_struct
-                    .get_fields_by_direction(direction)
-                    .map(|field| format!("{}.{}", struct_name, field))
-                    .collect::<Vec<String>>();
+                // direction, qualified by the name of the struct *instance*.
+                // If direction is None, include ports of both directions.
+                let pins_with_desired_direction: Vec<String> = match direction {
+                    Some(dir) => the_struct
+                        .get_fields_by_direction(dir)
+                        .map(|field| format!("{}.{}", struct_name, field))
+                        .collect(),
+                    None => the_struct
+                        .get_fields_by_direction(Dir::In)
+                        .chain(the_struct.get_fields_by_direction(Dir::Out))
+                        .map(|field| format!("{}.{}", struct_name, field))
+                        .collect(),
+                };
 
                 // If the identifier corresponds to a DUT port with the desired
                 // direction, the check passes,
@@ -127,10 +118,16 @@ pub fn check_if_symbol_is_dut_port(
                 if pins_with_desired_direction.contains(&symbol_full_name) {
                     Ok(())
                 } else {
-                    let error_msg = format!(
-                        "`{}` is a {}put field of the struct `{}`, but only {}put fields are allowed to appear in {})",
-                        symbol_full_name, !direction, struct_name, direction, lang_feature
-                    );
+                    let error_msg = match direction {
+                        Some(dir) => format!(
+                            "`{}` is a {}put field of the struct `{}`, but only {}put fields are allowed to appear in {})",
+                            symbol_full_name, !dir, struct_name, dir, lang_feature
+                        ),
+                        None => format!(
+                            "`{}` is not a field of the struct `{}`",
+                            symbol_full_name, struct_name
+                        ),
+                    };
                     handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
@@ -161,21 +158,16 @@ pub fn check_condition_wf(
     match expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
-            // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_direction(*symbol_id, Dir::Out) {
-                Ok(())
-            } else {
-                // Check if the identifier is a DUT output port
-                check_if_symbol_is_dut_port(
-                    *symbol_id,
-                    Dir::Out,
-                    LocationId::Expr(*expr_id),
-                    tr,
-                    symbol_table,
-                    handler,
-                    LangFeature::Conditionals,
-                )
-            }
+            // Check if the identifier is a DUT port (either input or output)
+            check_if_symbol_is_dut_port(
+                *symbol_id,
+                None,
+                LocationId::Expr(*expr_id),
+                tr,
+                symbol_table,
+                handler,
+                LangFeature::Conditionals,
+            )
         }
         Expr::DontCare => {
             let error_msg =
@@ -214,7 +206,7 @@ pub fn check_assertion_arg_wf(
                 // Check if the identifier is a DUT output port
                 check_if_symbol_is_dut_port(
                     *symbol_id,
-                    Dir::Out,
+                    Some(Dir::Out),
                     LocationId::Expr(*expr_id),
                     tr,
                     symbol_table,
@@ -309,7 +301,7 @@ pub fn check_assignment_rhs_wf(
                     if symbol_table[symbol_id].parent().is_some() {
                         check_if_symbol_is_dut_port(
                             *symbol_id,
-                            Dir::Out,
+                            Some(Dir::Out),
                             LocationId::Expr(*rhs_expr_id),
                             tr,
                             symbol_table,
@@ -372,7 +364,7 @@ pub fn check_assignment_wf(
     // Check if the LHS is a DUT input port
     check_if_symbol_is_dut_port(
         *lhs_symbol_id,
-        Dir::In,
+        Some(Dir::In),
         LocationId::Stmt(*stmt_id),
         tr,
         symbol_table,
