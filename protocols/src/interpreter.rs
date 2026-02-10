@@ -65,9 +65,12 @@ pub enum ExprValue {
 
 /// Type aliases for `Todo` indices (where a `Todo` is a protocol with
 /// concrete argument values, e.g. `add(1, 2, 3)`)
-type TodoIdx = usize;
+pub type TodoIdx = usize;
 
-/// An `Evaluator` evaluates ("interprets") a Protocols program
+/// An `Evaluator` evaluates ("interprets") a Protocols program.        
+/// **Note**: The scope of the `Evaluator` is limited to executing a single
+/// thread, with the `Scheduler` struct responsible for keeping track of
+/// different threads.
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
@@ -108,16 +111,6 @@ pub struct Evaluator<'a> {
     /// The current todo_idx being executed
     /// (where a `todo` is a transaction with concrete argument values)
     current_todo_idx: TodoIdx,
-
-    /// Maps a `(TodoIdx, StmtId)` pair (representing a protocol that is
-    /// executing a particular bounded loop) to the no. of iterations remaining
-    /// for that particular loop.              
-    /// - **Invariant**: the no. of remaining iterations is always non-zero
-    ///   (if it reaches zero, we remove the entry from this map).       
-    /// - In the key, we need the `StmtId` to allow for nested loops,
-    ///   and we also need the `TodoIdx`, since the same `StmtId` could be active
-    ///   in differnt threads.
-    bounded_loop_remaining_iters: FxHashMap<(TodoIdx, StmtId), u128>,
 
     /// Whether `assert_eq` statements should be evaluated
     assertions_enabled: bool,
@@ -269,7 +262,6 @@ impl<'a> Evaluator<'a> {
             forbidden_inputs: Vec::new(),
             forbidden_output_counts,
             per_thread_input_vals,
-            bounded_loop_remaining_iters: FxHashMap::default(),
             current_todo_idx: 0,
             assertions_enabled: false,
             rng,
@@ -294,7 +286,6 @@ impl<'a> Evaluator<'a> {
 
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
-    /// Performs a context switch to execute a different thread
     pub fn context_switch(&mut self, todo: Todo<'a>, todo_idx: usize) {
         self.tr = todo.tr;
         self.st = todo.st;
@@ -688,7 +679,19 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
+    /// Evaluates the statement at the given `StmtId`. The additional argument
+    /// `bounded_loop_remaining_iters` tracks the no. of loop iterations
+    /// remaining for `repeat ...` loops. Callers of this function,
+    /// e.g. in `scheduler.rs`, are meant to mutably borrow the
+    /// `Thread.bounded_loop_remaining_iters` field and supply it as
+    /// an argument to this function. This design allows us to keep this field
+    /// only within the `Thread` struct and avoid duplicating it in the
+    /// `Evaluator` struct.
+    pub fn evaluate_stmt(
+        &mut self,
+        stmt_id: &StmtId,
+        bounded_loop_remaining_iters: &mut FxHashMap<(TodoIdx, StmtId), u128>,
+    ) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
@@ -700,9 +703,12 @@ impl<'a> Evaluator<'a> {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
-            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
-                self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
-            }
+            Stmt::BoundedLoop(num_iters_id, loop_body_id) => self.evaluate_bounded_loop(
+                num_iters_id,
+                stmt_id,
+                loop_body_id,
+                bounded_loop_remaining_iters,
+            ),
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
@@ -837,21 +843,26 @@ impl<'a> Evaluator<'a> {
 
     /// Evaluates a bounded loop (loop with a fixed no. of iterations).
     /// Arguments are the `ExprId`s/`StmtId`s for the no. of iterations,
-    /// the entire loop statement and the loop body itself.
+    /// the entire loop statement and the loop body itself. The final arguemnt
+    /// `bounded_loop_remaining_iters` tracks the no. of iterations remaining
+    /// for `repeat ...` loops (it is meant to be used as a mutable borrow
+    /// of the field `Thread.bounded_loops_remaining_iters` from the appropriate
+    /// thread).
     fn evaluate_bounded_loop(
         &mut self,
         num_iters_id: &ExprId,
         bounded_loop_id: &StmtId,
         loop_body_id: &StmtId,
+        bounded_loop_remaining_iters: &mut FxHashMap<(TodoIdx, StmtId), u128>,
     ) -> ExecutionResult<Option<StmtId>> {
         // Key for the `bounded_loop_remaining_iters` map, which tracks
         // the no. of iterations remaining for each bounded loop
         let key = (self.current_todo_idx, *bounded_loop_id);
-        if let Some(num_iterations) = self.bounded_loop_remaining_iters.get_mut(&key) {
+        if let Some(num_iterations) = bounded_loop_remaining_iters.get_mut(&key) {
             *num_iterations -= 1;
             if *num_iterations == 0 {
                 // Exit the loop
-                self.bounded_loop_remaining_iters.remove(&key);
+                bounded_loop_remaining_iters.remove(&key);
                 Ok(self.next_stmt_map[bounded_loop_id])
             } else {
                 // There are still non-zero iterations remaining,
@@ -885,8 +896,7 @@ impl<'a> Evaluator<'a> {
                     } else {
                         // Keep track of the no. of loop iterations,
                         // and execute the loop body
-                        self.bounded_loop_remaining_iters
-                            .insert(key, num_iterations);
+                        bounded_loop_remaining_iters.insert(key, num_iterations);
                         Ok(Some(*loop_body_id))
                     }
                 }

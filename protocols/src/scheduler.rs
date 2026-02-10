@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
 use crate::errors::{ExecutionError, ExecutionResult};
-use crate::interpreter::{Evaluator, ThreadInputValue};
+use crate::interpreter::{Evaluator, ThreadInputValue, TodoIdx};
 use crate::ir::*;
 
 use patronus::expr::Context;
@@ -86,6 +86,16 @@ pub struct Thread<'a> {
     pub prev_fork_stmt_id: Option<StmtId>,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     pub todo_idx: usize,
+
+    /// Maps a `(TodoIdx, StmtId)` pair (representing a protocol that is
+    /// executing a particular bounded loop) to the no. of iterations remaining
+    /// for that particular loop.              
+    /// - **Invariant**: the no. of remaining iterations is always non-zero
+    ///   (if it reaches zero, we remove the entry from this map).       
+    /// - In the key, we need the `StmtId` to allow for nested loops,
+    ///   and we also need the `TodoIdx`, since the same `StmtId` could be active
+    ///   in differnt threads.
+    pub bounded_loop_remaining_iters: FxHashMap<(TodoIdx, StmtId), u128>,
 }
 
 impl<'a> Thread<'a> {
@@ -102,6 +112,7 @@ impl<'a> Thread<'a> {
             prev_fork_stmt_id: None,
             has_stepped: false,
             has_forked: false,
+            bounded_loop_remaining_iters: FxHashMap::default(),
         }
     }
 
@@ -515,7 +526,10 @@ impl<'a> Scheduler<'a> {
                 thread.format_stmt(&current_stmt_id)
             );
 
-            match self.evaluator.evaluate_stmt(&current_stmt_id) {
+            match self
+                .evaluator
+                .evaluate_stmt(&current_stmt_id, &mut thread.bounded_loop_remaining_iters)
+            {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
                     info!(
@@ -645,8 +659,6 @@ impl<'a> Scheduler<'a> {
                 }
             }
         }
-
-        // Values already saved in per_thread_input_vals, nothing to save back to thread
 
         // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
         if thread.next_step.is_none() {
