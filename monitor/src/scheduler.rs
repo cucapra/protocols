@@ -49,7 +49,10 @@ pub enum ThreadResult {
     /// Thread encountered `fork`. The parent `Thread` is stored as an argument
     /// to this constructor, with the `parent` `Thread`'s state updated to
     /// it's post-`fork` state.
-    ExplicitFork { parent: Thread },
+    /// Note: We have to wrap the `Thread` in `Box`, otherwise
+    /// Clippy complains that there is a large size difference between different
+    /// constructors of this enum.
+    ExplicitFork { parent: Box<Thread> },
 
     /// Thread is laready in the `finished queue and forked implicitly
     /// (e.g. this thread is a protocol which ends with `step` without
@@ -64,8 +67,11 @@ pub enum CycleResult {
     Done,
     Fork {
         /// The thread that called fork
-        /// (Some for an explicit fork, None for implicit)
-        parent: Option<Thread>,
+        /// (Some for an explicit fork, None for implicit).
+        /// Note: We have to wrap the `Thread` in `Box`, otherwise
+        /// Clippy complains that there is a large size difference between different
+        /// constructors of this enum.
+        parent: Box<Option<Thread>>,
     },
 }
 
@@ -350,7 +356,7 @@ impl Scheduler {
     /// 2. When the `current` queue is empty, it sets `current` to `next`
     ///    (marking all suspended threads as ready for execution),
     ///    then advances the trace to the next step.
-    /// Notes:
+    ///    Notes:
     /// - This function is used by `GlobalScheduler` to coordinate
     ///   execution between multiple schedulers.
     /// - When a `fork` creates a `Scheduler` clone, call this function
@@ -371,10 +377,14 @@ impl Scheduler {
                 ThreadResult::Completed => continue,
                 ThreadResult::ExplicitFork { parent } => {
                     return Ok(CycleResult::Fork {
-                        parent: Some(parent),
+                        parent: Box::new(Some(*parent)),
                     });
                 }
-                ThreadResult::ImplicitFork => return Ok(CycleResult::Fork { parent: None }),
+                ThreadResult::ImplicitFork => {
+                    return Ok(CycleResult::Fork {
+                        parent: Box::new(None),
+                    });
+                }
             }
         }
 
@@ -886,7 +896,9 @@ impl Scheduler {
                                 thread.args_to_pins = self.interpreter.args_to_pins.clone();
 
                                 // Indicate to the caller that this thread forked
-                                return Ok(ThreadResult::ExplicitFork { parent: thread });
+                                return Ok(ThreadResult::ExplicitFork {
+                                    parent: Box::new(thread),
+                                });
                             }
                         }
                         _ => {

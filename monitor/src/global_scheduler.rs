@@ -51,7 +51,7 @@ fn process_group_cycles(
 
                     // If there was an explicit fork, we have to add the
                     // parent thread to the cloned scheduler
-                    if let Some(ref thread) = parent {
+                    if let Some(ref thread) = *parent {
                         cloned_scheduler.current.push_front(thread.clone());
                     }
 
@@ -95,18 +95,11 @@ fn process_group_cycles(
     // If all schedulers in the scheduler group failed, emit the error
     if group_was_non_empty && processed_schedulers.is_empty() {
         if let Some(failed_scheduler) = &last_failed_scheduler {
-            if !ctx.multiple_structs {
-                eprintln!(
-                    "All schedulers failed: No transactions match the waveform for DUT `{}`",
-                    failed_scheduler.struct_name
-                );
-                failed_scheduler.emit_error(trace, ctx)?;
-            } else {
-                info!(
-                    "All worlds failed for scheduler group corresponding to DUT `{}`",
-                    failed_scheduler.struct_name
-                );
-            }
+            eprintln!(
+                "All schedulers failed: No transactions match the waveform for DUT `{}`",
+                failed_scheduler.struct_name
+            );
+            failed_scheduler.emit_error(trace, ctx)?;
         }
     }
 
