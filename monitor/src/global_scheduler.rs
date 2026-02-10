@@ -10,7 +10,7 @@ use crate::{
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
 };
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use log::info;
 
 pub struct GlobalScheduler {
@@ -75,7 +75,7 @@ fn process_group_cycles(
                     eprintln!("{}", error_context);
                     scheduler
                         .emit_error(&trace, ctx)
-                        .context(anyhow!("Error in scheduler for {}", struct_name));
+                        .context(anyhow!("Error in scheduler for {}", struct_name))?;
                 } else {
                     info!(
                         "Error in scheduler for {}: {:#}",

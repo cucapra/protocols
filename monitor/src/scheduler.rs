@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -372,7 +372,7 @@ impl Scheduler {
                 ThreadResult::ExplicitFork { parent } => {
                     return Ok(CycleResult::Fork {
                         parent: Some(parent),
-                    })
+                    });
                 }
                 ThreadResult::ImplicitFork => return Ok(CycleResult::Fork { parent: None }),
             }
