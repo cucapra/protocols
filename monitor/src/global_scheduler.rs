@@ -10,8 +10,8 @@ use crate::{
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
 };
-use anyhow::{Context, anyhow};
 use log::info;
+use rustc_hash::FxHashSet;
 
 pub struct GlobalScheduler {
     /// Each element in the outer `Vec` corresponds to a `struct`.
@@ -27,13 +27,18 @@ pub struct GlobalScheduler {
 /// (the collection of all schedulers corresponding to the same struct,
 /// where each scheduler represents a different possible protocol trace)
 fn process_group_cycles(
-    schedulers: VecDeque<Scheduler>,
+    scheduler_group: VecDeque<Scheduler>,
     trace: &WaveSignalTrace,
     ctx: &GlobalContext,
 ) -> anyhow::Result<VecDeque<Scheduler>> {
+    // We have to define this up here since we end up mutating `scheduler_group`
+    // later in this function
+    let group_was_non_empty = !scheduler_group.is_empty();
+
     // BFS queue of schedulers (each scheduler represents the continuation
     // of a possible protocol trace)
-    let mut schedulers_to_process: VecDeque<Scheduler> = schedulers;
+    let mut last_failed_scheduler: Option<Scheduler> = None;
+    let mut schedulers_to_process: VecDeque<Scheduler> = scheduler_group;
     let mut processed_schedulers: VecDeque<Scheduler> = VecDeque::new();
 
     while let Some(mut scheduler) = schedulers_to_process.pop_front() {
@@ -71,23 +76,36 @@ fn process_group_cycles(
                 struct_name,
                 error_context,
             }) => {
-                if !ctx.multiple_structs {
-                    eprintln!("{}", error_context);
-                    scheduler
-                        .emit_error(&trace, ctx)
-                        .context(anyhow!("Error in scheduler for {}", struct_name))?;
-                } else {
-                    info!(
-                        "Error in scheduler for {}: {:#}",
-                        struct_name, error_context
-                    );
-                }
+                // This individual scheduler failed, so we discard it
+                // (Other schedulers in the scheduler group may still succeed)
+                info!(
+                    "Error in scheduler for {}: {:#}",
+                    struct_name, error_context
+                );
+                last_failed_scheduler = Some(scheduler);
             }
             Err(SchedulerError::Other(err)) => {
-                // Other errors (validation failures, internal errors, etc.)
-                // In multi-struct mode, we log these as warnings and continue
-                // This allows other schedulers to continue even if one fails
+                // This individual scheduler failed; discard it.
                 info!("Scheduler error for `{}`: {:#}", scheduler.struct_name, err);
+                last_failed_scheduler = Some(scheduler);
+            }
+        }
+    }
+
+    // If all schedulers in the scheduler group failed, emit the error
+    if group_was_non_empty && processed_schedulers.is_empty() {
+        if let Some(failed_scheduler) = &last_failed_scheduler {
+            if !ctx.multiple_structs {
+                eprintln!(
+                    "All schedulers failed: No transactions match the waveform for DUT `{}`",
+                    failed_scheduler.struct_name
+                );
+                failed_scheduler.emit_error(trace, ctx)?;
+            } else {
+                info!(
+                    "All worlds failed for scheduler group corresponding to DUT `{}`",
+                    failed_scheduler.struct_name
+                );
             }
         }
     }
@@ -109,19 +127,56 @@ impl GlobalScheduler {
         }
     }
 
-    /// Prints all output buffers (logs) across all scheduler groups
-    /// by merging all of them and sorting them based on ascending
-    /// clock cycle
+    /// Prints all unique protocol traces across all scheduler groups.
+    /// Each scheduler's `output_buffer` represents one possible trace.
+    /// Identical traces are removed, and partial traces that are
+    /// strict prefixes of longer traces are filtered out (these come from
+    /// schedulers where the child thread failed but the parent thread
+    /// continued).
     pub fn print_all_traces(&self) {
-        let mut buffers = vec![];
+        // Collect all unique traces
+        let mut all_traces: Vec<Vec<String>> = vec![];
+        let mut seen = FxHashSet::default();
+
         for scheduler_group in &self.scheduler_groups {
             for scheduler in scheduler_group {
-                buffers.extend(scheduler.output_buffer.clone());
+                let mut sorted_buffer = scheduler.output_buffer.clone();
+                sorted_buffer.sort_by_key(|(cycle_count, _)| *cycle_count);
+
+                let trace: Vec<String> = sorted_buffer
+                    .iter()
+                    .map(|(_, output)| output.clone())
+                    .collect();
+
+                if seen.insert(trace.clone()) {
+                    all_traces.push(trace);
+                }
             }
         }
-        buffers.sort_by_key(|(cycle_count, _)| *cycle_count);
-        for (_, output) in &buffers {
-            println!("{}", output);
+
+        // Filter out traces that are strict prefixes of other traces.
+        // These are partial traces from schedulers where a child thread failed
+        // but the parent thread completed successfully,
+        // resulting in a shorter trace.
+        let maximal_traces: Vec<&Vec<String>> = all_traces
+            .iter()
+            .filter(|trace| {
+                !all_traces
+                    .iter()
+                    .any(|other| other.len() > trace.len() && other.starts_with(trace.as_slice()))
+            })
+            .collect();
+
+        if maximal_traces.is_empty() {
+            return;
+        }
+
+        // Print all the traces one after another
+        for (i, trace) in maximal_traces.iter().enumerate() {
+            if maximal_traces.len() > 1 {
+                println!("Trace {}:", i);
+            }
+            println!("{}", trace.join("\n"));
         }
     }
 

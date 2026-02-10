@@ -950,15 +950,19 @@ impl Scheduler {
                             let start_time =
                                 trace.format_time(thread.start_time_step, ctx.time_unit);
                             let end_time = trace.format_time(end_time_step, ctx.time_unit);
-                            println!(
-                                "{}  // [time: {} -> {}] (thread {})",
-                                transaction_name,
-                                start_time,
-                                end_time,
-                                thread.global_thread_id(ctx)
-                            );
+                            self.output_buffer.push((
+                                self.cycle_count,
+                                format!(
+                                    "{}  // [time: {} -> {}] (thread {})",
+                                    transaction_name,
+                                    start_time,
+                                    end_time,
+                                    thread.global_thread_id(ctx)
+                                ),
+                            ));
                         } else {
-                            println!("{}", transaction_name)
+                            self.output_buffer
+                                .push((self.cycle_count, transaction_name));
                         }
                     }
                     self.finished.push_back(thread.clone());
