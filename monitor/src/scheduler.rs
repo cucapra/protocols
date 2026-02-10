@@ -38,10 +38,12 @@ impl From<anyhow::Error> for SchedulerError {
     }
 }
 
+/// The result of an individual `Thread`: either it `Completed`,
+/// forked explcitly or forked implicitly.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum ThreadResult {
-    /// Thread completed normally (moved to next/finished/failed queue)
+    /// Thread completed (moved to next/finished/failed queue)
     Completed,
 
     /// Thread encountered `fork`. The parent `Thread` is stored as an argument
@@ -54,6 +56,17 @@ pub enum ThreadResult {
     /// ever calling `fork`). The caller of a function which returns
     /// this constructor is responsible for spawning new protocol
     ImplicitFork,
+}
+
+/// The result of the *Scheduler* at the end of a cycle
+#[derive(Debug)]
+pub enum CycleResult {
+    Done,
+    Fork {
+        /// The thread that called fork
+        /// (Some for an explicit fork, None for implicit)
+        parent: Option<Thread>,
+    },
 }
 
 /// `Queue` is just a type alias for `VecDeque<Thread>`.
@@ -162,23 +175,23 @@ pub fn unique_start_cycles(queue: &Queue) -> Vec<u32> {
 #[derive(Clone)]
 pub struct Scheduler {
     /// Queue storing threads that are ready (to be run during the current step)
-    current: Queue,
+    pub current: Queue,
 
     /// Queue of suspended threads (to be run during the next step)
     pub next: Queue,
 
     /// Threads that have finished successfully
-    finished: Queue,
+    pub finished: Queue,
 
     /// Threads that failed
-    failed: Queue,
+    pub failed: Queue,
 
     /// The current scheduling cycle
-    cycle_count: u32,
+    pub cycle_count: u32,
 
     /// The no. of threads that have been created so far.
     /// (This variable is used to create unique `thread_id`s for `Thread`s.)
-    num_threads: u32,
+    pub num_threads: u32,
 
     /// The associated interpreter for Protocols programs
     interpreter: Interpreter,
@@ -197,12 +210,17 @@ pub struct Scheduler {
 
     /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
-    possible_transactions: Vec<(Transaction, SymbolTable)>,
+    pub possible_transactions: Vec<(Transaction, SymbolTable)>,
 
     /// The name of the struct this scheduler is monitoring
     /// (Used for prefixing transaction names in multi-struct scenarios)
     /// Note: if there is just one single struct, this string is empty
     pub struct_name: String,
+
+    /// Output buffer, where each element is a pair consisting of the cycle
+    /// number and a log string (this is needed because of how
+    /// executions for different schedulers are interleaved)
+    pub output_buffer: Vec<(u32, String)>,
 }
 
 impl Scheduler {
@@ -307,37 +325,57 @@ impl Scheduler {
             finished_thread: None,
             possible_transactions: transactions,
             struct_name,
+            output_buffer: Vec::new(),
         }
     }
 
-    /// Runs the scheduler in the current cycle by repeating the following steps.
-    /// 1. Pops a thread from the `current` queue and runs it till the next step.
-    ///    We keep doing this while the `current` queue is non-empty.
-    /// 2. When the `current` queue is empty, it sets `current` to `next`
-    ///    (marking all suspended threads as ready for execution),
-    ///    then advances the trace to the next step.
-    /// - Note: This function is used by `GlobalScheduler` to coordinate
-    ///   execution between multiple schedulers.
-    pub fn run_current_cycle(
-        &mut self,
-        trace: &WaveSignalTrace,
-        ctx: &GlobalContext,
-    ) -> Result<(), SchedulerError> {
-        info!(
-            "Inside `Scheduler::run_current_cycle` for {} scheduler",
-            self.struct_name
-        );
-
+    /// Call this function exactly once at the beginning of each cycle
+    /// (**Don't** call this on a cloned `Scheduler` that is created from a `fork`)
+    #[allow(dead_code)]
+    pub fn begin_cycle(&mut self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         // Clear auxiliary fields at the beginning of each cycle
         // to track which start cycles fork/finish in THIS cycle
         self.forked_start_cycles.clear();
         self.finished_thread = None;
-
         self.print_scheduler_state(trace, ctx);
+    }
 
-        // Run all threads in the current queue
+    /// Runs the scheduler in the current cycle by repeating the following steps.
+    /// 1. While the `current` queue is non-empty,
+    ///    pop a thread from the `current` queue and runs it till the next `step`
+    ///    and exmaine its `ThreadResult`.
+    ///  - If it `fork`ed either implicitly or explicitly, return early by
+    ///    signalling to the caller the appropriate `CycleResult`
+    ///  - Otherwise, continue.
+    /// 2. When the `current` queue is empty, it sets `current` to `next`
+    ///    (marking all suspended threads as ready for execution),
+    ///    then advances the trace to the next step.
+    /// Notes:
+    /// - This function is used by `GlobalScheduler` to coordinate
+    ///   execution between multiple schedulers.
+    /// - When a `fork` creates a `Scheduler` clone, call this function
+    ///   on the clone
+    pub fn process_current_queue(
+        &mut self,
+        trace: &WaveSignalTrace,
+        ctx: &GlobalContext,
+    ) -> Result<CycleResult, SchedulerError> {
+        info!(
+            "Inside `Scheduler::process_current_queue` for {} scheduler",
+            self.struct_name
+        );
+
+        // Process each thread (this function returns early when a thread `fork`s)
         while let Some(thread) = self.current.pop_front() {
-            self.run_thread_till_next_step(thread, trace, ctx)?;
+            match self.run_thread_till_next_step(thread, trace, ctx)? {
+                ThreadResult::Completed => continue,
+                ThreadResult::ExplicitFork { parent } => {
+                    return Ok(CycleResult::Fork {
+                        parent: Some(parent),
+                    })
+                }
+                ThreadResult::ImplicitFork => return Ok(CycleResult::Fork { parent: None }),
+            }
         }
 
         // At this point, all threads have been executed till their next `step`
@@ -500,7 +538,7 @@ impl Scheduler {
         // behave as expected
         self.validate_finished_and_failed_threads(trace, ctx)?;
 
-        Ok(())
+        Ok(CycleResult::Done)
     }
 
     /// Validates that threads in the `finished` and `failed` queues
