@@ -659,6 +659,7 @@ impl<'a> Scheduler<'a> {
                 }
             }
         }
+        // Values already saved in per_thread_input_vals, nothing to save back to thread
 
         // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
         if thread.next_step.is_none() {
