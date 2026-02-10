@@ -14,8 +14,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 /// Per-thread input value: either a concrete assignment or DontCare
@@ -117,7 +117,7 @@ pub struct Evaluator<'a> {
     /// - In the key, we need the `StmtId` to allow for nested loops,
     ///   and we also need the `TodoIdx`, since the same `StmtId` could be active
     ///   in differnt threads.
-    bounded_loop_remaining_iters: FxHashMap<(TodoIdx, StmtId), u64>,
+    bounded_loop_remaining_iters: FxHashMap<(TodoIdx, StmtId), u128>,
 
     /// Whether `assert_eq` statements should be evaluated
     assertions_enabled: bool,
@@ -237,9 +237,10 @@ impl<'a> Evaluator<'a> {
                 patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
             for input_expr in input_exprs {
                 // Find the protocol symbol corresponding to this input expression
-                if let Some(input_sym) = input_mapping
-                    .iter()
-                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
+                if let Some(input_sym) =
+                    input_mapping
+                        .iter()
+                        .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
                 {
                     // output_dependencies: output -> Vec<input> (inputs this output depends on)
                     if let Some(vec) = output_dependencies.get_mut(out_sym) {
@@ -871,9 +872,12 @@ impl<'a> Evaluator<'a> {
                     ))
                 }
                 ExprValue::Concrete(bvv) => {
+                    // Note: `BitVecValue` doesn't have a `to_u128` method,
+                    // so we have to use `to_u64` and then cast to `u128`
                     let num_iterations = bvv
                         .to_u64()
-                        .expect("Expected no. of loop iterations in a bounded loop to be a u64");
+                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer")
+                        as u128;
 
                     // If the user wrote `repeat 0 iterations { ... }`,
                     // skip the loop and proceed to the next stmt
