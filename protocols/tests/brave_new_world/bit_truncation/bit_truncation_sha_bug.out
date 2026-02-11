@@ -2,5 +2,5 @@ error: The two expressions did not evaluate to the same value
   ┌─ brave_new_world/bit_truncation/bit_truncation_sha.prot:9:15
   │
 9 │     assert_eq(data_out, dut.left);
-  │               ^^^^^^^^^^^^^^^^^^ LHS Value: ValueOwned(000001000000000000000000000000000000000000), RHS Value: ValueOwned(000000000000000000000000000000000000000000)
+  │               ^^^^^^^^^^^^^^^^^^ LHS Value: 68719476736, RHS Value: 0
 
