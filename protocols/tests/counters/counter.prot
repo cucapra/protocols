@@ -9,7 +9,7 @@ struct Counter {
 // because the guard for the while-loop refer to an
 // input port of the DUT, which is forbidden (see `well-formedness.md`)
 
-fn count_up<dut: Counter>(in a: u64) {
+prot count_up<dut: Counter>(in a: u64) {
     // Loading dut with values
     dut.a := a;
 

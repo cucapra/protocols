@@ -17,7 +17,7 @@ struct AXISManager {
 
 // RESET: Assert reset (active-low) and wait for manager to be ready
 // The manager waits C_M_START_COUNT cycles in INIT_COUNTER before sending
-fn reset<DUT: AXISManager>() {
+prot reset<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b0;         // Assert reset (active-low)
     DUT.i_tready := 1'b0;
     step();
@@ -29,7 +29,7 @@ fn reset<DUT: AXISManager>() {
 //
 // Output Arguments:
 //   data - Expected payload from manager
-fn recv<DUT: AXISManager>(
+prot recv<DUT: AXISManager>(
     out data: u32,
 ) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
@@ -52,7 +52,7 @@ fn recv<DUT: AXISManager>(
 //
 // Output Arguments:
 //   data - Expected payload from manager (should be the last word)
-fn recv_last<DUT: AXISManager>(
+prot recv_last<DUT: AXISManager>(
     out data: u32,
 ) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
@@ -72,7 +72,7 @@ fn recv_last<DUT: AXISManager>(
 // STALL: Assert backpressure (i_tready=0) while manager has valid data
 // AXI-Stream requires output args (tdata, tlast) to remain stable during stall
 // Only matches when the waveform contains i_tvalid=1 (i.e. there is some valid data and it's available to stall)
-fn stall<DUT: AXISManager>(out data: u32, out last: u1) {
+prot stall<DUT: AXISManager>(out data: u32, out last: u1) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b0;          // Apply backpressure
 
@@ -93,7 +93,7 @@ fn stall<DUT: AXISManager>(out data: u32, out last: u1) {
 
 // WAIT_FOR_DATA: Receiver is ready but no data is available
 // Used when tready=1 but tvalid=0 (i.e. receiver is polling for data)
-fn wait_for_data<DUT: AXISManager>() {
+prot wait_for_data<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b1;          
 
@@ -104,7 +104,7 @@ fn wait_for_data<DUT: AXISManager>() {
 
 // IDLE: No transaction - i_tready is deasserted
 #[idle]
-fn idle<DUT: AXISManager>() {
+prot idle<DUT: AXISManager>() {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b0;          
     step();

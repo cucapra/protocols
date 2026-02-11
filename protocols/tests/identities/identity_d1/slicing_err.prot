@@ -3,7 +3,7 @@ struct Identity {
   out s: u32,
 }
 
-fn slicing_err<DUT: Identity>(in a: u32, out s: u32) {
+prot slicing_err<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
 
   step();

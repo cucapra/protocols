@@ -6,7 +6,7 @@ struct ALU {
   out s: u32,
 }
 
-fn add<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
+prot add<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   DUT.op := 2'b00;
@@ -28,7 +28,7 @@ fn add<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-fn sub<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
+prot sub<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   DUT.op := 2'b01;
@@ -50,7 +50,7 @@ fn sub<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-fn and<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
+prot and<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   DUT.op := 2'b10;
@@ -72,7 +72,7 @@ fn and<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-fn or<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
+prot or<DUT: ALU>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   DUT.op := 2'b11;

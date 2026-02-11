@@ -6,7 +6,7 @@ struct Identity {
 // Update (11/9): this protocol is considered to be ill-formed
 // because the guard for the while-loop refer to an
 // input port of the DUT, which is forbidden (see `well-formedness.md`)
-fn two_fork_ill_formed<DUT: Identity>(in a: u32, out s: u32) {
+prot two_fork_ill_formed<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
 

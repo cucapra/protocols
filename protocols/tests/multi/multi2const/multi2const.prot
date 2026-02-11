@@ -4,7 +4,7 @@ struct multi2const {
     out out: u64,
 }
 
-fn multi<dut: multi2const>(in data_in: u64, out data_out: u64) {
+prot multi<dut: multi2const>(in data_in: u64, out data_out: u64) {
     dut.start := 1'b1;
     dut.inp := data_in;
     

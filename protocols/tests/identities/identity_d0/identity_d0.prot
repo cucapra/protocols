@@ -9,7 +9,7 @@ struct Identity {
 // on a), the input a is forbidden. So implicit re-application forces a := X instead.
 // This is correct behavior - we should not re-apply a value that would change the output
 // we already observed for control flow.
-fn passthrough<dut: Identity>() {
+prot passthrough<dut: Identity>() {
     dut.a := 32'b0;
     step();
 

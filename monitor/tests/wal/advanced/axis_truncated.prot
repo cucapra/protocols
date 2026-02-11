@@ -8,7 +8,7 @@ struct AXIS {
     in m_axis_tdata: u8,
 }
 
-fn send_data<D: AXIS>(in data: u8) {
+prot send_data<D: AXIS>(in data: u8) {
     D.m_axis_tdata := data;
     D.m_axis_tvalid := 1'b1;
     while (!(D.m_axis_tready == 1'b1)) {
@@ -21,7 +21,7 @@ fn send_data<D: AXIS>(in data: u8) {
 // We mark this protocol as `idle` to avoid excessive `idle()` transcations 
 // showing up in the trace produced by the monitor
 #[idle]
-fn idle<D: AXIS>() {
+prot idle<D: AXIS>() {
     D.m_axis_tvalid := 1'b0;
     // D.data is implicitly X
     step();
