@@ -1,6 +1,6 @@
 # Protocols
 **Protocols** is a DSL for specifying & testing hardware communication protocols at the cycle-level register-transfer level (RTL).
-A protocol is described using an `fn` definition containing a sequence of statements:
+A protocol is described using an `prot` definition containing a sequence of statements:
 - `symbol := RHS` assigns the value of the `RHS` expression to the DUT input port `symbol`. The right-hand side expression may be an arbitrary value, represented by `X` ("don't care").
 - `step(n)`  advances the clock by `n` cycles (`n > 0`)
 - `fork()`  allows for concurrent protocol execution.
