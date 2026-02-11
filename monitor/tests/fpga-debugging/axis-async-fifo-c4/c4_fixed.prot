@@ -162,7 +162,13 @@ fn idle<DUT: Receiver>() {
 
 // RESET: Assert reset signal to initialize FIFO
 fn reset<DUT: Sender>() {
-    DUT.rst := 1'b1;
-    
+    DUT.rst := 1'b1;    
+    step();
+}
+
+// We have to also define `reset` for the `Receiver` `DUT` since different 
+// structs are now treated separately in the new monitor implementation
+fn reset<DUT: Receiver>() {
+    DUT.rst := 1'b1; 
     step();
 }

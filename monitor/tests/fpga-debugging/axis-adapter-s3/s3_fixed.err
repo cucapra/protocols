@@ -1,0 +1,12 @@
+[Monitor] Found 2 possible protocol traces. Showing side-by-side diffs:
+Trace 1 (left) vs Trace 2 (right):
+     1 | reset()  // [time: 0ns -> 25ns] (thread 0)                      |      1 | reset()  // [time: 0ns -> 25ns] (thread 0)                      |
+     2 | wait_for_data()  // [time: 25ns -> 50ns] (thread 6)             |      2 | wait_for_data()  // [time: 25ns -> 50ns] (thread 6)             |
+     3 | wait_for_data()  // [time: 50ns -> 75ns] (thread 7)             |      3 | wait_for_data()  // [time: 50ns -> 75ns] (thread 7)             |
+     4 | wait_for_data()  // [time: 75ns -> 100ns] (thread 8)            |      4 | wait_for_data()  // [time: 75ns -> 100ns] (thread 8)            |
+     5 | recv(205)  // [time: 100ns -> 125ns] (thread 9)                 |      5 | recv(205)  // [time: 100ns -> 125ns] (thread 9)                 |
+     6 | recv(171)  // [time: 125ns -> 150ns] (thread 10)                |      6 | recv(171)  // [time: 125ns -> 150ns] (thread 10)                |
+     7 | recv(205)  // [time: 150ns -> 175ns] (thread 11)                |      7 | recv(205)  // [time: 150ns -> 175ns] (thread 11)                |
+     8 | recv(171)  // [time: 175ns -> 200ns] (thread 12)                |      8 | recv(171)  // [time: 175ns -> 200ns] (thread 12)                |
+     9 | recv(205)  // [time: 200ns -> 212.5ns] (thread 13)              |        |                                                                 |
+       |                                                                 |      9 | recv_last(205)  // [time: 200ns -> 212.5ns] (thread 13)         |
