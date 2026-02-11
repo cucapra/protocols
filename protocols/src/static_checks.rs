@@ -84,7 +84,17 @@ pub fn check_if_symbol_is_dut_port(
                     handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
-                _ => Ok(())
+                LangFeature::Conditionals => {
+                    // Input/output parameters of functions are not allowed
+                    // to appear in conditions
+                    let error_msg = format!(
+                        "{} is a function argument, but {} cannot mention function arguments",
+                        symbol_full_name, lang_feature
+                    );
+                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+                LangFeature::Assertions => Ok(()),
             }
         }
         (Some(struct_id), Some(parent_symbol_id)) => {
