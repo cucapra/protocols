@@ -5,7 +5,7 @@ struct Counter {
     out s: u64,
 }
 
-fn count_up<dut: Counter>(in a: u64) {
+prot count_up<dut: Counter>(in a: u64) {
     // Loading dut with values
     dut.a := a;
 

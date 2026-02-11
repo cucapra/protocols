@@ -6,7 +6,7 @@ struct multi2multi {
     out out: u64,
 }
 
-fn multi<dut: multi2multi>(in data_in: u64, out data_out: u64) {
+prot multi<dut: multi2multi>(in data_in: u64, out data_out: u64) {
     dut.start := 1'b1;
     dut.inp := data_in;
     assert_eq(dut.done, 1'b0);

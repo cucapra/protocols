@@ -382,7 +382,12 @@ impl fmt::Display for AssertionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AssertionError::EqualityFailed { value1, value2, .. } => {
-                write!(f, "Assertion failed: {:?} != {:?}", value1, value2)
+                write!(
+                    f,
+                    "Assertion failed: {} != {}",
+                    serialize_bitvec(value1, false),
+                    serialize_bitvec(value2, false)
+                )
             }
             AssertionError::DontCareAssertion { .. } => {
                 write!(

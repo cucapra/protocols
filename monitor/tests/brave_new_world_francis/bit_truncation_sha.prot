@@ -4,7 +4,7 @@ struct bit_truncation_sha {
     out left: u42,
 }
 
-fn bit_truncation_sha<dut: bit_truncation_sha>(in data_in: u64, out data_out: u42) {
+prot bit_truncation_sha<dut: bit_truncation_sha>(in data_in: u64, out data_out: u42) {
     dut.right := data_in;
     step();
     assert_eq(data_out, dut.left);

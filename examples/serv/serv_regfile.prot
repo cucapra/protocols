@@ -12,7 +12,7 @@ struct Regfile {
 }
 
 // source: https://github.com/ekiwi/transactional-verification-with-protocols/blob/039fb8d5beafb3c4a464e5dac3dc8a3e00b69f04/serv/check_regfile.py#L17
-fn read_write<R: Regfile>(
+prot read_write<R: Regfile>(
     in rs1_addr: u5,
     out rs1_data: u32,
     out rs2_data: u32,
@@ -268,7 +268,7 @@ fn read_write<R: Regfile>(
 // We mark this protocol as `idle` to avoid excessive `idle()` transcations 
 // showing up in the trace produced by the monitor
 #[idle]
-fn idle<R: Regfile>() {
+prot idle<R: Regfile>() {
   R.i_go := 1'b0;
   R.i_rd_en := 1'b0;
   assert_eq(R.o_ready, 1'b0);

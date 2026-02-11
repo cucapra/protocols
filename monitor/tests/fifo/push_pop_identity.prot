@@ -15,7 +15,7 @@ struct Fifo {
 }
 
 // The following functions are adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/paper/FifoPaperExampleSpec.scala#L72
-fn push<DUT: Fifo>(in input: u32) {
+prot push<DUT: Fifo>(in input: u32) {
     DUT.reset_i := 1'b0;
     DUT.enq_not_deq_i := 1'b1;
     DUT.v_i := 1'b1;
@@ -33,7 +33,7 @@ fn push<DUT: Fifo>(in input: u32) {
 
 // Note: the results of the `pop` are only visible after one cycle
 // because the memory read happens at the clock transition
-fn pop<DUT: Fifo>(out output: u32) {
+prot pop<DUT: Fifo>(out output: u32) {
     DUT.reset_i := 1'b0;
     DUT.enq_not_deq_i := 1'b0;
     DUT.v_i := 1'b1;
@@ -54,7 +54,7 @@ fn pop<DUT: Fifo>(out output: u32) {
     step();
 }
 
-fn idle<DUT: Fifo>() {
+prot idle<DUT: Fifo>() {
     DUT.v_i := 1'b0;
     DUT.reset_i := 1'b0;
     step();
@@ -66,7 +66,7 @@ fn idle<DUT: Fifo>() {
 }
 
 // Sets the `reset` bit to 1
-fn reset<DUT: Fifo>() {
+prot reset<DUT: Fifo>() {
     DUT.reset_i := 1'b1;
     step();
     DUT.reset_i := X;

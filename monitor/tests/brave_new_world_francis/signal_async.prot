@@ -6,7 +6,7 @@ struct SignalAsyncSpec {
     out final_resp_valid: u1,
 }
 
-fn signal_async<dut: SignalAsyncSpec>(in data_in: u32, out data_out: u32) {
+prot signal_async<dut: SignalAsyncSpec>(in data_in: u32, out data_out: u32) {
     dut.request := 1'b0;
     step(1);
     dut.request := 1'b1;

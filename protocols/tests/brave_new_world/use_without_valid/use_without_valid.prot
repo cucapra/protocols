@@ -7,7 +7,7 @@ struct UseWithoutValid {
     out sum: u32,
 }
 
-fn use_without_valid<dut: UseWithoutValid>(in data: u32, out data_out: u32) {
+prot use_without_valid<dut: UseWithoutValid>(in data: u32, out data_out: u32) {
     dut.data := data;
     dut.data_val := 1'b0;
     step(2);

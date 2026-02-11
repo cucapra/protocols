@@ -5,7 +5,7 @@ struct multi0keep {
     out out: u32,
 }
 
-fn multi<dut: multi0keep>(in data_in: u32, out data_out: u32) {
+prot multi<dut: multi0keep>(in data_in: u32, out data_out: u32) {
     dut.start := 1'b1;
     dut.inp := data_in;
     assert_eq(dut.done, 1'b0);

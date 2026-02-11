@@ -61,7 +61,9 @@ impl std::fmt::Display for BinOp {
 impl std::fmt::Display for ExprValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExprValue::Concrete(bit_vec_value) => write!(f, "{:?}", bit_vec_value),
+            ExprValue::Concrete(bit_vec_value) => {
+                write!(f, "{}", serialize_bitvec(bit_vec_value, false))
+            }
             ExprValue::DontCare => write!(f, "DontCare"),
         }
     }

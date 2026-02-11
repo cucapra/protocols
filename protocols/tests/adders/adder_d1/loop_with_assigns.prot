@@ -8,7 +8,7 @@ struct Adder {
 //   assign inputs -> step -> release inputs -> assert output
 // This tests that assignments, DontCare releases, and assertions
 // all work correctly inside a bounded loop body.
-fn loop_add<DUT: Adder>(in a: u32, in b: u32, in num_iters: u8, out s: u32) {
+prot loop_add<DUT: Adder>(in a: u32, in b: u32, in num_iters: u8, out s: u32) {
   repeat num_iters iterations {
     DUT.a := a;
     DUT.b := b;
