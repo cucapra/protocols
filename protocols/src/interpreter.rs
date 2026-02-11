@@ -88,21 +88,15 @@ pub struct Evaluator<'a> {
     /// Maps each `output |-> Vec<input>` (inputs that this output is dependent on)
     output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
 
-    // tracks forbidden ports due to combinational dependencies
+    /// Tracks inputs that are forbidden to assign to (after observing a dependent output)
     forbidden_inputs: Vec<SymbolId>,
 
-    /// The `forbidden_output_counts` map maintains a count for each output pin.
-    /// When a thread assigns an input from `Concrete` to `DontCare`, we increment
-    /// the count for all outputs combinationally dependent on that input.
-    /// When a thread assigns from `DontCare` to `Concrete`, we decrement those counts.
-    /// This reference counting is necessary because multiple input pins can
-    /// affect the same output pin combinationally;
-    /// after setting one input to `Concrete`, we cannot simply clear the
-    /// forbidden status of the output;
-    /// we must decrement its count by one. An output is forbidden to observe
-    /// if its count is greater than zero, meaning at least one input in its
-    /// combinational cone is currently assigned to DontCare.
-    forbidden_output_counts: FxHashMap<SymbolId, usize>,
+    /// The `forbidden_read_counts` map maintains a count for each input and output pin.
+    /// A port is forbidden to READ if its count is greater than zero.
+    /// For inputs: count is incremented when DontCare is assigned, decremented when Concrete is assigned.
+    /// For outputs: count is incremented when a dependent input is assigned DontCare, decremented when Concrete.
+    /// This reference counting handles the case where multiple inputs affect the same output.
+    forbidden_read_counts: FxHashMap<SymbolId, usize>,
 
     // Per-thread input values for each input pin: input_id -> (thread_id -> value)
     // This serves as both the current cycle's assignments AND the sticky inputs for implicit re-application
@@ -213,7 +207,7 @@ impl<'a> Evaluator<'a> {
         let mut output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
         let mut input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
 
-        // Initialize: keys are outputs -> output_dependencies, and inputs -> input_dependencies
+        // Initialize: keys are outputs -> inputs dependent on that ouput, and inputs -> all combinationally dependent outputs
         for symbol_id in output_mapping.keys() {
             output_dependencies.insert(*symbol_id, Vec::new());
         }
@@ -221,10 +215,14 @@ impl<'a> Evaluator<'a> {
             input_dependencies.insert(*symbol_id, Vec::new());
         }
 
-        // Initialize forbidden output counts to 0
-        let mut forbidden_output_counts = FxHashMap::default();
+        // Initialize forbidden input counts to 0
+        // Initialize forbidden read counts to 0 for all inputs and outputs
+        let mut forbidden_read_counts = FxHashMap::default();
+        for symbol_id in input_mapping.keys() {
+            forbidden_read_counts.insert(*symbol_id, 0);
+        }
         for symbol_id in output_mapping.keys() {
-            forbidden_output_counts.insert(*symbol_id, 0);
+            forbidden_read_counts.insert(*symbol_id, 0);
         }
 
         // For each output, find all inputs in its combinational cone of influence
@@ -263,7 +261,7 @@ impl<'a> Evaluator<'a> {
             input_dependencies,
             output_dependencies,
             forbidden_inputs: Vec::new(),
-            forbidden_output_counts,
+            forbidden_read_counts,
             per_thread_input_vals,
             current_todo_idx: 0,
             assertions_enabled: false,
@@ -298,18 +296,18 @@ impl<'a> Evaluator<'a> {
         self.current_todo_idx = todo_idx;
         self.bounded_loop_remaining_iters = todo.bounded_loop_remaining_iters;
 
-        // Clear forbidden ports when switching to a new thread context
+        // Clear forbidden inputs (combinational dependency tracking)
         self.forbidden_inputs.clear();
 
-        // Reset forbidden output counts to 0
-        for count in self.forbidden_output_counts.values_mut() {
+        // Reset forbidden read counts to 0
+        for count in self.forbidden_read_counts.values_mut() {
             *count = 0;
         }
     }
 
     /// Helper: applies an input value for a given thread.
     /// - Updates per_thread_input_vals
-    /// - Updates forbidden_output_counts
+    /// - Updates forbidden_read_counts (for both this input and dependent outputs)
     /// - Applies value to sim immediately
     /// - For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
     /// - Note: Conflict checking is deferred to `check_for_conflicts` at end of cycle.
@@ -331,21 +329,31 @@ impl<'a> Evaluator<'a> {
         let was_dontcare = matches!(old_val, Some(ThreadInputValue::DontCare));
         let is_dontcare = matches!(new_val, ThreadInputValue::DontCare);
 
-        // Update counts when transitioning to/from DontCare
+        // Update forbidden_read_counts when transitioning to/from DontCare
         if is_dontcare && !was_dontcare {
             // Transitioning TO DontCare (from None or Concrete): increment counts
+            // Increment this input's own forbidden count (can't read a DontCare input)
+            if let Some(count) = self.forbidden_read_counts.get_mut(symbol_id) {
+                *count += 1;
+            }
+            // Increment forbidden counts for all outputs dependent on this input
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
-                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                    if let Some(count) = self.forbidden_read_counts.get_mut(dep) {
                         *count += 1;
                     }
                 }
             }
         } else if !is_dontcare && was_dontcare {
             // Transitioning FROM DontCare (to Concrete): decrement counts
+            // Decrement this input's own forbidden count
+            if let Some(count) = self.forbidden_read_counts.get_mut(symbol_id) {
+                *count = count.saturating_sub(1);
+            }
+            // Decrement forbidden counts for all outputs dependent on this input
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
-                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                    if let Some(count) = self.forbidden_read_counts.get_mut(dep) {
                         *count = count.saturating_sub(1);
                     }
                 }
@@ -567,22 +575,24 @@ impl<'a> Evaluator<'a> {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
+
+                // Check if reading this port is forbidden (count > 0)
+                // For inputs: count > 0 when DontCare was assigned
+                // For outputs: count > 0 when a dependent input has DontCare
+                if let Some(&count) = self.forbidden_read_counts.get(sym_id) {
+                    if count > 0 {
+                        return Err(ExecutionError::forbidden_port_read(
+                            name.to_string(),
+                            *expr_id,
+                        ));
+                    }
+                }
+
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(
                         self.sim.get(*expr_ref).try_into().unwrap(),
                     ))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    // Check if observing this output port is forbidden (count > 0)
-                    // The count is > 0 when a DontCare value was assigned to a dependent input
-                    if let Some(&count) = self.forbidden_output_counts.get(sym_id) {
-                        if count > 0 {
-                            return Err(ExecutionError::forbidden_output_observation(
-                                name.to_string(),
-                                *expr_id,
-                            ));
-                        }
-                    }
-
                     // Observing an output port forbids assignments to its dependent inputs
                     if let Some(deps) = self.output_dependencies.get(sym_id) {
                         self.forbidden_inputs.extend(deps.iter().copied());
@@ -807,7 +817,7 @@ impl<'a> Evaluator<'a> {
         let expr_val = self.evaluate_expr(expr_id)?;
         let todo_idx = self.current_todo_idx;
 
-        // Check if assigning to this input port is forbidden (after evaluating RHS)
+        // Check if assigning to this input port is forbidden (after observing a dependent output)
         if self.forbidden_inputs.contains(symbol_id) {
             let name = self.st[symbol_id].name();
             return Err(ExecutionError::forbidden_input_assignment(

@@ -32,7 +32,7 @@ LHS, RHS ::= arg_expr
    | arg_expr[i:j]          (bit-slice)
    | arg_expr ++ arg_expr   (where `++` is concatenation)
 
-arg_expr ::= DUT output port | output parameter of a function | constant
+arg_expr ::= DUT output port | DUT input port | output parameter of a function | constant
 ```
 - This grammar is slightly different from the grammar for assignments: assertions refer to *output* parameters / DUT ports,
 whereas assignments refer to *input* parameters / DUT ports 
@@ -48,6 +48,7 @@ cond ::=
 
 cond_expr ::= 
   | DUT output port 
+  | DUT input port
   | constant 
   | cond_expr[i:j]              (bit-slice)
   | cond_expr ++ cond_expr      (concatenation)

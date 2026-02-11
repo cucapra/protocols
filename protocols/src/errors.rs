@@ -48,11 +48,8 @@ pub enum EvaluationError {
     },
     /// Attempted to assign to an input port after observing a dependent output
     ForbiddenInputAssignment { input_name: String, expr_id: ExprId },
-    /// Attempted to observe an output port after assigning DontCare to a dependent input
-    ForbiddenOutputObservation {
-        output_name: String,
-        expr_id: ExprId,
-    },
+    /// Attempted to read a port that is forbidden (input with DontCare, or output with dependent DontCare input)
+    ForbiddenPortRead { port_name: String, expr_id: ExprId },
     /// Invalid slice operation.
     /// self.width() >= msb >= lsb >= 0
     InvalidSlice {
@@ -234,11 +231,11 @@ impl fmt::Display for EvaluationError {
                     input_name
                 )
             }
-            EvaluationError::ForbiddenOutputObservation { output_name, .. } => {
+            EvaluationError::ForbiddenPortRead { port_name, .. } => {
                 write!(
                     f,
-                    "Cannot observe output '{}' after assigning DontCare to a dependent input",
-                    output_name
+                    "Cannot observe forbidden port '{}' after assigning DontCare to a combinationally dependent input",
+                    port_name
                 )
             }
             EvaluationError::InvalidSlice {
@@ -528,11 +525,8 @@ impl ExecutionError {
         })
     }
 
-    pub fn forbidden_output_observation(output_name: String, expr_id: ExprId) -> Self {
-        ExecutionError::Evaluation(EvaluationError::ForbiddenOutputObservation {
-            output_name,
-            expr_id,
-        })
+    pub fn forbidden_port_read(port_name: String, expr_id: ExprId) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ForbiddenPortRead { port_name, expr_id })
     }
 
     pub fn arithmetic_error(operation: String, details: String, expr_id: ExprId) -> Self {
@@ -689,16 +683,13 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
-            EvaluationError::ForbiddenOutputObservation {
-                output_name,
-                expr_id,
-            } => {
+            EvaluationError::ForbiddenPortRead { port_name, expr_id } => {
                 handler.emit_diagnostic_expr(
                     transaction,
                     expr_id,
                     &format!(
-                        "Cannot observe forbidden output '{}' after assigning DontCare to a combinationally dependent input",
-                        output_name
+                         "Cannot observe forbidden port '{}' after assigning DontCare to a combinationally dependent input",
+                        port_name
                     ),
                     Level::Error,
                 );

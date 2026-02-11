@@ -1,6 +1,1 @@
-error: `dut.a` is a input field of the struct `dut`, but only output fields are allowed to appear in conditions in if-statements / while-loops)
-   ┌─ counters/counter.prot:16:22
-   │
-16 │     while !(dut.s == dut.a) {
-   │                      ^^^^^ `dut.a` is a input field of the struct `dut`, but only output fields are allowed to appear in conditions in if-statements / while-loops)
-
+Protocol executed successfully!
