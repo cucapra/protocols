@@ -11,7 +11,7 @@ struct Fifo {
 }
 
 // Push the same value `num_iters` times
-fn push_n_times<DUT: Fifo>(in input: u32, in num_iters: u8) {
+prot push_n_times<DUT: Fifo>(in input: u32, in num_iters: u8) {
     repeat num_iters iterations {
         // We just inlined the `push` protocol in `fifo.prot` here
         DUT.reset_i := 1'b0;
@@ -29,7 +29,7 @@ fn push_n_times<DUT: Fifo>(in input: u32, in num_iters: u8) {
 }
 
 // Pop `num_iters` times, each time asserting that the popped value matches `expected`
-fn pop_n_times<DUT: Fifo>(out expected: u32, in num_iters: u8) {
+prot pop_n_times<DUT: Fifo>(out expected: u32, in num_iters: u8) {
     repeat num_iters iterations {
         // We just inlined the `pop` protocol in `fifo.prot` here
         DUT.reset_i := 1'b0;
@@ -47,7 +47,7 @@ fn pop_n_times<DUT: Fifo>(out expected: u32, in num_iters: u8) {
 }
 
 // Assert that the FIFO is empty
-fn check_empty<DUT: Fifo>() {
+prot check_empty<DUT: Fifo>() {
     DUT.v_i := 1'b0;
     DUT.reset_i := 1'b0;
     assert_eq(DUT.empty_o, 1'b1);
@@ -55,14 +55,14 @@ fn check_empty<DUT: Fifo>() {
 }
 
 // Assert that the FIFO is not empty
-fn check_not_empty<DUT: Fifo>() {
+prot check_not_empty<DUT: Fifo>() {
     DUT.v_i := 1'b0;
     DUT.reset_i := 1'b0;
     assert_eq(DUT.empty_o, 1'b0);
     step();
 }
 
-fn reset<DUT: Fifo>() {
+prot reset<DUT: Fifo>() {
     DUT.reset_i := 1'b1;
     DUT.v_i := 1'b0;
     step();
