@@ -117,6 +117,9 @@ pub struct Evaluator<'a> {
 
     /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
+
+    // Maps a `StmtId` pair to the no. of iterations remaining for that particular loop.
+    bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -264,6 +267,7 @@ impl<'a> Evaluator<'a> {
             per_thread_input_vals,
             current_todo_idx: 0,
             assertions_enabled: false,
+            bounded_loop_remaining_iters: FxHashMap::default(),
             rng,
         }
     }
@@ -292,6 +296,7 @@ impl<'a> Evaluator<'a> {
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
         self.next_stmt_map = todo.next_stmt_map;
         self.current_todo_idx = todo_idx;
+        self.bounded_loop_remaining_iters = todo.bounded_loop_remaining_iters;
 
         // Clear forbidden ports when switching to a new thread context
         self.forbidden_inputs.clear();
@@ -484,6 +489,11 @@ impl<'a> Evaluator<'a> {
     /// Used by the scheduler to check for conflicting assignments across threads.
     pub fn per_thread_input_vals(&self) -> &FxHashMap<SymbolId, PerThreadValues> {
         &self.per_thread_input_vals
+    }
+
+    /// Returns a clone of the bounded loop remaining iterations map.
+    pub fn bounded_loop_remaining_iters(&self) -> FxHashMap<StmtId, u128> {
+        self.bounded_loop_remaining_iters.clone()
     }
 
     /// Get the next statement after the given statement
@@ -687,11 +697,7 @@ impl<'a> Evaluator<'a> {
     /// an argument to this function. This design allows us to keep this field
     /// only within the `Thread` struct and avoid duplicating it in the
     /// `Evaluator` struct.
-    pub fn evaluate_stmt(
-        &mut self,
-        stmt_id: &StmtId,
-        bounded_loop_remaining_iters: &mut FxHashMap<(TodoIdx, StmtId), u128>,
-    ) -> ExecutionResult<Option<StmtId>> {
+    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
                 self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
@@ -703,12 +709,9 @@ impl<'a> Evaluator<'a> {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
-            Stmt::BoundedLoop(num_iters_id, loop_body_id) => self.evaluate_bounded_loop(
-                num_iters_id,
-                stmt_id,
-                loop_body_id,
-                bounded_loop_remaining_iters,
-            ),
+            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
+                self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
+            }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
@@ -853,16 +856,14 @@ impl<'a> Evaluator<'a> {
         num_iters_id: &ExprId,
         bounded_loop_id: &StmtId,
         loop_body_id: &StmtId,
-        bounded_loop_remaining_iters: &mut FxHashMap<(TodoIdx, StmtId), u128>,
     ) -> ExecutionResult<Option<StmtId>> {
         // Key for the `bounded_loop_remaining_iters` map, which tracks
         // the no. of iterations remaining for each bounded loop
-        let key = (self.current_todo_idx, *bounded_loop_id);
-        if let Some(num_iterations) = bounded_loop_remaining_iters.get_mut(&key) {
+        if let Some(num_iterations) = self.bounded_loop_remaining_iters.get_mut(bounded_loop_id) {
             *num_iterations -= 1;
             if *num_iterations == 0 {
                 // Exit the loop
-                bounded_loop_remaining_iters.remove(&key);
+                self.bounded_loop_remaining_iters.remove(bounded_loop_id);
                 Ok(self.next_stmt_map[bounded_loop_id])
             } else {
                 // There are still non-zero iterations remaining,
@@ -896,7 +897,8 @@ impl<'a> Evaluator<'a> {
                     } else {
                         // Keep track of the no. of loop iterations,
                         // and execute the loop body
-                        bounded_loop_remaining_iters.insert(key, num_iterations);
+                        self.bounded_loop_remaining_iters
+                            .insert(*bounded_loop_id, num_iterations);
                         Ok(Some(*loop_body_id))
                     }
                 }
