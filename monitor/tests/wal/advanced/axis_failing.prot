@@ -11,7 +11,7 @@ struct AXIS {
 }
 
 #[idle]
-fn idle<D: AXIS>() {
+prot idle<D: AXIS>() {
     D.m_axis_tvalid := 1'b0;
     // D.data is implicitly X
     step();

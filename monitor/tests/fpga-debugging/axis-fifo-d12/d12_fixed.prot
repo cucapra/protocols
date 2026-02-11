@@ -32,7 +32,7 @@ struct AxisFifo {
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
 // - `push_data` is the value being pushed,
 // - `pop_data` is the value being popped
-fn push_and_pop<DUT: AxisFifo>(
+prot push_and_pop<DUT: AxisFifo>(
     in push_data: u8,
     out pop_data: u8,
 ) {
@@ -81,7 +81,7 @@ fn push_and_pop<DUT: AxisFifo>(
 // Arguments:
 //   data - Payload byte to write to FIFO
 
-fn push<DUT: AxisFifo>(
+prot push<DUT: AxisFifo>(
     in data: u8,
 ) {
     DUT.rst := 1'b0;
@@ -109,7 +109,7 @@ fn push<DUT: AxisFifo>(
 //
 // Output Arguments:
 //   data - Expected payload byte from FIFO
-fn pop<DUT: AxisFifo>(
+prot pop<DUT: AxisFifo>(
     out data: u8,
 ) {
     DUT.rst := 1'b0;
@@ -141,7 +141,7 @@ fn pop<DUT: AxisFifo>(
 
 // IDLE: No transaction occurs
 // Both valid signals are deasserted
-fn idle<DUT: AxisFifo>() {
+prot idle<DUT: AxisFifo>() {
     DUT.rst := 1'b0;
     DUT.s_axis_tvalid := 1'b0;
     DUT.m_axis_tready := 1'b0;
@@ -149,7 +149,7 @@ fn idle<DUT: AxisFifo>() {
 }
 
 // RESET: Assert reset signal to initialize FIFO
-fn reset<DUT: AxisFifo>() {
+prot reset<DUT: AxisFifo>() {
     DUT.rst := 1'b1;
     step();
 }

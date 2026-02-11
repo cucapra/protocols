@@ -6,7 +6,7 @@ struct Multiplier {
 }
 
 // A multiplier with a 2-cycle delay
-fn mul<DUT: Multiplier>(in a: u32, in b: u32, out s: u32) {
+prot mul<DUT: Multiplier>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
 

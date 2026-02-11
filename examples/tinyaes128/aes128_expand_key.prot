@@ -6,7 +6,7 @@ struct ExpandKey128 {
   out output_delayed: u128,
 }
 
-fn aes128<dut : ExpandKey128>(in input: u128, out output: u128) {
+prot aes128<dut : ExpandKey128>(in input: u128, out output: u128) {
   dut.input := input;
   step();
   fork();

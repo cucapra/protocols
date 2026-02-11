@@ -7,7 +7,7 @@ struct Multiplier {
   out s: u32
 }
 
-fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
+prot mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   dut.a := a;
   dut.b := b;
   // hold a and b stable for two cycles
@@ -22,7 +22,7 @@ fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   s := dut.s;
 }
 
-fn ignore<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
+prot ignore<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   dut.a := a;
   dut.b := b;
   // hold a and b stable for two cycles

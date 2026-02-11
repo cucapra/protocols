@@ -9,7 +9,7 @@ struct FailureToUpdateSHA {
     out data: u32,
 }
 
-fn failure_to_update_sha<dut: FailureToUpdateSHA>() {
+prot failure_to_update_sha<dut: FailureToUpdateSHA>() {
     dut.reset := 1'b1;
     step(1);
 

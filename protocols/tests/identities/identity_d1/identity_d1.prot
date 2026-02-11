@@ -3,7 +3,7 @@ struct Identity {
   out s: u32,
 }
 
-fn explicit_fork<DUT: Identity>(in a: u32, out s: u32) {
+prot explicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
   step();
 
@@ -16,7 +16,7 @@ fn explicit_fork<DUT: Identity>(in a: u32, out s: u32) {
   step();
 }
 
-fn slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
+prot slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
 
   step();
