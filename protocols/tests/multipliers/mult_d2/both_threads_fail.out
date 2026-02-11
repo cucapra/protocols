@@ -2,11 +2,11 @@ error: The two expressions did not evaluate to the same value
    ┌─ multipliers/mult_d2/mult_d2.prot:22:13
    │
 22 │   assert_eq(s, DUT.s);
-   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000000011), RHS Value: ValueOwned(00000000000000000000000000000010)
+   │             ^^^^^^^^ LHS Value: 3, RHS Value: 2
 
 error: The two expressions did not evaluate to the same value
    ┌─ multipliers/mult_d2/mult_d2.prot:22:13
    │
 22 │   assert_eq(s, DUT.s);
-   │             ^^^^^^^^ LHS Value: ValueOwned(00000000000000000000000000101111), RHS Value: ValueOwned(00000000000000000000000000110000)
+   │             ^^^^^^^^ LHS Value: 47, RHS Value: 48
 

@@ -400,7 +400,11 @@ impl<'a> Evaluator<'a> {
                             _ => panic!("Expected BitVec type for input"),
                         };
                         let random_val = BitVecValue::random(&mut self.rng, width);
-                        log::info!("  Randomizing {} to {:?}", symbol_name, random_val);
+                        log::info!(
+                            "  Randomizing {} to {}",
+                            symbol_name,
+                            serialize_bitvec(&random_val, false)
+                        );
                         self.sim.set(*expr_ref, &random_val);
                     } else {
                         log::info!(
