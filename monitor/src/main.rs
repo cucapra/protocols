@@ -8,9 +8,11 @@ mod designs;
 mod global_context;
 mod global_scheduler;
 mod interpreter;
+mod queue;
 mod scheduler;
 mod signal_trace;
 mod thread;
+mod types;
 
 use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};

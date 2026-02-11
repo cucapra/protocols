@@ -6,9 +6,10 @@ use std::collections::VecDeque;
 
 use crate::{
     global_context::GlobalContext,
-    scheduler::{CycleResult, Scheduler, SchedulerError},
+    scheduler::Scheduler,
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
+    types::{CycleResult, SchedulerError},
 };
 use log::info;
 use rustc_hash::FxHashSet;

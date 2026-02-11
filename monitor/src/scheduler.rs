@@ -1,181 +1,21 @@
-// Copyright 2025 Cornell University
-// released under MIT License
-// author: Ernest Ng <eyn5@cornell.edu>
-
-use std::collections::VecDeque;
-
 use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Stmt, SymbolId, SymbolTable, Transaction},
-    serialize::{serialize_bitvec, serialize_stmt},
+    serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
 
 use crate::{
     global_context::GlobalContext,
     interpreter::Interpreter,
+    queue::*,
     signal_trace::{SignalTrace, WaveSignalTrace},
     thread::Thread,
+    types::*,
 };
-
-/// Error types that can occur during scheduler execution
-#[derive(Debug)]
-pub enum SchedulerError {
-    NoTransactionsMatch {
-        struct_name: String,
-        error_context: anyhow::Error,
-    },
-    /// Other errors (e.g., internal errors, validation failures)
-    Other(anyhow::Error),
-}
-
-impl From<anyhow::Error> for SchedulerError {
-    fn from(err: anyhow::Error) -> Self {
-        SchedulerError::Other(err)
-    }
-}
-
-/// The result of an individual `Thread`: either it `Completed`,
-/// forked explcitly or forked implicitly.
-#[derive(Debug)]
-#[allow(dead_code)]
-pub enum ThreadResult {
-    /// Thread completed (moved to next/finished/failed queue)
-    Completed,
-
-    /// Thread encountered `fork`. The parent `Thread` is stored as an argument
-    /// to this constructor, with the `parent` `Thread`'s state updated to
-    /// it's post-`fork` state.
-    /// Note: We have to wrap the `Thread` in `Box`, otherwise
-    /// Clippy complains that there is a large size difference between different
-    /// constructors of this enum.
-    ExplicitFork { parent: Box<Thread> },
-
-    /// Thread is laready in the `finished queue and forked implicitly
-    /// (e.g. this thread is a protocol which ends with `step` without
-    /// ever calling `fork`). The caller of a function which returns
-    /// this constructor is responsible for spawning new protocol
-    ImplicitFork,
-}
-
-/// The result of the *Scheduler* at the end of a cycle
-#[derive(Debug)]
-pub enum CycleResult {
-    Done,
-    Fork {
-        /// The thread that called fork
-        /// (Some for an explicit fork, None for implicit).
-        /// Note: We have to wrap the `Thread` in `Box`, otherwise
-        /// Clippy complains that there is a large size difference between different
-        /// constructors of this enum.
-        parent: Box<Option<Thread>>,
-    },
-}
-
-/// `Queue` is just a type alias for `VecDeque<Thread>`.
-/// We use a `VecDeque` instead of `Vec`, since `VecDeque::pop_back` produces
-/// elements in a FIFO order (which is what we want),
-/// whereas `Vec::pop` returns elements in LIFO order
-type Queue = VecDeque<Thread>;
-
-/// Formats a queue's contents into a pretty-printed string
-/// Note: we can't implement the `Display` trait for `Queue` since
-/// `Queue` is just a type alias
-fn format_queue(
-    queue: &Queue,
-    ctx: &GlobalContext,
-    trace: &WaveSignalTrace,
-    struct_name: &str,
-) -> String {
-    if !queue.is_empty() {
-        let formatted_queue = queue
-            .iter()
-            .map(|thread| format_thread(thread, ctx, trace, struct_name))
-            .collect::<Vec<String>>()
-            .join("\n\t");
-        format!("\n\t{}", formatted_queue)
-    } else {
-        "<EMPTY>".to_string()
-    }
-}
-
-/// Formats a single thread with context-aware timing information
-fn format_thread(
-    thread: &Thread,
-    ctx: &GlobalContext,
-    trace: &WaveSignalTrace,
-    struct_name: &str,
-) -> String {
-    let start_info = if ctx.show_waveform_time {
-        format!(
-            "Start time: {}",
-            trace.format_time(thread.start_time_step, ctx.time_unit)
-        )
-    } else {
-        format!("Start cycle: {}", thread.start_cycle)
-    };
-
-    let transaction_name = if ctx.multiple_structs {
-        format!("{}::{}", struct_name, thread.transaction.name)
-    } else {
-        thread.transaction.name.clone()
-    };
-
-    format!(
-        "THREAD {}: {{ {}, Transaction: `{}`, Current stmt: `{}` ({}) }}",
-        thread.global_thread_id(ctx),
-        start_info,
-        transaction_name,
-        serialize_stmt(
-            &thread.transaction,
-            &thread.symbol_table,
-            &thread.current_stmt_id
-        ),
-        thread.current_stmt_id
-    )
-}
-
-/// Formats a queue's contents into a *compact* pretty-printed string
-/// (i.e. no new-lines, only displays the thread_id and transaction name
-/// for each thread)
-fn format_queue_compact(queue: &Queue, ctx: &GlobalContext) -> String {
-    if !queue.is_empty() {
-        queue
-            .iter()
-            .map(|thread| {
-                format!(
-                    "Thread {} (`{}`)",
-                    thread.global_thread_id(ctx),
-                    thread.transaction.name
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    } else {
-        "<EMPTY>".to_string()
-    }
-}
-
-/// Extracts all elements in the `Queue` where all the threads have the
-/// same `start_cycle`, preserving their order
-pub fn threads_with_start_time(queue: &Queue, start_cycle: u32) -> Queue {
-    queue
-        .clone()
-        .into_iter()
-        .filter(|thread| thread.start_cycle == start_cycle)
-        .collect()
-}
-
-/// Finds all the unique start cycles of all the threads in the same queue
-pub fn unique_start_cycles(queue: &Queue) -> Vec<u32> {
-    let mut start_cycles: Vec<u32> = queue.iter().map(|thread| thread.start_cycle).collect();
-    start_cycles.sort();
-    start_cycles.dedup();
-    start_cycles
-}
 
 /// Scheduler for handling the multiple threads in the monitor
 #[derive(Clone)]
