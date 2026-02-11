@@ -1,4 +1,50 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Ernest Ng <eyn5@cornell.edu>
+
+/*! Miscellaneous type definitions for the monitor live in this file
+ */
+
+use std::fmt;
+
 use crate::thread::Thread;
+
+/// Represents a protocol application like `add(1, 2, 3)` which appears
+/// in the protocol trace produced by the monitor.
+/// (We can't use the name `Transaction` for this type as it is already
+/// used elsewhere in the codebase.)
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ProtocolApplication {
+    pub struct_name: Option<String>,
+    pub protocol_name: String,
+    pub serialized_args: Vec<String>, // already serialized
+}
+
+impl fmt::Display for ProtocolApplication {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(ref s) = self.struct_name {
+            write!(f, "{}::", s)?;
+        }
+        write!(
+            f,
+            "{}({})",
+            self.protocol_name,
+            self.serialized_args.join(", ")
+        )
+    }
+}
+
+/// An entry (protocol application) in the transaction trace
+/// that is produced by the monitor,
+/// along with relevant metadata (cycle count, start/end time, thread ID)
+#[derive(Clone, Debug)]
+pub struct OutputEntry {
+    pub cycle_count: u32,
+    pub protocol_application: ProtocolApplication,
+    pub start_time_step: u32,
+    pub end_time_step: u32,
+    pub thread_id: String,
+}
 
 /// Error types that can occur during scheduler execution
 #[derive(Debug)]

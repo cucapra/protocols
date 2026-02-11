@@ -2,6 +2,10 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+/*! This file defines a `Queue` data structure, representing a ready
+ *  queue of threads. This type is used in the monitor scheduler.
+ */
+
 use std::collections::VecDeque;
 
 use protocols::serialize::serialize_stmt;

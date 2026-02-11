@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -63,10 +63,9 @@ pub struct Scheduler {
     /// Note: if there is just one single struct, this string is empty
     pub struct_name: String,
 
-    /// Output buffer, where each element is a pair consisting of the cycle
-    /// number and a log string (this is needed because of how
-    /// executions for different schedulers are interleaved)
-    pub output_buffer: Vec<(u32, String)>,
+    /// Output buffer, where each element is an `OutputEntry`
+    /// (defined in `types.rs`).
+    pub output_buffer: Vec<OutputEntry>,
 }
 
 impl Scheduler {
@@ -791,31 +790,27 @@ impl Scheduler {
                             self.interpreter.transaction.name
                         );
                     } else {
-                        let transaction_str = self
-                            .interpreter
-                            .serialize_reconstructed_transaction(ctx, trace);
-
-                        // Add struct name prefix for multi-struct scenarios
-                        let transaction_name = self.format_transaction_name(ctx, transaction_str);
-
-                        if ctx.show_waveform_time {
-                            let start_time =
-                                trace.format_time(thread.start_time_step, ctx.time_unit);
-                            let end_time = trace.format_time(end_time_step, ctx.time_unit);
-                            self.output_buffer.push((
-                                self.cycle_count,
-                                format!(
-                                    "{}  // [time: {} -> {}] (thread {})",
-                                    transaction_name,
-                                    start_time,
-                                    end_time,
-                                    thread.global_thread_id(ctx)
-                                ),
-                            ));
+                        // Construct a `ProtocolApplication` object
+                        // from the current interpreter state
+                        // (i.e. an entry in the monitor's output trace)
+                        let struct_name = if ctx.multiple_structs {
+                            Some(self.struct_name.clone())
                         } else {
-                            self.output_buffer
-                                .push((self.cycle_count, transaction_name));
-                        }
+                            None
+                        };
+                        let protocol_application =
+                            self.interpreter
+                                .to_protocol_application(struct_name, ctx, trace);
+
+                        // Add the output entry + metadata to the scheduler's
+                        // output buffer
+                        self.output_buffer.push(OutputEntry {
+                            cycle_count: self.cycle_count,
+                            protocol_application,
+                            start_time_step: thread.start_time_step,
+                            end_time_step,
+                            thread_id: thread.global_thread_id(ctx),
+                        });
                     }
                     self.finished.push_back(thread.clone());
 
