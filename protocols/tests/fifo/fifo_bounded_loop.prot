@@ -1,0 +1,69 @@
+// FIFO protocols using bounded loops to push/pop multiple elements
+
+struct Fifo {
+    in data_i: u32,
+    in v_i: u1,
+    in enq_not_deq_i: u1,
+    in reset_i: u1, // Active-high (i.e. reset = 1 means we actually reset)
+    out full_o: u1,
+    out empty_o: u1,
+    out data_o: u32
+}
+
+// Push the same value `num_iters` times
+fn push_n_times<DUT: Fifo>(in input: u32, in num_iters: u8) {
+    repeat num_iters iterations {
+        // We just inlined the `push` protocol in `fifo.prot` here
+        DUT.reset_i := 1'b0;
+        DUT.enq_not_deq_i := 1'b1;
+        DUT.v_i := 1'b1;
+        DUT.data_i := input;
+        step();
+    }
+    DUT.enq_not_deq_i := X;
+    DUT.v_i := X;
+    DUT.data_i := X;
+    DUT.reset_i := X;
+    fork();
+    step();
+}
+
+// Pop `num_iters` times, each time asserting that the popped value matches `expected`
+fn pop_n_times<DUT: Fifo>(out expected: u32, in num_iters: u8) {
+    repeat num_iters iterations {
+        // We just inlined the `pop` protocol in `fifo.prot` here
+        DUT.reset_i := 1'b0;
+        DUT.enq_not_deq_i := 1'b0;
+        DUT.v_i := 1'b1;
+        step();
+        DUT.enq_not_deq_i := X;
+        DUT.v_i := X;
+        DUT.reset_i := X;
+        DUT.data_i := X;
+        assert_eq(DUT.data_o, expected);
+    }
+    fork();
+    step();
+}
+
+// Assert that the FIFO is empty
+fn check_empty<DUT: Fifo>() {
+    DUT.v_i := 1'b0;
+    DUT.reset_i := 1'b0;
+    assert_eq(DUT.empty_o, 1'b1);
+    step();
+}
+
+// Assert that the FIFO is not empty
+fn check_not_empty<DUT: Fifo>() {
+    DUT.v_i := 1'b0;
+    DUT.reset_i := 1'b0;
+    assert_eq(DUT.empty_o, 1'b0);
+    step();
+}
+
+fn reset<DUT: Fifo>() {
+    DUT.reset_i := 1'b1;
+    DUT.v_i := 1'b0;
+    step();
+}

@@ -63,7 +63,14 @@ pub enum ExprValue {
     DontCare,
 }
 
-/// An `Evaluator` evaluates ("interprets") a Protocols program
+/// Type aliases for `Todo` indices (where a `Todo` is a protocol with
+/// concrete argument values, e.g. `add(1, 2, 3)`)
+pub type TodoIdx = usize;
+
+/// An `Evaluator` evaluates ("interprets") a Protocols program.        
+/// **Note**: The scope of the `Evaluator` is limited to executing a single
+/// thread, with the `Scheduler` struct responsible for keeping track of
+/// different threads.
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
@@ -103,12 +110,16 @@ pub struct Evaluator<'a> {
 
     /// The current todo_idx being executed
     /// (where a `todo` is a transaction with concrete argument values)
-    current_todo_idx: usize,
+    current_todo_idx: TodoIdx,
 
+    /// Whether `assert_eq` statements should be evaluated
     assertions_enabled: bool,
 
     /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
+
+    // Maps a `StmtId` pair to the no. of iterations remaining for that particular loop.
+    bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -256,6 +267,7 @@ impl<'a> Evaluator<'a> {
             per_thread_input_vals,
             current_todo_idx: 0,
             assertions_enabled: false,
+            bounded_loop_remaining_iters: FxHashMap::default(),
             rng,
         }
     }
@@ -278,13 +290,13 @@ impl<'a> Evaluator<'a> {
 
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
-    /// Performs a context switch to execute a different thread
     pub fn context_switch(&mut self, todo: Todo<'a>, todo_idx: usize) {
         self.tr = todo.tr;
         self.st = todo.st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
         self.next_stmt_map = todo.next_stmt_map;
         self.current_todo_idx = todo_idx;
+        self.bounded_loop_remaining_iters = todo.bounded_loop_remaining_iters;
 
         // Clear forbidden ports when switching to a new thread context
         self.forbidden_inputs.clear();
@@ -477,6 +489,11 @@ impl<'a> Evaluator<'a> {
     /// Used by the scheduler to check for conflicting assignments across threads.
     pub fn per_thread_input_vals(&self) -> &FxHashMap<SymbolId, PerThreadValues> {
         &self.per_thread_input_vals
+    }
+
+    /// Returns a clone of the bounded loop remaining iterations map.
+    pub fn bounded_loop_remaining_iters(&self) -> FxHashMap<StmtId, u128> {
+        self.bounded_loop_remaining_iters.clone()
     }
 
     /// Get the next statement after the given statement
@@ -672,6 +689,14 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    /// Evaluates the statement at the given `StmtId`. The additional argument
+    /// `bounded_loop_remaining_iters` tracks the no. of loop iterations
+    /// remaining for `repeat ...` loops. Callers of this function,
+    /// e.g. in `scheduler.rs`, are meant to mutably borrow the
+    /// `Thread.bounded_loop_remaining_iters` field and supply it as
+    /// an argument to this function. This design allows us to keep this field
+    /// only within the `Thread` struct and avoid duplicating it in the
+    /// `Evaluator` struct.
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
@@ -683,6 +708,9 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
+            }
+            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
+                self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
@@ -811,6 +839,68 @@ impl<'a> Evaluator<'a> {
                     Ok(Some(*do_block_id))
                 } else {
                     Ok(self.next_stmt_map[while_id])
+                }
+            }
+        }
+    }
+
+    /// Evaluates a bounded loop (loop with a fixed no. of iterations).
+    /// Arguments are the `ExprId`s/`StmtId`s for the no. of iterations,
+    /// the entire loop statement and the loop body itself. The final arguemnt
+    /// `bounded_loop_remaining_iters` tracks the no. of iterations remaining
+    /// for `repeat ...` loops (it is meant to be used as a mutable borrow
+    /// of the field `Thread.bounded_loops_remaining_iters` from the appropriate
+    /// thread).
+    fn evaluate_bounded_loop(
+        &mut self,
+        num_iters_id: &ExprId,
+        bounded_loop_id: &StmtId,
+        loop_body_id: &StmtId,
+    ) -> ExecutionResult<Option<StmtId>> {
+        // Key for the `bounded_loop_remaining_iters` map, which tracks
+        // the no. of iterations remaining for each bounded loop
+        if let Some(num_iterations) = self.bounded_loop_remaining_iters.get_mut(bounded_loop_id) {
+            *num_iterations -= 1;
+            if *num_iterations == 0 {
+                // Exit the loop
+                self.bounded_loop_remaining_iters.remove(bounded_loop_id);
+                Ok(self.next_stmt_map[bounded_loop_id])
+            } else {
+                // There are still non-zero iterations remaining,
+                // so execute the loop body again
+                Ok(Some(*loop_body_id))
+            }
+        } else {
+            // We've not encountered this bounded loop before,
+            // so we have to evaluate the no. of iters that the user specified
+            let num_iters_result = self.evaluate_expr(num_iters_id)?;
+            match num_iters_result {
+                ExprValue::DontCare => {
+                    // No. of loop iterations can't be `DontCare`
+                    Err(ExecutionError::invalid_condition(
+                        "bounded_loop".to_string(),
+                        *num_iters_id,
+                    ))
+                }
+                ExprValue::Concrete(bvv) => {
+                    // Note: `BitVecValue` doesn't have a `to_u128` method,
+                    // so we have to use `to_u64` and then cast to `u128`
+                    let num_iterations = bvv
+                        .to_u64()
+                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer")
+                        as u128;
+
+                    // If the user wrote `repeat 0 iterations { ... }`,
+                    // skip the loop and proceed to the next stmt
+                    if num_iterations == 0 {
+                        Ok(self.next_stmt_map[bounded_loop_id])
+                    } else {
+                        // Keep track of the no. of loop iterations,
+                        // and execute the loop body
+                        self.bounded_loop_remaining_iters
+                            .insert(*bounded_loop_id, num_iterations);
+                        Ok(Some(*loop_body_id))
+                    }
                 }
             }
         }
