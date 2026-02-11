@@ -44,14 +44,18 @@ assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
 step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}
 fork = { "fork" ~ "()" ~ ";"}
-stmt = _{ (assign | step | fork | while_loop | cond | assert_eq ) }
+stmt = _{ (assign | step | fork | while_loop | bounded_loop | cond | assert_eq ) }
 dir = { "in" | "out" }
 arg = { dir ~ path_id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
 type_param = { "<" ~ path_id ~ ":" ~ path_id ~ ">" }
 
-// Loops
+// While loop
 while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
+
+// Bounded loop (fixed no. of iterations)
+// Concrete syntax is `repeat num_iterations iterations { ... }`
+bounded_loop = { "repeat" ~ expr ~ "iterations" ~ "{" ~ stmt* ~ "}" }
 
 // Assertions
 assert_eq = { "assert_eq" ~ "(" ~ expr ~ "," ~ expr ~ ")" ~ ";" }
@@ -68,5 +72,5 @@ annotation_name = { "idle" }
 // Structs
 struct_def = { "struct" ~ path_id ~ "{" ~ arglist? ~ "}" }
 
-fun = { annotation? ~ "fn" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
+fun = { annotation? ~ "prot" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
 file = { SOI ~ (fun | struct_def)* ~ EOI }

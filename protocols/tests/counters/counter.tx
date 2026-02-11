@@ -1,3 +1,2 @@
 // ARGS: --verilog counters/counter.v --protocol counters/counter.prot
-// RETURN: 1
 count_up(10);

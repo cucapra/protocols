@@ -46,7 +46,7 @@
       "patterns": [
         {
           "name": "keyword.control.protocols",
-          "match": "\\b(if|else|while)\\b"
+          "match": "\\b(if|else|while|repeat|iterations)\\b"
         },
         {
           "name": "keyword.other.protocols",
@@ -54,7 +54,7 @@
         },
         {
           "name": "storage.type.protocols",
-          "match": "\\b(struct|fn|in|out)\\b"
+          "match": "\\b(struct|fn|prot|in|out)\\b"
         },
         {
           "name": "constant.language.protocols",
@@ -107,7 +107,7 @@
     "function-definition": {
       "patterns": [
         {
-          "begin": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(<\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*>)?\\s*\\(",
+          "begin": "\\b(prot)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(<\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*>)?\\s*\\(",
           "beginCaptures": {
             "1": {
               "name": "storage.type.function.protocols"

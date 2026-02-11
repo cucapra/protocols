@@ -5,7 +5,7 @@ struct Adder {
 }
 
 // This should fail since there are two forks
-fn add_double_fork<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_double_fork<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();

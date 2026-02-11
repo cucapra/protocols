@@ -7,7 +7,7 @@ struct Multiplier {
 }
 
 // This protocol will fail on s := dut.s since you cant assign to an output param
-fn mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
+prot mul<dut: Multiplier>(in a: u32, in b: u32, out s: u32) {
   dut.a := a;
   dut.b := b;
   // hold a and b stable for two cycles

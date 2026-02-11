@@ -61,7 +61,9 @@ impl std::fmt::Display for BinOp {
 impl std::fmt::Display for ExprValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExprValue::Concrete(bit_vec_value) => write!(f, "{:?}", bit_vec_value),
+            ExprValue::Concrete(bit_vec_value) => {
+                write!(f, "{}", serialize_bitvec(bit_vec_value, false))
+            }
             ExprValue::DontCare => write!(f, "DontCare"),
         }
     }
@@ -174,6 +176,13 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
+        Stmt::BoundedLoop(expr_id, stmt_id) => {
+            format!(
+                "repeat {} iterations {{ {} }}",
+                serialize_expr(tr, st, expr_id),
+                serialize_stmt(tr, st, stmt_id)
+            )
+        }
         Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
             format!(
                 "if {} {{ {} }} {{ {} }}",
@@ -223,6 +232,16 @@ pub fn build_statements(
                 "{}while {} {{",
                 "  ".repeat(index),
                 serialize_expr(tr, st, cond)
+            )?;
+            build_statements(out, tr, st, bodyid, index + 1)?;
+            writeln!(out, "{}}}", "  ".repeat(index))?;
+        }
+        Stmt::BoundedLoop(count, bodyid) => {
+            writeln!(
+                out,
+                "{}repeat {} iterations {{",
+                "  ".repeat(index),
+                serialize_expr(tr, st, count)
             )?;
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
@@ -456,6 +475,32 @@ pub mod tests {
     #[test]
     fn test_simple_while_transaction() {
         test_helper("tests/counters/simple_while.prot", "simple_while");
+    }
+
+    // Simple test to make sure for-loop with a fixed no. of iterations
+    // type-checks and serializes properly
+    #[test]
+    fn test_simple_bounded_loop_transaction() {
+        test_helper(
+            "tests/counters/simple_bounded_loop.prot",
+            "simple_bounded_loop",
+        );
+    }
+
+    #[test]
+    fn test_nested_bounded_loop_transaction() {
+        test_helper(
+            "tests/adders/adder_d1/nested_busy_wait.prot",
+            "nested_bounded_loop",
+        );
+    }
+
+    #[test]
+    fn test_loop_with_assigns_transaction() {
+        test_helper(
+            "tests/adders/adder_d1/loop_with_assigns.prot",
+            "loop_with_assigns",
+        );
     }
 
     #[test]

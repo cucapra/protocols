@@ -13,7 +13,7 @@ struct picorv32_pcpi_mul {
 }
 
 // Adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/picorv32/PicoRV32Spec.scala#L27
-fn pcpi_mul<p: picorv32_pcpi_mul>(
+prot pcpi_mul<p: picorv32_pcpi_mul>(
     in rs1_data: u32,
     in rs2_data: u32,
     out rd_data: u32,
@@ -46,7 +46,7 @@ fn pcpi_mul<p: picorv32_pcpi_mul>(
   step();
 }
 
-fn pcpi_mul_reset<p: picorv32_pcpi_mul>() {
+prot pcpi_mul_reset<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
   step();
   fork();

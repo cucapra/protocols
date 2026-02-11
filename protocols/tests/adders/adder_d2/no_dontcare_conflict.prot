@@ -8,7 +8,7 @@ struct Adder {
 // This protocol omits the DontCare assignments after fork.
 // With implicit input re-application, this should cause a ConflictingAssignment
 // error when the next pipelined transaction tries to assign different values.
-fn add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   DUT.a := a;
   DUT.b := b;
 

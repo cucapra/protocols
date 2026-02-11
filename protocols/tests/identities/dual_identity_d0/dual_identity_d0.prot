@@ -5,7 +5,7 @@ struct DualIdentity {
   out s2: u1,
 }
 
-fn identity<dut: DualIdentity>(in a: u1, in b: u1) {
+prot identity<dut: DualIdentity>(in a: u1, in b: u1) {
     dut.a := 1'b0;
     dut.b := 1'b0;
 

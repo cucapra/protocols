@@ -20,6 +20,7 @@ use pest::iterators::Pair;
 use rustc_hash::FxHashSet;
 
 use crate::ir::*;
+use crate::serialize::serialize_bitvec;
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -415,7 +416,11 @@ impl DiagnosticHandler {
                 locations: self.error_locations(vec![(
                     fileid1,
                     Label {
-                        message: Some(format!("LHS Value: {:?}, RHS Value: {:?}", eval1, eval2)),
+                        message: Some(format!(
+                            "LHS Value: {}, RHS Value: {}",
+                            serialize_bitvec(eval1, false),
+                            serialize_bitvec(eval2, false)
+                        )),
                         range: (start1.min(start2), end1.max(end2)),
                     },
                 )]),

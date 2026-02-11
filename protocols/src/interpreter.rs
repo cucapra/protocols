@@ -63,7 +63,14 @@ pub enum ExprValue {
     DontCare,
 }
 
-/// An `Evaluator` evaluates ("interprets") a Protocols program
+/// Type aliases for `Todo` indices (where a `Todo` is a protocol with
+/// concrete argument values, e.g. `add(1, 2, 3)`)
+pub type TodoIdx = usize;
+
+/// An `Evaluator` evaluates ("interprets") a Protocols program.        
+/// **Note**: The scope of the `Evaluator` is limited to executing a single
+/// thread, with the `Scheduler` struct responsible for keeping track of
+/// different threads.
 pub struct Evaluator<'a> {
     tr: &'a Transaction,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
@@ -81,21 +88,15 @@ pub struct Evaluator<'a> {
     /// Maps each `output |-> Vec<input>` (inputs that this output is dependent on)
     output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
 
-    // tracks forbidden ports due to combinational dependencies
+    /// Tracks inputs that are forbidden to assign to (after observing a dependent output)
     forbidden_inputs: Vec<SymbolId>,
 
-    /// The `forbidden_output_counts` map maintains a count for each output pin.
-    /// When a thread assigns an input from `Concrete` to `DontCare`, we increment
-    /// the count for all outputs combinationally dependent on that input.
-    /// When a thread assigns from `DontCare` to `Concrete`, we decrement those counts.
-    /// This reference counting is necessary because multiple input pins can
-    /// affect the same output pin combinationally;
-    /// after setting one input to `Concrete`, we cannot simply clear the
-    /// forbidden status of the output;
-    /// we must decrement its count by one. An output is forbidden to observe
-    /// if its count is greater than zero, meaning at least one input in its
-    /// combinational cone is currently assigned to DontCare.
-    forbidden_output_counts: FxHashMap<SymbolId, usize>,
+    /// The `forbidden_read_counts` map maintains a count for each input and output pin.
+    /// A port is forbidden to READ if its count is greater than zero.
+    /// For inputs: count is incremented when DontCare is assigned, decremented when Concrete is assigned.
+    /// For outputs: count is incremented when a dependent input is assigned DontCare, decremented when Concrete.
+    /// This reference counting handles the case where multiple inputs affect the same output.
+    forbidden_read_counts: FxHashMap<SymbolId, usize>,
 
     // Per-thread input values for each input pin: input_id -> (thread_id -> value)
     // This serves as both the current cycle's assignments AND the sticky inputs for implicit re-application
@@ -103,12 +104,16 @@ pub struct Evaluator<'a> {
 
     /// The current todo_idx being executed
     /// (where a `todo` is a transaction with concrete argument values)
-    current_todo_idx: usize,
+    current_todo_idx: TodoIdx,
 
+    /// Whether `assert_eq` statements should be evaluated
     assertions_enabled: bool,
 
     /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
+
+    // Maps a `StmtId` pair to the no. of iterations remaining for that particular loop.
+    bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -202,7 +207,7 @@ impl<'a> Evaluator<'a> {
         let mut output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
         let mut input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
 
-        // Initialize: keys are outputs -> output_dependencies, and inputs -> input_dependencies
+        // Initialize: keys are outputs -> inputs dependent on that ouput, and inputs -> all combinationally dependent outputs
         for symbol_id in output_mapping.keys() {
             output_dependencies.insert(*symbol_id, Vec::new());
         }
@@ -210,10 +215,14 @@ impl<'a> Evaluator<'a> {
             input_dependencies.insert(*symbol_id, Vec::new());
         }
 
-        // Initialize forbidden output counts to 0
-        let mut forbidden_output_counts = FxHashMap::default();
+        // Initialize forbidden input counts to 0
+        // Initialize forbidden read counts to 0 for all inputs and outputs
+        let mut forbidden_read_counts = FxHashMap::default();
+        for symbol_id in input_mapping.keys() {
+            forbidden_read_counts.insert(*symbol_id, 0);
+        }
         for symbol_id in output_mapping.keys() {
-            forbidden_output_counts.insert(*symbol_id, 0);
+            forbidden_read_counts.insert(*symbol_id, 0);
         }
 
         // For each output, find all inputs in its combinational cone of influence
@@ -252,10 +261,11 @@ impl<'a> Evaluator<'a> {
             input_dependencies,
             output_dependencies,
             forbidden_inputs: Vec::new(),
-            forbidden_output_counts,
+            forbidden_read_counts,
             per_thread_input_vals,
             current_todo_idx: 0,
             assertions_enabled: false,
+            bounded_loop_remaining_iters: FxHashMap::default(),
             rng,
         }
     }
@@ -278,26 +288,26 @@ impl<'a> Evaluator<'a> {
 
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
-    /// Performs a context switch to execute a different thread
     pub fn context_switch(&mut self, todo: Todo<'a>, todo_idx: usize) {
         self.tr = todo.tr;
         self.st = todo.st;
         self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
         self.next_stmt_map = todo.next_stmt_map;
         self.current_todo_idx = todo_idx;
+        self.bounded_loop_remaining_iters = todo.bounded_loop_remaining_iters;
 
-        // Clear forbidden ports when switching to a new thread context
+        // Clear forbidden inputs (combinational dependency tracking)
         self.forbidden_inputs.clear();
 
-        // Reset forbidden output counts to 0
-        for count in self.forbidden_output_counts.values_mut() {
+        // Reset forbidden read counts to 0
+        for count in self.forbidden_read_counts.values_mut() {
             *count = 0;
         }
     }
 
     /// Helper: applies an input value for a given thread.
     /// - Updates per_thread_input_vals
-    /// - Updates forbidden_output_counts
+    /// - Updates forbidden_read_counts (for both this input and dependent outputs)
     /// - Applies value to sim immediately
     /// - For explicit assignments, `stmt_id` is Some(stmt_id). For implicit DontCare initialization, it's None.
     /// - Note: Conflict checking is deferred to `check_for_conflicts` at end of cycle.
@@ -319,21 +329,31 @@ impl<'a> Evaluator<'a> {
         let was_dontcare = matches!(old_val, Some(ThreadInputValue::DontCare));
         let is_dontcare = matches!(new_val, ThreadInputValue::DontCare);
 
-        // Update counts when transitioning to/from DontCare
+        // Update forbidden_read_counts when transitioning to/from DontCare
         if is_dontcare && !was_dontcare {
             // Transitioning TO DontCare (from None or Concrete): increment counts
+            // Increment this input's own forbidden count (can't read a DontCare input)
+            if let Some(count) = self.forbidden_read_counts.get_mut(symbol_id) {
+                *count += 1;
+            }
+            // Increment forbidden counts for all outputs dependent on this input
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
-                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                    if let Some(count) = self.forbidden_read_counts.get_mut(dep) {
                         *count += 1;
                     }
                 }
             }
         } else if !is_dontcare && was_dontcare {
             // Transitioning FROM DontCare (to Concrete): decrement counts
+            // Decrement this input's own forbidden count
+            if let Some(count) = self.forbidden_read_counts.get_mut(symbol_id) {
+                *count = count.saturating_sub(1);
+            }
+            // Decrement forbidden counts for all outputs dependent on this input
             if let Some(deps) = self.input_dependencies.get(symbol_id) {
                 for dep in deps {
-                    if let Some(count) = self.forbidden_output_counts.get_mut(dep) {
+                    if let Some(count) = self.forbidden_read_counts.get_mut(dep) {
                         *count = count.saturating_sub(1);
                     }
                 }
@@ -388,7 +408,11 @@ impl<'a> Evaluator<'a> {
                             _ => panic!("Expected BitVec type for input"),
                         };
                         let random_val = BitVecValue::random(&mut self.rng, width);
-                        log::info!("  Randomizing {} to {:?}", symbol_name, random_val);
+                        log::info!(
+                            "  Randomizing {} to {}",
+                            symbol_name,
+                            serialize_bitvec(&random_val, false)
+                        );
                         self.sim.set(*expr_ref, &random_val);
                     } else {
                         log::info!(
@@ -479,6 +503,11 @@ impl<'a> Evaluator<'a> {
         &self.per_thread_input_vals
     }
 
+    /// Returns a clone of the bounded loop remaining iterations map.
+    pub fn bounded_loop_remaining_iters(&self) -> FxHashMap<StmtId, u128> {
+        self.bounded_loop_remaining_iters.clone()
+    }
+
     /// Get the next statement after the given statement
     pub fn next_stmt(&self, stmt_id: &StmtId) -> Option<StmtId> {
         self.next_stmt_map.get(stmt_id).copied().flatten()
@@ -546,22 +575,24 @@ impl<'a> Evaluator<'a> {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].name();
+
+                // Check if reading this port is forbidden (count > 0)
+                // For inputs: count > 0 when DontCare was assigned
+                // For outputs: count > 0 when a dependent input has DontCare
+                if let Some(&count) = self.forbidden_read_counts.get(sym_id) {
+                    if count > 0 {
+                        return Err(ExecutionError::forbidden_port_read(
+                            name.to_string(),
+                            *expr_id,
+                        ));
+                    }
+                }
+
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
                     Ok(ExprValue::Concrete(
                         self.sim.get(*expr_ref).try_into().unwrap(),
                     ))
                 } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    // Check if observing this output port is forbidden (count > 0)
-                    // The count is > 0 when a DontCare value was assigned to a dependent input
-                    if let Some(&count) = self.forbidden_output_counts.get(sym_id) {
-                        if count > 0 {
-                            return Err(ExecutionError::forbidden_output_observation(
-                                name.to_string(),
-                                *expr_id,
-                            ));
-                        }
-                    }
-
                     // Observing an output port forbids assignments to its dependent inputs
                     if let Some(deps) = self.output_dependencies.get(sym_id) {
                         self.forbidden_inputs.extend(deps.iter().copied());
@@ -672,6 +703,14 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    /// Evaluates the statement at the given `StmtId`. The additional argument
+    /// `bounded_loop_remaining_iters` tracks the no. of loop iterations
+    /// remaining for `repeat ...` loops. Callers of this function,
+    /// e.g. in `scheduler.rs`, are meant to mutably borrow the
+    /// `Thread.bounded_loop_remaining_iters` field and supply it as
+    /// an argument to this function. This design allows us to keep this field
+    /// only within the `Thread` struct and avoid duplicating it in the
+    /// `Evaluator` struct.
     pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
         match &self.tr[stmt_id] {
             Stmt::Assign(symbol_id, expr_id) => {
@@ -683,6 +722,9 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
+            }
+            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
+                self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
@@ -775,7 +817,7 @@ impl<'a> Evaluator<'a> {
         let expr_val = self.evaluate_expr(expr_id)?;
         let todo_idx = self.current_todo_idx;
 
-        // Check if assigning to this input port is forbidden (after evaluating RHS)
+        // Check if assigning to this input port is forbidden (after observing a dependent output)
         if self.forbidden_inputs.contains(symbol_id) {
             let name = self.st[symbol_id].name();
             return Err(ExecutionError::forbidden_input_assignment(
@@ -811,6 +853,68 @@ impl<'a> Evaluator<'a> {
                     Ok(Some(*do_block_id))
                 } else {
                     Ok(self.next_stmt_map[while_id])
+                }
+            }
+        }
+    }
+
+    /// Evaluates a bounded loop (loop with a fixed no. of iterations).
+    /// Arguments are the `ExprId`s/`StmtId`s for the no. of iterations,
+    /// the entire loop statement and the loop body itself. The final arguemnt
+    /// `bounded_loop_remaining_iters` tracks the no. of iterations remaining
+    /// for `repeat ...` loops (it is meant to be used as a mutable borrow
+    /// of the field `Thread.bounded_loops_remaining_iters` from the appropriate
+    /// thread).
+    fn evaluate_bounded_loop(
+        &mut self,
+        num_iters_id: &ExprId,
+        bounded_loop_id: &StmtId,
+        loop_body_id: &StmtId,
+    ) -> ExecutionResult<Option<StmtId>> {
+        // Key for the `bounded_loop_remaining_iters` map, which tracks
+        // the no. of iterations remaining for each bounded loop
+        if let Some(num_iterations) = self.bounded_loop_remaining_iters.get_mut(bounded_loop_id) {
+            *num_iterations -= 1;
+            if *num_iterations == 0 {
+                // Exit the loop
+                self.bounded_loop_remaining_iters.remove(bounded_loop_id);
+                Ok(self.next_stmt_map[bounded_loop_id])
+            } else {
+                // There are still non-zero iterations remaining,
+                // so execute the loop body again
+                Ok(Some(*loop_body_id))
+            }
+        } else {
+            // We've not encountered this bounded loop before,
+            // so we have to evaluate the no. of iters that the user specified
+            let num_iters_result = self.evaluate_expr(num_iters_id)?;
+            match num_iters_result {
+                ExprValue::DontCare => {
+                    // No. of loop iterations can't be `DontCare`
+                    Err(ExecutionError::invalid_condition(
+                        "bounded_loop".to_string(),
+                        *num_iters_id,
+                    ))
+                }
+                ExprValue::Concrete(bvv) => {
+                    // Note: `BitVecValue` doesn't have a `to_u128` method,
+                    // so we have to use `to_u64` and then cast to `u128`
+                    let num_iterations = bvv
+                        .to_u64()
+                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer")
+                        as u128;
+
+                    // If the user wrote `repeat 0 iterations { ... }`,
+                    // skip the loop and proceed to the next stmt
+                    if num_iterations == 0 {
+                        Ok(self.next_stmt_map[bounded_loop_id])
+                    } else {
+                        // Keep track of the no. of loop iterations,
+                        // and execute the loop body
+                        self.bounded_loop_remaining_iters
+                            .insert(*bounded_loop_id, num_iterations);
+                        Ok(Some(*loop_body_id))
+                    }
                 }
             }
         }

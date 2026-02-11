@@ -44,6 +44,15 @@ pub struct Todo<'a> {
     pub args: ArgMap<'a>,
     /// Maps each `StmtId` to an optional `StmtId` of the next statement
     pub next_stmt_map: NextStmtMap,
+
+    /// Maps a `StmtId` pair to the no. of iterations remaining
+    /// for that particular loop.              
+    /// - **Invariant**: the no. of remaining iterations is always non-zero
+    ///   (if it reaches zero, we remove the entry from this map).       
+    /// - In the key, we need the `StmtId` to allow for nested loops,
+    ///   and we also need the `TodoIdx`, since the same `StmtId` could be active
+    ///   in differnt threads.
+    pub bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Todo<'a> {
@@ -58,6 +67,7 @@ impl<'a> Todo<'a> {
             st,
             args,
             next_stmt_map,
+            bounded_loop_remaining_iters: FxHashMap::default(),
         }
     }
 
@@ -108,6 +118,17 @@ impl<'a> Thread<'a> {
     /// Pretty-prints a `Statement` identified by its `StmtId`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
         self.todo.format_stmt(stmt_id)
+    }
+
+    /// Sets the next step and writes back bounded loop state from the evaluator.
+    /// Called when thread execution pauses (at step, on error, or on completion).
+    pub fn save_state(
+        &mut self,
+        next_step: Option<StmtId>,
+        bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
+    ) {
+        self.next_step = next_step;
+        self.todo.bounded_loop_remaining_iters = bounded_loop_remaining_iters;
     }
 }
 
@@ -504,7 +525,7 @@ impl<'a> Scheduler<'a> {
                 e
             );
             self.results[thread.todo_idx] = Err(e);
-            thread.next_step = None;
+            thread.save_state(None, self.evaluator.bounded_loop_remaining_iters());
             return;
         }
 
@@ -534,13 +555,17 @@ impl<'a> Scheduler<'a> {
 
                             // Check if this is the final step (no statement after it)
                             // If so, thread completes at this cycle rather than running another useless cycle
-                            if thread.todo.next_stmt_map.get(&next_id) == Some(&None) {
-                                info!("  This is the final step, thread completes.");
-                                thread.next_step = None;
-                            } else {
-                                thread.next_step = Some(next_id);
-                            }
-                            // Values already saved in per_thread_input_vals, nothing to do
+                            let next_step =
+                                if thread.todo.next_stmt_map.get(&next_id) == Some(&None) {
+                                    info!("  This is the final step, thread completes.");
+                                    None
+                                } else {
+                                    Some(next_id)
+                                };
+                            thread.save_state(
+                                next_step,
+                                self.evaluator.bounded_loop_remaining_iters(),
+                            );
                             return;
                         }
 
@@ -556,7 +581,10 @@ impl<'a> Scheduler<'a> {
                                     next_id,
                                 );
                                 self.results[thread.todo_idx] = Err(error);
-                                thread.next_step = None;
+                                thread.save_state(
+                                    None,
+                                    self.evaluator.bounded_loop_remaining_iters(),
+                                );
                                 return;
                             } else if !thread.has_stepped {
                                 info!(
@@ -569,7 +597,10 @@ impl<'a> Scheduler<'a> {
                                     next_id,
                                 );
                                 self.results[thread.todo_idx] = Err(error);
-                                thread.next_step = None;
+                                thread.save_state(
+                                    None,
+                                    self.evaluator.bounded_loop_remaining_iters(),
+                                );
                                 return;
                             }
 
@@ -632,7 +663,6 @@ impl<'a> Scheduler<'a> {
                         );
                         self.results[thread_id] = Err(error);
                     }
-                    thread.next_step = None;
                     break;
                 }
 
@@ -640,13 +670,12 @@ impl<'a> Scheduler<'a> {
                 Err(e) => {
                     info!("ERROR: {:?}, terminating thread", e);
                     self.results[thread.todo_idx] = Err(e);
-                    thread.next_step = None;
                     break;
                 }
             }
         }
-
-        // Values already saved in per_thread_input_vals, nothing to save back to thread
+        // Save thread state after execution pauses (loop exited via break)
+        thread.save_state(None, self.evaluator.bounded_loop_remaining_iters());
 
         // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
         if thread.next_step.is_none() {
