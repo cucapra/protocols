@@ -9,7 +9,7 @@ use crate::{
     scheduler::Scheduler,
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
-    types::{CycleResult, SchedulerError},
+    types::{CycleResult, OutputEntry, ProtocolApplication, SchedulerError},
 };
 use log::info;
 use rustc_hash::FxHashSet;
@@ -127,23 +127,27 @@ impl GlobalScheduler {
     /// strict prefixes of longer traces are filtered out (these come from
     /// schedulers where the child thread failed but the parent thread
     /// continued).
-    pub fn print_all_traces(&self) {
-        // Collect all unique traces
-        let mut all_traces: Vec<Vec<String>> = vec![];
-        let mut seen = FxHashSet::default();
+    pub fn print_all_traces(&self, ctx: &GlobalContext) {
+        // Collect all unique traces, deduplicating on the canonical
+        // `ProtocolApplication` sequence (ignoring timing and thread IDs)
+        let mut all_entries: Vec<Vec<OutputEntry>> = vec![];
+        let mut seen: FxHashSet<Vec<ProtocolApplication>> = FxHashSet::default();
 
         for scheduler_group in &self.scheduler_groups {
             for scheduler in scheduler_group {
-                let mut sorted_buffer = scheduler.output_buffer.clone();
-                sorted_buffer.sort_by_key(|(cycle_count, _)| *cycle_count);
+                // Sort `OutputEntry`s by increasing cycle no.
+                let mut sorted_output_entries = scheduler.output_buffer.clone();
+                sorted_output_entries.sort_by_key(|entry| entry.cycle_count);
 
-                let trace: Vec<String> = sorted_buffer
+                let trace: Vec<ProtocolApplication> = sorted_output_entries
                     .iter()
-                    .map(|(_, output)| output.clone())
+                    .map(|entry| entry.protocol_application.clone())
                     .collect();
 
-                if seen.insert(trace.clone()) {
-                    all_traces.push(trace);
+                // Only append `sorted_output_entries` to `all_entries`
+                // if it the corresponding `trace` wasn't previously `seen`
+                if seen.insert(trace) {
+                    all_entries.push(sorted_output_entries);
                 }
             }
         }
@@ -152,13 +156,26 @@ impl GlobalScheduler {
         // These are partial traces from schedulers where a child thread failed
         // but the parent thread completed successfully,
         // resulting in a shorter trace.
-        let maximal_traces: Vec<&Vec<String>> = all_traces
+        let all_traces: Vec<Vec<ProtocolApplication>> = all_entries
             .iter()
-            .filter(|trace| {
-                !all_traces
+            .map(|entries| {
+                entries
                     .iter()
-                    .any(|other| other.len() > trace.len() && other.starts_with(trace.as_slice()))
+                    .map(|e| e.protocol_application.clone())
+                    .collect()
             })
+            .collect();
+
+        let maximal_traces: Vec<&Vec<OutputEntry>> = all_entries
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| {
+                !all_traces.iter().any(|other| {
+                    other.len() > all_traces[*i].len()
+                        && other.starts_with(all_traces[*i].as_slice())
+                })
+            })
+            .map(|(_, entries)| entries)
             .collect();
 
         if maximal_traces.is_empty() {
@@ -170,7 +187,25 @@ impl GlobalScheduler {
             if maximal_traces.len() > 1 {
                 println!("Trace {}:", i);
             }
-            println!("{}", trace.join("\n"));
+            let lines: Vec<String> = trace
+                .iter()
+                .map(|entry| self.format_output_entry(entry, ctx))
+                .collect();
+            println!("{}", lines.join("\n"));
+        }
+    }
+
+    /// Formats an `OutputEntry` into a display string
+    fn format_output_entry(&self, entry: &OutputEntry, ctx: &GlobalContext) -> String {
+        if ctx.show_waveform_time {
+            let start_time = self.trace.format_time(entry.start_time_step, ctx.time_unit);
+            let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
+            format!(
+                "{}  // [time: {} -> {}] (thread {})",
+                entry.protocol_application, start_time, end_time, entry.thread_id
+            )
+        } else {
+            entry.protocol_application.to_string()
         }
     }
 
@@ -253,7 +288,7 @@ impl GlobalScheduler {
         info!("Monitor finished!");
 
         // Print all collected traces
-        self.print_all_traces();
+        self.print_all_traces(ctx);
 
         Ok(())
     }

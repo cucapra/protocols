@@ -1192,43 +1192,4 @@ impl Interpreter {
             }
         }
     }
-
-    /// Prints the reconstructed transaction
-    /// (i.e. the function call that led to the signal trace)
-    pub fn serialize_reconstructed_transaction(
-        &self,
-        ctx: &GlobalContext,
-        trace: &WaveSignalTrace,
-    ) -> String {
-        // Print the full args_mapping for debugging
-        info!(
-            "Final args_mapping:\n{}",
-            serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
-        );
-
-        let mut args = vec![];
-        // Iterates through each arg to the transaction and sees
-        // what their final value in the `args_mapping` is
-        for arg in &self.transaction.args {
-            let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
-            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
-                let time_str = if ctx.show_waveform_time {
-                    trace.format_time(trace.time_step(), ctx.time_unit)
-                } else {
-                    format!("cycle {}", self.trace_cycle_count) 
-                };
-                panic!(
-                    "Transaction `{}`, {}: Unable to find value for {} ({}) in args_mapping, which is {{ {} }}",
-                    self.transaction.name,
-                    time_str,
-                    name,
-                    symbol_id,
-                    serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
-                )
-            });
-            args.push(serialize_bitvec(value, ctx.display_hex));
-        }
-        format!("{}({})", self.transaction.name, args.join(", "))
-    }
 }

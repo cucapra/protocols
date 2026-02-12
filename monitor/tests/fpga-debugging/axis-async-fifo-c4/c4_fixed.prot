@@ -121,7 +121,7 @@ prot pop<DUT: Receiver>(
 // IDLE: No transaction occurs on the monitored interface
 // For Sender: no push transaction (no data being written to FIFO)
 // For Receiver: no pop transaction (no data being read from FIFO)
-
+#[idle]
 prot idle<DUT: Sender>() {
     DUT.rst := 1'b0;
 
@@ -141,6 +141,7 @@ prot idle<DUT: Sender>() {
     step();
 }
 
+#[idle]
 prot idle<DUT: Receiver>() {
     DUT.rst := 1'b0;
 
