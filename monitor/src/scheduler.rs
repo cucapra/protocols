@@ -1,165 +1,45 @@
-// Copyright 2025 Cornell University
-// released under MIT License
-// author: Ernest Ng <eyn5@cornell.edu>
-
-use std::collections::VecDeque;
-
 use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Stmt, SymbolId, SymbolTable, Transaction},
-    serialize::{serialize_bitvec, serialize_stmt},
+    serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
 
 use crate::{
     global_context::GlobalContext,
     interpreter::Interpreter,
+    queue::*,
     signal_trace::{SignalTrace, WaveSignalTrace},
     thread::Thread,
+    types::{
+        AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, ThreadResult,
+    },
 };
 
-/// Error types that can occur during scheduler execution
-#[derive(Debug)]
-pub enum SchedulerError {
-    NoTransactionsMatch {
-        struct_name: String,
-        error_context: anyhow::Error,
-    },
-    /// Other errors (e.g., internal errors, validation failures)
-    Other(anyhow::Error),
-}
-
-impl From<anyhow::Error> for SchedulerError {
-    fn from(err: anyhow::Error) -> Self {
-        SchedulerError::Other(err)
-    }
-}
-
-/// `Queue` is just a type alias for `VecDeque<Thread>`.
-/// We use a `VecDeque` instead of `Vec`, since `VecDeque::pop_back` produces
-/// elements in a FIFO order (which is what we want),
-/// whereas `Vec::pop` returns elements in LIFO order
-type Queue = VecDeque<Thread>;
-
-/// Formats a queue's contents into a pretty-printed string
-/// Note: we can't implement the `Display` trait for `Queue` since
-/// `Queue` is just a type alias
-fn format_queue(
-    queue: &Queue,
-    ctx: &GlobalContext,
-    trace: &WaveSignalTrace,
-    struct_name: &str,
-) -> String {
-    if !queue.is_empty() {
-        let formatted_queue = queue
-            .iter()
-            .map(|thread| format_thread(thread, ctx, trace, struct_name))
-            .collect::<Vec<String>>()
-            .join("\n\t");
-        format!("\n\t{}", formatted_queue)
-    } else {
-        "<EMPTY>".to_string()
-    }
-}
-
-/// Formats a single thread with context-aware timing information
-fn format_thread(
-    thread: &Thread,
-    ctx: &GlobalContext,
-    trace: &WaveSignalTrace,
-    struct_name: &str,
-) -> String {
-    let start_info = if ctx.show_waveform_time {
-        format!(
-            "Start time: {}",
-            trace.format_time(thread.start_time_step, ctx.time_unit)
-        )
-    } else {
-        format!("Start cycle: {}", thread.start_cycle)
-    };
-
-    let transaction_name = if ctx.multiple_structs {
-        format!("{}::{}", struct_name, thread.transaction.name)
-    } else {
-        thread.transaction.name.clone()
-    };
-
-    format!(
-        "THREAD {}: {{ {}, Transaction: `{}`, Current stmt: `{}` ({}) }}",
-        thread.global_thread_id(ctx),
-        start_info,
-        transaction_name,
-        serialize_stmt(
-            &thread.transaction,
-            &thread.symbol_table,
-            &thread.current_stmt_id
-        ),
-        thread.current_stmt_id
-    )
-}
-
-/// Formats a queue's contents into a *compact* pretty-printed string
-/// (i.e. no new-lines, only displays the thread_id and transaction name
-/// for each thread)
-fn format_queue_compact(queue: &Queue, ctx: &GlobalContext) -> String {
-    if !queue.is_empty() {
-        queue
-            .iter()
-            .map(|thread| {
-                format!(
-                    "Thread {} (`{}`)",
-                    thread.global_thread_id(ctx),
-                    thread.transaction.name
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    } else {
-        "<EMPTY>".to_string()
-    }
-}
-
-/// Extracts all elements in the `Queue` where all the threads have the
-/// same `start_cycle`, preserving their order
-pub fn threads_with_start_time(queue: &Queue, start_cycle: u32) -> Queue {
-    queue
-        .clone()
-        .into_iter()
-        .filter(|thread| thread.start_cycle == start_cycle)
-        .collect()
-}
-
-/// Finds all the unique start cycles of all the threads in the same queue
-pub fn unique_start_cycles(queue: &Queue) -> Vec<u32> {
-    let mut start_cycles: Vec<u32> = queue.iter().map(|thread| thread.start_cycle).collect();
-    start_cycles.sort();
-    start_cycles.dedup();
-    start_cycles
-}
-
 /// Scheduler for handling the multiple threads in the monitor
+#[derive(Clone)]
 pub struct Scheduler {
     /// Queue storing threads that are ready (to be run during the current step)
-    current: Queue,
+    pub current: Queue,
 
     /// Queue of suspended threads (to be run during the next step)
     pub next: Queue,
 
     /// Threads that have finished successfully
-    finished: Queue,
+    pub finished: Queue,
 
     /// Threads that failed
-    failed: Queue,
+    pub failed: Queue,
 
     /// The current scheduling cycle
-    cycle_count: u32,
+    pub cycle_count: u32,
 
     /// The no. of threads that have been created so far.
     /// (This variable is used to create unique `thread_id`s for `Thread`s.)
-    num_threads: u32,
+    pub num_threads: u32,
 
     /// The associated interpreter for Protocols programs
     interpreter: Interpreter,
@@ -178,12 +58,16 @@ pub struct Scheduler {
 
     /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
-    possible_transactions: Vec<(Transaction, SymbolTable)>,
+    pub possible_transactions: Vec<(Transaction, SymbolTable)>,
 
     /// The name of the struct this scheduler is monitoring
     /// (Used for prefixing transaction names in multi-struct scenarios)
     /// Note: if there is just one single struct, this string is empty
     pub struct_name: String,
+
+    /// Output buffer, where each element is an `OutputEntry`
+    /// (defined in `types.rs`).
+    pub output_buffer: AugmentedTrace,
 }
 
 impl Scheduler {
@@ -288,37 +172,60 @@ impl Scheduler {
             finished_thread: None,
             possible_transactions: transactions,
             struct_name,
+            output_buffer: Vec::new(),
         }
     }
 
-    /// Runs the scheduler in the current cycle by repeating the following steps.
-    /// 1. Pops a thread from the `current` queue and runs it till the next step.
-    ///    We keep doing this while the `current` queue is non-empty.
-    /// 2. When the `current` queue is empty, it sets `current` to `next`
-    ///    (marking all suspended threads as ready for execution),
-    ///    then advances the trace to the next step.
-    /// - Note: This function is used by `GlobalScheduler` to coordinate
-    ///   execution between multiple schedulers.
-    pub fn run_current_cycle(
-        &mut self,
-        trace: &WaveSignalTrace,
-        ctx: &GlobalContext,
-    ) -> Result<(), SchedulerError> {
-        info!(
-            "Inside `Scheduler::run_current_cycle` for {} scheduler",
-            self.struct_name
-        );
-
+    /// Call this function exactly once at the beginning of each cycle
+    /// (**Don't** call this on a cloned `Scheduler` that is created from a `fork`)
+    pub fn begin_cycle(&mut self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         // Clear auxiliary fields at the beginning of each cycle
         // to track which start cycles fork/finish in THIS cycle
         self.forked_start_cycles.clear();
         self.finished_thread = None;
-
         self.print_scheduler_state(trace, ctx);
+    }
 
-        // Run all threads in the current queue
+    /// Runs the scheduler in the current cycle by repeating the following steps.
+    /// 1. While the `current` queue is non-empty,
+    ///    pop a thread from the `current` queue and runs it till the next `step`
+    ///    and exmaine its `ThreadResult`.
+    ///  - If it `fork`ed either implicitly or explicitly, return early by
+    ///    signalling to the caller the appropriate `CycleResult`
+    ///  - Otherwise, continue.
+    /// 2. When the `current` queue is empty, it sets `current` to `next`
+    ///    (marking all suspended threads as ready for execution),
+    ///    then advances the trace to the next step.
+    ///    Notes:
+    /// - This function is used by `GlobalScheduler` to coordinate
+    ///   execution between multiple schedulers.
+    /// - When a `fork` creates a `Scheduler` clone, call this function
+    ///   on the clone
+    pub fn process_current_queue(
+        &mut self,
+        trace: &WaveSignalTrace,
+        ctx: &GlobalContext,
+    ) -> Result<CycleResult, SchedulerError> {
+        info!(
+            "Inside `Scheduler::process_current_queue` for {} scheduler",
+            self.struct_name
+        );
+
+        // Process each thread (this function returns early when a thread `fork`s)
         while let Some(thread) = self.current.pop_front() {
-            self.run_thread_till_next_step(thread, trace, ctx)?;
+            match self.run_thread_till_next_step(thread, trace, ctx)? {
+                ThreadResult::Completed => continue,
+                ThreadResult::ExplicitFork { parent } => {
+                    return Ok(CycleResult::Fork {
+                        parent: Box::new(Some(*parent)),
+                    });
+                }
+                ThreadResult::ImplicitFork => {
+                    return Ok(CycleResult::Fork {
+                        parent: Box::new(None),
+                    });
+                }
+            }
         }
 
         // At this point, all threads have been executed till their next `step`
@@ -481,7 +388,7 @@ impl Scheduler {
         // behave as expected
         self.validate_finished_and_failed_threads(trace, ctx)?;
 
-        Ok(())
+        Ok(CycleResult::Done)
     }
 
     /// Validates that threads in the `finished` and `failed` queues
@@ -740,7 +647,6 @@ impl Scheduler {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        eprintln!("{}", error_msg);
         Err(error_msg)
     }
 
@@ -753,7 +659,7 @@ impl Scheduler {
         mut thread: Thread,
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
-    ) -> Result<(), SchedulerError> {
+    ) -> Result<ThreadResult, SchedulerError> {
         info!(
             "Running thread {} (transaction `{}`) till next `step()`...",
             thread.global_thread_id(ctx),
@@ -791,7 +697,7 @@ impl Scheduler {
                             thread.current_stmt_id = next_stmt_id;
                             self.next.push_back(thread);
                             self.print_scheduler_state(trace, ctx);
-                            return Ok(());
+                            return Ok(ThreadResult::Completed);
                         }
                         Stmt::Fork => {
                             thread.has_forked = true;
@@ -808,44 +714,31 @@ impl Scheduler {
                                     thread.global_thread_id(ctx),
                                     thread.start_cycle
                                 );
+                                // Continue from the fork statement onwards
+                                current_stmt_id = next_stmt_id;
                             } else {
-                                // For each possible transaction, fork one new thread for it,
-                                // i.e. add it to the `current` queue
-                                // This means if there are `n` possible transactions,
-                                // we push `n` threads to the `current` queue.
-                                info!(
-                                    "Thread {} called `fork()`, creating new threads...",
-                                    thread.global_thread_id(ctx)
-                                );
-                                for (transaction, symbol_table) in &self.possible_transactions {
-                                    // Note: we use the new transaction's
-                                    // `next_stmt_mapping` when creating a new thread
-                                    let new_thread = Thread::new(
-                                        self.struct_name.clone(),
-                                        transaction.clone(),
-                                        symbol_table.clone(),
-                                        transaction.next_stmt_mapping(),
-                                        self.num_threads,
-                                        self.cycle_count,
-                                        trace.time_step(),
-                                    );
-                                    self.num_threads += 1;
-                                    info!(
-                                        "Adding new thread {} (`{}`) to `current` queue",
-                                        new_thread.global_thread_id(ctx),
-                                        new_thread.transaction.name
-                                    );
-                                    self.current.push_back(new_thread);
-                                }
+                                // Here, instead of creating a new thread for
+                                // each possible protocol, we indicate to the
+                                // caller that the current thread forked
 
-                                // Mark this start cycle as having forked
+                                // Indicate that the thread's `start_cycle`
+                                // called `fork` in the current cycle
                                 self.forked_start_cycles.insert(thread.start_cycle);
 
-                                self.print_scheduler_state(trace, ctx);
-                            }
+                                // Advance to next statement
+                                thread.current_stmt_id = next_stmt_id;
 
-                            // Continue from the fork statement onwards
-                            current_stmt_id = next_stmt_id;
+                                // Save the parent thread's state before we exit this function
+                                thread.args_mapping = self.interpreter.args_mapping.clone();
+                                thread.known_bits = self.interpreter.known_bits.clone();
+                                thread.constraints = self.interpreter.constraints.clone();
+                                thread.args_to_pins = self.interpreter.args_to_pins.clone();
+
+                                // Indicate to the caller that this thread forked
+                                return Ok(ThreadResult::ExplicitFork {
+                                    parent: Box::new(thread),
+                                });
+                            }
                         }
                         _ => {
                             // Default case: update `current_stmt_id`
@@ -870,7 +763,7 @@ impl Scheduler {
                         );
                         self.failed.push_back(thread);
                         self.print_scheduler_state(trace, ctx);
-                        return Ok(());
+                        return Ok(ThreadResult::Completed);
                     }
 
                     info!(
@@ -889,40 +782,41 @@ impl Scheduler {
                     // Use the actual time-step from the waveform as the `end_time_step`
                     let end_time_step = trace.time_step();
 
-                    // Don't print out the inferred transaction if the user
-                    // has marked it as `idle`
-                    if self.interpreter.transaction.is_idle {
+                    // Construct a `ProtocolApplication` object
+                    // from the current interpreter state
+                    // (i.e. an entry in the monitor's output trace)
+                    let struct_name = if ctx.multiple_structs {
+                        Some(self.struct_name.clone())
+                    } else {
+                        None
+                    };
+                    let is_idle = self.interpreter.transaction.is_idle;
+                    let protocol_application =
+                        self.interpreter
+                            .to_protocol_application(struct_name, ctx, trace);
+
+                    if is_idle {
                         info!(
-                            "Omitting idle transaction `{}` from trace",
+                            "Transaction `{}` is marked as idle",
                             self.interpreter.transaction.name
                         );
-                    } else {
-                        let transaction_str = self
-                            .interpreter
-                            .serialize_reconstructed_transaction(ctx, trace);
-
-                        // Add struct name prefix for multi-struct scenarios
-                        let transaction_name = self.format_transaction_name(ctx, transaction_str);
-
-                        if ctx.show_waveform_time {
-                            let start_time =
-                                trace.format_time(thread.start_time_step, ctx.time_unit);
-                            let end_time = trace.format_time(end_time_step, ctx.time_unit);
-                            println!(
-                                "{}  // [time: {} -> {}] (thread {})",
-                                transaction_name,
-                                start_time,
-                                end_time,
-                                thread.global_thread_id(ctx)
-                            );
-                        } else {
-                            println!("{}", transaction_name)
-                        }
                     }
+
+                    // Add the output entry + metadata to the scheduler's
+                    // output buffer
+                    self.output_buffer.push(AugmentedProtocolApplication {
+                        end_cycle_count: self.cycle_count,
+                        protocol_application,
+                        start_time_step: thread.start_time_step,
+                        end_time_step,
+                        thread_id: thread.global_thread_id(ctx),
+                        is_idle,
+                    });
                     self.finished.push_back(thread.clone());
 
                     // Implicit fork: if this thread hasn't forked yet,
-                    // spawn new threads for all possible transactions
+                    // indicate to the caller that an implicit fork
+                    // needs to be performed.
                     // This handles the case where a protocol just ends in
                     // `step()` without having previously called `fork()`
                     if !thread.has_forked {
@@ -930,23 +824,11 @@ impl Scheduler {
                             "Thread {} finished without explicit fork, performing implicit fork",
                             thread.global_thread_id(ctx)
                         );
-                        for (transaction, symbol_table) in &self.possible_transactions {
-                            let new_thread = Thread::new(
-                                self.struct_name.clone(),
-                                transaction.clone(),
-                                symbol_table.clone(),
-                                transaction.next_stmt_mapping(),
-                                self.num_threads,
-                                self.cycle_count,
-                                trace.time_step(),
-                            );
-                            self.num_threads += 1;
-
-                            self.current.push_back(new_thread);
-                        }
                         self.forked_start_cycles.insert(thread.start_cycle);
+                        return Ok(ThreadResult::ImplicitFork);
+                    } else {
+                        return Ok(ThreadResult::Completed);
                     }
-                    return Ok(());
                 }
                 Err(err) => {
                     info!(
@@ -957,7 +839,7 @@ impl Scheduler {
                     );
                     self.failed.push_back(thread);
                     self.print_scheduler_state(trace, ctx);
-                    return Ok(());
+                    return Ok(ThreadResult::Completed);
                 }
             }
         }

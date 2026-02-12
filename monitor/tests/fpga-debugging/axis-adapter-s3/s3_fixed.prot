@@ -41,6 +41,9 @@ prot recv<DUT: AXISManager>(
     // Verify output data
     assert_eq(DUT.output_axis_tdata, data);
 
+    // Assert that this is *not* the last data word 
+    assert_eq(DUT.output_axis_tlast, 1'b0);
+
     // One cycle for the transfer to complete
     step();
 }

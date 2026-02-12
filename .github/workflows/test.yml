@@ -89,9 +89,6 @@ jobs:
           sudo dpkg -i hyperfine_1.19.0_amd64.deb
       - name: Build monitor (release)
         run: cargo build --release --package protocols-monitor
-      - name: Restore baseline benchmark results
-        run: |
-          git show origin/main:benchmark_results/benchmark_results.csv > benchmark_results/baseline_results.csv 2>/dev/null || echo "No baseline found"
       - name: Run benchmarks
         run: uv run scripts/benchmark_monitor.py
       - name: Check for performance regressions

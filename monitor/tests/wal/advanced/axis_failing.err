@@ -1,5 +1,4 @@
-All threads failed for AXIS
+All schedulers failed: No transactions match the waveform for DUT `AXIS`
 Failure at 0ns: No transactions match the waveform in `wal/advanced/uart-axi-minimal.fst`.
 Possible transactions: [idle]
-Error in scheduler for AXIS
 Error: Monitor failed
