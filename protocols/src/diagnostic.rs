@@ -392,6 +392,67 @@ impl DiagnosticHandler {
         }
     }
 
+    /// Emits a diagnostic for an expression, with additional labels pointing at
+    /// related statements (e.g., the assignments that caused a forbidden read).
+    pub fn emit_diagnostic_expr_with_stmts(
+        &mut self,
+        tr: &Transaction,
+        expr_id: &ExprId,
+        expr_message: &str,
+        stmt_labels: &[(StmtId, String)],
+        main_message: &str,
+        level: Level,
+    ) {
+        if level == Level::Warning && !self.emit_warnings {
+            return;
+        }
+        if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
+            return;
+        }
+        let buffer = &mut self.create_buffer();
+        let mut locations = Vec::new();
+        let mut fileid_opt = None;
+
+        if let Some((start, end, fileid)) = tr.get_expr_loc(*expr_id) {
+            fileid_opt = Some(fileid);
+            locations.push((
+                fileid,
+                Label {
+                    message: Some(expr_message.to_string()),
+                    range: (start, end),
+                },
+            ));
+        }
+
+        for (stmt_id, msg) in stmt_labels {
+            if let Some((start, end, fileid)) = tr.get_stmt_loc(*stmt_id) {
+                fileid_opt = Some(fileid);
+                locations.push((
+                    fileid,
+                    Label {
+                        message: Some(msg.clone()),
+                        range: (start, end),
+                    },
+                ));
+            }
+        }
+
+        if let Some(fileid) = fileid_opt {
+            let diagnostic = Diagnostic {
+                title: format!("{:?} in file {}", level, fileid),
+                message: main_message.to_string(),
+                level,
+                locations: self.error_locations(locations),
+            };
+
+            diagnostic.emit(buffer, &self.files);
+
+            let error_msg = String::from_utf8_lossy(buffer.as_slice());
+            self.error_string.push_str(&error_msg);
+            print!("{}", error_msg);
+        }
+    }
+
     pub fn emit_diagnostic_assertion(
         &mut self,
         tr: &Transaction,
