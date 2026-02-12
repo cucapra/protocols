@@ -14,7 +14,9 @@ use crate::{
     queue::*,
     signal_trace::{SignalTrace, WaveSignalTrace},
     thread::Thread,
-    types::*,
+    types::{
+        AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, ThreadResult,
+    },
 };
 
 /// Scheduler for handling the multiple threads in the monitor
@@ -65,7 +67,7 @@ pub struct Scheduler {
 
     /// Output buffer, where each element is an `OutputEntry`
     /// (defined in `types.rs`).
-    pub output_buffer: Vec<OutputEntry>,
+    pub output_buffer: AugmentedTrace,
 }
 
 impl Scheduler {
@@ -802,8 +804,8 @@ impl Scheduler {
 
                     // Add the output entry + metadata to the scheduler's
                     // output buffer
-                    self.output_buffer.push(OutputEntry {
-                        cycle_count: self.cycle_count,
+                    self.output_buffer.push(AugmentedProtocolApplication {
+                        end_cycle_count: self.cycle_count,
                         protocol_application,
                         start_time_step: thread.start_time_step,
                         end_time_step,

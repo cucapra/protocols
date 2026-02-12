@@ -38,6 +38,38 @@ impl fmt::Display for ProtocolApplication {
 /// `add(1, 2, 3); add(4, 5, 9), ...]`
 pub type Trace = Vec<ProtocolApplication>;
 
+/// An `AugmentedProtocolApplication` represents a singular `ProtocolApplication`
+/// (an entry in the the transaction trace produced by the monitor, e.g. `add(1, 2, 3)`)
+/// augmented with extra metadata (cycle count, start/end time, thread ID)
+#[derive(Clone, Debug)]
+pub struct AugmentedProtocolApplication {
+    /// The scheduling cycle in which the protocol finished
+    pub end_cycle_count: u32,
+
+    /// A concrete protocol with concrete argument values
+    pub protocol_application: ProtocolApplication,
+
+    /// The time-step at which the protocol began
+    pub start_time_step: u32,
+
+    /// The time-step at which the protocol ended
+    pub end_time_step: u32,
+
+    /// The ID of the thread that executed this protocol
+    pub thread_id: String,
+
+    /// Whether this transaction was marked `#[idle]` in the protocol file.
+    /// Idle entries are excluded from the dedup key but still displayed.
+    pub is_idle: bool,
+}
+
+/// An `AugmentedTrace` is just a sequence of `AugmentedProtocolApplciation`s,
+/// similar to how a `Trace` is just a sequence of `ProtocolApplication`s.
+/// (individual protocol calls augmented with extra metatata,
+/// e.g. `add(1, 2, 3), add(4, 5, 9), ...`,
+/// but with metadata like the Thread ID / start & end time of each protocol).
+pub type AugmentedTrace = Vec<AugmentedProtocolApplication>;
+
 /// Conceptually, a `SchedulerGroup` is the collection of
 /// all schedulers corresponding to the same `struct` in our DSL,
 /// where each scheduler represents a different possible protocol trace.      
@@ -45,21 +77,6 @@ pub type Trace = Vec<ProtocolApplication>;
 /// of `Scheduler`s so that we can `push`/`pop` individual `Schedulers`
 /// into/from this queue.
 pub type SchedulerGroup = VecDeque<Scheduler>;
-
-/// An entry (protocol application) in the transaction trace
-/// that is produced by the monitor,
-/// along with relevant metadata (cycle count, start/end time, thread ID)
-#[derive(Clone, Debug)]
-pub struct OutputEntry {
-    pub cycle_count: u32,
-    pub protocol_application: ProtocolApplication,
-    pub start_time_step: u32,
-    pub end_time_step: u32,
-    pub thread_id: String,
-    /// Whether this transaction was marked `#[idle]` in the protocol file.
-    /// Idle entries are excluded from the dedup key but still displayed.
-    pub is_idle: bool,
-}
 
 /// Error types that can occur during scheduler execution
 #[derive(Debug)]

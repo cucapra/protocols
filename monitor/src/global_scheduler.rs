@@ -9,7 +9,10 @@ use crate::{
     scheduler::Scheduler,
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
-    types::{CycleResult, OutputEntry, SchedulerError, SchedulerGroup, Trace},
+    types::{
+        AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, SchedulerGroup,
+        Trace,
+    },
 };
 use log::info;
 use rustc_hash::FxHashSet;
@@ -39,7 +42,7 @@ fn process_group_cycles(
     // of a possible protocol trace)
     let mut last_failed_scheduler: Option<Scheduler> = None;
     let mut schedulers_to_process: SchedulerGroup = scheduler_group;
-    let mut processed_schedulers: SchedulerGroup = VecDeque::new();
+    let mut processed_schedulers: SchedulerGroup = SchedulerGroup::new();
 
     while let Some(mut scheduler) = schedulers_to_process.pop_front() {
         match scheduler.process_current_queue(trace, ctx) {
@@ -110,16 +113,16 @@ fn process_group_cycles(
 /// (deduplicated on canonical `ProtocolApplication` sequence, excluding idle,
 /// with strict-prefix traces filtered out).
 /// Returns the list of maximal `OutputEntry` traces for this group.
-fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<Vec<OutputEntry>> {
+fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrace> {
     // Collect all unique traces, deduplicating on the canonical
     // `ProtocolApplication` sequence (ignoring timing and thread IDs)
-    let mut all_entries: Vec<Vec<OutputEntry>> = vec![];
-    let mut seen: FxHashSet<Trace> = FxHashSet::default();
+    let mut all_entries: Vec<AugmentedTrace> = vec![];
+    let mut seen_traces: FxHashSet<Trace> = FxHashSet::default();
 
     for scheduler in scheduler_group {
         // Sort `OutputEntry`s by increasing cycle no.
         let mut sorted_output_entries = scheduler.output_buffer.clone();
-        sorted_output_entries.sort_by_key(|entry| entry.cycle_count);
+        sorted_output_entries.sort_by_key(|entry| entry.end_cycle_count);
 
         // Build canonical trace for dedup, excluding idle entries
         let trace: Trace = sorted_output_entries
@@ -129,8 +132,8 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<Vec<OutputEnt
             .collect();
 
         // Only append `sorted_output_entries` to `all_entries`
-        // if it the corresponding `trace` wasn't previously `seen`
-        if seen.insert(trace) {
+        // if it the corresponding `trace` wasn't previously in `seen_traces`
+        if seen_traces.insert(trace) {
             all_entries.push(sorted_output_entries);
         }
     }
@@ -178,25 +181,30 @@ impl GlobalScheduler {
     }
 
     /// Prints all unique protocol traces across all scheduler groups.
-    ///
+    /// (Recall that a scheduler group is just all schedulers corresponding
+    /// to the same `struct` in our DSL, where each scheduler is responsible
+    /// for exploring a possible candidate protocol trace.)
     /// For multi-struct protocols, each struct's scheduler group is processed
     /// independently during BFS, then the maximal (longest) trace from each
     /// group is interleaved by cycle count at display time.
     pub fn print_all_traces(&self, ctx: &GlobalContext) {
-        // Collect maximal traces per scheduler group
-        let group_traces: Vec<Vec<Vec<OutputEntry>>> = self
+        // Collect the maximal traces per scheduler group.
+        // The inner `Vec` represents the traces for all the schedulers
+        // for the same struct, while the outer `Vec` iterates over all
+        // possible `struct`s in the user-supplied `.prot` file.
+        let scheduler_group_traces: Vec<Vec<AugmentedTrace>> = self
             .scheduler_groups
             .iter()
             .map(collect_maximal_traces)
             .collect();
 
-        if group_traces.is_empty() {
+        if scheduler_group_traces.is_empty() {
             return;
         }
 
         // For single-struct: show all unique traces directly
-        if group_traces.len() == 1 {
-            let traces = &group_traces[0];
+        if scheduler_group_traces.len() == 1 {
+            let traces = &scheduler_group_traces[0];
             for (i, trace) in traces.iter().enumerate() {
                 if traces.len() > 1 {
                     println!("Trace {}:", i);
@@ -211,10 +219,10 @@ impl GlobalScheduler {
             return;
         }
 
-        // For multi-struct: pick the longest trace from each group
-        // and interleave them by cycle count
-        let mut merged: Vec<OutputEntry> = vec![];
-        for group in &group_traces {
+        // If we have multiple structs, pick the longest trace from each scheduler
+        // group. Interleave traces from each struct based on the cycle count in order.
+        let mut merged: AugmentedTrace = vec![];
+        for group in &scheduler_group_traces {
             if let Some(longest) = group
                 .iter()
                 .max_by_key(|t| t.iter().filter(|e| !e.is_idle).count())
@@ -222,8 +230,9 @@ impl GlobalScheduler {
                 merged.extend(longest.clone());
             }
         }
-        merged.sort_by_key(|entry| entry.cycle_count);
+        merged.sort_by_key(|entry| entry.end_cycle_count);
 
+        // Format for stdout
         let lines: Vec<String> = merged
             .iter()
             .filter(|entry| !entry.is_idle)
@@ -233,7 +242,11 @@ impl GlobalScheduler {
     }
 
     /// Formats an `OutputEntry` into a display string
-    fn format_output_entry(&self, entry: &OutputEntry, ctx: &GlobalContext) -> String {
+    fn format_output_entry(
+        &self,
+        entry: &AugmentedProtocolApplication,
+        ctx: &GlobalContext,
+    ) -> String {
         if ctx.show_waveform_time {
             let start_time = self.trace.format_time(entry.start_time_step, ctx.time_unit);
             let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
