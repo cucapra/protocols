@@ -69,7 +69,6 @@ impl From<anyhow::Error> for SchedulerError {
 /// The result of an individual `Thread`: either it `Completed`,
 /// forked explcitly or forked implicitly.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ThreadResult {
     /// Thread completed (moved to next/finished/failed queue)
     Completed,

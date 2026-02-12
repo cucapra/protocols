@@ -176,7 +176,6 @@ impl Scheduler {
 
     /// Call this function exactly once at the beginning of each cycle
     /// (**Don't** call this on a cloned `Scheduler` that is created from a `fork`)
-    #[allow(dead_code)]
     pub fn begin_cycle(&mut self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         // Clear auxiliary fields at the beginning of each cycle
         // to track which start cycles fork/finish in THIS cycle
