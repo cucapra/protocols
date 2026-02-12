@@ -9,7 +9,7 @@ use crate::{
     scheduler::Scheduler,
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
-    types::{CycleResult, OutputEntry, ProtocolApplication, SchedulerError, SchedulerGroup},
+    types::{CycleResult, OutputEntry, SchedulerError, SchedulerGroup, Trace},
 };
 use log::info;
 use rustc_hash::FxHashSet;
@@ -114,7 +114,7 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<Vec<OutputEnt
     // Collect all unique traces, deduplicating on the canonical
     // `ProtocolApplication` sequence (ignoring timing and thread IDs)
     let mut all_entries: Vec<Vec<OutputEntry>> = vec![];
-    let mut seen: FxHashSet<Vec<ProtocolApplication>> = FxHashSet::default();
+    let mut seen: FxHashSet<Trace> = FxHashSet::default();
 
     for scheduler in scheduler_group {
         // Sort `OutputEntry`s by increasing cycle no.
@@ -122,7 +122,7 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<Vec<OutputEnt
         sorted_output_entries.sort_by_key(|entry| entry.cycle_count);
 
         // Build canonical trace for dedup, excluding idle entries
-        let trace: Vec<ProtocolApplication> = sorted_output_entries
+        let trace: Trace = sorted_output_entries
             .iter()
             .filter(|entry| !entry.is_idle)
             .map(|entry| entry.protocol_application.clone())
@@ -139,7 +139,7 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<Vec<OutputEnt
     // These are partial traces from schedulers where a child thread failed
     // but the parent thread completed successfully,
     // resulting in a shorter trace.
-    let all_traces: Vec<Vec<ProtocolApplication>> = all_entries
+    let all_traces: Vec<Trace> = all_entries
         .iter()
         .map(|entries| {
             entries

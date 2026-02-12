@@ -33,6 +33,11 @@ impl fmt::Display for ProtocolApplication {
         )
     }
 }
+
+/// A `Trace` is just an ordered sequence of `ProtocolApplication`s, e.g.
+/// `add(1, 2, 3); add(4, 5, 9), ...]`
+pub type Trace = Vec<ProtocolApplication>;
+
 /// Conceptually, a `SchedulerGroup` is the collection of
 /// all schedulers corresponding to the same `struct` in our DSL,
 /// where each scheduler represents a different possible protocol trace.      
