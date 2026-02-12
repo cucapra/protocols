@@ -9,7 +9,7 @@ use crate::{
     scheduler::Scheduler,
     signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
     thread::Thread,
-    types::{CycleResult, OutputEntry, ProtocolApplication, SchedulerError},
+    types::{CycleResult, OutputEntry, ProtocolApplication, SchedulerError, SchedulerGroup},
 };
 use log::info;
 use rustc_hash::FxHashSet;
@@ -18,20 +18,19 @@ pub struct GlobalScheduler {
     /// Each element in the outer `Vec` corresponds to a `struct`.
     /// Each element in the inner `VecDeque` is a scheduler clone
     /// (which explores different possible protocol traces).
-    pub scheduler_groups: Vec<VecDeque<Scheduler>>,
+    pub scheduler_groups: Vec<SchedulerGroup>,
 
     /// The waveform supplied by the user (shared across all schedulers)
     trace: WaveSignalTrace,
 }
 
-/// Processes one cycle for a *scheduler group*
-/// (the collection of all schedulers corresponding to the same struct,
-/// where each scheduler represents a different possible protocol trace)
+/// Processes one clock cycle for all schedulers within the same scheduler group
+/// (See `types.rs` for the definition of a *scheduler group*)
 fn process_group_cycles(
-    scheduler_group: VecDeque<Scheduler>,
+    scheduler_group: SchedulerGroup,
     trace: &WaveSignalTrace,
     ctx: &GlobalContext,
-) -> anyhow::Result<VecDeque<Scheduler>> {
+) -> anyhow::Result<SchedulerGroup> {
     // We have to define this up here since we end up mutating `scheduler_group`
     // later in this function
     let group_was_non_empty = !scheduler_group.is_empty();
@@ -39,8 +38,8 @@ fn process_group_cycles(
     // BFS queue of schedulers (each scheduler represents the continuation
     // of a possible protocol trace)
     let mut last_failed_scheduler: Option<Scheduler> = None;
-    let mut schedulers_to_process: VecDeque<Scheduler> = scheduler_group;
-    let mut processed_schedulers: VecDeque<Scheduler> = VecDeque::new();
+    let mut schedulers_to_process: SchedulerGroup = scheduler_group;
+    let mut processed_schedulers: SchedulerGroup = VecDeque::new();
 
     while let Some(mut scheduler) = schedulers_to_process.pop_front() {
         match scheduler.process_current_queue(trace, ctx) {
@@ -111,7 +110,7 @@ fn process_group_cycles(
 /// (deduplicated on canonical `ProtocolApplication` sequence, excluding idle,
 /// with strict-prefix traces filtered out).
 /// Returns the list of maximal `OutputEntry` traces for this group.
-fn collect_maximal_traces(scheduler_group: &VecDeque<Scheduler>) -> Vec<Vec<OutputEntry>> {
+fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<Vec<OutputEntry>> {
     // Collect all unique traces, deduplicating on the canonical
     // `ProtocolApplication` sequence (ignoring timing and thread IDs)
     let mut all_entries: Vec<Vec<OutputEntry>> = vec![];
@@ -168,7 +167,7 @@ impl GlobalScheduler {
     /// Creates an new `GlobalScheduler`.
     /// Note: all the `Scheduler`s are expected to be initialized beforehand.
     pub fn new(schedulers: Vec<Scheduler>, trace: WaveSignalTrace) -> Self {
-        let scheduler_groups: Vec<VecDeque<Scheduler>> = schedulers
+        let scheduler_groups: Vec<SchedulerGroup> = schedulers
             .into_iter()
             .map(|s| VecDeque::from(vec![s]))
             .collect();

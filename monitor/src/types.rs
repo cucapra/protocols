@@ -5,9 +5,9 @@
 /*! Miscellaneous type definitions for the monitor live in this file
  */
 
-use std::fmt;
+use std::{collections::VecDeque, fmt};
 
-use crate::thread::Thread;
+use crate::{scheduler::Scheduler, thread::Thread};
 
 /// Represents a protocol application like `add(1, 2, 3)` which appears
 /// in the protocol trace produced by the monitor.
@@ -33,6 +33,13 @@ impl fmt::Display for ProtocolApplication {
         )
     }
 }
+/// Conceptually, a `SchedulerGroup` is the collection of
+/// all schedulers corresponding to the same `struct` in our DSL,
+/// where each scheduler represents a different possible protocol trace.      
+/// Practically, a `SchedulerGroup` is implemented as a queue (`VecDeque`)
+/// of `Scheduler`s so that we can `push`/`pop` individual `Schedulers`
+/// into/from this queue.
+pub type SchedulerGroup = VecDeque<Scheduler>;
 
 /// An entry (protocol application) in the transaction trace
 /// that is produced by the monitor,
