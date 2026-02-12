@@ -782,36 +782,36 @@ impl Scheduler {
                     // Use the actual time-step from the waveform as the `end_time_step`
                     let end_time_step = trace.time_step();
 
-                    // Don't print out the inferred transaction if the user
-                    // has marked it as `idle`
-                    if self.interpreter.transaction.is_idle {
+                    // Construct a `ProtocolApplication` object
+                    // from the current interpreter state
+                    // (i.e. an entry in the monitor's output trace)
+                    let struct_name = if ctx.multiple_structs {
+                        Some(self.struct_name.clone())
+                    } else {
+                        None
+                    };
+                    let is_idle = self.interpreter.transaction.is_idle;
+                    let protocol_application =
+                        self.interpreter
+                            .to_protocol_application(struct_name, ctx, trace);
+
+                    if is_idle {
                         info!(
-                            "Omitting idle transaction `{}` from trace",
+                            "Transaction `{}` is marked as idle",
                             self.interpreter.transaction.name
                         );
-                    } else {
-                        // Construct a `ProtocolApplication` object
-                        // from the current interpreter state
-                        // (i.e. an entry in the monitor's output trace)
-                        let struct_name = if ctx.multiple_structs {
-                            Some(self.struct_name.clone())
-                        } else {
-                            None
-                        };
-                        let protocol_application =
-                            self.interpreter
-                                .to_protocol_application(struct_name, ctx, trace);
-
-                        // Add the output entry + metadata to the scheduler's
-                        // output buffer
-                        self.output_buffer.push(OutputEntry {
-                            cycle_count: self.cycle_count,
-                            protocol_application,
-                            start_time_step: thread.start_time_step,
-                            end_time_step,
-                            thread_id: thread.global_thread_id(ctx),
-                        });
                     }
+
+                    // Add the output entry + metadata to the scheduler's
+                    // output buffer
+                    self.output_buffer.push(OutputEntry {
+                        cycle_count: self.cycle_count,
+                        protocol_application,
+                        start_time_step: thread.start_time_step,
+                        end_time_step,
+                        thread_id: thread.global_thread_id(ctx),
+                        is_idle,
+                    });
                     self.finished.push_back(thread.clone());
 
                     // Implicit fork: if this thread hasn't forked yet,

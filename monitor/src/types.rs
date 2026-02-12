@@ -44,6 +44,9 @@ pub struct OutputEntry {
     pub start_time_step: u32,
     pub end_time_step: u32,
     pub thread_id: String,
+    /// Whether this transaction was marked `#[idle]` in the protocol file.
+    /// Idle entries are excluded from the dedup key but still displayed.
+    pub is_idle: bool,
 }
 
 /// Error types that can occur during scheduler execution

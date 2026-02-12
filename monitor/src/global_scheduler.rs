@@ -139,8 +139,10 @@ impl GlobalScheduler {
                 let mut sorted_output_entries = scheduler.output_buffer.clone();
                 sorted_output_entries.sort_by_key(|entry| entry.cycle_count);
 
+                // Build canonical trace for dedup, excluding idle entries
                 let trace: Vec<ProtocolApplication> = sorted_output_entries
                     .iter()
+                    .filter(|entry| !entry.is_idle)
                     .map(|entry| entry.protocol_application.clone())
                     .collect();
 
@@ -161,6 +163,7 @@ impl GlobalScheduler {
             .map(|entries| {
                 entries
                     .iter()
+                    .filter(|e| !e.is_idle)
                     .map(|e| e.protocol_application.clone())
                     .collect()
             })
@@ -189,6 +192,7 @@ impl GlobalScheduler {
             }
             let lines: Vec<String> = trace
                 .iter()
+                .filter(|entry| !entry.is_idle)
                 .map(|entry| self.format_output_entry(entry, ctx))
                 .collect();
             println!("{}", lines.join("\n"));
