@@ -646,7 +646,6 @@ impl Scheduler {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        eprintln!("{}", error_msg);
         Err(error_msg)
     }
 
