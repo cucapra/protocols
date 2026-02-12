@@ -107,6 +107,63 @@ fn process_group_cycles(
     Ok(processed_schedulers)
 }
 
+/// For a single scheduler group, collects all unique maximal traces
+/// (deduplicated on canonical `ProtocolApplication` sequence, excluding idle,
+/// with strict-prefix traces filtered out).
+/// Returns the list of maximal `OutputEntry` traces for this group.
+fn collect_maximal_traces(scheduler_group: &VecDeque<Scheduler>) -> Vec<Vec<OutputEntry>> {
+    // Collect all unique traces, deduplicating on the canonical
+    // `ProtocolApplication` sequence (ignoring timing and thread IDs)
+    let mut all_entries: Vec<Vec<OutputEntry>> = vec![];
+    let mut seen: FxHashSet<Vec<ProtocolApplication>> = FxHashSet::default();
+
+    for scheduler in scheduler_group {
+        // Sort `OutputEntry`s by increasing cycle no.
+        let mut sorted_output_entries = scheduler.output_buffer.clone();
+        sorted_output_entries.sort_by_key(|entry| entry.cycle_count);
+
+        // Build canonical trace for dedup, excluding idle entries
+        let trace: Vec<ProtocolApplication> = sorted_output_entries
+            .iter()
+            .filter(|entry| !entry.is_idle)
+            .map(|entry| entry.protocol_application.clone())
+            .collect();
+
+        // Only append `sorted_output_entries` to `all_entries`
+        // if it the corresponding `trace` wasn't previously `seen`
+        if seen.insert(trace) {
+            all_entries.push(sorted_output_entries);
+        }
+    }
+
+    // Filter out traces that are strict prefixes of other traces.
+    // These are partial traces from schedulers where a child thread failed
+    // but the parent thread completed successfully,
+    // resulting in a shorter trace.
+    let all_traces: Vec<Vec<ProtocolApplication>> = all_entries
+        .iter()
+        .map(|entries| {
+            entries
+                .iter()
+                .filter(|e| !e.is_idle)
+                .map(|e| e.protocol_application.clone())
+                .collect()
+        })
+        .collect();
+
+    // Filter out strict prefix traces
+    all_entries
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| {
+            !all_traces.iter().any(|other| {
+                other.len() > all_traces[*i].len() && other.starts_with(all_traces[*i].as_slice())
+            })
+        })
+        .map(|(_, entries)| entries)
+        .collect()
+}
+
 impl GlobalScheduler {
     /// Creates an new `GlobalScheduler`.
     /// Note: all the `Scheduler`s are expected to be initialized beforehand.
@@ -122,81 +179,58 @@ impl GlobalScheduler {
     }
 
     /// Prints all unique protocol traces across all scheduler groups.
-    /// Each scheduler's `output_buffer` represents one possible trace.
-    /// Identical traces are removed, and partial traces that are
-    /// strict prefixes of longer traces are filtered out (these come from
-    /// schedulers where the child thread failed but the parent thread
-    /// continued).
+    ///
+    /// For multi-struct protocols, each struct's scheduler group is processed
+    /// independently during BFS, then the maximal (longest) trace from each
+    /// group is interleaved by cycle count at display time.
     pub fn print_all_traces(&self, ctx: &GlobalContext) {
-        // Collect all unique traces, deduplicating on the canonical
-        // `ProtocolApplication` sequence (ignoring timing and thread IDs)
-        let mut all_entries: Vec<Vec<OutputEntry>> = vec![];
-        let mut seen: FxHashSet<Vec<ProtocolApplication>> = FxHashSet::default();
-
-        for scheduler_group in &self.scheduler_groups {
-            for scheduler in scheduler_group {
-                // Sort `OutputEntry`s by increasing cycle no.
-                let mut sorted_output_entries = scheduler.output_buffer.clone();
-                sorted_output_entries.sort_by_key(|entry| entry.cycle_count);
-
-                // Build canonical trace for dedup, excluding idle entries
-                let trace: Vec<ProtocolApplication> = sorted_output_entries
-                    .iter()
-                    .filter(|entry| !entry.is_idle)
-                    .map(|entry| entry.protocol_application.clone())
-                    .collect();
-
-                // Only append `sorted_output_entries` to `all_entries`
-                // if it the corresponding `trace` wasn't previously `seen`
-                if seen.insert(trace) {
-                    all_entries.push(sorted_output_entries);
-                }
-            }
-        }
-
-        // Filter out traces that are strict prefixes of other traces.
-        // These are partial traces from schedulers where a child thread failed
-        // but the parent thread completed successfully,
-        // resulting in a shorter trace.
-        let all_traces: Vec<Vec<ProtocolApplication>> = all_entries
+        // Collect maximal traces per scheduler group
+        let group_traces: Vec<Vec<Vec<OutputEntry>>> = self
+            .scheduler_groups
             .iter()
-            .map(|entries| {
-                entries
-                    .iter()
-                    .filter(|e| !e.is_idle)
-                    .map(|e| e.protocol_application.clone())
-                    .collect()
-            })
+            .map(collect_maximal_traces)
             .collect();
 
-        let maximal_traces: Vec<&Vec<OutputEntry>> = all_entries
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| {
-                !all_traces.iter().any(|other| {
-                    other.len() > all_traces[*i].len()
-                        && other.starts_with(all_traces[*i].as_slice())
-                })
-            })
-            .map(|(_, entries)| entries)
-            .collect();
-
-        if maximal_traces.is_empty() {
+        if group_traces.is_empty() {
             return;
         }
 
-        // Print all the traces one after another
-        for (i, trace) in maximal_traces.iter().enumerate() {
-            if maximal_traces.len() > 1 {
-                println!("Trace {}:", i);
+        // For single-struct: show all unique traces directly
+        if group_traces.len() == 1 {
+            let traces = &group_traces[0];
+            for (i, trace) in traces.iter().enumerate() {
+                if traces.len() > 1 {
+                    println!("Trace {}:", i);
+                }
+                let lines: Vec<String> = trace
+                    .iter()
+                    .filter(|entry| !entry.is_idle)
+                    .map(|entry| self.format_output_entry(entry, ctx))
+                    .collect();
+                println!("{}", lines.join("\n"));
             }
-            let lines: Vec<String> = trace
-                .iter()
-                .filter(|entry| !entry.is_idle)
-                .map(|entry| self.format_output_entry(entry, ctx))
-                .collect();
-            println!("{}", lines.join("\n"));
+            return;
         }
+
+        // For multi-struct: pick the longest trace from each group
+        // and interleave them by cycle count
+        let mut merged: Vec<OutputEntry> = vec![];
+        for group in &group_traces {
+            if let Some(longest) = group
+                .iter()
+                .max_by_key(|t| t.iter().filter(|e| !e.is_idle).count())
+            {
+                merged.extend(longest.clone());
+            }
+        }
+        merged.sort_by_key(|entry| entry.cycle_count);
+
+        let lines: Vec<String> = merged
+            .iter()
+            .filter(|entry| !entry.is_idle)
+            .map(|entry| self.format_output_entry(entry, ctx))
+            .collect();
+        println!("{}", lines.join("\n"));
     }
 
     /// Formats an `OutputEntry` into a display string
