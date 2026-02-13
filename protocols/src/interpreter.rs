@@ -574,15 +574,36 @@ impl<'a> Evaluator<'a> {
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
             Expr::Sym(sym_id) => {
-                let name = self.st[sym_id].name();
+                let name = self.st[sym_id].full_name(self.st);
 
                 // Check if reading this port is forbidden (count > 0)
                 // For inputs: count > 0 when DontCare was assigned
                 // For outputs: count > 0 when a dependent input has DontCare
                 if let Some(&count) = self.forbidden_read_counts.get(sym_id) {
                     if count > 0 {
+                        // Collect the (full_name, stmt_id) of each DontCare input this port depends on
+                        let dep_inputs = self
+                            .output_dependencies
+                            .get(sym_id)
+                            .cloned()
+                            .unwrap_or_else(|| vec![*sym_id]);
+                        let unassigned_inputs: Vec<(String, Option<StmtId>)> = dep_inputs
+                            .iter()
+                            .filter_map(|input_id| {
+                                let per_thread = self.per_thread_input_vals.get(input_id)?;
+                                // Find any thread that assigned DontCare to this input
+                                let (_, (val, stmt_id)) =
+                                    per_thread.iter().find(|(_, (val, _))| val.is_dont_care())?;
+                                if val.is_dont_care() {
+                                    Some((self.st[input_id].full_name(self.st), *stmt_id))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
                         return Err(ExecutionError::forbidden_port_read(
-                            name.to_string(),
+                            name.clone(),
+                            unassigned_inputs,
                             *expr_id,
                         ));
                     }

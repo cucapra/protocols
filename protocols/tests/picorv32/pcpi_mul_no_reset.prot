@@ -46,10 +46,22 @@ prot pcpi_mul<p: picorv32_pcpi_mul>(
   step();
 }
 
-prot pcpi_mul_reset<p: picorv32_pcpi_mul>() {
+prot pcpi_mul_reset_normal<p: picorv32_pcpi_mul>() {
+  p.resetn := 1'b0;
+  step();
+  // keep the second cycle for consistency with pcpi_mul_reset_one
+  fork();
+  p.resetn := X;
+  step();
+}
+
+prot pcpi_mul_reset_one<p: picorv32_pcpi_mul>() {
   p.resetn := 1'b0;
   step();
   fork();
-  p.resetn := 1'b1; // NOTE: this line is new!
+  // set reset to 1
+  // if the pcpi_mul transaction terminates, it signals that this assignment
+  // is persistent past the termination of this thread.  
+  p.resetn := 1'b1; 
   step();
 }

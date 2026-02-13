@@ -49,7 +49,12 @@ pub enum EvaluationError {
     /// Attempted to assign to an input port after observing a dependent output
     ForbiddenInputAssignment { input_name: String, expr_id: ExprId },
     /// Attempted to read a port that is forbidden (input with DontCare, or output with dependent DontCare input)
-    ForbiddenPortRead { port_name: String, expr_id: ExprId },
+    ForbiddenPortRead {
+        port_name: String,
+        /// (input_name, stmt_id) for each DontCare input that caused the forbidden read
+        unassigned_inputs: Vec<(String, Option<StmtId>)>,
+        expr_id: ExprId,
+    },
     /// Invalid slice operation.
     /// self.width() >= msb >= lsb >= 0
     InvalidSlice {
@@ -231,11 +236,34 @@ impl fmt::Display for EvaluationError {
                     input_name
                 )
             }
-            EvaluationError::ForbiddenPortRead { port_name, .. } => {
+            EvaluationError::ForbiddenPortRead {
+                port_name,
+                unassigned_inputs,
+                ..
+            } => {
+                let input_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                let implicit_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .filter(|(_, stmt_id)| stmt_id.is_none())
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                let implicit_note = if implicit_names.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " ({} initialized to DontCare and were never assigned a concrete value)",
+                        implicit_names.join(", ")
+                    )
+                };
                 write!(
                     f,
-                    "Cannot observe forbidden port '{}' after assigning DontCare to a combinationally dependent input",
-                    port_name
+                    "Output '{}' depends on input(s) {} which do not have assigned values{}",
+                    port_name,
+                    input_names.join(", "),
+                    implicit_note
                 )
             }
             EvaluationError::InvalidSlice {
@@ -525,8 +553,16 @@ impl ExecutionError {
         })
     }
 
-    pub fn forbidden_port_read(port_name: String, expr_id: ExprId) -> Self {
-        ExecutionError::Evaluation(EvaluationError::ForbiddenPortRead { port_name, expr_id })
+    pub fn forbidden_port_read(
+        port_name: String,
+        unassigned_inputs: Vec<(String, Option<StmtId>)>,
+        expr_id: ExprId,
+    ) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ForbiddenPortRead {
+            port_name,
+            unassigned_inputs,
+            expr_id,
+        })
     }
 
     pub fn arithmetic_error(operation: String, details: String, expr_id: ExprId) -> Self {
@@ -683,14 +719,47 @@ impl DiagnosticEmitter {
                     Level::Error,
                 );
             }
-            EvaluationError::ForbiddenPortRead { port_name, expr_id } => {
-                handler.emit_diagnostic_expr(
+            EvaluationError::ForbiddenPortRead {
+                port_name,
+                unassigned_inputs,
+                expr_id,
+            } => {
+                let input_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                // Inputs with no stmt_id were never explicitly assigned (implicit DontCare at initialization)
+                let implicit_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .filter(|(_, stmt_id)| stmt_id.is_none())
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                let implicit_note = if implicit_names.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " ({} initialized to DontCare and were never assigned a concrete value)",
+                        implicit_names.join(", ")
+                    )
+                };
+                let main_message = format!(
+                    "Output '{}' depends on input(s) {} which do not have assigned values{}",
+                    port_name,
+                    input_names.join(", "),
+                    implicit_note
+                );
+                let stmt_labels: Vec<_> = unassigned_inputs
+                    .iter()
+                    .filter_map(|(name, stmt_id)| {
+                        stmt_id.map(|sid| (sid, format!("'{}' assigned DontCare here", name)))
+                    })
+                    .collect();
+                handler.emit_diagnostic_expr_with_stmts(
                     transaction,
                     expr_id,
-                    &format!(
-                         "Cannot observe forbidden port '{}' after assigning DontCare to a combinationally dependent input",
-                        port_name
-                    ),
+                    &main_message,
+                    &stmt_labels,
+                    &main_message,
                     Level::Error,
                 );
             }

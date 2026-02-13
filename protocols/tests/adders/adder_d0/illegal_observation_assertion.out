@@ -1,6 +1,9 @@
-error: Cannot observe forbidden port 's' after assigning DontCare to a combinationally dependent input
-   ┌─ adders/adder_d0/add_d0.prot:25:13
+error: Output 'DUT.s' depends on input(s) 'DUT.b' which do not have assigned values
+   ┌─ adders/adder_d0/add_d0.prot:22:3
    │
+22 │   DUT.b := X;
+   │   ^^^^^^^^^^^ 'DUT.b' assigned DontCare here
+   ·
 25 │   assert_eq(DUT.s, s); // this should be illegal
-   │             ^^^^^ Cannot observe forbidden port 's' after assigning DontCare to a combinationally dependent input
+   │             ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.b' which do not have assigned values
 

@@ -1,6 +1,6 @@
-error: Cannot observe forbidden port 's' after assigning DontCare to a combinationally dependent input
+error: Output 'DUT.s' depends on input(s) 'DUT.a' which do not have assigned values ('DUT.a' initialized to DontCare and were never assigned a concrete value)
   ┌─ inverters/inverter_d0.prot:7:12
   │
 7 │   DUT.a := DUT.s;
-  │            ^^^^^ Cannot observe forbidden port 's' after assigning DontCare to a combinationally dependent input
+  │            ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.a' which do not have assigned values ('DUT.a' initialized to DontCare and were never assigned a concrete value)
 

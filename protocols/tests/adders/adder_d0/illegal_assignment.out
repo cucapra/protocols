@@ -1,6 +1,6 @@
-error: Cannot observe forbidden port 's' after assigning DontCare to a combinationally dependent input
+error: Output 'DUT.s' depends on input(s) 'DUT.b', 'DUT.a' which do not have assigned values ('DUT.b', 'DUT.a' initialized to DontCare and were never assigned a concrete value)
    ┌─ adders/adder_d0/add_d0.prot:30:7
    │
 30 │   if (DUT.s == 32'b0) {
-   │       ^^^^^ Cannot observe forbidden port 's' after assigning DontCare to a combinationally dependent input
+   │       ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.b', 'DUT.a' which do not have assigned values ('DUT.b', 'DUT.a' initialized to DontCare and were never assigned a concrete value)
 
