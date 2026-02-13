@@ -432,29 +432,31 @@ impl Scheduler {
             }
             let finished_thread = &finished[0];
 
-            // ...and there shouldn't be any other threads in `next`
-            let next = threads_with_start_time(&self.next, start_cycle);
-            if !next.is_empty() {
-                let start_time_str = if ctx.show_waveform_time {
-                    trace.format_time(finished_thread.start_time_step, ctx.time_unit)
-                } else {
-                    format!("cycle {}", finished_thread.start_cycle)
-                };
-                let error_context = anyhow!(
-                    "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
+            // ...any other threads from the same start cycle still in `next`
+            // are slower siblings that lost the race — move them to `failed`
+            let sibling_names: Vec<String> = self
+                .next
+                .iter()
+                .filter(|t| t.start_cycle == start_cycle)
+                .map(|t| t.transaction.name.clone())
+                .collect();
+            if !sibling_names.is_empty() {
+                info!(
+                    "Thread {} (`{}`) finished; moving slower siblings from `next` to `failed`: {:?}",
                     finished_thread.global_thread_id(ctx),
                     finished_thread.transaction.name,
-                    start_time_str,
-                    next.iter()
-                        .map(|t| t.transaction.name.clone())
-                        .collect::<Vec<_>>()
+                    sibling_names
                 );
-
-                return Err(SchedulerError::NoTransactionsMatch {
-                    struct_name: self.struct_name.clone(),
-                    error_context,
-                });
             }
+            let mut remaining_next = Queue::new();
+            for thread in self.next.drain(..) {
+                if thread.start_cycle == start_cycle {
+                    self.failed.push_back(thread);
+                } else {
+                    remaining_next.push_back(thread);
+                }
+            }
+            self.next = remaining_next;
         }
 
         // Next, find the unique start cycles of all threads in `failed`
@@ -748,6 +750,18 @@ impl Scheduler {
                     }
                 }
                 Ok(None) => {
+                    // Check if the last executed statement was `step()`.
+                    // If not, this protocol is ill-formed and should be discarded.
+                    if !matches!(thread.transaction[current_stmt_id], Stmt::Step) {
+                        info!(
+                            "Thread {} (`{}`) didn't end with `step()`, marking as failed.",
+                            thread.global_thread_id(ctx),
+                            self.format_transaction_name(ctx, thread.transaction.name.clone())
+                        );
+                        self.failed.push_back(thread);
+                        return Ok(ThreadResult::Completed);
+                    }
+
                     // Check if another thread has already finished in this cycle.
                     // Invariant: Only one thread per struct can finish per cycle
                     if let Some((first_start_cycle, first_thread_id, first_transaction_name)) =
