@@ -4,7 +4,6 @@ Round-trip test: for each passing .tx test, run the interpreter to generate
 an FST waveform, then run the monitor on that FST. Reports success/fail counts.
 
 Usage: python scripts/roundtrip.py
-       (or via justfile: just roundtrip)
 
 TODO: Compare monitor output against original .tx transactions.
 """
