@@ -214,7 +214,10 @@ impl GlobalScheduler {
                     .filter(|prot_application| !prot_application.is_idle)
                     .map(|entry| self.format_augmented_protocol_application(entry, ctx))
                     .collect();
-                println!("{}", lines.join(";\n"));
+                // Include semi-colons so that the serialized
+                // protocol trace is the same as the concrete
+                // syntax for `.tx` files in the interpreter
+                println!("{};", lines.join(";\n"));
             }
             return;
         }

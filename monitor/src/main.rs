@@ -32,7 +32,7 @@ use protocols::typecheck::type_check;
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
 
 /// Args for the monitor CLI
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
     /// Path to a Protocol (.prot) file
