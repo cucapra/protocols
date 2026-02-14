@@ -217,7 +217,7 @@ impl GlobalScheduler {
                 // Include semi-colons so that the serialized
                 // protocol trace is the same as the concrete
                 // syntax for `.tx` files in the interpreter
-                println!("{};", lines.join(";\n"));
+                println!("{}", lines.join("\n"));
             }
             return;
         }
@@ -256,21 +256,21 @@ impl GlobalScheduler {
                 let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
                 if ctx.show_thread_ids {
                     format!(
-                        "{}  // [time: {} -> {}] (thread {})",
+                        "{};  // [time: {} -> {}] (thread {})",
                         entry.protocol_application, start_time, end_time, entry.thread_id
                     )
                 } else {
                     format!(
-                        "{}  // [time: {} -> {}]",
+                        "{};  // [time: {} -> {}]",
                         entry.protocol_application, start_time, end_time
                     )
                 }
             }
             (false, true) => format!(
-                "{}  // (thread {})",
+                "{};  // (thread {})",
                 entry.protocol_application, entry.thread_id
             ),
-            (false, false) => entry.protocol_application.to_string(),
+            (false, false) => format!("{};", entry.protocol_application.to_string()),
         }
     }
 
