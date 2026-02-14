@@ -270,7 +270,7 @@ impl GlobalScheduler {
                 "{};  // (thread {})",
                 entry.protocol_application, entry.thread_id
             ),
-            (false, false) => format!("{};", entry.protocol_application.to_string()),
+            (false, false) => format!("{};", entry.protocol_application),
         }
     }
 
