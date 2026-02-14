@@ -1,14 +1,14 @@
-reset()  // [time: 0ns -> 25ns] (thread 4)
-push(1)  // [time: 25ns -> 50ns] (thread 6)
-push(1)  // [time: 50ns -> 75ns] (thread 7)
-push(2)  // [time: 75ns -> 100ns] (thread 8)
-push(4)  // [time: 100ns -> 125ns] (thread 9)
-push(5)  // [time: 125ns -> 150ns] (thread 10)
-push(6)  // [time: 150ns -> 175ns] (thread 11)
-push(6)  // [time: 175ns -> 200ns] (thread 12)
-push(6)  // [time: 200ns -> 225ns] (thread 13)
-push(6)  // [time: 225ns -> 250ns] (thread 14)
-push(6)  // [time: 250ns -> 275ns] (thread 15)
-push(6)  // [time: 275ns -> 300ns] (thread 16)
-reset()  // [time: 300ns -> 325ns] (thread 17)
-push(6)  // [time: 325ns -> 337.5ns] (thread 18)
+reset()  // [time: 0ns -> 25ns];
+push(1)  // [time: 25ns -> 50ns];
+push(1)  // [time: 50ns -> 75ns];
+push(2)  // [time: 75ns -> 100ns];
+push(4)  // [time: 100ns -> 125ns];
+push(5)  // [time: 125ns -> 150ns];
+push(6)  // [time: 150ns -> 175ns];
+push(6)  // [time: 175ns -> 200ns];
+push(6)  // [time: 200ns -> 225ns];
+push(6)  // [time: 225ns -> 250ns];
+push(6)  // [time: 250ns -> 275ns];
+push(6)  // [time: 275ns -> 300ns];
+reset()  // [time: 300ns -> 325ns];
+push(6)  // [time: 325ns -> 337.5ns];

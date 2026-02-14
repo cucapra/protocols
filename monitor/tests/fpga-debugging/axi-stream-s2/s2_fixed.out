@@ -1,54 +1,54 @@
 Trace 0:
-reset()  // [time: 0ns -> 12.5ns] (thread 0)
-wait_for_data()  // [time: 337.5ns -> 362.5ns] (thread 19)
-wait_for_data()  // [time: 387.5ns -> 412.5ns] (thread 21)
-wait_for_data()  // [time: 512.5ns -> 537.5ns] (thread 26)
-wait_for_data()  // [time: 537.5ns -> 562.5ns] (thread 27)
-wait_for_data()  // [time: 612.5ns -> 637.5ns] (thread 30)
-wait_for_data()  // [time: 787.5ns -> 812.5ns] (thread 37)
-wait_for_data()  // [time: 837.5ns -> 862.5ns] (thread 39)
-recv(1)  // [time: 862.5ns -> 887.5ns] (thread 40)
-recv(2)  // [time: 887.5ns -> 912.5ns] (thread 41)
-recv(3)  // [time: 912.5ns -> 937.5ns] (thread 42)
-recv(4)  // [time: 937.5ns -> 962.5ns] (thread 43)
-recv(5)  // [time: 962.5ns -> 987.5ns] (thread 44)
-recv(6)  // [time: 987.5ns -> 1012.5ns] (thread 45)
-stall(7, 0)  // [time: 1012.5ns -> 1037.5ns] (thread 46)
-stall(7, 0)  // [time: 1037.5ns -> 1062.5ns] (thread 47)
-reset()  // [time: 1062.5ns -> 1087.5ns] (thread 48)
-reset()  // [time: 1087.5ns -> 1100ns] (thread 49)
+reset()  // [time: 0ns -> 12.5ns];
+wait_for_data()  // [time: 337.5ns -> 362.5ns];
+wait_for_data()  // [time: 387.5ns -> 412.5ns];
+wait_for_data()  // [time: 512.5ns -> 537.5ns];
+wait_for_data()  // [time: 537.5ns -> 562.5ns];
+wait_for_data()  // [time: 612.5ns -> 637.5ns];
+wait_for_data()  // [time: 787.5ns -> 812.5ns];
+wait_for_data()  // [time: 837.5ns -> 862.5ns];
+recv(1)  // [time: 862.5ns -> 887.5ns];
+recv(2)  // [time: 887.5ns -> 912.5ns];
+recv(3)  // [time: 912.5ns -> 937.5ns];
+recv(4)  // [time: 937.5ns -> 962.5ns];
+recv(5)  // [time: 962.5ns -> 987.5ns];
+recv(6)  // [time: 987.5ns -> 1012.5ns];
+stall(7, 0)  // [time: 1012.5ns -> 1037.5ns];
+stall(7, 0)  // [time: 1037.5ns -> 1062.5ns];
+reset()  // [time: 1062.5ns -> 1087.5ns];
+reset()  // [time: 1087.5ns -> 1100ns];
 Trace 1:
-reset()  // [time: 0ns -> 12.5ns] (thread 0)
-wait_for_data()  // [time: 337.5ns -> 362.5ns] (thread 19)
-wait_for_data()  // [time: 387.5ns -> 412.5ns] (thread 21)
-wait_for_data()  // [time: 512.5ns -> 537.5ns] (thread 26)
-wait_for_data()  // [time: 537.5ns -> 562.5ns] (thread 27)
-wait_for_data()  // [time: 612.5ns -> 637.5ns] (thread 30)
-wait_for_data()  // [time: 787.5ns -> 812.5ns] (thread 37)
-wait_for_data()  // [time: 837.5ns -> 862.5ns] (thread 39)
-recv(1)  // [time: 862.5ns -> 887.5ns] (thread 40)
-recv(2)  // [time: 887.5ns -> 912.5ns] (thread 41)
-recv(3)  // [time: 912.5ns -> 937.5ns] (thread 42)
-recv(4)  // [time: 937.5ns -> 962.5ns] (thread 43)
-recv(5)  // [time: 962.5ns -> 987.5ns] (thread 44)
-recv(6)  // [time: 987.5ns -> 1012.5ns] (thread 45)
-stall(7, 0)  // [time: 1012.5ns -> 1037.5ns] (thread 46)
-reset()  // [time: 1062.5ns -> 1087.5ns] (thread 48)
-reset()  // [time: 1087.5ns -> 1100ns] (thread 49)
+reset()  // [time: 0ns -> 12.5ns];
+wait_for_data()  // [time: 337.5ns -> 362.5ns];
+wait_for_data()  // [time: 387.5ns -> 412.5ns];
+wait_for_data()  // [time: 512.5ns -> 537.5ns];
+wait_for_data()  // [time: 537.5ns -> 562.5ns];
+wait_for_data()  // [time: 612.5ns -> 637.5ns];
+wait_for_data()  // [time: 787.5ns -> 812.5ns];
+wait_for_data()  // [time: 837.5ns -> 862.5ns];
+recv(1)  // [time: 862.5ns -> 887.5ns];
+recv(2)  // [time: 887.5ns -> 912.5ns];
+recv(3)  // [time: 912.5ns -> 937.5ns];
+recv(4)  // [time: 937.5ns -> 962.5ns];
+recv(5)  // [time: 962.5ns -> 987.5ns];
+recv(6)  // [time: 987.5ns -> 1012.5ns];
+stall(7, 0)  // [time: 1012.5ns -> 1037.5ns];
+reset()  // [time: 1062.5ns -> 1087.5ns];
+reset()  // [time: 1087.5ns -> 1100ns];
 Trace 2:
-reset()  // [time: 0ns -> 12.5ns] (thread 0)
-wait_for_data()  // [time: 337.5ns -> 362.5ns] (thread 19)
-wait_for_data()  // [time: 387.5ns -> 412.5ns] (thread 21)
-wait_for_data()  // [time: 512.5ns -> 537.5ns] (thread 26)
-wait_for_data()  // [time: 537.5ns -> 562.5ns] (thread 27)
-wait_for_data()  // [time: 612.5ns -> 637.5ns] (thread 30)
-wait_for_data()  // [time: 787.5ns -> 812.5ns] (thread 37)
-wait_for_data()  // [time: 837.5ns -> 862.5ns] (thread 39)
-recv(1)  // [time: 862.5ns -> 887.5ns] (thread 40)
-recv(2)  // [time: 887.5ns -> 912.5ns] (thread 41)
-recv(3)  // [time: 912.5ns -> 937.5ns] (thread 42)
-recv(4)  // [time: 937.5ns -> 962.5ns] (thread 43)
-recv(5)  // [time: 962.5ns -> 987.5ns] (thread 44)
-recv(6)  // [time: 987.5ns -> 1012.5ns] (thread 45)
-reset()  // [time: 1062.5ns -> 1087.5ns] (thread 48)
-reset()  // [time: 1087.5ns -> 1100ns] (thread 49)
+reset()  // [time: 0ns -> 12.5ns];
+wait_for_data()  // [time: 337.5ns -> 362.5ns];
+wait_for_data()  // [time: 387.5ns -> 412.5ns];
+wait_for_data()  // [time: 512.5ns -> 537.5ns];
+wait_for_data()  // [time: 537.5ns -> 562.5ns];
+wait_for_data()  // [time: 612.5ns -> 637.5ns];
+wait_for_data()  // [time: 787.5ns -> 812.5ns];
+wait_for_data()  // [time: 837.5ns -> 862.5ns];
+recv(1)  // [time: 862.5ns -> 887.5ns];
+recv(2)  // [time: 887.5ns -> 912.5ns];
+recv(3)  // [time: 912.5ns -> 937.5ns];
+recv(4)  // [time: 937.5ns -> 962.5ns];
+recv(5)  // [time: 962.5ns -> 987.5ns];
+recv(6)  // [time: 987.5ns -> 1012.5ns];
+reset()  // [time: 1062.5ns -> 1087.5ns];
+reset()  // [time: 1087.5ns -> 1100ns];
