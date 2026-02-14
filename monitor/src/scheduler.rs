@@ -430,33 +430,6 @@ impl Scheduler {
                         .collect::<Vec<_>>()
                 )));
             }
-            let finished_thread = &finished[0];
-
-            // ...any other threads from the same start cycle still in `next`
-            // are slower siblings that lost the race — move them to `failed`
-            let sibling_names: Vec<String> = self
-                .next
-                .iter()
-                .filter(|t| t.start_cycle == start_cycle)
-                .map(|t| t.transaction.name.clone())
-                .collect();
-            if !sibling_names.is_empty() {
-                info!(
-                    "Thread {} (`{}`) finished; moving slower siblings from `next` to `failed`: {:?}",
-                    finished_thread.global_thread_id(ctx),
-                    finished_thread.transaction.name,
-                    sibling_names
-                );
-            }
-            let mut remaining_next = Queue::new();
-            for thread in self.next.drain(..) {
-                if thread.start_cycle == start_cycle {
-                    self.failed.push_back(thread);
-                } else {
-                    remaining_next.push_back(thread);
-                }
-            }
-            self.next = remaining_next;
         }
 
         // Next, find the unique start cycles of all threads in `failed`
