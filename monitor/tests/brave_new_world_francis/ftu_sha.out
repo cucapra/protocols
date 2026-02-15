@@ -1,1 +1,4 @@
-failure_to_update_sha();
+// trace 0
+trace {
+    failure_to_update_sha();
+}

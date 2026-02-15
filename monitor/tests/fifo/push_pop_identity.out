@@ -1,6 +1,9 @@
-reset();
-push(2);
-pop(2);
-idle();
-push(3);
-pop(3);
+// trace 0
+trace {
+    reset();
+    push(2);
+    pop(2);
+    idle();
+    push(3);
+    pop(3);
+}

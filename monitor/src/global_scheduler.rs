@@ -167,6 +167,15 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
 }
 
 impl GlobalScheduler {
+    fn print_trace_block(trace_index: usize, lines: &[String]) {
+        println!("// trace {}", trace_index);
+        println!("trace {{");
+        for line in lines {
+            println!("    {}", line);
+        }
+        println!("}}");
+    }
+
     /// Creates an new `GlobalScheduler`.
     /// Note: all the `Scheduler`s are expected to be initialized beforehand.
     pub fn new(schedulers: Vec<Scheduler>, trace: WaveSignalTrace) -> Self {
@@ -206,18 +215,15 @@ impl GlobalScheduler {
         if scheduler_group_traces.len() == 1 {
             let traces = &scheduler_group_traces[0];
             for (i, trace) in traces.iter().enumerate() {
-                if traces.len() > 1 {
-                    println!("Trace {}:", i);
-                }
                 let lines: Vec<String> = trace
                     .iter()
                     .filter(|prot_application| !prot_application.is_idle)
                     .map(|entry| self.format_augmented_protocol_application(entry, ctx))
                     .collect();
-                // Include semi-colons so that the serialized
-                // protocol trace is the same as the concrete
-                // syntax for `.tx` files in the interpreter
-                println!("{}", lines.join("\n"));
+                if i > 0 {
+                    println!();
+                }
+                Self::print_trace_block(i, &lines);
             }
             return;
         }
@@ -241,7 +247,7 @@ impl GlobalScheduler {
             .filter(|entry| !entry.is_idle)
             .map(|entry| self.format_augmented_protocol_application(entry, ctx))
             .collect();
-        println!("{}", lines.join("\n"));
+        Self::print_trace_block(0, &lines);
     }
 
     /// Formats an `AugmentedProtocolApplication` into a display string

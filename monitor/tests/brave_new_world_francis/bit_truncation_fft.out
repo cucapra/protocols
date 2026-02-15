@@ -1,1 +1,4 @@
-bit_truncation_fft(8386560, 2047);
+// trace 0
+trace {
+    bit_truncation_fft(8386560, 2047);
+}
