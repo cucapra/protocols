@@ -1,6 +1,8 @@
 // ARGS: --verilog picorv32/picorv32.v --protocol picorv32/pcpi_mul.prot --module picorv32_pcpi_mul
-pcpi_mul_reset();
-pcpi_mul(1, 1, 1);
-pcpi_mul(1, 100, 100);
-pcpi_mul(100, 1, 100);
-pcpi_mul(33554483, 200, 2415929304);
+trace {
+    pcpi_mul_reset();
+    pcpi_mul(1, 1, 1);
+    pcpi_mul(1, 100, 100);
+    pcpi_mul(100, 1, 100);
+    pcpi_mul(33554483, 200, 2415929304);
+}

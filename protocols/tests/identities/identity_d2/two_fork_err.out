@@ -7,3 +7,4 @@ error: Thread 0 (transaction 'two_fork_err') attempted to fork more than once
 25 │   fork();
    │   ^^^^^^^ second fork() called here
 
+Trace 0 execution failed.

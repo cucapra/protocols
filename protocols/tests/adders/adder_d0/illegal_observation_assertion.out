@@ -7,3 +7,4 @@ error: Output 'DUT.s' depends on input(s) 'DUT.b' which do not have assigned val
 25 │   assert_eq(DUT.s, s); // this should be illegal
    │             ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.b' which do not have assigned values
 
+Trace 0 execution failed.
