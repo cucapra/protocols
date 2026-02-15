@@ -1,2 +1,4 @@
 // ARGS: --verilog=brave_new_world/signal_asynchrony/signal_async_fix.v --protocol=brave_new_world/signal_asynchrony/signal_async.prot --module signal_async_fix
-signal_async(6, 7);
+trace {
+    signal_async(6, 7);
+}

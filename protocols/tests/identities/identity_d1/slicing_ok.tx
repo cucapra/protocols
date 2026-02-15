@@ -1,2 +1,4 @@
 // ARGS: --verilog identities/identity_d1/identity_d1.v --protocol identities/identity_d1/identity_d1.prot
-slicing_ok(1, 1);
+trace {
+    slicing_ok(1, 1);
+}

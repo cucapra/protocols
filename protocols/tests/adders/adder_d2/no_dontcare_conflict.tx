@@ -1,4 +1,6 @@
 // ARGS: --verilog adders/adder_d2/add_d2.v --protocol adders/adder_d2/no_dontcare_conflict.prot
 // RETURN: 101
-add(1, 2, 3);
-add(4, 5, 9);
+trace {
+    add(1, 2, 3);
+    add(4, 5, 9);
+}

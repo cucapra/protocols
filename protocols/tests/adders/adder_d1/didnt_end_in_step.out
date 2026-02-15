@@ -4,3 +4,4 @@ error: The last executed statement in Thread 0 (transaction 'add_doesnt_end_in_s
 39 │   fork();
    │   ^^^^^^^ last statement wasn't `step()`
 
+Trace 0 execution failed.

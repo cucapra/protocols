@@ -17,7 +17,7 @@ pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
     transaction_arg_types: FxHashMap<String, Vec<Type>>,
-) -> anyhow::Result<Vec<TodoItem>> {
+) -> anyhow::Result<Vec<Vec<TodoItem>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
     let fileid = handler.add_file(filename, input.clone());
@@ -37,35 +37,44 @@ pub fn parse_transactions_file(
 
     // Access the `Rule`s contained within the parsed result
     let inner_rules = parse_result.unwrap().next().unwrap().into_inner();
-    let mut todos = vec![];
+    let mut traces: Vec<Vec<TodoItem>> = vec![];
 
-    // Parse each transaction
-    for transaction_pair in inner_rules {
-        if let Rule::transaction = transaction_pair.as_rule() {
-            let mut transaction_inner = transaction_pair.into_inner();
+    // Parse each trace block and each transaction within each block.
+    for trace_pair in inner_rules {
+        if trace_pair.as_rule() == Rule::trace {
+            let mut trace_todos: Vec<TodoItem> = vec![];
+            for transaction_pair in trace_pair.into_inner() {
+                if transaction_pair.as_rule() == Rule::transaction {
+                    let mut transaction_inner = transaction_pair.into_inner();
 
-            // First element should be the function name (ident)
-            let function_name = transaction_inner.next().unwrap().as_str().to_string();
+                    // First element should be the function name (ident)
+                    let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-            let arg_types = transaction_arg_types
-                .get(&function_name)
-                .unwrap_or_else(|| {
-                    panic!("Unable to fetch argument types for transaction {function_name}")
-                });
+                    let arg_types =
+                        transaction_arg_types
+                            .get(&function_name)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Unable to fetch argument types for transaction {function_name}"
+                                )
+                            });
 
-            // Parse arguments if they exist
-            let mut args: Vec<BitVecValue> = vec![];
-            if let Some(arglist_pair) = transaction_inner.next() {
-                if arglist_pair.as_rule() == Rule::arglist {
-                    args = parse_arglist(arglist_pair, handler, fileid, arg_types)?;
+                    // Parse arguments if they exist
+                    let mut args: Vec<BitVecValue> = vec![];
+                    if let Some(arglist_pair) = transaction_inner.next() {
+                        if arglist_pair.as_rule() == Rule::arglist {
+                            args = parse_arglist(arglist_pair, handler, fileid, arg_types)?;
+                        }
+                    }
+
+                    trace_todos.push((function_name, args));
                 }
             }
-
-            todos.push((function_name, args));
+            traces.push(trace_todos);
         }
     }
 
-    Ok(todos)
+    Ok(traces)
 }
 
 /// Parses a list of arguments that are supplied to a transaction,

@@ -4,3 +4,4 @@ error: The two expressions did not evaluate to the same value
 9 │     assert_eq(data_out, dut.left);
   │               ^^^^^^^^^^^^^^^^^^ LHS Value: 68719476736, RHS Value: 0
 
+Trace 0 execution failed.

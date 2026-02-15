@@ -16,3 +16,4 @@ error: Thread 1 (transaction 'add_double_fork') attempted to fork more than once
 15 │   fork();
    │   ^^^^^^^ second fork() called here
 
+Trace 0 execution failed.

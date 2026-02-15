@@ -10,3 +10,4 @@ error: Thread 1 (`multiple_assign`) attempted conflicting assignment to 'a': cur
 9 │   DUT.a := a;
   │   ^^^^^^^^^^^ Thread 1 (`multiple_assign`) attempted conflicting assignment to 'a': current=1, new=2
 
+Trace 0 execution failed.

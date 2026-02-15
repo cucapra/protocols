@@ -1,6 +1,8 @@
 // ARGS: --verilog identities/identity_d1/identity_d1.v --protocol identities/identity_d1/identity_d1.prot
 // RETURN: 101
-explicit_fork(1, 1);
-explicit_fork(2, 2);
-explicit_fork(3, 4);
-explicit_fork(4, 4);
+trace {
+    explicit_fork(1, 1);
+    explicit_fork(2, 2);
+    explicit_fork(3, 4);
+    explicit_fork(4, 4);
+}

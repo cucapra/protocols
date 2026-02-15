@@ -1,3 +1,5 @@
 // ARGS: --verilog multipliers/mult_d2/mult_d2.v --protocol multipliers/mult_d2/mult_d2.prot
-mul(1, 2, 2);
-mul(6, 8, 48);
+trace {
+    mul(1, 2, 2);
+    mul(6, 8, 48);
+}

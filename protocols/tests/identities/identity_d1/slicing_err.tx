@@ -1,3 +1,5 @@
 // ARGS: --verilog identities/identity_d1/identity_d1.v --protocol identities/identity_d1/slicing_err.prot
 // RETURN: 1
-slicing_err(1, 1);
+trace {
+    slicing_err(1, 1);
+}
