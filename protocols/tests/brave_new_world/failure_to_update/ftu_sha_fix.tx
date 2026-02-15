@@ -1,2 +1,4 @@
 // ARGS: --verilog=brave_new_world/failure_to_update/ftu_sha_fix.v --protocol=brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_fixed_gated
-failure_to_update_sha();
+trace {
+    failure_to_update_sha();
+}

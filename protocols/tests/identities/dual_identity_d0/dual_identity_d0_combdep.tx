@@ -1,8 +1,10 @@
 // ARGS: --verilog identities/dual_identity_d0/dual_identity_d0.v --protocol identities/dual_identity_d0/dual_identity_d0.prot
 // RETURN: 101
-// This test demonstrates how combinational dependency tracking should catch
-// observation-assignment conflicts.
-// The protocol observes dut.s2 (output) which combinationally depends on dut.b (input).
-// Observing s2 should forbid assignments to b, but both branches assign to b.
-// With comb dependency tracking: should error with "ASSIGNED FORBIDDEN PORT"
-identity(1, 1);
+trace {
+    // This test demonstrates how combinational dependency tracking should catch
+    // observation-assignment conflicts.
+    // The protocol observes dut.s2 (output) which combinationally depends on dut.b (input).
+    // Observing s2 should forbid assignments to b, but both branches assign to b.
+    // With comb dependency tracking: should error with "ASSIGNED FORBIDDEN PORT"
+    identity(1, 1);
+}

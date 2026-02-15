@@ -10,3 +10,4 @@ error: Thread 1 (`add_incorrect_implicit`) attempted conflicting assignment to '
 55 │   DUT.a := a;
    │   ^^^^^^^^^^^ Thread 1 (`add_incorrect_implicit`) attempted conflicting assignment to 'a': current=1, new=4
 
+Trace 0 execution failed.

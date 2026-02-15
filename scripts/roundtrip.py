@@ -44,6 +44,19 @@ def collect_tx_files() -> list[Path]:
     """Find all .tx files under PROJECT_ROOT, sorted."""
     return sorted(PROJECT_ROOT.rglob("*.tx"))
 
+def collect_generated_fsts(fst_path: Path) -> list[Path]:
+    """Collect generated waveform files for one interp run."""
+    indexed: list[tuple[int, Path]] = []
+    for path in fst_path.parent.glob(f"{fst_path.stem}_*{fst_path.suffix}"):
+        suffix = path.stem[len(fst_path.stem) + 1 :]
+        if suffix.isdigit():
+            indexed.append((int(suffix), path))
+    if indexed:
+        return [path for _, path in sorted(indexed, key=lambda item: item[0])]
+    if fst_path.exists():
+        return [fst_path]
+    return []
+
 
 def run_roundtrip():
     passed = 0
@@ -99,8 +112,12 @@ def run_roundtrip():
         instance_name = module_name if module_name else Path(verilog_rel).stem
 
         # Step 1: Run interpreter to generate FST
-        with tempfile.NamedTemporaryFile(suffix=".fst", delete=False) as tmp:
-            fst_file = tmp.name
+        # We pass a base .fst path; interp may write either that exact file
+        # or indexed files like *_0.fst for multi-trace input.
+        fd, fst_file = tempfile.mkstemp(suffix=".fst")
+        os.close(fd)
+        os.unlink(fst_file)
+        fst_path = Path(fst_file)
 
         try:
             interp_cmd = (
@@ -116,25 +133,39 @@ def run_roundtrip():
                 interp_failed_files.append(tx_rel)
                 continue
 
-            # Step 2: Run monitor on the generated FST
-            monitor_cmd = (
-                f"cargo run --quiet --package protocols-monitor -- "
-                f"-p {prot_file} --wave {fst_file} "
-                f"--instances {instance_name}:{struct_name}"
-            )
-            result = subprocess.run(
-                monitor_cmd, shell=True, cwd=base_dir,
-                capture_output=True, text=True,
-            )
-            if result.returncode == 0:
-                passed += 1
-            else:
+            generated_fsts = collect_generated_fsts(fst_path)
+            if not generated_fsts:
                 failed += 1
-                output = (result.stdout + result.stderr).strip()
-                failed_entries.append((tx_rel, output))
+                failed_entries.append(
+                    (tx_rel, f"No waveform file generated at {fst_path} or indexed variants")
+                )
+                continue
+
+            # Step 2: Run monitor on each generated FST (one per trace)
+            for trace_idx, generated_fst in enumerate(generated_fsts):
+                monitor_cmd = (
+                    f"cargo run --quiet --package protocols-monitor -- "
+                    f"-p {prot_file} --wave {generated_fst} "
+                    f"--instances {instance_name}:{struct_name}"
+                )
+                result = subprocess.run(
+                    monitor_cmd, shell=True, cwd=base_dir,
+                    capture_output=True, text=True,
+                )
+                if result.returncode == 0:
+                    passed += 1
+                else:
+                    failed += 1
+                    output = (result.stdout + result.stderr).strip()
+                    failed_entries.append((f"{tx_rel} (trace {trace_idx})", output))
         finally:
+            for path in fst_path.parent.glob(f"{fst_path.stem}_*{fst_path.suffix}"):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
             try:
-                os.unlink(fst_file)
+                fst_path.unlink()
             except OSError:
                 pass
 

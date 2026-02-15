@@ -2,31 +2,31 @@
 === Round-trip results ===
   Passed:  28 / 33
   Failed:  5 / 33
-  Skipped: 37 (transactions don't complete successfully)
+  Skipped: 38 (transactions don't complete successfully)
 
 Monitor failures:
 
-  --- protocols/tests/adders/adder_d1/busy_wait_pass.tx ---
+  --- protocols/tests/adders/adder_d1/busy_wait_pass.tx (trace 0) ---
   thread 'main' panicked at monitor/src/interpreter.rs:466:17:
   not yet implemented: Bounded loops is not yet implemented in the monitor
   note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-  --- protocols/tests/adders/adder_d1/loop_with_assigns.tx ---
+  --- protocols/tests/adders/adder_d1/loop_with_assigns.tx (trace 0) ---
   thread 'main' panicked at monitor/src/interpreter.rs:466:17:
   not yet implemented: Bounded loops is not yet implemented in the monitor
   note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-  --- protocols/tests/adders/adder_d1/nested_busy_wait.tx ---
+  --- protocols/tests/adders/adder_d1/nested_busy_wait.tx (trace 0) ---
   thread 'main' panicked at monitor/src/interpreter.rs:466:17:
   not yet implemented: Bounded loops is not yet implemented in the monitor
   note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-  --- protocols/tests/fifo/push_pop_loop_empty.tx ---
+  --- protocols/tests/fifo/push_pop_loop_empty.tx (trace 0) ---
   thread 'main' panicked at monitor/src/interpreter.rs:466:17:
   not yet implemented: Bounded loops is not yet implemented in the monitor
   note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-  --- protocols/tests/fifo/push_pop_loop_not_empty.tx ---
+  --- protocols/tests/fifo/push_pop_loop_not_empty.tx (trace 0) ---
   thread 'main' panicked at monitor/src/interpreter.rs:466:17:
   not yet implemented: Bounded loops is not yet implemented in the monitor
   note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
