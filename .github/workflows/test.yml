@@ -34,10 +34,16 @@ jobs:
       run: turnt --env interp $(find . -type f -name '*.tx')
     - name: Run Turnt tests for monitor
       run: turnt --env monitor $(find . -type f -name '*.prot')
-    - name: Run Turnt roundtrip tests (non-blocking)
-      if: matrix.toolchain == 'stable'
-      continue-on-error: true
-      run: turnt --env roundtrip $(find . -type f -name '*.tx')
+
+  roundtrip:
+    name: Roundtrip
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-environment
+      - name: Run Turnt roundtrip tests
+        run: turnt --env roundtrip $(find . -type f -name '*.tx')
 
   msrv:
     name: Check Minimum Rust Version for protocols library
