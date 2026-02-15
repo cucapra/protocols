@@ -1,12 +1,15 @@
-send_data(0)  // [time: 804ns -> 812ns] (thread 102)
-send_data(1)  // [time: 1508ns -> 1516ns] (thread 190)
-send_data(2)  // [time: 2212ns -> 2220ns] (thread 278)
-send_data(3)  // [time: 2916ns -> 2924ns] (thread 366)
-send_data(8)  // [time: 3620ns -> 6628ns] (thread 454)
-send_data(9)  // [time: 7140ns -> 7412ns] (thread 519)
-send_data(10)  // [time: 7844ns -> 7852ns] (thread 574)
-send_data(11)  // [time: 8548ns -> 8556ns] (thread 662)
-send_data(12)  // [time: 9252ns -> 9260ns] (thread 750)
-send_data(15)  // [time: 9956ns -> 11628ns] (thread 838)
-send_data(18)  // [time: 12068ns -> 13932ns] (thread 894)
-send_data(19)  // [time: 14180ns -> 14188ns] (thread 926)
+// trace 0
+trace {
+    send_data(0);  // [time: 804ns -> 812ns]
+    send_data(1);  // [time: 1508ns -> 1516ns]
+    send_data(2);  // [time: 2212ns -> 2220ns]
+    send_data(3);  // [time: 2916ns -> 2924ns]
+    send_data(8);  // [time: 3620ns -> 6628ns]
+    send_data(9);  // [time: 7140ns -> 7412ns]
+    send_data(10);  // [time: 7844ns -> 7852ns]
+    send_data(11);  // [time: 8548ns -> 8556ns]
+    send_data(12);  // [time: 9252ns -> 9260ns]
+    send_data(15);  // [time: 9956ns -> 11628ns]
+    send_data(18);  // [time: 12068ns -> 13932ns]
+    send_data(19);  // [time: 14180ns -> 14188ns]
+}

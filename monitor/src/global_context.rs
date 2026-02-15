@@ -2,6 +2,8 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::Cli;
+
 /// Time unit for displaying waveform times
 #[derive(Debug, Clone, Copy)]
 pub enum TimeUnit {
@@ -62,29 +64,28 @@ pub struct GlobalContext {
 
     /// Indicates if there are multiple (more than 1) structs in the source file
     pub multiple_structs: bool,
+
+    /// Indicates whether to print out thread IDs for each inferred transaction
+    pub show_thread_ids: bool,
 }
 
 impl GlobalContext {
-    /// Creates a new `GlobalContext` with the provided `design` and configuration flags.
-    /// The `display_hex` argument indicates whether to print integer literals
-    /// using hexadecimal (if `false`, we default to using decimal).
-    pub fn new(
-        waveform_file: String,
-        instance_id: u32,
-        display_hex: bool,
-        show_waveform_time: bool,
-        time_unit: TimeUnit,
-        print_num_steps: bool,
-        multiple_structs: bool,
-    ) -> Self {
+    /// Creates a new `GlobalContext` with the provided `design`
+    /// and configuration flags as specified by the user via the `Cli`.
+    /// The `display_hex` field indicates whether to print integer literals
+    /// in hexadecimal (if `false`, we default to using decimal).
+    /// Note: this function is meant to be called from `main.rs` only
+    /// upon monitor initialization.
+    pub fn new(cli: &Cli, instance_id: u32, time_unit: TimeUnit, multiple_structs: bool) -> Self {
         Self {
-            waveform_file,
+            waveform_file: cli.wave.clone(),
             instance_id,
-            display_hex,
-            show_waveform_time,
+            display_hex: cli.display_hex,
+            show_waveform_time: cli.show_waveform_time,
             time_unit,
-            print_num_steps,
+            print_num_steps: cli.print_num_steps,
             multiple_structs,
+            show_thread_ids: cli.show_thread_ids,
         }
     }
 }

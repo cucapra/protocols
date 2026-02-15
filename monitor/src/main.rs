@@ -74,6 +74,10 @@ struct Cli {
     #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
     show_waveform_time: bool,
 
+    /// If enabled, displays the thread ID corresponding to each inferred transaction
+    #[arg(long, value_name = "SHOW_THREAD_IDS")]
+    show_thread_ids: bool,
+
     /// Specifies the time unit for displaying waveform times.
     /// Can only be used with --show-waveform-time.
     /// Valid options: fs, ps, ns, us, ms, s, auto
@@ -136,7 +140,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge)
+    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())
         .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // Support multiple structs & designs
@@ -167,15 +171,7 @@ fn main() -> anyhow::Result<()> {
     let multiple_structs = dut_designs.len() > 1;
 
     // Create a GlobalContext that is shared across all schedulers
-    let ctx = GlobalContext::new(
-        cli.wave,
-        0,
-        cli.display_hex,
-        cli.show_waveform_time,
-        time_unit,
-        cli.print_num_steps,
-        multiple_structs,
-    );
+    let ctx = GlobalContext::new(&cli, 0, time_unit, multiple_structs);
 
     // Multi-struct mode: create a GlobalScheduler with one scheduler per design
     let mut schedulers = vec![];

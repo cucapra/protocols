@@ -1,13 +1,16 @@
-reset()  // [time: 0ns -> 25ns] (thread 4)
-push(1)  // [time: 25ns -> 50ns] (thread 5)
-push(1)  // [time: 50ns -> 75ns] (thread 6)
-push(2)  // [time: 75ns -> 100ns] (thread 7)
-push(3)  // [time: 100ns -> 125ns] (thread 8)
-push(4)  // [time: 125ns -> 150ns] (thread 9)
-push(5)  // [time: 150ns -> 175ns] (thread 10)
-push(6)  // [time: 175ns -> 200ns] (thread 11)
-pop(1)  // [time: 200ns -> 250ns] (thread 12)
-push_and_pop(6, 2)  // [time: 225ns -> 275ns] (thread 13)
-push_and_pop(6, 3)  // [time: 250ns -> 300ns] (thread 14)
-push_and_pop(7, 3)  // [time: 275ns -> 325ns] (thread 15)
-push_and_pop(7, 5)  // [time: 300ns -> 362.5ns] (thread 16)
+// trace 0
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    push(1);  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    push(3);  // [time: 100ns -> 125ns]
+    push(4);  // [time: 125ns -> 150ns]
+    push(5);  // [time: 150ns -> 175ns]
+    push(6);  // [time: 175ns -> 200ns]
+    pop(1);  // [time: 200ns -> 250ns]
+    push_and_pop(6, 2);  // [time: 225ns -> 275ns]
+    push_and_pop(6, 3);  // [time: 250ns -> 300ns]
+    push_and_pop(7, 3);  // [time: 275ns -> 325ns]
+    push_and_pop(7, 5);  // [time: 300ns -> 362.5ns]
+}

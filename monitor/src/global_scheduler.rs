@@ -112,7 +112,7 @@ fn process_group_cycles(
 /// For a single scheduler group, collects all unique maximal traces
 /// (deduplicated on canonical `ProtocolApplication` sequence, excluding idle,
 /// with strict-prefix traces filtered out).
-/// Returns the list of maximal `OutputEntry` traces for this group.
+/// Returns the list of maximal `AugmentedProtocolApplication` traces for this group.
 fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrace> {
     // Collect all unique traces, deduplicating on the canonical
     // `ProtocolApplication` sequence (ignoring timing and thread IDs)
@@ -120,15 +120,15 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
     let mut seen_traces: FxHashSet<Trace> = FxHashSet::default();
 
     for scheduler in scheduler_group {
-        // Sort `OutputEntry`s by increasing cycle no.
+        // Sort `AugmentedProtocolApplication`s by increasing cycle no.
         let mut sorted_output_entries = scheduler.output_buffer.clone();
-        sorted_output_entries.sort_by_key(|entry| entry.end_cycle_count);
+        sorted_output_entries.sort_by_key(|prot| prot.end_cycle_count);
 
         // Build canonical trace for dedup, excluding idle entries
         let trace: Trace = sorted_output_entries
             .iter()
-            .filter(|entry| !entry.is_idle)
-            .map(|entry| entry.protocol_application.clone())
+            .filter(|prot| !prot.is_idle)
+            .map(|prot| prot.protocol_application.clone())
             .collect();
 
         // Only append `sorted_output_entries` to `all_entries`
@@ -144,11 +144,11 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
     // resulting in a shorter trace.
     let all_traces: Vec<Trace> = all_entries
         .iter()
-        .map(|entries| {
-            entries
+        .map(|augmented_trace| {
+            augmented_trace
                 .iter()
-                .filter(|e| !e.is_idle)
-                .map(|e| e.protocol_application.clone())
+                .filter(|prot| !prot.is_idle)
+                .map(|prot| prot.protocol_application.clone())
                 .collect()
         })
         .collect();
@@ -167,6 +167,15 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
 }
 
 impl GlobalScheduler {
+    fn print_trace_block(trace_index: usize, lines: &[String]) {
+        println!("// trace {}", trace_index);
+        println!("trace {{");
+        for line in lines {
+            println!("    {}", line);
+        }
+        println!("}}");
+    }
+
     /// Creates an new `GlobalScheduler`.
     /// Note: all the `Scheduler`s are expected to be initialized beforehand.
     pub fn new(schedulers: Vec<Scheduler>, trace: WaveSignalTrace) -> Self {
@@ -206,15 +215,15 @@ impl GlobalScheduler {
         if scheduler_group_traces.len() == 1 {
             let traces = &scheduler_group_traces[0];
             for (i, trace) in traces.iter().enumerate() {
-                if traces.len() > 1 {
-                    println!("Trace {}:", i);
-                }
                 let lines: Vec<String> = trace
                     .iter()
-                    .filter(|entry| !entry.is_idle)
-                    .map(|entry| self.format_output_entry(entry, ctx))
+                    .filter(|prot_application| !prot_application.is_idle)
+                    .map(|entry| self.format_augmented_protocol_application(entry, ctx))
                     .collect();
-                println!("{}", lines.join("\n"));
+                if i > 0 {
+                    println!();
+                }
+                Self::print_trace_block(i, &lines);
             }
             return;
         }
@@ -236,26 +245,38 @@ impl GlobalScheduler {
         let lines: Vec<String> = merged
             .iter()
             .filter(|entry| !entry.is_idle)
-            .map(|entry| self.format_output_entry(entry, ctx))
+            .map(|entry| self.format_augmented_protocol_application(entry, ctx))
             .collect();
-        println!("{}", lines.join("\n"));
+        Self::print_trace_block(0, &lines);
     }
 
-    /// Formats an `OutputEntry` into a display string
-    fn format_output_entry(
+    /// Formats an `AugmentedProtocolApplication` into a display string
+    fn format_augmented_protocol_application(
         &self,
         entry: &AugmentedProtocolApplication,
         ctx: &GlobalContext,
     ) -> String {
-        if ctx.show_waveform_time {
-            let start_time = self.trace.format_time(entry.start_time_step, ctx.time_unit);
-            let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
-            format!(
-                "{}  // [time: {} -> {}] (thread {})",
-                entry.protocol_application, start_time, end_time, entry.thread_id
-            )
-        } else {
-            entry.protocol_application.to_string()
+        match (ctx.show_waveform_time, ctx.show_thread_ids) {
+            (true, true) | (true, false) => {
+                let start_time = self.trace.format_time(entry.start_time_step, ctx.time_unit);
+                let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
+                if ctx.show_thread_ids {
+                    format!(
+                        "{};  // [time: {} -> {}] (thread {})",
+                        entry.protocol_application, start_time, end_time, entry.thread_id
+                    )
+                } else {
+                    format!(
+                        "{};  // [time: {} -> {}]",
+                        entry.protocol_application, start_time, end_time
+                    )
+                }
+            }
+            (false, true) => format!(
+                "{};  // (thread {})",
+                entry.protocol_application, entry.thread_id
+            ),
+            (false, false) => format!("{};", entry.protocol_application),
         }
     }
 
