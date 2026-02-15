@@ -1,3 +1,5 @@
 // ARGS: --verilog adders/adder_d0/add_d0.v --protocol adders/adder_d0/add_d0.prot
 // RETURN: 101
-add_combinational_illegal_observation_in_conditional(5, 3, 8);
+trace {
+    add_combinational_illegal_observation_in_conditional(5, 3, 8);
+}

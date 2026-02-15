@@ -17,6 +17,7 @@ decimal_integer = ${ ASCII_DIGIT ~ ("_"? ~ ASCII_DIGIT)* }
 arg = ${ binary_integer | hex_integer | decimal_integer }
 arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
 transaction = { ident ~ "(" ~ arglist? ~ ")" ~ ";" }
+trace = { "trace" ~ "{" ~ transaction* ~ "}" }
 
-// A transactions file is just a list of transactions
-file = { SOI ~ transaction* ~ EOI }
+// A transactions file is a list of trace blocks
+file = { SOI ~ trace* ~ EOI }
