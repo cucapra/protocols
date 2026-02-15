@@ -1,10 +1,10 @@
-trace {
 // ARGS: --verilog fifo/bsg_mem_1rw_sync.v fifo/bsg_mem_1rw_sync_synth.v fifo/bsg_circular_ptr.v fifo/bsg_fifo_1rw_large.v fifo/fifo_wrapper.v --protocol=fifo/fifo.prot --module fifo_wrapper
+trace {
 
-reset();
-push(2);
-pop(2);
-idle();
-push(3);
-pop(3);
+    reset();
+    push(2);
+    pop(2);
+    idle();
+    push(3);
+    pop(3);
 }

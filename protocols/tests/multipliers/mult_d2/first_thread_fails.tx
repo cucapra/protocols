@@ -1,9 +1,6 @@
-trace {
 // ARGS: --verilog multipliers/mult_d2/mult_d2.v --protocol multipliers/mult_d2/mult_d2.prot
 // RETURN: 101
-mul(1, 2, 3);
-mul(6, 8, 48);
-
-
-
+trace {
+    mul(1, 2, 3);
+    mul(6, 8, 48);
 }

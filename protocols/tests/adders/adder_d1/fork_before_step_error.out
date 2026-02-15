@@ -4,5 +4,4 @@ error: Thread 0 (transaction 'add_fork_before_step') called `fork()` before call
 11 │   fork();
    │   ^^^^^^^ Thread 0 (transaction 'add_fork_before_step') called `fork()` before calling `step()`
 
-Trace 0 failed: Thread(ForkBeforeStep { thread_idx: 0, transaction_name: "add_fork_before_step", stmt_id: stmt3 })
 Trace 0 execution failed.

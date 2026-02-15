@@ -1,5 +1,5 @@
-trace {
 // ARGS: --verilog=brave_new_world/bit_truncation/bit_truncation_fft_bug.v --protocol=brave_new_world/bit_truncation/bit_truncation_fft.prot --module bit_truncation_fft_bug
 // RETURN: 101
-bit_truncation_fft(8386560, 2047);
+trace {
+    bit_truncation_fft(8386560, 2047);
 }

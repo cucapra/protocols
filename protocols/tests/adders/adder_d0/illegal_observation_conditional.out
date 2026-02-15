@@ -7,5 +7,4 @@ error: Output 'DUT.s' depends on input(s) 'DUT.b' which do not have assigned val
 12 │   if (DUT.s == 32'b0) { // this should be illegal
    │       ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.b' which do not have assigned values
 
-Trace 0 failed: Evaluation(ForbiddenPortRead { port_name: "DUT.s", unassigned_inputs: [("DUT.b", Some(stmt2))], expr_id: expr4 })
 Trace 0 execution failed.

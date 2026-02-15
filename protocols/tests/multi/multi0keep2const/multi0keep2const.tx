@@ -1,5 +1,4 @@
-trace {
 // ARGS: --verilog multi/multi0keep2const/multi0keep2const.v multi/multi0keep/multi0keep.v --protocol multi/multi0keep2const/multi0keep2const.prot --module multi0keep2const 
-multi(10, 10);
-
+trace {
+    multi(10, 10);
 }

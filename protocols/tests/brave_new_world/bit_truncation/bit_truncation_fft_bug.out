@@ -4,5 +4,4 @@ error: The two expressions did not evaluate to the same value
 10 │     assert_eq(data_out, dut.output_data);
    │               ^^^^^^^^^^^^^^^^^^^^^^^^^ LHS Value: 2047, RHS Value: 0
 
-Trace 0 failed: Assertion(EqualityFailed { expr1_id: expr2, expr2_id: expr3, value1: ValueOwned(11111111111), value2: ValueOwned(00000000000) })
 Trace 0 execution failed.

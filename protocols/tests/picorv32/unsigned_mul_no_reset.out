@@ -1,5 +1,4 @@
 Error
 error: Reached the maximum number of steps: 200
 
-Trace 0 failed: MaxStepsReached(200)
 Trace 0 execution failed.

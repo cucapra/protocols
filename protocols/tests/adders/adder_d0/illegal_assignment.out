@@ -4,5 +4,4 @@ error: Output 'DUT.s' depends on input(s) 'DUT.b', 'DUT.a' which do not have ass
 30 │   if (DUT.s == 32'b0) {
    │       ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.b', 'DUT.a' which do not have assigned values ('DUT.b', 'DUT.a' initialized to DontCare and were never assigned a concrete value)
 
-Trace 0 failed: Evaluation(ForbiddenPortRead { port_name: "DUT.s", unassigned_inputs: [("DUT.b", None), ("DUT.a", None)], expr_id: expr1 })
 Trace 0 execution failed.

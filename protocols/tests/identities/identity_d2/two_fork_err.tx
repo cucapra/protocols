@@ -1,6 +1,5 @@
-trace {
 // ARGS: --verilog identities/identity_d2/identity_d2.v --protocol identities/identity_d2/identity_d2.prot
 // RETURN: 101
-two_fork_err(1, 1);
-
+trace {
+    two_fork_err(1, 1);
 }

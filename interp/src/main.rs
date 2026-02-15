@@ -141,6 +141,10 @@ fn main() -> anyhow::Result<()> {
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {
+        if trace_index > 0 {
+            println!("\n---\n");
+        }
+
         // Run each trace in isolation with a fresh interpreter and scheduler.
         let interpreter = if let Some(waveform_file) = &cli.fst {
             let waveform_file = with_trace_suffix(waveform_file, trace_index);
@@ -159,15 +163,7 @@ fn main() -> anyhow::Result<()> {
             cli.max_steps.unwrap_or(u32::MAX),
         );
         let results = scheduler.execute_todos();
-
-        // Report each trace result to stdout so it is captured in .out files.
-        let mut trace_failed = false;
-        for res in results {
-            if let Err(err) = res {
-                trace_failed = true;
-                println!("Trace {} failed: {:?}", trace_index, err);
-            }
-        }
+        let trace_failed = results.iter().any(|res| res.is_err());
 
         if trace_failed {
             any_failed = true;
