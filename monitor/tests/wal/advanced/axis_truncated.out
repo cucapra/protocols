@@ -1,3 +1,6 @@
-send_data(15)  // [time: 0ns -> 968ns] (thread 0)
-send_data(18)  // [time: 1408ns -> 3272ns] (thread 57)
-send_data(19)  // [time: 3520ns -> 3528ns] (thread 89)
+// trace 0
+trace {
+    send_data(15);  // [time: 0ns -> 968ns]
+    send_data(18);  // [time: 1408ns -> 3272ns]
+    send_data(19);  // [time: 3520ns -> 3528ns]
+}
