@@ -1,1 +1,6 @@
 command = "cargo run --package protocols-interp -- --color never --transactions {filename} {args}"
+
+[envs.roundtrip]
+command = "python3 scripts/roundtrip_case.py {filename}"
+binary = true
+output.rt = "-"

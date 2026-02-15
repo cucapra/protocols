@@ -7,6 +7,10 @@ interp:
 monitor:
   turnt --env monitor $(find . -type f -name '*.prot') 
 
+# Run roundtrip checks (interp -> fst -> monitor) for all transactions
+roundtrip:
+  turnt --env roundtrip $(find . -type f -name '*.tx')
+
 # Run Turnt tests for the monitor based on the Brave New World artifacts
 bnw_monitor:
   turnt --env monitor $(find monitor/tests/fpga-debugging -type f -name '*.prot')   
