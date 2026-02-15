@@ -62,7 +62,6 @@ struct Cli {
 /// $ cargo run --package protocols-interp -- --verilog protocols/tests/counters/counter.v -p protocols/tests/counters/counter.prot -t protocols/tests/counters/counter.tx -v
 /// $ cargo run --package protocols-interp -- --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v -p protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
-
 fn with_trace_suffix(path: &str, trace_index: usize) -> String {
     let path = std::path::Path::new(path);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");

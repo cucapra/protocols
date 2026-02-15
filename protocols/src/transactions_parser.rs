@@ -50,11 +50,14 @@ pub fn parse_transactions_file(
                     // First element should be the function name (ident)
                     let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-                    let arg_types = transaction_arg_types
-                        .get(&function_name)
-                        .unwrap_or_else(|| {
-                            panic!("Unable to fetch argument types for transaction {function_name}")
-                        });
+                    let arg_types =
+                        transaction_arg_types
+                            .get(&function_name)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Unable to fetch argument types for transaction {function_name}"
+                                )
+                            });
 
                     // Parse arguments if they exist
                     let mut args: Vec<BitVecValue> = vec![];
