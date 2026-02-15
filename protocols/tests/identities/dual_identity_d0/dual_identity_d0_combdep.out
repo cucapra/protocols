@@ -4,3 +4,5 @@ error: Cannot assign to forbidden input 'b' after observing a combinationally de
 24 │         dut.b := b;
    │                  ^ Cannot assign to forbidden input 'b' after observing a combinationally dependent output
 
+Trace 0 failed: Evaluation(ForbiddenInputAssignment { input_name: "b", expr_id: expr7 })
+Trace 0 execution failed.

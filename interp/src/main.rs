@@ -8,7 +8,7 @@ use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
-use protocols::setup::{assert_ok, setup_test_environment};
+use protocols::setup::setup_test_environment;
 use protocols::transactions_parser::parse_transactions_file;
 use protocols::typecheck::type_check;
 use rustc_hash::FxHashMap;
@@ -62,6 +62,32 @@ struct Cli {
 /// $ cargo run --package protocols-interp -- --verilog protocols/tests/counters/counter.v -p protocols/tests/counters/counter.prot -t protocols/tests/counters/counter.tx -v
 /// $ cargo run --package protocols-interp -- --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v -p protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
+
+fn with_trace_suffix(path: &str, trace_index: usize) -> String {
+    let path = std::path::Path::new(path);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    let file_name = if stem.is_empty() {
+        if let Some(ext) = ext {
+            format!("trace_{}.{}", trace_index, ext)
+        } else {
+            format!("trace_{}", trace_index)
+        }
+    } else if let Some(ext) = ext {
+        format!("{}_{}.{}", stem, trace_index, ext)
+    } else {
+        format!("{}_{}", stem, trace_index)
+    };
+
+    match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => {
+            parent.join(file_name).to_string_lossy().to_string()
+        }
+        _ => file_name,
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -107,34 +133,52 @@ fn main() -> anyhow::Result<()> {
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler =
         &mut DiagnosticHandler::new(color_choice, cli.no_error_locations, emit_warnings);
-    let todos: Vec<(String, Vec<baa::BitVecValue>)> = parse_transactions_file(
+    let traces: Vec<Vec<(String, Vec<baa::BitVecValue>)>> = parse_transactions_file(
         cli.transactions,
         transactions_handler,
         transaction_arg_types,
     )?;
 
-    // Run the interpreter and the scheduler on the parsed transaction file
-    let interpreter = if let Some(waveform_file) = cli.fst {
-        patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
-    } else {
-        patronus::sim::Interpreter::new(&ctx, &sys)
-    };
+    let mut any_failed = false;
+    for (trace_index, todos) in traces.into_iter().enumerate() {
+        // Run each trace in isolation with a fresh interpreter and scheduler.
+        let interpreter = if let Some(waveform_file) = &cli.fst {
+            let waveform_file = with_trace_suffix(waveform_file, trace_index);
+            patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
+        } else {
+            patronus::sim::Interpreter::new(&ctx, &sys)
+        };
 
-    let mut scheduler = Scheduler::new(
-        transactions_and_symbols,
-        todos,
-        &ctx,
-        &sys,
-        interpreter,
-        protocols_handler,
-        cli.max_steps.unwrap_or(u32::MAX),
-    );
-    let results = scheduler.execute_todos();
+        let mut scheduler = Scheduler::new(
+            transactions_and_symbols.clone(),
+            todos,
+            &ctx,
+            &sys,
+            interpreter,
+            protocols_handler,
+            cli.max_steps.unwrap_or(u32::MAX),
+        );
+        let results = scheduler.execute_todos();
 
-    // Check whether the protocol was executed successfully
-    for res in results {
-        assert_ok(&res)
+        // Report each trace result to stdout so it is captured in .out files.
+        let mut trace_failed = false;
+        for res in results {
+            if let Err(err) = res {
+                trace_failed = true;
+                println!("Trace {} failed: {:?}", trace_index, err);
+            }
+        }
+
+        if trace_failed {
+            any_failed = true;
+            println!("Trace {} execution failed.", trace_index);
+        } else {
+            println!("Trace {} executed successfully!", trace_index);
+        }
     }
-    println!("Protocol executed successfully!");
+
+    if any_failed {
+        panic!("One or more traces failed.");
+    }
     Ok(())
 }

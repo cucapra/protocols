@@ -16,3 +16,6 @@ error: Thread 1 (transaction 'add_double_fork') attempted to fork more than once
 15 │   fork();
    │   ^^^^^^^ second fork() called here
 
+Trace 0 failed: Thread(DoubleFork { thread_idx: 0, transaction_name: "add_double_fork", first_fork_stmt_id: stmt4, second_fork_stmt_id: stmt7 })
+Trace 0 failed: Thread(DoubleFork { thread_idx: 1, transaction_name: "add_double_fork", first_fork_stmt_id: stmt4, second_fork_stmt_id: stmt7 })
+Trace 0 execution failed.

@@ -1,2 +1,5 @@
+trace {
 // ARGS: --verilog adders/adder_d0/add_d0.v --protocol adders/adder_d0/add_d0.prot
 add_combinational(100, 200, 300);
+
+}

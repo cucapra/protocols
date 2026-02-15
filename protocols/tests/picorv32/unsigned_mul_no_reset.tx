@@ -1,3 +1,4 @@
+trace {
 // ARGS: --verilog ../../examples/picorv32/picorv32.v --protocol picorv32/pcpi_mul_no_reset.prot --module picorv32_pcpi_mul --max-steps 200
 // RETURN: 101
 pcpi_mul_reset_normal();
@@ -5,3 +6,4 @@ pcpi_mul(1, 1, 1);
 pcpi_mul(1, 100, 100);
 pcpi_mul(100, 1, 100);
 pcpi_mul(33554483, 200, 2415929304);
+}

@@ -1,2 +1,4 @@
+trace {
 // ARGS: --verilog=brave_new_world/bit_truncation/bit_truncation_sha_fix.v --protocol=brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_fixed
 bit_truncation_sha(4398046511104, 68719476736);
+}

@@ -1,3 +1,5 @@
+trace {
 // ARGS: --verilog=brave_new_world/failure_to_update/ftu_sha_bug.v --protocol=brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_buggy
 // RETURN: 101
 failure_to_update_sha();
+}

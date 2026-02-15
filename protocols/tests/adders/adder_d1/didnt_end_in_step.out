@@ -4,3 +4,5 @@ error: The last executed statement in Thread 0 (transaction 'add_doesnt_end_in_s
 39 │   fork();
    │   ^^^^^^^ last statement wasn't `step()`
 
+Trace 0 failed: Thread(DidntEndWithStep { thread_idx: 0, transaction_name: "add_doesnt_end_in_step", last_executed_stmt_id: stmt7 })
+Trace 0 execution failed.

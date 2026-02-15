@@ -1,2 +1,5 @@
+trace {
 // ARGS: --verilog counters/counter.v --protocol counters/counter.prot
 count_up(10);
+
+}

@@ -1,2 +1,4 @@
+trace {
 // ARGS: --verilog=brave_new_world/use_without_valid/use_without_valid_fix.v --protocol=brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_fix
 use_without_valid(5, 5);
+}

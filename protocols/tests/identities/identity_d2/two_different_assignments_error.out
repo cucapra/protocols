@@ -10,3 +10,6 @@ error: Thread 1 (`multiple_assign`) attempted conflicting assignment to 'a': cur
 9 │   DUT.a := a;
   │   ^^^^^^^^^^^ Thread 1 (`multiple_assign`) attempted conflicting assignment to 'a': current=1, new=2
 
+Trace 0 failed: Thread(ConflictingAssignment { symbol_id: symbol1, symbol_name: "a", current_value: ValueOwned(00000000000000000000000000000010), new_value: ValueOwned(00000000000000000000000000000001), thread_idx: 0, transaction_name: "multiple_assign", stmt_id: stmt4 })
+Trace 0 failed: Thread(ConflictingAssignment { symbol_id: symbol1, symbol_name: "a", current_value: ValueOwned(00000000000000000000000000000001), new_value: ValueOwned(00000000000000000000000000000010), thread_idx: 1, transaction_name: "multiple_assign", stmt_id: stmt1 })
+Trace 0 execution failed.

@@ -1,4 +1,7 @@
+trace {
 // ARGS: --verilog identities/dual_identity_d1/dual_identity_d1.v --protocol identities/dual_identity_d1/dual_identity_d1.prot
 // RETURN: 1
 one(3);
 two(2, 3);
+
+}

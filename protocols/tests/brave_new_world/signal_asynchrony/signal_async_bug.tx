@@ -1,3 +1,5 @@
+trace {
 // ARGS: --verilog=brave_new_world/signal_asynchrony/signal_async_bug.v --protocol=brave_new_world/signal_asynchrony/signal_async.prot --module signal_async_bug
 // RETURN: 101
 signal_async(6, 7);
+}

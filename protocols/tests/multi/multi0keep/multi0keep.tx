@@ -1,2 +1,5 @@
+trace {
 // ARGS: --verilog multi/multi0keep/multi0keep.v --protocol multi/multi0keep/multi0keep.prot --module multi0keep 
 multi(10, 10);
+
+}

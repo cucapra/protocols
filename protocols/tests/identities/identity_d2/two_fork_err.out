@@ -7,3 +7,5 @@ error: Thread 0 (transaction 'two_fork_err') attempted to fork more than once
 25 │   fork();
    │   ^^^^^^^ second fork() called here
 
+Trace 0 failed: Thread(DoubleFork { thread_idx: 0, transaction_name: "two_fork_err", first_fork_stmt_id: stmt3, second_fork_stmt_id: stmt6 })
+Trace 0 execution failed.
