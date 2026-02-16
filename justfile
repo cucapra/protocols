@@ -1,5 +1,4 @@
 # Run all Turnt tests for the interpreter
-# (Output is piped through Faucet to clearly distinguish passing/failing tests)
 interp:
   turnt --env interp $(find . -type f -name '*.tx') 
 

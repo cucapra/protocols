@@ -7,7 +7,7 @@ A protocol is described using an `prot` definition containing a sequence of stat
 - `assert_eq(e1, e2)` tests equality between `e1` and `e2`.
 - `while` and `if/else` blocks allow for control flow
 - `repeat num_iters iterations { ... }` is a loop that executes for `num_iters` iterations exactly, where `num_iters` must be 
-  an input parameter supplied to the `fn`
+  an input parameter supplied to the `prot`
 
 This repository contains:
 - An *interpreter* for the DSL
@@ -20,13 +20,11 @@ These tools are all implemented in Rust, with some auxiliary benchmarking script
 
 **General dependencies**:
 Note: the installation instructions below assume a macOS environment.
-- Ensure you have Homebrew, `uv` and `npm` installed
+- Ensure you have Homebrew and `uv` installed
   - If not, follow these instructions to install [Homebrew](https://brew.sh) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
-  - Run `brew install node` to install `npm`
 - Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
 - Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), a command-line tool we use for [snapshot tests](https://www.cs.cornell.edu/~asampson/blog/turnt.html), which compare the output of our tools to expected outputs stored in dedicated files 
-- Run `npm install -g faucet` to install [Faucet](https://github.com/tape-testing/faucet), which summarizes test outputs from Turnt in a human-readable manner
 
 **Dependencies for benchmarking the monitor**:
 - Run `uv sync` to install the Python dependencies specified in `pyproject.toml` 

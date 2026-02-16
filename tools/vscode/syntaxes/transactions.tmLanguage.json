@@ -10,6 +10,9 @@
       "include": "#directives"
     },
     {
+      "include": "#trace-block"
+    },
+    {
       "include": "#function-call"
     },
     {
@@ -35,6 +38,38 @@
               "name": "keyword.control.directive.transactions"
             }
           }
+        }
+      ]
+    },
+    "trace-block": {
+      "patterns": [
+        {
+          "begin": "\\b(trace)\\s*(\\{)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.trace.transactions"
+            },
+            "2": {
+              "name": "punctuation.section.block.begin.transactions"
+            }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.block.end.transactions"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#function-call"
+            },
+            {
+              "include": "#integers"
+            }
+          ]
         }
       ]
     },
