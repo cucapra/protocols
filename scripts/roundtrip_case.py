@@ -15,16 +15,19 @@ from typing import Optional
 
 
 def parse_arg(args: str, flag: str) -> Optional[str]:
+    """Extract a CLI flag value from a // ARGS line."""
     m = re.search(rf"--{flag}[= ](\S+)", args)
     return m.group(1) if m else None
 
 
 def extract_struct_name(prot_path: Path) -> Optional[str]:
+    """Return the first struct name declared in a .prot file."""
     m = re.search(r"^struct\s+([A-Za-z_]\w*)", prot_path.read_text(), re.MULTILINE)
     return m.group(1) if m else None
 
 
 def normalize_trace_line(line: str) -> str:
+    """Normalize one trace statement line for stable expected/actual comparison."""
     line = line.strip()
     if "//" in line:
         line = line.split("//", 1)[0].rstrip()
@@ -56,6 +59,7 @@ def normalize_trace_line(line: str) -> str:
 
 
 def parse_trace_blocks(text: str) -> list[list[str]]:
+    """Parse `trace { ... }` blocks and return normalized statements per trace."""
     traces: list[list[str]] = []
     in_trace = False
     current: list[str] = []
@@ -82,6 +86,7 @@ def parse_trace_blocks(text: str) -> list[list[str]]:
 
 
 def collect_generated_fsts(base_fst: Path) -> list[Path]:
+    """Collect generated FSTs for a run, preferring indexed multi-trace outputs."""
     indexed: list[tuple[int, Path]] = []
     for path in base_fst.parent.glob(f"{base_fst.stem}_*{base_fst.suffix}"):
         suffix = path.stem[len(base_fst.stem) + 1 :]
@@ -96,6 +101,7 @@ def collect_generated_fsts(base_fst: Path) -> list[Path]:
 
 
 def cleanup_generated_fsts(base_fst: Path) -> None:
+    """Delete base and indexed temporary waveform files created for a test case."""
     for path in base_fst.parent.glob(f"{base_fst.stem}_*{base_fst.suffix}"):
         try:
             path.unlink()
@@ -108,11 +114,13 @@ def cleanup_generated_fsts(base_fst: Path) -> None:
 
 
 def fail(msg: str) -> int:
+    """Print a user-facing failure message and return a non-zero code."""
     print(msg)
     return 1
 
 
 def main() -> int:
+    """Execute one roundtrip check for a single `.tx` file."""
     if len(sys.argv) != 2:
         print("Usage: roundtrip_case.py <tx_file>")
         return 2
