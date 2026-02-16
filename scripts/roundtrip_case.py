@@ -2,7 +2,7 @@
 """Run one roundtrip check for a single .tx file.
 
 Usage:
-  python3 scripts/roundtrip_case.py path/to/test.tx
+  uv run scripts/roundtrip_case.py path/to/test.tx
 """
 
 import os
