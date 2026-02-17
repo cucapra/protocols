@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-test-environment
       - name: Run Turnt roundtrip tests
-        run: turnt --env roundtrip $(find . -type f -name '*.tx')
+        run: turnt --env roundtrip $(find . -type f -name '*.tx') --diff
 
   msrv:
     name: Check Minimum Rust Version for protocols library
