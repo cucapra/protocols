@@ -1,6 +1,15 @@
 trace_block: 0
+trace_result: FAIL
+failure_kind: monitor_error
+interpreter_trace:
+trace {
+    wait_and_add(1, 2, 3);
+    add(4, 5, 9);
+}
+
 monitor_error:
 All schedulers failed: No transactions match the waveform for DUT `Adder`
 Failure at cycle 1: No transactions match the waveform in `.roundtrip_tmp/adders-adder_d1-wait_and_add_correct_0.fst`.
 Possible transactions: [add, add_fork_early, add_doesnt_end_in_step, add_incorrect, add_incorrect_implicit, wait_and_add]
 Error: Monitor failed
+

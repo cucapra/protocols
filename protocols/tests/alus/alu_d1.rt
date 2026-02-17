@@ -1,4 +1,6 @@
 trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
 interpreter_trace:
 trace {
     add(1, 2, 3);
@@ -8,8 +10,8 @@ trace {
     or(0, 230, 230);
 }
 
-monitor_stdout:
-// trace 0
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
 trace {
     add(1, 2, 3);
     add(123, 245, 368);
@@ -18,4 +20,3 @@ trace {
     or(0, 230, 230);
 }
 
-Roundtrip trace 0 executed successfully!

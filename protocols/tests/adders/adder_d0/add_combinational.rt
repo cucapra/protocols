@@ -1,6 +1,14 @@
 trace_block: 0
+trace_result: FAIL
+failure_kind: monitor_error
+interpreter_trace:
+trace {
+    add_combinational(100, 200, 300);
+}
+
 monitor_error:
 thread 'main' panicked at monitor/src/interpreter.rs:65:17:
 Transaction `add_combinational_illegal_observation_in_conditional`, cycle 0: Unable to find value for b (symbol5) in args_mapping, which is { (symbol4) a: 100
 (symbol6) s: 300 }
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+

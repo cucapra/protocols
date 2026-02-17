@@ -1,5 +1,14 @@
 trace_block: 0
+trace_result: FAIL
+failure_kind: monitor_error
+interpreter_trace:
+trace {
+    loop_add(1, 2, 3, 3);
+    loop_add(10, 20, 1, 30);
+}
+
 monitor_error:
 thread 'main' panicked at monitor/src/interpreter.rs:479:17:
 not yet implemented: Bounded loops is not yet implemented in the monitor
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+

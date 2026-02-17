@@ -1,4 +1,6 @@
 trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
 interpreter_trace:
 trace {
     pcpi_mul_reset();
@@ -8,8 +10,8 @@ trace {
     pcpi_mul(33554483, 200, 2415929304);
 }
 
-monitor_stdout:
-// trace 0
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
 trace {
     pcpi_mul_reset();
     pcpi_mul(1, 1, 1);
@@ -18,4 +20,3 @@ trace {
     pcpi_mul(33554483, 200, 2415929304);
 }
 
-Roundtrip trace 0 executed successfully!

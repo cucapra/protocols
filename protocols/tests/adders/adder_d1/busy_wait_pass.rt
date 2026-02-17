@@ -1,5 +1,14 @@
 trace_block: 0
+trace_result: FAIL
+failure_kind: monitor_error
+interpreter_trace:
+trace {
+    add_busy_wait(1, 2, 1, 3);
+    add_busy_wait(4, 5, 3, 9);
+}
+
 monitor_error:
 thread 'main' panicked at monitor/src/interpreter.rs:479:17:
 not yet implemented: Bounded loops is not yet implemented in the monitor
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+

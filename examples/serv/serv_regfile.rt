@@ -1,15 +1,16 @@
 trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
 interpreter_trace:
 trace {
     read_write(0, 0, 0, 0, 1, 5, 3735928559);
     read_write(5, 3735928559, 0, 0, 0, 0, 0);
 }
 
-monitor_stdout:
-// trace 0
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
 trace {
     read_write(0, 0, 0, 0, 1, 5, 3735928559);
     read_write(5, 3735928559, 0, 0, 0, 0, 0);
 }
 
-Roundtrip trace 0 executed successfully!

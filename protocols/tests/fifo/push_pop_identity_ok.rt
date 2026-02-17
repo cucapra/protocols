@@ -1,4 +1,6 @@
 trace_block: 0
+trace_result: FAIL
+failure_kind: trace_mismatch
 interpreter_trace:
 trace {
     reset();
@@ -9,10 +11,11 @@ trace {
     pop(3);
 }
 
-monitor_stdout:
-// trace 0
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
 trace {
     reset();
     push(2);
     pop(2);
 }
+

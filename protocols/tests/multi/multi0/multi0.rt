@@ -1,13 +1,14 @@
 trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
 interpreter_trace:
 trace {
     multi(10, 10);
 }
 
-monitor_stdout:
-// trace 0
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
 trace {
     multi(10, 10);
 }
 
-Roundtrip trace 0 executed successfully!

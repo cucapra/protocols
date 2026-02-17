@@ -1,21 +1,22 @@
 trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
 interpreter_trace:
 trace {
     multiple_assign(1, 1);
     multiple_assign(1, 1);
 }
 
-monitor_stdout:
-// trace 0
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
 trace {
     multiple_assign(1, 1);
     multiple_assign(1, 1);
 }
 
-// trace 1
+candidate_monitor_trace: 1
 trace {
     multiple_assign(1, 1);
     two_fork_err(1, 1);
 }
 
-Roundtrip trace 0 executed successfully!
