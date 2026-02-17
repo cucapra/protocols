@@ -268,6 +268,13 @@ def main() -> int:
                     f"{monitor.stdout.strip() if monitor.stdout.strip() else '<empty>'}"
                 )
 
+            print(f"trace_block: {trace_idx}")
+            print("interpreter_trace:")
+            print(format_trace_block(expected))
+            print("")
+            print("monitor_stdout:")
+            print(monitor.stdout.strip() if monitor.stdout.strip() else "<empty>")
+            print("")
             print(f"Roundtrip trace {trace_idx} executed successfully!")
 
         if len(generated_fsts) < len(expected_traces):
