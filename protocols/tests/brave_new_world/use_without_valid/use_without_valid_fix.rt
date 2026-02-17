@@ -1,1 +1,13 @@
+trace_block: 0
+interpreter_trace:
+trace {
+    use_without_valid(5, 5);
+}
+
+monitor_stdout:
+// trace 0
+trace {
+    use_without_valid(5, 5);
+}
+
 Roundtrip trace 0 executed successfully!

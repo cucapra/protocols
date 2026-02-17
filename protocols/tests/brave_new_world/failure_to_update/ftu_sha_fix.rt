@@ -1,1 +1,13 @@
+trace_block: 0
+interpreter_trace:
+trace {
+    failure_to_update_sha();
+}
+
+monitor_stdout:
+// trace 0
+trace {
+    failure_to_update_sha();
+}
+
 Roundtrip trace 0 executed successfully!

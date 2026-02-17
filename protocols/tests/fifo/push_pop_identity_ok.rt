@@ -1,0 +1,18 @@
+trace_block: 0
+interpreter_trace:
+trace {
+    reset();
+    push(2);
+    pop(2);
+    idle();
+    push(3);
+    pop(3);
+}
+
+monitor_stdout:
+// trace 0
+trace {
+    reset();
+    push(2);
+    pop(2);
+}

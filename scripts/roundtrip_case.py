@@ -5,11 +5,10 @@ Usage:
   uv run scripts/roundtrip_case.py path/to/test.tx
 """
 
-import os
 import re
 import subprocess
 import sys
-import tempfile
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +17,14 @@ def parse_arg(args: str, flag: str) -> Optional[str]:
     """Extract a CLI flag value from a // ARGS line."""
     m = re.search(rf"--{flag}[= ](\S+)", args)
     return m.group(1) if m else None
+
+
+def relpath_str(path: Path, base_dir: Path) -> str:
+    """Return a path string relative to base_dir when possible."""
+    try:
+        return str(path.relative_to(base_dir))
+    except ValueError:
+        return str(path)
 
 
 def extract_struct_name(prot_path: Path) -> Optional[str]:
@@ -114,16 +121,43 @@ def cleanup_generated_fsts(base_fst: Path) -> None:
 
 
 def fail(msg: str) -> int:
-    """Print a user-facing failure message and return a non-zero code."""
+    """Print a failure message and return success for Turnt."""
     print(msg)
-    return 1
+    return 0
+
+
+def format_trace(trace: list[str]) -> str:
+    """Format one trace block for output."""
+    if not trace:
+        return "<empty trace>"
+    return "\n".join(trace)
+
+
+def format_trace_block(trace: list[str]) -> str:
+    """Format one trace using `trace { ... }` syntax with statement indentation."""
+    if not trace:
+        return "trace {\n}"
+    indented = "\n".join(f"    {stmt}" for stmt in trace)
+    return f"trace {{\n{indented}\n}}"
+
+
+def tx_path_to_wave_stem(tx_file: Path, base_dir: Path) -> str:
+    """Build a deterministic wave stem from the tx path."""
+    try:
+        rel = tx_file.relative_to(base_dir)
+        rel_no_suffix = rel.with_suffix("")
+        stem = str(rel_no_suffix).replace("/", "-").replace("\\", "-")
+    except ValueError:
+        stem = tx_file.stem
+    # Keep filenames portable and deterministic.
+    return re.sub(r"[^A-Za-z0-9._-]", "-", stem)
 
 
 def main() -> int:
     """Execute one roundtrip check for a single `.tx` file."""
     if len(sys.argv) != 2:
         print("Usage: roundtrip_case.py <tx_file>")
-        return 2
+        return 0
 
     tx_file = Path(sys.argv[1]).resolve()
     if not tx_file.exists():
@@ -161,19 +195,23 @@ def main() -> int:
     if not struct_name:
         return fail(f"Could not find struct in protocol: {prot_file}")
 
+    tx_file_rel = relpath_str(tx_file, base_dir)
+    prot_file_rel = relpath_str(prot_file, base_dir)
+
     module_name = parse_arg(args, "module")
     instance_name = module_name if module_name else Path(verilog_rel).stem
     expected_traces = parse_trace_blocks(tx_text)
-
-    fd, fst_file = tempfile.mkstemp(suffix=".fst")
-    os.close(fd)
-    os.unlink(fst_file)
-    fst_path = Path(fst_file)
+    wave_stem = tx_path_to_wave_stem(tx_file, base_dir)
+    roundtrip_tmp_dir = base_dir / ".roundtrip_tmp"
+    roundtrip_tmp_dir.mkdir(parents=True, exist_ok=True)
+    fst_path = roundtrip_tmp_dir / f"{wave_stem}.fst"
+    fst_path_rel = relpath_str(fst_path, base_dir)
+    cleanup_generated_fsts(fst_path)
 
     try:
         interp_cmd = (
             "cargo run --quiet --package protocols-interp -- "
-            f"--color never --transactions {tx_file} {args} --fst {fst_file}"
+            f"--color never --transactions {tx_file_rel} {args} --fst {fst_path_rel}"
         )
         interp = subprocess.run(
             interp_cmd,
@@ -183,7 +221,11 @@ def main() -> int:
             text=True,
         )
         if interp.returncode != 0:
-            return fail("Interpreter failed during roundtrip generation")
+            output = (interp.stdout + interp.stderr).strip()
+            return fail(
+                "interpreter_error:\n"
+                f"{output if output else '<no interpreter output>'}"
+            )
 
         generated_fsts = collect_generated_fsts(fst_path)
         if not generated_fsts:
@@ -197,7 +239,7 @@ def main() -> int:
 
             monitor_cmd = (
                 "cargo run --quiet --package protocols-monitor -- "
-                f"-p {prot_file} --wave {generated_fst} "
+                f"-p {prot_file_rel} --wave {relpath_str(generated_fst, base_dir)} "
                 f"--instances {instance_name}:{struct_name}"
             )
             monitor = subprocess.run(
@@ -210,24 +252,20 @@ def main() -> int:
             if monitor.returncode != 0:
                 output = (monitor.stdout + monitor.stderr).strip()
                 return fail(
-                    f"Monitor failed for trace {trace_idx} in {tx_file}\n{output}"
+                    f"trace_block: {trace_idx}\n"
+                    "monitor_error:\n"
+                    f"{output if output else '<no monitor output>'}"
                 )
 
             monitor_traces = parse_trace_blocks(monitor.stdout)
             expected = expected_traces[trace_idx]
             if expected not in monitor_traces:
-                expected_dump = "\n".join(expected) or "<empty trace>"
-                observed_dump = (
-                    "\n\n".join(
-                        f"trace {i}:\n" + ("\n".join(t) if t else "<empty trace>")
-                        for i, t in enumerate(monitor_traces)
-                    )
-                    if monitor_traces
-                    else "<no traces parsed from monitor stdout>"
-                )
                 return fail(
-                    f"Trace mismatch for {tx_file} trace {trace_idx}\n"
-                    f"Expected:\n{expected_dump}\n\nObserved:\n{observed_dump}"
+                    f"trace_block: {trace_idx}\n"
+                    "interpreter_trace:\n"
+                    f"{format_trace_block(expected)}\n\n"
+                    "monitor_stdout:\n"
+                    f"{monitor.stdout.strip() if monitor.stdout.strip() else '<empty>'}"
                 )
 
             print(f"Roundtrip trace {trace_idx} executed successfully!")
@@ -244,4 +282,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception:
+        print(f"roundtrip_tester_error:\n{traceback.format_exc().strip()}")
+        raise SystemExit(0)

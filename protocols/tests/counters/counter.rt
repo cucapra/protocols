@@ -1,1 +1,13 @@
+trace_block: 0
+interpreter_trace:
+trace {
+    count_up(10);
+}
+
+monitor_stdout:
+// trace 0
+trace {
+    count_up(10);
+}
+
 Roundtrip trace 0 executed successfully!

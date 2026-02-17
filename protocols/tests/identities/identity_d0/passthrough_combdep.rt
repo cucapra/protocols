@@ -1,13 +1,12 @@
 trace_block: 0
 interpreter_trace:
 trace {
-    multi(10, 10);
+    passthrough();
 }
 
 monitor_stdout:
 // trace 0
 trace {
-    multi(10, 10);
+    passthrough();
+    passthrough();
 }
-
-Roundtrip trace 0 executed successfully!

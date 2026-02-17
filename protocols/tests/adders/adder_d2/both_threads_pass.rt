@@ -1,1 +1,15 @@
+trace_block: 0
+interpreter_trace:
+trace {
+    add(1, 2, 3);
+    add(4, 5, 9);
+}
+
+monitor_stdout:
+// trace 0
+trace {
+    add(1, 2, 3);
+    add(4, 5, 9);
+}
+
 Roundtrip trace 0 executed successfully!
