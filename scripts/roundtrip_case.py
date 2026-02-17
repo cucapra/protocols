@@ -27,6 +27,17 @@ def relpath_str(path: Path, base_dir: Path) -> str:
         return str(path)
 
 
+def sanitize_error_output(text: str) -> str:
+    """Remove unstable runtime panic location lines from stderr/stdout text."""
+    lines = []
+    for line in text.splitlines():
+        if "panicked at " in line:
+            continue
+        lines.append(line)
+    sanitized = "\n".join(lines).strip()
+    return sanitized
+
+
 def extract_struct_name(prot_path: Path) -> Optional[str]:
     """Return the first struct name declared in a .prot file."""
     m = re.search(r"^struct\s+([A-Za-z_]\w*)", prot_path.read_text(), re.MULTILINE)
@@ -231,7 +242,7 @@ def main() -> int:
             text=True,
         )
         if interp.returncode != 0:
-            output = (interp.stdout + interp.stderr).strip()
+            output = sanitize_error_output((interp.stdout + interp.stderr).strip())
             return fail(
                 "interpreter_error:\n"
                 f"{output if output else '<no interpreter output>'}"
@@ -276,7 +287,7 @@ def main() -> int:
             )
             if monitor.returncode != 0:
                 any_failures = True
-                output = (monitor.stdout + monitor.stderr).strip()
+                output = sanitize_error_output((monitor.stdout + monitor.stderr).strip())
                 print("trace_result: FAIL")
                 print("failure_kind: monitor_error")
                 print("interpreter_trace:")
