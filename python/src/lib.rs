@@ -7,5 +7,5 @@ use pyo3::prelude::*;
 #[pymodule]
 #[pyo3(name = "protocols")]
 fn protocols(_py: Python<'_>, m: &pyo3::Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
-  Ok(())
+    Ok(())
 }
