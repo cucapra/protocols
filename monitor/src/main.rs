@@ -89,6 +89,11 @@ struct Cli {
     /// (i.e. clock cycles) taken by the montior
     #[arg(long, value_name = "PRINT_NUM_STEPS_TAKEN")]
     print_num_steps: bool,
+
+    /// Optional flag: if enabled, always prints out idle transcations
+    /// regardless of whether the protocol has been annotated with `#[idle]`
+    #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
+    include_idle: bool,
 }
 
 fn main() -> anyhow::Result<()> {

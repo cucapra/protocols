@@ -7,7 +7,7 @@ A protocol is described using an `prot` definition containing a sequence of stat
 - `assert_eq(e1, e2)` tests equality between `e1` and `e2`.
 - `while` and `if/else` blocks allow for control flow
 - `repeat num_iters iterations { ... }` is a loop that executes for `num_iters` iterations exactly, where `num_iters` must be 
-  an input parameter supplied to the `fn`
+  an input parameter supplied to the `prot`
 
 This repository contains:
 - An *interpreter* for the DSL
@@ -20,13 +20,11 @@ These tools are all implemented in Rust, with some auxiliary benchmarking script
 
 **General dependencies**:
 Note: the installation instructions below assume a macOS environment.
-- Ensure you have Homebrew, `uv` and `npm` installed
+- Ensure you have Homebrew and `uv` installed
   - If not, follow these instructions to install [Homebrew](https://brew.sh) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
-  - Run `brew install node` to install `npm`
 - Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
 - Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), a command-line tool we use for [snapshot tests](https://www.cs.cornell.edu/~asampson/blog/turnt.html), which compare the output of our tools to expected outputs stored in dedicated files 
-- Run `npm install -g faucet` to install [Faucet](https://github.com/tape-testing/faucet), which summarizes test outputs from Turnt in a human-readable manner
 
 **Dependencies for benchmarking the monitor**:
 - Run `uv sync` to install the Python dependencies specified in `pyproject.toml` 
@@ -62,8 +60,8 @@ Options:
           Path to a Protocol (.prot) file
   -w, --wave <WAVE_FILE>
           Path to a waveform trace (.fst, .vcd, .ghw) file
-  -i, --instances <INSTANCES>
-          A mapping of DUT struct in the protocol file to an instance in the signal trace. Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
+  -i, --instances <INSTANCES>...
+          A mapping of DUT struct in the protocol file to an instance in the signal trace. Multiple arguments can be passed if they're seperated by whitespace. Format is: `${instance_name}:${dut_struct_name}`
   -v, --verbose...
           Increase logging verbosity
   -q, --quiet...
@@ -76,10 +74,14 @@ Options:
           Optional argument which specifies the name of the signal to sample on a rising edge (posedge). If enabled, this flag acts as the "clock" signal for the monitor. Note: the full path to the signal should be passed as this argument, e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace
       --show-waveform-time
           If enabled, displays the start & end waveform time for each inferred transaction
+      --show-thread-ids
+          If enabled, displays the thread ID corresponding to each inferred transaction
       --time-unit <TIME_UNIT>
           Specifies the time unit for displaying waveform times. Can only be used with --show-waveform-time. Valid options: fs, ps, ns, us, ms, s, auto Default is 'auto' which selects the unit based on the maximum time in the waveform
       --print-num-steps
           Optional flag: if enabled, prints the no. of (logical) steps (i.e. clock cycles) taken by the montior
+      --include-idle
+          Optional flag: if enabled, always prints out idle transcations regardless of whether the protocol has been annotated with `#[idle]`
   -h, --help
           Print help
 ```
@@ -95,11 +97,11 @@ The interpreter has a CLI, which can be invoked as follows:
 ```bash
 $ cargo run --package protocols-interp -- --help
 
-Usage: protocols-interp [OPTIONS] --verilog <VERILOG_FILE> --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
+Usage: protocols-interp [OPTIONS] --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
 
 Options:
-      --verilog <VERILOG_FILE>
-          Path to a Verilog (.v) file
+      --verilog <VERILOG_FILES>...
+          Paths to one or more Verilog (.v) files
   -p, --protocol <PROTOCOLS_FILE>
           Path to a Protocol (.prot) file
   -t, --transactions <TRANSACTIONS_FILE>
@@ -109,7 +111,15 @@ Options:
   -f, --fst <WAVEFORM_FILE>
           (Optional) Name of the waveform file (.fst) in which to save results
   -v, --verbose...
-          Prints logs / debugging information to stdout
+          Increase logging verbosity
+  -q, --quiet...
+          Decrease logging verbosity
+      --color <COLOR_CHOICE>
+          Pass in `--color never` to suppress colored error messages. (By default, error messages are displayed w/ ANSI colors.) [default: auto] [possible values: auto, always, never]
+  -n, --no-error-locations
+          Whether to suppress location info (source file and label) in error messages
+      --max-steps <MAX_STEPS>
+          Stop the interpreter if it ever reaches the maximum number of cycles specified with this option
   -h, --help
           Print help
 ```

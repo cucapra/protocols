@@ -167,6 +167,7 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
 }
 
 impl GlobalScheduler {
+    /// Pretty-prints a `trace { ... }` block to stdout
     fn print_trace_block(trace_index: usize, lines: &[String]) {
         println!("// trace {}", trace_index);
         println!("trace {{");
@@ -201,7 +202,7 @@ impl GlobalScheduler {
         // The inner `Vec` represents the traces for all the schedulers
         // for the same struct, while the outer `Vec` iterates over all
         // possible `struct`s in the user-supplied `.prot` file.
-        let scheduler_group_traces: Vec<Vec<AugmentedTrace>> = self
+        let mut scheduler_group_traces: Vec<Vec<AugmentedTrace>> = self
             .scheduler_groups
             .iter()
             .map(collect_maximal_traces)
@@ -211,14 +212,25 @@ impl GlobalScheduler {
             return;
         }
 
+        // Closure for deduplicating traces based on whether
+        // protocols have been annotated with `#[idle]` and if
+        // the monitor is in `include_idle` mode
+        let filter_key =
+            |prot_app: &AugmentedProtocolApplication| ctx.include_idle || !prot_app.is_idle;
+
         // For single-struct: show all unique traces directly
         if scheduler_group_traces.len() == 1 {
-            let traces = &scheduler_group_traces[0];
-            for (i, trace) in traces.iter().enumerate() {
+            // We call `swap_remove` to take ownership of
+            // `scheduler_group_traces[0]` without cloning.
+            // Since we only enter this branch when there's 1 element in
+            // `scheduler_group_traces`, calling `swap_remove` is OK
+            // (doesn't break functionality).
+            let traces: Vec<AugmentedTrace> = scheduler_group_traces.swap_remove(0);
+            for (i, trace) in traces.into_iter().enumerate() {
                 let lines: Vec<String> = trace
-                    .iter()
-                    .filter(|prot_application| !prot_application.is_idle)
-                    .map(|entry| self.format_augmented_protocol_application(entry, ctx))
+                    .into_iter()
+                    .filter(filter_key)
+                    .map(|entry| self.format_augmented_protocol_application(&entry, ctx))
                     .collect();
                 if i > 0 {
                     println!();
@@ -231,10 +243,10 @@ impl GlobalScheduler {
         // If we have multiple structs, pick the longest trace from each scheduler
         // group. Interleave traces from each struct based on the cycle count in order.
         let mut merged: AugmentedTrace = vec![];
-        for group in &scheduler_group_traces {
+        for group in scheduler_group_traces.into_iter() {
             if let Some(longest) = group
-                .iter()
-                .max_by_key(|t| t.iter().filter(|e| !e.is_idle).count())
+                .into_iter()
+                .max_by_key(|t| t.iter().filter(|&x| filter_key(x)).count())
             {
                 merged.extend(longest.clone());
             }
@@ -243,9 +255,9 @@ impl GlobalScheduler {
 
         // Format for stdout
         let lines: Vec<String> = merged
-            .iter()
-            .filter(|entry| !entry.is_idle)
-            .map(|entry| self.format_augmented_protocol_application(entry, ctx))
+            .into_iter()
+            .filter(filter_key)
+            .map(|entry| self.format_augmented_protocol_application(&entry, ctx))
             .collect();
         Self::print_trace_block(0, &lines);
     }

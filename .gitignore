@@ -13,3 +13,11 @@ monitor/tests/axi_output.txt
 *.csv
 # Allow benchmark results to be committed for CI regression testing
 !benchmark_results/*.csv
+# Ignore all dotfiles
+.*
+# But include the .github directory (CI files)
+!.github/
+!.github/**/*
+# And also include .gitignore + .python-version
+!.gitignore
+!.python-version
