@@ -26,7 +26,8 @@ def test_adder_protocol():
         dut.a = a
         dut.b = b
         p.step()
-        dut.a = X
+        # possible alternative (nicer for generators!)
+        dut["a"] = X
         dut.b = X
         dut.s.expect(s)
         p.fork()
