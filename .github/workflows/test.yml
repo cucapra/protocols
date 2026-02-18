@@ -128,6 +128,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - uses: actions/checkout@v4
+      - name: Check Python Formating
+        working-directory: python
+        run: uv format --check
       - name: Install the project
         working-directory: python
         run: uv sync --locked --all-extras --dev
