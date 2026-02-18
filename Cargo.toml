@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["interp", "monitor", "protocols"]
+members = ["interp", "monitor", "protocols", "python"]
 
 
 [workspace.package]
@@ -10,6 +10,7 @@ rust-version = "1.85"
 repository = "https://github.com/cucapra/protocols"
 readme = "README.md"
 license = "MIT"
+version = "0.1.0"
 
 [workspace.dependencies]
 protocols = { path = "protocols" }

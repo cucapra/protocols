@@ -108,3 +108,29 @@ jobs:
         run: uv run scripts/benchmark_monitor.py
       - name: Check for performance regressions
         run: uv run scripts/check_performance_regression.py
+
+  python:
+    name: Test Python Bindings
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+        python:
+          - "3.10"
+
+    steps:
+      - name: Update Rust to ${{ matrix.toolchain }}
+        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - name: Install uv and set the Python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/checkout@v4
+      - name: Install the project
+        working-directory: python
+        run: uv sync --locked --all-extras --dev
+      - name: Test
+        working-directory: python
+        run: uv run pytest

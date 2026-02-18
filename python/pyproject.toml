@@ -1,0 +1,35 @@
+[project]
+name = "protocols"
+requires-python = ">=3.9"
+dynamic = ["version"]
+license = "BSD-3-Clause"
+description = "The hardware bug-finding toolkit for Python programmers."
+authors = [
+    { name = "Kevin Laeufer", email = "laeufer@cornell.edu" },
+    { name = "Nikil Shyamunder", email = "nvs26@cornell.edu" },
+    { name = "Ernest Ng", email = "eyn5@cornell.edu" },
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python",
+    "License :: OSI Approved :: BSD License"
+]
+
+[project.urls]
+Homepage = "https://github.com/cucapra/protocols"
+Issues = "https://github.com/cucapra/protocols/issues"
+
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
+
+[tool.uv]
+cache-keys = [{file = "pyproject.toml"}, {file = "Cargo.toml"}, {file = "src/*.rs"}]

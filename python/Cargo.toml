@@ -1,0 +1,15 @@
+[package]
+name = "pyprotocols"
+description = "PyO3 bindings for protocols"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "protocls"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.26.0" , features = []}
+protocols = { path = "../protocols" }
