@@ -1,95 +1,94 @@
-// ARGS: --wave fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns
-
+// ARGS: --wave fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT:AXISManager --sample-posedge TOP.testbench.UUT.M_AXIS_ACLK --show-waveform-time --time-unit ns
 
 // Source (manager) that outputs a sequence of 8 words
 struct AXISManager {
     // Control signals
-    in i_aresetn: u1,              // Active-low reset
+    in M_AXIS_ARESETN: u1,              // Active-low reset
 
     // AXI-Stream manager outputs (from DUT perspective)
-    out i_tvalid: u1,              // manager has valid data
-    out i_tdata: u32,              // Data payload
-    out i_tstrb: u4,               // Byte strobe (always 0xF)
-    out i_tlast: u1,               // Last word in packet
+    out M_AXIS_TVALID: u1,              // manager has valid data
+    out M_AXIS_TDATA: u32,              // Data payload
+    out M_AXIS_TSTRB: u4,               // Byte strobe (always 0xF)
+    out M_AXIS_TLAST: u1,               // Last word in packet
 
     // AXI-Stream sub-ordinate input 
-    in i_tready: u1,               // Downstream ready to accept
+    in M_AXIS_TREADY: u1,               // Downstream ready to accept
 }
 
 // RESET: Assert reset (active-low) and wait for manager to be ready
 // The manager waits C_M_START_COUNT cycles in INIT_COUNTER before sending
 prot reset<DUT: AXISManager>() {
-    DUT.i_aresetn := 1'b0;         // Assert reset (active-low)
-    DUT.i_tready := 1'b0;
+    DUT.M_AXIS_ARESETN := 1'b0;         // Assert reset (active-low)
+    DUT.M_AXIS_TREADY := 1'b0;
     step();
 }
 
 // RECV: Receive one data word from the AXI-Stream manager
-// Data transfer occurs when i_tvalid and i_tready are both 1
-// Only matches when data is immediately available (i_tvalid = 1)
+// Data transfer occurs when M_AXIS_TVALID and M_AXIS_TREADY are both 1
+// Only matches when data is immediately available (M_AXIS_TVALID = 1)
 //
 // Output Arguments:
 //   data - Expected payload from manager
 prot recv<DUT: AXISManager>(
     out data: u32,
 ) {
-    DUT.i_aresetn := 1'b1;         // Keep out of reset
-    DUT.i_tready := 1'b1;          // Signal ready to receive
+    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
+    DUT.M_AXIS_TREADY := 1'b1;          // Signal ready to receive
 
     // Only matches when data is available
     // (use wait_for_data for cycles when tready=1 but tvalid=0)
-    assert_eq(DUT.i_tvalid, 1'b1);
+    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
 
     // Verify output data
-    assert_eq(DUT.i_tdata, data);
+    assert_eq(DUT.M_AXIS_TDATA, data);
 
     // One cycle for the transfer to complete
     step();
 }
 
-// RECV_LAST: Receive the last data word (with i_tlast asserted)
-// This verifies both the data and that i_tlast is properly set
-// Only matches when data is immediately available (i_tvalid = 1)
+// RECV_LAST: Receive the last data word (with M_AXIS_TLAST asserted)
+// This verifies both the data and that M_AXIS_TLAST is properly set
+// Only matches when data is immediately available (M_AXIS_TVALID = 1)
 //
 // Output Arguments:
 //   data - Expected payload from manager (should be the last word)
 prot recv_last<DUT: AXISManager>(
     out data: u32,
 ) {
-    DUT.i_aresetn := 1'b1;         // Keep out of reset
-    DUT.i_tready := 1'b1;          // Signal ready to receive
+    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
+    DUT.M_AXIS_TREADY := 1'b1;          // Signal ready to receive
 
     // Only matches when data is available
-    assert_eq(DUT.i_tvalid, 1'b1);
+    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
 
-    // Verify output data and i_tlast
-    assert_eq(DUT.i_tdata, data);
-    assert_eq(DUT.i_tlast, 1'b1);
+    // Verify output data and M_AXIS_TLAST
+    assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TLAST, 1'b1);
 
     // One cycle for the transfer to complete
     step();
 }
 
-// STALL: Assert backpressure (i_tready=0) while manager has valid data
+// STALL: Assert backpressure (M_AXIS_TREADY=0) while manager has valid data
 // AXI-Stream requires output args (tdata, tlast) to remain stable during stall
-// Only matches when the waveform contains i_tvalid=1 (i.e. there is some valid data and it's available to stall)
+// Only matches when the waveform contains M_AXIS_TVALID=1 (i.e. there is some valid data and it's available to stall)
 prot stall<DUT: AXISManager>(out data: u32, out last: u1) {
-    DUT.i_aresetn := 1'b1;         // Keep out of reset
-    DUT.i_tready := 1'b0;          // Apply backpressure
+    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
+    DUT.M_AXIS_TREADY := 1'b0;          // Apply backpressure
 
     // Stall only applies when manager has valid data
-    // If i_tvalid=0, this fails and we instead have an `idle` transaction
-    assert_eq(DUT.i_tvalid, 1'b1);
+    // If M_AXIS_TVALID=0, this fails and we instead have an `idle` transaction
+    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
 
     // Capture output values before the stall cycle
-    assert_eq(DUT.i_tdata, data);
-    assert_eq(DUT.i_tlast, last);
+    assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TLAST, last);
 
     step();
 
     // Verify outputs remained stable during the stall
-    assert_eq(DUT.i_tdata, data);
-    assert_eq(DUT.i_tlast, last);
+    assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TLAST, last);
 
     step();
 }
@@ -97,19 +96,18 @@ prot stall<DUT: AXISManager>(out data: u32, out last: u1) {
 // WAIT_FOR_DATA: Receiver is ready but no data is available
 // Used when tready=1 but tvalid=0 (i.e. receiver is polling for data)
 prot wait_for_data<DUT: AXISManager>() {
-    DUT.i_aresetn := 1'b1;         // Keep out of reset
-    DUT.i_tready := 1'b1;          
+    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
+    DUT.M_AXIS_TREADY := 1'b1;          
 
     // Only matches when no data is available
-    assert_eq(DUT.i_tvalid, 1'b0);
-
+    assert_eq(DUT.M_AXIS_TVALID, 1'b0);
     step();
 }
 
-// IDLE: No transaction - i_tready is deasserted
+// IDLE: No transaction - M_AXIS_TREADY is deasserted
 #[idle]
 prot idle<DUT: AXISManager>() {
-    DUT.i_aresetn := 1'b1;         // Keep out of reset
-    DUT.i_tready := 1'b0;          
+    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
+    DUT.M_AXIS_TREADY := 1'b0;          
     step();
 }
