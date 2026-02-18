@@ -14,34 +14,12 @@ trace {
     recv(4);  // [time: 937.5ns -> 962.5ns]
     recv(5);  // [time: 962.5ns -> 987.5ns]
     recv(6);  // [time: 987.5ns -> 1012.5ns]
-    stall(7, 0);  // [time: 1012.5ns -> 1037.5ns]
-    stall(7, 0);  // [time: 1037.5ns -> 1062.5ns]
+    stall(7, 0);  // [time: 1012.5ns -> 1062.5ns]
     reset();  // [time: 1062.5ns -> 1087.5ns]
     reset();  // [time: 1087.5ns -> 1100ns]
 }
 
 // trace 1
-trace {
-    reset();  // [time: 0ns -> 12.5ns]
-    wait_for_data();  // [time: 337.5ns -> 362.5ns]
-    wait_for_data();  // [time: 387.5ns -> 412.5ns]
-    wait_for_data();  // [time: 512.5ns -> 537.5ns]
-    wait_for_data();  // [time: 537.5ns -> 562.5ns]
-    wait_for_data();  // [time: 612.5ns -> 637.5ns]
-    wait_for_data();  // [time: 787.5ns -> 812.5ns]
-    wait_for_data();  // [time: 837.5ns -> 862.5ns]
-    recv(1);  // [time: 862.5ns -> 887.5ns]
-    recv(2);  // [time: 887.5ns -> 912.5ns]
-    recv(3);  // [time: 912.5ns -> 937.5ns]
-    recv(4);  // [time: 937.5ns -> 962.5ns]
-    recv(5);  // [time: 962.5ns -> 987.5ns]
-    recv(6);  // [time: 987.5ns -> 1012.5ns]
-    stall(7, 0);  // [time: 1012.5ns -> 1037.5ns]
-    reset();  // [time: 1062.5ns -> 1087.5ns]
-    reset();  // [time: 1087.5ns -> 1100ns]
-}
-
-// trace 2
 trace {
     reset();  // [time: 0ns -> 12.5ns]
     wait_for_data();  // [time: 337.5ns -> 362.5ns]
