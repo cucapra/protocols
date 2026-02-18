@@ -13,3 +13,6 @@ monitor/tests/axi_output.txt
 *.csv
 # Allow benchmark results to be committed for CI regression testing
 !benchmark_results/*.csv
+# Python
+__pycache__/
+python/python/protocols/*.so
