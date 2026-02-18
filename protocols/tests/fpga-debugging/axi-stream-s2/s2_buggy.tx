@@ -1,3 +1,4 @@
+// ARGS: --verilog fpga-debugging/axi-stream-s2/s2_buggy.v fpga-debugging/axi-stream-s2/faxis_master.v --protocol fpga-debugging/axi-stream-s2/s2_buggy.prot --module faxis_master
 // trace 0
 trace {
     reset();  // [time: 0ns -> 12.5ns]
