@@ -156,6 +156,14 @@ class Dut:
         proto = object.__getattribute__(self, "proto")
         return Pin(proto, item)
 
+    def __setitem__(self, key, value):
+        proto = object.__getattribute__(self, "proto")
+        proto.assign_pin(key, value)
+
+    def __getitem__(self, item):
+        proto = object.__getattribute__(self, "proto")
+        return Pin(proto, item)
+
 
 class Pin:
     def __init__(self, proto: Protocol, name: str):
