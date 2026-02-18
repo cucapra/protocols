@@ -38,7 +38,6 @@ impl TimeUnit {
 /// - other immutable fields (configuration flags)
 ///   Note: The `WaveSignalTrace` is owned by `GlobalScheduler` and passed
 ///   as needed
-#[derive(Debug)]
 pub struct GlobalContext {
     /// The name of the waveform file supplied by the user
     /// (Only used for error-reporting purposes)
@@ -67,6 +66,10 @@ pub struct GlobalContext {
 
     /// Indicates whether to print out thread IDs for each inferred transaction
     pub show_thread_ids: bool,
+
+    /// Indicates whether to print out `idle` transactions (regardless of
+    /// whether they've been annotated with `#[idle]`)
+    pub always_include_idle: bool,
 }
 
 impl GlobalContext {
@@ -86,6 +89,7 @@ impl GlobalContext {
             print_num_steps: cli.print_num_steps,
             multiple_structs,
             show_thread_ids: cli.show_thread_ids,
+            always_include_idle: cli.always_include_idle,
         }
     }
 }
