@@ -1,5 +1,5 @@
 # Copyright 2026 Cornell University
-# released under BSD 3-Clause License
+# released under MIT License
 # author: Kevin Laeufer <laeufer@cornell.edu>
 
 import pathlib
@@ -7,8 +7,8 @@ import pytest
 from protocols import *
 
 
-repo_root = (pathlib.Path(__file__) / '..' / '..' / '..').resolve()
+repo_root = (pathlib.Path(__file__) / ".." / ".." / "..").resolve()
 
 
 def test_something():
-    pass
+    assert proto_test_fn() == 42

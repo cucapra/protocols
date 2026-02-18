@@ -4,6 +4,8 @@ Cargo.lock
 test_run/
 *.btor
 **/.DS_Store
+.vscode/*
+.surfer/
 monitor/target
 monitor/tests/axi_output.txt
 *.json
@@ -20,3 +22,7 @@ monitor/tests/axi_output.txt
 !.gitignore
 !.python-version
 !.cargo
+
+# Python
+__pycache__/
+python/python/protocols/*.so

@@ -24,6 +24,8 @@ requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
+python-source = "python"
+module-name = "protocols.pyprotocols"
 features = ["pyo3/extension-module"]
 
 [dependency-groups]
@@ -32,4 +34,10 @@ dev = [
 ]
 
 [tool.uv]
-cache-keys = [{file = "pyproject.toml"}, {file = "Cargo.toml"}, {file = "src/*.rs"}, {file = "../protocols/src/*.rs"}]
+cache-keys = [
+    {file = "pyproject.toml"},
+    {file = "Cargo.toml"},
+    {file = "src/*.rs"},
+    {file = "../protocols/src/*.rs"},
+    {file = "../protocols/src/**/*.rs"}
+]

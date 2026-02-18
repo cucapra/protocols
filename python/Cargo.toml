@@ -7,7 +7,7 @@ edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "protocols"
+name = "pyprotocols"
 crate-type = ["cdylib"]
 
 [dependencies]
