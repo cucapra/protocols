@@ -3,7 +3,6 @@
 # author: Kevin Laeufer <laeufer@cornell.edu>
 
 import pathlib
-import pytest
 from protocols import *
 
 
