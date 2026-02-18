@@ -1,5 +1,3 @@
-// ARGS: --wave fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns
-
 // Source (manager) that outputs a sequence of 8 words
 struct AXISManager {
     // Control signals
