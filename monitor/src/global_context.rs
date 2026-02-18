@@ -69,7 +69,7 @@ pub struct GlobalContext {
 
     /// Indicates whether to print out `idle` transactions (regardless of
     /// whether they've been annotated with `#[idle]`)
-    pub always_include_idle: bool,
+    pub include_idle: bool,
 }
 
 impl GlobalContext {
@@ -89,7 +89,7 @@ impl GlobalContext {
             print_num_steps: cli.print_num_steps,
             multiple_structs,
             show_thread_ids: cli.show_thread_ids,
-            always_include_idle: cli.always_include_idle,
+            include_idle: cli.include_idle,
         }
     }
 }

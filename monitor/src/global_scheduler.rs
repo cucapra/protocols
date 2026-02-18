@@ -214,9 +214,9 @@ impl GlobalScheduler {
 
         // Closure for deduplicating traces based on whether
         // protocols have been annotated with `#[idle]` and if
-        // the monitor is in `always_include_idle` mode
+        // the monitor is in `include_idle` mode
         let filter_key =
-            |prot_app: &AugmentedProtocolApplication| ctx.always_include_idle || !prot_app.is_idle;
+            |prot_app: &AugmentedProtocolApplication| ctx.include_idle || !prot_app.is_idle;
 
         // For single-struct: show all unique traces directly
         if scheduler_group_traces.len() == 1 {

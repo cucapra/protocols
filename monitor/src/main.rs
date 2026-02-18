@@ -93,7 +93,7 @@ struct Cli {
     /// Optional flag: if enabled, always prints out idle transcations
     /// regardless of whether the protocol has been annotated with `#[idle]`
     #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
-    always_include_idle: bool,
+    include_idle: bool,
 }
 
 fn main() -> anyhow::Result<()> {
