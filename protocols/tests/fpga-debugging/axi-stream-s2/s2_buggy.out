@@ -1,0 +1,11 @@
+error: The two expressions did not evaluate to the same value
+   ┌─ fpga-debugging/axi-stream-s2/s2_buggy.prot:91:15
+   │
+91 │     assert_eq(DUT.M_AXIS_TLAST, last);
+   │               ^^^^^^^^^^^^^^^^^^^^^^ LHS Value: 1, RHS Value: 0
+
+Trace 0 execution failed.
+
+---
+
+Trace 1 executed successfully!

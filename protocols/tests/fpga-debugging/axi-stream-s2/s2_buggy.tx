@@ -1,4 +1,5 @@
 // ARGS: --verilog fpga-debugging/axi-stream-s2/s2_buggy.v fpga-debugging/axi-stream-s2/faxis_master.v --protocol fpga-debugging/axi-stream-s2/s2_buggy.prot --module xlnxstream_2018_3
+// RETURN: 101
 
 // trace 0
 trace {
