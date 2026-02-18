@@ -7,9 +7,9 @@ edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "protocls"
+name = "protocols"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.26.0" , features = []}
+pyo3 = { version = "0.28" , features = []}
 protocols = { path = "../protocols" }

@@ -20,7 +20,7 @@ Homepage = "https://github.com/cucapra/protocols"
 Issues = "https://github.com/cucapra/protocols/issues"
 
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
@@ -32,4 +32,4 @@ dev = [
 ]
 
 [tool.uv]
-cache-keys = [{file = "pyproject.toml"}, {file = "Cargo.toml"}, {file = "src/*.rs"}]
+cache-keys = [{file = "pyproject.toml"}, {file = "Cargo.toml"}, {file = "src/*.rs"}, {file = "../protocols/src/*.rs"}]
