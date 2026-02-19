@@ -19,6 +19,7 @@ from tqdm import tqdm
 TEST_ROOT = "monitor/tests"
 OUTPUT_CSV = "benchmark_results/benchmark_results.csv"
 
+
 def main():
     # Find all .prot files recursively under monitor/tests/
     search_pattern = os.path.join(TEST_ROOT, "**", "*.prot")
@@ -37,12 +38,15 @@ def main():
             "hyperfine",
             # Disable shell startup to avoid noise in measurements
             "--shell=none",
-            "--export-json", "tmp_hyperfine.json",
-            # Five warmup runs to run benchmarks on warm cache & avoid 
+            "--export-json",
+            "tmp_hyperfine.json",
+            # Five warmup runs to run benchmarks on warm cache & avoid
             # outliers between runs
-            "--warmup", "5",
+            "--warmup",
+            "5",
             # Suppress hyperfine output (results are checked separately)
-            "--style", "none",
+            "--style",
+            "none",
             # Ignore non-zero exit codes (some tests are expected to fail)
             "--ignore-failure",
             # Run Turnt with `--print` to run the monitor executable directly
@@ -51,7 +55,9 @@ def main():
         ]
 
         # Suppress Turnt's output to avoid measurement overhead
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
 
         # Load hyperfine JSON
         with open("tmp_hyperfine.json") as f:
@@ -72,7 +78,7 @@ def main():
         # Parse lines beginning with "No. of steps taken..." and extract the integer
         # Example: "No. of steps taken by AxisFifo scheduler: 74" -> 74
         num_steps = None
-        pattern = re.compile(r'^No\. of steps taken.*:\s*(\d+)')
+        pattern = re.compile(r"^No\. of steps taken.*:\s*(\d+)")
 
         with open(prof_file) as f:
             for line in f:
@@ -98,13 +104,35 @@ def main():
         if base.endswith(".prot"):
             base = base[:-5]  # strip .prot
 
-        rows.append([pf, base, num_steps, mean_time_per_step, stddev_per_step, min_time_per_step, max_time_per_step, steps_per_sec])
+        rows.append(
+            [
+                pf,
+                base,
+                num_steps,
+                mean_time_per_step,
+                stddev_per_step,
+                min_time_per_step,
+                max_time_per_step,
+                steps_per_sec,
+            ]
+        )
 
     # ---- Write CSV ----
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
     with open(OUTPUT_CSV, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["file_path", "test_name", "num_steps", "mean_per_step", "stddev_per_step", "min_per_step", "max_per_step", "steps_per_sec"])
+        writer.writerow(
+            [
+                "file_path",
+                "test_name",
+                "num_steps",
+                "mean_per_step",
+                "stddev_per_step",
+                "min_per_step",
+                "max_per_step",
+                "steps_per_sec",
+            ]
+        )
         writer.writerows(rows)
 
     print(f"\nWrote results to {OUTPUT_CSV}")
@@ -112,4 +140,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

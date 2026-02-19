@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Check for performance regressions in the monitor 
-by comparing current benchmark results with a baseline (the existing CSV 
+Check for performance regressions in the monitor
+by comparing current benchmark results with a baseline (the existing CSV
 in the `benchmark_results` sub-directory).
 """
 
@@ -12,6 +12,7 @@ import os
 BASELINE_CSV = "benchmark_results/baseline_results.csv"
 CURRENT_CSV = "benchmark_results/benchmark_results.csv"
 REGRESSION_THRESHOLD = 0.10  # 10% slower is considered a regression
+
 
 def load_results(csv_path):
     """Load benchmark results from CSV into a dict keyed by test_name."""
@@ -28,6 +29,7 @@ def load_results(csv_path):
                 "steps_per_sec": float(row["steps_per_sec"]),
             }
     return results
+
 
 def main():
     if not os.path.exists(BASELINE_CSV):
@@ -50,7 +52,7 @@ def main():
 
     for test_name in sorted(current.keys()):
         if test_name not in baseline:
-            steps_per_sec = current[test_name]['steps_per_sec']
+            steps_per_sec = current[test_name]["steps_per_sec"]
             print(f"NEW: {test_name}: {steps_per_sec:.2f} steps/sec")
             continue
 
@@ -59,35 +61,58 @@ def main():
         current_throughput = current[test_name]["steps_per_sec"]
 
         # Calculate percentage change (positive = improvement, negative = regression)
-        pct_change = ((current_throughput - baseline_throughput) / baseline_throughput) * 100
+        pct_change = (
+            (current_throughput - baseline_throughput) / baseline_throughput
+        ) * 100
 
         status = "="
         if pct_change < -REGRESSION_THRESHOLD * 100:
             # Throughput decreased by more than threshold = regression
             status = "REGRESSION"
-            regressions.append((test_name, baseline_throughput, current_throughput, pct_change))
+            regressions.append(
+                (test_name, baseline_throughput, current_throughput, pct_change)
+            )
         elif pct_change > REGRESSION_THRESHOLD * 100:
             # Throughput increased by more than threshold = improvement
             status = "IMPROVEMENT"
-            improvements.append((test_name, baseline_throughput, current_throughput, pct_change))
+            improvements.append(
+                (test_name, baseline_throughput, current_throughput, pct_change)
+            )
 
-        print(f"{status:12} {test_name:30} {baseline_throughput:7.2f} -> {current_throughput:7.2f} steps/sec ({pct_change:+6.2f}%)")
+        print(
+            f"{status:12} {test_name:30} {baseline_throughput:7.2f} -> {current_throughput:7.2f} steps/sec ({pct_change:+6.2f}%)"
+        )
 
     print()
 
     if regressions:
         print(f"\nFound {len(regressions)} performance regression(s):")
-        for test_name, baseline_throughput, current_throughput, pct_change in regressions:
-            print(f"  - {test_name}: {baseline_throughput:.2f} -> {current_throughput:.2f} steps/sec ({pct_change:+.2f}%)")
+        for (
+            test_name,
+            baseline_throughput,
+            current_throughput,
+            pct_change,
+        ) in regressions:
+            print(
+                f"  - {test_name}: {baseline_throughput:.2f} -> {current_throughput:.2f} steps/sec ({pct_change:+.2f}%)"
+            )
         return 1
 
     if improvements:
         print(f"\nFound {len(improvements)} performance improvement(s):")
-        for test_name, baseline_throughput, current_throughput, pct_change in improvements:
-            print(f"  - {test_name}: {baseline_throughput:.2f} -> {current_throughput:.2f} steps/sec ({pct_change:+.2f}%)")
+        for (
+            test_name,
+            baseline_throughput,
+            current_throughput,
+            pct_change,
+        ) in improvements:
+            print(
+                f"  - {test_name}: {baseline_throughput:.2f} -> {current_throughput:.2f} steps/sec ({pct_change:+.2f}%)"
+            )
 
     print("\nNo performance regressions detected!")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
