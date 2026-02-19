@@ -1,0 +1,14 @@
+trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
+interpreter_trace:
+trace {
+    signal_async(6, 7);
+}
+
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
+trace {
+    signal_async(6, 7);
+}
+

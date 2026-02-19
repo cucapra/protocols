@@ -403,6 +403,9 @@ impl<'a> Scheduler<'a> {
             }
         }
 
+        // Emit one trailing empty cycle so all generated .fst files having timing information
+        self.evaluator.sim_step();
+
         // Emit diagnostics for all errors after execution is complete
         self.emit_all_diagnostics();
         self.results.clone()
