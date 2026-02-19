@@ -71,6 +71,23 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  python-checks:
+    name: Type-check, lint & format Python files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-uv
+      - name: Use ty to typecheck python files
+        run: uv run --group dev ty check
+      - name: Use ruff to lint Python files
+        run: uv run --group dev ruff check
+      - name: Use ruff (via uv) to format Python files
+        # We pass in `--preview-features format` to suppress 
+        # uv's warning messages about the formatter being experimental
+        run: uv format --check --preview-features format      
+
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04
