@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-test-environment
+      - uses: ./.github/actions/setup-uv
       - name: Use ty to typecheck python files
         run: uv run --group dev ty check
       - name: Use ruff to lint Python files
