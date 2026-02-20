@@ -1,5 +1,16 @@
 // Wishbone B4 (Pipeline mode) subordinate
 
+
+// TODO: run the monitor on some existing waveforms 
+// Eventually put all the traces in a separate repo
+
+// For Wishbone, you can model everything using the same interface,
+// whereas for AXI we can't do this (because responses can be out of order in AXI <---- is this true?)
+
+// See if there is already a thing which takes Wishbone inputs/outputs and outputs transaction trace 
+// ^^ such a thing might already exist and is hard-coded 
+// TODO: see https://github.com/wallento/cocotbext-wishbone for a possible monitor
+
 // TODO: add `o_led` field to better model the state of the LED in `reqwalker.v`
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
@@ -54,7 +65,7 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
     DUT.i_we   := 1'b1;
     DUT.i_addr := addr;
     DUT.i_data := data;
-
+    // TODO: check whether data needs to be stable when subordinate stalls
     // Hold all request signals while the subordinate is stalling
     while (DUT.o_stall == 1'b1) {
         step();
@@ -76,7 +87,11 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
     // to avoid conflicting assignments between threads
     // (We set cyc to DontCare so the next protocol can decide 
     // whether the session continues)
-    DUT.i_stb  := X;
+
+    // TODO: check if there is pipelining
+    // So `stb` and `cyc` shouldn't be DontCare 
+    // (they should still be 1 when ack is 1)
+    DUT.i_stb := X;
     DUT.i_cyc := X;
     fork();
     step();
