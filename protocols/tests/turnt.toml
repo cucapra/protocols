@@ -1,2 +1,2 @@
 [envs.interp]
-command = "cargo run --package protocols-interp -- --color never --transactions {filename} {args}"
+command = "cargo run --quiet --package protocols-interp -- --color never --transactions {filename} {args}"
