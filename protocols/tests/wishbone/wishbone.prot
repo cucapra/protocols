@@ -1,5 +1,6 @@
 // Wishbone B4 (Pipeline mode) subordinate
 
+// TODO: add `o_led` field to better model the state of the LED in `reqwalker.v`
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
     in i_cyc: u1, 
