@@ -4,8 +4,6 @@ Cargo.lock
 test_run/
 *.btor
 **/.DS_Store
-.vscode/*
-.surfer/
 monitor/target
 monitor/tests/axi_output.txt
 *.json
@@ -18,6 +16,7 @@ monitor/tests/axi_output.txt
 # But include the .github directory (CI files)
 !.github/
 !.github/**/*
-# And also include .gitignore + .python-version
+# And also include .gitignore + .python-version + Cargo config
 !.gitignore
 !.python-version
+!.cargo
