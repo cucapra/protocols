@@ -1,5 +1,5 @@
 use anyhow::{Context, anyhow};
-use baa::BitVecOps;
+use baa::{BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
@@ -713,6 +713,26 @@ impl Scheduler {
                             .loop_args
                             .insert(loop_arg_symbol_id, LoopArgState::Known(0));
 
+                        // Also add the `loop_arg` to the `exited_thread`'s
+                        // `args_mapping` and `known_bits` map.
+                        // (The `loop_arg` is an input
+                        // parameter, so other statements in the protocol
+                        // can still refer to it)
+                        let loop_arg_bitwidth =
+                            thread.symbol_table[loop_arg_symbol_id].tpe().bitwidth();
+                        exited_thread
+                            .args_mapping
+                            .insert(loop_arg_symbol_id, BitVecValue::zero(loop_arg_bitwidth));
+                        exited_thread
+                            .known_bits
+                            .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
+
+                        // The exited_thread needs to execute the first statement
+                        // that immediately follow the loop
+                        exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
+                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
+                        );
+
                         // Update the current thread's `loop_args` map so that
                         // the `LoopArg` is now `Speculative(1)`
                         thread.loop_args.insert(
@@ -720,7 +740,8 @@ impl Scheduler {
                             LoopArgState::Speculative(1, loop_stmt_id),
                         );
 
-                        // Execute the loop body in the current thread
+                        // The current thread executes the
+                        // loop body for another iteration speculatively
                         thread.current_stmt_id = loop_body_id;
 
                         // Let the global scheduler deal with both threads
@@ -746,6 +767,27 @@ impl Scheduler {
                             .loop_args
                             .insert(loop_arg_symbol_id, LoopArgState::Known(*n));
 
+                        // Also add the `loop_arg` to the `exited_thread`'s
+                        // `args_mapping` and `known_bits` map.
+                        // (The `loop_arg` is an input
+                        // parameter, so other statements in the protocol
+                        // can still refer to it)
+                        let loop_arg_bitwidth =
+                            thread.symbol_table[loop_arg_symbol_id].tpe().bitwidth();
+                        exited_thread.args_mapping.insert(
+                            loop_arg_symbol_id,
+                            BitVecValue::from_u64(*n, loop_arg_bitwidth),
+                        );
+                        exited_thread
+                            .known_bits
+                            .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
+
+                        // The `exited_thread` needs to execute the first statement
+                        // that immediately follows the loop
+                        exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
+                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
+                        );
+
                         // Update the current thread's `loop_args` map so that
                         // the `LoopArg` is now `Speculative(n + 1)`
                         thread.loop_args.insert(
@@ -753,7 +795,8 @@ impl Scheduler {
                             LoopArgState::Speculative(n + 1, loop_stmt_id),
                         );
 
-                        // Execute the loop body in the current thread
+                        // The current thread executes the
+                        // loop body for another iteration speculatively
                         thread.current_stmt_id = loop_body_id;
 
                         // Let the global scheduler deal with both threads
