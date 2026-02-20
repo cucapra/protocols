@@ -71,8 +71,12 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
         step();
     }
 
-    // Set cyc to 0 to indicate end of write transaction
-    DUT.i_cyc := 1'b0;
+    // Need to set stb & cyc to DontCare before calling fork in order 
+    // to avoid conflicting assignments between threads
+    // (We set cyc to DontCare so the next protocol can decide 
+    // whether the session continues)
+    DUT.i_stb  := X;
+    DUT.i_cyc := X;
     fork();
     step();
 }
@@ -91,8 +95,9 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     }
     // Read request accepted, one cycle for data transfer, 
     // set stb to 0 to indicate there are no more requests
-    step(); 
+    step();
     DUT.i_stb  := 1'b0;
+    DUT.i_we   := X;
     DUT.i_addr := X;
 
     // Wait for ack; data is valid to read when ack becomes 1
@@ -101,9 +106,12 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     }
     assert_eq(DUT.o_data, data);
 
-    // Set cyc to 0 to mark end of transaction
-    DUT.i_cyc := 1'b0;
-    
+    // Need to set stb & cyc to DontCare before calling fork in order 
+    // to avoid conflicting assignments between threads
+    // (We set cyc to DontCare so the next protocol can decide 
+    // whether the session continues)
+    DUT.i_stb  := X;
+    DUT.i_cyc := X;
     fork();
     step();
 }
