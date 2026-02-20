@@ -62,8 +62,18 @@ pub struct Thread {
     /// Maps function parameters to DUT ports
     pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
 
-    /// Maps arguments of `repeat` loops to their current state
-    pub loop_args: FxHashMap<SymbolId, LoopArgState>,
+    /// Maps arguments of `repeat` loops to their current "guessed" state
+    /// (either `Speculative` or `Known` -- see docs for the `LoopArgState` type)
+    pub loop_args_state: FxHashMap<SymbolId, LoopArgState>,
+
+    /// Once the state of a `LoopArg` has been determined, we need to track
+    /// how many iterations remain to be executed -- this is most useful
+    /// if we have two loops that use the same `LoopArg`, e.g.
+    /// `repeat n iterations { ... }; ...; repeat n iterations { ...}`.
+    /// This map is populated lazily when we encounter each `repeat` loop
+    /// (see `Scheduler::run_thread_till_next_step`).
+    /// The `StmtId` key is the statement of the `repeat` loop.
+    pub repeat_loops_remaining_iters: FxHashMap<StmtId, u64>,
 
     /// Determines if the thread has called `fork()` yet. Initialized to `false`.
     /// Since well-formedness dicates that a protocol can only contain
@@ -120,7 +130,8 @@ impl Thread {
             start_time_step,
             args_to_pins: FxHashMap::default(),
             has_forked: false,
-            loop_args: FxHashMap::default(),
+            loop_args_state: FxHashMap::default(),
+            repeat_loops_remaining_iters: FxHashMap::default(),
         }
     }
 

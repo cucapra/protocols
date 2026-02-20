@@ -99,7 +99,7 @@ impl Interpreter {
         self.known_bits = thread.known_bits.clone();
         self.constraints = thread.constraints.clone();
         self.args_to_pins = thread.args_to_pins.clone();
-        self.loop_args = thread.loop_args.clone();
+        self.loop_args = thread.loop_args_state.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
