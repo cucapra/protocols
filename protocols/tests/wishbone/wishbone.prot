@@ -1,0 +1,109 @@
+// Wishbone B4 (Pipeline mode) subordinate
+
+struct WBSubordinate {
+    // Cycle is high anytime an active pipeline session is occurring
+    in i_cyc: u1, 
+
+    // Strobe is high when there is a request to the subordinate
+    // (akin to Valid in AXI-Lite, i.e. they indicate the manager 
+    // has something to transfer)
+    in i_stb: u1,
+
+    // Write-enable (true for write-requests)
+    in i_we: u1,
+
+    // Address of the request
+    in i_addr: u1,
+
+    // Data to be written 
+    in i_data: u32, 
+
+    // Response from the subordinate, indicating that the request
+    // has been fulfilled. 
+    out o_ack: u1,
+
+    // True on any cycle when the subordinate can't accept requests 
+    // False when a request can be accepted
+    // (i.e. the opposite of Ready in AXI-Lite)
+    out o_stall: u1,
+
+    // Data returned by the subordinate to the manager 
+    // This is valid only when ACK is true
+    out o_data: u32
+}
+
+// Both cyc & stb are low when the subordinate is low,
+// everything else is DontCare
+#[idle]
+prot idle<DUT: WBSubordinate>() {
+    DUT.i_cyc  := 1'b0;
+    DUT.i_stb  := 1'b0;
+    DUT.i_we   := X;
+    DUT.i_addr := X;
+    DUT.i_data := X;
+    step();
+}
+
+// Writes a value to the subordinate.
+// Wishbone says to hold all request signals while stalled (stall=1), 
+// i.e. when the subordinate is busy processing a previous request.
+prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
+    DUT.i_cyc  := 1'b1;
+    DUT.i_stb  := 1'b1;
+    DUT.i_we   := 1'b1;
+    DUT.i_addr := addr;
+    DUT.i_data := data;
+
+    // Hold all request signals while the subordinate is stalling
+    while (DUT.o_stall == 1'b1) {
+        step();
+    }
+    // Request accepted (stb=1, stall=0); ack registered for next cycle
+    step(); 
+    DUT.i_stb  := 1'b0;
+    DUT.i_we   := X;
+    DUT.i_addr := X;
+    DUT.i_data := X;
+
+    // Based on the Verilog, there is a 1 cycle latency before the 
+    // ack is registered
+    while (DUT.o_ack == 1'b0) {
+        step();
+    }
+
+    // Set cyc to 0 to indicate end of write transaction
+    DUT.i_cyc := 1'b0;
+    fork();
+    step();
+}
+
+// Reads a value from the subordinate
+prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
+    DUT.i_cyc  := 1'b1;
+    DUT.i_stb  := 1'b1;
+    DUT.i_we   := 1'b0;
+    DUT.i_addr := addr;
+    DUT.i_data := X;
+
+    // Wait while the subordinate stalls
+    while (DUT.o_stall == 1'b1) {
+        step();
+    }
+    // Read request accepted, one cycle for data transfer, 
+    // set stb to 0 to indicate there are no more requests
+    step(); 
+    DUT.i_stb  := 1'b0;
+    DUT.i_addr := X;
+
+    // Wait for ack; data is valid to read when ack becomes 1
+    while (DUT.o_ack == 1'b0) {
+        step();
+    }
+    assert_eq(DUT.o_data, data);
+
+    // Set cyc to 0 to mark end of transaction
+    DUT.i_cyc := 1'b0;
+    
+    fork();
+    step();
+}
