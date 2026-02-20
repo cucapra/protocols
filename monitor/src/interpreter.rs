@@ -50,28 +50,15 @@ impl Interpreter {
         &self,
         struct_name: Option<String>,
         ctx: &GlobalContext,
-        trace: &WaveSignalTrace,
+        _trace: &WaveSignalTrace,
     ) -> ProtocolApplication {
         let mut serialized_args = vec![];
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
-            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
-                let time_str = if ctx.show_waveform_time {
-                    trace.format_time(trace.time_step(), ctx.time_unit)
-                } else {
-                    format!("cycle {}", self.trace_cycle_count)
-                };
-                panic!(
-                    "Transaction `{}`, {}: Unable to find value for {} ({}) in args_mapping, which is {{ {} }}",
-                    self.transaction.name,
-                    time_str,
-                    name,
-                    symbol_id,
-                    serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
-                )
-            });
-            serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+            match self.args_mapping.get(&symbol_id) {
+                Some(value) => serialized_args.push(serialize_bitvec(value, ctx.display_hex)),
+                None => serialized_args.push("?".to_string()),
+            }
         }
         ProtocolApplication {
             struct_name,
@@ -488,7 +475,9 @@ impl Interpreter {
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    Ok(None)
+                    // Empty block — use next_stmt_map to continue
+                    // to the next statement in the parent scope
+                    Ok(self.next_stmt_map[stmt_id])
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }

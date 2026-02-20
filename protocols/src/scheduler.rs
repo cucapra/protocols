@@ -403,6 +403,10 @@ impl<'a> Scheduler<'a> {
             }
         }
 
+        // Final sim step so the FST waveform always has at least one time entry
+        // (needed for combinational-only designs where no cycle advances occur)
+        self.evaluator.sim_step();
+
         // Emit diagnostics for all errors after execution is complete
         self.emit_all_diagnostics();
         self.results.clone()
