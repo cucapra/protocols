@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -733,6 +733,9 @@ impl Scheduler {
                         });
                     }
                     Some(LoopArgState::Speculative(n, _)) => {
+                        // Fork two threads:
+                        // one with `Known(n)`, one with `Speculative(n + 1)`
+
                         // Create a new thread `exited_thread` that is identical
                         // to the current thread, but it exits the loop
                         // with the `LoopArg` set to `Known(n)`
@@ -763,7 +766,14 @@ impl Scheduler {
                         });
                     }
                     Some(LoopArgState::Known(_)) => {
-                        todo!("Handle case when `LoopArg` is `Known`")
+                        // Exit the loop since the `LoopArg` is already known,
+                        // proceed to the next immediate statement
+                        // (evaluated in the next iteration
+                        // of the outer `loop` in this function)
+                        current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
+                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
+                        );
+                        continue;
                     }
                 }
             }
