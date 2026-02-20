@@ -15,16 +15,24 @@ use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
     thread::Thread,
-    types::ProtocolApplication,
+    types::{LoopArgState, ProtocolApplication},
 };
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
+
+    /// Maps protocol arguments (input/output parameters) to their values
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks which bits of a `SymbolId` are known
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks the state of arguments for `repeat` loops
+    pub loop_args: FxHashMap<SymbolId, LoopArgState>,
 
     /// Constraints on DUT input port values that must hold after stepping.
     /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
@@ -91,6 +99,7 @@ impl Interpreter {
         self.known_bits = thread.known_bits.clone();
         self.constraints = thread.constraints.clone();
         self.args_to_pins = thread.args_to_pins.clone();
+        self.loop_args = thread.loop_args.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -157,6 +166,7 @@ impl Interpreter {
             trace_cycle_count,
             args_to_pins: FxHashMap::default(),
             dut_symbol_id,
+            loop_args: FxHashMap::default(),
         }
     }
 
@@ -475,8 +485,10 @@ impl Interpreter {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx, trace)
             }
-            Stmt::BoundedLoop(_, _) => {
-                todo!("Bounded loops is not yet implemented in the monitor")
+            Stmt::RepeatLoop(_, _) => {
+                // Repeat loops are intercepted in `run_thread_till_next_step`
+                // in `scheduler.rs`, so this case is unreachable
+                unreachable!("Repeat loops handled in `scheduler.rs` already")
             }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.

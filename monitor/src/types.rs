@@ -7,6 +7,8 @@
 
 use std::{collections::VecDeque, fmt};
 
+use protocols::ir::StmtId;
+
 use crate::{scheduler::Scheduler, thread::Thread};
 
 /// Represents a protocol application like `add(1, 2, 3)` which appears
@@ -129,4 +131,23 @@ pub enum CycleResult {
         /// constructors of this enum.
         parent: Box<Option<Thread>>,
     },
+}
+
+/// The possible states for an argument to a `repeat` loop.
+/// We maintain the following invariants:
+/// - `Speculative(n, loopID) `only becomes `Known(n)` after the corresponding
+///    scheduler has executed the body of the loop at `loopID` exactly `n`
+///    times (note that `n`` can be 0).
+/// - Once a `LoopArg` becomes Known, we proceed to the next statement
+///   that immediately follows the loop (we don't enter the loop body).
+/// - Moreover, once a `LoopArg` remains `Known`, it remains `Known` thereafter.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum LoopArgState {
+    /// `Speculative(n, loopID)` means the associated thread has already
+    /// *speculatively* executed the loop at `loopID` for `n` iterations.
+    /// (The `StmtId` is there to disambiguate between different loop statements,
+    /// since different loops can use the same loop argument `n`.)
+    Speculative(u64, StmtId),
+    Known(u64),
 }

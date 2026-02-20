@@ -10,7 +10,7 @@ use protocols::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::global_context::GlobalContext;
+use crate::{global_context::GlobalContext, types::LoopArgState};
 
 /// The local context associated with an individual thread,
 /// storing information such as:
@@ -61,6 +61,9 @@ pub struct Thread {
 
     /// Maps function parameters to DUT ports
     pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
+
+    /// Maps arguments of `repeat` loops to their current state
+    pub loop_args: FxHashMap<SymbolId, LoopArgState>,
 
     /// Determines if the thread has called `fork()` yet. Initialized to `false`.
     /// Since well-formedness dicates that a protocol can only contain
@@ -117,6 +120,7 @@ impl Thread {
             start_time_step,
             args_to_pins: FxHashMap::default(),
             has_forked: false,
+            loop_args: FxHashMap::default(),
         }
     }
 

@@ -14,8 +14,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 /// Per-thread input value: either a concrete assignment or DontCare
@@ -231,9 +231,10 @@ impl<'a> Evaluator<'a> {
                 patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
             for input_expr in input_exprs {
                 // Find the protocol symbol corresponding to this input expression
-                if let Some(input_sym) = input_mapping
-                    .iter()
-                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
+                if let Some(input_sym) =
+                    input_mapping
+                        .iter()
+                        .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
                 {
                     // output_dependencies: output -> Vec<input> (inputs this output depends on)
                     if let Some(vec) = output_dependencies.get_mut(out_sym) {
@@ -744,7 +745,7 @@ impl<'a> Evaluator<'a> {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
-            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
+            Stmt::RepeatLoop(num_iters_id, loop_body_id) => {
                 self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::Step => {

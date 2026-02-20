@@ -1,9 +1,9 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
-    ir::{Stmt, SymbolId, SymbolTable, Transaction},
+    ir::{Expr, Stmt, SymbolId, SymbolTable, Transaction},
     serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
@@ -15,7 +15,8 @@ use crate::{
     signal_trace::{SignalTrace, WaveSignalTrace},
     thread::Thread,
     types::{
-        AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, ThreadResult,
+        AugmentedProtocolApplication, AugmentedTrace, CycleResult, LoopArgState, SchedulerError,
+        ThreadResult,
     },
 };
 
@@ -143,7 +144,7 @@ impl Scheduler {
             current_threads.push_back(thread);
             thread_id += 1;
         }
-        // Technically, initializing the `interpreter` here is necessary
+        // Technically, initializing the `interpreter` here is unnecessary
         // since when we pop a thread from the `current` queue, we perform
         // a context switch and run the `interpreter` on the transaction/symbol_table
         // corresponding to the thread. However, we do this here nonetheless
@@ -673,6 +674,38 @@ impl Scheduler {
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
+            // Intercept repeat loops before evaluating statements
+            if let Stmt::RepeatLoop(loop_arg_expr_id, loop_body_id) =
+                thread.transaction[current_stmt_id]
+            {
+                let loop_stmt_id = current_stmt_id;
+                let loop_arg_symbol_id = match thread.transaction[loop_arg_expr_id] {
+                    Expr::Sym(symbol_id) => symbol_id,
+                    _ => {
+                        unreachable!("Arguments to repeat loops are always SymbolIDs")
+                    }
+                };
+
+                match thread.loop_args.get(&loop_arg_symbol_id) {
+                    None => {
+                        // First time seeing loop arg, it is `Unknown`
+                        // (i.e. absent from the thread's `loop_args` map)
+
+                        // Update the thread's `loop_args` map so that
+                        // the `loop_arg_symbol_id` is now `Speculative(1, ...)`
+                        thread.loop_args.insert(
+                            loop_arg_symbol_id,
+                            LoopArgState::Speculative(1, loop_stmt_id),
+                        );
+
+                        // Execute the loop body
+                        current_stmt_id = loop_body_id;
+                    }
+                    Some(_) => todo!(),
+                }
+
+                continue;
+            }
             match self.interpreter.evaluate_stmt(&current_stmt_id, ctx, trace) {
                 Ok(Some(next_stmt_id)) => {
                     // Update thread-local maps
