@@ -799,23 +799,6 @@ impl Scheduler {
                 // Now we need to handle the case when the value of a `LoopArg`
                 // is unknown
                 match thread.loop_args_state.get(&loop_arg_symbol_id).cloned() {
-                    Some(LoopArgState::Known(n)) => {
-                        // Value of `n` has been resolved from a prior loop
-                        // (either with the same `StmtId` or a different `StmtId`)
-                        if n == 0 {
-                            // Exit the loop since the `LoopArg` is already known,
-                            // proceed to the next immediate statement
-                            // (evaluated in the next iteration
-                            // of the outer `loop` in this function)
-                            current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
-                                "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
-                            );
-                        } else {
-                            thread.repeat_loops_remaining_iters.insert(loop_stmt_id, n);
-                            current_stmt_id = loop_body_id;
-                        }
-                        continue;
-                    }
                     None => {
                         // First time seeing loop arg, it is `Unknown`
                         // (i.e. absent from the thread's `loop_args_state` map),
@@ -829,7 +812,17 @@ impl Scheduler {
                             0,
                         ));
                     }
-                    Some(LoopArgState::Speculative(n, _)) => {
+                    Some(LoopArgState::Speculative(n, stored_loop_stmt_id)) => {
+                        // We disallow nested `repeat` loops that use the
+                        // same loop argument, i.e. we forbid
+                        // `repeat n iterations { repeat n iterations { ... } ... }`
+                        if loop_stmt_id != stored_loop_stmt_id {
+                            panic!(
+                                "Nested `repeat` loops that use the same loop argument `{}` are forbidden",
+                                thread.symbol_table[loop_arg_symbol_id].name()
+                            )
+                        }
+
                         // Fork two threads:
                         // one with `Known(n)`, one with `Speculative(n + 1)`
                         return Ok(self.handle_repeat_loops(
@@ -839,6 +832,26 @@ impl Scheduler {
                             thread,
                             n,
                         ));
+                    }
+                    Some(LoopArgState::Known(n)) => {
+                        // Value of `n` has been resolved from a prior loop
+                        // (either with the same `StmtId` or a different `StmtId`)
+                        if n == 0 {
+                            // Exit the loop since the `LoopArg` is already known,
+                            // proceed to the next immediate statement
+                            // (evaluated in the next iteration
+                            // of the outer `loop` in this function)
+                            current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
+                                "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
+                            );
+                        } else {
+                            // Insert it into the thread's `repeat_loops_remaining_iters`
+                            // map, which tracks how many iterations need to be executed
+                            // for this loop
+                            thread.repeat_loops_remaining_iters.insert(loop_stmt_id, n);
+                            current_stmt_id = loop_body_id;
+                        }
+                        continue;
                     }
                 }
             }
