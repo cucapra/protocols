@@ -3,7 +3,7 @@ use baa::{BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
-    ir::{Expr, Stmt, SymbolId, SymbolTable, Transaction},
+    ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},
     serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
@@ -663,6 +663,81 @@ impl Scheduler {
         Err(error_msg)
     }
 
+    /// Helper function which handles `repeat` loops by forking two threads:
+    /// - One which exits the loop with the `LoopArg` set to `Known(n)`
+    /// - One which speculatively executes the loop body for another iteration,
+    ///   with the `LoopArg` set to `Speculative(n + 1)`
+    ///
+    /// The arguments to this function are:
+    /// - The `SymbolId` / `StmtId`s of the `LoopArg`, loop body and the
+    ///   entire loop statement itself
+    /// - The `current_thread` (which will speculatively execute the loop body
+    ///   for another iteration)
+    /// - The value `n` that has been currently "guessed" for the `LoopArg`
+    ///
+    /// This function returns a `ThreadResult::RepeatLoopFork` containing the
+    /// two threads.
+    fn handle_repeat_loops(
+        &mut self,
+        loop_arg_symbol_id: SymbolId,
+        loop_body_id: StmtId,
+        loop_stmt_id: StmtId,
+        mut current_thread: Thread,
+        n: u64,
+    ) -> ThreadResult {
+        // Create a new thread `exited_thread` that is identical
+        // to the current thread, but it exits the loop
+        // with the `LoopArg` set to `Known(n)`
+        let mut exited_thread = current_thread.clone();
+        exited_thread.thread_id = self.num_threads;
+        self.num_threads += 1;
+        exited_thread
+            .loop_args
+            .insert(loop_arg_symbol_id, LoopArgState::Known(n));
+
+        // Also add the `loop_arg` to the `exited_thread`'s
+        // `args_mapping` and `known_bits` map.
+        // (The `loop_arg` is an input
+        // parameter, so other statements in the protocol
+        // can still refer to it)
+        let loop_arg_bitwidth = current_thread.symbol_table[loop_arg_symbol_id]
+            .tpe()
+            .bitwidth();
+        exited_thread.args_mapping.insert(
+            loop_arg_symbol_id,
+            BitVecValue::from_u64(n, loop_arg_bitwidth),
+        );
+        exited_thread
+            .known_bits
+            .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
+
+        // The exited_thread needs to execute the first statement
+        // that immediately follow the loop
+        exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
+                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
+                        );
+
+        // Update the current thread's `loop_args` map so that
+        // the `LoopArg` is now `Speculative(n + 1)`
+        current_thread.loop_args.insert(
+            loop_arg_symbol_id,
+            LoopArgState::Speculative(n + 1, loop_stmt_id),
+        );
+
+        // The current thread executes the
+        // loop body for another iteration speculatively
+        current_thread.current_stmt_id = loop_body_id;
+
+        // Let the global scheduler deal with both threads
+        // (The current thread is called the `speculative_thread`,
+        // since it speculatively executes the loop body again
+        // with the `LoopArg` set to `Speculative(n + 1)`)
+        ThreadResult::RepeatLoopFork {
+            exited_thread: Box::new(exited_thread),
+            speculative_thread: Box::new(current_thread),
+        }
+    }
+
     /// Keeps running a `thread` until:
     /// - It reaches the next `step()` or `fork()` statement
     /// - It completes succesfully
@@ -698,115 +773,30 @@ impl Scheduler {
                     }
                 };
 
-                match thread.loop_args.get(&loop_arg_symbol_id) {
+                match thread.loop_args.get(&loop_arg_symbol_id).cloned() {
                     None => {
                         // First time seeing loop arg, it is `Unknown`
-                        // (i.e. absent from the thread's `loop_args` map)
-
-                        // Create a new thread `exited_thread` that is identical
-                        // to the current thread, but it exits the loop
-                        // with the `LoopArg` set to `Known(0)`
-                        let mut exited_thread = thread.clone();
-                        exited_thread.thread_id = self.num_threads;
-                        self.num_threads += 1;
-                        exited_thread
-                            .loop_args
-                            .insert(loop_arg_symbol_id, LoopArgState::Known(0));
-
-                        // Also add the `loop_arg` to the `exited_thread`'s
-                        // `args_mapping` and `known_bits` map.
-                        // (The `loop_arg` is an input
-                        // parameter, so other statements in the protocol
-                        // can still refer to it)
-                        let loop_arg_bitwidth =
-                            thread.symbol_table[loop_arg_symbol_id].tpe().bitwidth();
-                        exited_thread
-                            .args_mapping
-                            .insert(loop_arg_symbol_id, BitVecValue::zero(loop_arg_bitwidth));
-                        exited_thread
-                            .known_bits
-                            .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
-
-                        // The exited_thread needs to execute the first statement
-                        // that immediately follow the loop
-                        exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
-                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
-                        );
-
-                        // Update the current thread's `loop_args` map so that
-                        // the `LoopArg` is now `Speculative(1)`
-                        thread.loop_args.insert(
+                        // (i.e. absent from the thread's `loop_args` map),
+                        // so pass in `n = 0` to the `handle_repeat_loops`
+                        // helper function
+                        return Ok(self.handle_repeat_loops(
                             loop_arg_symbol_id,
-                            LoopArgState::Speculative(1, loop_stmt_id),
-                        );
-
-                        // The current thread executes the
-                        // loop body for another iteration speculatively
-                        thread.current_stmt_id = loop_body_id;
-
-                        // Let the global scheduler deal with both threads
-                        // (The current thread is called the `speculative_thread`,
-                        // since it speculatively executes the loop body again
-                        // with the `LoopArg` set to `Speculative(1)`)
-                        return Ok(ThreadResult::RepeatLoopFork {
-                            exited_thread: Box::new(exited_thread),
-                            speculative_thread: Box::new(thread),
-                        });
+                            loop_body_id,
+                            loop_stmt_id,
+                            thread,
+                            0,
+                        ));
                     }
                     Some(LoopArgState::Speculative(n, _)) => {
                         // Fork two threads:
                         // one with `Known(n)`, one with `Speculative(n + 1)`
-
-                        // Create a new thread `exited_thread` that is identical
-                        // to the current thread, but it exits the loop
-                        // with the `LoopArg` set to `Known(n)`
-                        let mut exited_thread = thread.clone();
-                        exited_thread.thread_id = self.num_threads;
-                        self.num_threads += 1;
-                        exited_thread
-                            .loop_args
-                            .insert(loop_arg_symbol_id, LoopArgState::Known(*n));
-
-                        // Also add the `loop_arg` to the `exited_thread`'s
-                        // `args_mapping` and `known_bits` map.
-                        // (The `loop_arg` is an input
-                        // parameter, so other statements in the protocol
-                        // can still refer to it)
-                        let loop_arg_bitwidth =
-                            thread.symbol_table[loop_arg_symbol_id].tpe().bitwidth();
-                        exited_thread.args_mapping.insert(
+                        return Ok(self.handle_repeat_loops(
                             loop_arg_symbol_id,
-                            BitVecValue::from_u64(*n, loop_arg_bitwidth),
-                        );
-                        exited_thread
-                            .known_bits
-                            .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
-
-                        // The `exited_thread` needs to execute the first statement
-                        // that immediately follows the loop
-                        exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
-                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
-                        );
-
-                        // Update the current thread's `loop_args` map so that
-                        // the `LoopArg` is now `Speculative(n + 1)`
-                        thread.loop_args.insert(
-                            loop_arg_symbol_id,
-                            LoopArgState::Speculative(n + 1, loop_stmt_id),
-                        );
-
-                        // The current thread executes the
-                        // loop body for another iteration speculatively
-                        thread.current_stmt_id = loop_body_id;
-
-                        // Let the global scheduler deal with both threads
-                        // (The current thread is called the `speculative_thread`,
-                        // since it speculatively executes the loop body again
-                        // with the `LoopArg` set to `Speculative(1)`)
-                        return Ok(ThreadResult::RepeatLoopFork {
-                            exited_thread: Box::new(exited_thread),
-                            speculative_thread: Box::new(thread),
-                        });
+                            loop_body_id,
+                            loop_stmt_id,
+                            thread,
+                            n,
+                        ));
                     }
                     Some(LoopArgState::Known(_)) => {
                         // Exit the loop since the `LoopArg` is already known,
