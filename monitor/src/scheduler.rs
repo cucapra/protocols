@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 use log::info;
 use protocols::{
@@ -198,8 +198,8 @@ impl Scheduler {
     ///    (marking all suspended threads as ready for execution),
     ///    then advances the trace to the next step.
     ///    Notes:
-    /// - This function is used by `GlobalScheduler` to coordinate
-    ///   execution between multiple schedulers.
+    /// - This function is used by `GlobalScheduler::process_group_cycles`
+    ///   to coordinate execution between multiple schedulers.
     /// - When a `fork` creates a `Scheduler` clone, call this function
     ///   on the clone
     pub fn process_current_queue(
@@ -212,7 +212,10 @@ impl Scheduler {
             self.struct_name
         );
 
-        // Process each thread (this function returns early when a thread `fork`s)
+        // Process each thread. Note that
+        // this function returns early when a thread `fork`s, with the
+        // new forked-off threads propagated to the caller
+        // (`GlobalScheduler::process_group_cycles`)
         while let Some(thread) = self.current.pop_front() {
             match self.run_thread_till_next_step(thread, trace, ctx)? {
                 ThreadResult::Completed => continue,
@@ -224,6 +227,15 @@ impl Scheduler {
                 ThreadResult::ImplicitFork => {
                     return Ok(CycleResult::Fork {
                         parent: Box::new(None),
+                    });
+                }
+                ThreadResult::RepeatLoopFork {
+                    exited_thread,
+                    speculative_thread,
+                } => {
+                    return Ok(CycleResult::RepeatLoopFork {
+                        exited_thread,
+                        speculative_thread,
                     });
                 }
             }
@@ -691,20 +703,69 @@ impl Scheduler {
                         // First time seeing loop arg, it is `Unknown`
                         // (i.e. absent from the thread's `loop_args` map)
 
-                        // Update the thread's `loop_args` map so that
-                        // the `loop_arg_symbol_id` is now `Speculative(1, ...)`
+                        // Create a new thread `exited_thread` that is identical
+                        // to the current thread, but it exits the loop
+                        // with the `LoopArg` set to `Known(0)`
+                        let mut exited_thread = thread.clone();
+                        exited_thread.thread_id = self.num_threads;
+                        self.num_threads += 1;
+                        exited_thread
+                            .loop_args
+                            .insert(loop_arg_symbol_id, LoopArgState::Known(0));
+
+                        // Update the current thread's `loop_args` map so that
+                        // the `LoopArg` is now `Speculative(1)`
                         thread.loop_args.insert(
                             loop_arg_symbol_id,
                             LoopArgState::Speculative(1, loop_stmt_id),
                         );
 
-                        // Execute the loop body
-                        current_stmt_id = loop_body_id;
-                    }
-                    Some(_) => todo!(),
-                }
+                        // Execute the loop body in the current thread
+                        thread.current_stmt_id = loop_body_id;
 
-                continue;
+                        // Let the global scheduler deal with both threads
+                        // (The current thread is called the `speculative_thread`,
+                        // since it speculatively executes the loop body again
+                        // with the `LoopArg` set to `Speculative(1)`)
+                        return Ok(ThreadResult::RepeatLoopFork {
+                            exited_thread: Box::new(exited_thread),
+                            speculative_thread: Box::new(thread),
+                        });
+                    }
+                    Some(LoopArgState::Speculative(n, _)) => {
+                        // Create a new thread `exited_thread` that is identical
+                        // to the current thread, but it exits the loop
+                        // with the `LoopArg` set to `Known(n)`
+                        let mut exited_thread = thread.clone();
+                        exited_thread.thread_id = self.num_threads;
+                        self.num_threads += 1;
+                        exited_thread
+                            .loop_args
+                            .insert(loop_arg_symbol_id, LoopArgState::Known(*n));
+
+                        // Update the current thread's `loop_args` map so that
+                        // the `LoopArg` is now `Speculative(n + 1)`
+                        thread.loop_args.insert(
+                            loop_arg_symbol_id,
+                            LoopArgState::Speculative(n + 1, loop_stmt_id),
+                        );
+
+                        // Execute the loop body in the current thread
+                        thread.current_stmt_id = loop_body_id;
+
+                        // Let the global scheduler deal with both threads
+                        // (The current thread is called the `speculative_thread`,
+                        // since it speculatively executes the loop body again
+                        // with the `LoopArg` set to `Speculative(1)`)
+                        return Ok(ThreadResult::RepeatLoopFork {
+                            exited_thread: Box::new(exited_thread),
+                            speculative_thread: Box::new(thread),
+                        });
+                    }
+                    Some(LoopArgState::Known(_)) => {
+                        todo!("Handle case when `LoopArg` is `Known`")
+                    }
+                }
             }
             match self.interpreter.evaluate_stmt(&current_stmt_id, ctx, trace) {
                 Ok(Some(next_stmt_id)) => {

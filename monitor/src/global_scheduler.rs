@@ -48,14 +48,16 @@ fn process_group_cycles(
         match scheduler.process_current_queue(trace, ctx) {
             Ok(CycleResult::Done) => processed_schedulers.push_back(scheduler),
             Ok(CycleResult::Fork { parent }) => {
-                // Iterate over all possible candidate protocols
+                // When there is an explicit/implicit fork,
+                // we need to iterate over all possible candidate protocols
+                // and for each candidate protocol, spawn a scheduler that runs it
                 for (transaction, symbol_table) in &scheduler.possible_transactions {
                     let mut cloned_scheduler = scheduler.clone();
 
                     // If there was an explicit fork, we have to add the
-                    // parent thread to the cloned scheduler
+                    // parent thread to the cloned scheduler's `current` queue.
                     if let Some(ref thread) = *parent {
-                        cloned_scheduler.current.push_front(thread.clone());
+                        cloned_scheduler.current.push_back(thread.clone());
                     }
 
                     // Create a new thread for the candidate protocol
@@ -74,6 +76,32 @@ fn process_group_cycles(
                     // Continue processing the cloned scheduler
                     schedulers_to_process.push_back(cloned_scheduler);
                 }
+            }
+            Ok(CycleResult::RepeatLoopFork {
+                exited_thread,
+                speculative_thread,
+            }) => {
+                // For forks that arise due to `repeat` loops,
+                // create 2 schedulers that each execute a different thread:
+                // - One which executes the `exited_thread`, i.e. the thread
+                //   which exits the loop with the `LoopArg` set to
+                //   `Known(n)` for some `n >= 0`
+                // - One which executes the `speculative_thread`, i.e.
+                //   the thread which speculatively executes the loop body
+                //   for another iteration, with the `LoopArg`
+                //   set to `Speculative(n + 1)`
+
+                let mut scheduler_with_exited_thread = scheduler.clone();
+                scheduler_with_exited_thread
+                    .current
+                    .push_back(*exited_thread);
+                schedulers_to_process.push_back(scheduler_with_exited_thread);
+
+                let mut scheduler_with_speculative_thread = scheduler.clone();
+                scheduler_with_speculative_thread
+                    .current
+                    .push_back(*speculative_thread);
+                schedulers_to_process.push_back(scheduler_with_speculative_thread);
             }
             Err(SchedulerError::NoTransactionsMatch {
                 struct_name,
