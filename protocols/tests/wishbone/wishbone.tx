@@ -1,0 +1,17 @@
+// ARGS: --verilog wishbone/reqwalker.v --protocol=wishbone/wishbone.prot --module reqwalker
+trace {
+    // Initial state register is 0
+    read(0, 0);
+
+    // Trigger the LED animation: state machine counts 0 -> 1 -> 2 -> ... -> 11 -> 0
+    // After write() completes (2 clock edges), state=2
+    write(0, 0);
+
+    // Wait for the state machine to finish cycling back to 0.
+    // Each idle() advances state by 1; 10 idles brings state from 2 -> 3 -> ... -> 11 -> 0
+    idle(); idle(); idle(); idle(); idle();
+    idle(); idle(); idle(); idle(); idle();
+
+    // State is back to 0
+    read(0, 0);
+}
