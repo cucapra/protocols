@@ -51,7 +51,7 @@ $ uv run scripts/plot_benchmark_results.py
 ## Monitor CLI
 The CLI for the monitor can be used as follows:
 ```bash 
-$ cargo run --package protocols-monitor -- --help
+$ cargo monitor --help
 
 Usage: protocols-monitor [OPTIONS] --protocol <PROTOCOLS_FILE> --wave <WAVE_FILE>
 
@@ -89,13 +89,13 @@ Options:
 Example usage:
 ```bash
 $ cd monitor/tests
-$ cargo run --quiet --package protocols-monitor -- -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
+$ cargo monitor -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
 ```
 
 ## Interpreter CLI
 The interpreter has a CLI, which can be invoked as follows:
 ```bash
-$ cargo run --package protocols-interp -- --help
+$ cargo interp --help
 
 Usage: protocols-interp [OPTIONS] --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
 
@@ -127,7 +127,7 @@ Options:
 Example usage:
 
 ```bash
-$ cargo run --package protocols-interp -- --verilog protocols/tests/adders/adder_d1/add_d1.v \
+$ cargo interp --verilog protocols/tests/adders/adder_d1/add_d1.v \
         --protocol protocols/tests/adders/adder_d1/add_d1.prot \
         -t protocols/tests/adders/adder_d1/both_threads_pass.tx \
         --verbose
