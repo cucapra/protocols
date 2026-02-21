@@ -1,4 +1,4 @@
-// Maps to a Verilog design
+// ARGS: --wave adders/busy_wait.fst --instances add_d1:Adder 
 struct Adder {
   in a: u32,
   in b: u32,
@@ -10,7 +10,7 @@ struct Adder {
 // calling `step()` multiple times in the loop with the same inputs 
 // should still produce the correct result on the adder. (This allows us to 
 // reuse the same Verilog file as the other `adder_d1` tests.)
-prot add_busy_wait<DUT: Adder>(in a: u32, in b: u32, in num_iters: u8, out s: u32) {
+prot add_busy_wait<DUT: Adder>(in a: u32, in b: u32, in num_iters: u64, out s: u32) {
   DUT.a := a;
   DUT.b := b;
   // We want `assert_eq(s, DUT.s)` to hold for every iteration of this loop,
