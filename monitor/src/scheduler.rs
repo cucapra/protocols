@@ -973,9 +973,21 @@ impl Scheduler {
                         None
                     };
                     let is_idle = self.interpreter.transaction.is_idle;
-                    let protocol_application =
+
+                    let prot_app_opt =
                         self.interpreter
                             .to_protocol_application(struct_name, ctx, trace);
+
+                    if prot_app_opt.is_none() {
+                        info!(
+                            "Unable to construct protocol application for thread {} (`{}`), marking thread as failed",
+                            thread.global_thread_id(ctx),
+                            self.format_transaction_name(ctx, thread.transaction.name.clone())
+                        );
+                        self.failed.push_back(thread.clone());
+                        self.print_scheduler_state(trace, ctx);
+                        return Ok(ThreadResult::Completed);
+                    }
 
                     if is_idle {
                         info!(
@@ -988,7 +1000,8 @@ impl Scheduler {
                     // output buffer
                     self.output_buffer.push(AugmentedProtocolApplication {
                         end_cycle_count: self.cycle_count,
-                        protocol_application,
+                        protocol_application: prot_app_opt
+                            .expect("Expected Some(ProtocolApplication)"),
                         start_time_step: thread.start_time_step,
                         end_time_step,
                         thread_id: thread.global_thread_id(ctx),
