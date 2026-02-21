@@ -54,6 +54,10 @@ impl Interpreter {
     /// Attempts to builds a `ProtocolApplication` from the current interpreter state.
     /// `struct_name` is left as `None` — the caller (Scheduler) is responsible
     /// for setting it, since the Interpreter doesn't know the struct name.
+    /// If this return function returns `None` (e.g. because an argument
+    /// wasn't present in `args_mapping`), the caller
+    /// (`Scheduler::run_thread_till_next_step`) treats the corresponding thread
+    /// as having failed.
     pub fn to_protocol_application(
         &self,
         struct_name: Option<String>,
@@ -63,8 +67,7 @@ impl Interpreter {
         let mut serialized_args = vec![];
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let value_opt = self.args_mapping.get(&symbol_id);
-            if let Some(value) = value_opt {
+            if let Some(value) = self.args_mapping.get(&symbol_id) {
                 serialized_args.push(serialize_bitvec(value, ctx.display_hex));
             } else {
                 let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
