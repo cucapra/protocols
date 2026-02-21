@@ -744,7 +744,7 @@ impl<'a> Evaluator<'a> {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
             }
-            Stmt::BoundedLoop(num_iters_id, loop_body_id) => {
+            Stmt::RepeatLoop(num_iters_id, loop_body_id) => {
                 self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::Step => {

@@ -203,7 +203,7 @@ fn check_stmt_types(
                 Err(anyhow!(error_msg))
             }
         }
-        Stmt::BoundedLoop(count_expr, bodyid) => {
+        Stmt::RepeatLoop(count_expr, bodyid) => {
             // Typecheck the no. of iterations (which must be a BitVec type of any width)
             let num_iterations_type = check_expr_types(tr, st, handler, count_expr)?;
             if let Type::BitVec(_) = num_iterations_type {
