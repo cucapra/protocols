@@ -714,8 +714,8 @@ impl Scheduler {
         // The exited_thread needs to execute the first statement
         // that immediately follow the loop
         exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
-            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
-        );
+                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step`"
+                        );
 
         // Update the current thread's `loop_args` map so that
         // the `LoopArg` is now `Speculative(n + 1)`
@@ -761,146 +761,99 @@ impl Scheduler {
         let mut current_stmt_id = thread.current_stmt_id;
 
         loop {
-            match thread.transaction[current_stmt_id] {
-                // Intercept `fork()` when it appears as the current statement
-                // (this happens when an `exited_thread` produced by
-                //  the `handle_repeat_loops` helper function
-                //  has `current_stmt_id`` pointing to `fork()`)
-                Stmt::Fork => {
-                    thread.has_forked = true;
+            // Intercept repeat loops before evaluating statements
+            if let Stmt::RepeatLoop(loop_arg_expr_id, loop_body_id) =
+                thread.transaction[current_stmt_id]
+            {
+                let loop_stmt_id = current_stmt_id;
+                let loop_arg_symbol_id = match thread.transaction[loop_arg_expr_id] {
+                    Expr::Sym(symbol_id) => symbol_id,
+                    Expr::Const(_) => {
+                        todo!("Maybe allow constants to appear as arguments to repeat loops??")
+                    }
+                    _ => {
+                        unreachable!("Arguments to repeat loops are always SymbolIDs")
+                    }
+                };
 
-                    // Check if another thread from the same start cycle has already forked
-                    // in the current cycle for this scheduler.
-                    // If so, skip the fork to avoid creating duplicate threads.
-                    let already_forked = self.forked_start_cycles.contains(&thread.start_cycle);
-                    let next_stmt_id = self.interpreter.next_stmt_map[&current_stmt_id]
-                        .expect("fork() is never the last statement in a protocol");
-
-                    if already_forked {
-                        info!(
-                            "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
-                            thread.global_thread_id(ctx),
-                            thread.start_cycle
+                // Suppose we already know how many iterations a `repeat` loop
+                // must take. If so, we execute it deterministically.
+                // This situation occurs if there are multiple `repeat` loops
+                // in a protocol that use the same `LoopArg`, e.g.
+                // `repeat n iterations { ... }; ...; repeat n iterations { ... }`
+                if let Some(num_remaining_iters) =
+                    thread.repeat_loops_remaining_iters.get_mut(&loop_stmt_id)
+                {
+                    *num_remaining_iters -= 1;
+                    if *num_remaining_iters == 0 {
+                        thread.repeat_loops_remaining_iters.remove(&loop_stmt_id);
+                        current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
+                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
                         );
-                        // Continue from the fork statement onwards
-                        current_stmt_id = next_stmt_id;
                     } else {
-                        // Here, instead of creating a new thread for
-                        // each possible protocol, we indicate to the
-                        // caller that the current thread forked
-
-                        // Indicate that the thread's `start_cycle`
-                        // called `fork` in the current cycle
-                        self.forked_start_cycles.insert(thread.start_cycle);
-
-                        // Advance to next statement
-                        thread.current_stmt_id = next_stmt_id;
-
-                        // Save the parent thread's state before we exit this function
-                        thread.args_mapping = self.interpreter.args_mapping.clone();
-                        thread.known_bits = self.interpreter.known_bits.clone();
-                        thread.constraints = self.interpreter.constraints.clone();
-                        thread.args_to_pins = self.interpreter.args_to_pins.clone();
-
-                        // Indicate to the caller that this thread forked
-                        return Ok(ThreadResult::ExplicitFork {
-                            parent: Box::new(thread),
-                        });
+                        current_stmt_id = loop_body_id;
                     }
                     continue;
                 }
-                Stmt::RepeatLoop(loop_arg_expr_id, loop_body_id) => {
-                    let loop_stmt_id = current_stmt_id;
-                    let loop_arg_symbol_id = match thread.transaction[loop_arg_expr_id] {
-                        Expr::Sym(symbol_id) => symbol_id,
-                        Expr::Const(_) => {
-                            todo!("Maybe allow constants to appear as arguments to repeat loops??")
-                        }
-                        _ => {
-                            unreachable!("Arguments to repeat loops are always SymbolIDs")
-                        }
-                    };
 
-                    // Suppose we already know how many iterations a `repeat` loop
-                    // must take. If so, we execute it deterministically.
-                    // This situation occurs if there are multiple `repeat` loops
-                    // in a protocol that use the same `LoopArg`, e.g.
-                    // `repeat n iterations { ... }; ...; repeat n iterations { ... }`
-                    if let Some(num_remaining_iters) =
-                        thread.repeat_loops_remaining_iters.get_mut(&loop_stmt_id)
-                    {
-                        *num_remaining_iters -= 1;
-                        if *num_remaining_iters == 0 {
-                            thread.repeat_loops_remaining_iters.remove(&loop_stmt_id);
+                // Now we need to handle the case when the value of a `LoopArg`
+                // is unknown
+                match thread.loop_args_state.get(&loop_arg_symbol_id).cloned() {
+                    None => {
+                        // First time seeing loop arg, it is `Unknown`
+                        // (i.e. absent from the thread's `loop_args_state` map),
+                        // so pass in `n = 0` to the `handle_repeat_loops`
+                        // helper function
+                        return Ok(self.handle_repeat_loops(
+                            loop_arg_symbol_id,
+                            loop_body_id,
+                            loop_stmt_id,
+                            thread,
+                            0,
+                        ));
+                    }
+                    Some(LoopArgState::Speculative(n, stored_loop_stmt_id)) => {
+                        // We disallow nested `repeat` loops that use the
+                        // same loop argument, i.e. we forbid
+                        // `repeat n iterations { repeat n iterations { ... } ... }`
+                        if loop_stmt_id != stored_loop_stmt_id {
+                            panic!(
+                                "Nested `repeat` loops that use the same loop argument `{}` are forbidden",
+                                thread.symbol_table[loop_arg_symbol_id].name()
+                            )
+                        }
+
+                        // Fork two threads:
+                        // one with `Known(n)`, one with `Speculative(n + 1)`
+                        return Ok(self.handle_repeat_loops(
+                            loop_arg_symbol_id,
+                            loop_body_id,
+                            loop_stmt_id,
+                            thread,
+                            n,
+                        ));
+                    }
+                    Some(LoopArgState::Known(n)) => {
+                        // Value of `n` has been resolved from a prior loop
+                        // (either with the same `StmtId` or a different `StmtId`)
+                        if n == 0 {
+                            // Exit the loop since the `LoopArg` is already known,
+                            // proceed to the next immediate statement
+                            // (evaluated in the next iteration
+                            // of the outer `loop` in this function)
                             current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
-                            "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
-                        );
+                                "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
+                            );
                         } else {
+                            // Insert it into the thread's `repeat_loops_remaining_iters`
+                            // map, which tracks how many iterations need to be executed
+                            // for this loop
+                            thread.repeat_loops_remaining_iters.insert(loop_stmt_id, n);
                             current_stmt_id = loop_body_id;
                         }
                         continue;
                     }
-
-                    // Now we need to handle the case when the value of a `LoopArg`
-                    // is unknown
-                    match thread.loop_args_state.get(&loop_arg_symbol_id).cloned() {
-                        None => {
-                            // First time seeing loop arg, it is `Unknown`
-                            // (i.e. absent from the thread's `loop_args_state` map),
-                            // so pass in `n = 0` to the `handle_repeat_loops`
-                            // helper function
-                            return Ok(self.handle_repeat_loops(
-                                loop_arg_symbol_id,
-                                loop_body_id,
-                                loop_stmt_id,
-                                thread,
-                                0,
-                            ));
-                        }
-                        Some(LoopArgState::Speculative(n, stored_loop_stmt_id)) => {
-                            // We disallow nested `repeat` loops that use the
-                            // same loop argument, i.e. we forbid
-                            // `repeat n iterations { repeat n iterations { ... } ... }`
-                            if loop_stmt_id != stored_loop_stmt_id {
-                                panic!(
-                                    "Nested `repeat` loops that use the same loop argument `{}` are forbidden",
-                                    thread.symbol_table[loop_arg_symbol_id].name()
-                                )
-                            }
-
-                            // Fork two threads:
-                            // one with `Known(n)`, one with `Speculative(n + 1)`
-                            return Ok(self.handle_repeat_loops(
-                                loop_arg_symbol_id,
-                                loop_body_id,
-                                loop_stmt_id,
-                                thread,
-                                n,
-                            ));
-                        }
-                        Some(LoopArgState::Known(n)) => {
-                            // Value of `n` has been resolved from a prior loop
-                            // (either with the same `StmtId` or a different `StmtId`)
-                            if n == 0 {
-                                // Exit the loop since the `LoopArg` is already known,
-                                // proceed to the next immediate statement
-                                // (evaluated in the next iteration
-                                // of the outer `loop` in this function)
-                                current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
-                                "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
-                            );
-                            } else {
-                                // Insert it into the thread's `repeat_loops_remaining_iters`
-                                // map, which tracks how many iterations need to be executed
-                                // for this loop
-                                thread.repeat_loops_remaining_iters.insert(loop_stmt_id, n);
-                                current_stmt_id = loop_body_id;
-                            }
-                            continue;
-                        }
-                    }
                 }
-                _ => (),
             }
             match self.interpreter.evaluate_stmt(&current_stmt_id, ctx, trace) {
                 Ok(Some(next_stmt_id)) => {
@@ -928,7 +881,47 @@ impl Scheduler {
                             self.print_scheduler_state(trace, ctx);
                             return Ok(ThreadResult::Completed);
                         }
-                        Stmt::Fork => unreachable!("Handled above already"),
+                        Stmt::Fork => {
+                            thread.has_forked = true;
+
+                            // Check if another thread from the same start cycle has already forked
+                            // in the current cycle for this scheduler.
+                            // If so, skip the fork to avoid creating duplicate threads.
+                            let already_forked =
+                                self.forked_start_cycles.contains(&thread.start_cycle);
+
+                            if already_forked {
+                                info!(
+                                    "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
+                                    thread.global_thread_id(ctx),
+                                    thread.start_cycle
+                                );
+                                // Continue from the fork statement onwards
+                                current_stmt_id = next_stmt_id;
+                            } else {
+                                // Here, instead of creating a new thread for
+                                // each possible protocol, we indicate to the
+                                // caller that the current thread forked
+
+                                // Indicate that the thread's `start_cycle`
+                                // called `fork` in the current cycle
+                                self.forked_start_cycles.insert(thread.start_cycle);
+
+                                // Advance to next statement
+                                thread.current_stmt_id = next_stmt_id;
+
+                                // Save the parent thread's state before we exit this function
+                                thread.args_mapping = self.interpreter.args_mapping.clone();
+                                thread.known_bits = self.interpreter.known_bits.clone();
+                                thread.constraints = self.interpreter.constraints.clone();
+                                thread.args_to_pins = self.interpreter.args_to_pins.clone();
+
+                                // Indicate to the caller that this thread forked
+                                return Ok(ThreadResult::ExplicitFork {
+                                    parent: Box::new(thread),
+                                });
+                            }
+                        }
                         _ => {
                             // Default case: update `current_stmt_id`
                             // to point to `next_stmt_id`
