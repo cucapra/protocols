@@ -4,7 +4,7 @@
 
 use clap::ColorChoice;
 use clap::Parser;
-use clap_verbosity_flag::{log::LevelFilter, Verbosity, WarnLevel};
+use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;

@@ -7,7 +7,6 @@ Usage:
 
 import argparse
 import re
-import shlex
 import subprocess
 import traceback
 from pathlib import Path
