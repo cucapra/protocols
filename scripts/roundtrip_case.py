@@ -277,7 +277,8 @@ def main() -> int:
                 print("---")
                 print("")
             print(f"trace_block: {trace_idx}")
-            print(f"fst_file: {relpath_str(generated_fst, base_dir)}")
+            if args_ns.keep_fst:
+                print(f"fst_file: {relpath_str(generated_fst, base_dir)}")
             printed_blocks += 1
             if trace_idx >= len(expected_traces):
                 print("trace_result: FAIL")
