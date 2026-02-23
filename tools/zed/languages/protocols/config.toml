@@ -1,0 +1,4 @@
+name = "Protocols"
+grammar = "protocols"
+path_suffixes = ["prot"]
+line_comments = ["// "]

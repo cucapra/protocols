@@ -1,0 +1,4 @@
+name = "Transactions"
+grammar = "transactions"
+path_suffixes = ["tx"]
+line_comments = ["// "]

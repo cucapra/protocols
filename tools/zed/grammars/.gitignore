@@ -1,0 +1,6 @@
+# Tree-sitter generated/compiled output — regenerate with `tree-sitter generate`
+*/src/
+*/node_modules/
+*/bindings/
+*/binding.gyp
+*.wasm

@@ -1,0 +1,19 @@
+id = "protocols"
+name = "Protocols"
+description = "Syntax highlighting for Protocols (.prot) and Transactions (.tx) files"
+version = "0.0.1"
+schema_version = 1
+authors = ["Protocols Contributors"]
+repository = "https://github.com/cucapra/protocols"
+
+[grammars.protocols]
+repository = "https://github.com/cucapra/protocols"
+# TODO: Replace with the actual commit hash once this directory is committed
+commit = "0000000000000000000000000000000000000000"
+path = "tools/zed/grammars/protocols"
+
+[grammars.transactions]
+repository = "https://github.com/cucapra/protocols"
+# TODO: Replace with the actual commit hash once this directory is committed
+commit = "0000000000000000000000000000000000000000"
+path = "tools/zed/grammars/transactions"
