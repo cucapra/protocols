@@ -1,0 +1,81 @@
+// ARGS: --wave adders/wait_and_add.fst --instances add_d1:Adder 
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+// Adder with 1-cycle delay (i.e. `DUT.s` is only assigned after one cycle)s
+prot add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot add_fork_early<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  fork();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  step();
+}
+
+// Like `add` above, but this protocol doesn't end in `step`, 
+// so this function is ill-formed
+prot add_doesnt_end_in_step<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+}
+
+
+prot add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := a;
+  DUT.b := b;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+
+  // missing DontCare assignments to DUT.a and DUT.b
+
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot wait_and_add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  step();
+
+  fork();
+
+  step();
+
+  DUT.a := a;
+  DUT.b := b;
+
+  step();
+
+  assert_eq(s, DUT.s);
+  step();
+}

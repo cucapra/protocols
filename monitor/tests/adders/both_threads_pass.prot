@@ -1,0 +1,19 @@
+// ARGS: --wave adders/both_threads_pass.fst --instances add_d1:Adder 
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+// Adder with 1-cycle delay (i.e. `DUT.s` is only assigned after one cycle)s
+prot add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+
+  fork();
+  step();
+}
