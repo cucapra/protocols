@@ -7,6 +7,7 @@ Usage:
 
 import argparse
 import re
+import shlex
 import subprocess
 import traceback
 from pathlib import Path
@@ -193,10 +194,6 @@ def main() -> int:
     )
     args_ns = parser.parse_args()
 
-    if args_ns.allow_round_trip_failure:
-        print("SKIP: allowed to fail")
-        return 0
-
     tx_file = Path(args_ns.tx_file).resolve()
     if not tx_file.exists():
         return fail(f"Missing tx file: {tx_file}")
@@ -207,6 +204,11 @@ def main() -> int:
         print("SKIP: missing // ARGS")
         return 0
     args = args_match.group(1)
+
+    # Check if --allow-round-trip-failure is present in the file's // ARGS line
+    if "--allow-round-trip-failure" in args:
+        print("SKIP: allowed to fail round trip")
+        return 0
 
     return_match = re.search(r"^// RETURN:\s*(\d+)", tx_text, re.MULTILINE)
     if return_match and int(return_match.group(1)) != 0:

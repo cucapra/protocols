@@ -1,15 +1,1 @@
-trace_block: 0
-trace_result: FAIL
-failure_kind: monitor_error
-interpreter_trace:
-trace {
-    reset();
-    push_n_times(42, 4);
-    pop_n_times(42, 4);
-    check_empty();
-}
-
-monitor_error:
-not yet implemented: Bounded loops is not yet implemented in the monitor
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-
+SKIP: allowed to fail round trip

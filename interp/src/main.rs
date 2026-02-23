@@ -4,7 +4,7 @@
 
 use clap::ColorChoice;
 use clap::Parser;
-use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
+use clap_verbosity_flag::{log::LevelFilter, Verbosity, WarnLevel};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
@@ -55,7 +55,8 @@ struct Cli {
     #[arg(long)]
     max_steps: Option<u32>,
 
-    /// Mark this test as allowed to fail (ignored by interpreter, used by test harness)
+    /// Mark this test as allowed to fail (ignored by interpreter, used only
+    /// round-trip test harness)
     #[arg(long)]
     allow_round_trip_failure: bool,
 }
