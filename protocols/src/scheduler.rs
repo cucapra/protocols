@@ -387,7 +387,7 @@ impl<'a> Scheduler<'a> {
             // Advance the simulator whenever a `step()` statement was
             // encountered this cycle.
             // This must happen even when all threads have completed and
-            // the `next_threads`` queue is empty, so that the waveform
+            // the `next_threads` queue is empty, so that the waveform
             // records a timestep for every `step()` statement in the protocol.
             // (Example: combinational adders which only contain one `step()`.
             // Without the following if-statement, the waveform would contain
@@ -395,6 +395,8 @@ impl<'a> Scheduler<'a> {
             if self.step_happened_this_cycle {
                 info!("Stepping...");
                 self.evaluator.sim_step();
+                // Reset flag to ensure that simulator is stepped exactly
+                // once during each cycle
                 self.step_happened_this_cycle = false;
             }
 
