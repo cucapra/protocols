@@ -54,6 +54,11 @@ struct Cli {
     /// of cycles specified with this option.
     #[arg(long)]
     max_steps: Option<u32>,
+
+    /// Mark this test as allowed to fail (ignored by interpreter, used only
+    /// round-trip test harness)
+    #[arg(long)]
+    allow_round_trip_failure: bool,
 }
 
 /// Examples (enables all tracing logs):

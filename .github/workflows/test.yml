@@ -33,6 +33,15 @@ jobs:
     - name: Run Turnt tests for monitor
       run: turnt --env monitor $(find . -type f -name '*.prot')
 
+  roundtrip:
+    name: Roundtrip
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-environment
+      - name: Run Turnt roundtrip tests
+        run: turnt --env roundtrip $(find . -type f -name '*.tx') --diff
+
   msrv:
     name: Check Minimum Rust Version for protocols library
     runs-on: ubuntu-24.04

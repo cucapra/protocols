@@ -20,8 +20,12 @@ prot slicing_ok<DUT: Identity>(in a: u32, out s: u32) {
   DUT.a := a;
 
   step();
+   
+  assert_eq(s[31:15], DUT.s[31:15]);   
 
-  assert_eq(s[31:15], DUT.s[31:15]);
+  // TODO for Ernest: 
+  // uncomment this line and see if it works with the monitor (if the round-trip test passes)
+  // assert_eq(s[14:0], DUT.s[14:0]);
 
   fork();
   step();

@@ -1,4 +1,4 @@
-// ARGS: --verilog fifo/bsg_mem_1rw_sync.v fifo/bsg_mem_1rw_sync_synth.v fifo/bsg_circular_ptr.v fifo/bsg_fifo_1rw_large.v fifo/fifo_wrapper.v --protocol=fifo/fifo_bounded_loop.prot --module fifo_wrapper
+// ARGS: --verilog fifo/bsg_mem_1rw_sync.v fifo/bsg_mem_1rw_sync_synth.v fifo/bsg_circular_ptr.v fifo/bsg_fifo_1rw_large.v fifo/fifo_wrapper.v --protocol=fifo/fifo_bounded_loop.prot --module fifo_wrapper --allow-round-trip-failure
 trace {
     reset();
     push_n_times(42, 4);   // Push 42 four times

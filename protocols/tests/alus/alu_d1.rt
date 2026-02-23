@@ -1,0 +1,22 @@
+trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
+interpreter_trace:
+trace {
+    add(1, 2, 3);
+    add(123, 245, 368);
+    sub(200, 200, 0);
+    and(100, 100, 100);
+    or(0, 230, 230);
+}
+
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
+trace {
+    add(1, 2, 3);
+    add(123, 245, 368);
+    sub(200, 200, 0);
+    and(100, 100, 100);
+    or(0, 230, 230);
+}
+
