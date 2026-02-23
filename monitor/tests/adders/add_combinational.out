@@ -1,4 +1,0 @@
-// trace 0
-trace {
-    add_combinational(100, 200, 300);
-}
