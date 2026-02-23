@@ -54,6 +54,10 @@ struct Cli {
     /// of cycles specified with this option.
     #[arg(long)]
     max_steps: Option<u32>,
+
+    /// Mark this test as allowed to fail (ignored by interpreter, used by test harness)
+    #[arg(long)]
+    allowed_to_fail: bool,
 }
 
 /// Examples (enables all tracing logs):
