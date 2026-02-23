@@ -1,1 +1,1 @@
-SKIP: non-zero // RETURN
+SKIP: allowed to fail round trip
