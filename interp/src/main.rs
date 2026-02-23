@@ -57,7 +57,7 @@ struct Cli {
 
     /// Mark this test as allowed to fail (ignored by interpreter, used by test harness)
     #[arg(long)]
-    allowed_to_fail: bool,
+    allow_round_trip_failure: bool,
 }
 
 /// Examples (enables all tracing logs):

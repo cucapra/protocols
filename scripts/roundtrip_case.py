@@ -187,13 +187,13 @@ def main() -> int:
         help="Do not delete the intermediate .fst waveform file after the check",
     )
     parser.add_argument(
-        "--allowed-to-fail",
+        "--allow-round-trip-failure",
         action="store_true",
         help="Mark this test as allowed to fail (will be skipped)",
     )
     args_ns = parser.parse_args()
 
-    if args_ns.allowed_to_fail:
+    if args_ns.allow_round_trip_failure:
         print("SKIP: allowed to fail")
         return 0
 
