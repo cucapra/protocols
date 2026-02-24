@@ -57,6 +57,7 @@ void	tick(void) {
 unsigned wb_read(unsigned a) {
 	tb->i_cyc = tb->i_stb = 1;
 	tb->i_we  = 0;
+	tb->eval(); // update o_stall, which depends combinatorially on i_we
 	tb->i_addr= a;
 	// Make the request
 	while(tb->o_stall)
@@ -74,6 +75,7 @@ unsigned wb_read(unsigned a) {
 void wb_write(unsigned a, unsigned v) {
 	tb->i_cyc = tb->i_stb = 1;
 	tb->i_we  = 1;
+	tb->eval(); // update o_stall, which depends combinatorially on i_we
 	tb->i_addr= a;
 	tb->i_data= v;
 	// Make the bus request
@@ -129,7 +131,7 @@ int main(int argc, char **argv) {
 					else
 						printf("-");
 				} printf("\n");
-			} tick();
+			}
 
 			last_state = state;
 			last_led = tb->o_led;
