@@ -2,7 +2,6 @@
 
 // Wishbone B4 (Pipeline mode) subordinate
 
-
 // TODO: run the monitor on some existing waveforms 
 // Eventually put all the traces in a separate repo
 
