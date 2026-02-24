@@ -11,7 +11,6 @@
 // ^^ such a thing might already exist and is hard-coded 
 // TODO: see https://github.com/wallento/cocotbext-wishbone for a possible monitor
 
-// TODO: add `o_led` field to better model the state of the LED in `reqwalker.v`
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
     in i_cyc: u1, 
@@ -39,9 +38,12 @@ struct WBSubordinate {
     // (i.e. the opposite of Ready in AXI-Lite)
     out o_stall: u1,
 
-    // Data returned by the subordinate to the manager 
+    // Data returned by the subordinate to the manager
     // This is valid only when ACK is true
-    out o_data: u32
+    out o_data: u32,
+
+    // LED output: one-hot encoding of the current walker state
+    out o_led: u6
 }
 
 // Both cyc & stb are low when the subordinate is low,
@@ -56,10 +58,11 @@ prot idle<DUT: WBSubordinate>() {
     step();
 }
 
-// Writes a value to the subordinate.
+// Writes a `data` value to the subordinate, and observes the 
+// resultant `led` state via an output parameter. 
 // Wishbone says to hold all request signals while stalled (stall=1), 
 // i.e. when the subordinate is busy processing a previous request.
-prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
+prot write<DUT: WBSubordinate>(in addr: u1, in data: u32, out led: u6) {
     DUT.i_cyc  := 1'b1;       
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b1;
@@ -83,10 +86,13 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
         step();
     }
 
-    // Ack is now 1, the data write is complete  
-    // Note: During the ACK phase, we have i_cyc=1 (session still active) 
-    // and i_stb=0 (no new request). 
+    // Ack is now 1, the data write is complete
+    // Note: During the ACK phase, we have i_cyc=1 (session still active)
+    // and i_stb=0 (no new request).
 
+    // Observe resultant LED state
+    assert_eq(DUT.o_led, led);
+    
     // These two signals are set to DontCare *after* the ACK completes so the
     // next protocol can decide whether to continue the session.
     DUT.i_stb := X;
@@ -95,8 +101,9 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
     step();
 }
 
-// Reads a value from the subordinate
-prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
+// Reads a value and the LED state from the subordinate
+// (the `data` and the `led` state are conveyed via output parameters)
+prot read<DUT: WBSubordinate>(in addr: u1, out data: u32, out led: u6) {
     DUT.i_cyc  := 1'b1;
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b0;
@@ -118,9 +125,12 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     while (DUT.o_ack == 1'b0) {
         step();
     }
-    assert_eq(DUT.o_data, data);
 
-    // Need to set stb & cyc to DontCare before calling fork in order 
+    // Observe resultant data value & LED state
+    assert_eq(DUT.o_data, data);
+    assert_eq(DUT.o_led, led);
+
+    // Need to set stb & cyc to DontCare before calling fork in order
     // to avoid conflicting assignments between threads
     // (We set cyc to DontCare so the next protocol can decide 
     // whether the session continues)
