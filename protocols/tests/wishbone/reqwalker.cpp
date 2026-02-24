@@ -29,6 +29,9 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
+// Required by Verilator when not using SystemC
+double sc_time_stamp() { return 0; }
+
 int	tickcount = 0;
 Vreqwalker	*tb;
 VerilatedVcdC	*tfp;

@@ -44,7 +44,8 @@ obj_dir/Vreqwalker__ALL.a: obj_dir/Vreqwalker.cpp
 
 reqwalker_tb: reqwalker.cpp obj_dir/Vreqwalker__ALL.a
 	g++ -I$(VINC) -I obj_dir $(VINC)/verilated.cpp	\
-		$(VINC)/verilated_vcd_c.cpp reqwalker.cpp	\
+		$(VINC)/verilated_vcd_c.cpp			\
+		$(VINC)/verilated_threads.cpp reqwalker.cpp	\
 		obj_dir/Vreqwalker__ALL.a -o reqwalker_tb
 
 .PHONY: clean
