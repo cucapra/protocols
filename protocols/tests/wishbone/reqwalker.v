@@ -110,6 +110,8 @@ module	reqwalker(i_clk,
 	if ((!$past(i_cyc))&&(i_cyc))
 		assume(i_stb);
 
+	// All request signals (data, addr, we, stb) must remain stable when the 
+	// subordinate stalls 
 	always @(posedge i_clk)
 	if (($past(i_stb))&&($past(o_stall)))
 	begin

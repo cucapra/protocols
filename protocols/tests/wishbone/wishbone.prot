@@ -60,7 +60,7 @@ prot idle<DUT: WBSubordinate>() {
 // Wishbone says to hold all request signals while stalled (stall=1), 
 // i.e. when the subordinate is busy processing a previous request.
 prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
-    DUT.i_cyc  := 1'b1;
+    DUT.i_cyc  := 1'b1;       
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b1;
     DUT.i_addr := addr;
@@ -72,25 +72,23 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
     }
     // Request accepted (stb=1, stall=0); ack registered for next cycle
     step(); 
-    DUT.i_stb  := 1'b0;
+    DUT.i_stb  := 1'b0; // Set stb to 0 since no new requests are issued
     DUT.i_we   := X;
     DUT.i_addr := X;
     DUT.i_data := X;
 
     // Based on the Verilog, there is a 1 cycle latency before the 
-    // ack is registered
+    // ack is registered. 
     while (DUT.o_ack == 1'b0) {
         step();
     }
 
-    // Need to set stb & cyc to DontCare before calling fork in order 
-    // to avoid conflicting assignments between threads
-    // (We set cyc to DontCare so the next protocol can decide 
-    // whether the session continues)
+    // Ack is now 1, the data write is complete  
+    // Note: During the ACK phase, we have i_cyc=1 (session still active) 
+    // and i_stb=0 (no new request). 
 
-    // TODO: check if there is pipelining
-    // So `stb` and `cyc` shouldn't be DontCare 
-    // (they should still be 1 when ack is 1)
+    // These two signals are set to DontCare *after* the ACK completes so the
+    // next protocol can decide whether to continue the session.
     DUT.i_stb := X;
     DUT.i_cyc := X;
     fork();
