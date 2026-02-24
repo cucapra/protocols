@@ -69,7 +69,7 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32, out led: u6) {
     DUT.i_we   := 1'b1;
     DUT.i_addr := addr;
     DUT.i_data := data;
-    // For reqwalker, stall is combinatorial: o_stall = busy && i_we.
+    // For reqwalker, stall is combinational: o_stall = busy && i_we.
     // When state=0 (idle, can accept), busy=0 so stall=0 before the accept posedge.
     // Stall=1 only appears AT the accept posedge (state 0->1), so the loop
     // is omitted here; the monitor samples posedge values where stall=1 already
