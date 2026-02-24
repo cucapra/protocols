@@ -135,6 +135,11 @@ int main(int argc, char **argv) {
 
 			last_state = state;
 			last_led = tb->o_led;
+
+			// Idle cycle between reads so the VCD captures i_stb=0,
+			// making each transaction visible as a separate event to the monitor
+			tb->i_cyc = tb->i_stb = 0;
+			tick();
 		}
 	}
 
