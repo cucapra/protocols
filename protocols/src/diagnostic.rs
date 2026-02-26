@@ -488,7 +488,7 @@ impl DiagnosticHandler {
                 "Expressions must be in the same file for assertion error"
             );
             let transaction_call = if todo_args.is_empty() {
-                tr.name.clone()
+                format!("{}()", tr.name)
             } else {
                 let args_str = todo_args
                     .iter()
