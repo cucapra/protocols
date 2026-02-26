@@ -822,8 +822,8 @@ impl DiagnosticEmitter {
                     "Expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
                     symbol_name,
                     symbol_id,
-                    serialize_bitvec(value, false),
-                    serialize_bitvec(trace_value, false),
+                    serialize_bitvec(value, handler.display_hex),
+                    serialize_bitvec(trace_value, handler.display_hex),
                     cycle_count
                 );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
@@ -839,8 +839,8 @@ impl DiagnosticEmitter {
                     "Constraint violation: {} (symbol_id {}) expected value {} but trace has {} at {}",
                     symbol_name,
                     symbol_id,
-                    serialize_bitvec(expected_value, false),
-                    serialize_bitvec(trace_value, false),
+                    serialize_bitvec(expected_value, handler.display_hex),
+                    serialize_bitvec(trace_value, handler.display_hex),
                     error_time
                 );
                 handler.emit_general_message(&message, Level::Error);
@@ -904,8 +904,8 @@ impl DiagnosticEmitter {
                         thread_idx,
                         transaction_name,
                         symbol_name,
-                        serialize_bitvec(current_value, false),
-                        serialize_bitvec(new_value, false)
+                        serialize_bitvec(current_value, handler.display_hex),
+                        serialize_bitvec(new_value, handler.display_hex)
                     ),
                     Level::Error,
                     Some(*thread_idx),

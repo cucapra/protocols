@@ -122,18 +122,27 @@ pub struct DiagnosticHandler {
     no_error_locations: bool,
     /// `emit_warnings` indicates whether to emit warning-level diagnostics
     emit_warnings: bool,
+    /// Indicates whether to display bit-vector literal values in
+    /// error messages in hexadecimal
+    pub display_hex: bool,
 }
 
 impl Default for DiagnosticHandler {
     /// Default `DiagnosticHandler` does not emit colored error messages,
-    /// includes location info in error locations, and emits warnings
+    /// includes location info in error locations, emits warnings,
+    /// and *doesn't* display bit-vectors in hex
     fn default() -> Self {
-        Self::new(ColorChoice::Never, false, true)
+        Self::new(ColorChoice::Never, false, true, false)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new(color_choice: ColorChoice, error_locations: bool, emit_warnings: bool) -> Self {
+    pub fn new(
+        color_choice: ColorChoice,
+        error_locations: bool,
+        emit_warnings: bool,
+        display_hex: bool,
+    ) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: FxHashSet::default(),
@@ -141,6 +150,7 @@ impl DiagnosticHandler {
             color_choice,
             no_error_locations: error_locations,
             emit_warnings,
+            display_hex,
         }
     }
 
@@ -482,7 +492,7 @@ impl DiagnosticHandler {
             } else {
                 let args_str = todo_args
                     .iter()
-                    .map(|v| serialize_bitvec(v, false))
+                    .map(|v| serialize_bitvec(v, self.display_hex))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", tr.name, args_str)
@@ -499,8 +509,8 @@ impl DiagnosticHandler {
                     Label {
                         message: Some(format!(
                             "LHS Value: {}, RHS Value: {}",
-                            serialize_bitvec(eval1, false),
-                            serialize_bitvec(eval2, false)
+                            serialize_bitvec(eval1, self.display_hex),
+                            serialize_bitvec(eval2, self.display_hex)
                         )),
                         range: (start1.min(start2), end1.max(end2)),
                     },
