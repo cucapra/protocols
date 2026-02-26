@@ -6,6 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 pub mod backends;
+pub mod design;
 pub mod diagnostic;
 pub mod errors;
 pub mod interpreter;
