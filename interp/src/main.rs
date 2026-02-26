@@ -115,8 +115,6 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
     );
 
-    // At the moment we only allow the user to specify one Verilog file
-    // through the CLI, so we have to wrap it in a singleton Vec
     let (parsed_data, ctx, sys) = setup_test_environment(
         cli.verilog.iter().map(|v| v.as_str()).collect(),
         &cli.protocol,
