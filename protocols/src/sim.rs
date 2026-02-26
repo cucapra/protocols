@@ -20,6 +20,7 @@ impl Simulation for VerilatorSim {}
 pub mod tests {
     use crate::yosys::*;
     use baa::{BitVecOps, BitVecValue};
+    use marlin_verilator::dynamic::DynamicVerilatedModel;
     use marlin_verilator::*;
     use patronus::sim::Simulator;
     use std::path::PathBuf;
@@ -41,19 +42,48 @@ pub mod tests {
         .unwrap();
 
         let conf = VerilatedModelConfig::default();
-        let _dut = runtime
+        let (clk, rcon, inp, out_1, out_2) = ("clk", "rcon", "in", "out_1", "out_2");
+        let mut dut = runtime
             .create_dyn_model(
                 "expand_key_128",
                 "../examples/tinyaes128/aes_128.v",
                 &[
                     // you should be able to derive these from the struct
-                    ("in", 127, 0, PortDirection::Input),
-                    ("out_1", 127, 0, PortDirection::Output),
-                    ("out_2", 127, 0, PortDirection::Output),
+                    (clk, 0, 0, PortDirection::Input),
+                    (rcon, 7, 0, PortDirection::Input),
+                    (inp, 127, 0, PortDirection::Input),
+                    (out_1, 127, 0, PortDirection::Output),
+                    (out_2, 127, 0, PortDirection::Output),
                 ],
                 conf,
             )
             .unwrap();
+
+        let step = |dut: &mut DynamicVerilatedModel| {
+            dut.pin(clk, 1u8).unwrap();
+            dut.eval();
+            dut.pin(clk, 0u8).unwrap();
+        };
+
+        // execute an expand_key
+        let inp_value = [0u32; 4];
+        dut.pin(inp, &inp_value).unwrap();
+        dut.pin(rcon, 1u8).unwrap(); // rcon is a constant for the circuit
+        dut.pin(clk, 0u8).unwrap();
+        dut.eval();
+        step(&mut dut);
+
+        let inp_value_2 = [11u32; 4];
+        dut.pin(inp, &inp_value_2).unwrap(); // X
+        dut.eval();
+        let out_1_val = dut.read(out_1).unwrap();
+        println!("out_1 = {out_1_val:?}");
+        step(&mut dut);
+
+        dut.pin(inp, &inp_value_2).unwrap(); // X
+        dut.eval();
+        let out_2_val = dut.read(out_2).unwrap();
+        println!("out_2 = {out_2_val:?}");
     }
 
     #[test]
