@@ -486,7 +486,13 @@ impl<'a> Scheduler<'a> {
                     .expect("Transaction not found in IRs");
                 let (tr, st, _) = self.irs[ir_idx];
 
-                DiagnosticEmitter::emit_execution_error(self.handler, error, tr, st);
+                DiagnosticEmitter::emit_execution_error(
+                    self.handler,
+                    error,
+                    tr,
+                    st,
+                    &self.todos[idx].1,
+                );
             }
         }
     }
