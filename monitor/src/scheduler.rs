@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use protocols::{
@@ -868,6 +868,31 @@ impl Scheduler {
                     // This determines if we need to move threads to/from different queues
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
+                            // If the current statement itself is a `fork()`,
+                            // it means this thread started directly at the fork
+                            // (e.g. `exited_thread` from `handle_repeat_loops`, i.e.
+                            // the thread that exits the `repeat_loop`
+                            // with `loop_arg = Known(n)` set to some `n`).
+                            // We need to handle the fork (by returning `ExplicitFork` early)
+                            // before moving the current thread
+                            // to the `next` queue, but only if no other threads from the same
+                            // start cycle have already forked this cycle (to avoid duplicates)
+                            if matches!(thread.transaction[current_stmt_id], Stmt::Fork) {
+                                thread.has_forked = true;
+                                let already_forked =
+                                    self.forked_start_cycles.contains(&thread.start_cycle);
+                                if !already_forked {
+                                    self.forked_start_cycles.insert(thread.start_cycle);
+                                    thread.current_stmt_id = next_stmt_id;
+                                    return Ok(ThreadResult::ExplicitFork {
+                                        parent: Box::new(thread),
+                                    });
+                                }
+                                // If another thread from the same start cycle,
+                                // has already forked in this cycle,
+                                // we just fall through to the normal Step logic below
+                            }
+
                             info!(
                                 "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
                                 thread.global_thread_id(ctx),
