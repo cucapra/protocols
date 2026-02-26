@@ -417,8 +417,8 @@ entity_impl!(StructId, "struct");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Struct {
-    name: String,
-    pins: Vec<Field>,
+    pub name: String,
+    pub pins: Vec<Field>,
 }
 
 impl Struct {
@@ -455,9 +455,9 @@ impl Struct {
 /// - The `Type` of the field
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
-    name: String,
-    dir: Dir,
-    tpe: Type,
+    pub name: String,
+    pub dir: Dir,
+    pub tpe: Type,
 }
 
 impl Field {

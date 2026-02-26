@@ -3,7 +3,9 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::serialize::Type::BitVec;
 use crate::{interpreter::ExprValue, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
@@ -294,6 +296,22 @@ pub fn serialize_structs(
         writeln!(out, "}}\n")?;
     }
 
+    Ok(())
+}
+
+/// Pretty-prints a struct definition (realized as a value of the `Struct`
+/// datatype) to the output buffer `out`
+pub fn serialize_struct(out: &mut impl Write, st: &Struct) -> std::io::Result<()> {
+    writeln!(out, "struct {} {{", st.name())?;
+
+    for field in st.pins() {
+        if let BitVec(width) = field.tpe() {
+            writeln!(out, "  {} {}: u{},", field.dir(), field.name(), width)?;
+        } else {
+            panic!("Cannot serialize struct with non-BitVec field types");
+        }
+    }
+    writeln!(out, "}}\n")?;
     Ok(())
 }
 
