@@ -59,16 +59,18 @@ unsigned wb_read(unsigned a) {
 	tb->i_we  = 0;
 	tb->eval(); // update o_stall, which depends combinationally on i_we
 	tb->i_addr= a;
-	// Make the request
-	while(tb->o_stall)
+	// Hold all signals stable while the subordinate is stalling
+	while(tb->o_stall) {
 		tick();
-	tick();
+	}
+	// Keep i_stb=1 until the ack arrives (Wishbone B4: hold signals stable)
+	while(!tb->o_ack) {
+		tick();
+	}
+	// Lower i_stb=0 after the ack; the caller's final tick will have i_stb=0
 	tb->i_stb = 0;
-	// Wait for the ACK
-	while(!tb->o_ack)
-		tick();
-	// Idle the bus, and read the response
-	tb->i_cyc = 0;
+	tb->i_cyc = 0; 
+	tick(); // flush i_cyc=0 to VCD at a posedge boundary
 	return tb->o_data;
 }
 
@@ -78,16 +80,18 @@ void wb_write(unsigned a, unsigned v) {
 	tb->eval(); // update o_stall, which depends combinationally on i_we
 	tb->i_addr= a;
 	tb->i_data= v;
-	// Make the bus request
-	while(tb->o_stall)
+	// Hold all signals stable while the subordinate is stalling
+	while(tb->o_stall) {
 		tick();
-	tick();
+	}
+	// Keep i_stb=1 until the ack arrives (Wishbone B4: hold signals stable)
+	while(!tb->o_ack) {
+		tick();
+	}
+	// Lower i_stb=0 after the ack; the caller's final tick will have i_stb=0
 	tb->i_stb = 0;
-	// Wait for the acknowledgement
-	while(!tb->o_ack)
-		tick();
-	// Idle the bus and return
-	tb->i_cyc = tb->i_stb = 0;
+	tb->i_cyc = 0;
+	tick(); // flush i_cyc=0 to VCD at a posedge boundary 
 }
 
 int main(int argc, char **argv) {
