@@ -103,8 +103,8 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     // Set other inputs to DontCare
     // Note that the waveform produced by their C++ test-bench keeps 
     // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.i_cyc := 1'b1;
-    DUT.i_stb := 1'b1;
+    DUT.i_cyc := X;
+    DUT.i_stb := X;
     DUT.i_we := X;
     DUT.i_addr := X;
     
