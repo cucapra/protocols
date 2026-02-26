@@ -384,7 +384,6 @@ impl<'a> Scheduler<'a> {
                 self.next_todo_idx += 1;
             }
 
-<<<<<<< Updated upstream
             // Advance the simulator whenever a `step()` statement was
             // encountered this cycle.
             // This must happen even when all threads have completed and
@@ -400,12 +399,6 @@ impl<'a> Scheduler<'a> {
                 // once during each cycle
                 self.step_happened_this_cycle = false;
             }
-=======
-            // Always step the simulation to capture the current state in the waveform,
-            // even if this is the final cycle with no more threads.
-            info!("Stepping...");
-            self.evaluator.sim_step();
->>>>>>> Stashed changes
 
             // setup the threads for the next cycle
             if !self.next_threads.is_empty() {
