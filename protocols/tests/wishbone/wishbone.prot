@@ -87,8 +87,10 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     DUT.i_data := X;
 
     // Wait for subordinate to Ack
-    // (Same logic as `write` protocol, and same reason why we don't need
-    // another while-loop for `stall` to become 0)
+    // (When we're reading, the write-enable is always 0, 
+    // but in the Verilog, `stall` is a boolean AND of `i_we` and another
+    // signal, so `stall` is always 0 when we're reading, so we don't 
+    // need another while-loop to wait for `stall` to become 0)
     while (DUT.o_ack == 1'b0) {
         step();
     }
@@ -107,5 +109,6 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     
     step();
 }
+
 
 
