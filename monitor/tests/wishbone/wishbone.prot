@@ -70,11 +70,12 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32, out led: u6) {
     // Data and led are updated combinationally in the same cycle as the ack,
     // so no separate cycle for data transfer is needed
     assert_eq(DUT.o_led, led);
-    
-    // We hvae to set input pins to DontCare (the testbench sets i_cyc/i_stb to 0
-    // in the next cycle, so we need to remove these constraints before the final `step`)
-    DUT.i_cyc  := X;
-    DUT.i_stb  := X;
+
+    // Transaction has finished, so set `cyc` and `stb` to 0
+    DUT.i_cyc := 1'b0;
+    DUT.i_stb := 1'b0;
+
+    // Set other inputs to DontCare
     DUT.i_we   := X;
     DUT.i_addr := X;
     DUT.i_data := X;
@@ -102,11 +103,12 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32, out led: u6) {
     // so no separate cycle for data transfer is needed
     assert_eq(DUT.o_data, data);
     assert_eq(DUT.o_led, led);
+
+    // Transaction has finished, so set `cyc` and `stb` to 0
+    DUT.i_cyc := 1'b0;
+    DUT.i_stb := 1'b0;
     
-    // Clear inputs before stepping away: the testbench lowers i_cyc/i_stb
-    // in the next cycle, so we must not carry those constraints into the final step().
-    DUT.i_cyc  := X;
-    DUT.i_stb  := X;
+    // Set other inputs to DontCare
     DUT.i_we   := X;
     DUT.i_addr := X;
     
