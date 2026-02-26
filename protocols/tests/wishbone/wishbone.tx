@@ -2,38 +2,40 @@
 trace {
     // Note: this transaction is designed to closely model the behavior
     // of the existing off-the-shelf C++ test-bench (reqwalker.cpp)
+    
+    // Note: their Verilog DUT ignores write/read addresses,
+    // so we only read/write from address 0 in this trace
 
-    // Initial state register is 0; o_led=0 (default case for state=0)
+    // Initial state is 0
     read(0, 0);
 
-    // 5 idle cycles (Test-bench always sets 5 cycles before each write)
+    // 5 idle cycles (Their TB always sets 5 idle cycles before each write)
     idle(); idle(); idle(); idle(); idle();
 
-    // Trigger the LED animation: on the accept edge, state becomes 1.
-    // o_led still shows the old case 0 (from the previous cycle) due to a 1-cycle delay.
+    // Write 1 to the subordinate
     write(0, 1);
 
     // Read back `o_data` and `o_led` as the LED walks through states.
     // The `read` protocol advances the state (`data`) by 1
     // and the write protocol's final step also advances state by 1 (1->2 before
     // the first read). This means the first value of `data` read is 3. 
-    read(0,  3); // state 2->3,  o_led=case(2)=0b00_0010
-    read(0,  5); // state 4->5,  o_led=case(4)=0b00_1000
-    read(0,  7); // state 6->7,  o_led=case(6)=0b10_0000
-    read(0,  9); // state 8->9,  o_led=case(8)=0b00_1000
-    read(0, 11); // state 10->11, o_led=case(10)=0b00_0010
-    read(0,  0); // state 11->0, o_led=case(0)=0b00_0000
+    read(0, 3); // state 2->3
+    read(0, 5); // state 4->5
+    read(0, 7); // state 6->7
+    read(0, 9); // state 8->9
+    read(0, 11); // state 10->11
+    read(0, 0); // state 11->0
 
     // Test-bench always sets 5 idle cycles before each write
     idle(); idle(); idle(); idle(); idle();
 
-    // Second iteration of outer `for` loop in `reqwalker.cpp`
-    // (identical state machine behaviour)
+    // Second iteration of the outer `for-loop in the `main` function 
+    // of `reqwalker.cpp` (identical state machine behaviour)
     write(0, 1);
-    read(0,  3);
-    read(0,  5);
-    read(0,  7);
-    read(0,  9);
+    read(0, 3);
+    read(0, 5);
+    read(0, 7);
+    read(0, 9);
     read(0, 11);
-    read(0,  0);
+    read(0, 0);
 }
