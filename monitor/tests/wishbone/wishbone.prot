@@ -1,23 +1,12 @@
 // ARGS: --wave wishbone/reqwalker.vcd --instances TOP.reqwalker:WBSubordinate --sample-posedge TOP.reqwalker.i_clk
 
 // Wishbone B4 (Pipeline mode) subordinate
-
-// TODO: run the monitor on some existing waveforms 
-// Eventually put all the traces in a separate repo
-
-// For Wishbone, you can model everything using the same interface,
-// whereas for AXI we can't do this (because responses can be out of order in AXI <---- is this true?)
-
-// See if there is already a thing which takes Wishbone inputs/outputs and outputs transaction trace 
-// ^^ such a thing might already exist and is hard-coded 
-// TODO: see https://github.com/wallento/cocotbext-wishbone for a possible monitor
-
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
-    in i_cyc: u1, 
+    in i_cyc: u1,
 
     // Strobe is high when there is a request to the subordinate
-    // (akin to Valid in AXI-Lite, i.e. they indicate the manager 
+    // (akin to Valid in AXI-Lite, i.e. they indicate the manager
     // has something to transfer)
     in i_stb: u1,
 
@@ -27,14 +16,14 @@ struct WBSubordinate {
     // Address of the request
     in i_addr: u1,
 
-    // Data to be written 
-    in i_data: u32, 
+    // Data to be written
+    in i_data: u32,
 
     // Response from the subordinate, indicating that the request
-    // has been fulfilled. 
+    // has been fulfilled.
     out o_ack: u1,
 
-    // True on any cycle when the subordinate can't accept requests 
+    // True on any cycle when the subordinate can't accept requests
     // False when a request can be accepted
     // (i.e. the opposite of Ready in AXI-Lite)
     out o_stall: u1,
@@ -59,9 +48,9 @@ prot idle<DUT: WBSubordinate>() {
     step();
 }
 
-// Writes a `data` value to the subordinate, and observes the 
-// resultant `led` state via an output parameter. 
-// Wishbone says to hold all request signals while stalled (stall=1), 
+// Writes a `data` value to the subordinate, and observes the
+// resultant `led` state via an output parameter.
+// Wishbone says to hold all request signals while stalled (stall=1),
 // i.e. when the subordinate is busy processing a previous request.
 prot write<DUT: WBSubordinate>(in addr: u1, in data: u32, out led: u6) {
     DUT.i_cyc  := 1'b1;
@@ -69,40 +58,27 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32, out led: u6) {
     DUT.i_we   := 1'b1;
     DUT.i_addr := addr;
     DUT.i_data := data;
-    // For reqwalker, stall is combinational: o_stall = busy && i_we.
-    // When state=0 (idle, can accept), busy=0 so stall=0 before the accept posedge.
-    // Stall=1 only appears AT the accept posedge (state 0->1), so the loop
-    // is omitted here; the monitor samples posedge values where stall=1 already
-    // coincides with ack=1 (post-accept artifact).
-    // Request accepted on this cycle; ack registered next cycle
-    step();
-    // i_stb goes to DontCare after acceptance: per Wishbone B4 the master may
-    // keep stb high for pipelined requests, and in VCDs the 0 only appears at
-    // the *next* posedge (testbench sets it after tick() returns).
+
+    // Wait till the subordinate Acks
+    // Note that in the Verilog, after the subordinate acks, 
+    // `o_stall` is assigned combinationally (`o_stall = busy && i_we`), 
+    // so we don't need another while-loop to wait for `stall` to become 0
+    while (DUT.o_ack == 1'b0) {
+        step();
+    }
+
+    // Data and led are updated combinationally in the same cycle as the ack,
+    // so no separate cycle for data transfer is needed
+    assert_eq(DUT.o_led, led);
+    
+    // We hvae to set input pins to DontCare (the testbench sets i_cyc/i_stb to 0
+    // in the next cycle, so we need to remove these constraints before the final `step`)
     DUT.i_cyc  := X;
     DUT.i_stb  := X;
     DUT.i_we   := X;
     DUT.i_addr := X;
     DUT.i_data := X;
-
-    // Based on the Verilog, there is a 1 cycle latency before the
-    // ack is registered.
-    while (DUT.o_ack == 1'b0) {
-        step();
-    }
-
-    // Ack is now 1, the data write is complete
-    // Note: During the ACK phase, we have i_cyc=1 (session still active)
-    // and i_stb=0 (no new request).
-
-    // Observe resultant LED state
-    assert_eq(DUT.o_led, led);
-
-    // Set to DontCare so the next protocol can decide whether to continue.
-    // No explicit fork(): using implicit fork so the next transaction starts
-    // at the *next* cycle (after i_cyc drops to 0 and the bus becomes idle).
-    DUT.i_stb := X;
-    DUT.i_cyc := X;
+    
     step();
 }
 
@@ -115,30 +91,24 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32, out led: u6) {
     DUT.i_addr := addr;
     DUT.i_data := X;
 
-    // Wait while the subordinate stalls
-    while (DUT.o_stall == 1'b1) {
-        step();
-    }
-    // Read request accepted, one cycle for data transfer.
-    // i_stb goes to DontCare after acceptance (same reasoning as write above).
-    step();
-    DUT.i_stb  := X;
-    DUT.i_we   := X;
-    DUT.i_addr := X;
-
-    // Wait for ack; data is valid to read when ack becomes 1
+    // Wait for subordinate to Ack
+    // (Same logic as `write` protocol, and same reason why we don't need
+    // another while-loop for `stall` to become 0)
     while (DUT.o_ack == 1'b0) {
         step();
     }
 
-    // Observe resultant data value & LED state
+    // Data and led are updated combinationally in the same cycle as the ack,
+    // so no separate cycle for data transfer is needed
     assert_eq(DUT.o_data, data);
     assert_eq(DUT.o_led, led);
-
-    // Set to DontCare so the next protocol can decide whether to continue.
-    // No explicit fork(): using implicit fork so the next transaction starts
-    // at the *next* cycle (after i_cyc drops to 0 and the bus becomes idle).
+    
+    // Clear inputs before stepping away: the testbench lowers i_cyc/i_stb
+    // in the next cycle, so we must not carry those constraints into the final step().
+    DUT.i_cyc  := X;
     DUT.i_stb  := X;
-    DUT.i_cyc := X;
+    DUT.i_we   := X;
+    DUT.i_addr := X;
+    
     step();
 }
