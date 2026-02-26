@@ -1,4 +1,4 @@
-error: The two expressions did not evaluate to the same value
+error: The two expressions did not evaluate to the same value (in transaction `add_busy_wait(1, 2, 2, 999)`)
    ┌─ adders/adder_d1/busy_wait.prot:21:15
    │
 21 │     assert_eq(s, DUT.s);
