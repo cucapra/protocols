@@ -14,7 +14,7 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{Instance, collects_design_names, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
@@ -23,6 +23,7 @@ use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
+use protocols::design::{find_designs, Design};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;

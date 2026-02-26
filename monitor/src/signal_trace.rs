@@ -3,7 +3,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design, global_context::TimeUnit};
+use protocols::design::Design;
+use crate::{Instance, global_context::TimeUnit};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
