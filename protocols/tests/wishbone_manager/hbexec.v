@@ -137,7 +137,7 @@ module	hbexec #(
 		output	reg	[(CW-1):0]	o_rsp_word,
 
 		/* ------------------------------------------------------------------------ */
-		/*                             Wishbone outputs                             */
+		/*          Wishbone outputs (provided to the subordinate)                  */
 		/* ------------------------------------------------------------------------ */
 		output	reg			o_wb_cyc, o_wb_stb, o_wb_we,
 		output	reg	[(AW-1):0]	o_wb_addr,
@@ -145,7 +145,7 @@ module	hbexec #(
 		output	wire	[3:0]		o_wb_sel,
 
 		/* ------------------------------------------------------------------------ */
-		/*                              Wishbone inputs                             */
+		/*        Wishbone inputs (obtained from the subordinate)                   */
 		/* ------------------------------------------------------------------------ */
 
 		input	wire		i_wb_stall, i_wb_ack, i_wb_err,
@@ -253,7 +253,9 @@ module	hbexec #(
 	/* ------------------------------------------------------------------------- */
 	/*        Logic for detemrining the output bus WE (write enable) line        */
 	/* ------------------------------------------------------------------------- */
-	// `o_wb_we` determines the request direction
+	// `o_wb_we` determines the request direction (i.e. whether its a read/write)
+	// for the Wishbone subordinate (i.e. the manager tells the subordinate
+	// if it should do a write or a read).
 	// We only accept commands when we are in the idle state, 
 	// and we only transition to the bus request state on a read/write command,
 	// so the following `always` block is sufficient.

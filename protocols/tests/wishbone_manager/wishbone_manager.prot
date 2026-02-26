@@ -1,0 +1,28 @@
+// A Wishbone manager which takes commands encoded via an input 34-bit word,
+// issues those commands across a Wishbone bus, 
+// and returns the result from the bus to the subordinate 
+struct WBManager {
+    in i_reset: u1,
+
+    // Input command channel (see Verilog for comments)
+    in i_cmd_stb: u1,
+    in i_cmd_word: u34,
+    out o_cmd_busy: u1,
+
+    // Return command channel (see Verilog for comments)
+    out o_rsp_stb: u1,
+    out o_rsp_word: u34,
+
+    // Wishbone outputs
+    out o_wb_cyc: u1,
+    out o_wb_stb: u1,
+    out o_wb_we: u1,
+    out o_wb_addr: u30,
+    out wb_data: u32,
+
+    // Wishbone inputs
+    in i_wb_stall: u1,
+    in i_wb_ack: u1,
+    in i_wb_err: u1,
+    in i_wb_data: u32
+}
