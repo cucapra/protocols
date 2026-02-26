@@ -20,3 +20,8 @@ monitor/tests/axi_output.txt
 !.gitignore
 !.python-version
 !.cargo
+
+# Verilator / iVerilog artifacts
+dump.vcd
+a.out
+obj_dir/
