@@ -1,43 +1,39 @@
 // ARGS: --verilog wishbone/reqwalker.v --protocol=wishbone/wishbone.prot --module reqwalker
 trace {
+    // Note: this transaction is designed to closely model the behavior
+    // of the existing off-the-shelf C++ test-bench (reqwalker.cpp)
+
     // Initial state register is 0; o_led=0 (default case for state=0)
     read(0, 0, 0);
 
+    // 5 idle cycles (Test-bench always sets 5 cycles before each write)
+    idle(); idle(); idle(); idle(); idle();
+
     // Trigger the LED animation: on the accept edge, state becomes 1.
-    // o_led still shows the old case 0 (from the previous cycle) due to a 1-cycle delay
+    // o_led still shows the old case 0 (from the previous cycle) due to a 1-cycle delay.
     write(0, 0, 0);
 
     // Read back `o_data` and `o_led` as the LED walks through states.
-    // `o_data` is the current state, `o_led` shows the LED state in the *previous* cycle 
-    read(0,  2, 0b000001); // state 1->2,  o_led=case(1) =0b00_0001
-    read(0,  3, 0b000010); // state 2->3,  o_led=case(2) =0b00_0010
-    read(0,  4, 0b000100); // state 3->4,  o_led=case(3) =0b00_0100
-    read(0,  5, 0b001000); // state 4->5,  o_led=case(4) =0b00_1000
-    read(0,  6, 0b010000); // state 5->6,  o_led=case(5) =0b01_0000
-    read(0,  7, 0b100000); // state 6->7,  o_led=case(6) =0b10_0000
-    read(0,  8, 0b010000); // state 7->8,  o_led=case(7) =0b01_0000
-    read(0,  9, 0b001000); // state 8->9,  o_led=case(8) =0b00_1000
-    read(0, 10, 0b000100); // state 9->10, o_led=case(9) =0b00_0100
+    // The `read` protocol advances the state (`data`) by 1
+    // and the write protocol's final step also advances state by 1 (1->2 before
+    // the first read). This means the first value of `data` read is 3. 
+    read(0,  3, 0b000010); // state 2->3,  o_led=case(2)=0b00_0010
+    read(0,  5, 0b001000); // state 4->5,  o_led=case(4)=0b00_1000
+    read(0,  7, 0b100000); // state 6->7,  o_led=case(6)=0b10_0000
+    read(0,  9, 0b001000); // state 8->9,  o_led=case(8)=0b00_1000
     read(0, 11, 0b000010); // state 10->11, o_led=case(10)=0b00_0010
-    read(0,  0, 0b000001); // state 11->0, o_led=case(11)=0b00_0001
+    read(0,  0, 0b000000); // state 11->0, o_led=case(0)=0b00_0000
 
-    // State is back to 0; o_led now catches up to case(0)=0
-    read(0, 0, 0b000000);
+    // Test-bench always sets 5 idle cycles before each write
+    idle(); idle(); idle(); idle(); idle();
+
+    // Second iteration of outer `for` loop in `reqwalker.cpp`
+    // (identical state machine behaviour)
+    write(0, 0, 0);
+    read(0,  3, 0b000010);
+    read(0,  5, 0b001000);
+    read(0,  7, 0b100000);
+    read(0,  9, 0b001000);
+    read(0, 11, 0b000010);
+    read(0,  0, 0b000000);
 }
-
-
-// +-------------+--------------+-------------+--------+-------------+
-// | Clock Cycle | state before | state after | o_data | o_led       |
-// +-------------+--------------+-------------+--------+-------------+
-// | 1           | 1            | 2           | 2      | 0b000001=1  |
-// | 2           | 2            | 3           | 3      | 0b000010=2  |
-// | 3           | 3            | 4           | 4      | 0b000100=4  |
-// | 4           | 4            | 5           | 5      | 0b001000=8  |
-// | 5           | 5            | 6           | 6      | 0b010000=16 |
-// | 6           | 6            | 7           | 7      | 0b100000=32 |
-// | 7           | 7            | 8           | 8      | 0b010000=16 |
-// | 8           | 8            | 9           | 9      | 0b001000=8  |
-// | 9           | 9            | 10          | 10     | 0b000100=4  |
-// | 10          | 10           | 11          | 11     | 0b000010=2  |
-// | 11          | 11           | 0           | 0      | 0b000001=1  |
-// +-------------+--------------+-------------+--------+-------------+
