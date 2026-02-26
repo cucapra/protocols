@@ -1,4 +1,4 @@
-error: The two expressions did not evaluate to the same value
+error: The two expressions did not evaluate to the same value (in transaction `explicit_fork(3, 4)`)
    ┌─ identities/identity_d1/identity_d1.prot:12:13
    │
 12 │   assert_eq(s, DUT.s);

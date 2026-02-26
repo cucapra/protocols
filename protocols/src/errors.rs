@@ -643,6 +643,7 @@ impl DiagnosticEmitter {
         error: &ExecutionError,
         transaction: &Transaction,
         symbol_table: &SymbolTable,
+        todo_args: &[BitVecValue],
     ) {
         match error {
             ExecutionError::Evaluation(eval_err) => {
@@ -655,7 +656,13 @@ impl DiagnosticEmitter {
                 Self::emit_symbol_error(handler, symbol_err, transaction, symbol_table);
             }
             ExecutionError::Assertion(assert_err) => {
-                Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
+                Self::emit_assertion_error(
+                    handler,
+                    assert_err,
+                    transaction,
+                    symbol_table,
+                    todo_args,
+                );
             }
             ExecutionError::MaxStepsReached(_) => {
                 handler.emit_general_message(&format!("{error}"), Level::Error);
@@ -981,6 +988,7 @@ impl DiagnosticEmitter {
         error: &AssertionError,
         transaction: &Transaction,
         _symbol_table: &SymbolTable,
+        todo_args: &[BitVecValue],
     ) {
         match error {
             AssertionError::EqualityFailed {
@@ -989,7 +997,14 @@ impl DiagnosticEmitter {
                 value1,
                 value2,
             } => {
-                handler.emit_diagnostic_assertion(transaction, expr1_id, expr2_id, value1, value2);
+                handler.emit_diagnostic_assertion(
+                    transaction,
+                    expr1_id,
+                    expr2_id,
+                    value1,
+                    value2,
+                    todo_args,
+                );
             }
             AssertionError::DontCareAssertion { stmt_id } => {
                 handler.emit_diagnostic_stmt(
