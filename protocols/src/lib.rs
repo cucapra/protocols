@@ -5,6 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+pub mod backends;
 pub mod diagnostic;
 pub mod errors;
 pub mod interpreter;
