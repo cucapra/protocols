@@ -638,6 +638,14 @@ pub type ExecutionResult<T> = Result<T, ExecutionError>;
 pub struct DiagnosticEmitter;
 
 impl DiagnosticEmitter {
+    /// Emits an error message that corresponds to a failure when
+    /// executing a protocol. Arguments are:
+    /// - The `DiagnosticHandler`
+    /// - The actual error
+    /// - The transaction which contained the error
+    /// - The relevant `SymbolTable` (for resolving variable names)
+    /// - The arguments (`todo_args`) supplied to the transaction
+    ///   (for extra info in the error message)
     pub fn emit_execution_error(
         handler: &mut DiagnosticHandler,
         error: &ExecutionError,

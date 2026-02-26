@@ -453,6 +453,12 @@ impl DiagnosticHandler {
         }
     }
 
+    /// Emits an error message when an `assert_eq` fails. Arguments are:
+    /// - The enclosing `Transaction`
+    /// - The `ExprId`s of the two arguments to the `assert_eq`
+    /// - The values that the two `Expr`s evaluate to
+    /// - The arguments `todo_args` supplied to the transaction
+    ///   (for more info in the error msg)
     pub fn emit_diagnostic_assertion(
         &mut self,
         tr: &Transaction,
