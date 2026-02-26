@@ -31,7 +31,6 @@ struct WBSubordinate {
     // Data returned by the subordinate to the manager
     // This is valid only when ACK is true
     out o_data: u32,
-
 }
 
 // Both cyc & stb are low when the subordinate is low,
