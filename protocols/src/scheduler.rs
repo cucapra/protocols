@@ -167,6 +167,13 @@ pub struct Scheduler<'a> {
     results: Vec<ExecutionResult<()>>,
     /// Handler for error diagnostics
     handler: &'a mut DiagnosticHandler,
+    /// Flag that tracks whether any thread executed a `step()` statement
+    /// in the current scheduling cycle. This is used to ensure
+    /// that the simulator's `sim_step()` method is called even when all
+    /// threads have completed and the `next_threads` queue is empty
+    /// (this is necessary to produce accurate waveforms for combinational
+    /// DUTs that only have one single `step()` in their protocol).
+    step_happened_this_cycle: bool,
 }
 
 impl<'a> Scheduler<'a> {
@@ -264,6 +271,7 @@ impl<'a> Scheduler<'a> {
             results: vec![Ok(()); results_size],
             handler,
             max_steps,
+            step_happened_this_cycle: false,
         }
     }
 
@@ -376,12 +384,24 @@ impl<'a> Scheduler<'a> {
                 self.next_todo_idx += 1;
             }
 
-            // setup the threads for the next cycle
-            if !self.next_threads.is_empty() {
-                // advance simulation for next step
+            // Advance the simulator whenever a `step()` statement was
+            // encountered this cycle.
+            // This must happen even when all threads have completed and
+            // the `next_threads` queue is empty, so that the waveform
+            // records a timestep for every `step()` statement in the protocol.
+            // (Example: combinational adders which only contain one `step()`.
+            // Without the following if-statement, the waveform would contain
+            // 0 timesteps.)
+            if self.step_happened_this_cycle {
                 info!("Stepping...");
                 self.evaluator.sim_step();
+                // Reset flag to ensure that simulator is stepped exactly
+                // once during each cycle
+                self.step_happened_this_cycle = false;
+            }
 
+            // setup the threads for the next cycle
+            if !self.next_threads.is_empty() {
                 info!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
                     self.next_threads.len()
@@ -551,6 +571,7 @@ impl<'a> Scheduler<'a> {
                             if !thread.has_stepped {
                                 thread.has_stepped = true;
                             }
+                            self.step_happened_this_cycle = true;
                             info!("  `Step()` reached at {:?}, pausing.", next_id);
 
                             // Check if this is the final step (no statement after it)
