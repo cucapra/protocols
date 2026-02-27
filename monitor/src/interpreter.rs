@@ -488,7 +488,9 @@ impl Interpreter {
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    Ok(None)
+                    // If we have an empty statement block,
+                    // proceed directly to the next statement
+                    Ok(self.next_stmt_map[stmt_id])
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }
@@ -958,6 +960,39 @@ impl Interpreter {
                         "Cleared bindings for {} in `constraints` and `args_to_pins` due to DontCare assignment",
                         self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
                     );
+
+                    // Even though the protocol says "don't care about this pin's value",
+                    // the trace still has a concrete value for it. If there's an input
+                    // parameter whose name matches the pin name and which hasn't been
+                    // inferred yet, read the trace value and add the mapping.
+                    // (e.g. `DUT.b := X` → still learn `b |-> trace_value(DUT.b)`)
+                    // This ensures `to_protocol_application` can find all parameter values.
+                    let pin_name = self.symbol_table[*lhs_symbol_id].name().to_string();
+                    if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        let transaction = self.transaction.clone();
+                        for arg in &transaction.args {
+                            if let Dir::In = arg.dir() {
+                                let param_symbol = arg.symbol();
+                                let param_name = self.symbol_table[param_symbol].name();
+                                if param_name == pin_name
+                                    && !self.args_mapping.contains_key(&param_symbol)
+                                {
+                                    let width = trace_value.width();
+                                    self.args_mapping.insert(param_symbol, trace_value.clone());
+                                    self.known_bits
+                                        .insert(param_symbol, BitVecValue::ones(width));
+                                    self.args_to_pins.insert(param_symbol, *lhs_symbol_id);
+                                    info!(
+                                        "Inferred input parameter {} |-> {} from DontCare assignment to {}",
+                                        param_name,
+                                        serialize_bitvec(&trace_value, ctx.display_hex),
+                                        pin_name
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
                 Ok(())
             }

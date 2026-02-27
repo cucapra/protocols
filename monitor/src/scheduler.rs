@@ -432,7 +432,8 @@ impl Scheduler {
             }
             let finished_thread = &finished[0];
 
-            // ...and there shouldn't be any other threads in `next`
+            // ...if there are other threads from the same start cycle still in `next`,
+            // eliminate them — only one protocol can win per start cycle.
             let next = threads_with_start_time(&self.next, start_cycle);
             if !next.is_empty() {
                 let start_time_str = if ctx.show_waveform_time {
@@ -440,20 +441,29 @@ impl Scheduler {
                 } else {
                     format!("cycle {}", finished_thread.start_cycle)
                 };
-                let error_context = anyhow!(
-                    "Thread {} (`{}`) finished but there are other threads with the same start time ({}) in the `next` queue, namely {:?}",
+                info!(
+                    "Thread {} (`{}`) finished at {}; failing {} competing thread(s) from the same start time: {:?}",
                     finished_thread.global_thread_id(ctx),
                     finished_thread.transaction.name,
                     start_time_str,
+                    next.len(),
                     next.iter()
                         .map(|t| t.transaction.name.clone())
                         .collect::<Vec<_>>()
                 );
-
-                return Err(SchedulerError::NoTransactionsMatch {
-                    struct_name: self.struct_name.clone(),
-                    error_context,
+                let next_thread_ids: Vec<u32> = next.iter().map(|t| t.thread_id).collect();
+                let mut threads_to_fail = Vec::new();
+                self.next.retain(|t| {
+                    if next_thread_ids.contains(&t.thread_id) {
+                        threads_to_fail.push(t.clone());
+                        false
+                    } else {
+                        true
+                    }
                 });
+                for t in threads_to_fail {
+                    self.failed.push_back(t);
+                }
             }
         }
 
@@ -748,6 +758,25 @@ impl Scheduler {
                     }
                 }
                 Ok(None) => {
+                    // If `current_stmt_id` is a `Fork` statement and there is no
+                    // `next_stmt_id`, it means the protocol ended with `fork()`
+                    // as its last statement -- this is an ill-formed protocol.
+                    // In this case, we treat this thread as having failed.
+                    // (if we treated this thread as having finished
+                    // successfully, it would incorrectly terminate other threads
+                    // from the same start cycle that are still in `next`.)
+                    // TODO: this is an ad-hoc fix for now (see Slack discussion)
+                    if matches!(thread.transaction[current_stmt_id], Stmt::Fork) {
+                        info!(
+                            "Thread {} (`{}`) reached end of function after skipping `fork()`. Marking as failed.",
+                            thread.global_thread_id(ctx),
+                            self.format_transaction_name(ctx, thread.transaction.name.clone())
+                        );
+                        self.failed.push_back(thread);
+                        self.print_scheduler_state(trace, ctx);
+                        return Ok(ThreadResult::Completed);
+                    }
+
                     // Check if another thread has already finished in this cycle.
                     // Invariant: Only one thread per struct can finish per cycle
                     if let Some((first_start_cycle, first_thread_id, first_transaction_name)) =
