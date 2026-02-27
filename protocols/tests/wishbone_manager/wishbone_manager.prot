@@ -1,6 +1,6 @@
 // A Wishbone manager which takes commands encoded via an input 34-bit word,
-// issues those commands across a Wishbone bus, 
-// and returns the result from the bus to the subordinate 
+// issues those commands across a Wishbone bus,
+// and returns the result from the bus to the subordinate
 struct WBManager {
     in i_reset: u1,
 
@@ -24,14 +24,13 @@ struct WBManager {
     in i_wb_stall: u1,
     in i_wb_ack: u1,
     in i_wb_err: u1,
-    in i_wb_data: u32
+    in i_wb_data: u32,
 }
 
-
-prot reset() {
+prot reset<DUT: WBManager>() {
     DUT.i_reset := 1'b1;
 
-    // Manager sets `cyc` & `stb` both to 0 
+    // Manager sets `cyc` & `stb` both to 0
     assert_eq(DUT.o_wb_cyc, 1'b0);
     assert_eq(DUT.o_wb_stb, 1'b0);
 
@@ -44,10 +43,145 @@ prot reset() {
     step();
 }
 
+
 #[idle]
-prot idle() {
-    DUT.i_cmd_stb = 1'b1;
+prot idle<DUT: WBManager>() {
+    DUT.i_cmd_stb := 1'b1;
     assert_eq(DUT.o_cmd_busy, 1'b0);
     step();
 }
 
+// Sets the Wishbone bus address to `addr`.
+// Sends a CMD_SUB_ADDR command where the "opcode" is i_cmd_word[33:32] = 2'b10:
+//   i_cmd_word[31:2] = addr   (30-bit absolute address)
+//   i_cmd_word[1]    = 0      
+//   i_cmd_word[0]    = 0      
+//
+// The manager echoes the new address back on the response channel one cycle
+// after the command is accepted. Specifically, after one cycle,
+// `o_rsp_stb` is set to 1 and `o_rsp_word` contains the address.
+//
+// response format in `o_rsp_word`: { 2'b10, addr[29:0], 1'b0, !inc } 
+// where:
+// - RSP_SUB_ADDR = 2'b10 is the "opcode" for the response
+// - `inc` is an internal variable in the Verilog module.
+// When i_cmd_word[0]=0, inc=1, so !inc=0, i.e. the response is {2'b10, addr, 2'b00}.
+prot set_address<DUT: WBManager>(in addr: u30) {
+    DUT.i_reset    := 1'b0;
+    DUT.i_cmd_stb  := 1'b1;
+
+    // bit[33:32]=2'b10 (CMD_SUB_ADDR), bits[31:2]=addr, bit[1]=0 (absolute), bit[0]=0 (auto-increment)
+    DUT.i_cmd_word := 30'b10 + addr + 30'b0;
+    DUT.i_wb_stall := 1'b0;
+    DUT.i_wb_ack   := 1'b0;
+    DUT.i_wb_err   := 1'b0;
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+    step();
+
+    // At this point, in the Verilog, `o_wb_addr` and `newaddr` are updated. 
+    // TODO: figure out how to express address increment since our langauge
+    // doesn't have addition 
+    DUT.i_cmd_stb := 1'b0;
+    step();
+
+    // Manager echoes the new address back on the response channel
+    assert_eq(DUT.o_rsp_stb, 1'b1);
+    assert_eq(DUT.o_rsp_word, 30'b10 + addr + 30'b0);
+    step();
+}
+
+// Writes a 32-bit `data` word to the Wishbone bus at the current address.
+// Sends the CMD_SUB_WR "opcode" (i_cmd_word[33:32] = 2'b01) with `data` in bits [31:0].
+// This assumes the subordinate does not stall (i_wb_stall = 0 throughout).
+//
+// State machine progression:
+//   IDLE -> issue command -> step
+//   BUS REQUEST (cyc=1, stb=1, we=1): subordinate accepts immediately (stall=0) -> step
+//   BUS WAIT (cyc=1, stb=0): subordinate acknowledges (ack=1) -> step
+//   IDLE (cyc=0): RSP_WRITE_ACKNOWLEDGEMENT = {2'b01, 32'x0} on response channel
+prot write<DUT: WBManager>(in data: u32) {
+    // IDLE: issue write command
+    DUT.i_reset    := 1'b0;
+    DUT.i_cmd_stb  := 1'b1;
+    DUT.i_cmd_word := 32'x1 + data;
+    DUT.i_wb_stall := 1'b0;
+    DUT.i_wb_ack   := 1'b0;
+    DUT.i_wb_err   := 1'b0;
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+    step();
+
+    // BUS REQUEST: manager asserts cyc=1, stb=1, we=1
+    DUT.i_cmd_stb := 1'b0;
+    assert_eq(DUT.o_wb_cyc, 1'b1);
+    assert_eq(DUT.o_wb_stb, 1'b1);
+    assert_eq(DUT.o_wb_we, 1'b1);
+    assert_eq(DUT.o_cmd_busy, 1'b1);
+    // stall=0, so manager will drop `o_wb_stb` after this step
+    step();
+
+    // BUS WAIT: stb has dropped (request accepted), cyc still high
+    assert_eq(DUT.o_wb_cyc, 1'b1);
+    assert_eq(DUT.o_wb_stb, 1'b0);
+    // Subordinate acknowledges the write
+    DUT.i_wb_ack := 1'b1;
+    step();
+
+    // IDLE: cyc dropped, write acknowledged on response channel
+    assert_eq(DUT.o_wb_cyc, 1'b0);
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+    assert_eq(DUT.o_rsp_stb, 1'b1);
+
+    // RSP_WRITE_ACKNOWLEDGEMENT = { RSP_SUB_ACK(2'b01), 32'x0 }
+    assert_eq(DUT.o_rsp_word, 32'x1 + 32'x0);
+    DUT.i_wb_ack := 1'b0;
+    step();
+}
+
+// Reads a 32-bit word from the Wishbone bus at the current address.
+// `rdata` is the value provided by the subordinate (driven on i_wb_data).
+// Sends CMD_SUB_RD (i_cmd_word[33:32] = 2'b00).
+// Assumes the subordinate does not stall (i_wb_stall = 0 throughout).
+//
+// State progression:
+//   IDLE -> issue command -> step
+//   BUS REQUEST (cyc=1, stb=1, we=0): subordinate accepts immediately (stall=0) -> step
+//   BUS WAIT (cyc=1, stb=0): subordinate acknowledges with data (ack=1) -> step
+//   IDLE (cyc=0): { RSP_SUB_DATA(2'b00), rdata } on response channel
+prot read<DUT: WBManager>(in rdata: u32) {
+    // IDLE: issue read command (lower 32 bits are ignored by the manager)
+    DUT.i_reset    := 1'b0;
+    DUT.i_cmd_stb  := 1'b1;
+    DUT.i_cmd_word := 34'x0;
+    DUT.i_wb_stall := 1'b0;
+    DUT.i_wb_ack   := 1'b0;
+    DUT.i_wb_err   := 1'b0;
+    DUT.i_wb_data  := rdata;
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+    step();
+
+    // BUS REQUEST: manager asserts cyc=1, stb=1, we=0
+    DUT.i_cmd_stb := 1'b0;
+    assert_eq(DUT.o_wb_cyc,   1'b1);
+    assert_eq(DUT.o_wb_stb,   1'b1);
+    assert_eq(DUT.o_wb_we,    1'b0);
+    assert_eq(DUT.o_cmd_busy, 1'b1);
+    // stall=0, so manager will drop stb after this step
+    step();
+
+    // BUS WAIT: stb has dropped (request accepted), cyc still high
+    assert_eq(DUT.o_wb_cyc, 1'b1);
+    assert_eq(DUT.o_wb_stb, 1'b0);
+    // Subordinate acknowledges with read data
+    DUT.i_wb_ack  := 1'b1;
+    DUT.i_wb_data := rdata;
+    step();
+
+    // IDLE: cyc dropped, read data on response channel
+    assert_eq(DUT.o_wb_cyc,   1'b0);
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+    assert_eq(DUT.o_rsp_stb,  1'b1);
+    // { RSP_SUB_DATA(2'b00), rdata }
+    assert_eq(DUT.o_rsp_word, 32'x0 + rdata);
+    DUT.i_wb_ack := 1'b0;
+    step();
+}

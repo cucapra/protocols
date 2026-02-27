@@ -1,0 +1,23 @@
+// ARGS: --verilog wishbone_manager/hbexec.v --protocol=wishbone_manager/wishbone_manager.prot --module hbexec
+trace {
+    reset();
+
+    // Set the bus address to 0x10 (absolute, auto-increment enabled)
+    set_address(30'h10);
+
+    // Write 0xDEADBEEF to address 0x10.
+    // Address auto-increments to 0x11 after the request is accepted.
+    // TODO: need to figure out how to increment the address since our 
+    // language doesn't have addition
+    write(0xDEADBEEF);
+
+    // The subordinate returns 0xCAFEF00D from address 0x11.
+    // Manager should echo it as { 2'b00, 0xCAFEF00D } in o_rsp_word.
+    // Address auto-increments to 0x12.
+    read(0xCAFEF00D);
+
+    // Write 0xABCD1234 to address 0x12.
+    write(0xABCD1234);
+
+    idle();
+}
