@@ -26,3 +26,28 @@ struct WBManager {
     in i_wb_err: u1,
     in i_wb_data: u32
 }
+
+
+prot reset() {
+    DUT.i_reset := 1'b1;
+
+    // Manager sets `cyc` & `stb` both to 0 
+    assert_eq(DUT.o_wb_cyc, 1'b0);
+    assert_eq(DUT.o_wb_stb, 1'b0);
+
+    // Reset means manager is no longer busy
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+
+    // `o_rsp_stb` is 0 since the output doesn't reference a codeword
+    assert_eq(DUT.o_rsp_stb, 1'b0);
+
+    step();
+}
+
+#[idle]
+prot idle() {
+    DUT.i_cmd_stb = 1'b1;
+    assert_eq(DUT.o_cmd_busy, 1'b0);
+    step();
+}
+
