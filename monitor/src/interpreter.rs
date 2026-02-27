@@ -15,16 +15,24 @@ use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
     thread::Thread,
-    types::ProtocolApplication,
+    types::{LoopArgState, ProtocolApplication},
 };
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
+
+    /// Maps protocol arguments (input/output parameters) to their values
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks which bits of a `SymbolId` are known
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks the state of arguments for `repeat` loops
+    pub loop_args: FxHashMap<SymbolId, LoopArgState>,
 
     /// Constraints on DUT input port values that must hold after stepping.
     /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
@@ -43,41 +51,47 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    /// Builds a `ProtocolApplication` from the current interpreter state.
+    /// Attempts to builds a `ProtocolApplication` from the current interpreter state.
     /// `struct_name` is left as `None` — the caller (Scheduler) is responsible
     /// for setting it, since the Interpreter doesn't know the struct name.
+    /// If this return function returns `None` (e.g. because an argument
+    /// wasn't present in `args_mapping`), the caller
+    /// (`Scheduler::run_thread_till_next_step`) treats the corresponding thread
+    /// as having failed.
     pub fn to_protocol_application(
         &self,
         struct_name: Option<String>,
         ctx: &GlobalContext,
         trace: &WaveSignalTrace,
-    ) -> ProtocolApplication {
+    ) -> Option<ProtocolApplication> {
         let mut serialized_args = vec![];
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
-            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
+            if let Some(value) = self.args_mapping.get(&symbol_id) {
+                serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+            } else {
+                let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
                 let time_str = if ctx.show_waveform_time {
                     trace.format_time(trace.time_step(), ctx.time_unit)
                 } else {
                     format!("cycle {}", self.trace_cycle_count)
                 };
-                panic!(
+                info!(
                     "Transaction `{}`, {}: Unable to find value for {} ({}) in args_mapping, which is {{ {} }}",
                     self.transaction.name,
                     time_str,
                     name,
                     symbol_id,
                     serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
-                )
-            });
-            serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+                );
+                return None;
+            }
         }
-        ProtocolApplication {
+        Some(ProtocolApplication {
             struct_name,
             protocol_name: self.transaction.name.clone(),
             serialized_args,
-        }
+        })
     }
 
     /// Performs a context switch in the `Interpreter` by setting its
@@ -91,6 +105,7 @@ impl Interpreter {
         self.known_bits = thread.known_bits.clone();
         self.constraints = thread.constraints.clone();
         self.args_to_pins = thread.args_to_pins.clone();
+        self.loop_args = thread.loop_args_state.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -157,6 +172,7 @@ impl Interpreter {
             trace_cycle_count,
             args_to_pins: FxHashMap::default(),
             dut_symbol_id,
+            loop_args: FxHashMap::default(),
         }
     }
 
@@ -475,8 +491,10 @@ impl Interpreter {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx, trace)
             }
-            Stmt::BoundedLoop(_, _) => {
-                todo!("Bounded loops is not yet implemented in the monitor")
+            Stmt::RepeatLoop(_, _) => {
+                // Repeat loops are intercepted in `run_thread_till_next_step`
+                // in `scheduler.rs`, so this case is unreachable
+                unreachable!("Repeat loops handled in `scheduler.rs` already")
             }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.

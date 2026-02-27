@@ -176,7 +176,7 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
-        Stmt::BoundedLoop(expr_id, stmt_id) => {
+        Stmt::RepeatLoop(expr_id, stmt_id) => {
             format!(
                 "repeat {} iterations {{ {} }}",
                 serialize_expr(tr, st, expr_id),
@@ -236,7 +236,7 @@ pub fn build_statements(
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
-        Stmt::BoundedLoop(count, bodyid) => {
+        Stmt::RepeatLoop(count, bodyid) => {
             writeln!(
                 out,
                 "{}repeat {} iterations {{",

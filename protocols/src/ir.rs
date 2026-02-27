@@ -148,7 +148,7 @@ impl Transaction {
                     }
                     // Add a back-edge from the loop body to the current `stmt_id`
                     // (same as how while-loops are represented in the current AST)
-                    Stmt::BoundedLoop(_, body_id) => {
+                    Stmt::RepeatLoop(_, body_id) => {
                         map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
                     }
                     _ => {}
@@ -325,8 +325,9 @@ pub enum Stmt {
     Step,
     Fork,
     While(ExprId, StmtId),
-    // Bounded loop with fixed no. of iterations
-    BoundedLoop(ExprId, StmtId),
+    /// Bounded loop with fixed no. of iterations
+    /// (`ExprId` is the no. of iterations, `StmtId` is the loop body)
+    RepeatLoop(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
 }

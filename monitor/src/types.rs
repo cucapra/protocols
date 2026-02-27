@@ -7,6 +7,8 @@
 
 use std::{collections::VecDeque, fmt};
 
+use protocols::ir::StmtId;
+
 use crate::{scheduler::Scheduler, thread::Thread};
 
 /// Represents a protocol application like `add(1, 2, 3)` which appears
@@ -95,8 +97,11 @@ impl From<anyhow::Error> for SchedulerError {
     }
 }
 
-/// The result of an individual `Thread`: either it `Completed`,
-/// forked explcitly or forked implicitly.
+/// The result of an individual `Thread` is one of four options:
+/// - it `Completed` (was moved to one of the `next/finished/failed` queues)
+/// - it forked explicitly (by calling `fork()`) (`ExplicitFork`)
+/// - it forked implicitly at the end of a protocol (`ImplicitFork`)
+/// - it forked after encountering a `repeat` loop (`RepeatLoopFork`)
 #[derive(Debug)]
 pub enum ThreadResult {
     /// Thread completed (moved to next/finished/failed queue)
@@ -110,11 +115,22 @@ pub enum ThreadResult {
     /// constructors of this enum.
     ExplicitFork { parent: Box<Thread> },
 
-    /// Thread is laready in the `finished queue and forked implicitly
+    /// Thread is already in the `finished` queue and forked implicitly
     /// (e.g. this thread is a protocol which ends with `step` without
     /// ever calling `fork`). The caller of a function which returns
     /// this constructor is responsible for spawning new protocol
     ImplicitFork,
+
+    /// A fork that arises when learning the value of arguments to `repeat` loops
+    RepeatLoopFork {
+        /// The thread that exited the loop with the loop argument
+        /// set to `Known(n)` for some `n >= 0`
+        exited_thread: Box<Thread>,
+
+        /// The thread that remains in the loop and executed the loop body again,
+        /// with the loop argument set to `Speculative(n + 1)`
+        speculative_thread: Box<Thread>,
+    },
 }
 
 /// The result of the *Scheduler* at the end of a cycle
@@ -129,4 +145,33 @@ pub enum CycleResult {
         /// constructors of this enum.
         parent: Box<Option<Thread>>,
     },
+    /// A fork that arises when learning the value of arguments to `repeat` loops
+    RepeatLoopFork {
+        /// The thread that exited the loop with the loop argument
+        /// set to `Known(n)` for some `n >= 0`
+        exited_thread: Box<Thread>,
+
+        /// The thread that remains in the loop and executed the loop body again,
+        /// with the loop argument set to `Speculative(n + 1)`
+        speculative_thread: Box<Thread>,
+    },
+}
+
+/// The possible states for an argument to a `repeat` loop.
+/// We maintain the following invariants:
+/// - `Speculative(n, loopID) `only becomes `Known(n)` after the corresponding
+///   scheduler has executed the body of the loop at `loopID` exactly `n`
+///   times (note that `n` can be 0).
+/// - Once a `LoopArg` becomes Known, we proceed to the next statement
+///   that immediately follows the loop (we don't enter the loop body).
+/// - Moreover, once a `LoopArg` remains `Known`, it remains `Known` thereafter.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum LoopArgState {
+    /// `Speculative(n, loopID)` means the associated thread has already
+    /// *speculatively* executed the loop at `loopID` for `n` iterations.
+    /// (The `StmtId` is there to disambiguate between different loop statements,
+    /// since different loops can use the same loop argument `n`.)
+    Speculative(u64, StmtId),
+    Known(u64),
 }
