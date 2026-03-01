@@ -1,0 +1,78 @@
+// A simple hazard interface, in the style of Jang et al. (2024).
+
+// Suppose we have a RISC-V CPU that uses the 5 usual stages 
+// (Fetch-Decode-Execute-Memory-Write), and we want to execute 
+// instructions `I1, I2`:
+// ```
+// I1: ld r2, 0(r1)    # Load mem[r1] into r2
+// I2: sub r3, r4, r2  # Set r3 := r4 - r2
+// ```
+// `r2` appears in both instructions, so there is a data dependency.
+// In particular, when I1 is at the execute stage and I2 is at the decode stage,
+// I2 must be stalled since `r2` is unavailable (it is still being computed). 
+// I2 can only proceed when I1 is at the memory stage and communicates
+// the value of `r2` via a bypass.
+
+// A *hazard interfaces* generalizes ready-valid interface, by allowing 
+// the receiver to send back an extra `resolver` signal on top of the 
+// usual `ready` bit. This example encodes it.
+
+// This is a read-after-write data hazard check:
+// on top of sending back an availability ("ready") bit,
+// the sender indicates whih register it has locked (it is currently writing to),
+// and whether the locked register contains a valid value,
+// so that the sender can stall if there's a conflict (i.e. if the sender
+// needs to use the same register).
+
+// The transfer only fires when ready(payload, resolver) holds:
+//   `DUT.o_available = true && !(DUT.o_lock_valid && DUT.o_locked_reg == src_reg)`
+
+// In standard valid-ready, the sender would just send back one single `ready` 
+// bit, so this example is not expressible.
+
+// This interface is written from the perspective of the receiver,
+// so the backward signals are output fields. 
+struct HazardInterface {
+    // Forward signals (sender -> receiver): the "payload"
+    in i_valid:   u1,
+    in i_src_reg: u5,   // The register being read by the sender's stage
+    in i_payload: u32,
+
+    // Backward signals (receiver -> sender)
+    out o_available:  u1,  // This is the same as the ready bit
+    out o_locked_reg: u5,  // Which register is currently locked by the receiver
+    out o_lock_valid: u1,  // Whether the register contains a valid value
+}
+
+#[idle]
+prot idle<DUT: HazardInterface>() {
+    DUT.i_valid   := 1'b0;
+    DUT.i_src_reg := X;
+    DUT.i_payload := X;
+    step();
+}
+
+// Sends a `payload` from the `src_reg` from the sender to the reciever
+prot send_data<DUT: HazardInterface>(in src_reg: u5, in payload: u32) {
+    DUT.i_valid   := 1'b1;
+    DUT.i_src_reg := src_reg;
+    DUT.i_payload := payload;
+
+    // Keep waiting if the receiver is not ready (not availalbe),
+    // and if the receiver has locked the same register as `src_reg` 
+    // (and the register contains a value value)
+    // Note: this while-loop is the key difference from ready-valid, 
+    // in usual ready-valid we'd just have `while (DUT.o_ready == 0) { step(); }`  
+    // Note: this doesn't work right now b/c our DSL doesn't support `||` or `&&`
+    while (DUT.o_available == 1'b0 || (DUT.o_lock_valid == 1'b1 && DUT.o_locked_reg == src_reg)) {
+        step();
+    }
+
+    // Data transfer occurs during this cycle
+    step();
+
+    DUT.i_valid   := X;
+    DUT.i_src_reg := X;
+    DUT.i_payload := X;
+    step();
+}
