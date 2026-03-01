@@ -63,6 +63,7 @@ prot send_data<DUT: HazardInterface>(in src_reg: u5, in payload: u32) {
     // (and the register contains a value value)
     // Note: this while-loop is the key difference from ready-valid, 
     // in usual ready-valid we'd just have `while (DUT.o_ready == 0) { step(); }`  
+    // Note: this doesn't work right now b/c our DSL doesn't support `||` or `&&`
     while (DUT.o_available == 1'b0 || (DUT.o_lock_valid == 1'b1 && DUT.o_locked_reg == src_reg)) {
         step();
     }
