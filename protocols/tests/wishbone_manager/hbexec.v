@@ -60,7 +60,7 @@
 
 `define	CMD_SUB_RD	2'b00         // Read request
 `define	CMD_SUB_WR	2'b01         // Write request 
-`define	CMD_SUB_BUS	1'b0          // A request in general 
+`define	CMD_SUB_BUS	1'b0          // Bus request (either a read or a write)
 `define	CMD_SUB_ADDR	2'b10     // Set an address
 `define	CMD_SUB_SPECIAL	2'b11     // Bus reset
 
