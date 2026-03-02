@@ -152,7 +152,7 @@ pub fn to_verilog(
                 )?;
                 writeln!(out, "    wait(do_fork == 1);")?;
             }
-            write!(out, "    {name}(")?;
+            write!(out, "    fork {name}(")?;
             for (ii, arg) in args.iter().enumerate() {
                 let is_first = ii == 0;
                 if !is_first {
@@ -160,7 +160,7 @@ pub fn to_verilog(
                 }
                 write!(out, "'h{}", arg.to_hex_str())?;
             }
-            writeln!(out, ");")?;
+            writeln!(out, "); join_none")?;
         }
     }
     writeln!(out, "    #20;")?;
@@ -410,14 +410,24 @@ pub mod tests {
     #[test]
     fn add_d1_to_verilog() {
         let protos = frontend("tests/adders/adder_d1/add_d1.prot");
-        let tx = [(
-            "add".into(),
-            vec![
-                BitVecValue::from_i64(2, 32),
-                BitVecValue::from_i64(5, 32),
-                BitVecValue::from_i64(7, 32),
-            ],
-        )];
+        let tx = [
+            (
+                "add".into(),
+                vec![
+                    BitVecValue::from_i64(2, 32),
+                    BitVecValue::from_i64(5, 32),
+                    BitVecValue::from_i64(7, 32),
+                ],
+            ),
+            (
+                "add".into(),
+                vec![
+                    BitVecValue::from_i64(34, 32),
+                    BitVecValue::from_i64(5, 32),
+                    BitVecValue::from_i64(39, 32),
+                ],
+            ),
+        ];
         let verilog = backend(&protos, &[("clk".to_string(), PinAnnotation::Clock)], &tx);
         println!("{verilog}");
         todo!("actually assert something!")
