@@ -2,10 +2,12 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::design::find_designs;
+use crate::design::{Design, find_designs};
 use crate::ir::*;
 use crate::scheduler::TodoItem;
 use baa::{BitVecOps, BitVecValue};
+use patronus::smt::Error::Parser;
+use rustc_hash::FxHashMap;
 
 // todo: add `interface` and `module` to protocol language and remove pin argument
 pub fn to_verilog(
@@ -23,9 +25,6 @@ pub fn to_verilog(
         "Currently we only handle a single modules."
     );
     let (_, module) = modules.into_iter().next().unwrap();
-    if !pins.is_empty() {
-        todo!("deal with extra pins");
-    }
 
     // derive the instance name from the first protocol
     let first_proto_id = *module.transaction_ids.first().unwrap();
@@ -86,23 +85,47 @@ pub fn to_verilog(
             )?,
         }
     }
+    // extra pins
+    for (name, anno) in pins {
+        match anno {
+            PinAnnotation::Clock => {
+                writeln!(out, "  wire {}_{}; // Clock input", instance_name, name)?;
+                writeln!(out, "  assign {}_{} = clk;", instance_name, name)?;
+            }
+            PinAnnotation::Const(value) => {
+                writeln!(
+                    out,
+                    "  wire [{}:0] {}_{}; // Constant input",
+                    value.width() - 1,
+                    instance_name,
+                    name
+                )?;
+                writeln!(
+                    out,
+                    "  assign {}_{} = 'h{};",
+                    instance_name,
+                    name,
+                    value.to_hex_str()
+                )?;
+            }
+        }
+    }
     writeln!(out, "")?;
 
     // instance
     writeln!(out, "  // instance of the design under test")?;
     writeln!(out, "  {} {}(", module.name, instance_name)?;
-    for (ii, (_, field)) in module.pins.iter().enumerate() {
+    let pin_names = module
+        .pins
+        .iter()
+        .map(|(_, f)| f.name())
+        .chain(pins.iter().map(|(n, _)| n.as_str()));
+    for (ii, name) in pin_names.enumerate() {
         let is_first = ii == 0;
         if !is_first {
             writeln!(out, ",")?;
         }
-        write!(
-            out,
-            "    .{}({}_{})",
-            field.name(),
-            instance_name,
-            field.name()
-        )?;
+        write!(out, "    .{}({}_{})", name, instance_name, name)?;
     }
     writeln!(out, "")?;
     writeln!(out, "  );")?;
@@ -111,7 +134,8 @@ pub fn to_verilog(
     // one task for each protocol
     for &proto_id in module.transaction_ids.iter() {
         let (proto, st) = &protos[proto_id];
-        proto_to_verilog(st, proto, out)?;
+        let sym_verilog = gen_sym_to_verilog_map(st, proto, &module, &instance_name);
+        proto_to_verilog(st, proto, &sym_verilog, out)?;
     }
 
     // the test program
@@ -153,6 +177,7 @@ pub fn to_verilog(
 fn proto_to_verilog(
     st: &SymbolTable,
     proto: &Transaction,
+    sym_verilog: &FxHashMap<SymbolId, String>,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     writeln!(out, "  // protocol: {}", proto.name)?;
@@ -168,9 +193,178 @@ fn proto_to_verilog(
     }
     writeln!(out, ");")?;
 
+    stmt_to_verilog(st, proto, "    ", sym_verilog, out, proto.body)?;
+
     writeln!(out, "  endtask; // {}", proto.name)?;
     writeln!(out, "")?;
     Ok(())
+}
+
+fn gen_sym_to_verilog_map(
+    st: &SymbolTable,
+    proto: &Transaction,
+    m: &Design,
+    instance_name: &str,
+) -> FxHashMap<SymbolId, String> {
+    let mut out = FxHashMap::default();
+
+    // transaction arguments are just flat identifiers with no prefixing
+    for arg in proto.args.iter() {
+        out.insert(arg.symbol(), st[arg.symbol()].name().to_string());
+    }
+
+    // dut ports get a prefix
+    for (sym, field) in m.pins.iter() {
+        out.insert(*sym, format!("{instance_name}_{}", field.name()));
+    }
+
+    out
+}
+
+fn stmt_to_verilog(
+    st: &SymbolTable,
+    proto: &Transaction,
+    indent: &str,
+    sym_verilog: &FxHashMap<SymbolId, String>,
+    out: &mut impl std::io::Write,
+    stmt: StmtId,
+) -> std::io::Result<()> {
+    match &proto[stmt] {
+        Stmt::Block(stmts) => {
+            for s in stmts {
+                stmt_to_verilog(st, proto, indent, sym_verilog, out, *s)?;
+            }
+        }
+        Stmt::Assign(lhs, rhs) => {
+            write!(out, "{indent}")?;
+            sym_to_verilog(st, sym_verilog, out, lhs)?;
+            write!(out, " = ")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *rhs)?;
+            writeln!(out, ";")?;
+        }
+        Stmt::Step => {
+            writeln!(out, "{indent}#2; // step()")?;
+        }
+        Stmt::Fork => {
+            writeln!(out, "{indent}do_fork = 1; // fork()")?;
+        }
+        Stmt::While(_, _) => {
+            todo!("while loop")
+        }
+        Stmt::BoundedLoop(_, _) => {
+            todo!("repeat loop")
+        }
+        Stmt::IfElse(_, _, _) => {
+            todo!("if/else")
+        }
+        Stmt::AssertEq(a, b) => {
+            assert_eq_to_verilog(st, proto, indent, sym_verilog, out, *a, *b)?;
+        }
+    }
+    Ok(())
+}
+
+fn assert_eq_to_verilog(
+    st: &SymbolTable,
+    proto: &Transaction,
+    indent: &str,
+    sym_verilog: &FxHashMap<SymbolId, String>,
+    out: &mut impl std::io::Write,
+    a: ExprId,
+    b: ExprId,
+) -> std::io::Result<()> {
+    // print out error
+    write!(out, "{indent}if (")?;
+    expr_to_verilog(st, proto, sym_verilog, out, a)?;
+    write!(out, " != ")?;
+    expr_to_verilog(st, proto, sym_verilog, out, b)?;
+    writeln!(out, ")")?;
+    write!(out, "{indent}  $display (\"[%0t] {}(", proto.name)?;
+    for ii in 0..proto.args.len() {
+        let is_first = ii == 0;
+        if !is_first {
+            write!(out, ", 0x%0h")?;
+        } else {
+            write!(out, "0x%0h")?;
+        }
+    }
+    write!(out, "): ")?;
+    expr_to_verilog(st, proto, sym_verilog, out, a)?;
+    write!(out, "=0x%0h ")?;
+    expr_to_verilog(st, proto, sym_verilog, out, b)?;
+    write!(out, "=0x%0h\", $time, ")?;
+    for arg in proto.args.iter() {
+        let arg_name = st[arg.symbol()].name();
+        write!(out, "{arg_name}, ")?;
+    }
+    expr_to_verilog(st, proto, sym_verilog, out, a)?;
+    write!(out, ", ")?;
+    expr_to_verilog(st, proto, sym_verilog, out, b)?;
+    writeln!(out, ");")?;
+
+    // actual assert
+    write!(out, "{indent}assert(")?;
+    expr_to_verilog(st, proto, sym_verilog, out, a)?;
+    write!(out, " == ")?;
+    expr_to_verilog(st, proto, sym_verilog, out, b)?;
+    writeln!(out, ");")?;
+
+    Ok(())
+}
+
+fn expr_to_verilog(
+    st: &SymbolTable,
+    proto: &Transaction,
+    sym_verilog: &FxHashMap<SymbolId, String>,
+    out: &mut impl std::io::Write,
+    e: ExprId,
+) -> std::io::Result<()> {
+    match &proto[e] {
+        Expr::Const(value) => write!(out, "'h{}", value.to_hex_str()),
+        Expr::Sym(s) => sym_to_verilog(st, sym_verilog, out, s),
+        Expr::DontCare => write!(out, "$random"),
+        Expr::Binary(BinOp::Equal, a, b) => {
+            write!(out, "(")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *a)?;
+            write!(out, " == ")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *b)?;
+            write!(out, ")")
+        }
+        Expr::Binary(BinOp::Concat, a, b) => {
+            write!(out, "{{")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *a)?;
+            write!(out, ", ")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *b)?;
+            write!(out, "}}")
+        }
+        Expr::Unary(UnaryOp::Not, e) => {
+            write!(out, "~")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *e)
+        }
+        Expr::Slice(e, msb, lsb) => {
+            write!(out, "(")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *e)?;
+            if msb == lsb {
+                write!(out, ")[{msb}]")
+            } else {
+                write!(out, ")[{msb}:{lsb}]")
+            }
+        }
+    }
+}
+
+fn sym_to_verilog(
+    st: &SymbolTable,
+    sym_verilog: &FxHashMap<SymbolId, String>,
+    out: &mut impl std::io::Write,
+    s: &SymbolId,
+) -> std::io::Result<()> {
+    debug_assert!(
+        sym_verilog.contains_key(s),
+        "Unknown symbol: {} ({s:?})",
+        st[s].full_name(st)
+    );
+    write!(out, "{}", sym_verilog[s])
 }
 
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
@@ -224,7 +418,7 @@ pub mod tests {
                 BitVecValue::from_i64(7, 32),
             ],
         )];
-        let verilog = backend(&protos, &[], &tx);
+        let verilog = backend(&protos, &[("clk".to_string(), PinAnnotation::Clock)], &tx);
         println!("{verilog}");
         todo!("actually assert something!")
     }
