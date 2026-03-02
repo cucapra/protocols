@@ -6,7 +6,6 @@ use crate::design::{Design, find_designs};
 use crate::ir::*;
 use crate::scheduler::TodoItem;
 use baa::{BitVecOps, BitVecValue};
-use patronus::smt::Error::Parser;
 use rustc_hash::FxHashMap;
 
 // todo: add `interface` and `module` to protocol language and remove pin argument
@@ -375,27 +374,9 @@ pub enum PinAnnotation {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::frontend;
     use super::*;
-    use crate::diagnostic::DiagnosticHandler;
-    use crate::parser::Rule::assert_eq;
-    use crate::parser::parse_file;
-    use crate::typecheck::type_check;
-    use clap::ColorChoice;
 
-    fn frontend(filename: impl AsRef<std::path::Path>) -> Vec<(Transaction, SymbolTable)> {
-        // Note: for the monitor, error message locations in `.prot` files are suppressed
-        // in the `DiagnosticHandlers` for now
-        let mut protocols_handler = DiagnosticHandler::new(ColorChoice::Auto, true, false, false);
-
-        // Parse protocols file
-        let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
-            parse_file(filename, &mut protocols_handler).unwrap();
-
-        // Type-check the parsed transactions
-        type_check(&transactions_symbol_tables, &mut protocols_handler).unwrap();
-
-        transactions_symbol_tables
-    }
 
     fn backend(
         protos: &[(Transaction, SymbolTable)],
@@ -403,7 +384,7 @@ pub mod tests {
         transactions: &[TodoItem],
     ) -> String {
         let mut out = vec![];
-        to_verilog("tb", protos, pins, Some("dump.vcd"), transactions, &mut out);
+        to_verilog("tb", protos, pins, Some("dump.vcd"), transactions, &mut out).unwrap();
         String::from_utf8(out).unwrap()
     }
 
