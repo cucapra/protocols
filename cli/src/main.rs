@@ -2,9 +2,12 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use baa::BitVecValue;
 use clap::*;
+use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::design::find_designs;
-use protocols::frontend;
+use protocols::ir::{SymbolTable, Transaction};
+use protocols::{frontend, transaction_frontend};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -17,7 +20,34 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Cmds {
-    VerilogTb { verilog_tb: String },
+    Verilog {
+        verilog_tb: String,
+        #[arg(long)]
+        transactions: Option<String>,
+        #[arg(long)]
+        vcd_out: Option<String>,
+        #[arg(long)]
+        clock: Option<String>,
+    },
+}
+
+fn load_trace(
+    transaction_file: Option<&str>,
+    protos: &[(Transaction, SymbolTable)],
+) -> Vec<(String, Vec<BitVecValue>)> {
+    if let Some(filename) = transaction_file {
+        let traces = transaction_frontend(filename, protos.iter()).unwrap();
+        if traces.len() >= 1 {
+            if traces.len() > 1 {
+                log::warn!("More than 1 trace in {filename}. Picking first one.");
+            }
+            traces.into_iter().next().unwrap()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    }
 }
 
 fn main() {
@@ -38,8 +68,28 @@ fn main() {
 
     match args.command {
         None => {}
-        Some(Cmds::VerilogTb { verilog_tb }) => {
-            // TODO: create verilog tb
+        Some(Cmds::Verilog {
+            verilog_tb,
+            transactions,
+            vcd_out,
+            clock,
+        }) => {
+            let trace = load_trace(transactions.as_deref(), &protos);
+            let mut pins = vec![];
+            if let Some(clock) = clock {
+                pins.push((clock, PinAnnotation::Clock));
+            }
+            let out_file = std::fs::File::create(&verilog_tb).unwrap();
+            let mut out_writer = std::io::BufWriter::new(out_file);
+            to_verilog(
+                &verilog_tb,
+                &protos,
+                &pins,
+                vcd_out.as_deref(),
+                &trace,
+                &mut out_writer,
+            )
+            .unwrap();
         }
     }
 }

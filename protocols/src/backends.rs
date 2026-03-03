@@ -2,3 +2,5 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 mod verilog;
+
+pub use verilog::{PinAnnotation, to_verilog};

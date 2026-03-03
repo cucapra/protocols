@@ -374,9 +374,8 @@ pub enum PinAnnotation {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::frontend;
     use super::*;
-
+    use crate::frontend;
 
     fn backend(
         protos: &[(Transaction, SymbolTable)],

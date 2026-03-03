@@ -3,8 +3,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use rustc_hash::FxHashMap;
 use protocols::design::Design;
+use rustc_hash::FxHashMap;
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string
 pub fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {

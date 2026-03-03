@@ -13,3 +13,4 @@ clap = { version = "4.5.45", features = ["derive"] }
 baa.workspace = true
 patronus.workspace = true
 rustc-hash.workspace = true
+log = "0.4.27"
