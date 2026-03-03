@@ -7,7 +7,10 @@ use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::design::find_designs;
 use protocols::ir::{SymbolTable, Transaction};
+use protocols::parser::Rule::file;
 use protocols::{frontend, transaction_frontend};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -29,13 +32,23 @@ enum Cmds {
         #[arg(long)]
         clock: Option<String>,
     },
+    RunVerilog {
+        run_dir: String,
+        #[arg(long)]
+        transactions: Option<String>,
+        #[arg(long)]
+        clock: Option<String>,
+        /// Paths to one or more Verilog (.v) files
+        #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
+        verilog: Vec<String>,
+    },
 }
 
 fn load_trace(
-    transaction_file: Option<&str>,
     protos: &[(Transaction, SymbolTable)],
+    transactions: Option<&str>,
 ) -> Vec<(String, Vec<BitVecValue>)> {
-    if let Some(filename) = transaction_file {
+    if let Some(filename) = transactions {
         let traces = transaction_frontend(filename, protos.iter()).unwrap();
         if traces.len() >= 1 {
             if traces.len() > 1 {
@@ -48,6 +61,107 @@ fn load_trace(
     } else {
         vec![]
     }
+}
+
+fn make_verilog_tb(
+    protos: &[(Transaction, SymbolTable)],
+    verilog_tb: String,
+    transactions: Option<String>,
+    vcd_out: Option<String>,
+    clock: Option<String>,
+) {
+    let trace = load_trace(protos, transactions.as_deref());
+    let mut pins = vec![];
+    if let Some(clock) = clock {
+        pins.push((clock, PinAnnotation::Clock));
+    }
+    let out_file = std::fs::File::create(&verilog_tb).unwrap();
+    let mut out_writer = std::io::BufWriter::new(out_file);
+    let tb_name = "tb";
+    to_verilog(
+        tb_name,
+        &protos,
+        &pins,
+        vcd_out.as_deref(),
+        &trace,
+        &mut out_writer,
+    )
+    .unwrap();
+}
+
+fn run_verilog_tb(
+    protos: &[(Transaction, SymbolTable)],
+    run_dir: String,
+    transactions: Option<String>,
+    clock: Option<String>,
+    verilog: Vec<String>,
+) {
+    // check whether iverilog is available
+    let _ = std::process::Command::new("iverilog")
+        .arg("-v")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("Could not launch Icarus Verilog (iverilog!)")
+        .wait()
+        .unwrap();
+
+    // ensure that the run_dir exists
+    let cwd = Path::new(&run_dir);
+    if !cwd.exists() {
+        std::fs::create_dir_all(cwd).unwrap();
+    }
+
+    // generate the testbench file
+    let abs_cwd = cwd.canonicalize().unwrap();
+    let verilog_tb = "tb.v";
+    let verilog_tb_str = abs_cwd.join(verilog_tb).to_str().unwrap().to_string();
+    let vcd_out_rel = "dump.vcd";
+    make_verilog_tb(
+        &protos,
+        verilog_tb_str,
+        transactions,
+        Some(vcd_out_rel.to_string()),
+        clock,
+    );
+
+    // check verilog files
+    let mut filenames = vec![];
+    for filename in verilog.iter() {
+        let path = Path::new(filename);
+        if !path.exists() {
+            panic!("cannot find verilog file {filename}");
+        } else {
+            let abs_path = path.canonicalize().unwrap();
+            filenames.push(abs_path.to_str().unwrap().to_string());
+        }
+    }
+
+    // run icarus
+    let a_out = cwd.join("a.out");
+    if a_out.exists() {
+        std::fs::remove_file(&a_out).unwrap();
+    }
+    let _ = std::process::Command::new("iverilog")
+        .arg("-g2012")
+        .arg(verilog_tb)
+        .args(filenames)
+        .current_dir(cwd)
+        .spawn()
+        .expect("Failed to compile testbench with icarus.")
+        .wait()
+        .unwrap();
+    if !a_out.exists() {
+        panic!("Icarus did not produce the expected a.out!");
+    }
+
+    // run tb
+    let _ = std::process::Command::new("./a.out")
+        .current_dir(cwd)
+        .spawn()
+        .expect("Failed to start testbench.")
+        .wait()
+        .unwrap();
 }
 
 fn main() {
@@ -74,22 +188,15 @@ fn main() {
             vcd_out,
             clock,
         }) => {
-            let trace = load_trace(transactions.as_deref(), &protos);
-            let mut pins = vec![];
-            if let Some(clock) = clock {
-                pins.push((clock, PinAnnotation::Clock));
-            }
-            let out_file = std::fs::File::create(&verilog_tb).unwrap();
-            let mut out_writer = std::io::BufWriter::new(out_file);
-            to_verilog(
-                &verilog_tb,
-                &protos,
-                &pins,
-                vcd_out.as_deref(),
-                &trace,
-                &mut out_writer,
-            )
-            .unwrap();
+            make_verilog_tb(&protos, verilog_tb, transactions, vcd_out, clock);
+        }
+        Some(Cmds::RunVerilog {
+            run_dir,
+            transactions,
+            clock,
+            verilog,
+        }) => {
+            run_verilog_tb(&protos, run_dir, transactions, clock, verilog);
         }
     }
 }
