@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
-use log::info;
 use protocols::{
     errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,

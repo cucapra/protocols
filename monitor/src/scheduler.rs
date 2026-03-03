@@ -1,6 +1,5 @@
 use anyhow::{Context, anyhow};
 use baa::{BitVecOps, BitVecValue};
-use log::info;
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},

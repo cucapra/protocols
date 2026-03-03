@@ -14,7 +14,6 @@ use crate::{
         Trace,
     },
 };
-use log::info;
 use rustc_hash::FxHashSet;
 
 pub struct GlobalScheduler {

@@ -3,6 +3,8 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+#[macro_use]
+mod macros;
 mod axi_experiment;
 mod designs;
 mod global_context;
@@ -27,6 +29,8 @@ use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 use protocols::typecheck::type_check;
+use std::io::Write;
+use std::path::Path;
 
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
@@ -104,8 +108,45 @@ fn main() -> anyhow::Result<()> {
     // For concision, we disable timestamps and the module paths in the log
     let mut logger = env_logger::Builder::new();
 
+    let use_color = cli.color != ColorChoice::Never;
     logger
-        .format_timestamp(None)
+        .format(move |buf, record| {
+            use clap::builder::styling::{AnsiColor, Color, Style};
+            use log::Level;
+            let file = record
+                .file()
+                .and_then(|f| Path::new(f).file_name()?.to_str())
+                .unwrap_or("?");
+            let line = record.line().unwrap_or(0);
+            let fn_name = record
+                .target()
+                .rsplit("::")
+                .next()
+                .unwrap_or(record.target());
+            let level_style = if use_color {
+                let color = match record.level() {
+                    Level::Info => AnsiColor::Cyan,
+                    _ => AnsiColor::Red,
+                };
+                Style::new().fg_color(Some(Color::Ansi(color))).bold()
+            } else {
+                Style::new()
+            };
+            let dim_style = if use_color {
+                Style::new().dimmed()
+            } else {
+                Style::new()
+            };
+            writeln!(
+                buf,
+                "{}{file}:{line}{} {}({fn_name}){}: {}",
+                dim_style.render(),
+                dim_style.render_reset(),
+                level_style.render(),
+                level_style.render_reset(),
+                record.args()
+            )
+        })
         .filter_level(cli.verbosity.log_level_filter());
 
     if cli.color == ColorChoice::Never {

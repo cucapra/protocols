@@ -3,7 +3,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use log::info;
 use protocols::{
     ir::{Field, SymbolId, SymbolTable, Transaction, Type},
     serialize::serialize_field,
