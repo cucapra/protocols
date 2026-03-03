@@ -193,6 +193,19 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
         .collect()
 }
 
+/// Out of all the protocols that were executed successfully by the same scheduler
+/// (i.e. are in the scheduler's `output_buffer`), this function
+/// finds the maximum end-time (clock cycle) where a non-idle protocol completed
+fn max_non_idle_end_cycle(scheduler: &Scheduler) -> u32 {
+    scheduler
+        .output_buffer
+        .iter()
+        .filter(|e| !e.is_idle)
+        .map(|e| e.end_cycle_count)
+        .max()
+        .unwrap_or(0)
+}
+
 impl GlobalScheduler {
     /// Pretty-prints a `trace { ... }` block to stdout
     fn print_trace_block(trace_index: usize, lines: &[String]) {
@@ -343,29 +356,24 @@ impl GlobalScheduler {
             // print the final state of each individual scheduler,
             // then exit the loop
             if trace_ended {
-                for scheduler_group in &self.scheduler_groups {
-                    for scheduler in scheduler_group {
-                        let max_end = scheduler
-                            .output_buffer
-                            .iter()
-                            .map(|e| e.end_cycle_count)
-                            .max()
-                            .unwrap_or(0);
-                        eprintln!(
-                            "[DBG] Scheduler for `{}`: cycle_count={}, max_end_cycle={}, entries=[{}]",
-                            scheduler.struct_name,
-                            scheduler.cycle_count,
-                            max_end,
-                            scheduler
-                                .output_buffer
-                                .iter()
-                                .map(|e| format!(
-                                    "{}(start={},end={})",
-                                    e.protocol_application, e.start_time_step, e.end_cycle_count
-                                ))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        );
+                for scheduler_group in self.scheduler_groups.iter_mut() {
+                    // Remove schedulers in the group
+                    // whose candidate traces finish earlier
+                    // than the maximum end-cycle observed across this group.
+                    // (These are premature schedules that don't cover the entirety
+                    // of the waveform)
+                    let group_max_end = scheduler_group
+                        .iter()
+                        .map(max_non_idle_end_cycle)
+                        .max()
+                        .unwrap_or(0);
+
+                    scheduler_group.retain(|scheduler| {
+                        let scheduler_max_end = max_non_idle_end_cycle(scheduler);
+                        scheduler_max_end == group_max_end
+                    });
+
+                    if let Some(scheduler) = scheduler_group.front() {
                         scheduler.print_step_count(ctx);
                     }
                 }

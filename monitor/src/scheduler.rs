@@ -3,7 +3,7 @@ use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},
-    serialize::serialize_bitvec,
+    serialize::{serialize_args_mapping, serialize_bitvec},
 };
 use rustc_hash::FxHashSet;
 
@@ -717,6 +717,16 @@ impl Scheduler {
             .known_bits
             .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
 
+        repeat_info!(
+            "Exited thread ({}) has args_mapping {}\n",
+            exited_thread.thread_id,
+            serialize_args_mapping(
+                &exited_thread.args_mapping,
+                &exited_thread.symbol_table,
+                false
+            )
+        );
+
         // The exited_thread needs to execute the first statement
         // that immediately follow the loop
         exited_thread.current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
@@ -1009,7 +1019,7 @@ impl Scheduler {
                         return Ok(ThreadResult::Completed);
                     }
 
-                    info!(
+                    repeat_info!(
                         "Thread {} (`{}`) finished successfully, adding to `finished` queue",
                         thread.global_thread_id(ctx),
                         self.format_transaction_name(ctx, thread.transaction.name.clone())
@@ -1064,6 +1074,8 @@ impl Scheduler {
                             .clone()
                             .expect("Expected Some(ProtocolApplication)")
                     );
+
+                    repeat_info!("next queue: {}", format_queue_compact(&self.next, ctx));
 
                     // Add the output entry + metadata to the scheduler's
                     // output buffer
