@@ -14,8 +14,8 @@ macro_rules! info {
 /// related to `repeat` loops.
 macro_rules! repeat_info {
     ($($arg:tt)*) => {{
-        let _fn_name = stdext::function_name!().rsplit("::").next().unwrap_or("?");
-        let _target = std::format!("repeat::{}", _fn_name);
-        log::info!(target: _target.as_str(), $($arg)*)
+        let fn_name = stdext::function_name!().rsplit("::").next().unwrap_or("?");
+        let target = std::format!("repeat::{}", fn_name);
+        log::info!(target: target.as_str(), $($arg)*)
     }}
 }
