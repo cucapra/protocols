@@ -345,13 +345,27 @@ impl GlobalScheduler {
             if trace_ended {
                 for scheduler_group in &self.scheduler_groups {
                     for scheduler in scheduler_group {
-                        if scheduler.next.is_empty() {
-                            info!(
-                                "Trace has ended, threads in `next` can't proceed, terminating scheduler for `{}` w/ final state:",
-                                scheduler.struct_name
-                            );
-                            scheduler.print_scheduler_state(&self.trace, ctx);
-                        }
+                        let max_end = scheduler
+                            .output_buffer
+                            .iter()
+                            .map(|e| e.end_cycle_count)
+                            .max()
+                            .unwrap_or(0);
+                        eprintln!(
+                            "[DBG] Scheduler for `{}`: cycle_count={}, max_end_cycle={}, entries=[{}]",
+                            scheduler.struct_name,
+                            scheduler.cycle_count,
+                            max_end,
+                            scheduler
+                                .output_buffer
+                                .iter()
+                                .map(|e| format!(
+                                    "{}(start={},end={})",
+                                    e.protocol_application, e.start_time_step, e.end_cycle_count
+                                ))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
                         scheduler.print_step_count(ctx);
                     }
                 }

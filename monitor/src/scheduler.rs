@@ -1057,6 +1057,14 @@ impl Scheduler {
                         );
                     }
 
+                    repeat_info!(
+                        "Thread {}: Pushing {} to output buffer",
+                        thread.thread_id,
+                        prot_app_opt
+                            .clone()
+                            .expect("Expected Some(ProtocolApplication)")
+                    );
+
                     // Add the output entry + metadata to the scheduler's
                     // output buffer
                     self.output_buffer.push(AugmentedProtocolApplication {
