@@ -16,12 +16,12 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
+use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -120,11 +120,6 @@ fn main() -> anyhow::Result<()> {
                 .and_then(|f| Path::new(f).file_name()?.to_str())
                 .unwrap_or("?");
             let line = record.line().unwrap_or(0);
-            let fn_name = record
-                .target()
-                .rsplit("::")
-                .next()
-                .unwrap_or(record.target());
             let level_style = if use_color {
                 let color = match record.level() {
                     Level::Info => AnsiColor::Cyan,
@@ -141,10 +136,11 @@ fn main() -> anyhow::Result<()> {
             };
             writeln!(
                 buf,
-                "{}{file}:{line}{} {}({fn_name}){}: {}",
+                "{}{file}:{line}{} {}({}){}: {}",
                 dim_style.render(),
                 dim_style.render_reset(),
                 level_style.render(),
+                record.target(),
                 level_style.render_reset(),
                 record.args()
             )
