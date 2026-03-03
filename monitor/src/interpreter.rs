@@ -159,8 +159,6 @@ impl Interpreter {
             serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
         );
 
-        info!("initial known_bits:\n{:?}", known_bits);
-
         Self {
             transaction: transaction.clone(),
             symbol_table,
@@ -440,6 +438,12 @@ impl Interpreter {
                     "Extended args_mapping with {} |-> {}",
                     out_param_name,
                     serialize_bitvec(&value, ctx.display_hex)
+                );
+                repeat_info!(
+                    "Output param {} = {} (read from trace at cycle {})",
+                    out_param_name,
+                    serialize_bitvec(&value, ctx.display_hex),
+                    self.trace_cycle_count
                 );
                 Ok(())
             } else {

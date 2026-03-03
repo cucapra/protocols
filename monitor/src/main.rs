@@ -111,41 +111,56 @@ fn main() -> anyhow::Result<()> {
     // Configure output format of logger
     // (include function name, line number & file name for each log)
     let use_color = cli.color != ColorChoice::Never;
-    logger
-        .format(move |buf, record| {
-            use clap::builder::styling::{AnsiColor, Color, Style};
-            use log::Level;
-            let file = record
-                .file()
-                .and_then(|f| Path::new(f).file_name()?.to_str())
-                .unwrap_or("?");
-            let line = record.line().unwrap_or(0);
-            let level_style = if use_color {
-                let color = match record.level() {
-                    Level::Info => AnsiColor::Cyan,
-                    _ => AnsiColor::Red,
-                };
-                Style::new().fg_color(Some(Color::Ansi(color))).bold()
-            } else {
-                Style::new()
+    // When -v is passed, show only repeat-loop logs (target="repeat").
+    // All other info-level logs are hidden to reduce noise.
+    if cli.verbosity.log_level_filter() >= LevelFilter::Info {
+        logger
+            .filter(Some("repeat"), LevelFilter::Info)
+            .filter(None, LevelFilter::Warn);
+    } else {
+        logger.filter_level(cli.verbosity.log_level_filter());
+    }
+
+    logger.format(move |buf, record| {
+        use clap::builder::styling::{AnsiColor, Color, Style};
+        use log::Level;
+        let file = record
+            .file()
+            .and_then(|f| Path::new(f).file_name()?.to_str())
+            .unwrap_or("?");
+        let line = record.line().unwrap_or(0);
+        let level_style = if use_color {
+            let color = match record.level() {
+                Level::Info => AnsiColor::Cyan,
+                _ => AnsiColor::Red,
             };
-            let dim_style = if use_color {
-                Style::new().dimmed()
-            } else {
-                Style::new()
-            };
-            writeln!(
-                buf,
-                "{}{file}:{line}{} {}({}){}: {}",
-                dim_style.render(),
-                dim_style.render_reset(),
-                level_style.render(),
-                record.target(),
-                level_style.render_reset(),
-                record.args()
-            )
-        })
-        .filter_level(cli.verbosity.log_level_filter());
+            Style::new().fg_color(Some(Color::Ansi(color))).bold()
+        } else {
+            Style::new()
+        };
+        let dim_style = if use_color {
+            Style::new().dimmed()
+        } else {
+            Style::new()
+        };
+        // For `repeat_info!` logs the target is "repeat::<full::fn::path>".
+        // Strip back to just the function name for a compact display.
+        let target = record
+            .target()
+            .rsplit("::")
+            .next()
+            .unwrap_or(record.target());
+        writeln!(
+            buf,
+            "{}{file}:{line}{} {}({}){}: {}",
+            dim_style.render(),
+            dim_style.render_reset(),
+            level_style.render(),
+            target,
+            level_style.render_reset(),
+            record.args()
+        )
+    });
 
     if !use_color {
         logger.write_style(env_logger::WriteStyle::Never);

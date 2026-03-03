@@ -8,3 +8,14 @@ macro_rules! info {
         )
     }
 }
+
+/// Like `info!`, but prefixes the target with `"repeat::"` so logs can be filtered
+/// independently of other logs. Use this macro when logging events
+/// related to `repeat` loops.
+macro_rules! repeat_info {
+    ($($arg:tt)*) => {{
+        let _fn_name = stdext::function_name!().rsplit("::").next().unwrap_or("?");
+        let _target = std::format!("repeat::{}", _fn_name);
+        log::info!(target: _target.as_str(), $($arg)*)
+    }}
+}

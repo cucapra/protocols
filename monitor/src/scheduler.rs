@@ -684,6 +684,13 @@ impl Scheduler {
         mut current_thread: Thread,
         n: u64,
     ) -> ThreadResult {
+        repeat_info!(
+            "Thread {}: RepeatLoop fork at cycle {} — spawning exited_thread (Known({})) and speculative_thread (Speculative({}))",
+            current_thread.thread_id,
+            self.cycle_count,
+            n,
+            n + 1
+        );
         // Create a new thread `exited_thread` that is identical
         // to the current thread, but it exits the loop
         // with the `LoopArg` set to `Known(n)`
@@ -785,11 +792,20 @@ impl Scheduler {
                 {
                     *num_remaining_iters -= 1;
                     if *num_remaining_iters == 0 {
+                        repeat_info!(
+                            "Thread {}: repeat_loops_remaining_iters hit 0, exiting loop",
+                            thread.thread_id
+                        );
                         thread.repeat_loops_remaining_iters.remove(&loop_stmt_id);
                         current_stmt_id = self.interpreter.next_stmt_map[&loop_stmt_id].expect(
                             "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
                         );
                     } else {
+                        repeat_info!(
+                            "Thread {}: repeat_loops_remaining_iters = {}, re-entering loop body",
+                            thread.thread_id,
+                            *num_remaining_iters
+                        );
                         current_stmt_id = loop_body_id;
                     }
                     continue;
@@ -803,6 +819,11 @@ impl Scheduler {
                         // (i.e. absent from the thread's `loop_args_state` map),
                         // so pass in `n = 0` to the `handle_repeat_loops`
                         // helper function
+                        repeat_info!(
+                            "Thread {}: First encounter of repeat loop (loop_arg `{}`), calling handle_repeat_loops(n=0)",
+                            thread.thread_id,
+                            thread.symbol_table[loop_arg_symbol_id].name()
+                        );
                         return Ok(self.handle_repeat_loops(
                             loop_arg_symbol_id,
                             loop_body_id,
@@ -822,6 +843,12 @@ impl Scheduler {
                             )
                         }
 
+                        repeat_info!(
+                            "Thread {}: Speculative({}), calling handle_repeat_loops(n={})",
+                            thread.thread_id,
+                            n,
+                            n
+                        );
                         // Fork two threads:
                         // one with `Known(n)`, one with `Speculative(n + 1)`
                         return Ok(self.handle_repeat_loops(
@@ -836,6 +863,10 @@ impl Scheduler {
                         // Value of `n` has been resolved from a prior loop
                         // (either with the same `StmtId` or a different `StmtId`)
                         if n == 0 {
+                            repeat_info!(
+                                "Thread {}: Known(0) — skipping loop body entirely (0 iterations, no step() called inside loop)",
+                                thread.thread_id
+                            );
                             // Exit the loop since the `LoopArg` is already known,
                             // proceed to the next immediate statement
                             // (evaluated in the next iteration
@@ -844,6 +875,12 @@ impl Scheduler {
                                 "Repeat loops can't be the last statement in a protocol since protocols always end with `step()`"
                             );
                         } else {
+                            repeat_info!(
+                                "Thread {}: Known({}) — executing {} iteration(s) of loop body",
+                                thread.thread_id,
+                                n,
+                                n
+                            );
                             // Insert it into the thread's `repeat_loops_remaining_iters`
                             // map, which tracks how many iterations need to be executed
                             // for this loop
