@@ -120,7 +120,8 @@ fn main() -> anyhow::Result<()> {
 
     // Note: for the monitor, error message locations in `.prot` files are suppressed
     // in the `DiagnosticHandlers` for now
-    let mut protocols_handler = DiagnosticHandler::new(cli.color, false, emit_warnings);
+    let mut protocols_handler =
+        DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
     let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =

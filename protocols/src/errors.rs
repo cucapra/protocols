@@ -638,11 +638,20 @@ pub type ExecutionResult<T> = Result<T, ExecutionError>;
 pub struct DiagnosticEmitter;
 
 impl DiagnosticEmitter {
+    /// Emits an error message that corresponds to a failure when
+    /// executing a protocol. Arguments are:
+    /// - The `DiagnosticHandler`
+    /// - The actual error
+    /// - The transaction which contained the error
+    /// - The relevant `SymbolTable` (for resolving variable names)
+    /// - The arguments (`todo_args`) supplied to the transaction
+    ///   (for extra info in the error message)
     pub fn emit_execution_error(
         handler: &mut DiagnosticHandler,
         error: &ExecutionError,
         transaction: &Transaction,
         symbol_table: &SymbolTable,
+        todo_args: &[BitVecValue],
     ) {
         match error {
             ExecutionError::Evaluation(eval_err) => {
@@ -655,7 +664,13 @@ impl DiagnosticEmitter {
                 Self::emit_symbol_error(handler, symbol_err, transaction, symbol_table);
             }
             ExecutionError::Assertion(assert_err) => {
-                Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
+                Self::emit_assertion_error(
+                    handler,
+                    assert_err,
+                    transaction,
+                    symbol_table,
+                    todo_args,
+                );
             }
             ExecutionError::MaxStepsReached(_) => {
                 handler.emit_general_message(&format!("{error}"), Level::Error);
@@ -807,8 +822,8 @@ impl DiagnosticEmitter {
                     "Expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
                     symbol_name,
                     symbol_id,
-                    serialize_bitvec(value, false),
-                    serialize_bitvec(trace_value, false),
+                    serialize_bitvec(value, handler.display_hex),
+                    serialize_bitvec(trace_value, handler.display_hex),
                     cycle_count
                 );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
@@ -824,8 +839,8 @@ impl DiagnosticEmitter {
                     "Constraint violation: {} (symbol_id {}) expected value {} but trace has {} at {}",
                     symbol_name,
                     symbol_id,
-                    serialize_bitvec(expected_value, false),
-                    serialize_bitvec(trace_value, false),
+                    serialize_bitvec(expected_value, handler.display_hex),
+                    serialize_bitvec(trace_value, handler.display_hex),
                     error_time
                 );
                 handler.emit_general_message(&message, Level::Error);
@@ -889,8 +904,8 @@ impl DiagnosticEmitter {
                         thread_idx,
                         transaction_name,
                         symbol_name,
-                        serialize_bitvec(current_value, false),
-                        serialize_bitvec(new_value, false)
+                        serialize_bitvec(current_value, handler.display_hex),
+                        serialize_bitvec(new_value, handler.display_hex)
                     ),
                     Level::Error,
                     Some(*thread_idx),
@@ -981,6 +996,7 @@ impl DiagnosticEmitter {
         error: &AssertionError,
         transaction: &Transaction,
         _symbol_table: &SymbolTable,
+        todo_args: &[BitVecValue],
     ) {
         match error {
             AssertionError::EqualityFailed {
@@ -989,7 +1005,14 @@ impl DiagnosticEmitter {
                 value1,
                 value2,
             } => {
-                handler.emit_diagnostic_assertion(transaction, expr1_id, expr2_id, value1, value2);
+                handler.emit_diagnostic_assertion(
+                    transaction,
+                    expr1_id,
+                    expr2_id,
+                    value1,
+                    value2,
+                    todo_args,
+                );
             }
             AssertionError::DontCareAssertion { stmt_id } => {
                 handler.emit_diagnostic_stmt(

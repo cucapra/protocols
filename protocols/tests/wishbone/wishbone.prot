@@ -1,0 +1,114 @@
+// Wishbone B4 (Pipeline mode) subordinate
+struct WBSubordinate {
+    // Cycle is high anytime an active pipeline session is occurring
+    in i_cyc: u1,
+
+    // Strobe is high when there is a request to the subordinate
+    // (akin to Valid in AXI-Lite, i.e. they indicate the manager
+    // has something to transfer)
+    in i_stb: u1,
+
+    // Write-enable (true for write-requests)
+    in i_we: u1,
+
+    // Address of the request
+    in i_addr: u1,
+
+    // Data to be written
+    in i_data: u32,
+
+    // Response from the subordinate, indicating that the request
+    // has been fulfilled.
+    out o_ack: u1,
+
+    // True on any cycle when the subordinate can't accept requests
+    // False when a request can be accepted
+    // (i.e. the opposite of Ready in AXI-Lite)
+    out o_stall: u1,
+
+    // Data returned by the subordinate to the manager
+    // This is valid only when ACK is true
+    out o_data: u32,
+}
+
+// Both cyc & stb are low when the subordinate is low,
+// everything else is DontCare
+#[idle]
+prot idle<DUT: WBSubordinate>() {
+    DUT.i_cyc  := 1'b0;
+    DUT.i_stb  := 1'b0;
+    DUT.i_we   := X;
+    DUT.i_addr := X;
+    DUT.i_data := X;
+    step();
+}
+
+// Writes a `data` value to the subordinate.
+// Wishbone says to hold all request signals while stalled (stall=1),
+// i.e. when the subordinate is busy processing a previous request.
+prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
+    DUT.i_cyc  := 1'b1;
+    DUT.i_stb  := 1'b1;
+    DUT.i_we   := 1'b1;
+    DUT.i_addr := addr;
+    DUT.i_data := data;
+
+    // Wait till the subordinate Acks
+    // Note that in the Verilog, after the subordinate acks, 
+    // `o_stall` is assigned combinationally (`o_stall = busy && i_we`), 
+    // so we don't need another while-loop to wait for `stall` to become 0
+    while (DUT.o_ack == 1'b0) {
+        step();
+    }
+
+    // Data is updated combinationally in the same cycle as the ack,
+    // so no separate cycle for data transfer is needed
+    assert_eq(DUT.o_data, data);
+
+    // Set other inputs to DontCare
+    // Note that the waveform produced by their C++ test-bench keeps 
+    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
+    DUT.i_cyc := X;
+    DUT.i_stb := X;
+    DUT.i_we := X;
+    DUT.i_addr := X;
+    DUT.i_data := X;
+    
+    step();
+}
+
+// Reads a value from the subordinate
+// (the `data` is conveyed via output parameters)
+prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
+    DUT.i_cyc  := 1'b1;
+    DUT.i_stb  := 1'b1;
+    DUT.i_we   := 1'b0;
+    DUT.i_addr := addr;
+    DUT.i_data := X;
+
+    // Wait for subordinate to Ack
+    // (When we're reading, the write-enable is always 0, 
+    // but in the Verilog, `stall` is a boolean AND of `i_we` and another
+    // signal, so `stall` is always 0 when we're reading, so we don't 
+    // need another while-loop to wait for `stall` to become 0)
+    while (DUT.o_ack == 1'b0) {
+        step();
+    }
+
+    // Data is updated combinationally in the same cycle as the ack,
+    // so no separate cycle for data transfer is needed
+    assert_eq(DUT.o_data, data);
+    
+    // Set other inputs to DontCare
+    // Note that the waveform produced by their C++ test-bench keeps 
+    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
+    DUT.i_cyc := X;
+    DUT.i_stb := X;
+    DUT.i_we := X;
+    DUT.i_addr := X;
+    
+    step();
+}
+
+
+
