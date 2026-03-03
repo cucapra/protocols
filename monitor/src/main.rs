@@ -16,12 +16,12 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{collects_design_names, find_designs, parse_instance, Design, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
@@ -108,6 +108,8 @@ fn main() -> anyhow::Result<()> {
     // For concision, we disable timestamps and the module paths in the log
     let mut logger = env_logger::Builder::new();
 
+    // Configure output format of logger
+    // (include function name, line number & file name for each log)
     let use_color = cli.color != ColorChoice::Never;
     logger
         .format(move |buf, record| {
@@ -149,7 +151,7 @@ fn main() -> anyhow::Result<()> {
         })
         .filter_level(cli.verbosity.log_level_filter());
 
-    if cli.color == ColorChoice::Never {
+    if !use_color {
         logger.write_style(env_logger::WriteStyle::Never);
     }
 
