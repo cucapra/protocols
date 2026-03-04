@@ -125,7 +125,7 @@ jobs:
       - uses: ./.github/actions/setup-test-environment
       - name: Icarus Verilog Version
         # we intentionally ignore the fact that `iverilog -v` returns a non-zero exit code
-        run: iverilog -v ; which iverilog
+        run: iverilog -v || which iverilog
       - name: Build
         run: cargo build --bin protocols-cli
       - name: Run Verilog Testbench for AES128
