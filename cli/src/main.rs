@@ -7,10 +7,8 @@ use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::design::find_designs;
 use protocols::ir::{SymbolTable, Transaction};
-use protocols::parser::Rule::file;
 use protocols::{frontend, transaction_frontend};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::path::Path;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -170,15 +168,6 @@ fn main() {
 
     // we always parse and type check the protocol file
     let protos = frontend(args.protocol);
-
-    // find module
-    let modules = find_designs(protos.iter());
-    assert_eq!(
-        modules.len(),
-        1,
-        "Currently we only handle a single modules."
-    );
-    let (_, module) = modules.into_iter().next().unwrap();
 
     match args.command {
         None => {}

@@ -57,7 +57,9 @@ pub fn to_verilog(
         out,
         "  // pulsing this wire will launch the next transaction"
     )?;
-    writeln!(out, "  reg do_fork = 0;")?;
+    writeln!(out, "  reg [31:0] do_fork_count = 0;")?;
+    writeln!(out, "  reg [31:0] started_count = 0;")?;
+    writeln!(out, "  reg [31:0] finished_count = 0;")?;
     writeln!(out, "")?;
 
     // pins
@@ -149,8 +151,9 @@ pub fn to_verilog(
                     out,
                     "    #2; // we need to wait at least one clock cycle before the next transaction can be started"
                 )?;
-                writeln!(out, "    wait(do_fork == 1);")?;
+                writeln!(out, "    wait(do_fork_count >= started_count);")?;
             }
+            writeln!(out, "    started_count += 'd1;")?;
             write!(out, "    fork {name}(")?;
             for (ii, arg) in args.iter().enumerate() {
                 let is_first = ii == 0;
@@ -162,7 +165,8 @@ pub fn to_verilog(
             writeln!(out, "); join_none")?;
         }
     }
-    writeln!(out, "    #20;")?;
+    writeln!(out, "    wait(started_count == finished_count);")?;
+    writeln!(out, "    #2;")?;
     writeln!(out, "    $finish();")?;
     writeln!(out, "  end")?;
 
@@ -194,6 +198,7 @@ fn proto_to_verilog(
 
     stmt_to_verilog(st, proto, "    ", sym_verilog, out, proto.body)?;
 
+    writeln!(out, "    finished_count += 1;")?;
     writeln!(out, "  endtask; // {}", proto.name)?;
     writeln!(out, "")?;
     Ok(())
@@ -245,7 +250,7 @@ fn stmt_to_verilog(
             writeln!(out, "{indent}#2; // step()")?;
         }
         Stmt::Fork => {
-            writeln!(out, "{indent}do_fork = 1; // fork()")?;
+            writeln!(out, "{indent}do_fork_count += 1; // fork()")?;
         }
         Stmt::While(_, _) => {
             todo!("while loop")
