@@ -30,7 +30,6 @@ use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 use protocols::typecheck::type_check;
 use std::io::Write;
-use std::path::Path;
 
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
@@ -108,9 +107,9 @@ fn main() -> anyhow::Result<()> {
     // For concision, we disable timestamps and the module paths in the log
     let mut logger = env_logger::Builder::new();
 
-    // Configure output format of logger
-    // (include function name, line number & file name for each log)
-    let use_color = cli.color != ColorChoice::Never;
+    // Configure output format of logger.
+    // For `info!` / `repeat_info!` logs, call-site context is included
+    // directly by the macros via `debug_name!`.
     // When -v is passed, show only repeat-loop logs (target="repeat").
     // All other info-level logs are hidden to reduce noise.
     if cli.verbosity.log_level_filter() >= LevelFilter::Info {
@@ -122,47 +121,15 @@ fn main() -> anyhow::Result<()> {
     }
 
     logger.format(move |buf, record| {
-        use clap::builder::styling::{AnsiColor, Color, Style};
-        use log::Level;
-        let file = record
-            .file()
-            .and_then(|f| Path::new(f).file_name()?.to_str())
-            .unwrap_or("?");
-        let line = record.line().unwrap_or(0);
-        let level_style = if use_color {
-            let color = match record.level() {
-                Level::Info => AnsiColor::Cyan,
-                _ => AnsiColor::Red,
-            };
-            Style::new().fg_color(Some(Color::Ansi(color))).bold()
+        let target = record.target();
+        if target == "repeat" || target == "info" {
+            writeln!(buf, "{}", record.args())
         } else {
-            Style::new()
-        };
-        let dim_style = if use_color {
-            Style::new().dimmed()
-        } else {
-            Style::new()
-        };
-        // For `repeat_info!` logs the target is "repeat::<full::fn::path>".
-        // Strip back to just the function name for a compact display.
-        let target = record
-            .target()
-            .rsplit("::")
-            .next()
-            .unwrap_or(record.target());
-        writeln!(
-            buf,
-            "{}{file}:{line}{} {}({}){}: {}",
-            dim_style.render(),
-            dim_style.render_reset(),
-            level_style.render(),
-            target,
-            level_style.render_reset(),
-            record.args()
-        )
+            writeln!(buf, "({}): {}", target, record.args())
+        }
     });
 
-    if !use_color {
+    if cli.color == ColorChoice::Never {
         logger.write_style(env_logger::WriteStyle::Never);
     }
 

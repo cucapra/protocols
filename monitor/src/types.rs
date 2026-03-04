@@ -82,8 +82,7 @@ pub struct AugmentedProtocolApplication {
 /// `AugmentedProtocolApplication`s (intuitively, a trace is just an
 /// ordered sequence of protocols).
 /// We define `AugmentedTrace` as a tuple struct so that we can define
-/// methods over this type. This newtype lets us define inherent-style behavior via traits while
-/// still behaving like a vector at call sites through `Deref`.
+/// methods over this type.
 #[derive(Clone, Debug, Default)]
 pub struct AugmentedTrace(pub Vec<AugmentedProtocolApplication>);
 
