@@ -21,8 +21,9 @@ pub fn compact_debug_prefix(debug_name: &str) -> String {
     format!("{}:{} ({})", file, line, fn_name)
 }
 
-/// A wrapper around the `log::info!` macro, which includes the name of the
-/// function in which the log was called (obtained via `stdext::function_name!`)
+/// A wrapper around the `log::info!` macro, which includes the function name,
+/// file name and line number in which the log was called
+/// (obtained via `stdext::debug_name!`)
 macro_rules! info {
     ($($arg:tt)*) => {{
         let location = crate::macros::compact_debug_prefix(&stdext::debug_name!());
