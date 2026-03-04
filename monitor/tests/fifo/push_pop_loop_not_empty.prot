@@ -1,4 +1,7 @@
+// CMD: timeout 5s cargo monitor -p {filename} {args}
 // ARGS: --wave fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo
+// RETURN: 124
+// TODO: true 
 
 // FIFO protocols using bounded loops to push/pop multiple elements
 
