@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use crate::designs::{Design, Instance};
+    use crate::designs::Instance;
     use crate::signal_trace::{SignalTrace, StepResult, WaveSignalTrace};
     use baa::BitVecOps;
+    use protocols::design::Design;
     use protocols::ir::{Dir, Field, SymbolTable, Type};
     use rustc_hash::FxHashMap;
 
