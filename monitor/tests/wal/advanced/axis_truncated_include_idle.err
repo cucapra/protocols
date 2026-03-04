@@ -1,0 +1,4 @@
+All schedulers failed: No transactions match the waveform for DUT `AXIS`
+Failure at 704ns: No transactions match the waveform in `wal/advanced/uart-axi-truncated.fst`.
+Possible transactions: [send_data, idle]
+Error: Monitor failed

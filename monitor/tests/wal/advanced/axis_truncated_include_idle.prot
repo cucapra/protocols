@@ -1,5 +1,5 @@
 // ARGS: --wave wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle
-
+// RETURN: 1
 // This file is identical to `axis_truncated.prot`, except we enable the `--include-idle`
 // flag in the monitor to check if `idle` transactions are being printed out correctly
 
