@@ -202,46 +202,22 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
     // more frequently after they've been initially inferred).
     let max_end_cycle = maximal_traces
         .iter()
-        .map(max_non_idle_end_cycle)
+        .map(|trace| trace.max_non_idle_end_cycle())
         .max()
         .unwrap_or(0);
     let min_rebind_score_option = maximal_traces
         .iter()
-        .filter(|trace| max_non_idle_end_cycle(trace) == max_end_cycle)
-        .map(trace_rebind_score)
+        .filter(|trace| trace.max_non_idle_end_cycle() == max_end_cycle)
+        .map(|trace| trace.trace_rebind_score())
         .min();
     if let Some(min_score) = min_rebind_score_option {
         maximal_traces.retain(|trace| {
-            (max_non_idle_end_cycle(trace) != max_end_cycle)
-                || trace_rebind_score(trace) == min_score
+            (trace.max_non_idle_end_cycle() != max_end_cycle)
+                || trace.trace_rebind_score() == min_score
         });
     }
 
     maximal_traces
-}
-
-/// Helper function: takes a trace and computes the latest clock cycle
-/// during which a non-idle protocol finished successfully.
-fn max_non_idle_end_cycle(trace: &AugmentedTrace) -> u32 {
-    trace
-        .iter()
-        .filter(|entry| !entry.is_idle)
-        .map(|entry| entry.end_cycle_count)
-        .max()
-        .unwrap_or(0)
-}
-
-/// Helper function: takes a trace and computes its *rebind score*,
-/// the sum of the `total_rebind_count` of each protocol in the trace
-/// (where for each protocol, its `total_rebind_count` is the sum
-/// of the no. of times its parameters' values changed after they were
-/// initially inferred due to changes in the waveform signal over time)
-fn trace_rebind_score(trace: &AugmentedTrace) -> u32 {
-    trace
-        .iter()
-        .filter(|entry| !entry.is_idle)
-        .map(|entry| entry.total_rebind_count)
-        .sum()
 }
 
 impl GlobalScheduler {
@@ -320,7 +296,7 @@ impl GlobalScheduler {
 
         // If we have multiple structs, pick the longest trace from each scheduler
         // group. Interleave traces from each struct based on the cycle count in order.
-        let mut merged: AugmentedTrace = vec![];
+        let mut merged = AugmentedTrace::default();
         for group in scheduler_group_traces.into_iter() {
             if let Some(longest) = group
                 .into_iter()

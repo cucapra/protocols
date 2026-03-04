@@ -172,7 +172,7 @@ impl Scheduler {
             finished_thread: None,
             possible_transactions: transactions,
             struct_name,
-            output_buffer: Vec::new(),
+            output_buffer: AugmentedTrace::default(),
         }
     }
 

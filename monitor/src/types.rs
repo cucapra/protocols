@@ -5,7 +5,11 @@
 /*! Miscellaneous type definitions for the monitor live in this file
  */
 
-use std::{collections::VecDeque, fmt};
+use std::{
+    collections::VecDeque,
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 use protocols::ir::StmtId;
 
@@ -74,12 +78,65 @@ pub struct AugmentedProtocolApplication {
     pub total_rebind_count: u32,
 }
 
-/// An `AugmentedTrace` is just a sequence of `AugmentedProtocolApplciation`s,
-/// similar to how a `Trace` is just a sequence of `ProtocolApplication`s.
-/// (individual protocol calls augmented with extra metatata,
-/// e.g. `add(1, 2, 3), add(4, 5, 9), ...`,
-/// but with metadata like the Thread ID / start & end time of each protocol).
-pub type AugmentedTrace = Vec<AugmentedProtocolApplication>;
+/// An `AugmentedTrace` is just a wrapper over a vector of
+/// `AugmentedProtocolApplication`s (intuitively, a trace is just an
+/// ordered sequence of protocols).
+/// We define `AugmentedTrace` as a tuple struct so that we can define
+/// methods over this type. This newtype lets us define inherent-style behavior via traits while
+/// still behaving like a vector at call sites through `Deref`.
+#[derive(Clone, Debug, Default)]
+pub struct AugmentedTrace(pub Vec<AugmentedProtocolApplication>);
+
+/// Allows us to call `iter()` directly on the  `AugmentedTrace` type
+impl Deref for AugmentedTrace {
+    type Target = Vec<AugmentedProtocolApplication>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Allows us to use mutable `Vec` methods directly on the `AugmentedTrace` type
+impl DerefMut for AugmentedTrace {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// Allows us to call `into_iter()` directly on the `AugmentedTrace` type
+/// (without needing to access the internal `Vec`)
+impl IntoIterator for AugmentedTrace {
+    type Item = AugmentedProtocolApplication;
+    type IntoIter = std::vec::IntoIter<AugmentedProtocolApplication>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl AugmentedTrace {
+    /// Helper function: takes a trace and computes the latest clock cycle
+    /// during which a non-idle protocol finished successfully.
+    pub fn max_non_idle_end_cycle(&self) -> u32 {
+        self.iter()
+            .filter(|entry| !entry.is_idle)
+            .map(|entry| entry.end_cycle_count)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Helper function: takes a trace and computes its *rebind score*,
+    /// the sum of the `total_rebind_count` of each protocol in the trace
+    /// (where for each protocol, its `total_rebind_count` is the sum
+    /// of the no. of times its parameters' values changed after they were
+    /// initially inferred due to changes in the waveform signal over time)
+    pub fn trace_rebind_score(&self) -> u32 {
+        self.iter()
+            .filter(|entry| !entry.is_idle)
+            .map(|entry| entry.total_rebind_count)
+            .sum()
+    }
+}
 
 /// Conceptually, a `SchedulerGroup` is the collection of
 /// all schedulers corresponding to the same `struct` in our DSL,
