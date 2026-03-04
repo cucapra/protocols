@@ -26,8 +26,10 @@ pub struct GlobalScheduler {
     trace: WaveSignalTrace,
 }
 
-/// Processes one clock cycle for all schedulers within the same scheduler group
+/// Processes one clock cycle for all schedulers within the same scheduler group.
 /// (See `types.rs` for the definition of a *scheduler group*)
+/// Returns a `SchedulerGroup` of all schedulers that have been processed
+/// for the current clock cycle.
 fn process_group_cycles(
     scheduler_group: SchedulerGroup,
     trace: &WaveSignalTrace,
@@ -45,7 +47,9 @@ fn process_group_cycles(
 
     while let Some(mut scheduler) = schedulers_to_process.pop_front() {
         match scheduler.process_current_queue(trace, ctx) {
-            Ok(CycleResult::Done) => processed_schedulers.push_back(scheduler),
+            Ok(CycleResult::Done) => {
+                processed_schedulers.push_back(scheduler);
+            }
             Ok(CycleResult::Fork { parent }) => {
                 // When there is an explicit/implicit fork,
                 // we need to iterate over all possible candidate protocols
@@ -122,9 +126,22 @@ fn process_group_cycles(
         }
     }
 
-    // If all schedulers in the scheduler group failed, emit the error
-    if group_was_non_empty && processed_schedulers.is_empty() {
+    // If all schedulers that were processed can't make any more progress
+    // (i.e. both their `current` & `next` queues are empty, indicating
+    // there are no more threads to run in the current cycle nor the next cycle),
+    // and at least one scheduler failed in this cycle, then no scheduler in this
+    // group can produce a trace that is consistent with the waveform,
+    // so we emit an error.
+    let all_schedulers_done = processed_schedulers
+        .iter()
+        .all(|scheduler| scheduler.current.is_empty() && scheduler.next.is_empty());
+    if group_was_non_empty && all_schedulers_done {
         if let Some(failed_scheduler) = &last_failed_scheduler {
+            info!(
+                "All schedulers in the scheduler group for struct `{}` have been processed, 
+                (all of them have no more threads to execute in the current/next cycle), there was a scheduler that failed, so emitting a global monitor failure",
+                failed_scheduler.struct_name
+            );
             eprintln!(
                 "All schedulers failed: No transactions match the waveform for DUT `{}`",
                 failed_scheduler.struct_name
