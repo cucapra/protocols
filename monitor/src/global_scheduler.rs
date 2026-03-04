@@ -180,8 +180,9 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
         })
         .collect();
 
-    // Filter out strict prefix traces
-    all_entries
+    // Filter out traces which are strict prefixes of other traces.
+    // Call the remaining traces *maximal traces*.
+    let mut maximal_traces: Vec<AugmentedTrace> = all_entries
         .into_iter()
         .enumerate()
         .filter(|(i, _)| {
@@ -190,20 +191,57 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
             })
         })
         .map(|(_, entries)| entries)
-        .collect()
+        .collect();
+
+    // Out of all traces that reach the same max cycle,
+    // keep only the ones with the lowest `rebind_score`
+    // (i.e. prefer traces where protocol parameters don't change frequently
+    // after their values have been inferred). This allows us to
+    // handle `repeat` loops where the no. of cycles have been speculatively
+    // "guessed" (a wrong guess will cause parameter values to change
+    // more frequently after they've been initially inferred).
+    let max_end_cycle = maximal_traces
+        .iter()
+        .map(max_non_idle_end_cycle)
+        .max()
+        .unwrap_or(0);
+    let min_rebind_score_option = maximal_traces
+        .iter()
+        .filter(|trace| max_non_idle_end_cycle(trace) == max_end_cycle)
+        .map(trace_rebind_score)
+        .min();
+    if let Some(min_score) = min_rebind_score_option {
+        maximal_traces.retain(|trace| {
+            (max_non_idle_end_cycle(trace) != max_end_cycle)
+                || trace_rebind_score(trace) == min_score
+        });
+    }
+
+    maximal_traces
 }
 
-/// Out of all the protocols that were executed successfully by the same scheduler
-/// (i.e. are in the scheduler's `output_buffer`), this function
-/// finds the maximum end-time (clock cycle) where a non-idle protocol completed
-fn max_non_idle_end_cycle(scheduler: &Scheduler) -> u32 {
-    scheduler
-        .output_buffer
+/// Helper function: takes a trace and computes the latest clock cycle
+/// during which a non-idle protocol finished successfully.
+fn max_non_idle_end_cycle(trace: &AugmentedTrace) -> u32 {
+    trace
         .iter()
-        .filter(|e| !e.is_idle)
-        .map(|e| e.end_cycle_count)
+        .filter(|entry| !entry.is_idle)
+        .map(|entry| entry.end_cycle_count)
         .max()
         .unwrap_or(0)
+}
+
+/// Helper function: takes a trace and computes its *rebind score*,
+/// the sum of the `total_rebind_count` of each protocol in the trace
+/// (where for each protocol, its `total_rebind_count` is the sum
+/// of the no. of times its parameters' values changed after they were
+/// initially inferred due to changes in the waveform signal over time)
+fn trace_rebind_score(trace: &AugmentedTrace) -> u32 {
+    trace
+        .iter()
+        .filter(|entry| !entry.is_idle)
+        .map(|entry| entry.total_rebind_count)
+        .sum()
 }
 
 impl GlobalScheduler {
@@ -362,15 +400,15 @@ impl GlobalScheduler {
                     // than the maximum end-cycle observed across this group.
                     // (These are premature schedules that don't cover the entirety
                     // of the waveform)
-                    let group_max_end = scheduler_group
+                    let group_max_end_cycle = scheduler_group
                         .iter()
-                        .map(max_non_idle_end_cycle)
+                        .map(|scheduler| scheduler.max_non_idle_end_cycle())
                         .max()
                         .unwrap_or(0);
 
                     scheduler_group.retain(|scheduler| {
-                        let scheduler_max_end = max_non_idle_end_cycle(scheduler);
-                        scheduler_max_end == group_max_end
+                        let max_end_cycle = scheduler.max_non_idle_end_cycle();
+                        max_end_cycle == group_max_end_cycle
                     });
 
                     if let Some(scheduler) = scheduler_group.front() {

@@ -63,6 +63,15 @@ pub struct AugmentedProtocolApplication {
     /// Whether this transaction was marked `#[idle]` in the protocol file.
     /// Idle entries are excluded from the dedup key but still displayed.
     pub is_idle: bool,
+
+    /// The sum of each parameter's `rebind_count` for the thread corresponding
+    /// to this protocol
+    /// (i.e. the sum of all values in the thread's `rebind_counts` map).
+    /// A lower `total_rebind_count` indicates a protocol
+    /// whose parameters don't change value after they've been inferred
+    /// from the waveform (i.e. the corresponding waveform signals
+    /// remain stable over time).
+    pub total_rebind_count: u32,
 }
 
 /// An `AugmentedTrace` is just a sequence of `AugmentedProtocolApplciation`s,

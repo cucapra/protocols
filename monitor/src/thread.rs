@@ -62,6 +62,12 @@ pub struct Thread {
     /// Maps function parameters to DUT ports
     pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
 
+    /// Map which tracks how many times an input/output parameter's value
+    /// was updated *after* it was initially inferred due to the corresponding
+    /// waveform signal changing over time. (This is useful for filtering out
+    /// invalid candidate traces for protocols containing `repeat` loops.)
+    pub rebind_counts: FxHashMap<SymbolId, u32>,
+
     /// Maps arguments of `repeat` loops to their current "guessed" state
     /// (either `Speculative` or `Known` -- see docs for the `LoopArgState` type)
     pub loop_args_state: FxHashMap<SymbolId, LoopArgState>,
@@ -129,6 +135,7 @@ impl Thread {
             start_cycle,
             start_time_step,
             args_to_pins: FxHashMap::default(),
+            rebind_counts: FxHashMap::default(),
             has_forked: false,
             loop_args_state: FxHashMap::default(),
             repeat_loops_remaining_iters: FxHashMap::default(),

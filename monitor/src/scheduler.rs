@@ -358,6 +358,15 @@ impl Scheduler {
                                         time_str
                                     );
                                     thread.args_mapping.insert(*param_id, trace_value);
+
+                                    // Increment the `rebind_count` for this
+                                    // parameter, since the parameter's value
+                                    // has been updated since it was initially
+                                    // inferred due to a change in the corresponding
+                                    // waveform signal.
+                                    // Note: we later use `rebind_counts` when
+                                    // filtering out candidate traces.
+                                    *thread.rebind_counts.entry(*param_id).or_insert(0) += 1;
                                 } else {
                                     info!(
                                         "args_mapping OK: {} = {} = {}",
@@ -1087,6 +1096,7 @@ impl Scheduler {
                         end_time_step,
                         thread_id: thread.global_thread_id(ctx),
                         is_idle,
+                        total_rebind_count: thread.rebind_counts.values().sum(),
                     });
                     self.finished.push_back(thread.clone());
 
@@ -1119,6 +1129,19 @@ impl Scheduler {
                 }
             }
         }
+    }
+
+    /// Helper function: out of all the protocols that were executed
+    /// successfully by the same scheduler
+    /// (i.e. are in the scheduler's `output_buffer`), this function
+    /// finds the maximum end-time (clock cycle) when a non-idle protocol finished
+    pub fn max_non_idle_end_cycle(&self) -> u32 {
+        self.output_buffer
+            .iter()
+            .filter(|e| !e.is_idle)
+            .map(|e| e.end_cycle_count)
+            .max()
+            .unwrap_or(0)
     }
 
     /// Pretty-prints an error message for the monitor
