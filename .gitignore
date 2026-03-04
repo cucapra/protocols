@@ -25,3 +25,7 @@ monitor/tests/axi_output.txt
 dump.vcd
 a.out
 obj_dir/
+
+# Verilog backend
+run_dir/
+tb.v
