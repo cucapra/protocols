@@ -67,15 +67,6 @@ pub struct AugmentedProtocolApplication {
     /// Whether this transaction was marked `#[idle]` in the protocol file.
     /// Idle entries are excluded from the dedup key but still displayed.
     pub is_idle: bool,
-
-    /// The sum of each parameter's `rebind_count` for the thread corresponding
-    /// to this protocol
-    /// (i.e. the sum of all values in the thread's `rebind_counts` map).
-    /// A lower `total_rebind_count` indicates a protocol
-    /// whose parameters don't change value after they've been inferred
-    /// from the waveform (i.e. the corresponding waveform signals
-    /// remain stable over time).
-    pub total_rebind_count: u32,
 }
 
 /// An `AugmentedTrace` is just a wrapper over a vector of
@@ -122,18 +113,6 @@ impl AugmentedTrace {
             .map(|entry| entry.end_cycle_count)
             .max()
             .unwrap_or(0)
-    }
-
-    /// Helper function: takes a trace and computes its *rebind score*,
-    /// the sum of the `total_rebind_count` of each protocol in the trace
-    /// (where for each protocol, its `total_rebind_count` is the sum
-    /// of the no. of times its parameters' values changed after they were
-    /// initially inferred due to changes in the waveform signal over time)
-    pub fn trace_rebind_score(&self) -> u32 {
-        self.iter()
-            .filter(|entry| !entry.is_idle)
-            .map(|entry| entry.total_rebind_count)
-            .sum()
     }
 }
 

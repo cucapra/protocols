@@ -193,29 +193,15 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
         .map(|(_, entries)| entries)
         .collect();
 
-    // Out of all traces that reach the same max cycle,
-    // keep only the ones with the lowest `rebind_score`
-    // (i.e. prefer traces where protocol parameters don't change frequently
-    // after their values have been inferred). This allows us to
-    // handle `repeat` loops where the no. of cycles have been speculatively
-    // "guessed" (a wrong guess will cause parameter values to change
-    // more frequently after they've been initially inferred).
+    // Keep only traces that reach the latest non-idle end cycle.
+    // This discards shorter maximal traces that do not cover as much
+    // of the waveform as competing candidates.
     let max_end_cycle = maximal_traces
         .iter()
         .map(|trace| trace.max_non_idle_end_cycle())
         .max()
         .unwrap_or(0);
-    let min_rebind_score_option = maximal_traces
-        .iter()
-        .filter(|trace| trace.max_non_idle_end_cycle() == max_end_cycle)
-        .map(|trace| trace.trace_rebind_score())
-        .min();
-    if let Some(min_score) = min_rebind_score_option {
-        maximal_traces.retain(|trace| {
-            (trace.max_non_idle_end_cycle() != max_end_cycle)
-                || trace.trace_rebind_score() == min_score
-        });
-    }
+    maximal_traces.retain(|trace| trace.max_non_idle_end_cycle() == max_end_cycle);
 
     maximal_traces
 }

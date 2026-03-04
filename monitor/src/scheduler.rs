@@ -346,27 +346,17 @@ impl Scheduler {
                             // to handle re-assignments to the same port that involve bit-slices for now,
                             // as is the case for the SERV example.)
                             if all_bits_known && trace_value.width() == param_value.width() {
-                                // If there are any discrepancies between the existing
-                                // inferred value for a function parameter and its
-                                // waveform value, we update the inferred value to be
-                                // the waveform value at the current time-step.
                                 if trace_value != *param_value {
                                     info!(
-                                        "Updating {} |-> {} in args_mapping based on waveform data at {}",
+                                        "args_mapping FAILED for thread {} (`{}`) at {}: {} = {} (trace) != {} (inferred)",
+                                        thread.global_thread_id(ctx),
+                                        thread.transaction.name,
+                                        time_str,
                                         param_name,
                                         serialize_bitvec(&trace_value, ctx.display_hex),
-                                        time_str
+                                        serialize_bitvec(param_value, ctx.display_hex)
                                     );
-                                    thread.args_mapping.insert(*param_id, trace_value);
-
-                                    // Increment the `rebind_count` for this
-                                    // parameter, since the parameter's value
-                                    // has been updated since it was initially
-                                    // inferred due to a change in the corresponding
-                                    // waveform signal.
-                                    // Note: we later use `rebind_counts` when
-                                    // filtering out candidate traces.
-                                    *thread.rebind_counts.entry(*param_id).or_insert(0) += 1;
+                                    failed_constraint_checks.push(thread.clone());
                                 } else {
                                     info!(
                                         "args_mapping OK: {} = {} = {}",
@@ -1096,7 +1086,6 @@ impl Scheduler {
                         end_time_step,
                         thread_id: thread.global_thread_id(ctx),
                         is_idle,
-                        total_rebind_count: thread.rebind_counts.values().sum(),
                     });
                     self.finished.push_back(thread.clone());
 
