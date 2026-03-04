@@ -1,7 +1,7 @@
 // CMD: timeout 5s cargo monitor -p {filename} {args}
 // ARGS: --wave adders/nested_busy_wait.fst --instances add_d1:Adder 
-// TODO: true
 // RETURN: 124
+// TODO: true
 
 struct Adder {
   in a: u32,
