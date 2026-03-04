@@ -129,7 +129,7 @@ jobs:
       - name: Build
         run: cargo build --bin protocols-cli
       - name: Run Verilog Testbench for AES128
-        run: cargo run --bin protocols-cli -- -p=examples/tinyaes128/aes128.prot run-verilog --transactions=examples/tinyaes128/aes128.tx --verilog=examples/tinyaes128/aes_128.v run_dir/tinyaes128
+        run: cargo run --bin protocols-cli -- -p=examples/tinyaes128/aes128.prot run-verilog --transactions=examples/tinyaes128/aes128.tx --verilog=examples/tinyaes128/aes_128.v --clock=clk run_dir/tinyaes128
       - uses: actions/upload-artifact@v4
         with:
           name: tinyaes128.vcd
