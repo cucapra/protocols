@@ -114,8 +114,8 @@ fn main() -> anyhow::Result<()> {
     // All other info-level logs are hidden to reduce noise.
     if cli.verbosity.log_level_filter() >= LevelFilter::Info {
         logger
-            .filter(Some("repeat"), LevelFilter::Info)
-            .filter(None, LevelFilter::Warn);
+            // .filter(Some("repeat"), LevelFilter::Info)
+            .filter(None, LevelFilter::Info);
     } else {
         logger.filter_level(cli.verbosity.log_level_filter());
     }
