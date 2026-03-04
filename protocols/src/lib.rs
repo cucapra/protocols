@@ -46,7 +46,7 @@ pub fn transaction_frontend<'a>(
     // Maps a transaction's name to its argument types
     let mut transaction_arg_types = rustc_hash::FxHashMap::default();
     for (tx, symbol_table) in protos {
-        transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(&symbol_table));
+        transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file

@@ -43,14 +43,14 @@ pub fn to_verilog(
             out,
             "  initial begin $dumpfile(\"{filename}\"); $dumpvars(0, {testbench_name}); end "
         )?;
-        writeln!(out, "")?;
+        writeln!(out)?;
     }
 
     // we always generate a clock even if it is not used
     writeln!(out, "  // clock with period = 2")?;
     writeln!(out, "  reg clk = 0;")?;
     writeln!(out, "  always #1 clk = ~clk;\n")?;
-    writeln!(out, "")?;
+    writeln!(out)?;
 
     // variable used to control when the next protocol execution needs to be launched
     writeln!(
@@ -60,7 +60,7 @@ pub fn to_verilog(
     writeln!(out, "  reg [31:0] do_fork_count = 0;")?;
     writeln!(out, "  reg [31:0] started_count = 0;")?;
     writeln!(out, "  reg [31:0] finished_count = 0;")?;
-    writeln!(out, "")?;
+    writeln!(out)?;
 
     // pins
     writeln!(
@@ -111,7 +111,7 @@ pub fn to_verilog(
             }
         }
     }
-    writeln!(out, "")?;
+    writeln!(out)?;
 
     // instance
     writeln!(out, "  // instance of the design under test")?;
@@ -128,9 +128,9 @@ pub fn to_verilog(
         }
         write!(out, "    .{}({}_{})", name, instance_name, name)?;
     }
-    writeln!(out, "")?;
+    writeln!(out)?;
     writeln!(out, "  );")?;
-    writeln!(out, "")?;
+    writeln!(out)?;
 
     // one task for each protocol
     for &proto_id in module.transaction_ids.iter() {
@@ -170,7 +170,7 @@ pub fn to_verilog(
     writeln!(out, "    $finish();")?;
     writeln!(out, "  end")?;
 
-    writeln!(out, "")?;
+    writeln!(out)?;
 
     writeln!(out, "endmodule // {testbench_name}")?;
 
@@ -200,7 +200,7 @@ fn proto_to_verilog(
 
     writeln!(out, "    finished_count += 1;")?;
     writeln!(out, "  endtask; // {}", proto.name)?;
-    writeln!(out, "")?;
+    writeln!(out)?;
     Ok(())
 }
 

@@ -5,7 +5,6 @@
 use baa::BitVecValue;
 use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
-use protocols::design::find_designs;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::{frontend, transaction_frontend};
 use std::path::Path;
@@ -48,7 +47,7 @@ fn load_trace(
 ) -> Vec<(String, Vec<BitVecValue>)> {
     if let Some(filename) = transactions {
         let traces = transaction_frontend(filename, protos.iter()).unwrap();
-        if traces.len() >= 1 {
+        if !traces.is_empty() {
             if traces.len() > 1 {
                 log::warn!("More than 1 trace in {filename}. Picking first one.");
             }
@@ -78,7 +77,7 @@ fn make_verilog_tb(
     let tb_name = "tb";
     to_verilog(
         tb_name,
-        &protos,
+        protos,
         &pins,
         vcd_out.as_deref(),
         &trace,
@@ -116,7 +115,7 @@ fn run_verilog_tb(
     let verilog_tb_str = abs_cwd.join(verilog_tb).to_str().unwrap().to_string();
     let vcd_out_rel = "dump.vcd";
     make_verilog_tb(
-        &protos,
+        protos,
         verilog_tb_str,
         transactions,
         Some(vcd_out_rel.to_string()),
