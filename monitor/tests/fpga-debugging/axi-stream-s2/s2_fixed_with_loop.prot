@@ -44,6 +44,7 @@ prot recv<DUT: AXISManager>(
         step();
     }
     assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TLAST, is_last);
 
     // Now we are allowed to exert backpressure for `num_cycles` cycles
     repeat num_cycles iterations {
@@ -57,6 +58,7 @@ prot recv<DUT: AXISManager>(
         // Data and valid must remain stable since valid is now 1
         assert_eq(DUT.M_AXIS_TVALID, 1'b1);
         assert_eq(DUT.M_AXIS_TDATA, data);
+        assert_eq(DUT.M_AXIS_TLAST, is_last);
     }
 
     // Receiver is now ready 
