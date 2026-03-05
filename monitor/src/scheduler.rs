@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
@@ -743,10 +743,24 @@ impl Scheduler {
                         );
 
         // Update the current thread's `loop_args` map so that
-        // the `LoopArg` is now `Speculative(n + 1)`
+        // the `LoopArg` is now `Speculative(n + 1)`, and update
+        // the current thread's `args_mapping` as well
         current_thread.loop_args_state.insert(
             loop_arg_symbol_id,
             LoopArgState::Speculative(n + 1, loop_stmt_id),
+        );
+        current_thread.args_mapping.insert(
+            loop_arg_symbol_id,
+            BitVecValue::from_u64(n + 1, loop_arg_bitwidth),
+        );
+        repeat_info!(
+            "Speculative thread ({}) has args_mapping {}\n",
+            exited_thread.thread_id,
+            serialize_args_mapping(
+                &exited_thread.args_mapping,
+                &exited_thread.symbol_table,
+                false
+            )
         );
 
         // The current thread executes the

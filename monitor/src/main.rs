@@ -16,16 +16,16 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Instance, collects_design_names, parse_instance};
+use crate::designs::{collects_design_names, parse_instance, Instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
-use protocols::design::{Design, find_designs};
+use protocols::design::{find_designs, Design};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
@@ -114,7 +114,9 @@ fn main() -> anyhow::Result<()> {
     // When -v is passed, show only repeat-loop logs (target="repeat").
     // All other info-level logs are hidden to reduce noise.
     if cli.verbosity.log_level_filter() >= LevelFilter::Info {
-        logger.filter(None, LevelFilter::Info);
+        logger
+            .filter(Some("repeat"), LevelFilter::Info)
+            .filter(None, LevelFilter::Info);
     } else {
         logger.filter_level(cli.verbosity.log_level_filter());
     }
