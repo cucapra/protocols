@@ -31,78 +31,44 @@ prot reset<DUT: AXISManager>() {
 //   data - Expected payload from manager
 prot recv<DUT: AXISManager>(
     out data: u32,
+    in num_cycles: u64,
 ) {
-    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
-    DUT.M_AXIS_TREADY := 1'b1;          // Signal ready to receive
+    // Keep out of reset
+    DUT.M_AXIS_ARESETN := 1'b1;         
+    
+    // We're free to signal ready or not, it doesn't matter until valid is asserted
+    DUT.M_AXIS_TREADY := X;
 
-    // Only matches when data is available
-    // (use wait_for_data for cycles when tready=1 but tvalid=0)
+    // Wait until data becomes valid
+    while (DUT.M_AXIS_TVALID == 1'b0) {
+        step();
+    }
+    assert_eq(DUT.M_AXIS_TDATA, data);
+
+    // Now we are allowed to exert backpressure for `num_cycles` cycles
+    if (DUT.M_AXIS_TREADY == 1'b0) {
+        repeat num_cycles iterations {
+            step();
+            
+            // Data and valid must remain stable since valid is now 1
+            assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+            assert_eq(DUT.M_AXIS_TDATA, data);
+        }
+    } else {
+
+    }
+
+    // Receiver is now ready 
+    DUT.M_AXIS_TREADY := 1'b1;
+
+    // Ensure that valid and data are still stable
     assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-
-    // Verify output data
     assert_eq(DUT.M_AXIS_TDATA, data);
 
     // One cycle for the transfer to complete
     step();
 }
 
-// RECV_LAST: Receive the last data word (with M_AXIS_TLAST asserted)
-// This verifies both the data and that M_AXIS_TLAST is properly set
-// Only matches when data is immediately available (M_AXIS_TVALID = 1)
-//
-// Output Arguments:
-//   data - Expected payload from manager (should be the last word)
-prot recv_last<DUT: AXISManager>(
-    out data: u32,
-) {
-    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
-    DUT.M_AXIS_TREADY := 1'b1;          // Signal ready to receive
-
-    // Only matches when data is available
-    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-
-    // Verify output data and M_AXIS_TLAST
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TLAST, 1'b1);
-
-    // One cycle for the transfer to complete
-    step();
-}
-
-// STALL: Assert backpressure (M_AXIS_TREADY=0) while manager has valid data
-// AXI-Stream requires output args (tdata, tlast) to remain stable during stall
-// Only matches when the waveform contains M_AXIS_TVALID=1 (i.e. there is some valid data and it's available to stall)
-prot stall<DUT: AXISManager>(out data: u32, out last: u1) {
-    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
-    DUT.M_AXIS_TREADY := 1'b0;          // Apply backpressure
-
-    // Stall only applies when manager has valid data
-    // If M_AXIS_TVALID=0, this fails and we instead have an `idle` transaction
-    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-
-    // Capture output values before the stall cycle
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TLAST, last);
-
-    step();
-
-    // Verify outputs remained stable during the stall
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TLAST, last);
-
-    step();
-}
-
-// WAIT_FOR_DATA: Receiver is ready but no data is available
-// Used when tready=1 but tvalid=0 (i.e. receiver is polling for data)
-prot wait_for_data<DUT: AXISManager>() {
-    DUT.M_AXIS_ARESETN := 1'b1;         // Keep out of reset
-    DUT.M_AXIS_TREADY := 1'b1;          
-
-    // Only matches when no data is available
-    assert_eq(DUT.M_AXIS_TVALID, 1'b0);
-    step();
-}
 
 // IDLE: No transaction - M_AXIS_TREADY is deasserted
 #[idle]
