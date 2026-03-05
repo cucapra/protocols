@@ -1,0 +1,12 @@
+// trace 0
+trace {
+    reset();  // [time: 0ns -> 12.5ns]
+    recv(1, 0);  // [time: 12.5ns -> 887.5ns]
+    recv(2, 0);  // [time: 887.5ns -> 912.5ns]
+    recv(3, 0);  // [time: 912.5ns -> 937.5ns]
+    recv(4, 0);  // [time: 937.5ns -> 962.5ns]
+    recv(5, 0);  // [time: 962.5ns -> 987.5ns]
+    recv(6, 0);  // [time: 987.5ns -> 1012.5ns]
+    reset();  // [time: 1062.5ns -> 1087.5ns]
+    reset();  // [time: 1087.5ns -> 1100ns]
+}

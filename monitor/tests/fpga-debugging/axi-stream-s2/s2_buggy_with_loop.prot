@@ -46,16 +46,17 @@ prot recv<DUT: AXISManager>(
     assert_eq(DUT.M_AXIS_TDATA, data);
 
     // Now we are allowed to exert backpressure for `num_cycles` cycles
-    if (DUT.M_AXIS_TREADY == 1'b0) {
-        repeat num_cycles iterations {
-            step();
-            
-            // Data and valid must remain stable since valid is now 1
-            assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-            assert_eq(DUT.M_AXIS_TDATA, data);
-        }
-    } else {
+    repeat num_cycles iterations {
+        step();
+
+        // If we move this assignment outside the repeat-loop, 
+        // the monitor fails because in the waveform, when `valid` becomes 1,
+        // `ready` is already 1 (i.e. there is no backpressure)
+        DUT.M_AXIS_TREADY := 1'b0; 
         
+        // Data and valid must remain stable since valid is now 1
+        assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+        assert_eq(DUT.M_AXIS_TDATA, data);
     }
 
     // Receiver is now ready 
