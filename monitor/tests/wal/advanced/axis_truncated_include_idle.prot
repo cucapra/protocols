@@ -1,0 +1,29 @@
+// ARGS: --wave wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle
+
+// This file is identical to `axis_truncated.prot`, except we enable the `--include-idle`
+// flag in the monitor to check if `idle` transactions are being printed out correctly
+
+struct AXIS {
+    out m_axis_tready: u1,
+    in m_axis_tvalid: u1,
+    in m_axis_tdata: u8,
+}
+
+prot send_data<D: AXIS>(in data: u8) {
+    D.m_axis_tdata := data;
+    D.m_axis_tvalid := 1'b1;
+    while (!(D.m_axis_tready == 1'b1)) {
+        step();
+    }
+    // one cycle for the data transfer to take place
+    step();
+}
+
+// We mark this protocol as `idle` to avoid excessive `idle()` transcations 
+// showing up in the trace produced by the monitor
+#[idle]
+prot idle<D: AXIS>() {
+    D.m_axis_tvalid := 1'b0;
+    // D.data is implicitly X
+    step();
+}

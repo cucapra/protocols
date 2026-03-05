@@ -54,6 +54,11 @@ struct Cli {
     /// of cycles specified with this option.
     #[arg(long)]
     max_steps: Option<u32>,
+
+    /// Determines whether to display bit-vector literal values in
+    /// error-messages in hexadecimal
+    #[arg(long, value_name = "DISPLAY_IN_HEX")]
+    display_hex: bool,
 }
 
 /// Examples (enables all tracing logs):
@@ -103,11 +108,13 @@ fn main() -> anyhow::Result<()> {
     // Print warning messages only if `--verbose` is enabled
     // (the --verbose flag triggers `LevelFilter::Info`)
     let emit_warnings = cli.verbosity.log_level_filter() == LevelFilter::Info;
-    let protocols_handler =
-        &mut DiagnosticHandler::new(color_choice, cli.no_error_locations, emit_warnings);
+    let protocols_handler = &mut DiagnosticHandler::new(
+        color_choice,
+        cli.no_error_locations,
+        emit_warnings,
+        cli.display_hex,
+    );
 
-    // At the moment we only allow the user to specify one Verilog file
-    // through the CLI, so we have to wrap it in a singleton Vec
     let (parsed_data, ctx, sys) = setup_test_environment(
         cli.verilog.iter().map(|v| v.as_str()).collect(),
         &cli.protocol,
@@ -130,8 +137,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler =
-        &mut DiagnosticHandler::new(color_choice, cli.no_error_locations, emit_warnings);
+    let transactions_handler = &mut DiagnosticHandler::new(
+        color_choice,
+        cli.no_error_locations,
+        emit_warnings,
+        cli.display_hex,
+    );
     let traces: Vec<Vec<(String, Vec<baa::BitVecValue>)>> = parse_transactions_file(
         cli.transactions,
         transactions_handler,

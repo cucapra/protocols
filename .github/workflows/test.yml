@@ -2,8 +2,6 @@ name: Protocols Tests
 
 on:
   push:
-    branches:
-      - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -73,6 +71,23 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  python-checks:
+    name: Type-check, lint & format Python files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-uv
+      - name: Use ty to typecheck python files
+        run: uv run --group dev ty check
+      - name: Use ruff to lint Python files
+        run: uv run --group dev ruff check
+      - name: Use ruff (via uv) to format Python files
+        # We pass in `--preview-features format` to suppress 
+        # uv's warning messages about the formatter being experimental
+        run: uv format --check --preview-features format      
+
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04
@@ -93,3 +108,31 @@ jobs:
         run: uv run scripts/benchmark_monitor.py
       - name: Check for performance regressions
         run: uv run scripts/check_performance_regression.py
+
+
+  verilog:
+    name: Verilog Backend Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - name: Update Rust to ${{ matrix.toolchain }}
+        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-environment
+      - name: Icarus Verilog Version
+        # we intentionally ignore the fact that `iverilog -v` returns a non-zero exit code
+        run: iverilog -v || which iverilog
+      - name: Build
+        run: cargo build --bin protocols-cli
+      - name: Run Verilog Testbench for AES128
+        run: cargo run --bin protocols-cli -- -p=examples/tinyaes128/aes128.prot run-verilog --transactions=examples/tinyaes128/aes128.tx --verilog=examples/tinyaes128/aes_128.v --clock=clk run_dir/tinyaes128
+      - name: Rerun testbench manually to catch a bad exit code
+        run: iverilog -g2012 run_dir/tinyaes128/tb.v examples/tinyaes128/aes_128.v && ./a.out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tinyaes128.vcd
+          path: run_dir/tinyaes128/dump.vcd

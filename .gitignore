@@ -4,8 +4,6 @@ Cargo.lock
 test_run/
 *.btor
 **/.DS_Store
-.vscode/*
-.surfer/
 monitor/target
 monitor/tests/axi_output.txt
 *.json
@@ -13,7 +11,7 @@ monitor/tests/axi_output.txt
 *.csv
 # Allow benchmark results to be committed for CI regression testing
 !benchmark_results/*.csv
-# Ignore all dotfiles and dotdirectories
+# Ignore all dotfiles
 .*
 # But include the .github directory (CI files)
 !.github/
@@ -21,3 +19,12 @@ monitor/tests/axi_output.txt
 # And also include .gitignore + .python-version
 !.gitignore
 !.python-version
+
+# Verilator / iVerilog artifacts
+dump.vcd
+a.out
+obj_dir/
+
+# Verilog backend
+run_dir/
+tb.v

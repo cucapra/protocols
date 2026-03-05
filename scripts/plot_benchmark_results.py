@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 INPUT_CSV = "benchmark_results/benchmark_results.csv"
 OUTPUT_PNG = "benchmark_results/benchmark_plot.png"
 
+
 def main():
     names = []
     steps_per_sec = []
@@ -44,8 +45,9 @@ def main():
     plt.savefig(OUTPUT_PNG)
 
     print(f"Saved plot to {OUTPUT_PNG}")
-    
+
     plt.close()
+
 
 if __name__ == "__main__":
     main()

@@ -3,10 +3,11 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, designs::Design, global_context::TimeUnit};
+use crate::{Instance, global_context::TimeUnit};
 use anyhow::Context;
 use baa::BitVecValue;
 use log::info;
+use protocols::design::Design;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalRef};

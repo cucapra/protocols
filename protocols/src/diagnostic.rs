@@ -122,18 +122,27 @@ pub struct DiagnosticHandler {
     no_error_locations: bool,
     /// `emit_warnings` indicates whether to emit warning-level diagnostics
     emit_warnings: bool,
+    /// Indicates whether to display bit-vector literal values in
+    /// error messages in hexadecimal
+    pub display_hex: bool,
 }
 
 impl Default for DiagnosticHandler {
     /// Default `DiagnosticHandler` does not emit colored error messages,
-    /// includes location info in error locations, and emits warnings
+    /// includes location info in error locations, emits warnings,
+    /// and *doesn't* display bit-vectors in hex
     fn default() -> Self {
-        Self::new(ColorChoice::Never, false, true)
+        Self::new(ColorChoice::Never, false, true, false)
     }
 }
 
 impl DiagnosticHandler {
-    pub fn new(color_choice: ColorChoice, error_locations: bool, emit_warnings: bool) -> Self {
+    pub fn new(
+        color_choice: ColorChoice,
+        error_locations: bool,
+        emit_warnings: bool,
+        display_hex: bool,
+    ) -> Self {
         Self {
             files: SimpleFiles::new(),
             reported_errs: FxHashSet::default(),
@@ -141,6 +150,7 @@ impl DiagnosticHandler {
             color_choice,
             no_error_locations: error_locations,
             emit_warnings,
+            display_hex,
         }
     }
 
@@ -453,6 +463,12 @@ impl DiagnosticHandler {
         }
     }
 
+    /// Emits an error message when an `assert_eq` fails. Arguments are:
+    /// - The enclosing `Transaction`
+    /// - The `ExprId`s of the two arguments to the `assert_eq`
+    /// - The values that the two `Expr`s evaluate to
+    /// - The arguments `todo_args` supplied to the transaction
+    ///   (for more info in the error msg)
     pub fn emit_diagnostic_assertion(
         &mut self,
         tr: &Transaction,
@@ -460,6 +476,7 @@ impl DiagnosticHandler {
         expr2_id: &ExprId,
         eval1: &BitVecValue,
         eval2: &BitVecValue,
+        todo_args: &[BitVecValue],
     ) {
         let buffer = &mut self.create_buffer();
 
@@ -470,17 +487,30 @@ impl DiagnosticHandler {
                 fileid1 == fileid2,
                 "Expressions must be in the same file for assertion error"
             );
+            let transaction_call = if todo_args.is_empty() {
+                format!("{}()", tr.name)
+            } else {
+                let args_str = todo_args
+                    .iter()
+                    .map(|v| serialize_bitvec(v, self.display_hex))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", tr.name, args_str)
+            };
             let diagnostic = Diagnostic {
                 title: format!("Error in file {}", fileid1),
-                message: "The two expressions did not evaluate to the same value".to_string(),
+                message: format!(
+                    "The two expressions did not evaluate to the same value (in transaction `{}`)",
+                    transaction_call
+                ),
                 level: Level::Error,
                 locations: self.error_locations(vec![(
                     fileid1,
                     Label {
                         message: Some(format!(
                             "LHS Value: {}, RHS Value: {}",
-                            serialize_bitvec(eval1, false),
-                            serialize_bitvec(eval2, false)
+                            serialize_bitvec(eval1, self.display_hex),
+                            serialize_bitvec(eval2, self.display_hex)
                         )),
                         range: (start1.min(start2), end1.max(end2)),
                     },

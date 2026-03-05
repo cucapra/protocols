@@ -14,7 +14,7 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{Instance, collects_design_names, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
@@ -23,6 +23,7 @@ use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
+use protocols::design::{Design, find_designs};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
@@ -89,6 +90,11 @@ struct Cli {
     /// (i.e. clock cycles) taken by the montior
     #[arg(long, value_name = "PRINT_NUM_STEPS_TAKEN")]
     print_num_steps: bool,
+
+    /// Optional flag: if enabled, always prints out idle transcations
+    /// regardless of whether the protocol has been annotated with `#[idle]`
+    #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
+    include_idle: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -115,7 +121,8 @@ fn main() -> anyhow::Result<()> {
 
     // Note: for the monitor, error message locations in `.prot` files are suppressed
     // in the `DiagnosticHandlers` for now
-    let mut protocols_handler = DiagnosticHandler::new(cli.color, false, emit_warnings);
+    let mut protocols_handler =
+        DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
     let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
