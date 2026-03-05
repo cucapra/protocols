@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
