@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // parse protocol file
-    let mut protocols_handler = DiagnosticHandler::new(ColorChoice::Auto, false);
+    let mut protocols_handler = DiagnosticHandler::new(ColorChoice::Auto, false, false, false);
     let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
         parsing_helper(&cli.protocol, &mut protocols_handler);
 
