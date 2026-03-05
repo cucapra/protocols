@@ -443,7 +443,7 @@ impl ParserContext<'_> {
         )?;
         let num_iterations = self.parse_expr(expr_rule.into_inner())?;
         let body = self.parse_stmt_block(inner_rules)?;
-        Ok(Stmt::BoundedLoop(num_iterations, body))
+        Ok(Stmt::RepeatLoop(num_iterations, body))
     }
 
     fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {

@@ -14,7 +14,6 @@ use crate::{
         Trace,
     },
 };
-use log::info;
 use rustc_hash::FxHashSet;
 
 pub struct GlobalScheduler {
@@ -27,8 +26,10 @@ pub struct GlobalScheduler {
     trace: WaveSignalTrace,
 }
 
-/// Processes one clock cycle for all schedulers within the same scheduler group
+/// Processes one clock cycle for all schedulers within the same scheduler group.
 /// (See `types.rs` for the definition of a *scheduler group*)
+/// Returns a `SchedulerGroup` of all schedulers that have been processed
+/// for the current clock cycle.
 fn process_group_cycles(
     scheduler_group: SchedulerGroup,
     trace: &WaveSignalTrace,
@@ -46,16 +47,20 @@ fn process_group_cycles(
 
     while let Some(mut scheduler) = schedulers_to_process.pop_front() {
         match scheduler.process_current_queue(trace, ctx) {
-            Ok(CycleResult::Done) => processed_schedulers.push_back(scheduler),
+            Ok(CycleResult::Done) => {
+                processed_schedulers.push_back(scheduler);
+            }
             Ok(CycleResult::Fork { parent }) => {
-                // Iterate over all possible candidate protocols
+                // When there is an explicit/implicit fork,
+                // we need to iterate over all possible candidate protocols
+                // and for each candidate protocol, spawn a scheduler that runs it
                 for (transaction, symbol_table) in &scheduler.possible_transactions {
                     let mut cloned_scheduler = scheduler.clone();
 
                     // If there was an explicit fork, we have to add the
-                    // parent thread to the cloned scheduler
+                    // parent thread to the cloned scheduler's `current` queue.
                     if let Some(ref thread) = *parent {
-                        cloned_scheduler.current.push_front(thread.clone());
+                        cloned_scheduler.current.push_back(thread.clone());
                     }
 
                     // Create a new thread for the candidate protocol
@@ -74,6 +79,32 @@ fn process_group_cycles(
                     // Continue processing the cloned scheduler
                     schedulers_to_process.push_back(cloned_scheduler);
                 }
+            }
+            Ok(CycleResult::RepeatLoopFork {
+                exited_thread,
+                speculative_thread,
+            }) => {
+                // For forks that arise due to `repeat` loops,
+                // create 2 schedulers that each execute a different thread:
+                // - One which executes the `exited_thread`, i.e. the thread
+                //   which exits the loop with the `LoopArg` set to
+                //   `Known(n)` for some `n >= 0`
+                // - One which executes the `speculative_thread`, i.e.
+                //   the thread which speculatively executes the loop body
+                //   for another iteration, with the `LoopArg`
+                //   set to `Speculative(n + 1)`
+
+                let mut scheduler_with_exited_thread = scheduler.clone();
+                scheduler_with_exited_thread
+                    .current
+                    .push_back(*exited_thread);
+                schedulers_to_process.push_back(scheduler_with_exited_thread);
+
+                let mut scheduler_with_speculative_thread = scheduler.clone();
+                scheduler_with_speculative_thread
+                    .current
+                    .push_back(*speculative_thread);
+                schedulers_to_process.push_back(scheduler_with_speculative_thread);
             }
             Err(SchedulerError::NoTransactionsMatch {
                 struct_name,
@@ -95,9 +126,22 @@ fn process_group_cycles(
         }
     }
 
-    // If all schedulers in the scheduler group failed, emit the error
-    if group_was_non_empty && processed_schedulers.is_empty() {
+    // If all schedulers that were processed can't make any more progress
+    // (i.e. both their `current` & `next` queues are empty, indicating
+    // there are no more threads to run in the current cycle nor the next cycle),
+    // and at least one scheduler failed in this cycle, then no scheduler in this
+    // group can produce a trace that is consistent with the waveform,
+    // so we emit an error.
+    let all_schedulers_done = processed_schedulers
+        .iter()
+        .all(|scheduler| scheduler.current.is_empty() && scheduler.next.is_empty());
+    if group_was_non_empty && all_schedulers_done {
         if let Some(failed_scheduler) = &last_failed_scheduler {
+            info!(
+                "All schedulers in the scheduler group for struct `{}` have been processed, 
+                (all of them have no more threads to execute in the current/next cycle), there was a scheduler that failed, so emitting a global monitor failure",
+                failed_scheduler.struct_name
+            );
             eprintln!(
                 "All schedulers failed: No transactions match the waveform for DUT `{}`",
                 failed_scheduler.struct_name
@@ -153,8 +197,9 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
         })
         .collect();
 
-    // Filter out strict prefix traces
-    all_entries
+    // Filter out traces which are strict prefixes of other traces.
+    // Call the remaining traces *maximal traces*.
+    let mut maximal_traces: Vec<AugmentedTrace> = all_entries
         .into_iter()
         .enumerate()
         .filter(|(i, _)| {
@@ -163,7 +208,19 @@ fn collect_maximal_traces(scheduler_group: &SchedulerGroup) -> Vec<AugmentedTrac
             })
         })
         .map(|(_, entries)| entries)
-        .collect()
+        .collect();
+
+    // Keep only traces that reach the latest non-idle end cycle.
+    // This discards shorter maximal traces that do not cover as much
+    // of the waveform as competing candidates.
+    let max_end_cycle = maximal_traces
+        .iter()
+        .map(|trace| trace.max_non_idle_end_cycle())
+        .max()
+        .unwrap_or(0);
+    maximal_traces.retain(|trace| trace.max_non_idle_end_cycle() == max_end_cycle);
+
+    maximal_traces
 }
 
 impl GlobalScheduler {
@@ -242,7 +299,7 @@ impl GlobalScheduler {
 
         // If we have multiple structs, pick the longest trace from each scheduler
         // group. Interleave traces from each struct based on the cycle count in order.
-        let mut merged: AugmentedTrace = vec![];
+        let mut merged = AugmentedTrace::default();
         for group in scheduler_group_traces.into_iter() {
             if let Some(longest) = group
                 .into_iter()
@@ -316,15 +373,24 @@ impl GlobalScheduler {
             // print the final state of each individual scheduler,
             // then exit the loop
             if trace_ended {
-                for scheduler_group in &self.scheduler_groups {
-                    for scheduler in scheduler_group {
-                        if scheduler.next.is_empty() {
-                            info!(
-                                "Trace has ended, threads in `next` can't proceed, terminating scheduler for `{}` w/ final state:",
-                                scheduler.struct_name
-                            );
-                            scheduler.print_scheduler_state(&self.trace, ctx);
-                        }
+                for scheduler_group in self.scheduler_groups.iter_mut() {
+                    // Remove schedulers in the group
+                    // whose candidate traces finish earlier
+                    // than the maximum end-cycle observed across this group.
+                    // (These are premature schedules that don't cover the entirety
+                    // of the waveform)
+                    let group_max_end_cycle = scheduler_group
+                        .iter()
+                        .map(|scheduler| scheduler.max_non_idle_end_cycle())
+                        .max()
+                        .unwrap_or(0);
+
+                    scheduler_group.retain(|scheduler| {
+                        let max_end_cycle = scheduler.max_non_idle_end_cycle();
+                        max_end_cycle == group_max_end_cycle
+                    });
+
+                    if let Some(scheduler) = scheduler_group.front() {
                         scheduler.print_step_count(ctx);
                     }
                 }
