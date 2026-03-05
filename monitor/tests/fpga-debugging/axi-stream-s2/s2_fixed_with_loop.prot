@@ -24,13 +24,13 @@ prot reset<DUT: AXISManager>() {
 }
 
 // RECV: Receive one data word from the AXI-Stream manager
-// Data transfer occurs when M_AXIS_TVALID and M_AXIS_TREADY are both 1
-// Only matches when data is immediately available (M_AXIS_TVALID = 1)
-//
 // Output Arguments:
-//   data - Expected payload from manager
+// - `data`: Payload from manager
+// - `is_last`: Whether this is the last word in the packet 
+// - `num_cycles`: No. of cycles in which the subordinate exerts backpressure
 prot recv<DUT: AXISManager>(
     out data: u32,
+    out is_last: u1,
     in num_cycles: u64,
 ) {
     // Keep out of reset
@@ -47,12 +47,12 @@ prot recv<DUT: AXISManager>(
 
     // Now we are allowed to exert backpressure for `num_cycles` cycles
     repeat num_cycles iterations {
-        step();
-
         // If we move this assignment outside the repeat-loop, 
         // the monitor fails because in the waveform, when `valid` becomes 1,
         // `ready` is already 1 (i.e. there is no backpressure)
         DUT.M_AXIS_TREADY := 1'b0;
+
+        step();
         
         // Data and valid must remain stable since valid is now 1
         assert_eq(DUT.M_AXIS_TVALID, 1'b1);
@@ -65,6 +65,7 @@ prot recv<DUT: AXISManager>(
     // Ensure that valid and data are still stable
     assert_eq(DUT.M_AXIS_TVALID, 1'b1);
     assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TLAST, is_last);
 
     // One cycle for the transfer to complete
     step();
