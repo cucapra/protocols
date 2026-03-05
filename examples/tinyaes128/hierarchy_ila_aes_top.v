@@ -236,6 +236,7 @@ wire xram_wr  = (aes_state_write_data);
 // next state logic.
 wire [1:0] aes_reg_state_next_idle = start_op ? AES_STATE_READ_DATA : AES_STATE_IDLE;
 wire [1:0] aes_reg_state_next_read_data = last_byte_acked ? AES_STATE_OPERATE : AES_STATE_READ_DATA;
+// NOTE: this is most likely a bug!! since we should only transition to the next state after 20 cycles! Looks like this is fixed in `ila_aes_top.v`
 wire [1:0] aes_reg_state_next_operate = AES_STATE_WRITE_DATA;
 wire [1:0] aes_reg_state_next_write_data = 
         // more blocks? then go to the next block.

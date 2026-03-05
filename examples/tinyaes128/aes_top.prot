@@ -1,0 +1,79 @@
+// Protocol based on the ILA specification
+//
+// https://github.com/yuex1994/ILA_AES/blob/master/src/aes_ila.cc
+// 
+
+// AES_ADDR = 0xff02
+// AES_LENGTH = 0xff04
+
+// address space
+// 0xff00 	AES_START 	Write 1 to start encryption
+// 0xff01 	AES_STATE 	Read-only, 0: Idle, >0: Busy
+// 0xff02 	AES_ADDR 	Memory address for the plaintext
+// 0xff10 	AES_KEY 	Key for encryption
+// 0xff20 	AES_CTR 	Initial value of the counter
+
+
+// WRITE_ADDRESS (ready bound: 1)
+// - What is `cmd`, `cmdaddr` and `cmddata`??
+// (cmd == CMD_WRITE) & (cmdaddr >= AES_ADDR) & (cmdaddr < AES_ADDR + 2) 
+// only overwrites address if not busy
+
+// READ_ADDRESS (ready bound 1)
+// (cmd == CMD_READ) & (cmdaddr >= AES_ADDR) & (cmdaddr < AES_ADDR + 2)
+
+// WRITE_LENGTH (ready bound 1)
+// (cmd == CMD_WRITE) & (cmdaddr >= AES_LENGTH) & (cmdaddr < AES_LENGTH + 2)
+
+// READ_LENGTH (ready bound 1)
+// (cmd == CMD_READ) & (cmdaddr >= AES_LENGTH) & (cmdaddr < AES_LENGTH + 2)
+
+// WRITE_KEY (ready bound 1)
+// (cmd == CMD_WRITE) & (cmdaddr >= AES_KEY) & (cmdaddr < AES_KEY + 16)
+
+// READ_KEY (ready bound 1)
+// (cmd == CMD_READ) & (cmdaddr >= AES_KEY) & (cmdaddr < AES_KEY + 16)
+
+// WRITE_COUNTER (ready bound 1)
+// (cmd == CMD_WRITE) & (cmdaddr >= AES_CNT) & (cmdaddr < AES_CNT + 16)
+
+// READ_COUNTER (ready bound 1)
+// (cmd == CMD_READ) & (cmdaddr >= AES_CNT) & (cmdaddr < AES_CNT + 16)
+
+// GET_STATUS (ready bound 1)
+// (cmd == CMD_READ) & (cmdaddr >= AES_CNT) & (cmdaddr < AES_CNT + 16)
+
+// START_ENCRYPT (ready bound 1)
+// (cmd == CMD_WRITE) & (cmdaddr == AES_START) & (cmddata == 1)
+// updates the `status` register (as long as it is idle!) and thus starts the child ILA
+// status = AES_STATE_READ_DATA
+
+
+// Child ILA for START_ENCRYPT
+// ---------------------------
+//
+// LOAD (byte by byte) (ready_signal = xram_ack_delay_1, max_bound = 20)
+// ===================
+// when status == AES_STATE_READ_DATA
+// byte_count += 1
+// rd_data[(byte_count+1)*8-1:byte_count*8] = data
+// if byte_count == 15:
+//   status = AES_STATE_OPERATE
+//
+// OPERATE (ready bound = 1)
+// =========================
+// when status == AES_STATE_OPERATE
+// enc_data = aes128(counter + blk_cnt, key) xor rd_data
+// status = AES_STATE_WRITE_DATA
+//
+// STORE (ready_signal = xram_ack_delay_1, max_bound = 20)
+// =========================
+// when status == AES_STATE_WRITE_DATA
+// note: byte_cnt starts at zero because it overflows in LOAD right when transitioning to OPERATE
+// byte_count += 1
+// if byte_cnt == 15:
+//   if blk_cnt + 16 < length:
+//     blk_cnt += 16
+//     status = AES_STATE_READ_DATA
+//   else:
+//     status = AES_STATE_IDLE
