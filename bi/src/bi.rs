@@ -4,10 +4,7 @@
 
 use crate::signal_trace::{SignalTrace, StepResult};
 use baa::{BitVecOps, BitVecValue};
-use patronus::mc::SmtModelCheckerOptions;
-use protocols::ir::{Arg, Dir, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction};
-use protocols::parser::Rule::assert_eq;
-use protocols::scheduler::NextStmtMap;
+use protocols::ir::*;
 use rustc_hash::FxHashMap;
 
 pub struct BackwardsInterpreter<T: SignalTrace> {
@@ -38,7 +35,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
         let step = 0;
         // create one thread per transaction
-        let threads = fork(transactions.iter(), step).collect();
+        let threads = fork(transactions.iter()).collect();
 
         Self {
             transactions,
@@ -57,16 +54,17 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
         while let Some(mut thread) = active_threads.pop() {
             match self.exec_thread(&mut thread) {
-                ExecThreadResult::Yield => {
+                (ExecThreadResult::Yield, forked) => {
                     next_threads.push(thread);
                 }
-                ExecThreadResult::Failed => {
+                (ExecThreadResult::Failed, _) => {
                     failed.push(thread);
                 }
-                ExecThreadResult::Finished(forked) => {
+                (ExecThreadResult::Finished, forked) => {
                     finished.push(thread);
-                    if forked {
-                        active_threads.extend(fork(self.transactions.iter(), self.step));
+                    if !forked {
+                        // TODO: this forking thing here does not work!
+                        active_threads.extend(fork(self.transactions.iter()));
                     }
                 }
             }
@@ -74,7 +72,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
         debug_assert!(active_threads.is_empty());
 
         if !finished.is_empty() {
-            todo!("deal with finished threads")
+            println!("[finished] {} threads", finished.len());
         }
         if !failed.is_empty() {
             todo!("deal with failed threads!")
@@ -89,7 +87,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
         more_to_do
     }
 
-    fn exec_thread(&self, thread: &mut Thread) -> ExecThreadResult {
+    fn exec_thread(&self, thread: &mut Thread) -> (ExecThreadResult, bool) {
         let mut pc = thread.next_stmt;
         let transaction = &self.transactions[thread.transaction_id].transaction;
         let next_stmts = &self.transactions[thread.transaction_id].next_stmt;
@@ -101,12 +99,12 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     if self.exec_equality(&transaction, thread, *lhs, *rhs) {
                         next_stmts[&stmt]
                     } else {
-                        return ExecThreadResult::Failed;
+                        return (ExecThreadResult::Failed, forked);
                     }
                 }
                 Stmt::Step => {
                     thread.next_stmt = next_stmts[&stmt];
-                    return ExecThreadResult::Yield;
+                    return (ExecThreadResult::Yield, forked);
                 }
                 Stmt::Fork => {
                     forked = true;
@@ -114,6 +112,9 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                 }
                 Stmt::While(_, _) => {
                     todo!("while")
+                }
+                Stmt::BoundedLoop(_, _) => {
+                    todo!("repeat")
                 }
                 Stmt::IfElse(_, _, _) => {
                     todo!("if else")
@@ -132,13 +133,13 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     if self.exec_equality(&transaction, thread, port, other) {
                         next_stmts[&stmt]
                     } else {
-                        return ExecThreadResult::Failed;
+                        return (ExecThreadResult::Failed, forked);
                     }
                 }
             };
         }
         debug_assert!(pc.is_none());
-        ExecThreadResult::Finished(forked)
+        (ExecThreadResult::Finished, forked)
     }
 
     /// returns a dut port symbol if the expression corresponds to one
@@ -230,18 +231,21 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
     }
 }
 
+pub struct ExecutionContext {
+    threads: Vec<Thread>,
+    step: u32,
+}
+
 enum ExecThreadResult {
     Yield,
     Failed,
-    Finished(bool),
+    Finished,
 }
 
 fn fork<'a>(
     transactions: impl Iterator<Item = &'a TransactionInfo>,
-    start_step: u32,
 ) -> impl Iterator<Item = Thread> {
     transactions.enumerate().map(move |(id, t)| Thread {
-        start_step,
         transaction_id: id,
         next_stmt: Some(t.transaction.body),
         arg_values: vec![None; t.transaction.args.len()],
@@ -255,7 +259,6 @@ struct TransactionInfo {
 }
 
 struct Thread {
-    start_step: u32,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
     arg_values: Vec<Option<BitVecValue>>,
