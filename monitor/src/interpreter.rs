@@ -1002,11 +1002,11 @@ impl Interpreter {
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
                             info!("Updated known_bits to map {} |-> 111...1", symbol_name);
 
-                            // Add a constraint so that value of the DUT input port
-                            // is checked after each `step()`
+                            // Add a constraint saying that `DUT input port := current trace value`
+                            // (This is checked after future `step()`s)
                             self.constraints.insert(*lhs_symbol_id, trace_value.clone());
                             info!(
-                                "Added constraint: {} must equal {}",
+                                "Added constraint: {} == {}",
                                 lhs_name,
                                 serialize_bitvec(&trace_value, ctx.display_hex)
                             );
