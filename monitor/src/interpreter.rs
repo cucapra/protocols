@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
-use log::info;
 use protocols::{
     errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
@@ -15,24 +14,30 @@ use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
     thread::Thread,
-    types::ProtocolApplication,
+    types::{LoopArgState, ProtocolApplication},
 };
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
+
+    /// Maps protocol arguments (input/output parameters) to their values
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks which bits of a `SymbolId` are known
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks the state of arguments for `repeat` loops
+    pub loop_args: FxHashMap<SymbolId, LoopArgState>,
 
     /// Constraints on DUT input port values that must hold after stepping.
     /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
-    /// and verified after each `step()` to ensure the constraint still holds.
+    /// or assignments like `DUT.a := a`,
+    /// and checked after each `step()` to ensure the constraint still holds.
     pub constraints: FxHashMap<SymbolId, BitVecValue>,
-
-    // Maps function parameters to DUT pins
-    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
 
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
@@ -43,41 +48,47 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    /// Builds a `ProtocolApplication` from the current interpreter state.
+    /// Attempts to builds a `ProtocolApplication` from the current interpreter state.
     /// `struct_name` is left as `None` — the caller (Scheduler) is responsible
     /// for setting it, since the Interpreter doesn't know the struct name.
+    /// If this return function returns `None` (e.g. because an argument
+    /// wasn't present in `args_mapping`), the caller
+    /// (`Scheduler::run_thread_till_next_step`) treats the corresponding thread
+    /// as having failed.
     pub fn to_protocol_application(
         &self,
         struct_name: Option<String>,
         ctx: &GlobalContext,
         trace: &WaveSignalTrace,
-    ) -> ProtocolApplication {
+    ) -> Option<ProtocolApplication> {
         let mut serialized_args = vec![];
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
-            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
+            if let Some(value) = self.args_mapping.get(&symbol_id) {
+                serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+            } else {
+                let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
                 let time_str = if ctx.show_waveform_time {
                     trace.format_time(trace.time_step(), ctx.time_unit)
                 } else {
                     format!("cycle {}", self.trace_cycle_count)
                 };
-                panic!(
+                info!(
                     "Transaction `{}`, {}: Unable to find value for {} ({}) in args_mapping, which is {{ {} }}",
                     self.transaction.name,
                     time_str,
                     name,
                     symbol_id,
                     serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
-                )
-            });
-            serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+                );
+                return None;
+            }
         }
-        ProtocolApplication {
+        Some(ProtocolApplication {
             struct_name,
             protocol_name: self.transaction.name.clone(),
             serialized_args,
-        }
+        })
     }
 
     /// Performs a context switch in the `Interpreter` by setting its
@@ -90,7 +101,7 @@ impl Interpreter {
         self.args_mapping = thread.args_mapping.clone();
         self.known_bits = thread.known_bits.clone();
         self.constraints = thread.constraints.clone();
-        self.args_to_pins = thread.args_to_pins.clone();
+        self.loop_args = thread.loop_args_state.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -145,8 +156,6 @@ impl Interpreter {
             serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
         );
 
-        info!("initial known_bits:\n{:?}", known_bits);
-
         Self {
             transaction: transaction.clone(),
             symbol_table,
@@ -155,8 +164,8 @@ impl Interpreter {
             known_bits,
             constraints: FxHashMap::default(),
             trace_cycle_count,
-            args_to_pins: FxHashMap::default(),
             dut_symbol_id,
+            loop_args: FxHashMap::default(),
         }
     }
 
@@ -426,6 +435,12 @@ impl Interpreter {
                     out_param_name,
                     serialize_bitvec(&value, ctx.display_hex)
                 );
+                repeat_info!(
+                    "Output param {} = {} (read from trace at cycle {})",
+                    out_param_name,
+                    serialize_bitvec(&value, ctx.display_hex),
+                    self.trace_cycle_count
+                );
                 Ok(())
             } else {
                 // If `out_param_symbol` is already in the `args_mapping`,
@@ -475,8 +490,10 @@ impl Interpreter {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx, trace)
             }
-            Stmt::BoundedLoop(_, _) => {
-                todo!("Bounded loops is not yet implemented in the monitor")
+            Stmt::RepeatLoop(_, _) => {
+                // Repeat loops are intercepted in `run_thread_till_next_step`
+                // in `scheduler.rs`, so this case is unreachable
+                unreachable!("Repeat loops handled in `scheduler.rs` already")
             }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.
@@ -949,13 +966,8 @@ impl Interpreter {
                 if self.symbol_table[*lhs_symbol_id].parent().is_some() {
                     self.constraints.remove(lhs_symbol_id);
 
-                    // Also remove any parameter bindings that map to this port
-                    // (e.g., if we had `data -> D.m_axis_tdata`, remove it)
-                    self.args_to_pins
-                        .retain(|_param_id, port_id| *port_id != *lhs_symbol_id);
-
                     info!(
-                        "Cleared bindings for {} in `constraints` and `args_to_pins` due to DontCare assignment",
+                        "Cleared bindings for {} in `constraints` due to DontCare assignment",
                         self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
                     );
                 }
@@ -990,23 +1002,14 @@ impl Interpreter {
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
                             info!("Updated known_bits to map {} |-> 111...1", symbol_name);
 
-                            // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
-                            // into the `args_to_pins` map
-                            // (the RHS is the function parameter,
-                            // the LHS is a DUT pin)
-                            self.args_to_pins.insert(*rhs_symbol_id, *lhs_symbol_id);
+                            // Add a constraint saying that `DUT input port := current trace value`
+                            // (This is checked after future `step()`s)
+                            self.constraints.insert(*lhs_symbol_id, trace_value.clone());
                             info!(
-                                "Updated args_to_pins to map {} |-> {}",
-                                symbol_name, lhs_name
+                                "Added constraint: {} == {}",
+                                lhs_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex)
                             );
-
-                            // If there is an existing cosntraint for the DUT port (e.g. `DUT.a`)
-                            // this means it was previously assigned some constant (e.g. `DUT.a := 5`),
-                            // but now we are overwriting it with an assignment to an input parameter
-                            // (e.g. `DUT.a := <input_param>`), so we should remove the constraint
-                            if self.constraints.contains_key(lhs_symbol_id) {
-                                self.constraints.remove(lhs_symbol_id);
-                            }
 
                             Ok(())
                         } else {
@@ -1090,16 +1093,6 @@ impl Interpreter {
                                         "Updated known_bits to map {} |-> {}",
                                         symbol_name,
                                         current_known_bits.to_bit_str()
-                                    );
-
-                                    // Insert a mapping `sliced_symbol_id` |-> `lhs_symbol_id`
-                                    // into the `args_to_pins` map
-                                    // (the RHS is the function parameter,
-                                    // the LHS is a DUT pin)
-                                    self.args_to_pins.insert(*sliced_symbol_id, *lhs_symbol_id);
-                                    info!(
-                                        "Updated args_to_pins to map {} |-> {}",
-                                        symbol_name, lhs_name
                                     );
 
                                     Ok(())

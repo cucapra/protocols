@@ -255,7 +255,7 @@ fn stmt_to_verilog(
         Stmt::While(_, _) => {
             todo!("while loop")
         }
-        Stmt::BoundedLoop(_, _) => {
+        Stmt::RepeatLoop(_, _) => {
             todo!("repeat loop")
         }
         Stmt::IfElse(_, _, _) => {

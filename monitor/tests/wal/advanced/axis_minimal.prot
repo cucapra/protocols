@@ -1,5 +1,5 @@
 // ARGS: --wave wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns
-//
+// RETURN: 1
 // This implementation of an AXI-Streaming Protocol is a bit different from the WAL version.
 
 struct AXIS {
