@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use crate::signal_trace::{SignalTrace, StepResult};
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use protocols::ir::*;
 use rustc_hash::FxHashMap;
 
@@ -282,14 +282,28 @@ impl ExecutionContext {
                     thread.has_forked = true;
                     next_stmts[&stmt]
                 }
-                Stmt::While(_, _) => {
-                    todo!("while")
+                Stmt::While(cond, body) => {
+                    let cond_value = self
+                        .eval_expr(get_value, &transaction, thread, *cond)
+                        .expect("while condition is always concrete");
+                    if cond_value.is_true() {
+                        Some(*body)
+                    } else {
+                        next_stmts[&stmt]
+                    }
                 }
                 Stmt::BoundedLoop(_, _) => {
                     todo!("repeat")
                 }
-                Stmt::IfElse(_, _, _) => {
-                    todo!("if else")
+                Stmt::IfElse(cond, tru, fals) => {
+                    let cond_value = self
+                        .eval_expr(get_value, &transaction, thread, *cond)
+                        .expect("if condition is always concrete");
+                    if cond_value.is_true() {
+                        Some(*tru)
+                    } else {
+                        Some(*fals)
+                    }
                 }
                 Stmt::AssertEq(lhs, rhs) => {
                     let (port, other) = match (
@@ -320,7 +334,7 @@ impl ExecutionContext {
     /// used for both assert_eq and assignments
     fn exec_equality(
         &self,
-        get_value: impl Fn(SymbolId) -> BitVecValue,
+        get_value: &impl Fn(SymbolId) -> BitVecValue,
         transaction: &Transaction,
         thread: &mut Thread,
         lhs: SymbolId,
@@ -361,7 +375,7 @@ impl ExecutionContext {
 
     fn eval_expr(
         &self,
-        get_value: impl Fn(SymbolId) -> BitVecValue,
+        get_value: &impl Fn(SymbolId) -> BitVecValue,
         transaction: &Transaction,
         thread: &Thread,
         expr: ExprId,
@@ -373,8 +387,25 @@ impl ExecutionContext {
             Expr::Const(value) => Some(value.clone()),
             Expr::Sym(dut_port) => Some(get_value(*dut_port)),
             Expr::DontCare => None,
-            Expr::Binary(_, _, _) => todo!(),
-            Expr::Unary(_, _) => todo!(),
+            Expr::Binary(op, a, b) => {
+                self.eval_expr(get_value, transaction, thread, *a)
+                    .and_then(|a_value| {
+                        self.eval_expr(get_value, transaction, thread, *b)
+                            .map(|b_value| match op {
+                                BinOp::Equal => {
+                                    if a_value.is_equal(&b_value) {
+                                        BitVecValue::new_true()
+                                    } else {
+                                        BitVecValue::new_false()
+                                    }
+                                }
+                                BinOp::Concat => a_value.concat(&b_value),
+                            })
+                    })
+            }
+            Expr::Unary(UnaryOp::Not, e) => self
+                .eval_expr(get_value, transaction, thread, *e)
+                .map(|v| v.not()),
             Expr::Slice(_, _, _) => todo!(),
         }
     }
