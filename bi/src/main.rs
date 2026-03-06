@@ -6,7 +6,7 @@
 mod bi;
 mod signal_trace;
 
-use crate::bi::BackwardsInterpreter;
+use crate::bi::{BackwardsInterpreter, ProtoTrace};
 use crate::signal_trace::WaveSignalTrace;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
@@ -87,28 +87,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bi = BackwardsInterpreter::new(transactions_symbol_tables, trace, 0);
     while bi.step() {}
 
-    for (ii, trace) in bi.protocol_traces().enumerate() {
-        println!("// trace {ii}");
-        println!("trace {{");
-        for (name, args) in trace.iter() {
-            print!("    {name}(");
-            for (ai, arg) in args.iter().enumerate() {
-                let is_first = ai == 0;
-                if !is_first {
-                    print!(", ");
-                }
-                if let Some(v) = arg {
-                    print!("{}", v.to_dec_str());
-                } else {
-                    print!("X");
-                }
-            }
-            println!(");");
-        }
-        println!("}}");
+    // We currently need to filter out duplicate traces because of execution paths that have
+    // diverged without finishing any threads.
+    let mut traces: Vec<_> = bi.protocol_traces().collect();
+    traces.sort();
+    traces.dedup();
+
+    for (ii, trace) in traces.into_iter().enumerate() {
+        print_trace(ii, &trace);
     }
 
     Ok(())
+}
+
+fn print_trace(ii: usize, trace: &ProtoTrace) {
+    println!("// trace {ii}");
+    println!("trace {{");
+    for (name, args) in trace.iter() {
+        print!("    {name}(");
+        for (ai, arg) in args.iter().enumerate() {
+            let is_first = ai == 0;
+            if !is_first {
+                print!(", ");
+            }
+            if let Some(v) = arg {
+                print!("{}", v.to_dec_str());
+            } else {
+                print!("X");
+            }
+        }
+        println!(");");
+    }
+    println!("}}");
 }
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string

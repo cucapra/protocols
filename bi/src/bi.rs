@@ -56,22 +56,35 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
         // step all possible execution paths
         for mut exec in execs {
+            debug_assert!(!exec.threads.is_empty(), "lost all threads!");
             let r = exec.step(&self.transactions, &|sym| {
                 self.trace.get(self.instance_id, sym)
             });
             match r {
                 ExecResult::Ok => self.executions.push(exec),
                 ExecResult::Failed => failed.push(exec),
-                ExecResult::OkForked => {
+                ExecResult::OkForked(_thread) => {
                     // fork means that we need to _immediately_ start a new thread
                     for mut forked in exec.fork(self.transactions.iter()) {
                         match forked.step_new_thread(&self.transactions, &|sym| {
                             self.trace.get(self.instance_id, sym)
                         }) {
                             ExecResult::Ok => self.executions.push(forked),
-                            ExecResult::OkForked => unreachable!("cannot fork in first step"),
+                            ExecResult::OkForked(_) => unreachable!("cannot fork in first step"),
+                            ExecResult::OkDelayedFork(_thread) => {
+                                // execute forked threads together with all other threads in the next step
+                                for forked in forked.fork(self.transactions.iter()) {
+                                    self.executions.push(forked);
+                                }
+                            }
                             ExecResult::Failed => failed.push(forked),
                         }
+                    }
+                }
+                ExecResult::OkDelayedFork(_thread) => {
+                    // execute forked threads together with all other threads in the next step
+                    for forked in exec.fork(self.transactions.iter()) {
+                        self.executions.push(forked);
                     }
                 }
             }
@@ -87,6 +100,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
         let trace_done = self.trace.step() == StepResult::Done;
         self.step += 1;
+        // println!("[step] {trace_done}");
         !trace_done
     }
 
@@ -129,11 +143,24 @@ struct ExecutionContext {
     trace: ProtoTrace,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 enum ExecResult {
     Ok,
-    OkForked,
+    OkForked(String),
+    OkDelayedFork(String), // happens when there is a thread that finishes without having forked
     Failed,
+}
+
+impl ExecResult {
+    fn is_ok(&self) -> bool {
+        matches!(
+            self,
+            ExecResult::Ok | ExecResult::OkForked(_) | ExecResult::OkDelayedFork(_)
+        )
+    }
+    fn forked(&self) -> bool {
+        matches!(self, ExecResult::OkForked(_) | ExecResult::OkDelayedFork(_))
+    }
 }
 
 impl ExecutionContext {
@@ -147,29 +174,37 @@ impl ExecutionContext {
         let mut finished = vec![];
         let mut failed = vec![];
 
-        let mut any_forked = false;
+        let mut status = ExecResult::Ok;
         while let Some(mut thread) = active_threads.pop() {
             let (res, forked) = self.step_thread(transactions, get_value, &mut thread);
-            assert!(
-                !(any_forked && forked),
-                "Two threads forking at the same step should be impossible!"
-            );
-            any_forked |= forked;
+            if forked {
+                assert!(
+                    !status.forked(),
+                    "Two threads forking at the same step should be impossible!"
+                );
+                if status.is_ok() {
+                    status = ExecResult::OkForked(thread.name.clone())
+                }
+            }
+
             match res {
                 ExecThreadResult::Yield => {
                     next_threads.push(thread);
                 }
                 ExecThreadResult::Failed => {
+                    status = ExecResult::Failed;
                     failed.push(thread);
                 }
                 ExecThreadResult::Finished => {
                     // implicit fork at the end of a thread
                     if !thread.has_forked {
                         assert!(
-                            !(any_forked && forked),
+                            !status.forked(),
                             "Two threads forking at the same step should be impossible!"
                         );
-                        any_forked |= forked;
+                        if status.is_ok() {
+                            status = ExecResult::OkDelayedFork(thread.name.clone())
+                        }
                     }
                     finished.push(thread);
                 }
@@ -184,13 +219,7 @@ impl ExecutionContext {
             self.trace.push((name, thread.arg_values));
         }
 
-        if !failed.is_empty() {
-            ExecResult::Failed
-        } else if any_forked {
-            ExecResult::OkForked
-        } else {
-            ExecResult::Ok
-        }
+        status
     }
 
     // used after forking, steps only the last pushed thread
@@ -210,7 +239,8 @@ impl ExecutionContext {
             }
             ExecThreadResult::Failed => ExecResult::Failed,
             ExecThreadResult::Finished => {
-                todo!("should not happen")
+                assert!(!thread.has_forked);
+                ExecResult::OkDelayedFork(thread.name.clone())
             }
         }
     }
@@ -356,6 +386,7 @@ impl ExecutionContext {
         transactions.enumerate().map(move |(id, t)| {
             let mut ctx = (*self).clone();
             ctx.threads.push(Thread {
+                name: t.transaction.name.clone(),
                 transaction_id: id,
                 next_stmt: Some(t.transaction.body),
                 arg_values: vec![None; t.transaction.args.len()],
@@ -367,6 +398,7 @@ impl ExecutionContext {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 enum ExecThreadResult {
     Yield,
     Failed,
@@ -381,6 +413,7 @@ struct TransactionInfo {
 
 #[derive(Debug, Clone)]
 struct Thread {
+    name: String,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
     arg_values: Vec<Option<BitVecValue>>,
