@@ -15,7 +15,7 @@ use protocols::design::{Design, find_designs};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
 
@@ -47,6 +47,11 @@ struct Cli {
     /// e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace.
     #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
     sample_posedge: Option<String>,
+
+    /// Optional flag: if enabled, always prints out idle transcations
+    /// regardless of whether the protocol has been annotated with `#[idle]`
+    #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
+    include_idle: bool,
 }
 
 #[allow(unused_variables)]
@@ -81,6 +86,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|arg| parse_instance(&designs, arg))
         .collect();
 
+    let exclude_from_trace = if cli.include_idle {
+        FxHashSet::default()
+    } else {
+        FxHashSet::from_iter(
+            transactions_symbol_tables
+                .iter()
+                .filter(|(t, _)| t.is_idle)
+                .map(|(t, _)| t.name.clone()),
+        )
+    };
+
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
@@ -93,7 +109,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     traces.sort();
     traces.dedup();
 
-    for (ii, trace) in traces.into_iter().enumerate() {
+    for (ii, mut trace) in traces.into_iter().enumerate() {
+        trace.retain(|(name, _)| !exclude_from_trace.contains(name));
         print_trace(ii, &trace);
     }
 
