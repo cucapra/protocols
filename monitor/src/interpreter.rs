@@ -35,11 +35,9 @@ pub struct Interpreter {
 
     /// Constraints on DUT input port values that must hold after stepping.
     /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
-    /// and verified after each `step()` to ensure the constraint still holds.
+    /// or assignments like `DUT.a := a`,
+    /// and checked after each `step()` to ensure the constraint still holds.
     pub constraints: FxHashMap<SymbolId, BitVecValue>,
-
-    // Maps function parameters to DUT pins
-    pub args_to_pins: FxHashMap<SymbolId, SymbolId>,
 
     /// The current cycle count in the trace
     /// (This field is only used to make error messages more informative)
@@ -103,7 +101,6 @@ impl Interpreter {
         self.args_mapping = thread.args_mapping.clone();
         self.known_bits = thread.known_bits.clone();
         self.constraints = thread.constraints.clone();
-        self.args_to_pins = thread.args_to_pins.clone();
         self.loop_args = thread.loop_args_state.clone();
     }
 
@@ -167,7 +164,6 @@ impl Interpreter {
             known_bits,
             constraints: FxHashMap::default(),
             trace_cycle_count,
-            args_to_pins: FxHashMap::default(),
             dut_symbol_id,
             loop_args: FxHashMap::default(),
         }
@@ -970,13 +966,8 @@ impl Interpreter {
                 if self.symbol_table[*lhs_symbol_id].parent().is_some() {
                     self.constraints.remove(lhs_symbol_id);
 
-                    // Also remove any parameter bindings that map to this port
-                    // (e.g., if we had `data -> D.m_axis_tdata`, remove it)
-                    self.args_to_pins
-                        .retain(|_param_id, port_id| *port_id != *lhs_symbol_id);
-
                     info!(
-                        "Cleared bindings for {} in `constraints` and `args_to_pins` due to DontCare assignment",
+                        "Cleared bindings for {} in `constraints` due to DontCare assignment",
                         self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
                     );
                 }
@@ -1011,23 +1002,14 @@ impl Interpreter {
                                 .insert(*rhs_symbol_id, BitVecValue::ones(width));
                             info!("Updated known_bits to map {} |-> 111...1", symbol_name);
 
-                            // Insert a mapping `rhs_symbol_id` |-> `lhs_symbol_id`
-                            // into the `args_to_pins` map
-                            // (the RHS is the function parameter,
-                            // the LHS is a DUT pin)
-                            self.args_to_pins.insert(*rhs_symbol_id, *lhs_symbol_id);
+                            // Add a constraint so that value of the DUT input port
+                            // is checked after each `step()`
+                            self.constraints.insert(*lhs_symbol_id, trace_value.clone());
                             info!(
-                                "Updated args_to_pins to map {} |-> {}",
-                                symbol_name, lhs_name
+                                "Added constraint: {} must equal {}",
+                                lhs_name,
+                                serialize_bitvec(&trace_value, ctx.display_hex)
                             );
-
-                            // If there is an existing cosntraint for the DUT port (e.g. `DUT.a`)
-                            // this means it was previously assigned some constant (e.g. `DUT.a := 5`),
-                            // but now we are overwriting it with an assignment to an input parameter
-                            // (e.g. `DUT.a := <input_param>`), so we should remove the constraint
-                            if self.constraints.contains_key(lhs_symbol_id) {
-                                self.constraints.remove(lhs_symbol_id);
-                            }
 
                             Ok(())
                         } else {
@@ -1111,16 +1093,6 @@ impl Interpreter {
                                         "Updated known_bits to map {} |-> {}",
                                         symbol_name,
                                         current_known_bits.to_bit_str()
-                                    );
-
-                                    // Insert a mapping `sliced_symbol_id` |-> `lhs_symbol_id`
-                                    // into the `args_to_pins` map
-                                    // (the RHS is the function parameter,
-                                    // the LHS is a DUT pin)
-                                    self.args_to_pins.insert(*sliced_symbol_id, *lhs_symbol_id);
-                                    info!(
-                                        "Updated args_to_pins to map {} |-> {}",
-                                        symbol_name, lhs_name
                                     );
 
                                     Ok(())
