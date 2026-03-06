@@ -7,11 +7,13 @@ mod bi;
 mod signal_trace;
 
 use crate::bi::BackwardsInterpreter;
-use crate::signal_trace::{WaveSamplingMode, WaveSignalTrace};
+use crate::signal_trace::WaveSignalTrace;
+use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use protocols::design::{Design, find_designs};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
+use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 use rustc_hash::FxHashMap;
 // From the top-level directory, run:
@@ -37,6 +39,14 @@ struct Cli {
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
+
+    /// Optional argument which specifies the name of the
+    /// signal to sample on a rising edge (posedge). If enabled, this
+    /// flag acts as the "clock" signal for the monitor.
+    /// Note: the full path to the signal should be passed as this argument,
+    /// e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace.
+    #[arg(long, value_name = "SIGNAL_TO_SAMPLE_ON_RISING_EDGE")]
+    sample_posedge: Option<String>,
 }
 
 #[allow(unused_variables)]
@@ -72,11 +82,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, WaveSamplingMode::Direct, &designs, &instances)
-        .expect("failed to read waveform file");
+    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
     let mut bi = BackwardsInterpreter::new(transactions_symbol_tables, trace, 0);
     while bi.step() {}
+
+    for (ii, trace) in bi.protocol_traces().enumerate() {
+        println!("// trace {ii}");
+        println!("trace {{");
+        for (name, args) in trace.iter() {
+            print!("    {name}(");
+            for (ai, arg) in args.iter().enumerate() {
+                let is_first = ai == 0;
+                if !is_first {
+                    print!(", ");
+                }
+                if let Some(v) = arg {
+                    print!("{}", v.to_dec_str());
+                } else {
+                    print!("X");
+                }
+            }
+            println!(");");
+        }
+        println!("}}");
+    }
+
     Ok(())
 }
 
@@ -85,70 +116,6 @@ fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
     let mut dut_names: Vec<String> = duts.keys().cloned().collect();
     dut_names.sort();
     dut_names.join(", ")
-}
-
-/// Metadata associated with a design (i.e. a `struct` in the Protocols language)
-#[allow(dead_code)]
-struct Design {
-    name: String,
-    /// Pins from a struct, along with their associated `SymbolId`s
-    pins: Vec<(SymbolId, Field)>,
-    symbol: SymbolId,
-    /// Index of transactions that use this struct
-    /// (e.g. an "Adder" supports these transactions)
-    transaction_ids: Vec<usize>,
-}
-
-/// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
-/// returning a `HashMap` from struct names to the actual `Design`
-fn find_designs<'a>(
-    transactions: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
-) -> FxHashMap<String, Design> {
-    // Maps the name of the transaction to metadata about the struct (design)
-    // We use `FxHashMap` because its a bit faster than the usual `HashMap`
-    let mut designs: FxHashMap<String, Design> = FxHashMap::default();
-    for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
-        if let Some(symbol) = transaction.type_param {
-            // We assume type parameters have to be structs
-            let struct_id = match symbol_table[symbol].tpe() {
-                Type::Struct(id) => id,
-                o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
-            };
-            let dut_record = &symbol_table[struct_id];
-            let name = dut_record.name().to_string();
-            if let Some(design) = designs.get_mut(&name) {
-                design.transaction_ids.push(transaction_id);
-            } else {
-                // `Field`s are also called `pin`s`
-                let pins_vec: Vec<Field> = dut_record.pins().clone();
-
-                // For each pin, look up its associated `SymbolId` in the symbol table
-                let pins_with_ids: Vec<(SymbolId, Field)> = pins_vec
-                    .into_iter()
-                    .map(|pin| {
-                        let full_name = format!("{}.{}", symbol_table[symbol].name(), pin.name());
-                        (
-                            symbol_table
-                                .symbol_id_from_name(&full_name)
-                                .expect("Unable to find symbol ID for pin"),
-                            pin,
-                        )
-                    })
-                    .collect();
-                designs.insert(
-                    name.clone(),
-                    Design {
-                        name,
-                        pins: pins_with_ids,
-                        symbol,
-                        transaction_ids: vec![transaction_id],
-                    },
-                );
-            }
-        }
-        // skipping any transactions that are not associated with a DUT
-    }
-    designs
 }
 
 struct Instance {
