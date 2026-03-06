@@ -1,0 +1,37 @@
+// trace 0
+trace {
+    reset();  // [time: 0ns -> 12.5ns]
+    recv(1, 0, 0);  // [time: 12.5ns -> 887.5ns]
+    recv(2, 0, 0);  // [time: 887.5ns -> 912.5ns]
+    recv(3, 0, 0);  // [time: 912.5ns -> 937.5ns]
+    recv(4, 0, 0);  // [time: 937.5ns -> 962.5ns]
+    recv(5, 0, 0);  // [time: 962.5ns -> 987.5ns]
+    recv(6, 0, 0);  // [time: 987.5ns -> 1012.5ns]
+    stall(7, 0, 2);  // [time: 1012.5ns -> 1050ns]
+}
+
+// trace 1
+trace {
+    reset();  // [time: 0ns -> 12.5ns]
+    recv(1, 0, 0);  // [time: 12.5ns -> 887.5ns]
+    recv(2, 0, 0);  // [time: 887.5ns -> 912.5ns]
+    recv(3, 0, 0);  // [time: 912.5ns -> 937.5ns]
+    recv(4, 0, 0);  // [time: 937.5ns -> 962.5ns]
+    recv(5, 0, 0);  // [time: 962.5ns -> 987.5ns]
+    recv(6, 0, 0);  // [time: 987.5ns -> 1012.5ns]
+    idle();  // [time: 1012.5ns -> 1037.5ns]
+    stall(7, 1, 1);  // [time: 1037.5ns -> 1050ns]
+}
+
+// trace 2
+trace {
+    reset();  // [time: 0ns -> 12.5ns]
+    recv(1, 0, 0);  // [time: 12.5ns -> 887.5ns]
+    recv(2, 0, 0);  // [time: 887.5ns -> 912.5ns]
+    recv(3, 0, 0);  // [time: 912.5ns -> 937.5ns]
+    recv(4, 0, 0);  // [time: 937.5ns -> 962.5ns]
+    recv(5, 0, 0);  // [time: 962.5ns -> 987.5ns]
+    recv(6, 0, 0);  // [time: 987.5ns -> 1012.5ns]
+    stall(7, 0, 1);  // [time: 1012.5ns -> 1037.5ns]
+    stall(7, 1, 1);  // [time: 1037.5ns -> 1050ns]
+}

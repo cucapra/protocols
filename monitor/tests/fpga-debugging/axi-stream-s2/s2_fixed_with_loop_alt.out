@@ -7,6 +7,8 @@ trace {
     recv(4, 0, 0);  // [time: 937.5ns -> 962.5ns]
     recv(5, 0, 0);  // [time: 962.5ns -> 987.5ns]
     recv(6, 0, 0);  // [time: 987.5ns -> 1012.5ns]
+    idle();  // [time: 1012.5ns -> 1037.5ns]
+    idle();  // [time: 1037.5ns -> 1062.5ns]
     reset();  // [time: 1062.5ns -> 1087.5ns]
     reset();  // [time: 1087.5ns -> 1100ns]
 }

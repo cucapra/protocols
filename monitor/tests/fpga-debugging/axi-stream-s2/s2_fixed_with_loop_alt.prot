@@ -1,4 +1,4 @@
-// ARGS: --wave fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT:AXISManager --sample-posedge TOP.testbench.UUT.M_AXIS_ACLK --show-waveform-time --time-unit ns
+// ARGS: --wave fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT:AXISManager --sample-posedge TOP.testbench.UUT.M_AXIS_ACLK --show-waveform-time --time-unit ns --include-idle
 
 // Source (manager) that outputs a sequence of 8 words
 struct AXISManager {
@@ -53,7 +53,7 @@ prot recv<DUT: AXISManager>(
         // `ready` is already 1 (i.e. there is no backpressure)
         DUT.M_AXIS_TREADY := 1'b0;
 
-        step(); 
+        step();
         
         // Data and valid must remain stable since valid is now 1
         assert_eq(DUT.M_AXIS_TVALID, 1'b1);
@@ -72,6 +72,22 @@ prot recv<DUT: AXISManager>(
     // One cycle for the transfer to complete
     step();
 }
+
+// prot stall<DUT: AXISManager>(out data: u32, out last: u1, in num_cycles: u64) {
+//     DUT.M_AXIS_ARESETN := 1'b1;
+//     DUT.M_AXIS_TREADY := 1'b0;
+//     assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+//     assert_eq(DUT.M_AXIS_TDATA, data);
+//     assert_eq(DUT.M_AXIS_TLAST, last);   
+
+//     repeat num_cycles iterations {
+//         step();
+//         assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+//         assert_eq(DUT.M_AXIS_TDATA, data);
+//         assert_eq(DUT.M_AXIS_TLAST, last); 
+//     }
+//     step();
+// }
 
 
 // IDLE: No transaction - M_AXIS_TREADY is deasserted
