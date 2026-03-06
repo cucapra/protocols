@@ -1,7 +1,6 @@
 use std::collections::hash_map::Entry;
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
-use log::info;
 use protocols::{
     errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
@@ -15,16 +14,24 @@ use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
     thread::Thread,
-    types::ProtocolApplication,
+    types::{LoopArgState, ProtocolApplication},
 };
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Interpreter {
     pub transaction: Transaction,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
+
+    /// Maps protocol arguments (input/output parameters) to their values
     pub args_mapping: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks which bits of a `SymbolId` are known
     pub known_bits: FxHashMap<SymbolId, BitVecValue>,
+
+    /// Tracks the state of arguments for `repeat` loops
+    pub loop_args: FxHashMap<SymbolId, LoopArgState>,
 
     /// Constraints on DUT input port values that must hold after stepping.
     /// These are established by assignments like `D.m_axis_tvalid := 1'b1`
@@ -43,41 +50,47 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    /// Builds a `ProtocolApplication` from the current interpreter state.
+    /// Attempts to builds a `ProtocolApplication` from the current interpreter state.
     /// `struct_name` is left as `None` — the caller (Scheduler) is responsible
     /// for setting it, since the Interpreter doesn't know the struct name.
+    /// If this return function returns `None` (e.g. because an argument
+    /// wasn't present in `args_mapping`), the caller
+    /// (`Scheduler::run_thread_till_next_step`) treats the corresponding thread
+    /// as having failed.
     pub fn to_protocol_application(
         &self,
         struct_name: Option<String>,
         ctx: &GlobalContext,
         trace: &WaveSignalTrace,
-    ) -> ProtocolApplication {
+    ) -> Option<ProtocolApplication> {
         let mut serialized_args = vec![];
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
-            let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
-            let value = self.args_mapping.get(&symbol_id).unwrap_or_else(|| {
+            if let Some(value) = self.args_mapping.get(&symbol_id) {
+                serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+            } else {
+                let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
                 let time_str = if ctx.show_waveform_time {
                     trace.format_time(trace.time_step(), ctx.time_unit)
                 } else {
                     format!("cycle {}", self.trace_cycle_count)
                 };
-                panic!(
+                info!(
                     "Transaction `{}`, {}: Unable to find value for {} ({}) in args_mapping, which is {{ {} }}",
                     self.transaction.name,
                     time_str,
                     name,
                     symbol_id,
                     serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
-                )
-            });
-            serialized_args.push(serialize_bitvec(value, ctx.display_hex));
+                );
+                return None;
+            }
         }
-        ProtocolApplication {
+        Some(ProtocolApplication {
             struct_name,
             protocol_name: self.transaction.name.clone(),
             serialized_args,
-        }
+        })
     }
 
     /// Performs a context switch in the `Interpreter` by setting its
@@ -91,6 +104,7 @@ impl Interpreter {
         self.known_bits = thread.known_bits.clone();
         self.constraints = thread.constraints.clone();
         self.args_to_pins = thread.args_to_pins.clone();
+        self.loop_args = thread.loop_args_state.clone();
     }
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
@@ -145,8 +159,6 @@ impl Interpreter {
             serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
         );
 
-        info!("initial known_bits:\n{:?}", known_bits);
-
         Self {
             transaction: transaction.clone(),
             symbol_table,
@@ -157,6 +169,7 @@ impl Interpreter {
             trace_cycle_count,
             args_to_pins: FxHashMap::default(),
             dut_symbol_id,
+            loop_args: FxHashMap::default(),
         }
     }
 
@@ -426,6 +439,12 @@ impl Interpreter {
                     out_param_name,
                     serialize_bitvec(&value, ctx.display_hex)
                 );
+                repeat_info!(
+                    "Output param {} = {} (read from trace at cycle {})",
+                    out_param_name,
+                    serialize_bitvec(&value, ctx.display_hex),
+                    self.trace_cycle_count
+                );
                 Ok(())
             } else {
                 // If `out_param_symbol` is already in the `args_mapping`,
@@ -475,8 +494,10 @@ impl Interpreter {
             Stmt::While(loop_guard_id, do_block_id) => {
                 self.evaluate_while(loop_guard_id, stmt_id, do_block_id, ctx, trace)
             }
-            Stmt::BoundedLoop(_, _) => {
-                todo!("Bounded loops is not yet implemented in the monitor")
+            Stmt::RepeatLoop(_, _) => {
+                // Repeat loops are intercepted in `run_thread_till_next_step`
+                // in `scheduler.rs`, so this case is unreachable
+                unreachable!("Repeat loops handled in `scheduler.rs` already")
             }
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.
@@ -488,7 +509,9 @@ impl Interpreter {
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    Ok(None)
+                    // If we have an empty statement block,
+                    // proceed directly to the next statement
+                    Ok(self.next_stmt_map[stmt_id])
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }
@@ -958,6 +981,39 @@ impl Interpreter {
                         "Cleared bindings for {} in `constraints` and `args_to_pins` due to DontCare assignment",
                         self.symbol_table[*lhs_symbol_id].full_name(&self.symbol_table)
                     );
+
+                    // Even though the protocol says "don't care about this pin's value",
+                    // the trace still has a concrete value for it. If there's an input
+                    // parameter whose name matches the pin name and which hasn't been
+                    // inferred yet, read the trace value and add the mapping.
+                    // (e.g. `DUT.b := X` → still learn `b |-> trace_value(DUT.b)`)
+                    // This ensures `to_protocol_application` can find all parameter values.
+                    let pin_name = self.symbol_table[*lhs_symbol_id].name().to_string();
+                    if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        let transaction = self.transaction.clone();
+                        for arg in &transaction.args {
+                            if let Dir::In = arg.dir() {
+                                let param_symbol = arg.symbol();
+                                let param_name = self.symbol_table[param_symbol].name();
+                                if param_name == pin_name
+                                    && !self.args_mapping.contains_key(&param_symbol)
+                                {
+                                    let width = trace_value.width();
+                                    self.args_mapping.insert(param_symbol, trace_value.clone());
+                                    self.known_bits
+                                        .insert(param_symbol, BitVecValue::ones(width));
+                                    self.args_to_pins.insert(param_symbol, *lhs_symbol_id);
+                                    info!(
+                                        "Inferred input parameter {} |-> {} from DontCare assignment to {}",
+                                        param_name,
+                                        serialize_bitvec(&trace_value, ctx.display_hex),
+                                        pin_name
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
                 Ok(())
             }

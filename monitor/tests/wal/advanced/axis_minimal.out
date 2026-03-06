@@ -1,4 +1,0 @@
-// trace 0
-trace {
-    send_data(15);  // [time: 0ns -> 284ns]
-}

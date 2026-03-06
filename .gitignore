@@ -16,10 +16,9 @@ monitor/tests/axi_output.txt
 # But include the .github directory (CI files)
 !.github/
 !.github/**/*
-# And also include .gitignore + .python-version + Cargo config
+# And also include .gitignore + .python-version
 !.gitignore
 !.python-version
-!.cargo
 
 # Verilator / iVerilog artifacts
 dump.vcd

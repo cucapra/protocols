@@ -3,6 +3,8 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+#[macro_use]
+mod macros;
 mod axi_experiment;
 mod designs;
 mod global_context;
@@ -28,6 +30,7 @@ use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 use protocols::typecheck::type_check;
+use std::io::Write;
 
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
@@ -105,9 +108,27 @@ fn main() -> anyhow::Result<()> {
     // For concision, we disable timestamps and the module paths in the log
     let mut logger = env_logger::Builder::new();
 
-    logger
-        .format_timestamp(None)
-        .filter_level(cli.verbosity.log_level_filter());
+    // Configure output format of logger.
+    // For `info!` / `repeat_info!` logs, call-site context is included
+    // directly by the macros via `debug_name!`.
+    // When -v is passed, show only repeat-loop logs (target="repeat").
+    // All other info-level logs are hidden to reduce noise.
+    if cli.verbosity.log_level_filter() >= LevelFilter::Info {
+        logger
+            .filter(Some("repeat"), LevelFilter::Info)
+            .filter(None, LevelFilter::Info);
+    } else {
+        logger.filter_level(cli.verbosity.log_level_filter());
+    }
+
+    logger.format(move |buf, record| {
+        let target = record.target();
+        if target == "repeat" || target == "info" {
+            writeln!(buf, "{}", record.args())
+        } else {
+            writeln!(buf, "({}): {}", target, record.args())
+        }
+    });
 
     if cli.color == ColorChoice::Never {
         logger.write_style(env_logger::WriteStyle::Never);
