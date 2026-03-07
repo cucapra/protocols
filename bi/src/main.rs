@@ -6,7 +6,7 @@
 mod bi;
 mod signal_trace;
 
-use crate::bi::{BackwardsInterpreter, ProtoTrace};
+use crate::bi::{BIResult, BackwardsInterpreter, ProtoTrace};
 use crate::signal_trace::WaveSignalTrace;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
@@ -101,7 +101,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
     let mut bi = BackwardsInterpreter::new(transactions_symbol_tables, trace, 0);
-    while bi.step() {}
+    let mut r = bi.step();
+    while r == BIResult::Ok {
+        r = bi.step();
+    }
+
+    if r == BIResult::Fail {
+        println!("Failed after {} steps.", bi.steps());
+    }
 
     // We currently need to filter out duplicate traces because of execution paths that have
     // diverged without finishing any threads.
