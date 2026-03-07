@@ -5,7 +5,7 @@
 use crate::signal_trace::{SignalTrace, StepResult};
 use baa::{BitVecOps, BitVecValue};
 use protocols::ir::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub type ProtoTrace = Vec<(String, Vec<Option<BitVecValue>>)>;
 
@@ -18,7 +18,18 @@ pub struct BackwardsInterpreter<T: SignalTrace> {
     step: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BIResult {
+    Ok,
+    Done,
+    Fail,
+}
+
 impl<T: SignalTrace> BackwardsInterpreter<T> {
+    pub fn steps(&self) -> u32 {
+        self.step
+    }
+
     pub fn new(
         transactions_and_symbols: Vec<(Transaction, SymbolTable)>,
         trace: T,
@@ -50,7 +61,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
         }
     }
 
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> BIResult {
         let execs = std::mem::take(&mut self.executions);
         let mut failed = vec![];
 
@@ -92,16 +103,18 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
         // make sure that at least one path is still active
         if self.executions.is_empty() {
-            panic!(
-                "{}: all executions failed. No matching execution trace found.\nFailed: {failed:?}",
-                self.step
-            );
+            self.executions = failed; // just in order to extract the trace
+            BIResult::Fail
+        } else {
+            let trace_done = self.trace.step() == StepResult::Done;
+            self.step += 1;
+            // println!("[step] {trace_done}");
+            if trace_done {
+                BIResult::Done
+            } else {
+                BIResult::Ok
+            }
         }
-
-        let trace_done = self.trace.step() == StepResult::Done;
-        self.step += 1;
-        // println!("[step] {trace_done}");
-        !trace_done
     }
 
     pub fn protocol_traces(&self) -> impl Iterator<Item = ProtoTrace> {
@@ -259,18 +272,33 @@ impl ExecutionContext {
             pc = match &transaction[stmt] {
                 Stmt::Block(stmt_ids) => stmt_ids.first().cloned(),
                 Stmt::Assign(lhs, rhs) => {
-                    if self.exec_equality(get_value, &transaction, thread, *lhs, *rhs) {
-                        next_stmts[&stmt]
-                    } else {
-                        return (
-                            ExecThreadResult::Failed,
-                            thread.has_forked && !forked_before,
-                        );
-                    }
+                    // we apply all pin assignments at the end of a step
+                    thread.pin_assignments.push((*lhs, *rhs));
+                    next_stmts[&stmt]
                 }
                 Stmt::Step => {
                     thread.next_stmt = next_stmts[&stmt];
                     thread.steps += 1;
+
+                    // check assignments
+                    let mut pins_assigned = FxHashSet::default();
+                    let assignments = std::mem::take(&mut thread.pin_assignments);
+                    for (pin, expr) in assignments.into_iter().rev() {
+                        if !pins_assigned.contains(&pin) {
+                            pins_assigned.insert(pin);
+                            if !self.exec_equality(get_value, transaction, thread, pin, expr) {
+                                // early exit on failure
+                                return (
+                                    ExecThreadResult::Failed,
+                                    thread.has_forked && !forked_before,
+                                );
+                            } else if !matches!(transaction[expr], Expr::DontCare) {
+                                // assignment sticks around for the next step
+                                thread.pin_assignments.push((pin, expr));
+                            }
+                        }
+                    }
+
                     let r = if thread.next_stmt.is_none() {
                         ExecThreadResult::Finished
                     } else {
@@ -292,8 +320,11 @@ impl ExecutionContext {
                         next_stmts[&stmt]
                     }
                 }
-                Stmt::BoundedLoop(_, _) => {
-                    todo!("repeat")
+                Stmt::RepeatLoop(repetitions, body) => {
+                    let (arg_id, arg) = as_arg(transaction, *repetitions)
+                        .expect("repeat loop repetition count needs to be an argument");
+
+                    todo!("repeat {:?}", arg.symbol())
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
@@ -423,6 +454,7 @@ impl ExecutionContext {
                 arg_values: vec![None; t.transaction.args.len()],
                 has_forked: false,
                 steps: 0,
+                pin_assignments: vec![],
             });
             ctx
         })
@@ -448,6 +480,7 @@ struct Thread {
     transaction_id: usize,
     next_stmt: Option<StmtId>,
     arg_values: Vec<Option<BitVecValue>>,
+    pin_assignments: Vec<(SymbolId, ExprId)>,
     has_forked: bool,
     steps: u32,
 }
