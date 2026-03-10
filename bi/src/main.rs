@@ -4,9 +4,10 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 mod bi;
+mod bi2;
 mod signal_trace;
 
-use crate::bi::{BIResult, BackwardsInterpreter, ProtoTrace};
+use crate::bi2::{BIResult, BackwardsInterpreter, ProtoTrace};
 use crate::signal_trace::WaveSignalTrace;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
@@ -101,10 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
     let mut bi = BackwardsInterpreter::new(transactions_symbol_tables, trace, 0);
-    let mut r = bi.step();
-    while r == BIResult::Ok {
-        r = bi.step();
-    }
+    let r = bi.run();
 
     if r == BIResult::Fail {
         println!("Failed after {} steps.", bi.steps());
