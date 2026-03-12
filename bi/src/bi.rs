@@ -14,6 +14,9 @@ pub struct BackwardsInterpreter<T: SignalTrace> {
     transactions: Vec<TransactionInfo>,
     instance_id: u32,
     step: u32,
+    active: Vec<Path>,
+    finished: Vec<Path>,
+    failed: Vec<Path>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,17 +37,69 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             .map(|(t, _)| t.into())
             .collect();
         let step = 0;
+        let active = Path::default().fork(transactions.iter(), false);
 
         Self {
             transactions,
             trace,
             instance_id,
             step,
+            active,
+            finished: vec![],
         }
     }
 
     pub fn run(&mut self) -> BIResult {
-        let mut paths = Path::default().fork(self.transactions.iter(), false);
+
+    }
+
+
+    /// execute a single step
+    fn exec(&mut self) {
+        if let Some(mut path) = self.active.pop() {
+            // execute one path
+            let r = path.exec(&self.transactions, &|sym| self.trace.get(self.instance_id, sym));
+            match r {
+                PathResult::Fork(delayed) => {
+                    let mut new_paths = path.fork(self.transactions.iter(), delayed);
+                    debug_assert!(new_paths.iter().all(|p| !p.step_finished()));
+                    self.active.append(&mut new_paths);
+                }
+                PathResult::Ok => {
+                    debug_assert!(!path.step_finished() && !path.failed());
+                    self.active.push(path);
+                }
+                PathResult::Failed => {
+                    debug_assert!(path.failed());
+                    self.failed.push(path);
+                }
+                PathResult::FinishedStep => {
+                    debug_assert!(path.step_finished() && !path.failed());
+                    self.finished.push(path);
+                }
+            }
+        } else {
+            // otherwise all paths must be finished
+            debug_assert!(self.active.is_empty());
+            debug_assert!(self.finished.iter().all(|p| p.step == self.step && p.step_finished() && !p.failed()));
+            debug_assert!(self.failed.iter().all(|p| p.failed()));
+            let all_failed = self.finished.is_empty();
+            if all_failed {
+                todo!("show good error message when all paths fail")
+            } else {
+                // discard failed paths and prepare others for next step
+                self.failed.clear();
+                for mut path in self.finished.drain(..) {
+                    path.active.append(&mut path.next);
+                    self.active.push(path);
+                }
+                // step trace
+                match self.trace.step() {
+                    StepResult::Ok => {}
+                    StepResult::Done => { todo!("trace done!") }
+                }
+            }
+        }
     }
 }
 
@@ -56,16 +111,19 @@ struct Path {
     active: Vec<Thread>,
     failed: Vec<Thread>,
     next: Vec<Thread>,
+    step: u32,
 }
 
 #[derive(Debug, Clone)]
 enum PathResult {
-    Fork,
-    StepDone,
+    Fork(bool),
+    Ok,
     Failed,
+    FinishedStep,
 }
 
 impl Path {
+
     fn fork<'a>(
         self,
         transactions: impl Iterator<Item = &'a TransactionInfo>,
@@ -95,13 +153,21 @@ impl Path {
             .collect()
     }
 
+    fn step_finished(&self) -> bool {
+        self.active.is_empty()
+    }
+
+    fn failed(&self) -> bool {
+        !self.failed.is_empty()
+    }
+
     fn exec(
         &mut self,
-        ti: &TransactionInfo,
+        tis: &[TransactionInfo],
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> PathResult {
         if let Some(mut t) = self.active.pop() {
-            match t.exec(ti, get_value) {
+            match t.exec(&tis[t.transaction_id], get_value) {
                 ThreadResult::Ok => {}
                 ThreadResult::Step => {}
                 ThreadResult::Fork => {}
@@ -112,7 +178,7 @@ impl Path {
                 ThreadResult::Failed => PathResult::Failed,
             }
         } else {
-            PathResult::StepDone
+            PathResult::FinishedStep
         }
     }
 }
@@ -133,8 +199,8 @@ enum ThreadResult {
     Ok,
     Step,
     Fork,
-    StepAndFork,
-    Finished,
+    FinalStepAndFork,
+    FinalStep,
     Failed,
 }
 
@@ -144,25 +210,43 @@ impl Thread {
         ti: &TransactionInfo,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> ThreadResult {
+        use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
             let (next_stmt, result) = match &ti.transaction[stmt] {
-                Stmt::Block(stmt_ids) => stmt_ids.first().cloned(),
+                Stmt::Block(stmt_ids) => (stmt_ids.first().cloned(), Ok),
                 Stmt::Assign(lhs, rhs) => {
                     // we apply all pin assignments at the end of a step
                     self.pin_assignments.push((*lhs, *rhs));
-                    ti.next_stmt[&stmt]
+                    (ti.next_stmt[&stmt], Ok)
                 }
                 Stmt::Step => {
-                    self.next_stmt = ti.next_stmt[&stmt];
+                    let next_stmt = ti.next_stmt[&stmt];
                     self.steps += 1;
                     let assign_ok = self.check_assignments(&ti.transaction, get_value);
+
+                    let r = match (assign_ok, next_stmt.is_none(), self.has_forked) {
+                        (true, _, _) => Failed,
+                        (false, true, false) => FinalStepAndFork,
+                        (false, true, true) => FinalStep,
+                        (false, false, _) => Step,
+                    }
+
+                    if assign_ok {
+                        if next_stmt.is_none() {
+                            if !self.has_forked {
+                                (None, StepAndFork)
+                            } else {
+                                (None, Step)
+                            }
+                        }
+                    }
 
                     let r = if thread.next_stmt.is_none() {
                         crate::bi2::ExecThreadResult::Finished
                     } else {
                         crate::bi2::ExecThreadResult::Yield
                     };
-                    return (r, thread.has_forked && !forked_before);
+                    (ti.next_stmt[&stmt], Ok)
                 }
                 Stmt::Fork => {
                     thread.has_forked = true;
