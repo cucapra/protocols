@@ -7,7 +7,7 @@ mod bi;
 mod bi2;
 mod signal_trace;
 
-use crate::bi2::{BIResult, BackwardsInterpreter, ProtoTrace};
+use crate::bi::{BIResult, BackwardsInterpreter, ProtoCall, ProtoTrace};
 use crate::signal_trace::WaveSignalTrace;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
@@ -115,7 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     traces.dedup();
 
     for (ii, mut trace) in traces.into_iter().enumerate() {
-        trace.retain(|(name, _)| !exclude_from_trace.contains(name));
+        trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
         print_trace(ii, &trace);
     }
 
@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn print_trace(ii: usize, trace: &ProtoTrace) {
     println!("// trace {ii}");
     println!("trace {{");
-    for (name, args) in trace.iter() {
+    for ProtoCall { name, args } in trace.iter() {
         print!("    {name}(");
         for (ai, arg) in args.iter().enumerate() {
             let is_first = ai == 0;
