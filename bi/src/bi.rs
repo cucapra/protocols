@@ -10,7 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct BackwardsInterpreter<T: SignalTrace> {
     trace: T,
-    transactions: Vec<TransactionInfo>,
+    transactions: Vec<ProtoInfo>,
     instance_id: u32,
     step: u32,
     active: Vec<Path>,
@@ -27,14 +27,21 @@ pub enum BIResult {
 }
 
 impl<T: SignalTrace> BackwardsInterpreter<T> {
-    pub fn new(
-        transactions_and_symbols: Vec<(Transaction, SymbolTable)>,
+    pub fn new<'a>(
+        transactions_and_symbols: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
         trace: T,
         instance_id: u32,
     ) -> Self {
         let transactions: Vec<_> = transactions_and_symbols
-            .into_iter()
-            .map(|(t, _)| t.into())
+            .enumerate()
+            .map(|(proto_id, (t, _))| {
+                let next_stmt = t.next_stmt_mapping();
+                ProtoInfo {
+                    proto_id,
+                    proto: t.clone(),
+                    next_stmt,
+                }
+            })
             .collect();
         let step = 0;
         let mut traces = Traces::default();
@@ -223,7 +230,7 @@ impl Path {
 
     fn fork<'a>(
         self,
-        transactions: impl Iterator<Item = &'a TransactionInfo>,
+        transactions: impl Iterator<Item = &'a ProtoInfo>,
         traces: &mut Traces,
     ) -> Vec<Self> {
         debug_assert!(self.failed.is_empty());
@@ -237,10 +244,10 @@ impl Path {
                 }
 
                 let t = Thread {
-                    name: format!("{}@{}", t.transaction.name, self.step),
+                    name: format!("{}@{}", t.proto.name, self.step),
                     transaction_id: id,
-                    next_stmt: Some(t.transaction.body),
-                    arg_values: vec![None; t.transaction.args.len()],
+                    next_stmt: Some(t.proto.body),
+                    arg_values: vec![None; t.proto.args.len()],
                     has_forked: false,
                     step: 0,
                     pin_assignments: vec![],
@@ -259,7 +266,7 @@ impl Path {
 
     fn exec_stmt(
         &mut self,
-        tis: &[TransactionInfo],
+        tis: &[ProtoInfo],
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> (PathResult, Option<ProtoCall>) {
         // we need to always execute the oldest thread first in order to get the correct order
@@ -312,9 +319,9 @@ impl Path {
     }
 }
 
-fn thread_to_call(tis: &[TransactionInfo], thread: Thread, end: u32) -> ProtoCall {
+fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: u32) -> ProtoCall {
     assert!(thread.next_stmt.is_none());
-    let name = tis[thread.transaction_id].transaction.name.clone();
+    let name = tis[thread.transaction_id].proto.name.clone();
     let args = thread.arg_values;
     let start = thread.start_step;
     ProtoCall {
@@ -352,13 +359,13 @@ enum ThreadResult {
 impl Thread {
     fn exec_stmt(
         &mut self,
-        ti: &TransactionInfo,
+        ti: &ProtoInfo,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
             // println!("{:?}", &ti.transaction[stmt]);
-            match &ti.transaction[stmt] {
+            match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
                     Ok
@@ -372,7 +379,7 @@ impl Thread {
                 Stmt::Step => {
                     self.next_stmt = ti.next_stmt[&stmt];
                     self.step += 1;
-                    let assign_ok = self.check_assignments(&ti.transaction, get_value);
+                    let assign_ok = self.check_assignments(ti, get_value);
 
                     match (assign_ok, self.next_stmt.is_none(), self.has_forked) {
                         // we found a constraint violation from the assignments
@@ -392,7 +399,7 @@ impl Thread {
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self
-                        .eval_expr(get_value, &&ti.transaction, *cond)
+                        .eval_expr(get_value, &&ti.proto, *cond)
                         .expect("while condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*body)
@@ -402,14 +409,14 @@ impl Thread {
                     Ok
                 }
                 Stmt::RepeatLoop(repetitions, body) => {
-                    let (arg_id, arg) = as_arg(&ti.transaction, *repetitions)
+                    let (arg_id, arg) = as_arg(&ti.proto, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument");
 
                     todo!("repeat {:?}", arg.symbol())
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
-                        .eval_expr(get_value, &&ti.transaction, *cond)
+                        .eval_expr(get_value, &&ti.proto, *cond)
                         .expect("if condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*tru)
@@ -420,8 +427,8 @@ impl Thread {
                 }
                 Stmt::AssertEq(lhs, rhs) => {
                     let (port, other) = match (
-                        as_dut_port_symbol(&ti.transaction, *lhs),
-                        as_dut_port_symbol(&ti.transaction, *rhs),
+                        as_dut_port_symbol(&ti.proto, *lhs),
+                        as_dut_port_symbol(&ti.proto, *rhs),
                     ) {
                         (Some(port), _) => (port, *rhs),
                         (_, Some(port)) => (port, *lhs),
@@ -431,9 +438,7 @@ impl Thread {
                     };
                     self.next_stmt = ti.next_stmt[&stmt];
 
-                    if let Some(fail) =
-                        self.exec_equality(get_value, &ti.transaction, stmt, port, other)
-                    {
+                    if let Some(fail) = self.exec_equality(get_value, ti, stmt, port, other) {
                         self.failures.push(fail);
                         Failed
                     } else {
@@ -450,7 +455,7 @@ impl Thread {
     /// imposed by assignments in the current step.
     fn check_assignments(
         &mut self,
-        transaction: &Transaction,
+        ti: &ProtoInfo,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> bool {
         let mut pins_assigned = FxHashSet::default();
@@ -460,9 +465,9 @@ impl Thread {
             // only the final assignment to a pin matters
             if !pins_assigned.contains(&pin) {
                 pins_assigned.insert(pin);
-                if let Some(fail) = self.exec_equality(get_value, transaction, stmt, pin, expr) {
+                if let Some(fail) = self.exec_equality(get_value, ti, stmt, pin, expr) {
                     self.failures.push(fail);
-                } else if !matches!(transaction[expr], Expr::DontCare) {
+                } else if !matches!(ti.proto[expr], Expr::DontCare) {
                     // assignment sticks around for the next step
                     self.pin_assignments.push((stmt, pin, expr));
                 }
@@ -475,18 +480,18 @@ impl Thread {
     fn exec_equality(
         &mut self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
-        transaction: &Transaction,
+        ti: &ProtoInfo,
         stmt: StmtId,
         lhs: SymbolId,
         rhs: ExprId,
     ) -> Option<Failure> {
         // a DontCare imposes no constraints and thus there is nothing to learn, nothing to check
-        if matches!(transaction[rhs], Expr::DontCare) {
+        if matches!(ti.proto[rhs], Expr::DontCare) {
             return None;
         }
 
         let lhs_value = get_value(lhs);
-        if let Some(rhs_value) = self.eval_expr(get_value, transaction, rhs) {
+        if let Some(rhs_value) = self.eval_expr(get_value, &ti.proto, rhs) {
             if rhs_value != lhs_value {
                 // println!(
                 //     "[{}] found a disagreement: {} =/= {}",
@@ -496,6 +501,7 @@ impl Thread {
                 // );
                 Some(Failure {
                     step: self.step,
+                    proto_id: ti.proto_id,
                     thread_name: self.name.clone(),
                     stmt,
                     a: lhs_value,
@@ -505,7 +511,7 @@ impl Thread {
                 None
             }
         } else {
-            if let Some((arg_id, _arg)) = as_arg(&transaction, rhs) {
+            if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
                 debug_assert!(self.arg_values[arg_id].is_none());
                 // println!(
                 //     "[{}] Discovered that ?? = {}",
@@ -585,18 +591,9 @@ fn as_arg(transaction: &Transaction, expr: ExprId) -> Option<(usize, Arg)> {
     }
 }
 
-impl From<Transaction> for TransactionInfo {
-    fn from(t: Transaction) -> Self {
-        let next_stmt = t.next_stmt_mapping();
-        Self {
-            transaction: t,
-            next_stmt,
-        }
-    }
-}
-
 #[derive(Debug)]
-struct TransactionInfo {
-    transaction: Transaction,
+struct ProtoInfo {
+    proto_id: usize,
+    proto: Transaction,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
 }

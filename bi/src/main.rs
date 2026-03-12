@@ -14,7 +14,7 @@ use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::design::{Design, find_designs};
-use protocols::diagnostic::DiagnosticHandler;
+use protocols::diagnostic::{DiagnosticHandler, Level};
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
-    let mut bi = BackwardsInterpreter::new(transactions_symbol_tables, trace, 0);
+    let mut bi = BackwardsInterpreter::new(transactions_symbol_tables.iter(), trace, 0);
     let r = bi.run();
 
     if let BIResult::Fail(failures) = r {
@@ -124,13 +124,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             print_trace(ii, &trace, cli.show_steps);
 
             for fail in fails {
-                print!(
+                let proto = &transactions_symbol_tables[fail.proto_id].0;
+                let msg = format!(
                     "in step {}: [{}] {} != {}",
                     fail.step,
                     fail.thread_name,
                     fail.a.to_hex_str(),
                     fail.b.to_hex_str()
                 );
+                protocols_handler.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
             }
         }
 

@@ -92,6 +92,7 @@ impl Traces {
 pub struct Failure {
     // TODO: include more information for assignments vs assert_eq
     pub step: u32,
+    pub proto_id: usize,
     pub thread_name: String,
     pub stmt: StmtId,
     pub a: BitVecValue,
