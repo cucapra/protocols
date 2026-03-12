@@ -4,7 +4,6 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 mod bi;
-mod bi2;
 mod signal_trace;
 
 use crate::bi::{BIResult, BackwardsInterpreter, ProtoCall, ProtoTrace};
@@ -108,13 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Failed after {} steps.", bi.steps());
     }
 
-    // We currently need to filter out duplicate traces because of execution paths that have
-    // diverged without finishing any threads.
-    let mut traces: Vec<_> = bi.protocol_traces().collect();
-    traces.sort();
-    traces.dedup();
-
-    for (ii, mut trace) in traces.into_iter().enumerate() {
+    for (ii, mut trace) in bi.protocol_traces().enumerate() {
         trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
         print_trace(ii, &trace);
     }

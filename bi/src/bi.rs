@@ -9,7 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 pub type ProtoTrace = Vec<ProtoCall>;
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ProtoCall {
     pub name: String,
     pub args: Vec<Option<BitVecValue>>,
@@ -171,6 +171,8 @@ impl Path {
         }
     }
 
+    #[cfg(test)]
+    #[allow(dead_code)]
     fn thread_string(&self) -> String {
         let active = self
             .active
@@ -296,6 +298,7 @@ fn thread_to_call(tis: &[TransactionInfo], thread: Thread) -> ProtoCall {
 
 #[derive(Debug, Clone)]
 struct Thread {
+    #[allow(dead_code)]
     name: String,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
