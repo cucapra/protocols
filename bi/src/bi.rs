@@ -255,6 +255,9 @@ impl Path {
         tis: &[TransactionInfo],
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> (PathResult, Option<ProtoCall>) {
+        // we need to always execute the oldest thread first in order to get the correct order
+        // of transactions in our output trace (we want the oldest transaction to appear first in the trace)
+        self.active.sort_by_key(|t| u32::MAX - t.start_step);
         if let Some(mut thread) = self.active.pop() {
             let r = thread.exec_stmt(&tis[thread.transaction_id], get_value);
             // println!("{r:?}");
