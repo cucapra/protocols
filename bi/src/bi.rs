@@ -45,7 +45,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             .collect();
         let step = 0;
         let mut traces = Traces::default();
-        let active = Path::new(&mut traces).fork(transactions.iter(), &mut traces, false);
+        let active = Path::new(&mut traces).fork(transactions.iter(), &mut traces);
 
         Self {
             transactions,
@@ -93,18 +93,28 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     self.active.push(path);
                 }
                 PathResult::Fork => {
-                    let mut new_paths =
-                        path.fork(self.transactions.iter(), &mut self.traces, false);
+                    let mut new_paths = path.fork(self.transactions.iter(), &mut self.traces);
                     debug_assert!(new_paths.iter().all(|p| !p.failed()));
                     self.active.append(&mut new_paths);
                 }
                 PathResult::FinishedStep => {
+                    debug_assert!(
+                        !path.active.is_empty()
+                            && path.next.is_empty()
+                            && path.step == self.step + 1,
+                        "path should be ready to run the next step"
+                    );
                     debug_assert!(!path.failed(), "{path:?}");
                     self.next.push(path);
                 }
                 PathResult::FinishedStepAndFork => {
-                    let mut new_paths = path.fork(self.transactions.iter(), &mut self.traces, true);
-                    debug_assert!(new_paths.iter().all(|p| !p.failed()));
+                    debug_assert!(
+                        // here `path.active` can be empty since we are forking off more threads
+                        path.next.is_empty() && path.step == self.step + 1,
+                        "path should be ready to run the next step"
+                    );
+                    debug_assert!(!path.failed(), "{path:?}");
+                    let mut new_paths = path.fork(self.transactions.iter(), &mut self.traces);
                     self.next.append(&mut new_paths);
                 }
                 PathResult::Failed => {
@@ -123,14 +133,16 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                 println!("show good error message when all paths fail");
                 false // stop
             } else {
+                // step trace
+                if self.trace.step() == StepResult::Done {
+                    return false;
+                }
+                // println!("----- Finished Step {}", self.step);
                 // discard failed paths and prepare others for next step
                 self.failed.clear();
                 self.active.append(&mut self.next);
-                // step trace
-                match self.trace.step() {
-                    StepResult::Ok => true,
-                    StepResult::Done => false,
-                }
+                self.step += 1;
+                true
             }
         }
     }
@@ -171,7 +183,6 @@ impl Path {
         }
     }
 
-    #[cfg(test)]
     #[allow(dead_code)]
     fn thread_string(&self) -> String {
         let active = self
@@ -206,7 +217,6 @@ impl Path {
         self,
         transactions: impl Iterator<Item = &'a TransactionInfo>,
         traces: &mut Traces,
-        delayed: bool,
     ) -> Vec<Self> {
         debug_assert!(self.failed.is_empty());
         transactions
@@ -227,11 +237,7 @@ impl Path {
                     steps: 0,
                     pin_assignments: vec![],
                 };
-                if delayed {
-                    p.next.push(t);
-                } else {
-                    p.active.push(t);
-                }
+                p.active.push(t);
                 p
             })
             .collect()
@@ -247,7 +253,9 @@ impl Path {
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> (PathResult, Option<ProtoCall>) {
         if let Some(mut thread) = self.active.pop() {
-            match thread.exec_stmt(&tis[thread.transaction_id], get_value) {
+            let r = thread.exec_stmt(&tis[thread.transaction_id], get_value);
+            // println!("{r:?}");
+            match r {
                 ThreadResult::Failed => {
                     self.failed.push(thread);
                     (PathResult::Failed, None)
