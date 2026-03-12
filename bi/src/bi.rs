@@ -7,7 +7,13 @@ use baa::{BitVecOps, BitVecValue};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-pub type ProtoTrace = Vec<(String, Vec<Option<BitVecValue>>)>;
+pub type ProtoTrace = Vec<ProtoCall>;
+
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ProtoCall {
+    pub name: String,
+    pub args: Vec<Option<BitVecValue>>,
+}
 
 pub struct BackwardsInterpreter<T: SignalTrace> {
     trace: T,
@@ -15,8 +21,9 @@ pub struct BackwardsInterpreter<T: SignalTrace> {
     instance_id: u32,
     step: u32,
     active: Vec<Path>,
-    finished: Vec<Path>,
+    next: Vec<Path>,
     failed: Vec<Path>,
+    traces: Traces,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +44,8 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             .map(|(t, _)| t.into())
             .collect();
         let step = 0;
-        let active = Path::default().fork(transactions.iter(), false);
+        let mut traces = Traces::default();
+        let active = Path::new(&mut traces).fork(transactions.iter(), &mut traces, false);
 
         Self {
             transactions,
@@ -45,58 +53,88 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             instance_id,
             step,
             active,
-            finished: vec![],
+            next: vec![],
+            failed: vec![],
+            traces,
         }
     }
 
     pub fn run(&mut self) -> BIResult {
-
+        loop {
+            self.exec();
+        }
     }
 
+    pub fn protocol_traces(&self) -> impl Iterator<Item = ProtoTrace> {
+        self.traces.unique_traces().into_iter()
+    }
 
-    /// execute a single step
+    pub fn steps(&self) -> u32 {
+        self.step
+    }
+
+    /// execute a single statement
     fn exec(&mut self) {
         if let Some(mut path) = self.active.pop() {
             // execute one path
-            let r = path.exec(&self.transactions, &|sym| self.trace.get(self.instance_id, sym));
+            let (r, pc) = path.exec_stmt(&self.transactions, &|sym| {
+                self.trace.get(self.instance_id, sym)
+            });
+
+            if let Some(value) = pc {
+                self.traces.append(path.trace_id, value);
+            }
+
             match r {
-                PathResult::Fork(delayed) => {
-                    let mut new_paths = path.fork(self.transactions.iter(), delayed);
-                    debug_assert!(new_paths.iter().all(|p| !p.step_finished()));
-                    self.active.append(&mut new_paths);
-                }
                 PathResult::Ok => {
                     debug_assert!(!path.step_finished() && !path.failed());
                     self.active.push(path);
+                }
+                PathResult::Fork => {
+                    let mut new_paths =
+                        path.fork(self.transactions.iter(), &mut self.traces, false);
+                    debug_assert!(new_paths.iter().all(|p| !p.step_finished() && !p.failed()));
+                    self.active.append(&mut new_paths);
+                }
+                PathResult::FinishedStep => {
+                    debug_assert!(path.step_finished() && !path.failed());
+                    self.next.push(path);
+                }
+                PathResult::FinishedStepAndFork => {
+                    let mut new_paths = path.fork(self.transactions.iter(), &mut self.traces, true);
+                    debug_assert!(new_paths.iter().all(|p| p.step_finished() && !p.failed()));
+                    self.next.append(&mut new_paths);
                 }
                 PathResult::Failed => {
                     debug_assert!(path.failed());
                     self.failed.push(path);
                 }
-                PathResult::FinishedStep => {
-                    debug_assert!(path.step_finished() && !path.failed());
-                    self.finished.push(path);
-                }
             }
         } else {
             // otherwise all paths must be finished
             debug_assert!(self.active.is_empty());
-            debug_assert!(self.finished.iter().all(|p| p.step == self.step && p.step_finished() && !p.failed()));
+            debug_assert!(
+                self.next
+                    .iter()
+                    .all(|p| p.step == self.step && p.step_finished() && !p.failed())
+            );
             debug_assert!(self.failed.iter().all(|p| p.failed()));
-            let all_failed = self.finished.is_empty();
+            let all_failed = self.next.is_empty();
             if all_failed {
                 todo!("show good error message when all paths fail")
             } else {
                 // discard failed paths and prepare others for next step
                 self.failed.clear();
-                for mut path in self.finished.drain(..) {
+                for mut path in self.next.drain(..) {
                     path.active.append(&mut path.next);
                     self.active.push(path);
                 }
                 // step trace
                 match self.trace.step() {
                     StepResult::Ok => {}
-                    StepResult::Done => { todo!("trace done!") }
+                    StepResult::Done => {
+                        todo!("trace done!")
+                    }
                 }
             }
         }
@@ -104,10 +142,9 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 }
 
 /// An execution path.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Path {
-    /// identifier for the protocol trace associated with this execution path
-    trace_id: usize,
+    trace_id: TraceId,
     active: Vec<Thread>,
     failed: Vec<Thread>,
     next: Vec<Thread>,
@@ -116,17 +153,29 @@ struct Path {
 
 #[derive(Debug, Clone)]
 enum PathResult {
-    Fork(bool),
     Ok,
-    Failed,
+    Fork,
     FinishedStep,
+    FinishedStepAndFork,
+    Failed,
 }
 
 impl Path {
+    fn new(traces: &mut Traces) -> Self {
+        let trace_id = traces.empty();
+        Self {
+            trace_id,
+            active: vec![],
+            failed: vec![],
+            next: vec![],
+            step: 0,
+        }
+    }
 
     fn fork<'a>(
         self,
         transactions: impl Iterator<Item = &'a TransactionInfo>,
+        traces: &mut Traces,
         delayed: bool,
     ) -> Vec<Self> {
         debug_assert!(self.failed.is_empty());
@@ -134,6 +183,7 @@ impl Path {
             .enumerate()
             .map(move |(id, t)| {
                 let mut p = self.clone();
+                p.trace_id = traces.fork(p.trace_id);
                 let t = Thread {
                     name: t.transaction.name.clone(),
                     transaction_id: id,
@@ -161,26 +211,48 @@ impl Path {
         !self.failed.is_empty()
     }
 
-    fn exec(
+    fn exec_stmt(
         &mut self,
         tis: &[TransactionInfo],
         get_value: &impl Fn(SymbolId) -> BitVecValue,
-    ) -> PathResult {
-        if let Some(mut t) = self.active.pop() {
-            match t.exec(&tis[t.transaction_id], get_value) {
-                ThreadResult::Ok => {}
-                ThreadResult::Step => {}
-                ThreadResult::Fork => {}
-                ThreadResult::StepAndFork => {}
-                ThreadResult::Finished => {
-                    todo!("extend trace from the finished thread")
+    ) -> (PathResult, Option<ProtoCall>) {
+        if let Some(mut thread) = self.active.pop() {
+            match thread.exec_stmt(&tis[thread.transaction_id], get_value) {
+                ThreadResult::Failed => {
+                    self.failed.push(thread);
+                    (PathResult::Failed, None)
                 }
-                ThreadResult::Failed => PathResult::Failed,
+                ThreadResult::Ok => {
+                    self.active.push(thread);
+                    (PathResult::Ok, None)
+                }
+                ThreadResult::Fork => {
+                    self.active.push(thread);
+                    (PathResult::Fork, None)
+                }
+                ThreadResult::Step => {
+                    self.next.push(thread);
+                    (PathResult::FinishedStep, None)
+                }
+                ThreadResult::FinalStep => {
+                    (PathResult::FinishedStep, Some(thread_to_call(tis, thread)))
+                }
+                ThreadResult::FinalStepAndFork => (
+                    PathResult::FinishedStepAndFork,
+                    Some(thread_to_call(tis, thread)),
+                ),
             }
         } else {
-            PathResult::FinishedStep
+            unreachable!("exec_stmt should only be called if there is an active thread!")
         }
     }
+}
+
+fn thread_to_call(tis: &[TransactionInfo], thread: Thread) -> ProtoCall {
+    assert!(thread.next_stmt.is_none());
+    let name = tis[thread.transaction_id].transaction.name.clone();
+    let args = thread.arg_values;
+    ProtoCall { name, args }
 }
 
 #[derive(Debug, Clone)]
@@ -205,83 +277,77 @@ enum ThreadResult {
 }
 
 impl Thread {
-    fn exec(
+    fn exec_stmt(
         &mut self,
         ti: &TransactionInfo,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            let (next_stmt, result) = match &ti.transaction[stmt] {
-                Stmt::Block(stmt_ids) => (stmt_ids.first().cloned(), Ok),
+            match &ti.transaction[stmt] {
+                Stmt::Block(stmt_ids) => {
+                    self.next_stmt = stmt_ids.first().cloned();
+                    Ok
+                }
                 Stmt::Assign(lhs, rhs) => {
                     // we apply all pin assignments at the end of a step
                     self.pin_assignments.push((*lhs, *rhs));
-                    (ti.next_stmt[&stmt], Ok)
+                    self.next_stmt = ti.next_stmt[&stmt];
+                    Ok
                 }
                 Stmt::Step => {
-                    let next_stmt = ti.next_stmt[&stmt];
+                    self.next_stmt = ti.next_stmt[&stmt];
                     self.steps += 1;
                     let assign_ok = self.check_assignments(&ti.transaction, get_value);
 
-                    let r = match (assign_ok, next_stmt.is_none(), self.has_forked) {
+                    match (assign_ok, self.next_stmt.is_none(), self.has_forked) {
+                        // we found a constraint violation from the assignments
                         (true, _, _) => Failed,
+                        // this is the last step in the protocol, and we have not forked yet
                         (false, true, false) => FinalStepAndFork,
+                        // this is the last step in the protocol, but we already forked
                         (false, true, true) => FinalStep,
+                        // there is more to execute and all assignment constraints passed
                         (false, false, _) => Step,
                     }
-
-                    if assign_ok {
-                        if next_stmt.is_none() {
-                            if !self.has_forked {
-                                (None, StepAndFork)
-                            } else {
-                                (None, Step)
-                            }
-                        }
-                    }
-
-                    let r = if thread.next_stmt.is_none() {
-                        crate::bi2::ExecThreadResult::Finished
-                    } else {
-                        crate::bi2::ExecThreadResult::Yield
-                    };
-                    (ti.next_stmt[&stmt], Ok)
                 }
                 Stmt::Fork => {
-                    thread.has_forked = true;
-                    next_stmts[&stmt]
+                    self.has_forked = true;
+                    self.next_stmt = ti.next_stmt[&stmt];
+                    Fork
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self
-                        .eval_expr(get_value, &transaction, thread, *cond)
+                        .eval_expr(get_value, &&ti.transaction, *cond)
                         .expect("while condition is always concrete");
-                    if cond_value.is_true() {
+                    self.next_stmt = if cond_value.is_true() {
                         Some(*body)
                     } else {
-                        next_stmts[&stmt]
-                    }
+                        ti.next_stmt[&stmt]
+                    };
+                    Ok
                 }
                 Stmt::RepeatLoop(repetitions, body) => {
-                    let (arg_id, arg) = crate::bi2::as_arg(transaction, *repetitions)
+                    let (arg_id, arg) = as_arg(&ti.transaction, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument");
 
                     todo!("repeat {:?}", arg.symbol())
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
-                        .eval_expr(get_value, &transaction, thread, *cond)
+                        .eval_expr(get_value, &&ti.transaction, *cond)
                         .expect("if condition is always concrete");
-                    if cond_value.is_true() {
+                    self.next_stmt = if cond_value.is_true() {
                         Some(*tru)
                     } else {
                         Some(*fals)
-                    }
+                    };
+                    Ok
                 }
                 Stmt::AssertEq(lhs, rhs) => {
                     let (port, other) = match (
-                        crate::bi2::as_dut_port_symbol(&transaction, *lhs),
-                        crate::bi2::as_dut_port_symbol(&transaction, *rhs),
+                        as_dut_port_symbol(&ti.transaction, *lhs),
+                        as_dut_port_symbol(&ti.transaction, *rhs),
                     ) {
                         (Some(port), _) => (port, *rhs),
                         (_, Some(port)) => (port, *lhs),
@@ -289,20 +355,16 @@ impl Thread {
                             todo!("we currently expect one side of an assert_eq to be a port!")
                         }
                     };
-                    if self.exec_equality(get_value, &transaction, thread, port, other) {
-                        next_stmts[&stmt]
+                    self.next_stmt = ti.next_stmt[&stmt];
+                    if self.exec_equality(get_value, &ti.transaction, port, other) {
+                        Ok
                     } else {
-                        return (
-                            crate::bi2::ExecThreadResult::Failed,
-                            thread.has_forked && !forked_before,
-                        );
+                        Failed
                     }
                 }
-            };
-            self.next_stmt = next_stmt;
-            result
+            }
         } else {
-            ThreadResult::Finished
+            unreachable!("should have finished with a step!")
         }
     }
 
@@ -452,4 +514,60 @@ impl From<Transaction> for TransactionInfo {
 struct TransactionInfo {
     transaction: Transaction,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
+}
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+struct TraceId(u32);
+
+#[derive(Debug, Clone)]
+struct TraceEntry {
+    value: ProtoCall,
+    prev: Option<u32>,
+}
+
+#[derive(Debug, Default)]
+struct Traces {
+    entries: Vec<TraceEntry>,
+    tails: Vec<Option<u32>>,
+}
+
+impl Traces {
+    fn append(&mut self, trace: TraceId, value: ProtoCall) {
+        let entry_id = self.entries.len() as u32;
+        let prev = self.tails.get(trace.0 as usize).cloned().flatten();
+        self.entries.push(TraceEntry { value, prev });
+        self.tails[trace.0 as usize] = Some(entry_id);
+    }
+
+    fn fork(&mut self, trace: TraceId) -> TraceId {
+        let new_id = TraceId(self.tails.len() as u32);
+        self.tails.push(self.tails[trace.0 as usize]);
+        new_id
+    }
+
+    fn empty(&mut self) -> TraceId {
+        let new_id = TraceId(self.tails.len() as u32);
+        self.tails.push(None);
+        new_id
+    }
+
+    fn unique_traces(&self) -> Vec<ProtoTrace> {
+        let mut tails: Vec<_> = self.tails.iter().cloned().flatten().collect();
+        tails.sort();
+        tails.dedup();
+        tails
+            .into_iter()
+            .map(|t| {
+                let mut out = vec![];
+                let mut t = Some(t);
+                while let Some(entry_id) = t {
+                    let entry = &self.entries[entry_id as usize];
+                    out.push(entry.value.clone());
+                    t = entry.prev;
+                }
+                out.reverse();
+                out
+            })
+            .collect()
+    }
 }
