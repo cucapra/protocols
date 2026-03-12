@@ -1,13 +1,15 @@
-// Copyright 2025 Cornell University
+// Copyright 2025-2026 Cornell University
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 mod bi;
+mod proto_trace;
 mod signal_trace;
 
-use crate::bi::{BIResult, BackwardsInterpreter, ProtoCall, ProtoTrace};
-use crate::signal_trace::WaveSignalTrace;
+use crate::bi::*;
+use crate::proto_trace::*;
+use crate::signal_trace::*;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
@@ -107,16 +109,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bi = BackwardsInterpreter::new(transactions_symbol_tables, trace, 0);
     let r = bi.run();
 
-    if r == BIResult::Fail {
-        println!("Failed after {} steps.", bi.steps());
-    }
+    if let BIResult::Fail(failures) = r {
+        debug_assert_eq!(
+            failures.len(),
+            1,
+            "TODO: handle multiple possible traces better"
+        );
+        for (ii, (trace_id, fails)) in failures.into_iter().enumerate() {
+            if ii > 0 {
+                println!();
+            }
+            let mut trace = bi.protocol_traces().get_trace(trace_id);
+            trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
+            print_trace(ii, &trace, cli.show_steps);
 
-    for (ii, mut trace) in bi.protocol_traces().enumerate() {
-        trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-        print_trace(ii, &trace, cli.show_steps);
-    }
+            for fail in fails {
+                print!(
+                    "in step {}: [{}] {} != {}",
+                    fail.step,
+                    fail.thread_name,
+                    fail.a.to_hex_str(),
+                    fail.b.to_hex_str()
+                );
+            }
+        }
 
-    Ok(())
+        Err("".into())
+    } else {
+        for (ii, mut trace) in bi.protocol_traces().unique_traces().into_iter().enumerate() {
+            trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
+            print_trace(ii, &trace, cli.show_steps);
+        }
+        Ok(())
+    }
 }
 
 fn print_trace(ii: usize, trace: &ProtoTrace, show_steps: bool) {
