@@ -52,6 +52,10 @@ struct Cli {
     /// regardless of whether the protocol has been annotated with `#[idle]`
     #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
     include_idle: bool,
+
+    /// If enabled, displays the start & end step for each inferred transaction
+    #[arg(long)]
+    show_steps: bool,
 }
 
 #[allow(unused_variables)]
@@ -109,16 +113,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (ii, mut trace) in bi.protocol_traces().enumerate() {
         trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-        print_trace(ii, &trace);
+        print_trace(ii, &trace, cli.show_steps);
     }
 
     Ok(())
 }
 
-fn print_trace(ii: usize, trace: &ProtoTrace) {
+fn print_trace(ii: usize, trace: &ProtoTrace, show_steps: bool) {
     println!("// trace {ii}");
     println!("trace {{");
-    for ProtoCall { name, args } in trace.iter() {
+    for ProtoCall {
+        name,
+        args,
+        start,
+        end,
+    } in trace.iter()
+    {
         print!("    {name}(");
         for (ai, arg) in args.iter().enumerate() {
             let is_first = ai == 0;
@@ -131,7 +141,16 @@ fn print_trace(ii: usize, trace: &ProtoTrace) {
                 print!("X");
             }
         }
-        println!(");");
+        print!(");");
+        if show_steps {
+            if start == end {
+                println!(" [{start}]")
+            } else {
+                println!(" [{start} .. {end}]");
+            }
+        } else {
+            println!();
+        }
     }
     println!("}}");
 }

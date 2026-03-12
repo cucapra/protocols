@@ -12,6 +12,8 @@ pub type ProtoTrace = Vec<ProtoCall>;
 #[derive(Debug, Clone)]
 pub struct ProtoCall {
     pub name: String,
+    pub start: u32,
+    pub end: u32,
     pub args: Vec<Option<BitVecValue>>,
 }
 
@@ -236,6 +238,7 @@ impl Path {
                     has_forked: false,
                     steps: 0,
                     pin_assignments: vec![],
+                    start_step: self.step,
                 };
                 p.active.push(t);
                 p
@@ -274,10 +277,12 @@ impl Path {
                     self.next.push(thread);
                     (PathResult::Ok, None)
                 }
-                ThreadResult::FinalStep => (PathResult::Ok, Some(thread_to_call(tis, thread))),
+                ThreadResult::FinalStep => {
+                    (PathResult::Ok, Some(thread_to_call(tis, thread, self.step)))
+                }
                 ThreadResult::FinalStepAndFork => {
                     self.fork_next_step = true;
-                    (PathResult::Ok, Some(thread_to_call(tis, thread)))
+                    (PathResult::Ok, Some(thread_to_call(tis, thread, self.step)))
                 }
             }
         } else {
@@ -297,11 +302,17 @@ impl Path {
     }
 }
 
-fn thread_to_call(tis: &[TransactionInfo], thread: Thread) -> ProtoCall {
+fn thread_to_call(tis: &[TransactionInfo], thread: Thread, end: u32) -> ProtoCall {
     assert!(thread.next_stmt.is_none());
     let name = tis[thread.transaction_id].transaction.name.clone();
     let args = thread.arg_values;
-    ProtoCall { name, args }
+    let start = thread.start_step;
+    ProtoCall {
+        name,
+        args,
+        start,
+        end,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -314,6 +325,7 @@ struct Thread {
     pin_assignments: Vec<(SymbolId, ExprId)>,
     has_forked: bool,
     steps: u32,
+    start_step: u32,
 }
 
 #[derive(Debug, Clone)]
