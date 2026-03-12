@@ -2,20 +2,11 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::signal_trace::{SignalTrace, StepResult};
+use crate::proto_trace::*;
+use crate::signal_trace::*;
 use baa::{BitVecOps, BitVecValue};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-
-pub type ProtoTrace = Vec<ProtoCall>;
-
-#[derive(Debug, Clone)]
-pub struct ProtoCall {
-    pub name: String,
-    pub start: u32,
-    pub end: u32,
-    pub args: Vec<Option<BitVecValue>>,
-}
 
 pub struct BackwardsInterpreter<T: SignalTrace> {
     trace: T,
@@ -28,11 +19,11 @@ pub struct BackwardsInterpreter<T: SignalTrace> {
     traces: Traces,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BIResult {
     Ok,
     Done,
-    Fail,
+    Fail(Vec<(TraceId, Vec<Failure>)>),
 }
 
 impl<T: SignalTrace> BackwardsInterpreter<T> {
@@ -62,20 +53,19 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
     }
 
     pub fn run(&mut self) -> BIResult {
-        while self.exec() {}
-        BIResult::Done
+        let mut r = self.exec_stmt();
+        while r == BIResult::Ok {
+            r = self.exec_stmt();
+        }
+        r
     }
 
-    pub fn protocol_traces(&self) -> impl Iterator<Item = ProtoTrace> {
-        self.traces.unique_traces().into_iter()
-    }
-
-    pub fn steps(&self) -> u32 {
-        self.step
+    pub fn protocol_traces(&self) -> &Traces {
+        &self.traces
     }
 
     /// execute a single statement
-    fn exec(&mut self) -> bool {
+    fn exec_stmt(&mut self) -> BIResult {
         if let Some(mut path) = self.active.pop() {
             // println!("{}", path.thread_string());
 
@@ -121,30 +111,46 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                 }
                 PathResult::Failed => {
                     debug_assert!(path.failed());
-                    self.traces.remove(path.trace_id);
                     self.failed.push(path);
                 }
             }
-            true
+            BIResult::Ok
         } else {
             // otherwise all paths must be finished
             debug_assert!(self.active.is_empty());
             debug_assert!(self.failed.iter().all(|p| p.failed()));
             let all_failed = self.next.is_empty();
             if all_failed {
-                println!("show good error message when all paths fail");
-                false // stop
+                let failures = self
+                    .failed
+                    .iter()
+                    .map(|p| {
+                        (
+                            p.trace_id,
+                            p.failed
+                                .iter()
+                                .flat_map(|t| t.failures.iter())
+                                .cloned()
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                BIResult::Fail(failures)
             } else {
+                // discard failed paths and prepare others for next step
+                for thread in self.failed.drain(..) {
+                    // now, we can discard the traces of failed paths
+                    self.traces.remove(thread.trace_id);
+                }
+
                 // step trace
                 if self.trace.step() == StepResult::Done {
-                    return false;
+                    BIResult::Done
+                } else {
+                    self.active.append(&mut self.next);
+                    self.step += 1;
+                    BIResult::Ok
                 }
-                // println!("----- Finished Step {}", self.step);
-                // discard failed paths and prepare others for next step
-                self.failed.clear();
-                self.active.append(&mut self.next);
-                self.step += 1;
-                true
             }
         }
     }
@@ -236,9 +242,10 @@ impl Path {
                     next_stmt: Some(t.transaction.body),
                     arg_values: vec![None; t.transaction.args.len()],
                     has_forked: false,
-                    steps: 0,
+                    step: 0,
                     pin_assignments: vec![],
                     start_step: self.step,
+                    failures: vec![],
                 };
                 p.active.push(t);
                 p
@@ -325,10 +332,11 @@ struct Thread {
     transaction_id: usize,
     next_stmt: Option<StmtId>,
     arg_values: Vec<Option<BitVecValue>>,
-    pin_assignments: Vec<(SymbolId, ExprId)>,
+    pin_assignments: Vec<(StmtId, SymbolId, ExprId)>,
     has_forked: bool,
-    steps: u32,
+    step: u32,
     start_step: u32,
+    failures: Vec<Failure>,
 }
 
 #[derive(Debug, Clone)]
@@ -357,13 +365,13 @@ impl Thread {
                 }
                 Stmt::Assign(lhs, rhs) => {
                     // we apply all pin assignments at the end of a step
-                    self.pin_assignments.push((*lhs, *rhs));
+                    self.pin_assignments.push((stmt, *lhs, *rhs));
                     self.next_stmt = ti.next_stmt[&stmt];
                     Ok
                 }
                 Stmt::Step => {
                     self.next_stmt = ti.next_stmt[&stmt];
-                    self.steps += 1;
+                    self.step += 1;
                     let assign_ok = self.check_assignments(&ti.transaction, get_value);
 
                     match (assign_ok, self.next_stmt.is_none(), self.has_forked) {
@@ -422,10 +430,14 @@ impl Thread {
                         }
                     };
                     self.next_stmt = ti.next_stmt[&stmt];
-                    if self.exec_equality(get_value, &ti.transaction, port, other) {
-                        Ok
-                    } else {
+
+                    if let Some(fail) =
+                        self.exec_equality(get_value, &ti.transaction, stmt, port, other)
+                    {
+                        self.failures.push(fail);
                         Failed
+                    } else {
+                        Ok
                     }
                 }
             }
@@ -444,20 +456,19 @@ impl Thread {
         let mut pins_assigned = FxHashSet::default();
         let assignments = std::mem::take(&mut self.pin_assignments);
         // go from last assignment to first
-        for (pin, expr) in assignments.into_iter().rev() {
+        for (stmt, pin, expr) in assignments.into_iter().rev() {
             // only the final assignment to a pin matters
             if !pins_assigned.contains(&pin) {
                 pins_assigned.insert(pin);
-                if !self.exec_equality(get_value, transaction, pin, expr) {
-                    // early exit on failure
-                    return false;
+                if let Some(fail) = self.exec_equality(get_value, transaction, stmt, pin, expr) {
+                    self.failures.push(fail);
                 } else if !matches!(transaction[expr], Expr::DontCare) {
                     // assignment sticks around for the next step
-                    self.pin_assignments.push((pin, expr));
+                    self.pin_assignments.push((stmt, pin, expr));
                 }
             }
         }
-        true
+        self.failures.is_empty()
     }
 
     /// used for both assert_eq and assignments
@@ -465,12 +476,13 @@ impl Thread {
         &mut self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
         transaction: &Transaction,
+        stmt: StmtId,
         lhs: SymbolId,
         rhs: ExprId,
-    ) -> bool {
+    ) -> Option<Failure> {
         // a DontCare imposes no constraints and thus there is nothing to learn, nothing to check
         if matches!(transaction[rhs], Expr::DontCare) {
-            return true;
+            return None;
         }
 
         let lhs_value = get_value(lhs);
@@ -482,8 +494,16 @@ impl Thread {
                 //     lhs_value.to_bit_str(),
                 //     rhs_value.to_bit_str()
                 // );
+                Some(Failure {
+                    step: self.step,
+                    thread_name: self.name.clone(),
+                    stmt,
+                    a: lhs_value,
+                    b: rhs_value,
+                })
+            } else {
+                None
             }
-            rhs_value == lhs_value
         } else {
             if let Some((arg_id, _arg)) = as_arg(&transaction, rhs) {
                 debug_assert!(self.arg_values[arg_id].is_none());
@@ -496,7 +516,7 @@ impl Thread {
             } else {
                 todo!()
             }
-            true
+            None
         }
     }
 
@@ -579,65 +599,4 @@ impl From<Transaction> for TransactionInfo {
 struct TransactionInfo {
     transaction: Transaction,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
-}
-
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
-struct TraceId(u32);
-
-#[derive(Debug, Clone)]
-struct TraceEntry {
-    value: ProtoCall,
-    prev: Option<u32>,
-}
-
-#[derive(Debug, Default)]
-struct Traces {
-    entries: Vec<TraceEntry>,
-    tails: Vec<Option<u32>>,
-}
-
-impl Traces {
-    fn append(&mut self, trace: TraceId, value: ProtoCall) {
-        let entry_id = self.entries.len() as u32;
-        let prev = self.tails.get(trace.0 as usize).cloned().flatten();
-        self.entries.push(TraceEntry { value, prev });
-        self.tails[trace.0 as usize] = Some(entry_id);
-    }
-
-    fn fork(&mut self, trace: TraceId) -> TraceId {
-        let new_id = TraceId(self.tails.len() as u32);
-        self.tails.push(self.tails[trace.0 as usize]);
-        new_id
-    }
-
-    fn empty(&mut self) -> TraceId {
-        let new_id = TraceId(self.tails.len() as u32);
-        self.tails.push(None);
-        new_id
-    }
-
-    fn remove(&mut self, trace: TraceId) {
-        // TODO: remove any orphaned entries (GC!)
-        self.tails[trace.0 as usize] = None;
-    }
-
-    fn unique_traces(&self) -> Vec<ProtoTrace> {
-        let mut tails: Vec<_> = self.tails.iter().cloned().flatten().collect();
-        tails.sort();
-        tails.dedup();
-        tails
-            .into_iter()
-            .map(|t| {
-                let mut out = vec![];
-                let mut t = Some(t);
-                while let Some(entry_id) = t {
-                    let entry = &self.entries[entry_id as usize];
-                    out.push(entry.value.clone());
-                    t = entry.prev;
-                }
-                out.reverse();
-                out
-            })
-            .collect()
-    }
 }
