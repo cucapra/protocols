@@ -59,6 +59,10 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
         }
     }
 
+    pub fn step_to_ns(&self, logical_step: u32) -> String {
+        self.trace.step_to_ns(logical_step)
+    }
+
     pub fn run(&mut self) -> BIResult {
         let mut r = self.exec_stmt();
         while r == BIResult::Ok {

@@ -5,11 +5,10 @@
 
 use crate::Instance;
 use baa::BitVecValue;
-use log::info;
 use protocols::design::Design;
 use protocols::ir::SymbolId;
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, SignalRef};
+use wellen::{Hierarchy, SignalRef, TimescaleUnit};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug, PartialEq)]
@@ -30,6 +29,8 @@ pub trait SignalTrace {
     /// Returns `Err` if the `pin` doesn't exist in the port map
     /// for the given instance.
     fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue;
+
+    fn step_to_ns(&self, logical_step: u32) -> String;
 }
 
 /// The `WaveSamplingMode` determines how signals from a waveform are sampled
@@ -52,7 +53,7 @@ pub enum WaveSamplingMode {
 #[allow(dead_code)]
 pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
-    pub port_map: FxHashMap<PortKey, SignalRef>,
+    port_map: FxHashMap<PortKey, SignalRef>,
 
     /// The sampling mode to be used on the waveform
     sampling_mode: WaveSamplingMode,
@@ -68,6 +69,9 @@ pub struct WaveSignalTrace {
     /// Note that this field is only `Some` if the user passes an argument
     /// to the optional `--sample_posedge` CLI argument
     clock_signal: Option<SignalRef>,
+
+    /// Maps a logical step to time step.
+    step_to_idx: Vec<u32>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -78,11 +82,6 @@ pub struct PortKey {
 }
 
 impl WaveSignalTrace {
-    /// Returns the actual time value (in the waveform's time units) for a given time_step index
-    pub fn time_value(&self, time_step: u32) -> u64 {
-        self.wave.time_table()[time_step as usize]
-    }
-
     /// Opens a waveform at the specified `filename` with the given
     /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
     /// as an argument to determine the `WaveSamplingMode` (whether it is
@@ -122,15 +121,10 @@ impl WaveSignalTrace {
             wave,
             port_map,
             sampling_mode,
-
-            // At the beginning, zero `step()` calls have happened,
-            // so `logical_step` is initialized to 0
             logical_step: 0,
-
-            // The waveform begins with `TimeIdx = 0`
             time_step: 0,
-
             clock_signal,
+            step_to_idx: vec![0],
         })
     }
 
@@ -274,6 +268,7 @@ impl SignalTrace for WaveSignalTrace {
                 if self.logical_step < total_steps {
                     self.logical_step += 1;
                     self.time_step += 1;
+                    self.step_to_idx.push(self.time_step);
                 }
                 if self.logical_step == total_steps {
                     StepResult::Done
@@ -285,8 +280,6 @@ impl SignalTrace for WaveSignalTrace {
             WaveSamplingMode::RisingEdge(clock_signal_ref) => {
                 // First, increment the logical step
                 self.logical_step += 1;
-
-                let old_time = self.time_value(self.time_step) / 1_000_000;
 
                 // Next, as long as the time-step is in bounds...
                 while self.time_step < total_steps {
@@ -300,15 +293,7 @@ impl SignalTrace for WaveSignalTrace {
                     self.time_step += 1;
                     let new_value = self.get_value(clock_signal_ref, self.time_step);
                     if prev_value == "0" && new_value == "1" {
-                        let new_time = self.time_value(self.time_step) / 1_000_000;
-
-                        info!(
-                            "time_value of new_time is {}",
-                            self.time_value(self.time_step)
-                        );
-
-                        info!("Advanced clock time from {old_time}ns -> {new_time}ns");
-
+                        self.step_to_idx.push(self.time_step);
                         return StepResult::Ok;
                     }
                 }
@@ -344,5 +329,27 @@ impl SignalTrace for WaveSignalTrace {
                 err
             )
         })
+    }
+
+    fn step_to_ns(&self, logical_step: u32) -> String {
+        let time_table_idx = *self
+            .step_to_idx
+            .get(logical_step as usize)
+            .unwrap_or_else(|| self.step_to_idx.last().unwrap());
+        let time = if let Some(time_table_idx) = self.step_to_idx.get(logical_step as usize) {
+            self.wave.time_table()[*time_table_idx as usize]
+        } else {
+            *self.wave.time_table().last().unwrap()
+        };
+        if let Some(timescale) = self.wave.hierarchy().timescale() {
+            let time = time * timescale.factor as u64;
+            match timescale.unit {
+                TimescaleUnit::PicoSeconds => format!("{}ns", time as f64 / 1000.0),
+                TimescaleUnit::NanoSeconds => format!("{}ns", time),
+                other => todo!("support {other:?}"),
+            }
+        } else {
+            format!("{}ns", time)
+        }
     }
 }

@@ -18,8 +18,6 @@ use protocols::diagnostic::{DiagnosticHandler, Level};
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::parser::parsing_helper;
 use rustc_hash::{FxHashMap, FxHashSet};
-// From the top-level directory, run:
-// $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -72,6 +70,10 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI args
     let cli = Cli::parse();
+
+    if let Some(tu) = cli.time_unit {
+        assert_eq!(tu, "ns", "Only nano seconds are supported");
+    }
 
     // Set up logger to use the log-level specified via the `-v` flag
     // For concision, we disable timestamps and the module paths in the log
@@ -129,7 +131,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let mut trace = bi.protocol_traces().get_trace(trace_id);
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            print_trace(ii, &trace, cli.show_steps);
+            print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
+                bi.step_to_ns(step)
+            });
 
             for fail in fails {
                 let proto = &transactions_symbol_tables[fail.proto_id].0;
@@ -148,13 +152,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         for (ii, mut trace) in bi.protocol_traces().unique_traces().into_iter().enumerate() {
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            print_trace(ii, &trace, cli.show_steps);
+            print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
+                bi.step_to_ns(step)
+            });
         }
         Ok(())
     }
 }
 
-fn print_trace(ii: usize, trace: &ProtoTrace, show_steps: bool) {
+fn print_trace(
+    ii: usize,
+    trace: &ProtoTrace,
+    show_steps: bool,
+    show_time: bool,
+    get_ns: impl Fn(u32) -> String,
+) {
     println!("// trace {ii}");
     println!("trace {{");
     for ProtoCall {
@@ -183,6 +195,9 @@ fn print_trace(ii: usize, trace: &ProtoTrace, show_steps: bool) {
             } else {
                 println!(" [{start} .. {end}]");
             }
+        } else if show_time {
+            // the original monitor always shows the time of the next time step as end time
+            println!("  // [time: {} -> {}]", get_ns(*start), get_ns(*end + 1));
         } else {
             println!();
         }
