@@ -156,6 +156,17 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
                 // step trace
                 if self.trace.step() == StepResult::Done {
+                    // at the end of the trace, we add unfinished transactions to the trace
+                    for path in self.next.iter() {
+                        let mut active = path.active.clone();
+                        active.sort_by_key(|t| u32::MAX - t.start_step);
+                        for thread in active {
+                            self.traces.append(
+                                path.trace_id,
+                                thread_to_call(&self.transactions, thread, None),
+                            );
+                        }
+                    }
                     BIResult::Done
                 } else {
                     self.active.append(&mut self.next);
@@ -298,12 +309,16 @@ impl Path {
                     self.next.push(thread);
                     (PathResult::Ok, None)
                 }
-                ThreadResult::FinalStep => {
-                    (PathResult::Ok, Some(thread_to_call(tis, thread, self.step)))
-                }
+                ThreadResult::FinalStep => (
+                    PathResult::Ok,
+                    Some(thread_to_call(tis, thread, Some(self.step))),
+                ),
                 ThreadResult::FinalStepAndFork => {
                     self.fork_next_step = true;
-                    (PathResult::Ok, Some(thread_to_call(tis, thread, self.step)))
+                    (
+                        PathResult::Ok,
+                        Some(thread_to_call(tis, thread, Some(self.step))),
+                    )
                 }
             }
         } else {
@@ -323,8 +338,8 @@ impl Path {
     }
 }
 
-fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: u32) -> ProtoCall {
-    assert!(thread.next_stmt.is_none());
+fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: Option<u32>) -> ProtoCall {
+    assert!(end.is_none() || thread.next_stmt.is_none());
     let name = tis[thread.transaction_id].proto.name.clone();
     let args = thread.arg_values;
     let start = thread.start_step;
@@ -412,8 +427,8 @@ impl Thread {
                     };
                     Ok
                 }
-                Stmt::RepeatLoop(repetitions, body) => {
-                    let (arg_id, arg) = as_arg(&ti.proto, *repetitions)
+                Stmt::RepeatLoop(repetitions, _body) => {
+                    let (_arg_id, arg) = as_arg(&ti.proto, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument");
 
                     todo!("repeat {:?}", arg.symbol())

@@ -332,10 +332,6 @@ impl SignalTrace for WaveSignalTrace {
     }
 
     fn step_to_ns(&self, logical_step: u32) -> String {
-        let time_table_idx = *self
-            .step_to_idx
-            .get(logical_step as usize)
-            .unwrap_or_else(|| self.step_to_idx.last().unwrap());
         let time = if let Some(time_table_idx) = self.step_to_idx.get(logical_step as usize) {
             self.wave.time_table()[*time_table_idx as usize]
         } else {

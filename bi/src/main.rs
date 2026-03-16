@@ -190,14 +190,22 @@ fn print_trace(
         }
         print!(");");
         if show_steps {
-            if start == end {
-                println!(" [{start}]")
+            if let Some(end) = end {
+                if start == end {
+                    println!(" [{start}]");
+                } else {
+                    println!(" [{start} .. {end}]");
+                }
             } else {
-                println!(" [{start} .. {end}]");
+                println!(" [{start} .. ]");
             }
         } else if show_time {
-            // the original monitor always shows the time of the next time step as end time
-            println!("  // [time: {} -> {}]", get_ns(*start), get_ns(*end + 1));
+            if let Some(end) = end {
+                // the original monitor always shows the time of the next time step as end time
+                println!("  // [time: {} -> {}]", get_ns(*start), get_ns(*end + 1));
+            } else {
+                println!("  // [time: {} -> ]", get_ns(*start));
+            }
         } else {
             println!();
         }

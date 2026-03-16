@@ -13,7 +13,7 @@ pub type ProtoTrace = Vec<ProtoCall>;
 pub struct ProtoCall {
     pub name: String,
     pub start: u32,
-    pub end: u32,
+    pub end: Option<u32>,
     pub args: Vec<Option<BitVecValue>>,
 }
 
