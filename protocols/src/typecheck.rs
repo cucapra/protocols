@@ -90,7 +90,7 @@ fn check_expr_types(
                 }
                 Type::UnsignedInt => {
                     let error_msg = "Invalid slice operation: can't take bit-slices of uint";
-                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
                 Type::Unknown => {
