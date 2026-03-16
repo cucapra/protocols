@@ -58,6 +58,14 @@ struct Cli {
     /// If enabled, displays the start & end step for each inferred transaction
     #[arg(long)]
     show_steps: bool,
+
+    // TODO: we do not actually look at this argument right now
+    #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
+    show_waveform_time: bool,
+
+    // TODO: we do not actually look at this argument right now
+    #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
+    time_unit: Option<String>,
 }
 
 #[allow(unused_variables)]
