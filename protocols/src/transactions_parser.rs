@@ -198,6 +198,7 @@ fn parse_arg(
     // Extract the bitwidth from the type of the argument
     let bitwidth = match ty {
         Type::BitVec(width) => *width,
+        Type::UnsignedInt => 64, // we just treat unsigned integers as 64 bit for now
         _ => {
             let msg = format!("Unsupported argument type: {:?}", ty);
             handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
