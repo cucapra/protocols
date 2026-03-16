@@ -1,0 +1,10 @@
+---
+source: protocols/src/serialize.rs
+assertion_line: 374
+expression: content
+---
+error: Lexing failed: expected arg
+  ┌─ tests/misc/func_arg_invalid.prot:6:35
+  │
+6 │ prot func_arg_invalid<dut: Dummy>(in a: u1, in b: u1, out s: u1) { 
+  │                                   ^ Lexing failed: expected arg

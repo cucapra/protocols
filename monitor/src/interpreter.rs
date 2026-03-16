@@ -217,23 +217,21 @@ impl Interpreter {
                         // Find if there's an output parameter with this name
                         // that hasn't been added to the `args_mapping` yet
                         for arg in &self.transaction.args {
-                            if let Dir::Out = arg.dir() {
-                                let param_name = self.symbol_table[arg.symbol()].name();
-                                if param_name == pin_name
-                                    && !self.args_mapping.contains_key(&arg.symbol())
-                                {
-                                    // If yes, we read the value for the corresponding
-                                    // DUT pin from the trace, and update the args_mapping
-                                    // so that `<output_param> |-> <value_of_DUT_pin_from_trace>`
-                                    info!(
-                                        "Capturing output parameter {} = {}",
-                                        param_name,
-                                        serialize_bitvec(&value, ctx.display_hex)
-                                    );
-                                    self.args_mapping.insert(arg.symbol(), value.clone());
+                            let param_name = self.symbol_table[arg.symbol()].name();
+                            if param_name == pin_name
+                                && !self.args_mapping.contains_key(&arg.symbol())
+                            {
+                                // If yes, we read the value for the corresponding
+                                // DUT pin from the trace, and update the args_mapping
+                                // so that `<output_param> |-> <value_of_DUT_pin_from_trace>`
+                                info!(
+                                    "Capturing output parameter {} = {}",
+                                    param_name,
+                                    serialize_bitvec(&value, ctx.display_hex)
+                                );
+                                self.args_mapping.insert(arg.symbol(), value.clone());
 
-                                    break;
-                                }
+                                break;
                             }
                         }
                     }
@@ -539,17 +537,14 @@ impl Interpreter {
                 let name1 = self.symbol_table.full_name_from_symbol_id(&symbol_id1);
                 let name2 = self.symbol_table.full_name_from_symbol_id(&symbol_id2);
 
-                let out_params: Vec<SymbolId> = self
-                    .transaction
-                    .get_parameters_by_direction(Dir::Out)
-                    .collect();
-                for out_param_symbol in out_params {
-                    if out_param_symbol == symbol_id1 {
+                let params: Vec<_> = self.transaction.args.iter().map(|a| a.symbol()).collect();
+                for param_symbol in params {
+                    if param_symbol == symbol_id1 {
                         info!("{} is an output param of the transaction", name1);
                         self.map_output_param_to_trace(
                             symbol_id1, symbol_id2, *expr_id2, ctx, trace,
                         )?;
-                    } else if out_param_symbol == symbol_id2 {
+                    } else if param_symbol == symbol_id2 {
                         info!("{} is an output param of the transaction", name2);
                         self.map_output_param_to_trace(
                             symbol_id2, symbol_id1, *expr_id1, ctx, trace,
@@ -657,88 +652,75 @@ impl Interpreter {
                             self.format_expr(known_expr_id)
                         );
 
-                        // Check if `symbol_name` is an output parameter
-                        let out_params: Vec<SymbolId> = self
-                            .transaction
-                            .get_parameters_by_direction(Dir::Out)
-                            .collect();
-                        if !out_params.contains(sliced_symbol_id) {
-                            Ok(())
-                        } else {
-                            // Get the expected width from the symbol's type
-                            let expected_width =
-                                self.symbol_table[sliced_symbol_id].tpe().bitwidth();
+                        // Get the expected width from the symbol's type
+                        let expected_width = self.symbol_table[sliced_symbol_id].tpe().bitwidth();
 
-                            // If `sliced_symbol_id` isn't in either of
-                            // `args_mapping` or `known_bits`, map it to the
-                            // bit-vector of all zeroes
-                            self.args_mapping
-                                .entry(*sliced_symbol_id)
-                                .or_insert_with(|| BitVecValue::zero(expected_width));
-                            self.known_bits
-                                .entry(*sliced_symbol_id)
-                                .or_insert_with(|| BitVecValue::zero(expected_width));
+                        // If `sliced_symbol_id` isn't in either of
+                        // `args_mapping` or `known_bits`, map it to the
+                        // bit-vector of all zeroes
+                        self.args_mapping
+                            .entry(*sliced_symbol_id)
+                            .or_insert_with(|| BitVecValue::zero(expected_width));
+                        self.known_bits
+                            .entry(*sliced_symbol_id)
+                            .or_insert_with(|| BitVecValue::zero(expected_width));
 
-                            // Get the current value and known_bits
-                            let mut current_value = self.args_mapping[sliced_symbol_id].clone();
-                            let mut known_bits = self.known_bits[sliced_symbol_id].clone();
+                        // Get the current value and known_bits
+                        let mut current_value = self.args_mapping[sliced_symbol_id].clone();
+                        let mut known_bits = self.known_bits[sliced_symbol_id].clone();
 
-                            // Update bits `[msb:lsb]` w/ the known value
-                            for i in 0..=(msb - lsb) {
-                                let bit_pos = lsb + i;
-                                if known_value.is_bit_set(i) {
-                                    current_value.set_bit(bit_pos);
-                                } else {
-                                    current_value.clear_bit(bit_pos);
-                                }
-                                // Mark this bit as known
-                                known_bits.set_bit(bit_pos);
+                        // Update bits `[msb:lsb]` w/ the known value
+                        for i in 0..=(msb - lsb) {
+                            let bit_pos = lsb + i;
+                            if known_value.is_bit_set(i) {
+                                current_value.set_bit(bit_pos);
+                            } else {
+                                current_value.clear_bit(bit_pos);
                             }
-
-                            // Update `args_mapping` and `known_bits` to point
-                            // to the updated values & known bits
-                            self.args_mapping
-                                .insert(*sliced_symbol_id, current_value.clone());
-                            self.known_bits
-                                .insert(*sliced_symbol_id, known_bits.clone());
-
-                            info!(
-                                "Updated args_mapping: {} |-> {} (0b{})",
-                                symbol_name,
-                                serialize_bitvec(&current_value, ctx.display_hex),
-                                current_value.to_bit_str()
-                            );
-                            info!(
-                                "Updated known_bits: {} |-> {}",
-                                symbol_name,
-                                known_bits.to_bit_str()
-                            );
-
-                            Ok(())
+                            // Mark this bit as known
+                            known_bits.set_bit(bit_pos);
                         }
+
+                        // Update `args_mapping` and `known_bits` to point
+                        // to the updated values & known bits
+                        self.args_mapping
+                            .insert(*sliced_symbol_id, current_value.clone());
+                        self.known_bits
+                            .insert(*sliced_symbol_id, known_bits.clone());
+
+                        info!(
+                            "Updated args_mapping: {} |-> {} (0b{})",
+                            symbol_name,
+                            serialize_bitvec(&current_value, ctx.display_hex),
+                            current_value.to_bit_str()
+                        );
+                        info!(
+                            "Updated known_bits: {} |-> {}",
+                            symbol_name,
+                            known_bits.to_bit_str()
+                        );
+
+                        Ok(())
                     }
                     _ => Ok(()),
                 }
             }
             Expr::Sym(symbol_id) => {
-                // Fetch all the output parameters of the function
-                let out_params: Vec<SymbolId> = self
-                    .transaction
-                    .get_parameters_by_direction(Dir::Out)
-                    .collect();
+                // Fetch all the parameters of the function
+                let params: Vec<_> = self.transaction.args.iter().map(|a| a.symbol()).collect();
 
-                let out_param_strs = out_params
+                let param_strs = params
                     .iter()
                     .map(|symbol_id| self.symbol_table[symbol_id].name().to_string())
                     .collect::<Vec<String>>()
                     .join(", ");
-                info!("out_params = {}", out_param_strs);
+                info!("out_params = {}", param_strs);
 
                 // If `symbol_id` is an output parameter that is currently
                 // absent from `args_mapping`, insert the binding
                 // `symbol_id |-> known_value` into `args_mapping`,
                 // and update `known_bits` to be all ones
-                if out_params.contains(symbol_id) {
+                if params.contains(symbol_id) {
                     let symbol_name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
 
                     info!("Identified {} as an output parameter", symbol_name);

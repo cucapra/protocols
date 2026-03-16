@@ -1,0 +1,10 @@
+---
+source: protocols/src/typecheck.rs
+assertion_line: 316
+expression: content
+---
+error: Lexing failed: expected arg
+  ┌─ tests/adders/adder_d1/add_d1.prot:8:22
+  │
+8 │ prot add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+  │                      ^ Lexing failed: expected arg

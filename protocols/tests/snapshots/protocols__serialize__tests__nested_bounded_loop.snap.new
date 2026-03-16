@@ -1,0 +1,10 @@
+---
+source: protocols/src/serialize.rs
+assertion_line: 374
+expression: content
+---
+error: Lexing failed: expected arg
+   ┌─ tests/adders/adder_d1/nested_busy_wait.prot:12:35
+   │
+12 │ prot nested_busy_wait<DUT: Adder>(in a: u32, in b: u32, in outer_iters: uint, in inner_iters: uint, out s: u32) {
+   │                                   ^ Lexing failed: expected arg

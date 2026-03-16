@@ -1,0 +1,10 @@
+---
+source: protocols/src/typecheck.rs
+assertion_line: 316
+expression: content
+---
+error: Lexing failed: expected arg
+  ┌─ tests/counters/simple_while.prot:6:33
+  │
+6 │ prot simple_while<dut: Counter>(in a: u64, in b: u64, out s: u64) {
+  │                                 ^ Lexing failed: expected arg

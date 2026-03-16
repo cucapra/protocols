@@ -1,0 +1,10 @@
+---
+source: protocols/src/serialize.rs
+assertion_line: 374
+expression: content
+---
+error: Lexing failed: expected arg
+  ┌─ tests/counters/simple_bounded_loop.prot:6:40
+  │
+6 │ prot simple_bounded_loop<dut: Counter>(in a: u64, in num_iterations: uint, out s: u64) {
+  │                                        ^ Lexing failed: expected arg

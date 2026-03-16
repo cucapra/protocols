@@ -333,16 +333,14 @@ pub fn serialize(
                 if last_index {
                     writeln!(
                         out,
-                        "{} {}: {}) {{",
-                        arg.dir(),
+                        "{}: {}) {{",
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
                     )?;
                 } else {
                     write!(
                         out,
-                        "{} {}: {}, ",
-                        arg.dir(),
+                        "{}: {}, ",
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
                     )?;
@@ -537,7 +535,7 @@ pub mod tests {
 
         // 2) create transaction
         let mut easycond = Transaction::new("easycond".to_string());
-        easycond.args = vec![Arg::new(a, Dir::In), Arg::new(b, Dir::Out)];
+        easycond.args = vec![Arg::new(a), Arg::new(b)];
         easycond.type_param = Some(dut);
 
         // 3) create expressions
