@@ -418,7 +418,7 @@ impl Thread {
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self
-                        .eval_expr(get_value, &&ti.proto, *cond)
+                        .eval_expr(get_value, &ti.proto, *cond)
                         .expect("while condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*body)
@@ -435,7 +435,7 @@ impl Thread {
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
-                        .eval_expr(get_value, &&ti.proto, *cond)
+                        .eval_expr(get_value, &ti.proto, *cond)
                         .expect("if condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*tru)
