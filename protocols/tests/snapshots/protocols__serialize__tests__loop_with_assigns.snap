@@ -8,7 +8,7 @@ struct Adder {
   out s: u32,
 }
 
-fn loop_add<DUT: Adder>(in a: u32, in b: u32, in num_iters: uint, out s: u32) {
+fn loop_add<DUT: Adder>(a: u32, b: u32, num_iters: uint, s: u32) {
   repeat num_iters iterations {
     DUT.a := a;
     DUT.b := b;
