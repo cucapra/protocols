@@ -13,13 +13,13 @@ struct Regfile {
 
 // source: https://github.com/ekiwi/transactional-verification-with-protocols/blob/039fb8d5beafb3c4a464e5dac3dc8a3e00b69f04/serv/check_regfile.py#L17
 prot read_write<R: Regfile>(
-    in rs1_addr: u5,
-    out rs1_data: u32,
-    out rs2_data: u32,
-    in rs2_addr: u5,
-    in rd_enable: u1,
-    in rd_addr: u5,
-    in rd_data: u32,
+    rs1_addr: u5,
+    rs1_data: u32,
+    rs2_data: u32,
+    rs2_addr: u5,
+    rd_enable: u1,
+    rd_addr: u5,
+    rd_data: u32,
   ) {
 
   R.i_go := 1'b1;

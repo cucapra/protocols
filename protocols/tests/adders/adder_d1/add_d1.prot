@@ -5,7 +5,7 @@ struct Adder {
   out s: u32,
 }
 
-prot add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -16,7 +16,7 @@ prot add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-prot add_fork_early<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -27,9 +27,9 @@ prot add_fork_early<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-// Like `add` above, but this protocol doesn't end in `step`, 
+// Like `add` above, but this protocol doesn't end in `step`,
 // so this function is ill-formed
-prot add_doesnt_end_in_step<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_doesnt_end_in_step<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -40,7 +40,7 @@ prot add_doesnt_end_in_step<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
 }
 
 
-prot add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -51,7 +51,7 @@ prot add_incorrect<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-prot add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_incorrect_implicit<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -63,7 +63,7 @@ prot add_incorrect_implicit<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
   step();
 }
 
-prot wait_and_add<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
 
   step();
 

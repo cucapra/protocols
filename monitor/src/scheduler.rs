@@ -623,9 +623,7 @@ impl Scheduler {
         // (The `loop_arg` is an input
         // parameter, so other statements in the protocol
         // can still refer to it)
-        let loop_arg_bitwidth = current_thread.symbol_table[loop_arg_symbol_id]
-            .tpe()
-            .bitwidth();
+        let loop_arg_bitwidth = 64; // TODO: simplify this code since we will just treat uint as 64-bit
         exited_thread.args_mapping.insert(
             loop_arg_symbol_id,
             BitVecValue::from_u64(n, loop_arg_bitwidth),

@@ -46,7 +46,7 @@ prot idle<DUT: WBSubordinate>() {
 // Writes a `data` value to the subordinate.
 // Wishbone says to hold all request signals while stalled (stall=1),
 // i.e. when the subordinate is busy processing a previous request.
-prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
+prot write<DUT: WBSubordinate>(addr: u1, data: u32) {
     DUT.i_cyc  := 1'b1;
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b1;
@@ -79,7 +79,7 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
 
 // Reads a value from the subordinate
 // (the `data` is conveyed via output parameters)
-prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
+prot read<DUT: WBSubordinate>(addr: u1, data: u32) {
     DUT.i_cyc  := 1'b1;
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b0;

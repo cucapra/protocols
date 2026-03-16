@@ -6,6 +6,7 @@ runs:
     - uses: YosysHQ/setup-oss-cad-suite@v3
       with:
         version: '2024-05-07'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
     - uses: ./.github/actions/setup-uv
     - name: Install Turnt
       shell: bash

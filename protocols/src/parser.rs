@@ -491,11 +491,6 @@ impl ParserContext<'_> {
             match inner_pair.as_rule() {
                 Rule::arg => {
                     let mut arg_inner = inner_pair.clone().into_inner();
-                    let dir_pair = self.expect_rule(
-                        arg_inner.next(),
-                        &inner_pair,
-                        "Expected direction in argument",
-                    )?;
                     let id_pair = self.expect_rule(
                         arg_inner.next(),
                         &inner_pair,
@@ -506,11 +501,10 @@ impl ParserContext<'_> {
                         &inner_pair,
                         "Expected type in argument",
                     )?;
-                    let dir = self.parse_dir(dir_pair)?;
                     let id = id_pair.as_str();
                     let tpe = self.parse_type(tpe_pair)?;
                     let symbol_id = self.st.add_without_parent(id.to_string(), tpe);
-                    let arg = Arg::new(symbol_id, dir);
+                    let arg = Arg::new(symbol_id);
                     args.push(arg);
                 }
                 Rule::arglist => {
@@ -543,20 +537,23 @@ impl ParserContext<'_> {
         let mut symbols = Vec::new();
         for inner_pair in pair.into_inner() {
             match inner_pair.as_rule() {
-                Rule::arg => {
-                    let mut arg_inner = inner_pair.clone().into_inner();
+                Rule::field => {
+                    let mut field_inner = inner_pair.clone().into_inner();
                     let dir_pair = self.expect_rule(
-                        arg_inner.next(),
+                        field_inner.next(),
                         &inner_pair,
                         "Expected direction in field",
                     )?;
                     let id_pair = self.expect_rule(
-                        arg_inner.next(),
+                        field_inner.next(),
                         &inner_pair,
                         "Expected identifier in field",
                     )?;
-                    let tpe_pair =
-                        self.expect_rule(arg_inner.next(), &inner_pair, "Expected type in field")?;
+                    let tpe_pair = self.expect_rule(
+                        field_inner.next(),
+                        &inner_pair,
+                        "Expected type in field",
+                    )?;
                     let dir = self.parse_dir(dir_pair)?;
                     let id = id_pair.as_str();
                     let tpe = self.parse_type(tpe_pair)?;
@@ -564,7 +561,7 @@ impl ParserContext<'_> {
                     fields.push(field);
                     symbols.push(id.to_string());
                 }
-                Rule::arglist => {
+                Rule::field_list => {
                     let (nested_fields, nested_symbols) = self.parse_fields(inner_pair)?;
                     fields.extend(nested_fields);
                     symbols.extend(nested_symbols);
@@ -619,19 +616,28 @@ impl ParserContext<'_> {
     }
 
     fn parse_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Type, String> {
-        match pair.as_rule() {
-            Rule::tpe => {
-                let mut inner_rules = pair.into_inner();
-                let type_str = inner_rules.next().unwrap().as_str();
-                let size = type_str.parse::<u32>().unwrap();
-                Ok(Type::BitVec(size))
+        if pair.as_rule() == Rule::tpe {
+            let inner_type =
+                self.expect_rule(pair.clone().into_inner().next(), &pair, "Expected type")?;
+            match inner_type.as_rule() {
+                Rule::bv_tpe => {
+                    let width_str = inner_type.into_inner().next().unwrap().as_str();
+                    let size = width_str.parse::<u32>().unwrap();
+                    Ok(Type::BitVec(size))
+                }
+                Rule::uint_tpe => Ok(Type::UnsignedInt),
+                _ => {
+                    let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
+                    self.handler
+                        .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+                    Err(msg)
+                }
             }
-            _ => {
-                let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
-                self.handler
-                    .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
-                Err(msg)
-            }
+        } else {
+            let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
+            self.handler
+                .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+            Err(msg)
         }
     }
 }

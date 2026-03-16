@@ -9,7 +9,7 @@ struct AXIS {
     in m_axis_tdata: u8,
 }
 
-prot send_data<D: AXIS>(in data: u8) {
+prot send_data<D: AXIS>(data: u8) {
     D.m_axis_tdata := data;
     D.m_axis_tvalid := 1'b1;
     while (!(D.m_axis_tready == 1'b1)) {
