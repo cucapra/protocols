@@ -26,8 +26,8 @@ struct AxisFifo {
 // - `push_data` is the value being pushed,
 // - `pop_data` is the value being popped
 prot push_and_pop<DUT: AxisFifo>(
-    in push_data: u8,
-    out pop_data: u8,
+    push_data: u8,
+    pop_data: u8,
 ) {
     // Check that both push and pop handshakes occur in this cycle
     DUT.rst := 1'b0;
@@ -48,7 +48,7 @@ prot push_and_pop<DUT: AxisFifo>(
 // Arguments:
 //   data - Payload byte to write to FIFO
 prot push<DUT: AxisFifo>(
-    in data: u8,
+    data: u8,
 ) {
     // Check that push handshake occurs (valid & ready both 1)
     DUT.rst := 1'b0;
@@ -73,7 +73,7 @@ prot push<DUT: AxisFifo>(
 // Output Arguments:
 //   data - Expected payload byte from FIFO
 prot pop<DUT: AxisFifo>(
-    out data: u8,
+    data: u8,
 ) {
     // Check that pop handshake occurs (valid & ready both 1)
     DUT.rst := 1'b0;
@@ -128,8 +128,8 @@ prot reset<DUT: AxisFifo>() {
 // - `push_data` is the value being pushed,
 // - `pop_data` is the value being popped
 prot push_and_pop<DUT: AxisFifo>(
-    in push_data: u8,
-    out pop_data: u8,
+    push_data: u8,
+    pop_data: u8,
 ) {
     DUT.rst := 1'b0;
 

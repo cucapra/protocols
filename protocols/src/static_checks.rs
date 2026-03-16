@@ -209,8 +209,8 @@ pub fn check_assertion_arg_wf(
     match expr {
         Expr::Const(_) => Ok(()),
         Expr::Sym(symbol_id) => {
-            // Check if the identifier is an output parameter of the function
-            if tr.is_param_with_direction(*symbol_id, Dir::Out) {
+            // Check if the identifier is a parameter of the function
+            if tr.is_param(*symbol_id) {
                 Ok(())
             } else {
                 // Check if the identifier is a DUT output port
@@ -294,40 +294,29 @@ pub fn check_assignment_rhs_wf(
             // The only kind of identifier which is allowed on
             // the RHS of an assignment is an input parameter
             // All other kinds of identifiers are forbidden
-            if tr.is_param_with_direction(*symbol_id, Dir::In) {
+            if tr.is_param(*symbol_id) {
                 Ok(())
             } else {
-                // Output parameters are not allowed to appear on the RHS of assignments
-                if tr.is_param_with_direction(*symbol_id, Dir::Out) {
+                // Only output fields of structs are allowed to appear on the RHS of assignments
+                if symbol_table[symbol_id].parent().is_some() {
+                    check_if_symbol_is_dut_port(
+                        *symbol_id,
+                        Some(Dir::Out),
+                        LocationId::Expr(*rhs_expr_id),
+                        tr,
+                        symbol_table,
+                        handler,
+                        LangFeature::Assignments,
+                    )
+                } else {
+                    // Generic error message for invalid identifiers
+                    // (e.g. the user referred to a non-existent variable)
                     let error_msg = format!(
-                        "`{}` is an output parameter of the function `{}`, but output parameters are not allowed to appear on the RHS of assignments",
-                        serialize_expr(tr, symbol_table, rhs_expr_id),
-                        tr.name
+                        "Invalid identifier {} on the RHS of an assignment",
+                        symbol_table[symbol_id].name()
                     );
                     handler.emit_diagnostic_expr(tr, rhs_expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
-                } else {
-                    // Only output fields of structs are allowed to appear on the RHS of assignments
-                    if symbol_table[symbol_id].parent().is_some() {
-                        check_if_symbol_is_dut_port(
-                            *symbol_id,
-                            Some(Dir::Out),
-                            LocationId::Expr(*rhs_expr_id),
-                            tr,
-                            symbol_table,
-                            handler,
-                            LangFeature::Assignments,
-                        )
-                    } else {
-                        // Generic error message for invalid identifiers
-                        // (e.g. the user referred to a non-existent variable)
-                        let error_msg = format!(
-                            "Invalid identifier {} on the RHS of an assignment",
-                            symbol_table[symbol_id].name()
-                        );
-                        handler.emit_diagnostic_expr(tr, rhs_expr_id, &error_msg, Level::Error);
-                        Err(anyhow!(error_msg))
-                    }
                 }
             }
         }

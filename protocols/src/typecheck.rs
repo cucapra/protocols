@@ -413,11 +413,7 @@ mod tests {
             std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
         let mut tr = Transaction::new("func_arg_invalid".to_string());
-        tr.args = vec![
-            Arg::new(a, Dir::In),
-            Arg::new(b, Dir::In),
-            Arg::new(s, Dir::Out),
-        ];
+        tr.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         let b_expr = tr.e(Expr::Sym(b));
         tr.add_expr_loc(b_expr, 62, 63, fileid);

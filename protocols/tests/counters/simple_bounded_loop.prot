@@ -3,7 +3,7 @@ struct Counter {
     out s: u64,
 }
 
-prot simple_bounded_loop<dut: Counter>(in a: u64, in num_iterations: uint, out s: u64) {
+prot simple_bounded_loop<dut: Counter>(a: u64, num_iterations: uint, s: u64) {
     dut.a := a;
     repeat num_iterations iterations {
         step();

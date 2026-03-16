@@ -6,7 +6,7 @@ struct aes_128 {
   out out: u128,
 }
 
-prot aes128<dut : aes_128>(in key: u128, in state: u128, out out: u128) {
+prot aes128<dut : aes_128>(key: u128, state: u128, out: u128) {
   dut.state := state;
   dut.key := key;
   step();

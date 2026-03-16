@@ -69,7 +69,7 @@ struct Receiver {
 //   data - Payload byte to write to FIFO
 
 prot push<DUT: Sender>(
-    in data: u8,
+    data: u8,
 ) {
     DUT.rst := 1'b0;
 
@@ -93,7 +93,7 @@ prot push<DUT: Sender>(
 // Output Arguments:
 //   data - Expected payload byte from FIFO
 prot pop<DUT: Receiver>(
-    out data: u8,
+    data: u8,
 ) {
     DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;

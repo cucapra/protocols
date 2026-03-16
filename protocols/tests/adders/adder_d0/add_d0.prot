@@ -4,7 +4,7 @@ struct Adder {
   out s: u32,
 }
 
-prot add_combinational_illegal_observation_in_conditional<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_combinational_illegal_observation_in_conditional<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := X;
   DUT.b := X;
   DUT.a := a;
@@ -17,7 +17,7 @@ prot add_combinational_illegal_observation_in_conditional<DUT: Adder>(in a: u32,
   step();
 }
 
-prot add_combinational_illegal_observation_in_assertion<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_combinational_illegal_observation_in_assertion<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := X;
   DUT.b := X;
   DUT.a := a;
@@ -26,7 +26,7 @@ prot add_combinational_illegal_observation_in_assertion<DUT: Adder>(in a: u32, i
   step();
 }
 
-prot add_combinational_legal_observation_illegal_assignment<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_combinational_legal_observation_illegal_assignment<DUT: Adder>(a: u32, b: u32, s: u32) {
   if (DUT.s == 32'b0) {
     DUT.a := a; // this should be illegal
   } else {
@@ -35,7 +35,7 @@ prot add_combinational_legal_observation_illegal_assignment<DUT: Adder>(in a: u3
   step();
 }
 
-prot add_combinational<DUT: Adder>(in a: u32, in b: u32, out s: u32) {
+prot add_combinational<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   assert_eq(s, DUT.s);

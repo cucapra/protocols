@@ -1,5 +1,5 @@
 ---
-source: src/serialize.rs
+source: protocols/src/serialize.rs
 expression: content
 ---
 struct Counter {
@@ -7,7 +7,7 @@ struct Counter {
   out s: u64,
 }
 
-fn simple_if<dut: Counter>(in a: u64, out s: u64) {
+fn simple_if<dut: Counter>(a: u64, s: u64) {
   dut.a := a;
   step();
   step();
