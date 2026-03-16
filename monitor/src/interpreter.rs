@@ -65,6 +65,23 @@ impl Interpreter {
         for arg in &self.transaction.args {
             let symbol_id = arg.symbol();
             if let Some(value) = self.args_mapping.get(&symbol_id) {
+                // Check that all bits of the parameter are known.
+                // If any bits are unknown, the thread fails (the user needs to
+                // add assertions/assignments that fully specify
+                // what the unknown bits ought to be)
+                if let Some(kb) = self.known_bits.get(&symbol_id) {
+                    let unknown_bits: Vec<u32> =
+                        (0..value.width()).filter(|&i| !kb.is_bit_set(i)).collect();
+                    if !unknown_bits.is_empty() {
+                        let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
+                        info!(
+                            "Parameter `{}` has unknown bits {:?} — \
+                             add assertions / assignments to fully specify all bits",
+                            name, unknown_bits
+                        );
+                        return None;
+                    }
+                }
                 serialized_args.push(serialize_bitvec(value, ctx.display_hex));
             } else {
                 let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
