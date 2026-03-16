@@ -22,6 +22,7 @@ pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Res
 pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => format!("u{}", t),
+        Type::UnsignedInt => "uint".to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
         Type::Unknown => "unknown".to_string(),
     }

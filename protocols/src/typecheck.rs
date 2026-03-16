@@ -88,6 +88,11 @@ fn check_expr_types(
                     handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
+                Type::UnsignedInt => {
+                    let error_msg = "Invalid slice operation: can't take bit-slices of uint";
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
                 Type::Unknown => {
                     let error_msg = format!(
                         "Invalid slice operation: can't take bit-slices of expr {} with Unknown type",
@@ -204,9 +209,9 @@ fn check_stmt_types(
             }
         }
         Stmt::RepeatLoop(count_expr, bodyid) => {
-            // Typecheck the no. of iterations (which must be a BitVec type of any width)
+            // Typecheck the no. of iterations (which must be a uint type)
             let num_iterations_type = check_expr_types(tr, st, handler, count_expr)?;
-            if let Type::BitVec(_) = num_iterations_type {
+            if let Type::UnsignedInt = num_iterations_type {
                 // Then, type-check the loop body
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
