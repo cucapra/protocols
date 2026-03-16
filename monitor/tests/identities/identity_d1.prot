@@ -10,6 +10,7 @@ prot slicing_ok<DUT: Identity>(a: u32, s: u32) {
   step();
 
   assert_eq(s[31:15], DUT.s[31:15]);
+  assert_eq(s[14:0], DUT.s[14:0]);
 
   fork();
   step();
