@@ -174,7 +174,7 @@ impl Transaction {
     /// Determines if `symbol_id` is a function parameter with the desired `direction`
     /// (e.g. check if an identifier corresponds to an input parameter of the function)
     pub fn is_param(&self, symbol_id: SymbolId) -> bool {
-        self.args.iter().find(|a| a.symbol() == symbol_id).is_some()
+        self.args.iter().any(|a| a.symbol() == symbol_id)
     }
 
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
