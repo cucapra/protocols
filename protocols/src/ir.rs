@@ -281,6 +281,8 @@ impl std::ops::Not for Dir {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Type {
+    /// Non-negative integer with no upper bound.
+    UnsignedInt,
     BitVec(u32),
     Struct(StructId),
     /// Type taken on when we do not know the actual type yet
@@ -309,6 +311,7 @@ impl Type {
         match self {
             Type::BitVec(width) => *width,
             Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
         }
     }
