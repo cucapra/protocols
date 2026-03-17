@@ -145,10 +145,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        Err("".into())
+        Err("Monitor failed".into())
     } else {
         for (ii, mut trace) in bi.protocol_traces().unique_traces().into_iter().enumerate() {
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
+            if ii > 0 {
+                println!();
+            }
             print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
                 bi.step_to_ns(step)
             });
