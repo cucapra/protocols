@@ -39,9 +39,6 @@ struct WBSubordinate {
 prot idle<DUT: WBSubordinate>() {
     DUT.i_cyc  := 1'b0;
     DUT.i_stb  := 1'b0;
-    DUT.i_we   := X;
-    DUT.i_addr := X;
-    DUT.i_data := X;
     step();
 }
 
@@ -66,16 +63,6 @@ prot write<DUT: WBSubordinate>(addr: u1, data: u32) {
     // Data is updated combinationally in the same cycle as the ack,
     // so no separate cycle for data transfer is needed
     assert_eq(DUT.o_data, data);
-
-    // Set other inputs to DontCare
-    // Note that the waveform produced by their C++ test-bench keeps 
-    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.i_cyc := X;
-    DUT.i_stb := X;
-    DUT.i_we := X;
-    DUT.i_addr := X;
-    DUT.i_data := X;
-    
     step();
 }
 
@@ -86,7 +73,6 @@ prot read<DUT: WBSubordinate>(addr: u1, data: u32) {
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b0;
     DUT.i_addr := addr;
-    DUT.i_data := X;
 
     // Wait for subordinate to Ack
     // (When we're reading, the write-enable is always 0, 
@@ -100,14 +86,5 @@ prot read<DUT: WBSubordinate>(addr: u1, data: u32) {
     // Data is updated combinationally in the same cycle as the ack,
     // so no separate cycle for data transfer is needed
     assert_eq(DUT.o_data, data);
-    
-    // Set other inputs to DontCare
-    // Note that the waveform produced by their C++ test-bench keeps 
-    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.i_cyc := X;
-    DUT.i_stb := X;
-    DUT.i_we := X;
-    DUT.i_addr := X;
-    
     step();
 }
