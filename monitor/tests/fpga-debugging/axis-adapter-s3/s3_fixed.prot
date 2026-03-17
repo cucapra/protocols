@@ -91,6 +91,8 @@ prot stall<DUT: AXISManager>(data: u8, last: u1) {
     // Verify outputs remained stable during the stall
     assert_eq(DUT.output_axis_tdata, data);
     assert_eq(DUT.output_axis_tlast, last);
+
+    step();
 }
 
 // WAIT_FOR_DATA: Receiver is ready but no data is available
