@@ -20,7 +20,5 @@ prot multi<dut: multi0>(data_in: u32, data_out: u32) {
     }
 
     assert_eq(dut.out, data_out);
-
-    fork();
     step();
 }

@@ -16,7 +16,5 @@ prot multi<dut: multi2const>(data_in: u64, data_out: u64) {
     step(3);
 
     assert_eq(dut.out, data_out);
-
-    fork();
     step();
 }
