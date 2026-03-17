@@ -32,7 +32,7 @@ struct Cli {
 
     /// A mapping of DUT struct in the protocol file to an instance in the signal trace.
     /// Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
-    #[arg(short, long)]
+    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
     instances: Vec<String>,
 
     /// Users can specify `-v` or `--verbose` to toggle logging
@@ -56,13 +56,23 @@ struct Cli {
     #[arg(long)]
     show_steps: bool,
 
-    // TODO: we do not actually look at this argument right now
+    /// This flag will make the bi append any in-progress transactions to the trace.
+    #[arg(long)]
+    include_in_progress: bool,
+
     #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
     show_waveform_time: bool,
 
-    // TODO: we do not actually look at this argument right now
     #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
     time_unit: Option<String>,
+
+    /// Limit the number of traces written to stdout.
+    #[arg(long)]
+    max_traces: Option<u32>,
+
+    /// If enabled, displays integer literals using hexadecimal notation
+    #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
+    display_hex: bool,
 }
 
 #[allow(unused_variables)]
@@ -75,8 +85,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // parse protocol file
+    let show_warnings = false;
     let skip_static_step_fork_checks = false;
-    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
     let parsed_ir = frontend(cli.protocol, &mut d, skip_static_step_fork_checks)?;
 
     let designs = find_designs(parsed_ir.iter());
@@ -108,31 +119,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
-    let mut bi = BackwardsInterpreter::new(parsed_ir.iter(), trace, 0);
+    let mut bi = BackwardsInterpreter::new(parsed_ir.iter(), trace, 0, cli.include_in_progress);
     let r = bi.run();
 
     if let BIResult::Fail(failures) = r {
-        debug_assert_eq!(
-            failures.len(),
-            1,
-            "TODO: handle multiple possible traces better"
-        );
         for (ii, (trace_id, fails)) in failures.into_iter().enumerate() {
             if ii > 0 {
                 println!();
             }
             let mut trace = bi.protocol_traces().get_trace(trace_id);
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
-                bi.step_to_ns(step)
-            });
+            print_trace(
+                ii,
+                &trace,
+                cli.show_steps,
+                cli.show_waveform_time,
+                cli.display_hex,
+                |step| bi.step_to_ns(step),
+            );
 
             for fail in fails {
                 let proto = &parsed_ir[fail.proto_id].0;
                 let msg = format!(
-                    "in step {}: [{}] {} != {}",
-                    fail.step,
+                    "[{}] executing step {} of the transaction: {} != {}",
                     fail.thread_name,
+                    fail.thread_local_step,
                     fail.a.to_hex_str(),
                     fail.b.to_hex_str()
                 );
@@ -140,13 +151,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        Err("".into())
+        Err("Monitor failed".into())
     } else {
-        for (ii, mut trace) in bi.protocol_traces().unique_traces().into_iter().enumerate() {
+        let unique_traces = bi.protocol_traces().unique_traces();
+        let num_traces = unique_traces.len();
+        for (ii, mut trace) in unique_traces.into_iter().enumerate() {
+            if cli.max_traces == Some(ii as u32) {
+                println!("Displayed {}/{} traces.", ii, num_traces);
+                break;
+            }
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
-                bi.step_to_ns(step)
-            });
+            if ii > 0 {
+                println!();
+            }
+            print_trace(
+                ii,
+                &trace,
+                cli.show_steps,
+                cli.show_waveform_time,
+                cli.display_hex,
+                |step| bi.step_to_ns(step),
+            );
         }
         Ok(())
     }
@@ -157,6 +182,7 @@ fn print_trace(
     trace: &ProtoTrace,
     show_steps: bool,
     show_time: bool,
+    display_hex: bool,
     get_ns: impl Fn(u32) -> String,
 ) {
     println!("// trace {ii}");
@@ -175,7 +201,11 @@ fn print_trace(
                 print!(", ");
             }
             if let Some(v) = arg {
-                print!("{}", v.to_dec_str());
+                if display_hex {
+                    print!("0x{}", v.to_hex_str());
+                } else {
+                    print!("{}", v.to_dec_str());
+                }
             } else {
                 print!("X");
             }
