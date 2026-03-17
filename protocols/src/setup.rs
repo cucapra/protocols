@@ -46,6 +46,12 @@ pub fn create_sim_context(
     })
 }
 
+pub type TestEnv = (
+    Vec<(Transaction, SymbolTable)>,
+    patronus::expr::Context,
+    patronus::system::TransitionSystem,
+);
+
 /// Takes the following arguments and creates an environment for testing
 /// - `verilog_paths`: paths to Verilog files
 /// - `transaction_filename`: path to a Protocol `.prot` file
@@ -57,11 +63,7 @@ pub fn setup_test_environment(
     top_module: Option<String>,
     handler: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
-) -> anyhow::Result<(
-    Vec<(Transaction, SymbolTable)>,    // owned
-    patronus::expr::Context,            // owned
-    patronus::system::TransitionSystem, // owned
-)> {
+) -> anyhow::Result<TestEnv> {
     let (ctx, sys) = create_sim_context(verilog_paths, top_module);
     let parsed = frontend(transaction_filename, handler, skip_static_step_fork_checks)?;
     Ok((parsed, ctx, sys))
