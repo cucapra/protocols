@@ -1,5 +1,5 @@
-// ARGS: --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/didnt_end_in_step.prot
-// RETURN: 1
+// ARGS: --skip-static-step-fork-checks --verilog adders/adder_d1/add_d1.v --protocol adders/adder_d1/didnt_end_in_step.prot
+// RETURN: 101
 trace {
     add_doesnt_end_in_step(1, 2, 3);
 }

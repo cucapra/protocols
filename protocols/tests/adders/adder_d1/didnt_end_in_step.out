@@ -1,6 +1,7 @@
-error: Final statement in `add_doesnt_end_in_step` is not a step.
+error: The last executed statement in Thread 0 (transaction 'add_doesnt_end_in_step') wasn't `step()` (all threads must end their execution with a call to `step()`)
    ┌─ adders/adder_d1/didnt_end_in_step.prot:16:3
    │
 16 │   fork();
-   │   ^^^^^^^ Final statement in `add_doesnt_end_in_step` is not a step.
+   │   ^^^^^^^ last statement wasn't `step()`
 
+Trace 0 execution failed.
