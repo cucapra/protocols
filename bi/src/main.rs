@@ -119,11 +119,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let r = bi.run();
 
     if let BIResult::Fail(failures) = r {
-        debug_assert_eq!(
-            failures.len(),
-            1,
-            "TODO: handle multiple possible traces better"
-        );
         for (ii, (trace_id, fails)) in failures.into_iter().enumerate() {
             if ii > 0 {
                 println!();
