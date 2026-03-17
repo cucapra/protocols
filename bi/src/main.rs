@@ -15,8 +15,7 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::design::{Design, find_designs};
 use protocols::diagnostic::{DiagnosticHandler, Level};
-use protocols::ir::{SymbolTable, Transaction};
-use protocols::parser::parsing_helper;
+use protocols::frontend;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Args for the monitor CLI
@@ -75,19 +74,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(tu, "ns", "Only nano seconds are supported");
     }
 
-    // Set up logger to use the log-level specified via the `-v` flag
-    // For concision, we disable timestamps and the module paths in the log
-    env_logger::Builder::new()
-        .format_timestamp(None)
-        .filter_level(cli.verbosity.log_level_filter())
-        .init();
-
     // parse protocol file
-    let mut protocols_handler = DiagnosticHandler::new(ColorChoice::Auto, false, false, false);
-    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
-        parsing_helper(&cli.protocol, &mut protocols_handler);
+    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+    let parsed_ir = frontend(cli.protocol, &mut d);
 
-    let designs = find_designs(transactions_symbol_tables.iter());
+    let designs = find_designs(parsed_ir.iter());
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -106,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         FxHashSet::default()
     } else {
         FxHashSet::from_iter(
-            transactions_symbol_tables
+            parsed_ir
                 .iter()
                 .filter(|(t, _)| t.is_idle)
                 .map(|(t, _)| t.name.clone()),
@@ -116,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
-    let mut bi = BackwardsInterpreter::new(transactions_symbol_tables.iter(), trace, 0);
+    let mut bi = BackwardsInterpreter::new(parsed_ir.iter(), trace, 0);
     let r = bi.run();
 
     if let BIResult::Fail(failures) = r {
@@ -136,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             for fail in fails {
-                let proto = &transactions_symbol_tables[fail.proto_id].0;
+                let proto = &parsed_ir[fail.proto_id].0;
                 let msg = format!(
                     "in step {}: [{}] {} != {}",
                     fail.step,
@@ -144,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     fail.a.to_hex_str(),
                     fail.b.to_hex_str()
                 );
-                protocols_handler.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+                d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
             }
         }
 
