@@ -340,6 +340,7 @@ impl SignalTrace for WaveSignalTrace {
         if let Some(timescale) = self.wave.hierarchy().timescale() {
             let time = time * timescale.factor as u64;
             match timescale.unit {
+                TimescaleUnit::FemtoSeconds => format!("{}ns", time as f64 / 1000.0 / 1000.0),
                 TimescaleUnit::PicoSeconds => format!("{}ns", time as f64 / 1000.0),
                 TimescaleUnit::NanoSeconds => format!("{}ns", time),
                 other => todo!("support {other:?}"),
