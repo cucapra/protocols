@@ -5,6 +5,8 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::diagnostic::DiagnosticHandler;
+
 pub mod backends;
 pub mod design;
 pub mod diagnostic;
@@ -16,22 +18,29 @@ pub mod scheduler;
 pub mod serialize;
 pub mod setup;
 pub mod static_checks;
+mod static_fork_step_check;
 pub mod transactions_parser;
 pub mod typecheck;
 mod yosys;
 
 /// Simple frontend which loads a single protocols file, type checks and returns the AST.
-pub fn frontend(filename: impl AsRef<std::path::Path>) -> Vec<(ir::Transaction, ir::SymbolTable)> {
-    // Note: for the monitor, error message locations in `.prot` files are suppressed
-    // in the `DiagnosticHandlers` for now
-    let mut protocols_handler = default_diagnostics();
-
+pub fn frontend(
+    filename: impl AsRef<std::path::Path>,
+    diag: &mut DiagnosticHandler,
+) -> Vec<(ir::Transaction, ir::SymbolTable)> {
     // Parse protocols file
     let transactions_symbol_tables: Vec<(ir::Transaction, ir::SymbolTable)> =
-        parser::parse_file(filename, &mut protocols_handler).unwrap();
+        parser::parse_file(filename, diag).unwrap();
 
     // Type-check the parsed transactions
-    typecheck::type_check(&transactions_symbol_tables, &mut protocols_handler).unwrap();
+    typecheck::type_check(&transactions_symbol_tables, diag).unwrap();
+
+    // check for fork and step errors
+    let error_count =
+        static_fork_step_check::check_step_and_fork(&transactions_symbol_tables, diag);
+    if error_count > 0 {
+        panic!("Errors!");
+    }
 
     transactions_symbol_tables
 }
@@ -42,6 +51,7 @@ pub type Traces = Vec<Vec<(String, Vec<baa::BitVecValue>)>>;
 pub fn transaction_frontend<'a>(
     filename: impl AsRef<std::path::Path>,
     protos: impl Iterator<Item = &'a (ir::Transaction, ir::SymbolTable)>,
+    diag: &mut DiagnosticHandler,
 ) -> anyhow::Result<Traces> {
     // Maps a transaction's name to its argument types
     let mut transaction_arg_types = rustc_hash::FxHashMap::default();
@@ -49,15 +59,5 @@ pub fn transaction_frontend<'a>(
         transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
     }
 
-    // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let mut transactions_handler = default_diagnostics();
-    transactions_parser::parse_transactions_file(
-        filename,
-        &mut transactions_handler,
-        transaction_arg_types,
-    )
-}
-
-fn default_diagnostics() -> diagnostic::DiagnosticHandler {
-    diagnostic::DiagnosticHandler::new(clap::ColorChoice::Auto, true, false, false)
+    transactions_parser::parse_transactions_file(filename, diag, transaction_arg_types)
 }
