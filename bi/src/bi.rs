@@ -12,6 +12,7 @@ pub struct BackwardsInterpreter<T: SignalTrace> {
     trace: T,
     transactions: Vec<ProtoInfo>,
     instance_id: u32,
+    include_in_progress: bool,
     step: u32,
     active: Vec<Path>,
     next: Vec<Path>,
@@ -31,6 +32,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
         transactions_and_symbols: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
         trace: T,
         instance_id: u32,
+        include_in_progress: bool,
     ) -> Self {
         let transactions: Vec<_> = transactions_and_symbols
             .enumerate()
@@ -51,6 +53,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             transactions,
             trace,
             instance_id,
+            include_in_progress,
             step,
             active,
             next: vec![],
@@ -156,15 +159,17 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
 
                 // step trace
                 if self.trace.step() == StepResult::Done {
-                    // at the end of the trace, we add unfinished transactions to the trace
-                    for path in self.next.iter() {
-                        let mut active = path.active.clone();
-                        active.sort_by_key(|t| u32::MAX - t.start_step);
-                        for thread in active {
-                            self.traces.append(
-                                path.trace_id,
-                                thread_to_call(&self.transactions, thread, None),
-                            );
+                    if self.include_in_progress {
+                        // at the end of the trace, we add unfinished transactions to the trace
+                        for path in self.next.iter() {
+                            let mut active = path.active.clone();
+                            active.sort_by_key(|t| u32::MAX - t.start_step);
+                            for thread in active {
+                                self.traces.append(
+                                    path.trace_id,
+                                    thread_to_call(&self.transactions, thread, None),
+                                );
+                            }
                         }
                     }
                     BIResult::Done

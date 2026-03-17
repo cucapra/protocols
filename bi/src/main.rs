@@ -56,6 +56,10 @@ struct Cli {
     #[arg(long)]
     show_steps: bool,
 
+    /// This flag will make the bi append any in-progress transactions to the trace.
+    #[arg(long)]
+    include_in_progress: bool,
+
     // TODO: we do not actually look at this argument right now
     #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
     show_waveform_time: bool,
@@ -75,8 +79,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // parse protocol file
+    let show_warnings = false;
     let skip_static_step_fork_checks = false;
-    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
     let parsed_ir = frontend(cli.protocol, &mut d, skip_static_step_fork_checks)?;
 
     let designs = find_designs(parsed_ir.iter());
@@ -108,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // parse waveform
     let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
-    let mut bi = BackwardsInterpreter::new(parsed_ir.iter(), trace, 0);
+    let mut bi = BackwardsInterpreter::new(parsed_ir.iter(), trace, 0, cli.include_in_progress);
     let r = bi.run();
 
     if let BIResult::Fail(failures) = r {
