@@ -27,19 +27,6 @@ prot add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-// Like `add` above, but this protocol doesn't end in `step`,
-// so this function is ill-formed
-prot add_doesnt_end_in_step<DUT: Adder>(a: u32, b: u32, s: u32) {
-  DUT.a := a;
-  DUT.b := b;
-  step();
-  DUT.a := X;
-  DUT.b := X;
-  assert_eq(s, DUT.s);
-  fork();
-}
-
-
 prot add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;

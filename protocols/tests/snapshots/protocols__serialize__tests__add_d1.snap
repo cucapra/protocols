@@ -30,16 +30,6 @@ fn add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn add_doesnt_end_in_step<DUT: Adder>(a: u32, b: u32, s: u32) {
-  DUT.a := a;
-  DUT.b := b;
-  step();
-  DUT.a := X;
-  DUT.b := X;
-  assert_eq(s, DUT.s);
-  fork();
-}
-
 fn add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
