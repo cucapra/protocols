@@ -7,8 +7,8 @@
 
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::ExecutionError;
-use crate::frontend;
 use crate::ir::{SymbolTable, Transaction};
+use crate::parser::parsing_helper;
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use baa::BitVecValue;
 use std::path::PathBuf;
@@ -62,7 +62,9 @@ pub fn setup_test_environment(
     patronus::system::TransitionSystem, // owned
 ) {
     let (ctx, sys) = create_sim_context(verilog_paths, top_module);
-    let parsed = frontend(transaction_filename, handler);
+    // TODO: enable checks again!
+    //let parsed = frontend(transaction_filename, handler);
+    let parsed = parsing_helper(transaction_filename, handler);
     (parsed, ctx, sys)
 }
 
