@@ -5,6 +5,7 @@
 use baa::BitVecValue;
 use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
+use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::{frontend, transaction_frontend};
 use std::path::Path;
@@ -46,7 +47,8 @@ fn load_trace(
     transactions: Option<&str>,
 ) -> Vec<(String, Vec<BitVecValue>)> {
     if let Some(filename) = transactions {
-        let traces = transaction_frontend(filename, protos.iter()).unwrap();
+        let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+        let traces = transaction_frontend(filename, protos.iter(), &mut d).unwrap();
         if !traces.is_empty() {
             if traces.len() > 1 {
                 log::warn!("More than 1 trace in {filename}. Picking first one.");
@@ -166,7 +168,8 @@ fn main() {
     let args = Args::parse();
 
     // we always parse and type check the protocol file
-    let protos = frontend(args.protocol);
+    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+    let protos = frontend(args.protocol, &mut d).unwrap();
 
     match args.command {
         None => {}

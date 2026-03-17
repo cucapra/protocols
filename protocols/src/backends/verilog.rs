@@ -380,6 +380,7 @@ pub enum PinAnnotation {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::diagnostic::DiagnosticHandler;
     use crate::frontend;
 
     fn backend(
@@ -393,8 +394,8 @@ pub mod tests {
     }
 
     #[test]
-    fn add_d1_to_verilog() {
-        let protos = frontend("tests/adders/adder_d1/add_d1.prot");
+    fn alu_d1_to_verilog() {
+        let protos = frontend("tests/alus/alu_d1.prot", &mut DiagnosticHandler::default()).unwrap();
         let tx = [
             (
                 "add".into(),

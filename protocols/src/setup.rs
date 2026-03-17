@@ -62,6 +62,8 @@ pub fn setup_test_environment(
     patronus::system::TransitionSystem, // owned
 ) {
     let (ctx, sys) = create_sim_context(verilog_paths, top_module);
+    // TODO: enable checks again!
+    //let parsed = frontend(transaction_filename, handler);
     let parsed = parsing_helper(transaction_filename, handler);
     (parsed, ctx, sys)
 }
