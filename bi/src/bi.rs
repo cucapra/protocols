@@ -402,8 +402,8 @@ impl Thread {
                 }
                 Stmt::Step => {
                     self.next_stmt = ti.next_stmt[&stmt];
-                    self.step += 1;
                     let assign_ok = self.check_assignments(ti, get_value);
+                    self.step += 1;
 
                     match (assign_ok, self.next_stmt.is_none(), self.has_forked) {
                         // we found a constraint violation from the assignments
@@ -524,7 +524,7 @@ impl Thread {
                 //     rhs_value.to_bit_str()
                 // );
                 Some(Failure {
-                    step: self.step,
+                    thread_local_step: self.step,
                     proto_id: ti.proto_id,
                     thread_name: self.name.clone(),
                     stmt,

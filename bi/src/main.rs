@@ -132,9 +132,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for fail in fails {
                 let proto = &parsed_ir[fail.proto_id].0;
                 let msg = format!(
-                    "in step {}: [{}] {} != {}",
-                    fail.step,
+                    "[{}] executing step {} of the transaction: {} != {}",
                     fail.thread_name,
+                    fail.thread_local_step,
                     fail.a.to_hex_str(),
                     fail.b.to_hex_str()
                 );
