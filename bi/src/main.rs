@@ -60,13 +60,15 @@ struct Cli {
     #[arg(long)]
     include_in_progress: bool,
 
-    // TODO: we do not actually look at this argument right now
     #[arg(long, value_name = "SHOW_START_END_WAVEFORM_TIME_FOR_EACH_TRANSACTION")]
     show_waveform_time: bool,
 
-    // TODO: we do not actually look at this argument right now
     #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
     time_unit: Option<String>,
+
+    /// Limit the number of traces written to stdout.
+    #[arg(long)]
+    max_traces: Option<u32>,
 }
 
 #[allow(unused_variables)]
@@ -147,7 +149,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Err("Monitor failed".into())
     } else {
-        for (ii, mut trace) in bi.protocol_traces().unique_traces().into_iter().enumerate() {
+        let unique_traces = bi.protocol_traces().unique_traces();
+        let num_traces = unique_traces.len();
+        for (ii, mut trace) in unique_traces.into_iter().enumerate() {
+            if cli.max_traces == Some(ii as u32) {
+                println!("Displayed {}/{} traces.", ii, num_traces);
+                break;
+            }
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
             if ii > 0 {
                 println!();
