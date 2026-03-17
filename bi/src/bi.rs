@@ -4,7 +4,7 @@
 
 use crate::proto_trace::*;
 use crate::signal_trace::*;
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -36,11 +36,12 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
     ) -> Self {
         let transactions: Vec<_> = transactions_and_symbols
             .enumerate()
-            .map(|(proto_id, (t, _))| {
+            .map(|(proto_id, (t, sym))| {
                 let next_stmt = t.next_stmt_mapping();
                 ProtoInfo {
                     proto_id,
                     proto: t.clone(),
+                    sym: sym.clone(),
                     next_stmt,
                 }
             })
@@ -263,11 +264,18 @@ impl Path {
                     p.trace_id = traces.fork(p.trace_id);
                 }
 
+                let arg_values = t
+                    .proto
+                    .args
+                    .iter()
+                    .map(|a| ArgValue::unknown(t.sym[a].tpe().bitwidth()))
+                    .collect();
+
                 let t = Thread {
                     name: format!("{}@{}", t.proto.name, self.step),
                     transaction_id: id,
                     next_stmt: Some(t.proto.body),
-                    arg_values: vec![None; t.proto.args.len()],
+                    arg_values,
                     has_forked: false,
                     step: 0,
                     pin_assignments: vec![],
@@ -346,7 +354,7 @@ impl Path {
 fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: Option<u32>) -> ProtoCall {
     assert!(end.is_none() || thread.next_stmt.is_none());
     let name = tis[thread.transaction_id].proto.name.clone();
-    let args = thread.arg_values;
+    let args = thread.arg_values.iter().map(|a| a.get_known()).collect();
     let start = thread.start_step;
     ProtoCall {
         name,
@@ -362,7 +370,7 @@ struct Thread {
     name: String,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
-    arg_values: Vec<Option<BitVecValue>>,
+    arg_values: Vec<ArgValue>,
     pin_assignments: Vec<(StmtId, SymbolId, ExprId)>,
     has_forked: bool,
     step: u32,
@@ -536,13 +544,12 @@ impl Thread {
             }
         } else {
             if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
-                debug_assert!(self.arg_values[arg_id].is_none());
                 // println!(
                 //     "[{}] Discovered that ?? = {}",
                 //     self.name,
                 //     lhs_value.to_bit_str()
                 // );
-                self.arg_values[arg_id] = Some(lhs_value);
+                self.arg_values[arg_id].define_value(lhs_value);
             } else {
                 todo!()
             }
@@ -557,7 +564,7 @@ impl Thread {
         expr: ExprId,
     ) -> Option<BitVecValue> {
         if let Some((arg_id, _)) = as_arg(transaction, expr) {
-            return self.arg_values[arg_id].clone();
+            return self.arg_values[arg_id].get_known();
         }
         match &transaction[expr] {
             Expr::Const(value) => Some(value.clone()),
@@ -619,5 +626,48 @@ fn as_arg(transaction: &Transaction, expr: ExprId) -> Option<(usize, Arg)> {
 struct ProtoInfo {
     proto_id: usize,
     proto: Transaction,
+    sym: SymbolTable,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
+}
+
+#[derive(Debug, Clone)]
+struct ArgValue {
+    value: BitVecValue,
+    known: BitVecValue,
+}
+
+impl ArgValue {
+    fn unknown(width: WidthInt) -> Self {
+        Self {
+            value: BitVecValue::zero(width),
+            known: BitVecValue::zero(width),
+        }
+    }
+
+    fn get_known(&self) -> Option<BitVecValue> {
+        if self.known.is_all_ones() {
+            Some(self.value.clone())
+        } else {
+            None
+        }
+    }
+
+    fn bit_is_known(&self, bit: WidthInt) -> bool {
+        self.known.is_bit_set(bit)
+    }
+
+    fn define_bit(&mut self, bit: WidthInt, value: u8) {
+        debug_assert!(!self.bit_is_known(bit));
+        debug_assert!(bit < self.value.width());
+        if value != 0 {
+            self.value.set_bit(bit);
+        }
+        self.known.set_bit(bit);
+    }
+
+    fn define_value(&mut self, value: BitVecValue) {
+        debug_assert_eq!(self.value.width(), value.width());
+        self.value = value;
+        self.known = BitVecValue::ones(self.value.width());
+    }
 }
