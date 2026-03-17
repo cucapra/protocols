@@ -69,6 +69,10 @@ struct Cli {
     /// Limit the number of traces written to stdout.
     #[arg(long)]
     max_traces: Option<u32>,
+
+    /// If enabled, displays integer literals using hexadecimal notation
+    #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
+    display_hex: bool,
 }
 
 #[allow(unused_variables)]
@@ -125,9 +129,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let mut trace = bi.protocol_traces().get_trace(trace_id);
             trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
-                bi.step_to_ns(step)
-            });
+            print_trace(
+                ii,
+                &trace,
+                cli.show_steps,
+                cli.show_waveform_time,
+                cli.display_hex,
+                |step| bi.step_to_ns(step),
+            );
 
             for fail in fails {
                 let proto = &parsed_ir[fail.proto_id].0;
@@ -155,9 +164,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if ii > 0 {
                 println!();
             }
-            print_trace(ii, &trace, cli.show_steps, cli.show_waveform_time, |step| {
-                bi.step_to_ns(step)
-            });
+            print_trace(
+                ii,
+                &trace,
+                cli.show_steps,
+                cli.show_waveform_time,
+                cli.display_hex,
+                |step| bi.step_to_ns(step),
+            );
         }
         Ok(())
     }
@@ -168,6 +182,7 @@ fn print_trace(
     trace: &ProtoTrace,
     show_steps: bool,
     show_time: bool,
+    display_hex: bool,
     get_ns: impl Fn(u32) -> String,
 ) {
     println!("// trace {ii}");
@@ -186,7 +201,11 @@ fn print_trace(
                 print!(", ");
             }
             if let Some(v) = arg {
-                print!("{}", v.to_dec_str());
+                if display_hex {
+                    print!("0x{}", v.to_hex_str());
+                } else {
+                    print!("{}", v.to_dec_str());
+                }
             } else {
                 print!("X");
             }
