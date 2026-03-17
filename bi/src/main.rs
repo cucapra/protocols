@@ -32,7 +32,7 @@ struct Cli {
 
     /// A mapping of DUT struct in the protocol file to an instance in the signal trace.
     /// Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
-    #[arg(short, long)]
+    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
     instances: Vec<String>,
 
     /// Users can specify `-v` or `--verbose` to toggle logging
