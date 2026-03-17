@@ -1,10 +1,10 @@
 error: Thread 0 (transaction 'two_fork_err') attempted to fork more than once
-   ┌─ identities/identity_d2/identity_d2.prot:22:3
+   ┌─ identities/identity_d2/two_fork_err.prot:10:3
    │
-22 │   fork();
+10 │   fork();
    │   ^^^^^^^ first fork() called here
    ·
-25 │   fork();
+13 │   fork();
    │   ^^^^^^^ second fork() called here
 
 Trace 0 execution failed.
