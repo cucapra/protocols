@@ -169,7 +169,7 @@ fn main() {
 
     // we always parse and type check the protocol file
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let protos = frontend(args.protocol, &mut d);
+    let protos = frontend(args.protocol, &mut d).unwrap();
 
     match args.command {
         None => {}

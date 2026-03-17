@@ -395,7 +395,7 @@ pub mod tests {
 
     #[test]
     fn alu_d1_to_verilog() {
-        let protos = frontend("tests/alus/alu_d1.prot", &mut DiagnosticHandler::default());
+        let protos = frontend("tests/alus/alu_d1.prot", &mut DiagnosticHandler::default()).unwrap();
         let tx = [
             (
                 "add".into(),

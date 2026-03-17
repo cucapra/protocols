@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // parse protocol file
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let parsed_ir = frontend(cli.protocol, &mut d);
+    let parsed_ir = frontend(cli.protocol, &mut d)?;
 
     let designs = find_designs(parsed_ir.iter());
 

@@ -6,6 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::diagnostic::DiagnosticHandler;
+use anyhow::anyhow;
 
 pub mod backends;
 pub mod design;
@@ -27,22 +28,22 @@ mod yosys;
 pub fn frontend(
     filename: impl AsRef<std::path::Path>,
     diag: &mut DiagnosticHandler,
-) -> Vec<(ir::Transaction, ir::SymbolTable)> {
+) -> anyhow::Result<Vec<(ir::Transaction, ir::SymbolTable)>> {
     // Parse protocols file
     let transactions_symbol_tables: Vec<(ir::Transaction, ir::SymbolTable)> =
-        parser::parse_file(filename, diag).unwrap();
+        parser::parse_file(filename, diag).map_err(|e| anyhow!(e))?;
 
     // Type-check the parsed transactions
-    typecheck::type_check(&transactions_symbol_tables, diag).unwrap();
+    typecheck::type_check(&transactions_symbol_tables, diag)?;
 
     // check for fork and step errors
     let error_count =
         static_fork_step_check::check_step_and_fork(&transactions_symbol_tables, diag);
     if error_count > 0 {
-        panic!("Errors!");
+        Err(anyhow!("step or fork errors"))
+    } else {
+        Ok(transactions_symbol_tables)
     }
-
-    transactions_symbol_tables
 }
 
 pub type Traces = Vec<Vec<(String, Vec<baa::BitVecValue>)>>;
