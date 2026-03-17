@@ -96,6 +96,10 @@ struct Cli {
     /// regardless of whether the protocol has been annotated with `#[idle]`
     #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
     include_idle: bool,
+
+    /// Skips the static checks for step/fork errors.
+    #[arg(long)]
+    skip_static_step_fork_checks: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -142,8 +146,11 @@ fn main() -> anyhow::Result<()> {
         DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
-    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
-        frontend(&cli.protocol, &mut protocols_handler)?;
+    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> = frontend(
+        &cli.protocol,
+        &mut protocols_handler,
+        cli.skip_static_step_fork_checks,
+    )?;
 
     let designs = find_designs(transactions_symbol_tables.iter());
 

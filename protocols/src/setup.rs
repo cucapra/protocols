@@ -56,13 +56,14 @@ pub fn setup_test_environment(
     transaction_filename: &str,
     top_module: Option<String>,
     handler: &mut DiagnosticHandler,
+    skip_static_step_fork_checks: bool,
 ) -> anyhow::Result<(
     Vec<(Transaction, SymbolTable)>,    // owned
     patronus::expr::Context,            // owned
     patronus::system::TransitionSystem, // owned
 )> {
     let (ctx, sys) = create_sim_context(verilog_paths, top_module);
-    let parsed = frontend(transaction_filename, handler)?;
+    let parsed = frontend(transaction_filename, handler, skip_static_step_fork_checks)?;
     Ok((parsed, ctx, sys))
 }
 

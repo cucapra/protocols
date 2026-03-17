@@ -58,6 +58,10 @@ struct Cli {
     /// error-messages in hexadecimal
     #[arg(long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
+
+    /// Skips the static checks for step/fork errors.
+    #[arg(long)]
+    skip_static_step_fork_checks: bool,
 }
 
 /// Examples (enables all tracing logs):
@@ -119,6 +123,7 @@ fn main() -> anyhow::Result<()> {
         &cli.protocol,
         cli.module,
         protocols_handler,
+        cli.skip_static_step_fork_checks,
     )?;
 
     // Nikil says we have to do this step in order to convert
