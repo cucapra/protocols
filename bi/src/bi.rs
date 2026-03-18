@@ -104,6 +104,13 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     debug_assert!(new_paths.iter().all(|p| !p.failed()));
                     self.active.append(&mut new_paths);
                 }
+                PathResult::Branch(new_threads) => {
+                    self.active.extend(new_threads.into_iter().map(|new_t| {
+                        let mut p = path.clone();
+                        p.active.push(new_t);
+                        p
+                    }))
+                }
                 PathResult::FinishedStep => {
                     debug_assert!(
                         !path.active.is_empty()
@@ -199,6 +206,7 @@ struct Path {
 #[derive(Debug, Clone)]
 enum PathResult {
     Ok,
+    Branch(Vec<Thread>),
     Fork,
     Failed,
     FinishedStep,
@@ -322,6 +330,11 @@ impl Path {
                     self.next.push(thread);
                     (PathResult::Ok, None)
                 }
+                ThreadResult::RepeatLoop(arg_id, arg) => {
+                    let tid = thread.transaction_id;
+                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid], arg_id, arg);
+                    (PathResult::Branch(vec![a, b]), None)
+                }
                 ThreadResult::FinalStep => (
                     PathResult::Ok,
                     Some(thread_to_call(tis, thread, Some(self.step))),
@@ -381,6 +394,7 @@ struct Thread {
 #[derive(Debug, Clone)]
 enum ThreadResult {
     Ok,
+    RepeatLoop(usize, Arg),
     Step,
     Fork,
     FinalStepAndFork,
@@ -389,6 +403,15 @@ enum ThreadResult {
 }
 
 impl Thread {
+    fn exec_repeat_loop_branch(
+        self,
+        _ti: &ProtoInfo,
+        _arg_id: usize,
+        _arg: Arg,
+    ) -> (Thread, Thread) {
+        todo!("implement repeat loop branch")
+    }
+
     fn exec_stmt(
         &mut self,
         ti: &ProtoInfo,
@@ -441,10 +464,12 @@ impl Thread {
                     Ok
                 }
                 Stmt::RepeatLoop(repetitions, _body) => {
-                    let (_arg_id, arg) = as_arg(&ti.proto, *repetitions)
+                    let (arg_id, arg) = as_arg(&ti.proto, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument");
 
-                    todo!("repeat {:?}", arg.symbol())
+                    // the outside needs to actually execute the repeat loop branch since it involves
+                    // cloning the current thread
+                    RepeatLoop(arg_id, arg)
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
