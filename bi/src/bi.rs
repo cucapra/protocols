@@ -276,7 +276,7 @@ impl Path {
                     .proto
                     .args
                     .iter()
-                    .map(|a| ArgValue::unknown(t.sym[a].tpe().bitwidth()))
+                    .map(|a| ArgValue::unknown(&t.sym, a))
                     .collect();
 
                 let t = Thread {
@@ -409,7 +409,12 @@ impl Thread {
         _arg_id: usize,
         _arg: Arg,
     ) -> (Thread, Thread) {
-        todo!("implement repeat loop branch")
+        // TODO: check that next stmt is repeat loop
+        let mut taken = self.clone();
+
+        let mut not_taken = self;
+        todo!();
+        (taken, not_taken)
     }
 
     fn exec_stmt(
@@ -569,12 +574,16 @@ impl Thread {
             }
         } else {
             if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
+                if let ArgValue::Data(d) = &mut self.arg_values[arg_id] {
+                    d.define_value(lhs_value);
+                } else {
+                    unreachable!("assignments/assert_eq must involve data values (bit vectors)!")
+                }
                 // println!(
                 //     "[{}] Discovered that ?? = {}",
                 //     self.name,
                 //     lhs_value.to_bit_str()
                 // );
-                self.arg_values[arg_id].define_value(lhs_value);
             } else {
                 todo!()
             }
@@ -656,12 +665,49 @@ struct ProtoInfo {
 }
 
 #[derive(Debug, Clone)]
-struct ArgValue {
+enum ArgValue {
+    Data(DataValue),
+    Repeat(RepeatValue),
+}
+
+impl ArgValue {
+    fn unknown(sym: &SymbolTable, arg: &Arg) -> Self {
+        match sym[arg.symbol()].tpe() {
+            Type::UnsignedInt => Self::Repeat(RepeatValue::default()),
+            Type::BitVec(w) => Self::Data(DataValue::unknown(w)),
+            Type::Struct(_) => unreachable!("args cannot be structs"),
+            Type::Unknown => unreachable!("arg types are always known"),
+        }
+    }
+
+    fn get_known(&self) -> Option<BitVecValue> {
+        match self {
+            ArgValue::Data(d) => d.get_known(),
+            ArgValue::Repeat(RepeatValue::Exactly(v)) => Some(BitVecValue::from_u64(*v as u64, 32)),
+            ArgValue::Repeat(RepeatValue::AtLeast(_)) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum RepeatValue {
+    AtLeast(u32),
+    Exactly(u32),
+}
+
+impl Default for RepeatValue {
+    fn default() -> Self {
+        Self::AtLeast(0)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DataValue {
     value: BitVecValue,
     known: BitVecValue,
 }
 
-impl ArgValue {
+impl DataValue {
     fn unknown(width: WidthInt) -> Self {
         Self {
             value: BitVecValue::zero(width),
