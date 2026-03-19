@@ -1,0 +1,27 @@
+// trace 0
+trace {
+    loop_add(1, 2, 3, 2);
+    loop_add(10, 20, 30, 0);
+}
+
+// trace 1
+trace {
+    loop_add(1, 2, 3, 0);
+    loop_add(1, 2, 3, 1);
+    loop_add(10, 20, 30, 0);
+}
+
+// trace 2
+trace {
+    loop_add(1, 2, 3, 1);
+    loop_add(1, 2, 3, 0);
+    loop_add(10, 20, 30, 0);
+}
+
+// trace 3
+trace {
+    loop_add(1, 2, 3, 0);
+    loop_add(1, 2, 3, 0);
+    loop_add(1, 2, 3, 0);
+    loop_add(10, 20, 30, 0);
+}
