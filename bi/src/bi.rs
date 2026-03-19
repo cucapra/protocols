@@ -321,7 +321,11 @@ impl Path {
                     (PathResult::Ok, None)
                 }
                 ThreadResult::Fork => {
-                    assert!(!self.has_forked_this_step && !self.fork_next_step);
+                    assert!(
+                        !self.has_forked_this_step,
+                        "another thread already forked in the same thread!"
+                    );
+                    assert!(!self.fork_next_step);
                     self.has_forked_this_step = true;
                     self.active.push(thread);
                     (PathResult::Fork, None)
@@ -477,6 +481,7 @@ impl Thread {
                     }
                 }
                 Stmt::Fork => {
+                    assert!(self.step > 0, "[{}] Cannot fork at step zero!", self.name);
                     self.has_forked = true;
                     self.next_stmt = ti.next_stmt[&stmt];
                     Fork
