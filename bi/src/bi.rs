@@ -82,7 +82,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
     /// execute a single statement
     fn exec_stmt(&mut self) -> BIResult {
         if let Some(mut path) = self.active.pop() {
-            // println!("{}", path.thread_string());
+            println!("{}", path.thread_string());
 
             // execute one path
             let (r, pc) = path.exec_stmt(&self.transactions, &|sym| {
@@ -232,7 +232,7 @@ impl Path {
         let active = self
             .active
             .iter()
-            .map(|t| t.name.as_str())
+            .map(|t| format!("{}@{:?}", t.name.as_str(), t.next_stmt))
             .collect::<Vec<_>>()
             .join(", ");
         let next = self
@@ -310,7 +310,7 @@ impl Path {
         self.active.sort_by_key(|t| u32::MAX - t.start_step);
         if let Some(mut thread) = self.active.pop() {
             let r = thread.exec_stmt(&tis[thread.transaction_id], get_value);
-            // println!("{r:?}");
+            println!("{r:?}");
             match r {
                 ThreadResult::Failed => {
                     self.failed.push(thread);
@@ -330,9 +330,9 @@ impl Path {
                     self.next.push(thread);
                     (PathResult::Ok, None)
                 }
-                ThreadResult::RepeatLoop(arg_id, arg) => {
+                ThreadResult::RepeatLoop => {
                     let tid = thread.transaction_id;
-                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid], arg_id, arg);
+                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid]);
                     (PathResult::Branch(vec![a, b]), None)
                 }
                 ThreadResult::FinalStep => (
@@ -394,7 +394,7 @@ struct Thread {
 #[derive(Debug, Clone)]
 enum ThreadResult {
     Ok,
-    RepeatLoop(usize, Arg),
+    RepeatLoop,
     Step,
     Fork,
     FinalStepAndFork,
@@ -403,17 +403,41 @@ enum ThreadResult {
 }
 
 impl Thread {
-    fn exec_repeat_loop_branch(
-        self,
-        _ti: &ProtoInfo,
-        _arg_id: usize,
-        _arg: Arg,
-    ) -> (Thread, Thread) {
-        // TODO: check that next stmt is repeat loop
-        let mut taken = self.clone();
+    fn exec_repeat_loop_branch(self, ti: &ProtoInfo) -> (Thread, Thread) {
+        let stmt = self.next_stmt.expect("");
+        debug_assert!(
+            matches!(&ti.proto[stmt], Stmt::RepeatLoop(_, _)),
+            "repeat loop!"
+        );
+        let (body, arg_id) = if let Stmt::RepeatLoop(arg, body) = &ti.proto[stmt] {
+            (*body, as_arg(&ti.proto, *arg).unwrap().0)
+        } else {
+            unreachable!(
+                "this function may only be called when executing a repeat loop statement!"
+            );
+        };
 
+        // if we take the repeat loop branch, we up the value
+        let mut taken = self.clone();
+        let arg_value = taken.arg_values[arg_id]
+            .as_repeat()
+            .expect("must be a uint arg");
+        arg_value.increment_current_value();
+        let value = arg_value.current_value();
+        taken.name = format!("{}{value}?", taken.name);
+        taken.next_stmt = Some(body);
+
+        // of we do not take the branch, we jump after the loop
         let mut not_taken = self;
-        todo!();
+        let arg_value = not_taken.arg_values[arg_id]
+            .as_repeat()
+            .expect("must be a uint arg");
+        let max_iter = arg_value.current_value();
+        *arg_value = RepeatValue::Exactly(max_iter, 0);
+        not_taken.name = format!("{}{max_iter}!", not_taken.name);
+        not_taken.next_stmt = ti.next_stmt[&stmt];
+
+        // we need to explore both versions of our thread
         (taken, not_taken)
     }
 
@@ -424,7 +448,7 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            // println!("{:?}", &ti.transaction[stmt]);
+            println!("{:?}", &ti.proto[stmt]);
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
@@ -468,13 +492,32 @@ impl Thread {
                     };
                     Ok
                 }
-                Stmt::RepeatLoop(repetitions, _body) => {
-                    let (arg_id, arg) = as_arg(&ti.proto, *repetitions)
-                        .expect("repeat loop repetition count needs to be an argument");
+                Stmt::RepeatLoop(repetitions, body) => {
+                    let arg_id = as_arg(&ti.proto, *repetitions)
+                        .expect("repeat loop repetition count needs to be an argument")
+                        .0;
 
-                    // the outside needs to actually execute the repeat loop branch since it involves
-                    // cloning the current thread
-                    RepeatLoop(arg_id, arg)
+                    let arg_value = self.arg_values[arg_id]
+                        .as_repeat()
+                        .expect("must be a repeat arg");
+
+                    // check to see if the number of iterations is known
+                    // in this case we essentially just have a for(i=0; i < max_iters; i++) loop
+                    if let Some(max_iters) = arg_value.num_iters() {
+                        if arg_value.current_value() < max_iters {
+                            arg_value.increment_current_value();
+                            self.next_stmt = Some(*body);
+                        } else {
+                            // this will make the current value overflow and go back to zero
+                            arg_value.increment_current_value();
+                            self.next_stmt = ti.next_stmt[&stmt]; // exit loop
+                        }
+                        Ok
+                    } else {
+                        // we do not actually know the correct number of steps, and we need to explore both possibilities
+                        // this must happen outside of this method since it involves cloning the thread
+                        RepeatLoop
+                    }
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
@@ -683,8 +726,18 @@ impl ArgValue {
     fn get_known(&self) -> Option<BitVecValue> {
         match self {
             ArgValue::Data(d) => d.get_known(),
-            ArgValue::Repeat(RepeatValue::Exactly(v)) => Some(BitVecValue::from_u64(*v as u64, 32)),
+            ArgValue::Repeat(RepeatValue::Exactly(v, _)) => {
+                Some(BitVecValue::from_u64(*v as u64, 32))
+            }
             ArgValue::Repeat(RepeatValue::AtLeast(_)) => None,
+        }
+    }
+
+    fn as_repeat(&mut self) -> Option<&mut RepeatValue> {
+        if let Self::Repeat(v) = self {
+            Some(v)
+        } else {
+            None
         }
     }
 }
@@ -692,12 +745,42 @@ impl ArgValue {
 #[derive(Debug, Clone)]
 enum RepeatValue {
     AtLeast(u32),
-    Exactly(u32),
+    Exactly(u32, u32),
 }
 
 impl Default for RepeatValue {
     fn default() -> Self {
         Self::AtLeast(0)
+    }
+}
+
+impl RepeatValue {
+    fn current_value(&self) -> u32 {
+        match self {
+            RepeatValue::AtLeast(v) => *v,
+            RepeatValue::Exactly(_, v) => *v,
+        }
+    }
+
+    fn increment_current_value(&mut self) {
+        match self {
+            RepeatValue::AtLeast(v) => *v += 1,
+            RepeatValue::Exactly(b, v) => {
+                if *v + 1 == *b {
+                    *v = 0;
+                } else {
+                    *v += 1;
+                }
+                debug_assert!(*v < *b);
+            }
+        }
+    }
+
+    fn num_iters(&self) -> Option<u32> {
+        match self {
+            RepeatValue::AtLeast(_) => None,
+            RepeatValue::Exactly(b, _) => Some(*b),
+        }
     }
 }
 
