@@ -820,10 +820,12 @@ impl DataValue {
         }
     }
 
+    #[allow(dead_code)]
     fn bit_is_known(&self, bit: WidthInt) -> bool {
         self.known.is_bit_set(bit)
     }
 
+    #[allow(dead_code)]
     fn define_bit(&mut self, bit: WidthInt, value: u8) {
         debug_assert!(!self.bit_is_known(bit));
         debug_assert!(bit < self.value.width());
