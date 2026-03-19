@@ -82,7 +82,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
     /// execute a single statement
     fn exec_stmt(&mut self) -> BIResult {
         if let Some(mut path) = self.active.pop() {
-            println!("{}", path.thread_string());
+            // println!("{}", path.thread_string());
 
             // execute one path
             let (r, pc) = path.exec_stmt(&self.transactions, &|sym| {
@@ -105,11 +105,16 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     self.active.append(&mut new_paths);
                 }
                 PathResult::Branch(new_threads) => {
-                    self.active.extend(new_threads.into_iter().map(|new_t| {
-                        let mut p = path.clone();
-                        p.active.push(new_t);
-                        p
-                    }))
+                    self.active
+                        .extend(new_threads.into_iter().enumerate().map(|(id, new_t)| {
+                            let mut p = path.clone();
+                            p.active.push(new_t);
+                            if id > 0 {
+                                // ensure every new path has a unique trace
+                                p.trace_id = self.traces.fork(p.trace_id);
+                            }
+                            p
+                        }))
                 }
                 PathResult::FinishedStep => {
                     debug_assert!(
@@ -138,6 +143,10 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             }
             BIResult::Ok
         } else {
+            // println!("BI: Finished step {}. Traces failed={}, active={}", self.step, self.failed.len(), self.next.len());
+            // for f in self.failed.iter().chain(self.next.iter()) {
+            //     println!(" - {}", f.thread_string());
+            // }
             // otherwise all paths must be finished
             debug_assert!(self.active.is_empty());
             debug_assert!(self.failed.iter().all(|p| p.failed()));
@@ -310,7 +319,7 @@ impl Path {
         self.active.sort_by_key(|t| u32::MAX - t.start_step);
         if let Some(mut thread) = self.active.pop() {
             let r = thread.exec_stmt(&tis[thread.transaction_id], get_value);
-            println!("{r:?}");
+            // println!("{r:?}");
             match r {
                 ThreadResult::Failed => {
                     self.failed.push(thread);
@@ -452,7 +461,7 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            println!("{:?}", &ti.proto[stmt]);
+            // println!("{:?}", &ti.proto[stmt]);
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
