@@ -327,8 +327,8 @@ impl GlobalScheduler {
     ) -> String {
         match (ctx.show_waveform_time, ctx.show_thread_ids) {
             (true, true) | (true, false) => {
-                let start_time = self.trace.format_time(entry.start_time_step, ctx.time_unit);
-                let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
+                let start_time = self.trace.format_time(entry.start_time_step);
+                let end_time = self.trace.format_time(entry.end_time_step);
                 if ctx.show_thread_ids {
                     format!(
                         "{};  // [time: {} -> {}] (thread {})",
@@ -396,6 +396,24 @@ impl GlobalScheduler {
                     }
                 }
                 break;
+            }
+
+            // In single-struct mode, a scheduler group with no runnable
+            // threads means we have reached a dead state: there is still
+            // waveform remaining, but no candidate transaction can match it.
+            if !ctx.multiple_structs {
+                for scheduler_group in &self.scheduler_groups {
+                    let no_live_threads = !scheduler_group.is_empty()
+                        && scheduler_group
+                            .iter()
+                            .all(|scheduler| scheduler.current.is_empty() && scheduler.next.is_empty());
+
+                    if no_live_threads {
+                        if let Some(scheduler) = scheduler_group.front() {
+                            scheduler.emit_error(&self.trace, ctx)?;
+                        }
+                    }
+                }
             }
 
             // Stop early if --max-steps was specified and we've hit the limit

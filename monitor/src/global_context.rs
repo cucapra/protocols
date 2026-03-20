@@ -4,34 +4,6 @@
 
 use crate::Cli;
 
-/// Time unit for displaying waveform times
-#[derive(Debug, Clone, Copy)]
-pub enum TimeUnit {
-    FemtoSeconds,
-    PicoSeconds,
-    NanoSeconds,
-    MicroSeconds,
-    MilliSeconds,
-    Seconds,
-    Auto, // Auto-select based on the maximum time value
-}
-
-impl TimeUnit {
-    /// Parses a string into the corresponding `TImeUnit`
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "fs" => Some(TimeUnit::FemtoSeconds),
-            "ps" => Some(TimeUnit::PicoSeconds),
-            "ns" => Some(TimeUnit::NanoSeconds),
-            "us" => Some(TimeUnit::MicroSeconds),
-            "ms" => Some(TimeUnit::MilliSeconds),
-            "s" => Some(TimeUnit::Seconds),
-            "auto" => Some(TimeUnit::Auto),
-            _ => None,
-        }
-    }
-}
-
 /// The `GlobalContext` stores fields which are common
 /// to all threads, e.g.:
 /// - the `Design` (since all threads are working over the same `Design`)
@@ -53,9 +25,6 @@ pub struct GlobalContext {
     /// Indicates whether to display the start & end waveform time for each
     /// inferred transaction
     pub show_waveform_time: bool,
-
-    /// The time unit to use for displaying waveform times
-    pub time_unit: TimeUnit,
 
     /// Indicates whether to print the no. of logical steps (i.e. clock cycles)
     /// taken by the monitor
@@ -84,13 +53,12 @@ impl GlobalContext {
     /// in hexadecimal (if `false`, we default to using decimal).
     /// Note: this function is meant to be called from `main.rs` only
     /// upon monitor initialization.
-    pub fn new(cli: &Cli, instance_id: u32, time_unit: TimeUnit, multiple_structs: bool) -> Self {
+    pub fn new(cli: &Cli, instance_id: u32, multiple_structs: bool) -> Self {
         Self {
             waveform_file: cli.wave.clone(),
             instance_id,
             display_hex: cli.display_hex,
             show_waveform_time: cli.show_waveform_time,
-            time_unit,
             print_num_steps: cli.print_num_steps,
             multiple_structs,
             show_thread_ids: cli.show_thread_ids,
