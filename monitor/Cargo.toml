@@ -19,3 +19,4 @@ log = "0.4.27"
 stdext = "0.3"
 rustc-hash.workspace = true
 anyhow = "1.0.100"
+rand = "0.9"

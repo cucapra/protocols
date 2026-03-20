@@ -8,8 +8,9 @@ use anyhow::Context;
 use baa::BitVecValue;
 use protocols::design::Design;
 use protocols::ir::SymbolId;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, SignalRef};
+use wellen::{Hierarchy, SignalEncoding, SignalRef};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]
@@ -449,11 +450,16 @@ impl SignalTrace for WaveSignalTrace {
         // (represented as a bit-string)
         let bit_str = self.get_value(*signal_ref, self.time_step);
 
-        Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|err| {
-            panic!(
-                "Unable to convert bit-string {bit_str} to BitVecValue, {:?}",
-                err
-            )
+        Ok(BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|_| {
+            // If the bit-string can't be converted into a BitVecValue
+            // (e.g. because the waveform contains "x"), generate
+            // a random value of the appropriate bit-width.
+            let bitwidth = match self.wave.hierarchy().get_signal_tpe(*signal_ref) {
+                Some(SignalEncoding::BitVector(width)) => width.get(),
+                _ => panic!("Expected a bit-vector signal for key {:?}", key),
+            };
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
+            BitVecValue::random(&mut rng, bitwidth)
         }))
     }
 }
