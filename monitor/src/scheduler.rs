@@ -83,6 +83,7 @@ impl Scheduler {
 
     /// Prints the internal state of the scheduler
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
+    #[allow(dead_code)]
     pub fn print_scheduler_state(&self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         let time_step = trace.time_step();
         let header = if ctx.show_waveform_time {
@@ -178,6 +179,7 @@ impl Scheduler {
 
     /// Call this function exactly once at the beginning of each cycle
     /// (**Don't** call this on a cloned `Scheduler` that is created from a `fork`)
+    #[allow(unused_variables)]
     pub fn begin_cycle(&mut self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         // Clear auxiliary fields at the beginning of each cycle
         // to track which start cycles fork/finish in THIS cycle
@@ -537,15 +539,15 @@ impl Scheduler {
         self.cycle_count += 1;
         self.interpreter.trace_cycle_count += 1;
 
-        if ctx.show_waveform_time {
-            let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
-            info!("Advancing to time {}, setting current = next", time_str);
-        } else {
-            info!(
-                "Advancing to cycle {}, setting current = next",
-                self.cycle_count
-            );
-        }
+        // if ctx.show_waveform_time {
+        //     let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+        //     info!("Advancing to time {}, setting current = next", time_str);
+        // } else {
+        //     info!(
+        //         "Advancing to cycle {}, setting current = next",
+        //         self.cycle_count
+        //     );
+        // }
     }
 
     /// Marks the trace as having ended
