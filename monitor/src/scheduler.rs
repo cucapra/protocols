@@ -183,7 +183,7 @@ impl Scheduler {
         // to track which start cycles fork/finish in THIS cycle
         self.forked_start_cycles.clear();
         self.finished_thread = None;
-        self.print_scheduler_state(trace, ctx);
+        // self.print_scheduler_state(trace, ctx);
     }
 
     /// Runs the scheduler in the current cycle by repeating the following steps.
@@ -838,7 +838,7 @@ impl Scheduler {
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
                             self.next.push_back(thread);
-                            self.print_scheduler_state(trace, ctx);
+                            // self.print_scheduler_state(trace, ctx);
                             return Ok(ThreadResult::Completed);
                         }
                         Stmt::Fork => {
@@ -903,7 +903,7 @@ impl Scheduler {
                             first_start_cycle
                         );
                         self.failed.push_back(thread);
-                        self.print_scheduler_state(trace, ctx);
+                        // self.print_scheduler_state(trace, ctx);
                         return Ok(ThreadResult::Completed);
                     }
 
@@ -944,7 +944,7 @@ impl Scheduler {
                             self.format_transaction_name(ctx, thread.transaction.name.clone())
                         );
                         self.failed.push_back(thread.clone());
-                        self.print_scheduler_state(trace, ctx);
+                        // self.print_scheduler_state(trace, ctx);
                         return Ok(ThreadResult::Completed);
                     }
 
@@ -1002,7 +1002,7 @@ impl Scheduler {
                         self.serialize_monitor_error(err, trace, ctx)
                     );
                     self.failed.push_back(thread);
-                    self.print_scheduler_state(trace, ctx);
+                    // self.print_scheduler_state(trace, ctx);
                     return Ok(ThreadResult::Completed);
                 }
             }
