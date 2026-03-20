@@ -94,14 +94,21 @@ struct Cli {
     /// regardless of whether the protocol has been annotated with `#[idle]`
     #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
     include_idle: bool,
+
+    /// If specified, the monitor stops after processing this many clock cycles.
+    /// Useful for quickly testing a protocol against the beginning of a large waveform.
+    #[arg(long, value_name = "MAX_STEPS")]
+    max_steps: Option<u32>,
 }
 
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
 
-    // Set up logger to use the log-level specified via the `-v` flag
-    // For concision, we disable timestamps and the module paths in the log
+    // Set up logger to use the log-level specified via the `-v` flag.
+    // For concision, we disable timestamps and the module paths in the log.
+    // We use `LogWrapper` from `indicatif-log-bridge` so that log output
+    // doesn't get mixed up with the progress bar.
     let mut logger = env_logger::Builder::new();
 
     logger

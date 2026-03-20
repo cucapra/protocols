@@ -299,6 +299,7 @@ impl GlobalScheduler {
         }
 
         let mut trace_ended = false;
+        let mut steps_taken: u32 = 0;
 
         loop {
             for scheduler_group in self.scheduler_groups.iter_mut() {
@@ -331,25 +332,34 @@ impl GlobalScheduler {
                 break;
             }
 
+            // Stop early if --max-steps was specified and we've hit the limit
+            steps_taken += 1;
+            if let Some(max) = ctx.max_steps {
+                if steps_taken >= max {
+                    info!("GlobalScheduler: Reached --max-steps limit of {max}, stopping early");
+                    break;
+                }
+            }
+
             // Advance the trace (only once for all schedulers)
             let step_result = self.trace.step();
 
-            if ctx.show_waveform_time {
-                let time_str = self
-                    .trace
-                    .format_time(self.trace.time_step(), ctx.time_unit);
-                info!("GlobalScheduler: Advancing to time {}", time_str);
-            } else {
-                info!("GlobalScheduler: Advancing to next cycle");
-            }
+            // if ctx.show_waveform_time {
+            //     let time_str = self
+            //         .trace
+            //         .format_time(self.trace.time_step(), ctx.time_unit);
+            //     info!("GlobalScheduler: Advancing to time {}", time_str);
+            // } else {
+            //     info!("GlobalScheduler: Advancing to next cycle");
+            // }
 
             // Advance all schedulers to their next cycle
             for scheduler_group in self.scheduler_groups.iter_mut() {
                 for scheduler in scheduler_group.iter_mut() {
-                    info!(
-                        "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
-                        scheduler.struct_name
-                    );
+                    // info!(
+                    //     "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
+                    //     scheduler.struct_name
+                    // );
                     scheduler.advance_to_next_cycle(ctx, &self.trace);
                 }
             }

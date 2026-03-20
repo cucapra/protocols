@@ -206,10 +206,10 @@ impl Scheduler {
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
     ) -> Result<CycleResult, SchedulerError> {
-        info!(
-            "Inside `Scheduler::process_current_queue` for {} scheduler",
-            self.struct_name
-        );
+        // info!(
+        //     "Inside `Scheduler::process_current_queue` for {} scheduler",
+        //     self.struct_name
+        // );
 
         // Process each thread (this function returns early when a thread `fork`s)
         while let Some(thread) = self.current.pop_front() {
@@ -660,11 +660,11 @@ impl Scheduler {
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
     ) -> Result<ThreadResult, SchedulerError> {
-        info!(
-            "Running thread {} (transaction `{}`) till next `step()`...",
-            thread.global_thread_id(ctx),
-            self.format_transaction_name(ctx, thread.transaction.name.clone())
-        );
+        // info!(
+        //     "Running thread {} (transaction `{}`) till next `step()`...",
+        //     thread.global_thread_id(ctx),
+        //     self.format_transaction_name(ctx, thread.transaction.name.clone())
+        // );
 
         // Perform a context switch (use the argument thread's `Transaction`
         // & associated `SymbolTable` / `NextStmtMap`)
@@ -686,11 +686,11 @@ impl Scheduler {
                     // This determines if we need to move threads to/from different queues
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
-                            info!(
-                                "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
-                                thread.global_thread_id(ctx),
-                                thread.transaction.clone().name,
-                            );
+                            // info!(
+                            //     "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
+                            //     thread.global_thread_id(ctx),
+                            //     thread.transaction.clone().name,
+                            // );
 
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
@@ -709,11 +709,11 @@ impl Scheduler {
                                 self.forked_start_cycles.contains(&thread.start_cycle);
 
                             if already_forked {
-                                info!(
-                                    "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
-                                    thread.global_thread_id(ctx),
-                                    thread.start_cycle
-                                );
+                                // info!(
+                                //     "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
+                                //     thread.global_thread_id(ctx),
+                                //     thread.start_cycle
+                                // );
                                 // Continue from the fork statement onwards
                                 current_stmt_id = next_stmt_id;
                             } else {

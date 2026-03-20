@@ -70,6 +70,11 @@ pub struct GlobalContext {
     /// Indicates whether to print out `idle` transactions (regardless of
     /// whether they've been annotated with `#[idle]`)
     pub include_idle: bool,
+
+    /// If `Some(n)`, the monitor stops after processing `n` clock cycles.
+    /// Useful for quickly testing a protocol against the beginning of a
+    /// large waveform without waiting for the full trace to be processed.
+    pub max_steps: Option<u32>,
 }
 
 impl GlobalContext {
@@ -90,6 +95,7 @@ impl GlobalContext {
             multiple_structs,
             show_thread_ids: cli.show_thread_ids,
             include_idle: cli.include_idle,
+            max_steps: cli.max_steps,
         }
     }
 }
