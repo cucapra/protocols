@@ -39,16 +39,13 @@ struct WBSubordinate {
 prot idle<DUT: WBSubordinate>() {
     DUT.i_cyc  := 1'b0;
     DUT.i_stb  := 1'b0;
-    DUT.i_we   := X;
-    DUT.i_addr := X;
-    DUT.i_data := X;
     step();
 }
 
 // Writes a `data` value to the subordinate.
 // Wishbone says to hold all request signals while stalled (stall=1),
 // i.e. when the subordinate is busy processing a previous request.
-prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
+prot write<DUT: WBSubordinate>(addr: u1, data: u32) {
     DUT.i_cyc  := 1'b1;
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b1;
@@ -62,31 +59,16 @@ prot write<DUT: WBSubordinate>(in addr: u1, in data: u32) {
     while (DUT.o_ack == 1'b0) {
         step();
     }
-
-    // Data is updated combinationally in the same cycle as the ack,
-    // so no separate cycle for data transfer is needed
-    assert_eq(DUT.o_data, data);
-
-    // Set other inputs to DontCare
-    // Note that the waveform produced by their C++ test-bench keeps 
-    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.i_cyc := X;
-    DUT.i_stb := X;
-    DUT.i_we := X;
-    DUT.i_addr := X;
-    DUT.i_data := X;
-    
     step();
 }
 
 // Reads a value from the subordinate
 // (the `data` is conveyed via output parameters)
-prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
+prot read<DUT: WBSubordinate>(addr: u1, data: u32) {
     DUT.i_cyc  := 1'b1;
     DUT.i_stb  := 1'b1;
     DUT.i_we   := 1'b0;
     DUT.i_addr := addr;
-    DUT.i_data := X;
 
     // Wait for subordinate to Ack
     // (When we're reading, the write-enable is always 0, 
@@ -100,14 +82,5 @@ prot read<DUT: WBSubordinate>(in addr: u1, out data: u32) {
     // Data is updated combinationally in the same cycle as the ack,
     // so no separate cycle for data transfer is needed
     assert_eq(DUT.o_data, data);
-    
-    // Set other inputs to DontCare
-    // Note that the waveform produced by their C++ test-bench keeps 
-    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.i_cyc := X;
-    DUT.i_stb := X;
-    DUT.i_we := X;
-    DUT.i_addr := X;
-    
     step();
 }

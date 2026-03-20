@@ -1,3 +1,5 @@
 [alias]
 interp = "run --quiet --package protocols-interp --"
 monitor = "run --quiet --package protocols-monitor --"
+bi = "run --quiet --package bi --"
+parse = "run --quiet --package protocols-cli -- -p"

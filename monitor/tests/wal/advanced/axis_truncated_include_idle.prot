@@ -1,5 +1,5 @@
 // ARGS: --wave wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle
-
+// RETURN: 1
 // This file is identical to `axis_truncated.prot`, except we enable the `--include-idle`
 // flag in the monitor to check if `idle` transactions are being printed out correctly
 
@@ -9,7 +9,7 @@ struct AXIS {
     in m_axis_tdata: u8,
 }
 
-prot send_data<D: AXIS>(in data: u8) {
+prot send_data<D: AXIS>(data: u8) {
     D.m_axis_tdata := data;
     D.m_axis_tvalid := 1'b1;
     while (!(D.m_axis_tready == 1'b1)) {

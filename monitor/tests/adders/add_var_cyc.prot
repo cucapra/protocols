@@ -1,0 +1,26 @@
+// ARGS: --wave adders/loop_with_assigns.fst --instances add_d1:Adder
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+prot loop_add<DUT: Adder>(a: u32, b: u32, s: u32, extra_cycles: uint) {
+  // first cycle
+  DUT.a := a;
+  DUT.b := b;
+  step();
+
+  // extra cycles (keeping inputs constant)
+  repeat extra_cycles iterations {
+    assert_eq(s, DUT.s);
+    step();
+  }
+
+  // final cycle
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}

@@ -1,4 +1,5 @@
 // ARGS: --wave fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns
+// RETURN: 1
 
 // AXI-Stream FIFO with frame-level atomicity
 // Maps to d4_fixed.v module I/O ports
@@ -33,8 +34,8 @@ struct AxisFifo {
 // - `push_data` is the value being pushed,
 // - `pop_data` is the value being popped
 prot push_and_pop<DUT: AxisFifo>(
-    in push_data: u8,
-    out pop_data: u8,
+    push_data: u8,
+    pop_data: u8,
 ) {
     DUT.rst := 1'b0;
 
@@ -82,7 +83,7 @@ prot push_and_pop<DUT: AxisFifo>(
 //   data - Payload byte to write to FIFO
 
 prot push<DUT: AxisFifo>(
-    in data: u8,
+    data: u8,
 ) {
     DUT.rst := 1'b0;
 
@@ -110,7 +111,7 @@ prot push<DUT: AxisFifo>(
 // Output Arguments:
 //   data - Expected payload byte from FIFO
 prot pop<DUT: AxisFifo>(
-    out data: u8,
+    data: u8,
 ) {
     DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;

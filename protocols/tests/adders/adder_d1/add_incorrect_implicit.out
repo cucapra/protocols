@@ -1,13 +1,13 @@
 error: Thread 0 (`add_incorrect_implicit`) attempted conflicting assignment to 'a': current=4, new=1
-   ┌─ adders/adder_d1/add_d1.prot:55:3
+   ┌─ adders/adder_d1/add_d1.prot:42:3
    │
-55 │   DUT.a := a;
+42 │   DUT.a := a;
    │   ^^^^^^^^^^^ Thread 0 (`add_incorrect_implicit`) attempted conflicting assignment to 'a': current=4, new=1
 
 error: Thread 1 (`add_incorrect_implicit`) attempted conflicting assignment to 'a': current=1, new=4
-   ┌─ adders/adder_d1/add_d1.prot:55:3
+   ┌─ adders/adder_d1/add_d1.prot:42:3
    │
-55 │   DUT.a := a;
+42 │   DUT.a := a;
    │   ^^^^^^^^^^^ Thread 1 (`add_incorrect_implicit`) attempted conflicting assignment to 'a': current=1, new=4
 
 Trace 0 execution failed.

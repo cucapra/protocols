@@ -3,6 +3,8 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+#[macro_use]
+mod macros;
 mod axi_experiment;
 mod designs;
 mod global_context;
@@ -14,7 +16,7 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Design, Instance, collects_design_names, find_designs, parse_instance};
+use crate::designs::{Instance, collects_design_names, parse_instance};
 use crate::global_context::{GlobalContext, TimeUnit};
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
@@ -23,10 +25,10 @@ use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
+use protocols::design::{Design, find_designs};
 use protocols::diagnostic::DiagnosticHandler;
+use protocols::frontend;
 use protocols::ir::{SymbolTable, Transaction};
-use protocols::parser::parsing_helper;
-use protocols::typecheck::type_check;
 use std::io::Write;
 
 // From the top-level directory, run:
@@ -102,6 +104,10 @@ struct Cli {
     /// where we only want to see the monitor's output on a prefix of the waveform.)
     #[arg(long, value_name = "MAX_STEPS")]
     max_steps: Option<u32>,
+
+    /// Skips the static checks for step/fork errors.
+    #[arg(long)]
+    skip_static_step_fork_checks: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -148,11 +154,11 @@ fn main() -> anyhow::Result<()> {
         DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
-    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> =
-        parsing_helper(&cli.protocol, &mut protocols_handler);
-
-    // Type-check the parsed transactions
-    type_check(&transactions_symbol_tables, &mut protocols_handler)?;
+    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> = frontend(
+        &cli.protocol,
+        &mut protocols_handler,
+        cli.skip_static_step_fork_checks,
+    )?;
 
     let designs = find_designs(transactions_symbol_tables.iter());
 

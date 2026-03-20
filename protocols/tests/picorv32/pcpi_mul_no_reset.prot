@@ -14,9 +14,9 @@ struct picorv32_pcpi_mul {
 
 // Adapted from https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/picorv32/PicoRV32Spec.scala#L27
 prot pcpi_mul<p: picorv32_pcpi_mul>(
-    in rs1_data: u32,
-    in rs2_data: u32,
-    out rd_data: u32,
+    rs1_data: u32,
+    rs2_data: u32,
+    rd_data: u32,
   ) {
   // NOTE: the line `p.resetn := 1'b1` has been removed here  
   p.pcpi_valid := 1'b1;

@@ -22,6 +22,7 @@ pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Res
 pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
     match tpe {
         Type::BitVec(t) => format!("u{}", t),
+        Type::UnsignedInt => "uint".to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
         Type::Unknown => "unknown".to_string(),
     }
@@ -176,7 +177,7 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
-        Stmt::BoundedLoop(expr_id, stmt_id) => {
+        Stmt::RepeatLoop(expr_id, stmt_id) => {
             format!(
                 "repeat {} iterations {{ {} }}",
                 serialize_expr(tr, st, expr_id),
@@ -236,7 +237,7 @@ pub fn build_statements(
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;
         }
-        Stmt::BoundedLoop(count, bodyid) => {
+        Stmt::RepeatLoop(count, bodyid) => {
             writeln!(
                 out,
                 "{}repeat {} iterations {{",
@@ -332,16 +333,14 @@ pub fn serialize(
                 if last_index {
                     writeln!(
                         out,
-                        "{} {}: {}) {{",
-                        arg.dir(),
+                        "{}: {}) {{",
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
                     )?;
                 } else {
                     write!(
                         out,
-                        "{} {}: {}, ",
-                        arg.dir(),
+                        "{}: {}, ",
                         st[arg].name(),
                         serialize_type(&st, st[arg].tpe())
                     )?;
@@ -536,7 +535,7 @@ pub mod tests {
 
         // 2) create transaction
         let mut easycond = Transaction::new("easycond".to_string());
-        easycond.args = vec![Arg::new(a, Dir::In), Arg::new(b, Dir::Out)];
+        easycond.args = vec![Arg::new(a), Arg::new(b)];
         easycond.type_param = Some(dut);
 
         // 3) create expressions

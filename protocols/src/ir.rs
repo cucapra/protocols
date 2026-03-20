@@ -5,13 +5,11 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::serialize::{build_statements, serialize_expr, serialize_type};
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::ops::Index;
-
-use crate::serialize::{build_statements, serialize_expr, serialize_type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
@@ -148,7 +146,7 @@ impl Transaction {
                     }
                     // Add a back-edge from the loop body to the current `stmt_id`
                     // (same as how while-loops are represented in the current AST)
-                    Stmt::BoundedLoop(_, body_id) => {
+                    Stmt::RepeatLoop(_, body_id) => {
                         map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
                     }
                     _ => {}
@@ -173,24 +171,10 @@ impl Transaction {
         arg_types
     }
 
-    /// Retrieves the `SymbolId`s of all the parameters of a transaction
-    /// that have a specified `direction`,
-    /// returning an `Iterator` over the `SymbolId`s of the parameters
-    pub fn get_parameters_by_direction(&self, direction: Dir) -> impl Iterator<Item = SymbolId> {
-        self.args.iter().filter_map(move |arg| {
-            if arg.dir == direction {
-                Some(arg.symbol)
-            } else {
-                None
-            }
-        })
-    }
-
     /// Determines if `symbol_id` is a function parameter with the desired `direction`
     /// (e.g. check if an identifier corresponds to an input parameter of the function)
-    pub fn is_param_with_direction(&self, symbol_id: SymbolId, direction: Dir) -> bool {
-        self.get_parameters_by_direction(direction)
-            .contains(&symbol_id)
+    pub fn is_param(&self, symbol_id: SymbolId) -> bool {
+        self.args.iter().any(|a| a.symbol() == symbol_id)
     }
 
     /// Pretty-prints an `Expr` based on its `ExprId`, using the
@@ -242,21 +226,16 @@ impl Index<&StmtId> for Transaction {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Arg {
-    dir: Dir,
     symbol: SymbolId,
 }
 
 impl Arg {
-    pub fn dir(&self) -> Dir {
-        self.dir
-    }
-
     pub fn symbol(&self) -> SymbolId {
         self.symbol
     }
 
-    pub fn new(symbol: SymbolId, dir: Dir) -> Self {
-        Self { dir, symbol }
+    pub fn new(symbol: SymbolId) -> Self {
+        Self { symbol }
     }
 }
 
@@ -281,6 +260,8 @@ impl std::ops::Not for Dir {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Type {
+    /// Non-negative integer with no upper bound.
+    UnsignedInt,
     BitVec(u32),
     Struct(StructId),
     /// Type taken on when we do not know the actual type yet
@@ -309,6 +290,7 @@ impl Type {
         match self {
             Type::BitVec(width) => *width,
             Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
         }
     }
@@ -325,8 +307,9 @@ pub enum Stmt {
     Step,
     Fork,
     While(ExprId, StmtId),
-    // Bounded loop with fixed no. of iterations
-    BoundedLoop(ExprId, StmtId),
+    /// Bounded loop with fixed no. of iterations
+    /// (`ExprId` is the no. of iterations, `StmtId` is the loop body)
+    RepeatLoop(ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
 }
@@ -772,11 +755,7 @@ mod tests {
 
         // 2) create transaction
         let mut add = Transaction::new("add".to_string());
-        add.args = vec![
-            Arg::new(a, Dir::In),
-            Arg::new(b, Dir::In),
-            Arg::new(s, Dir::Out),
-        ];
+        add.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         // 3) create expressions
         let a_expr = add.e(Expr::Sym(a));
@@ -829,7 +808,7 @@ mod tests {
 
         // 2) create transaction
         let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
-        calyx_go_done.args = vec![Arg::new(ii, Dir::In), Arg::new(oo, Dir::Out)];
+        calyx_go_done.args = vec![Arg::new(ii), Arg::new(oo)];
         calyx_go_done.type_param = Some(dut);
 
         // 3) create expressions

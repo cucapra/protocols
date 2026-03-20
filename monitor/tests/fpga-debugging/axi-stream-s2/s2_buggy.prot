@@ -30,7 +30,7 @@ prot reset<DUT: AXISManager>() {
 // Output Arguments:
 //   data - Expected payload from manager
 prot recv<DUT: AXISManager>(
-    out data: u32,
+    data: u32,
 ) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b1;          // Signal ready to receive
@@ -53,7 +53,7 @@ prot recv<DUT: AXISManager>(
 // Output Arguments:
 //   data - Expected payload from manager (should be the last word)
 prot recv_last<DUT: AXISManager>(
-    out data: u32,
+    data: u32,
 ) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b1;          // Signal ready to receive
@@ -72,7 +72,7 @@ prot recv_last<DUT: AXISManager>(
 // STALL: Assert backpressure (i_tready=0) while manager has valid data
 // AXI-Stream requires output args (tdata, tlast) to remain stable during stall
 // Only matches when the waveform contains i_tvalid=1 (i.e. there is some valid data and it's available to stall)
-prot stall<DUT: AXISManager>(out data: u32, out last: u1) {
+prot stall<DUT: AXISManager>(data: u32, last: u1) {
     DUT.i_aresetn := 1'b1;         // Keep out of reset
     DUT.i_tready := 1'b0;          // Apply backpressure
 
@@ -89,6 +89,8 @@ prot stall<DUT: AXISManager>(out data: u32, out last: u1) {
     // Verify outputs remained stable during the stall
     assert_eq(DUT.i_tdata, data);
     assert_eq(DUT.i_tlast, last);
+
+    step();
 }
 
 // WAIT_FOR_DATA: Receiver is ready but no data is available

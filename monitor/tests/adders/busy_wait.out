@@ -1,0 +1,12 @@
+// trace 0
+trace {
+    add_busy_wait(1, 2, 1, 3);
+    add_busy_wait(4, 5, 2, 9);
+}
+
+// trace 1
+trace {
+    add_busy_wait(1, 2, 1, 3);
+    add_busy_wait(4, 5, 1, 9);
+    add_busy_wait(4, 5, 1, 9);
+}

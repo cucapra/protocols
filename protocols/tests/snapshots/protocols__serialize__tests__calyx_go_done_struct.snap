@@ -1,5 +1,5 @@
 ---
-source: src/serialize.rs
+source: protocols/src/serialize.rs
 expression: content
 ---
 struct Calyx {
@@ -9,7 +9,7 @@ struct Calyx {
   out oo: u32,
 }
 
-fn calyx_go_done<dut: Calyx>(in ii: u32, out oo: u32) {
+fn calyx_go_done<dut: Calyx>(ii: u32, oo: u32) {
   dut.ii := ii;
   dut.go := 1;
   while !(dut.done == 1) {

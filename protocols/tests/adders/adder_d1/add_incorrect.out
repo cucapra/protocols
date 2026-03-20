@@ -1,13 +1,13 @@
 error: Thread 0 (`add_incorrect`) attempted conflicting assignment to 'a': current=4, new=1
-   ┌─ adders/adder_d1/add_d1.prot:47:3
+   ┌─ adders/adder_d1/add_d1.prot:34:3
    │
-47 │   DUT.a := a;
+34 │   DUT.a := a;
    │   ^^^^^^^^^^^ Thread 0 (`add_incorrect`) attempted conflicting assignment to 'a': current=4, new=1
 
 error: Thread 1 (`add_incorrect`) attempted conflicting assignment to 'a': current=1, new=4
-   ┌─ adders/adder_d1/add_d1.prot:44:3
+   ┌─ adders/adder_d1/add_d1.prot:31:3
    │
-44 │   DUT.a := a;
+31 │   DUT.a := a;
    │   ^^^^^^^^^^^ Thread 1 (`add_incorrect`) attempted conflicting assignment to 'a': current=1, new=4
 
 Trace 0 execution failed.

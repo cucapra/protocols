@@ -88,6 +88,11 @@ fn check_expr_types(
                     handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
+                Type::UnsignedInt => {
+                    let error_msg = "Invalid slice operation: can't take bit-slices of uint";
+                    handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
                 Type::Unknown => {
                     let error_msg = format!(
                         "Invalid slice operation: can't take bit-slices of expr {} with Unknown type",
@@ -203,10 +208,10 @@ fn check_stmt_types(
                 Err(anyhow!(error_msg))
             }
         }
-        Stmt::BoundedLoop(count_expr, bodyid) => {
-            // Typecheck the no. of iterations (which must be a BitVec type of any width)
+        Stmt::RepeatLoop(count_expr, bodyid) => {
+            // Typecheck the no. of iterations (which must be a uint type)
             let num_iterations_type = check_expr_types(tr, st, handler, count_expr)?;
-            if let Type::BitVec(_) = num_iterations_type {
+            if let Type::UnsignedInt = num_iterations_type {
                 // Then, type-check the loop body
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
@@ -408,11 +413,7 @@ mod tests {
             std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
         let mut tr = Transaction::new("func_arg_invalid".to_string());
-        tr.args = vec![
-            Arg::new(a, Dir::In),
-            Arg::new(b, Dir::In),
-            Arg::new(s, Dir::Out),
-        ];
+        tr.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         let b_expr = tr.e(Expr::Sym(b));
         tr.add_expr_loc(b_expr, 62, 63, fileid);

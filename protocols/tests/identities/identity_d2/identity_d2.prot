@@ -3,7 +3,7 @@ struct Identity {
   out s: u32,
 }
 
-prot multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
+prot multiple_assign<DUT: Identity>(a: u32, s: u32) {
   // If multiple instances of this protocol are run, this will pass if and only if
   // both instances pass the same integer value for parameter a. 
   DUT.a := a;
@@ -15,14 +15,3 @@ prot multiple_assign<DUT: Identity>(in a: u32, out s: u32) {
   step();
 }
 
-prot two_fork_err<DUT: Identity>(in a: u32, out s: u32) {
-  // guaranteed failure due to two forks during execution
-  DUT.a := a;
-  step();
-  fork();
-  DUT.a := a;
-  step();
-  fork();
-  assert_eq(s, DUT.s);
-  step();
-}
