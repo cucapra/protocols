@@ -54,6 +54,26 @@ prot write<DUT: WBSubordinate>(in addr: u32, in data: u32) {
     }
 
     step();
+
+    // After ACK, CYC and STB become 0 (section 3.1.3.1).
+    // Per Rule 3.60, once STB is low, the address/data/WE don't 
+    // contain semantically valid values, so they can be DontCare.
+    DUT.eth_sl_wb_cyc_i  := 1'b0;
+    DUT.eth_sl_wb_stb_i  := 1'b0;
+    DUT.eth_sl_wb_we_i   := X;
+    DUT.eth_sl_wb_adr_i := X;
+    DUT.eth_sl_wb_dat_i := X;
+    
+    step();
+
+    // Note: the Wishbone spec says that after CYC and STB go to 0,
+    // ACK should be set to 0 (Rule 3.5). However, the spec
+    // allows Ack to be de-asserted
+    // either combinationally (Permission 3.30) 
+    // or after one cycle (Observation 3.45)
+    // (this DUT implementation does the latter).
+    // Due to this ambiguity in the Wishbone spec, we don't include an extra check
+    // that Ack = 0 at the end of the protocol 
 }
 
 // Reads a value from the subordinate
@@ -65,17 +85,25 @@ prot read<DUT: WBSubordinate>(in addr: u32, out data: u32) {
     DUT.eth_sl_wb_adr_i := addr;
 
     // Input data to the subordinate during reads is DontCare
-    DUT.eth_sl_wb_dat_i := X;          
+    DUT.eth_sl_wb_dat_i := X;
 
     // Wait for subordinate to Ack
     while (DUT.eth_sl_wb_ack_o == 1'b0) {
         step();
     }
-
-    // Data is valid in the same cycle as ACK
-    // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O", 
+    
+    // ACK is now high, and data is valid in the same cycle as ACK
+    // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
     // i.e. data is only valid when ACK is high)
     assert_eq(DUT.eth_sl_wb_dat_o, data);
-    
+
+    // After ACK, CYC and STB become 0 (section 3.1.3.1).
+    // Per Rule 3.60, once STB is low, the address/data/WE don't 
+    // contain semantically valid values, so they can be DontCare.
+    DUT.eth_sl_wb_cyc_i  := 1'b0;
+    DUT.eth_sl_wb_stb_i  := 1'b0;
+    DUT.eth_sl_wb_we_i   := X;
+    DUT.eth_sl_wb_adr_i := X;
+    DUT.eth_sl_wb_dat_i := X;
     step();
 }
