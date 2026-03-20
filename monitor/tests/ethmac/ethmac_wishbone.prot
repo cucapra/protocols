@@ -1,6 +1,6 @@
 // ARGS: --wave ethmac/ethmac.fst --instances tb_ethernet:WBSubordinate --sample-posedge tb_ethernet.wb_clk
 
-// Wishbone B4 (Pipeline mode) subordinate
+// Wishbone B3 (Classic mode) subordinate
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
     in eth_sl_wb_cyc_i: u1,
@@ -40,9 +40,7 @@ prot idle<DUT: WBSubordinate>() {
     step();
 }
 
-// Writes a `data` value to the subordinate.
-// Wishbone says to hold all request signals while stalled (stall=1),
-// i.e. when the subordinate is busy processing a previous request.
+// Writes a `data` value to the subordinate
 prot write<DUT: WBSubordinate>(in addr: u32, in data: u32) {
     DUT.eth_sl_wb_cyc_i  := 1'b1;
     DUT.eth_sl_wb_stb_i  := 1'b1;
@@ -55,19 +53,6 @@ prot write<DUT: WBSubordinate>(in addr: u32, in data: u32) {
         step();
     }
 
-    // Data is updated combinationally in the same cycle as the ack,
-    // so no separate cycle for data transfer is needed
-    assert_eq(DUT.eth_sl_wb_dat_o, data);
-
-    // Set other inputs to DontCare
-    // Note that the waveform produced by their C++ test-bench keeps 
-    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.eth_sl_wb_cyc_i := X;
-    DUT.eth_sl_wb_stb_i := X;
-    DUT.eth_sl_wb_we_i := X;
-    DUT.eth_sl_wb_adr_i := X;
-    DUT.eth_sl_wb_dat_i := X;
-    
     step();
 }
 
@@ -78,28 +63,19 @@ prot read<DUT: WBSubordinate>(in addr: u32, out data: u32) {
     DUT.eth_sl_wb_stb_i  := 1'b1;
     DUT.eth_sl_wb_we_i   := 1'b0;
     DUT.eth_sl_wb_adr_i := addr;
-    DUT.eth_sl_wb_dat_i := X;
+
+    // Input data to the subordinate during reads is DontCare
+    DUT.eth_sl_wb_dat_i := X;          
 
     // Wait for subordinate to Ack
-    // (When we're reading, the write-enable is always 0, 
-    // but in the Verilog, `stall` is a boolean AND of `eth_sl_wb_we_i` and another
-    // signal, so `stall` is always 0 when we're reading, so we don't 
-    // need another while-loop to wait for `stall` to become 0)
     while (DUT.eth_sl_wb_ack_o == 1'b0) {
         step();
     }
 
-    // Data is updated combinationally in the same cycle as the ack,
-    // so no separate cycle for data transfer is needed
+    // Data is valid in the same cycle as ACK
+    // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O", 
+    // i.e. data is only valid when ACK is high)
     assert_eq(DUT.eth_sl_wb_dat_o, data);
-    
-    // Set other inputs to DontCare
-    // Note that the waveform produced by their C++ test-bench keeps 
-    // `cyc` and `stb` high, so we don't set `cyc` and `stb` to 0 here
-    DUT.eth_sl_wb_cyc_i := X;
-    DUT.eth_sl_wb_stb_i := X;
-    DUT.eth_sl_wb_we_i := X;
-    DUT.eth_sl_wb_adr_i := X;
     
     step();
 }
