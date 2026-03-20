@@ -41,7 +41,7 @@ prot idle<DUT: WBSubordinate>() {
 }
 
 // Writes a `data` value to the subordinate
-prot write<DUT: WBSubordinate>(in addr: u32, in data: u32) {
+prot write<DUT: WBSubordinate>(addr: u32, data: u32) {
     DUT.eth_sl_wb_cyc_i  := 1'b1;
     DUT.eth_sl_wb_stb_i  := 1'b1;
     DUT.eth_sl_wb_we_i   := 1'b1;
@@ -78,7 +78,7 @@ prot write<DUT: WBSubordinate>(in addr: u32, in data: u32) {
 
 // Reads a value from the subordinate
 // (the `data` is conveyed via output parameters)
-prot read<DUT: WBSubordinate>(in addr: u32, out data: u32) {
+prot read<DUT: WBSubordinate>(addr: u32, data: u32) {
     DUT.eth_sl_wb_cyc_i  := 1'b1;
     DUT.eth_sl_wb_stb_i  := 1'b1;
     DUT.eth_sl_wb_we_i   := 1'b0;
