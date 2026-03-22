@@ -601,8 +601,9 @@ impl Scheduler {
         n: u64,
     ) -> ThreadResult {
         repeat_info!(
-            "Thread {}: RepeatLoop fork at cycle {} — spawning exited_thread (Known({})) and speculative_thread (Speculative({}))",
+            "Thread {} (`{}`): RepeatLoop fork at cycle {} — spawning exited_thread (Known({})) and speculative_thread (Speculative({}))",
             current_thread.thread_id,
+            current_thread.transaction.name,
             self.cycle_count,
             n,
             n + 1
@@ -632,8 +633,9 @@ impl Scheduler {
             .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
 
         repeat_info!(
-            "Exited thread ({}) has args_mapping {}\n",
+            "Exited thread ({}, `{}`) has args_mapping {}\n",
             exited_thread.thread_id,
+            exited_thread.transaction.name,
             serialize_args_mapping(
                 &exited_thread.args_mapping,
                 &exited_thread.symbol_table,
