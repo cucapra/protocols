@@ -87,10 +87,7 @@ impl Scheduler {
     pub fn print_scheduler_state(&self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         let time_step = trace.time_step();
         let header = if ctx.show_waveform_time {
-            format!(
-                "SCHEDULER STATE, TIME {}:",
-                trace.format_time(time_step, ctx.time_unit)
-            )
+            format!("SCHEDULER STATE, TIME {}:", trace.format_time(time_step))
         } else {
             format!("SCHEDULER STATE, CYCLE {}:", self.cycle_count)
         };
@@ -255,7 +252,7 @@ impl Scheduler {
             // If any constraints failed, figure out the right time-step/cycle
             // to display in the logs
             let time_str = if ctx.show_waveform_time {
-                trace.format_time(trace.time_step(), ctx.time_unit)
+                trace.format_time(trace.time_step())
             } else {
                 format!("cycle {}", self.interpreter.trace_cycle_count)
             };
@@ -338,13 +335,13 @@ impl Scheduler {
             let finished = threads_with_start_time(&self.finished, start_cycle);
             if finished.len() > 1 {
                 let start_time = if ctx.show_waveform_time {
-                    trace.format_time(finished[0].start_time_step, ctx.time_unit)
+                    trace.format_time(finished[0].start_time_step)
                 } else {
                     format!("cycle {}", start_cycle)
                 };
                 let end_time_step = trace.time_step();
                 let end_time = if ctx.show_waveform_time {
-                    trace.format_time(end_time_step, ctx.time_unit)
+                    trace.format_time(end_time_step)
                 } else {
                     format!("cycle {}", self.cycle_count)
                 };
@@ -367,7 +364,7 @@ impl Scheduler {
             let next = threads_with_start_time(&self.next, start_cycle);
             if !next.is_empty() {
                 let start_time_str = if ctx.show_waveform_time {
-                    trace.format_time(finished_thread.start_time_step, ctx.time_unit)
+                    trace.format_time(finished_thread.start_time_step)
                 } else {
                     format!("cycle {}", finished_thread.start_cycle)
                 };
@@ -437,7 +434,7 @@ impl Scheduler {
         // Print all the threads that finished & failed during the most recent step
         if !self.failed.is_empty() {
             if ctx.show_waveform_time {
-                let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+                let time_str = trace.format_time(trace.time_step());
                 info!(
                     "Threads that failed at time {}: {}",
                     time_str,
@@ -471,7 +468,7 @@ impl Scheduler {
 
         if !self.finished.is_empty() {
             if ctx.show_waveform_time {
-                let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+                let time_str = trace.format_time(trace.time_step());
                 info!(
                     "Threads that finished at time {}: {}",
                     time_str,
@@ -540,7 +537,7 @@ impl Scheduler {
         self.interpreter.trace_cycle_count += 1;
 
         // if ctx.show_waveform_time {
-        //     let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+        //     let time_str = trace.format_time(trace.time_step());
         //     info!("Advancing to time {}, setting current = next", time_str);
         // } else {
         //     info!(
@@ -563,7 +560,7 @@ impl Scheduler {
     pub fn emit_error(&self, trace: &WaveSignalTrace, ctx: &GlobalContext) -> anyhow::Result<()> {
         self.print_step_count(ctx);
         let time_str = if ctx.show_waveform_time {
-            trace.format_time(trace.time_step(), ctx.time_unit)
+            trace.format_time(trace.time_step())
         } else {
             format!("cycle {}", self.interpreter.trace_cycle_count)
         };
@@ -1051,7 +1048,7 @@ impl Scheduler {
                 cycle_count,
             }) => {
                 let time_str = if ctx.show_waveform_time {
-                    trace.format_time(trace.time_step(), ctx.time_unit)
+                    trace.format_time(trace.time_step())
                 } else {
                     format!("cycle {}", cycle_count)
                 };

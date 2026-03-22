@@ -49,10 +49,7 @@ pub fn format_thread(
     struct_name: &str,
 ) -> String {
     let start_info = if ctx.show_waveform_time {
-        format!(
-            "Start time: {}",
-            trace.format_time(thread.start_time_step, ctx.time_unit)
-        )
+        format!("Start time: {}", trace.format_time(thread.start_time_step))
     } else {
         format!("Start cycle: {}", thread.start_cycle)
     };

@@ -17,7 +17,7 @@ mod thread;
 mod types;
 
 use crate::designs::{Instance, collects_design_names, parse_instance};
-use crate::global_context::{GlobalContext, TimeUnit};
+use crate::global_context::GlobalContext;
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
@@ -81,10 +81,7 @@ struct Cli {
     #[arg(long, value_name = "SHOW_THREAD_IDS")]
     show_thread_ids: bool,
 
-    /// Specifies the time unit for displaying waveform times.
-    /// Can only be used with --show-waveform-time.
-    /// Valid options: fs, ps, ns, us, ms, s, auto
-    /// Default is 'auto' which selects the unit based on the maximum time in the waveform.
+    /// Note: this CLI flag is no longer used (only support ns for simplicity)
     #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
     time_unit: Option<String>,
 
@@ -190,24 +187,11 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
 
-    // Parse the time unit (defaults to `Auto` if not specified)
-    let time_unit = if let Some(ref time_unit_str) = cli.time_unit {
-        TimeUnit::from_str(time_unit_str).with_context(|| {
-            format!(
-                "Invalid time unit: '{}'. Valid options: fs, ps, ns, us, ms, s, auto",
-                time_unit_str
-            )
-        })?
-    } else {
-        TimeUnit::Auto
-    };
-
     // Check if we have multiple structs/designs
-
     let multiple_structs = dut_designs.len() > 1;
 
     // Create a GlobalContext that is shared across all schedulers
-    let ctx = GlobalContext::new(&cli, 0, time_unit, multiple_structs);
+    let ctx = GlobalContext::new(&cli, 0, multiple_structs);
 
     // Multi-struct mode: create a GlobalScheduler with one scheduler per design
     let mut schedulers = vec![];
