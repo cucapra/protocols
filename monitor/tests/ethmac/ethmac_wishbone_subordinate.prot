@@ -59,9 +59,9 @@ prot reset<DUT: WBSubordinate>() {
 
     // Wishbone spec (Rule 3.20): CYC & STB must be 0 when RST is 1, 
     // all other signals are undefined (DontCare)
-    DUT.eth_sl_wb_cyc_i  := 1'b0;
-    DUT.eth_sl_wb_stb_i  := 1'b0;
-    DUT.eth_sl_wb_we_i   := X;
+    DUT.eth_sl_wb_cyc_i := 1'b0;
+    DUT.eth_sl_wb_stb_i := 1'b0;
+    DUT.eth_sl_wb_we_i := X;
     DUT.eth_sl_wb_adr_i := X;
     DUT.eth_sl_wb_dat_i := X;
 
@@ -146,7 +146,7 @@ prot read<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
     DUT.eth_sl_wb_dat_i := X;
     
     // Wishbone spec says that after CYC and STB go to 0,
-    // ACK should be set to 0 (Rule 3.5). 
+    // ACK should be set to 0 (Rule 3.50). 
     assert_eq(DUT.eth_sl_wb_ack_o, 1'b0);
     step();
 }

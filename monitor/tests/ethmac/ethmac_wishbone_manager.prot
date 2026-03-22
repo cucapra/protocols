@@ -5,8 +5,8 @@ struct WBManager {
     // Reset signal
     in wb_rst: u1,
 
-    // Response from the subordinate, indicating that the request
-    // has been fulfilled.
+    // The subordinate's response to the manager, 
+    // indicating that the request has been fulfilled.
     in eth_ma_wb_ack_i: u1,
 
     // Data returned by the subordinate to the manager
@@ -31,4 +31,72 @@ struct WBManager {
     out eth_ma_wb_dat_o: u32
 }
 
-// TODO: add manager version of protocols
+// Indicates the manager is idle
+#[idle]
+prot idle<DUT: WBManager>() {
+    // Reset signal is 0 (to distinguish the `idle` and `reset` protocols)
+    DUT.wb_rst := 1'b0;
+    DUT.eth_ma_wb_ack_i := X;
+    DUT.eth_ma_wb_dat_i := X;
+    step();
+}
+
+// Resets the manager
+prot reset<DUT: WBManager>() {
+    // Reset signal is 1
+    DUT.wb_rst := 1'b0;  
+    
+    // Wishbone spec (Rule 3.20): CYC & STB must be 0 when RST is 1, 
+    // all other signals are undefined (DontCare)
+    assert_eq(DUT.eth_ma_wb_cyc_o, 1'b0);
+    assert_eq(DUT.eth_ma_wb_stb_o, 1'b0);
+    DUT.eth_ma_wb_ack_i := X;
+    DUT.eth_ma_wb_dat_i := X;
+
+    step();
+}
+
+// Performs a write request with the given address and data payload
+prot write<DUT: WBManager>(addr: u32, data: u32, num_cycles: uint) {
+    // Before a bus cycle, ACK is 0 
+    DUT.eth_ma_wb_ack_i := 1'b0;
+    
+    // Note: in the waveform, 
+    // the manager always asserts CYC and STB together synchronously
+    assert_eq(DUT.eth_ma_wb_cyc_o, 1'b1);
+    assert_eq(DUT.eth_ma_wb_stb_o, 1'b1);
+    
+    // Rule 3.60: Manager must drive the write-enable, data and 
+    // address signals synchronously at the same cycle in 
+    // which STB becomes high
+
+    assert_eq(DUT.eth_ma_wb_we_o, 1'b1); // WE = 1 for write requests
+    assert_eq(DUT.eth_ma_wb_adr_o, addr);
+    assert_eq(DUT.eth_ma_wb_dat_o, data);
+
+    // Wait some no. of cycles before the subordinate ACKs
+    repeat num_cycles iterations {
+        step();
+
+        // All manager outputs must be held stable 
+        assert_eq(DUT.eth_ma_wb_cyc_o, 1'b1);
+        assert_eq(DUT.eth_ma_wb_stb_o, 1'b1);
+        assert_eq(DUT.eth_ma_wb_we_o, 1'b1); 
+        assert_eq(DUT.eth_ma_wb_adr_o, addr);
+        assert_eq(DUT.eth_ma_wb_dat_o, data);
+    }
+
+    // Subordinate acks
+    DUT.eth_ma_wb_ack_i := 1'b1;
+
+    // One cycle for data transfer
+    step();
+
+    // Subordinate sets ACK to 0, manager sets CYC & STB to 0
+    DUT.eth_ma_wb_ack_i := 1'b0;
+    assert_eq(DUT.eth_ma_wb_cyc_o, 1'b0);
+    assert_eq(DUT.eth_ma_wb_stb_o, 1'b0); 
+
+    step();
+}
+
