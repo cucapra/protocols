@@ -26,6 +26,9 @@ struct WBSubordinate {
     // Data to be written
     in eth_sl_wb_dat_i: u32,
 
+    // Reset signal
+    in wb_rst: u1,
+
     // Response from the subordinate, indicating that the request
     // has been fulfilled.
     out eth_sl_wb_ack_o: u1,
@@ -35,7 +38,7 @@ struct WBSubordinate {
     out eth_sl_wb_dat_o: u32,
 }
 
-// Both cyc & stb are low when the subordinate is low,
+// Both cyc & stb are low when the subordinate is idle,
 // everything else is DontCare
 #[idle]
 prot idle<DUT: WBSubordinate>() {
@@ -44,6 +47,21 @@ prot idle<DUT: WBSubordinate>() {
     DUT.eth_sl_wb_we_i   := X;
     DUT.eth_sl_wb_adr_i := X;
     DUT.eth_sl_wb_dat_i := X;
+    step();
+}
+
+// Resets the subordinate
+prot reset<DUT: WBSubordinate>() {
+    DUT.wb_rst := 1'b1;
+
+    // Wishbone spec (Rule 3.20): CYC & STB must be 0 when RST is 1, 
+    // all other signals are undefined (DontCare)
+    DUT.eth_sl_wb_cyc_i  := 1'b0;
+    DUT.eth_sl_wb_stb_i  := 1'b0;
+    DUT.eth_sl_wb_we_i   := X;
+    DUT.eth_sl_wb_adr_i := X;
+    DUT.eth_sl_wb_dat_i := X;
+
     step();
 }
 
