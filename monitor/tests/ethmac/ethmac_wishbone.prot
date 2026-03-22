@@ -45,9 +45,9 @@ prot idle<DUT: WBSubordinate>() {
 // Writes a `data` value to the subordinate
 prot write<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
     DUT.eth_sl_wb_cyc_i := 1'b1;
-    DUT.eth_sl_wb_stb_i := 1'b0;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
+        DUT.eth_sl_wb_stb_i := 1'b0;
         step();
     }
     DUT.eth_sl_wb_stb_i := 1'b1;
