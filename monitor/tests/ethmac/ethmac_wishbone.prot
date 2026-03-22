@@ -1,6 +1,8 @@
 // ARGS: --wave ethmac/ethmac.fst --instances tb_ethernet:WBSubordinate --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns
 
 // Note: one clock cycle is 30ns in the waveform
+// Total of ~31,620,000 clock cycles in the waveform (waveform is 949899798 ns long)
+// Note: on my machine, it takes ~7 mins 22 seconds to handle the first 12,500 cycles (before the process gets killed)
 
 // Wishbone B3 (Classic mode) subordinate
 struct WBSubordinate {
