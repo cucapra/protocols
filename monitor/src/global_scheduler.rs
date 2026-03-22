@@ -156,12 +156,24 @@ fn process_group_cycles(
         if let Some(failed_scheduler) = &last_failed_scheduler {
             info!(
                 "All schedulers in the scheduler group for struct `{}` have been processed, 
-                (all of them have no more threads to execute in the current/next cycle), there was a scheduler that failed, so emitting a global monitor failure",
+                (all of them have no more threads to execute in the current/next cycle), 
+                and there was at least one scheduler that failed, so emitting a global monitor failure",
                 failed_scheduler.struct_name
             );
             eprintln!(
                 "All schedulers failed: No transactions match the waveform for DUT `{}`",
                 failed_scheduler.struct_name
+            );
+            eprintln!(
+                "Trace inferred so far by failed scheduler: {}",
+                failed_scheduler
+                    .output_buffer
+                    .iter()
+                    .map(|augmented_prot_app| {
+                        format!("{}", augmented_prot_app.protocol_application)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
             );
             failed_scheduler.emit_error(trace, ctx)?;
         }
