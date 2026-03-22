@@ -601,11 +601,13 @@ impl Scheduler {
         n: u64,
     ) -> ThreadResult {
         repeat_info!(
-            "Thread {} (`{}`): RepeatLoop fork at cycle {} — spawning exited_thread (Known({})) and speculative_thread (Speculative({}))",
+            "Thread {} (`{}`): RepeatLoop fork at cycle {} — spawning exited_thread (Thread {}, Known({})) and speculative_thread (Thread {}, Speculative({}))",
             current_thread.thread_id,
             current_thread.transaction.name,
             self.cycle_count,
+            self.num_threads,
             n,
+            current_thread.thread_id,
             n + 1
         );
         // Create a new thread `exited_thread` that is identical
@@ -909,9 +911,10 @@ impl Scheduler {
                     }
 
                     repeat_info!(
-                        "Thread {} (`{}`) finished successfully, adding to `finished` queue",
+                        "Thread {} (`{}`) finished successfully at time {}, adding to `finished` queue",
                         thread.global_thread_id(ctx),
-                        self.format_transaction_name(ctx, thread.transaction.name.clone())
+                        self.format_transaction_name(ctx, thread.transaction.name.clone()),
+                        trace.format_time(trace.time_step())
                     );
 
                     // Record this thread as having finished in this cycle
