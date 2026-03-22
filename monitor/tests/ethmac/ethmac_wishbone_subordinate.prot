@@ -42,6 +42,8 @@ struct WBSubordinate {
 // everything else is DontCare
 #[idle]
 prot idle<DUT: WBSubordinate>() {
+    // Reset signal is 0 (to distinguish the `idle` & `reset` protocols)
+    DUT.wb_rst := 1'b0;  
     DUT.eth_sl_wb_cyc_i  := 1'b0;
     DUT.eth_sl_wb_stb_i  := 1'b0;
     DUT.eth_sl_wb_we_i   := X;
@@ -52,6 +54,7 @@ prot idle<DUT: WBSubordinate>() {
 
 // Resets the subordinate
 prot reset<DUT: WBSubordinate>() {
+    // Reset signal is 1
     DUT.wb_rst := 1'b1;
 
     // Wishbone spec (Rule 3.20): CYC & STB must be 0 when RST is 1, 
