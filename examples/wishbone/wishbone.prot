@@ -73,11 +73,11 @@ prot write_classic<self: Wishbone>(mask: u4, addr: u30, data: u32) {
     self.wishbone_sel := mask;
     self.wishbone_dat_w := data;
 
-    // TODO: masking
-    // if !mask[0] { wishbone_dat_w[ 7: 0] := X; }
-    // if !mask[1] { wishbone_dat_w[15: 8] := X; }
-    // if !mask[2] { wishbone_dat_w[23:16] := X; }
-    // if !mask[3] { wishbone_dat_w[31:24] := X; }
+    // randomize masked out
+    if !mask[0] { wishbone_dat_w[ 7: 0] := X; }
+    if !mask[1] { wishbone_dat_w[15: 8] := X; }
+    if !mask[2] { wishbone_dat_w[23:16] := X; }
+    if !mask[3] { wishbone_dat_w[31:24] := X; }
 
 
     while self.wishbone_ack == 1'b0 {

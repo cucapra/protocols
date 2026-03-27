@@ -42,7 +42,7 @@ path_id = @{ id ~ ("." ~ id)* }
 tpe = { uint_tpe | bv_tpe }
 uint_tpe = { "uint" }
 bv_tpe = { "u" ~ dec_integer }
-assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
+assign = { (slice | path_id) ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
 step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}
 fork = { "fork" ~ "()" ~ ";"}
