@@ -1,0 +1,119 @@
+// Wishbone pins for this project from the server (the one servicing requests) perspective
+struct Wishbone {
+    // low active reset pin
+    in reset: u1, // TODO: should this be out??
+    // acknowledge (from server)
+    out wishbone_ack: u1,
+    // address (from client)
+    in wishbone_adr: u30,
+    // cycle output, indicates bus cycle in progress (from client)
+    in wishbone_cyc: u1,
+    // read data from server
+    out wishbone_dat_r: u32,
+    // write data from client
+    in wishbone_dat_w: u32,
+    // error from server
+    out wishbone_err: u1,
+    // mask for data in/out from client
+    in wishbone_sel: u4,
+    // indicates a valid transfer cycle from client
+    in wishbone_stb: u1,
+    // write enable (i.e. not read) from client
+    in wishbone_we: u1,
+    ///// 4.2 WISHBONE Registered Feedback
+    // burst type extension
+    // used for incrementing bursts
+    // 0: linear burst
+    // 1: 4-beat wrap burst
+    // 2: 8-beat wrap burst
+    // 3: 16-beat wrap burst
+    in wishbone_bte: u2,
+    // cycle type indentifier
+    // 0: classic cycle
+    // 1: constant address burst cycle
+    // 2: incrementing burst cycle
+    // 3-6: reserved
+    // 7: end of burst
+    in wishbone_cti: u3,
+    // no LOCK
+    // no RTY
+}
+
+prot reset<self: Wishbone>() {
+    self.reset := 1'b0;
+    step();
+}
+
+prot idle<self: Wishbone>() {
+    self.reset := 1'b1;
+    self.wishbone_cyc := 1'b0;
+    self.wishbone_stb := 1'b0;
+    step();
+}
+
+prot write<self: Wishbone>(mask: u4, addr: u30, data: u32) {
+    // no reset
+    self.reset := 1'b1;
+    // classic cycle (in which case bte is don't care)
+    self.wishbone_cti := 3'b0;
+    self.wishbone_bte := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.wishbone_cyc := 1'b1;
+    self.wishbone_stb := 1'b1;
+
+    // we are writing
+    self.wishbone_we := 1'b1;
+
+    // apply parameters
+    self.wishbone_adr := addr;
+    self.wishbone_sel := mask;
+    self.wishbone_dat_w := data;
+
+    // TODO: masking
+    // if !mask[0] { wishbone_dat_w[ 7: 0] := X; }
+    // if !mask[1] { wishbone_dat_w[15: 8] := X; }
+    // if !mask[2] { wishbone_dat_w[23:16] := X; }
+    // if !mask[3] { wishbone_dat_w[31:24] := X; }
+
+
+    while self.wishbone_ack == 1'b0 {
+        step();
+    }
+
+    // acknowledge is now true
+    step();
+}
+
+prot read<self: Wishbone>(mask: u4, addr: u30, data: u32) {
+    // no reset
+    self.reset := 1'b1;
+    // classic cycle (in which case bte is don't care)
+    self.wishbone_cti := 3'b0;
+    self.wishbone_bte := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.wishbone_cyc := 1'b1;
+    self.wishbone_stb := 1'b1;
+
+    // we are reading
+    self.wishbone_we := 1'b0;
+
+    // apply parameters
+    self.wishbone_adr := addr;
+    self.wishbone_sel := mask;
+    self.wishbone_dat_w := X;
+
+    while self.wishbone_ack == 1'b0 {
+        step();
+    }
+
+    // TODO: masking
+    // if mask[0] { assert_eq(self.wishbone_dat_r[ 7: 0], data[ 7: 0]); }
+    // if mask[1] { assert_eq(self.wishbone_dat_r[15: 8], data[15: 8]); }
+    // if mask[2] { assert_eq(self.wishbone_dat_r[23:16], data[23:16]); }
+    // if mask[3] { assert_eq(self.wishbone_dat_r[31:24], data[31:24]); }
+
+    assert_eq(self.wishbone_dat_r, data);
+    step();
+}
