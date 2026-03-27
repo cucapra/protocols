@@ -517,9 +517,9 @@ pub mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
         let b: SymbolId =
-            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg);
+            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
         assert_eq!(symbols["b"], symbols[b]);
 
         // declare DUT struct (TODO: Fix struct)

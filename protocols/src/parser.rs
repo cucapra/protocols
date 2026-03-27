@@ -289,7 +289,21 @@ impl ParserContext<'_> {
                             &arglist_pair,
                             "Expected argument list",
                         )?;
-                        self.tr.args = self.parse_arglist(arg_rules)?;
+                        let raw_args = self.parse_arglist(arg_rules)?;
+
+                        // add raw arguments to symbol table
+                        self.tr.args = raw_args
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, (name, tpe))| {
+                                let symbol_id = self.st.add_without_parent(
+                                    name,
+                                    tpe,
+                                    SymbolKind::Arg(index as u16),
+                                );
+                                Arg::new(symbol_id)
+                            })
+                            .collect();
                     } else {
                         self.tr.args = Vec::new();
                     }
@@ -487,7 +501,10 @@ impl ParserContext<'_> {
         Ok(Stmt::IfElse(expr_id, if_block, else_block))
     }
 
-    fn parse_arglist(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Vec<Arg>, String> {
+    fn parse_arglist(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<Vec<(String, Type)>, String> {
         let mut args = Vec::new();
         for inner_pair in pair.into_inner() {
             match inner_pair.as_rule() {
@@ -503,13 +520,9 @@ impl ParserContext<'_> {
                         &inner_pair,
                         "Expected type in argument",
                     )?;
-                    let id = id_pair.as_str();
+                    let id = id_pair.as_str().to_string();
                     let tpe = self.parse_type(tpe_pair)?;
-                    let symbol_id =
-                        self.st
-                            .add_without_parent(id.to_string(), tpe, SymbolKind::Arg);
-                    let arg = Arg::new(symbol_id);
-                    args.push(arg);
+                    args.push((id, tpe));
                 }
                 Rule::arglist => {
                     let mut nested_args = self.parse_arglist(inner_pair)?;

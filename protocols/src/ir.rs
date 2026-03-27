@@ -273,7 +273,7 @@ pub enum SymbolKind {
     Dut,
     InPort,
     OutPort,
-    Arg,
+    Arg(u16),
 }
 
 impl Type {
@@ -735,8 +735,12 @@ impl SymbolTableEntry {
     pub fn is_port(&self) -> bool {
         matches!(self.kind, SymbolKind::InPort | SymbolKind::OutPort)
     }
-    pub fn is_arg(&self) -> bool {
-        matches!(self.kind, SymbolKind::Arg)
+    pub fn as_arg_index(&self) -> Option<usize> {
+        if let SymbolKind::Arg(index) = self.kind {
+            Some(index as usize)
+        } else {
+            None
+        }
     }
 }
 
@@ -751,10 +755,10 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
         let b: SymbolId =
-            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg);
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg);
+            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg(2));
         assert_eq!(symbols["s"], symbols[s]);
 
         // declare Adder struct
@@ -810,8 +814,8 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg);
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
+        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
         assert_eq!(symbols["oo"], symbols[oo]);
 
         // declare DUT struct
