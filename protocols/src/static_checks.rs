@@ -2,6 +2,7 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::ir::UnaryOp;
 use crate::{
     diagnostic::{DiagnosticHandler, Level},
     ir::{BinOp, Dir, Expr, ExprId, LocationId, StmtId, SymbolId, SymbolTable, Transaction, Type},
@@ -11,7 +12,7 @@ use anyhow::anyhow;
 use baa::{BitVecOps, BitVecValue, WidthInt};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EqualityConstraint {
+pub struct ArgEqualityConstraint {
     /// the index of the argument in the argument list of the protocol
     pub arg_index: usize,
     /// the value that (as subset) of the argument is supposed to be equal to
@@ -20,7 +21,7 @@ pub struct EqualityConstraint {
     lsb: WidthInt,
 }
 
-impl EqualityConstraint {
+impl ArgEqualityConstraint {
     pub fn lsb(&self) -> WidthInt {
         self.lsb
     }
@@ -32,43 +33,110 @@ impl EqualityConstraint {
     }
 }
 
-/// Separates a condition expression into equality constraints on arguments and a "left over" expression.
-// pub fn deconstruct_condition_expr(
-//     expr_id: ExprId,
-//     proto: &Transaction,
-//     symbol_table: &SymbolTable,
-// ) -> (Vec<EqualityConstraint>, ExprId) {
-//     match &proto[expr_id] {
-//         Expr::Const(_) => {}
-//         Expr::Sym(_) => {}
-//         Expr::DontCare => {}
-//         Expr::Binary(_, _, _) => {}
-//         Expr::Unary(_, _) => {}
-//         Expr::Slice(_, _, _) => {}
-//     }
-// }
+/// Separates a condition expression into equality constraints on arguments and ay "left over" expression.
+pub fn deconstruct_condition_expr(
+    expr_id: ExprId,
+    proto: &Transaction,
+    symbol_table: &SymbolTable,
+) -> (Vec<ArgEqualityConstraint>, Vec<ExprId>) {
+    // we currently do not have conjunction (AND) as a binary op, so we will only ever get one or the other
+    if let Some(eq) = as_equality_constraint(expr_id, proto, symbol_table) {
+        (vec![eq], vec![])
+    } else {
+        (vec![], vec![expr_id])
+    }
+}
 
-// fn as_equality_constraint(
-//     expr_id: ExprId,
-//     proto: &Transaction,
-//     symbol_table: &SymbolTable,
-// ) -> Option<EqualityConstraint> {
-//     match &proto[expr_id] {
-//         Expr::Unary(UnaryOp::Not, inner) => {
-//             if let Some((sym, msb, lsb)) = as_symbol_slice(*inner, proto) {
-//                 if symbol_table[sym].
-//             }
-//         }
-//     }
-// }
-//
-// fn as_symbol_slice(
-//     expr_id: ExprId,
-//     proto: &Transaction,
-//
-// ) -> Option<(SymbolId, WidthInt, WidthInt)> {
-//     todo!()
-// }
+fn as_equality_constraint(
+    expr_id: ExprId,
+    proto: &Transaction,
+    symbol_table: &SymbolTable,
+) -> Option<ArgEqualityConstraint> {
+    match &proto[expr_id] {
+        Expr::Unary(UnaryOp::Not, inner) => {
+            if let Expr::Unary(UnaryOp::Not, inner_inner) = &proto[inner] {
+                // deal with double negation
+                as_equality_constraint(*inner_inner, proto, symbol_table)
+            } else if let Some(mut eq_constraint) =
+                as_equality_constraint(*inner, proto, symbol_table)
+                && eq_constraint.width() == 1
+            {
+                // invert value because of "not" op
+                eq_constraint.value = eq_constraint.value.not();
+                Some(eq_constraint)
+            } else {
+                None
+            }
+        }
+        Expr::Binary(BinOp::Equal, a, b) => {
+            match (
+                as_symbol_slice(*a, proto, symbol_table),
+                as_const(*a, proto),
+                as_symbol_slice(*b, proto, symbol_table),
+                as_const(*b, proto),
+            ) {
+                (Some((sym, msb, lsb)), None, None, Some(value))
+                | (None, Some(value), Some((sym, msb, lsb)), None) => {
+                    debug_assert_eq!(msb - lsb + 1, value.width());
+                    let arg_index = symbol_table[sym].as_arg_index()?;
+                    Some(ArgEqualityConstraint {
+                        arg_index,
+                        value,
+                        lsb,
+                    })
+                }
+                _ => None,
+            }
+        }
+        // single bit slices can be thought of as an equality constraint
+        Expr::Slice(e, msb, lsb) if *msb == *lsb => {
+            if let Some((e_sym, _, inner_lsb)) = as_symbol_slice(*e, proto, symbol_table) {
+                if let Some(arg_index) = symbol_table[e_sym].as_arg_index() {
+                    Some(ArgEqualityConstraint {
+                        arg_index,
+                        value: BitVecValue::new_true(),
+                        lsb: inner_lsb + *lsb,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn as_const(expr_id: ExprId, proto: &Transaction) -> Option<BitVecValue> {
+    match &proto[expr_id] {
+        Expr::Const(value) => Some(value.clone()),
+        Expr::Sym(_) => None,
+        Expr::DontCare => None,
+        Expr::Binary(BinOp::Equal, a, b) => as_const(*a, proto).and_then(|a_value| {
+            as_const(*b, proto).map(|b_value| a_value.is_equal(&b_value).into())
+        }),
+        Expr::Binary(BinOp::Concat, a, b) => as_const(*a, proto)
+            .and_then(|a_value| as_const(*b, proto).map(|b_value| a_value.concat(&b_value))),
+        Expr::Unary(UnaryOp::Not, a) => as_const(*a, proto).map(|a_value| a_value.not()),
+        Expr::Slice(a, msb, lsb) => as_const(*a, proto).map(|a_value| a_value.slice(*msb, *lsb)),
+    }
+}
+fn as_symbol_slice(
+    expr_id: ExprId,
+    proto: &Transaction,
+    symbol_table: &SymbolTable,
+) -> Option<(SymbolId, WidthInt, WidthInt)> {
+    match &proto[expr_id] {
+        Expr::Sym(sym_id) => {
+            let msb = symbol_table[sym_id].tpe().bitwidth() - 1;
+            Some((*sym_id, msb, 0))
+        }
+        Expr::Slice(inner, msb, lsb) => as_symbol_slice(*inner, proto, symbol_table)
+            .map(|(sym, _, inner_lsb)| (sym, *msb + inner_lsb, *lsb + inner_lsb)),
+        _ => None,
+    }
+}
 
 /// Enum representing *language features* for which static well-formedness
 /// checks need to be performed
@@ -215,12 +283,25 @@ pub fn check_if_symbol_is_dut_port(
     }
 }
 
-/// Checks whether the condition (guard) for an if-statement / while-loop
-/// conforms to the well-formedness (WF) requirements.
-/// - The associated `Transaction`, `SymbolTable` & `DiagnosticHandler`
-///   are also expected as inputs (for error message purposes)
 pub fn check_condition_wf(
     expr_id: &ExprId,
+    tr: &Transaction,
+    symbol_table: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+) -> anyhow::Result<()> {
+    let (_equality_cond, others) = deconstruct_condition_expr(*expr_id, tr, symbol_table);
+    for other in others {
+        check_non_eq_condition_wf(other, tr, symbol_table, handler)?;
+    }
+    // equality conditions are already well-formed, otherwise they would not have been extracted
+
+    Ok(())
+}
+
+/// Checks whether the condition (guard) for an if-statement / while-loop
+/// conforms to the well-formedness (WF) requirements.
+pub fn check_non_eq_condition_wf(
+    expr_id: ExprId,
     tr: &Transaction,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
@@ -233,7 +314,7 @@ pub fn check_condition_wf(
             check_if_symbol_is_dut_port(
                 *symbol_id,
                 None,
-                LocationId::Expr(*expr_id),
+                LocationId::Expr(expr_id),
                 tr,
                 symbol_table,
                 handler,
@@ -243,7 +324,7 @@ pub fn check_condition_wf(
         Expr::DontCare => {
             let error_msg =
                 "DontCare not allowed inside conditions for if-statements & while-loops";
-            handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
+            handler.emit_diagnostic_expr(tr, &expr_id, error_msg, Level::Error);
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
