@@ -4,7 +4,7 @@ mod tests {
     use crate::signal_trace::{SignalTrace, StepResult, WaveSignalTrace};
     use baa::BitVecOps;
     use protocols::design::Design;
-    use protocols::ir::{Dir, Field, SymbolTable, Type};
+    use protocols::ir::{Dir, Field, SymbolKind, SymbolTable, Type};
     use rustc_hash::FxHashMap;
 
     fn axi_experiment_helper(waveform_file: &str, expected_values: Vec<u64>) {
@@ -12,14 +12,25 @@ mod tests {
         let mut symbol_table = SymbolTable::default();
 
         // Add symbols to the symbol table and get their IDs
-        let valid_id =
-            symbol_table.add_without_parent("m_axis_tvalid".to_string(), Type::BitVec(1));
-        let ready_id =
-            symbol_table.add_without_parent("m_axis_tready".to_string(), Type::BitVec(1));
-        let data_id = symbol_table.add_without_parent("m_axis_tdata".to_string(), Type::BitVec(8));
+        let valid_id = symbol_table.add_without_parent(
+            "m_axis_tvalid".to_string(),
+            Type::BitVec(1),
+            SymbolKind::InPort,
+        );
+        let ready_id = symbol_table.add_without_parent(
+            "m_axis_tready".to_string(),
+            Type::BitVec(1),
+            SymbolKind::OutPort,
+        );
+        let data_id = symbol_table.add_without_parent(
+            "m_axis_tdata".to_string(),
+            Type::BitVec(8),
+            SymbolKind::InPort,
+        );
 
         // Create a dummy SymbolId for the design itself
-        let design_id = symbol_table.add_without_parent("AXIS".to_string(), Type::Unknown);
+        let design_id =
+            symbol_table.add_without_parent("AXIS".to_string(), Type::Unknown, SymbolKind::Dut);
 
         // Create the Design for AXIS
         let axis_design = Design {

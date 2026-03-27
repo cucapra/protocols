@@ -558,8 +558,8 @@ mod tests {
     #[test]
     fn test_emit_diagnostic() {
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
-        let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::InPort);
+        let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::InPort);
 
         let mut tr = Transaction::new("test_transaction".to_string());
         let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
