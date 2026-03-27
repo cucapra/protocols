@@ -1,0 +1,22 @@
+// ARGS: --verilog wishbone/rtl/sram_dut.v --protocol wishbone/wishbone.prot --module dut
+trace {
+    // reset the design for two cycles
+    reset();
+    reset();
+
+    // write to SRAM
+    write_classic(0xf, 0x04000003, 0x9649ae98);
+    // read back the same value
+    read_classic(0xf, 0x04000003, 0x9649ae98);
+
+    // overwrite just a single byte
+    write_classic(1, 0x04000003, 0x111111ff);
+    // read back the complete value, only the lsb should have changed
+    read_classic(0xf, 0x04000003, 0x9649aeff);
+    // this read only checks the MSB and requires the protocol to actually branch on the mask value
+    read_classic(8, 0x04000003, 0x96000000);
+
+
+    // add some idle cycles at the end
+    idle(); idle(); idle(); idle();
+}

@@ -41,9 +41,12 @@ struct Wishbone {
 
 prot reset<self: Wishbone>() {
     self.reset := 1'b0;
+    self.wishbone_cyc := 1'b0;
+    self.wishbone_stb := 1'b0;
     step();
 }
 
+#[idle]
 prot idle<self: Wishbone>() {
     self.reset := 1'b1;
     self.wishbone_cyc := 1'b0;
@@ -51,7 +54,7 @@ prot idle<self: Wishbone>() {
     step();
 }
 
-prot write<self: Wishbone>(mask: u4, addr: u30, data: u32) {
+prot write_classic<self: Wishbone>(mask: u4, addr: u30, data: u32) {
     // no reset
     self.reset := 1'b1;
     // classic cycle (in which case bte is don't care)
@@ -85,7 +88,7 @@ prot write<self: Wishbone>(mask: u4, addr: u30, data: u32) {
     step();
 }
 
-prot read<self: Wishbone>(mask: u4, addr: u30, data: u32) {
+prot read_classic<self: Wishbone>(mask: u4, addr: u30, data: u32) {
     // no reset
     self.reset := 1'b1;
     // classic cycle (in which case bte is don't care)
@@ -108,12 +111,10 @@ prot read<self: Wishbone>(mask: u4, addr: u30, data: u32) {
         step();
     }
 
-    // TODO: masking
-    // if mask[0] { assert_eq(self.wishbone_dat_r[ 7: 0], data[ 7: 0]); }
-    // if mask[1] { assert_eq(self.wishbone_dat_r[15: 8], data[15: 8]); }
-    // if mask[2] { assert_eq(self.wishbone_dat_r[23:16], data[23:16]); }
-    // if mask[3] { assert_eq(self.wishbone_dat_r[31:24], data[31:24]); }
 
-    assert_eq(self.wishbone_dat_r, data);
+    if mask[0] { assert_eq(self.wishbone_dat_r[ 7: 0], data[ 7: 0]); }
+    if mask[1] { assert_eq(self.wishbone_dat_r[15: 8], data[15: 8]); }
+    if mask[2] { assert_eq(self.wishbone_dat_r[23:16], data[23:16]); }
+    if mask[3] { assert_eq(self.wishbone_dat_r[31:24], data[31:24]); }
     step();
 }
