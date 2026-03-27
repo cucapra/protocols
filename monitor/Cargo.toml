@@ -19,4 +19,5 @@ log = "0.4.27"
 stdext = "0.3"
 rustc-hash.workspace = true
 anyhow = "1.0.100"
+# There are dependency issues if we use rand v0.10, so we pin rand to 0.9 for now
 rand = "0.9"
