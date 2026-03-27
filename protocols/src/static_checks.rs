@@ -1,4 +1,4 @@
-// Copyright 2025 Cornell University
+// Copyright 2025-2026 Cornell University
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
@@ -8,6 +8,67 @@ use crate::{
     serialize::serialize_expr,
 };
 use anyhow::anyhow;
+use baa::{BitVecOps, BitVecValue, WidthInt};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EqualityConstraint {
+    /// the index of the argument in the argument list of the protocol
+    pub arg_index: usize,
+    /// the value that (as subset) of the argument is supposed to be equal to
+    pub value: BitVecValue,
+    /// the lsb offset (in case of a subset constraint)
+    lsb: WidthInt,
+}
+
+impl EqualityConstraint {
+    pub fn lsb(&self) -> WidthInt {
+        self.lsb
+    }
+    pub fn width(&self) -> WidthInt {
+        self.value.width()
+    }
+    pub fn msb(&self) -> WidthInt {
+        self.width() - self.lsb() - 1
+    }
+}
+
+/// Separates a condition expression into equality constraints on arguments and a "left over" expression.
+// pub fn deconstruct_condition_expr(
+//     expr_id: ExprId,
+//     proto: &Transaction,
+//     symbol_table: &SymbolTable,
+// ) -> (Vec<EqualityConstraint>, ExprId) {
+//     match &proto[expr_id] {
+//         Expr::Const(_) => {}
+//         Expr::Sym(_) => {}
+//         Expr::DontCare => {}
+//         Expr::Binary(_, _, _) => {}
+//         Expr::Unary(_, _) => {}
+//         Expr::Slice(_, _, _) => {}
+//     }
+// }
+
+// fn as_equality_constraint(
+//     expr_id: ExprId,
+//     proto: &Transaction,
+//     symbol_table: &SymbolTable,
+// ) -> Option<EqualityConstraint> {
+//     match &proto[expr_id] {
+//         Expr::Unary(UnaryOp::Not, inner) => {
+//             if let Some((sym, msb, lsb)) = as_symbol_slice(*inner, proto) {
+//                 if symbol_table[sym].
+//             }
+//         }
+//     }
+// }
+//
+// fn as_symbol_slice(
+//     expr_id: ExprId,
+//     proto: &Transaction,
+//
+// ) -> Option<(SymbolId, WidthInt, WidthInt)> {
+//     todo!()
+// }
 
 /// Enum representing *language features* for which static well-formedness
 /// checks need to be performed
