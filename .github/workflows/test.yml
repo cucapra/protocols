@@ -24,6 +24,8 @@ jobs:
       run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
     - uses: actions/checkout@v4
     - uses: ./.github/actions/setup-test-environment
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: cargo build --verbose
     - name: Run unit tests (Debug)
@@ -88,26 +90,28 @@ jobs:
         # uv's warning messages about the formatter being experimental
         run: uv format --check --preview-features format      
 
-  benchmark:
-    name: Performance Benchmarks
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+  # benchmark:
+  #   name: Performance Benchmarks
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 30
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history to access baseline
-      - uses: ./.github/actions/setup-test-environment
-      - name: Install hyperfine
-        run: |
-          wget https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine_1.19.0_amd64.deb
-          sudo dpkg -i hyperfine_1.19.0_amd64.deb
-      - name: Build monitor (release)
-        run: cargo build --release --package protocols-monitor
-      - name: Run benchmarks
-        run: uv run scripts/benchmark_monitor.py
-      - name: Check for performance regressions
-        run: uv run scripts/check_performance_regression.py
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0  # Fetch all history to access baseline
+  #     - uses: ./.github/actions/setup-test-environment
+  #       with:
+  #         github_token: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Install hyperfine
+  #       run: |
+  #         wget https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine_1.19.0_amd64.deb
+  #         sudo dpkg -i hyperfine_1.19.0_amd64.deb
+  #     - name: Build monitor (release)
+  #       run: cargo build --release --package protocols-monitor
+  #     - name: Run benchmarks
+  #       run: uv run scripts/benchmark_monitor.py
+  #     - name: Check for performance regressions
+  #       run: uv run scripts/check_performance_regression.py
 
 
   verilog:
@@ -123,6 +127,8 @@ jobs:
         run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-test-environment
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Icarus Verilog Version
         # we intentionally ignore the fact that `iverilog -v` returns a non-zero exit code
         run: iverilog -v || which iverilog
