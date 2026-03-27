@@ -268,6 +268,14 @@ pub enum Type {
     Unknown,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SymbolKind {
+    Dut,
+    InPort,
+    OutPort,
+    Arg,
+}
+
 impl Type {
     /// Checks whether two types are *equivalent*,
     /// i.e. if two bit-vector types have the same length,
@@ -525,7 +533,7 @@ impl std::fmt::Display for SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn add_without_parent(&mut self, name: String, tpe: Type) -> SymbolId {
+    pub fn add_without_parent(&mut self, name: String, tpe: Type, kind: SymbolKind) -> SymbolId {
         assert!(
             !name.contains('.'),
             "hierarchical names need to be handled externally"
@@ -533,6 +541,7 @@ impl SymbolTable {
         let entry = SymbolTableEntry {
             name,
             tpe,
+            kind,
             parent: None,
         };
         let lookup_name = entry.full_name(self);
@@ -563,23 +572,28 @@ impl SymbolTable {
             "hierarchical names need to be handled externally"
         );
 
-        let existing_pin: Option<&Field>;
-
-        if let Type::Struct(structid) = self.entries[parent].tpe() {
+        let existing_pin = if let Type::Struct(structid) = self.entries[parent].tpe() {
             let fields = self.structs[structid].pins();
-            existing_pin = fields.iter().find(|field| field.name == name);
+            fields.iter().find(|field| field.name == name)
         } else {
-            existing_pin = None;
-        }
+            None
+        };
 
-        let pin_type = match existing_pin {
+        let tpe = match existing_pin {
             Some(pin) => pin.tpe(),
-            None => Type::Unknown,
+            None => todo!("deal with parent not being a struct"),
+        };
+
+        let kind = match existing_pin.map(|p| p.dir) {
+            Some(Dir::In) => SymbolKind::InPort,
+            Some(Dir::Out) => SymbolKind::OutPort,
+            None => todo!("deal with parent not being a struct"),
         };
 
         let entry = SymbolTableEntry {
             name,
-            tpe: pin_type,
+            tpe,
+            kind,
             parent: Some(parent),
         };
         let lookup_name = entry.full_name(self);
@@ -685,6 +699,7 @@ impl Index<&Arg> for SymbolTable {
 pub struct SymbolTableEntry {
     name: String,
     tpe: Type,
+    kind: SymbolKind,
     /// Used to compute the fully qualified name.
     parent: Option<SymbolId>,
 }
@@ -716,6 +731,13 @@ impl SymbolTableEntry {
         }
         name
     }
+
+    pub fn is_port(&self) -> bool {
+        matches!(self.kind, SymbolKind::InPort | SymbolKind::OutPort)
+    }
+    pub fn is_arg(&self) -> bool {
+        matches!(self.kind, SymbolKind::Arg)
+    }
 }
 
 #[cfg(test)]
@@ -729,9 +751,10 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let b: SymbolId =
+            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg);
         assert_eq!(symbols["s"], symbols[s]);
 
         // declare Adder struct
@@ -743,7 +766,11 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(add_struct));
+        let dut = symbols.add_without_parent(
+            "dut".to_string(),
+            Type::Struct(add_struct),
+            SymbolKind::Dut,
+        );
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         let dut_b = symbols.add_with_parent("b".to_string(), dut);
         let dut_s = symbols.add_with_parent("s".to_string(), dut);
@@ -783,8 +810,8 @@ mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32));
+        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg);
         assert_eq!(symbols["oo"], symbols[oo]);
 
         // declare DUT struct
@@ -798,7 +825,11 @@ mod tests {
             ],
         );
 
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
+        let dut = symbols.add_without_parent(
+            "dut".to_string(),
+            Type::Struct(dut_struct),
+            SymbolKind::Dut,
+        );
         let dut_ii = symbols.add_with_parent("ii".to_string(), dut);
         let dut_go = symbols.add_with_parent("go".to_string(), dut);
         let dut_done = symbols.add_with_parent("done".to_string(), dut);

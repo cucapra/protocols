@@ -255,9 +255,11 @@ impl ParserContext<'_> {
                                 .struct_id_from_name(path_id_2)
                                 .ok_or_else(|| format!("Undefined struct: {}", path_id_2))?;
                             let dut_struct = self.st[struct_id].clone();
-                            let dut_symbol_id = self
-                                .st
-                                .add_without_parent(path_id_1.to_string(), Type::Struct(struct_id));
+                            let dut_symbol_id = self.st.add_without_parent(
+                                path_id_1.to_string(),
+                                Type::Struct(struct_id),
+                                SymbolKind::Dut,
+                            );
                             self.tr.type_param = Some(dut_symbol_id);
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
@@ -503,7 +505,9 @@ impl ParserContext<'_> {
                     )?;
                     let id = id_pair.as_str();
                     let tpe = self.parse_type(tpe_pair)?;
-                    let symbol_id = self.st.add_without_parent(id.to_string(), tpe);
+                    let symbol_id =
+                        self.st
+                            .add_without_parent(id.to_string(), tpe, SymbolKind::Arg);
                     let arg = Arg::new(symbol_id);
                     args.push(arg);
                 }

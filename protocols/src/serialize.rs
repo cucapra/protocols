@@ -517,8 +517,9 @@ pub mod tests {
 
         // 1) declare symbols
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32));
-        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(32));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg);
+        let b: SymbolId =
+            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg);
         assert_eq!(symbols["b"], symbols[b]);
 
         // declare DUT struct (TODO: Fix struct)
@@ -529,7 +530,11 @@ pub mod tests {
                 Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
             ],
         );
-        let dut = symbols.add_without_parent("dut".to_string(), Type::Struct(dut_struct));
+        let dut = symbols.add_without_parent(
+            "dut".to_string(),
+            Type::Struct(dut_struct),
+            SymbolKind::Dut,
+        );
         let dut_a = symbols.add_with_parent("a".to_string(), dut);
         assert_eq!(symbols["dut.a"], symbols[dut_a]);
 
