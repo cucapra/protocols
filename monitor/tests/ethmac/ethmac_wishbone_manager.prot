@@ -44,7 +44,7 @@ prot idle<DUT: WBManager>() {
 // Resets the manager
 prot reset<DUT: WBManager>() {
     // Reset signal is 1
-    DUT.wb_rst := 1'b0;  
+    DUT.wb_rst := 1'b1;  
     
     // Wishbone spec (Rule 3.20): CYC & STB must be 0 when RST is 1, 
     // all other signals are undefined (DontCare)
