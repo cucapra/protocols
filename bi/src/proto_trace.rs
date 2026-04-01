@@ -7,8 +7,11 @@
 use baa::BitVecValue;
 use protocols::ir::StmtId;
 
+/// A `ProtoTrace` (protocol trace) is just a type alias for a list
+/// of `ProtoCall`s (protocol calls)
 pub type ProtoTrace = Vec<ProtoCall>;
 
+/// Type representing a call to a protocol (e.g. `add(1, 2, 3)`)
 #[derive(Debug, Clone)]
 pub struct ProtoCall {
     pub name: String,
@@ -17,22 +20,36 @@ pub struct ProtoCall {
     pub args: Vec<Option<BitVecValue>>,
 }
 
+/// `TraceId` is an index into the `Traces.tails`
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct TraceId(u32);
 
+/// A `TraceEntry` is a linked-list node
 #[derive(Debug, Clone)]
 struct TraceEntry {
+    /// The actual protocol invocation
     value: ProtoCall,
+
+    /// The previous `TraceEntry`'s index in `Traces.entries`
+    /// (if one exists)
     prev: Option<u32>,
 }
 
+/// `Traces` represents all successfully completed transactions (across
+/// all explored execution paths)
 #[derive(Debug, Default)]
 pub struct Traces {
+    /// Flat array containing all `TraceEntry` nodes that have been created
     entries: Vec<TraceEntry>,
+
+    /// For `TraceId(i)`, `tails[i]` contains the index in `entries` of the
+    /// most recent `TraceEntry` created for `TraceId(i)`
     tails: Vec<Option<u32>>,
 }
 
 impl Traces {
+    /// Appends a `ProtoCall` to the end of the `trace`
+    /// (identified by its `TraceId`)
     pub fn append(&mut self, trace: TraceId, value: ProtoCall) {
         let entry_id = self.entries.len() as u32;
         let prev = self.tails.get(trace.0 as usize).cloned().flatten();
@@ -40,6 +57,13 @@ impl Traces {
         self.tails[trace.0 as usize] = Some(entry_id);
     }
 
+    /// Updates the `Traces` struct when a new protocol is `fork`-ed.
+    /// The argument `TraceId` is for the parent, while the forked-off child's
+    /// `TraceId` is returned.
+    /// This function creates a new `TraceId` for the child, and copies the
+    /// parent's `tails` pointer to the child (this means that the parent
+    /// & the child share all `TraceEntry`s prior to the fork, without
+    /// needing to clone every single `TraceEntry` struct).
     pub fn fork(&mut self, trace: TraceId) -> TraceId {
         let new_id = TraceId(self.tails.len() as u32);
         self.tails.push(self.tails[trace.0 as usize]);
@@ -52,11 +76,19 @@ impl Traces {
         new_id
     }
 
+    /// Discards the trace corresponding to a failed thread
+    /// (identified by its `TraceId`). Under the hood, this just
+    /// sets `tails[trace_id] = None`, which prevents the trace from
+    /// being accessible via `Traces::get_trace` (which retrieves all
+    /// transactions starting from `tails[trace_id]`).
     pub fn remove(&mut self, trace: TraceId) {
         // TODO: remove any orphaned entries (GC!)
         self.tails[trace.0 as usize] = None;
     }
 
+    /// Retrieves all transactions corresponding to a `TraceId`
+    /// by starting `tails[trace_id]` and walking backwards through  
+    /// each `TraceEntry`'s `prev` pointer
     pub fn get_trace(&self, trace: TraceId) -> ProtoTrace {
         if let Some(t) = self.tails[trace.0 as usize] {
             self.get_trace_from_tail(t)
@@ -65,6 +97,7 @@ impl Traces {
         }
     }
 
+    /// Helper function for `get_trace`
     fn get_trace_from_tail(&self, tail: u32) -> ProtoTrace {
         let mut out = vec![];
         let mut t = Some(tail);
@@ -77,6 +110,7 @@ impl Traces {
         out
     }
 
+    /// Extracts all unique protocol traces
     pub fn unique_traces(&self) -> Vec<ProtoTrace> {
         let mut tails: Vec<_> = self.tails.iter().cloned().flatten().collect();
         tails.sort();
