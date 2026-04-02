@@ -1,4 +1,4 @@
-// ARGS: --wave antmicro/test_fifo_classic_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns
+// ARGS: --wave antmicro/test_fifo_classic_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns --include-idle
 
 // Wishbone B3 (Classic mode) subordinate
 struct WBSubordinate {
@@ -36,8 +36,9 @@ struct WBSubordinate {
 // everything else is DontCare
 #[idle]
 prot idle<DUT: WBSubordinate>() {
-    // Reset signal is 0 (to distinguish the `idle` & `reset` protocols)
-    DUT.reset := 1'b0;  
+    // Reset signal is 1 (since reset is active-low) 
+    // to distinguish the `idle` & `reset` protocols
+    DUT.reset := 1'b1;  
     DUT.wishbone_cyc := 1'b0;
     DUT.wishbone_stb := 1'b0;
     DUT.wishbone_we := X;
@@ -48,16 +49,22 @@ prot idle<DUT: WBSubordinate>() {
 
 // Resets the subordinate
 prot reset<DUT: WBSubordinate>() {
-    // Reset signal is 1
-    DUT.reset := 1'b1;
+    // Reset signal is 0 (active-low)
+    DUT.reset := 1'b0;
 
-    // Wishbone spec (Rule 3.20): CYC & STB must be 0 when RST is 1, 
-    // all other signals are undefined (DontCare)
-    DUT.wishbone_cyc := 1'b0;
-    DUT.wishbone_stb := 1'b0;
+    DUT.wishbone_cyc := X;
+    DUT.wishbone_stb := X;
     DUT.wishbone_we := X;
     DUT.wishbone_adr := X;
     DUT.wishbone_dat_w := X;
+
+    step();
+
+    // Wishbone spec (Rule 3.20): CYC & STB must be 0 at the next rising clock 
+    // edge after RESET has been asserted (set to 0), 
+    // all other signals are undefined (DontCare)
+    DUT.wishbone_cyc := 1'b0;
+    DUT.wishbone_stb := 1'b0;
 
     step();
 }
