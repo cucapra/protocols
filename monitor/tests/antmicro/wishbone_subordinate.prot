@@ -65,6 +65,7 @@ prot reset<DUT: WBSubordinate>() {
     // all other signals are undefined (DontCare)
     DUT.wishbone_cyc := 1'b0;
     DUT.wishbone_stb := 1'b0;
+    DUT.reset := X;
 
     step();
 }
