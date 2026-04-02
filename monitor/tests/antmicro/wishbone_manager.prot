@@ -1,4 +1,4 @@
-// ARGS: --wave ethmac/ethmac.fst --instances tb_ethernet:WBManager --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns
+// ARGS: --wave antmicro/test_fifo_classic_1.fst --instances tb.dut:WBManager --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns
 
 // Wishbone B3 (Classic mode) manager 
 struct WBManager {
