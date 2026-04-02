@@ -287,6 +287,11 @@ pub fn type_check(
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
     for (tr, st) in trs {
+        // debug sanity check to make sure the symbol table and the argument list are in sync
+        for (index, arg) in tr.args.iter().enumerate() {
+            debug_assert_eq!(st[arg].as_arg_index(), Some(index), "{}", st[arg].name());
+        }
+
         for expr_id in tr.expr_ids() {
             check_expr_types(tr, st, handler, &expr_id)?;
         }
@@ -404,10 +409,12 @@ mod tests {
     fn function_argument_test() {
         let mut handler = DiagnosticHandler::default();
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1));
-        let b: SymbolId = symbols.add_without_parent("b".to_string(), Type::BitVec(1));
-        let c: SymbolId = symbols.add_without_parent("c".to_string(), Type::BitVec(1));
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1));
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1), SymbolKind::Arg(0));
+        let b: SymbolId =
+            symbols.add_without_parent("b".to_string(), Type::BitVec(1), SymbolKind::Arg(1));
+        let c: SymbolId =
+            symbols.add_without_parent("c".to_string(), Type::BitVec(1), SymbolKind::InPort);
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1), SymbolKind::Arg(2));
         assert_eq!(symbols["s"], symbols[s]);
         let input =
             std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
