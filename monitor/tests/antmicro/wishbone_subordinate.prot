@@ -90,9 +90,6 @@ prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     // ACK = 1 is sustained for one cycle
     step();
      
-    // The DUT takes one more cycle to set CYC and STB to become 0 
-    step();
-
     // After ACK, CYC and STB become 0 (section 3.1.3.1).
     // Per Rule 3.60, once STB is low, the address/data/WE don't 
     // contain semantically valid values, so they can be DontCare.
@@ -134,9 +131,6 @@ prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
     // i.e. data is only valid when ACK is high)
     assert_eq(DUT.wishbone_dat_r, data);
-
-    // The DUT takes one more cycle to set CYC and STB to become 0
-    step();
     
     // After ACK, CYC and STB become 0 (section 3.1.3.1).
     // Per Rule 3.60, once STB is low, the address/data/WE don't 
