@@ -1,4 +1,4 @@
-// ARGS: --wave antmicro/test_fifo_classic_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns --include-idle
+// ARGS: --wave antmicro/test_fifo_classic_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns
 
 // Wishbone B3 (Classic mode) subordinate
 struct WBSubordinate {
@@ -70,8 +70,8 @@ prot reset<DUT: WBSubordinate>() {
     step();
 }
 
-// Writes one single `data` value to the subordinate
-prot write_single<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+// Writes a `data` value to the subordinate at the given address
+prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
@@ -89,28 +89,32 @@ prot write_single<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     }
     // ACK = 1 is sustained for one cycle
     step();
-     
-    // After ACK, CYC and STB become 0 (section 3.1.3.1).
-    // Per Rule 3.60, once STB is low, the address/data/WE don't 
-    // contain semantically valid values, so they can be DontCare.
-    DUT.wishbone_cyc := 1'b0;
-    DUT.wishbone_stb := 1'b0;
+    
+    // After the ACK, CYC and STB are DontCare: the manager is free to either
+    // keep them asserted 
+    // (for block reads, section 8.4.2, Permission 3.40, Observation 3.55) 
+    // or deassert them (for single reads, section 3.1.3.1). 
+    // Since STB is DontCare, per Rule 3.60, the address/data/WE don't 
+    // contain semantically valid values, so these are also DontCare.
+
+    // Note: this DUT doesn't contain `TGC/BLK` signals, which we would 
+    // use to distinguish between single writes from block writes (section 3.1.5)
+
+    DUT.wishbone_cyc := X;
+    DUT.wishbone_stb := X;
     DUT.wishbone_we := X;
     DUT.wishbone_adr := X;
     DUT.wishbone_dat_w := X;
     
-    // Wishbone spec says that after CYC and STB go to 0,
-    // ACK should be set to 0 (Rule 3.5). 
-    assert_eq(DUT.wishbone_ack, 1'b0);
     step();
 }
 
-// Reads one single value from the subordinate
-// (the `data` is conveyed via output parameters)
-prot read_single<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+// Reads one single `data` value from the subordinate 
+prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
+        DUT.wishbone_stb := 1'b0;
         step();
     }
     DUT.wishbone_stb := 1'b1;
@@ -132,77 +136,22 @@ prot read_single<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     // i.e. data is only valid when ACK is high)
     assert_eq(DUT.wishbone_dat_r, data);
     
-    // After ACK, CYC and STB become 0 (section 3.1.3.1).
-    // Per Rule 3.60, once STB is low, the address/data/WE don't 
-    // contain semantically valid values, so they can be DontCare.
-    DUT.wishbone_cyc := 1'b0;
-    DUT.wishbone_stb := 1'b0;
+    // After the ACK, CYC and STB are DontCare: the manager is free to either
+    // keep them asserted 
+    // (for block reads, section 8.4.2, Permission 3.40, Observation 3.55) 
+    // or deassert them (for single reads, section 3.1.3.1). 
+    // Since STB is DontCare, per Rule 3.60, the address/data/WE don't 
+    // contain semantically valid values, so these are also DontCare.
+
+    // Note: this DUT doesn't contain `TGC/BLK` signals, which we would 
+    // use to distinguish between single writes from block writes (section 3.1.5)
+
+    DUT.wishbone_cyc := X;
+    DUT.wishbone_stb := X;
     DUT.wishbone_we := X;
     DUT.wishbone_adr := X;
     DUT.wishbone_dat_w := X;
     
-    // Wishbone spec says that after CYC and STB go to 0,
-    // ACK should be set to 0 (Rule 3.50). 
-    assert_eq(DUT.wishbone_ack, 1'b0);
     step();
 }
 
-// Same as `write`, but handles one *phase* (data transfer) within a BLOCK WRITE
-// (writing multiple values). The key difference is that CYC and STB are *not* 
-// deasserted at the end of the protocol, which distinguishes a block write 
-// from a single write.
-prot block_write_phase<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) { 
-    DUT.wishbone_cyc := 1'b1;
-    // Wait a variable no. of cycles until manager sets `stb` to 1
-    repeat num_cycles iterations {
-        DUT.wishbone_stb := 1'b0;
-        step();
-    }
-    DUT.wishbone_stb := 1'b1;
-    DUT.wishbone_we := 1'b1;
-    DUT.wishbone_adr := addr;
-    DUT.wishbone_dat_w := data;
-
-    // Wait till the subordinate Acks
-    while (DUT.wishbone_ack == 1'b0) {
-        step();
-    }
-
-    // We intentionally keep CYC high,
-    // which distinguishes a block read from a single read (Section 8.4.2).
-    step();
-} 
-
-// Same as `read`, but handles one *phase* (data transfer) within a BLOCK READ
-// (reading multiple values). The key difference is that CYC and STB are *not* 
-// deasserted at the end of the protocol, which distinguishes a block read 
-// from a single read.
-prot block_read_phase<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) { 
-    DUT.wishbone_cyc := 1'b1;
-    // Wait a variable no. of cycles until manager sets `stb` to 1
-    repeat num_cycles iterations {
-        step();
-    }
-    DUT.wishbone_stb := 1'b1;
-    DUT.wishbone_we := 1'b0;
-    DUT.wishbone_adr := addr;
-
-    // Input data to the subordinate during reads is DontCare
-    DUT.wishbone_dat_w := X;
-
-    // Wait for subordinate to Ack
-    while (DUT.wishbone_ack == 1'b0) {
-        step();
-    }
-    // ACK now becomes 1, so the data transfer occurs
-    step();
-
-    // ACK is now high, and data is valid in the same cycle as ACK
-    // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
-    // i.e. data is only valid when ACK is high)
-    assert_eq(DUT.wishbone_dat_r, data);
-
-    // We intentionally keep CYC high,
-    // which distinguishes a block read from a single read (Section 8.4.2). 
-    step();
-} 
