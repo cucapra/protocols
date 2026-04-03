@@ -70,8 +70,8 @@ prot reset<DUT: WBSubordinate>() {
     step();
 }
 
-// Writes a `data` value to the subordinate
-prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+// Writes one single `data` value to the subordinate
+prot write_single<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
@@ -105,9 +105,9 @@ prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     step();
 }
 
-// Reads a value from the subordinate
+// Reads one single value from the subordinate
 // (the `data` is conveyed via output parameters)
-prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+prot read_single<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
@@ -146,3 +146,63 @@ prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     assert_eq(DUT.wishbone_ack, 1'b0);
     step();
 }
+
+// Same as `write`, but handles one *phase* (data transfer) within a BLOCK WRITE
+// (writing multiple values). The key difference is that CYC and STB are *not* 
+// deasserted at the end of the protocol, which distinguishes a block write 
+// from a single write.
+prot block_write_phase<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) { 
+    DUT.wishbone_cyc := 1'b1;
+    // Wait a variable no. of cycles until manager sets `stb` to 1
+    repeat num_cycles iterations {
+        DUT.wishbone_stb := 1'b0;
+        step();
+    }
+    DUT.wishbone_stb := 1'b1;
+    DUT.wishbone_we := 1'b1;
+    DUT.wishbone_adr := addr;
+    DUT.wishbone_dat_w := data;
+
+    // Wait till the subordinate Acks
+    while (DUT.wishbone_ack == 1'b0) {
+        step();
+    }
+
+    // We intentionally keep CYC high,
+    // which distinguishes a block read from a single read (Section 8.4.2).
+    step();
+} 
+
+// Same as `read`, but handles one *phase* (data transfer) within a BLOCK READ
+// (reading multiple values). The key difference is that CYC and STB are *not* 
+// deasserted at the end of the protocol, which distinguishes a block read 
+// from a single read.
+prot block_read_phase<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) { 
+    DUT.wishbone_cyc := 1'b1;
+    // Wait a variable no. of cycles until manager sets `stb` to 1
+    repeat num_cycles iterations {
+        step();
+    }
+    DUT.wishbone_stb := 1'b1;
+    DUT.wishbone_we := 1'b0;
+    DUT.wishbone_adr := addr;
+
+    // Input data to the subordinate during reads is DontCare
+    DUT.wishbone_dat_w := X;
+
+    // Wait for subordinate to Ack
+    while (DUT.wishbone_ack == 1'b0) {
+        step();
+    }
+    // ACK now becomes 1, so the data transfer occurs
+    step();
+
+    // ACK is now high, and data is valid in the same cycle as ACK
+    // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
+    // i.e. data is only valid when ACK is high)
+    assert_eq(DUT.wishbone_dat_r, data);
+
+    // We intentionally keep CYC high,
+    // which distinguishes a block read from a single read (Section 8.4.2). 
+    step();
+} 
