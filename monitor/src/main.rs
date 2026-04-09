@@ -17,7 +17,7 @@ mod thread;
 mod types;
 
 use crate::designs::{Instance, collects_design_names, parse_instance};
-use crate::global_context::{GlobalContext, TimeUnit};
+use crate::global_context::GlobalContext;
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
@@ -30,6 +30,7 @@ use protocols::diagnostic::DiagnosticHandler;
 use protocols::frontend;
 use protocols::ir::{SymbolTable, Transaction};
 use std::io::Write;
+
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
 
@@ -80,10 +81,7 @@ struct Cli {
     #[arg(long, value_name = "SHOW_THREAD_IDS")]
     show_thread_ids: bool,
 
-    /// Specifies the time unit for displaying waveform times.
-    /// Can only be used with --show-waveform-time.
-    /// Valid options: fs, ps, ns, us, ms, s, auto
-    /// Default is 'auto' which selects the unit based on the maximum time in the waveform.
+    /// Note: this CLI flag is no longer used (only support ns for simplicity)
     #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
     time_unit: Option<String>,
 
@@ -97,6 +95,13 @@ struct Cli {
     #[arg(long, value_name = "ALWAYS_PRINT_IDLE_TRANSACTIONS")]
     include_idle: bool,
 
+    /// If this CLI flag is specified,
+    /// the monitor stops after processing after a certain no. of clock cycles.
+    /// (This should only be used when test the monitor over a large waveform
+    /// where we only want to see the monitor's output on a prefix of the waveform.)
+    #[arg(long, value_name = "MAX_STEPS")]
+    max_steps: Option<u32>,
+
     /// Skips the static checks for step/fork errors.
     #[arg(long)]
     skip_static_step_fork_checks: bool,
@@ -106,8 +111,8 @@ fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
 
-    // Set up logger to use the log-level specified via the `-v` flag
-    // For concision, we disable timestamps and the module paths in the log
+    // Set up logger to use the log-level specified via the `-v` flag.
+    // For concision, we disable timestamps and the module paths in the log.
     let mut logger = env_logger::Builder::new();
 
     // Configure output format of logger.
@@ -182,24 +187,11 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
 
-    // Parse the time unit (defaults to `Auto` if not specified)
-    let time_unit = if let Some(ref time_unit_str) = cli.time_unit {
-        TimeUnit::from_str(time_unit_str).with_context(|| {
-            format!(
-                "Invalid time unit: '{}'. Valid options: fs, ps, ns, us, ms, s, auto",
-                time_unit_str
-            )
-        })?
-    } else {
-        TimeUnit::Auto
-    };
-
     // Check if we have multiple structs/designs
-
     let multiple_structs = dut_designs.len() > 1;
 
     // Create a GlobalContext that is shared across all schedulers
-    let ctx = GlobalContext::new(&cli, 0, time_unit, multiple_structs);
+    let ctx = GlobalContext::new(&cli, 0, multiple_structs);
 
     // Multi-struct mode: create a GlobalScheduler with one scheduler per design
     let mut schedulers = vec![];

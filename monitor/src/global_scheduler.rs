@@ -35,6 +35,8 @@ fn process_group_cycles(
     trace: &WaveSignalTrace,
     ctx: &GlobalContext,
 ) -> anyhow::Result<SchedulerGroup> {
+    info!("Entered process_group_cycles function");
+
     // We have to define this up here since we end up mutating `scheduler_group`
     // later in this function
     let group_was_non_empty = !scheduler_group.is_empty();
@@ -51,6 +53,7 @@ fn process_group_cycles(
                 processed_schedulers.push_back(scheduler);
             }
             Ok(CycleResult::Fork { parent }) => {
+                info!("Entered CycleResult::Fork branch");
                 // When there is an explicit/implicit fork,
                 // we need to iterate over all possible candidate protocols
                 // and for each candidate protocol, spawn a scheduler that runs it
@@ -110,6 +113,7 @@ fn process_group_cycles(
                 struct_name,
                 error_context,
             }) => {
+                info!("Entered NoTransactionsMatch branch");
                 // This individual scheduler failed, so we discard it
                 // (Other schedulers in the scheduler group may still succeed)
                 info!(
@@ -119,12 +123,15 @@ fn process_group_cycles(
                 last_failed_scheduler = Some(scheduler);
             }
             Err(SchedulerError::Other(err)) => {
+                info!("Entered OtherSchedulerError branch");
                 // This individual scheduler failed; discard it.
                 info!("Scheduler error for `{}`: {:#}", scheduler.struct_name, err);
                 last_failed_scheduler = Some(scheduler);
             }
         }
     }
+
+    info!("Exited while-loop in process_group_cycles");
 
     // If all schedulers that were processed can't make any more progress
     // (i.e. both their `current` & `next` queues are empty, indicating
@@ -135,16 +142,38 @@ fn process_group_cycles(
     let all_schedulers_done = processed_schedulers
         .iter()
         .all(|scheduler| scheduler.current.is_empty() && scheduler.next.is_empty());
+
+    info!("all_schedulers_done = {}", all_schedulers_done);
+
     if group_was_non_empty && all_schedulers_done {
+        info!("Entered if-statement at end of process_group_cycles");
+
+        info!(
+            "last_failed_scheduler.is_some() = {}",
+            last_failed_scheduler.is_some()
+        );
+
         if let Some(failed_scheduler) = &last_failed_scheduler {
             info!(
                 "All schedulers in the scheduler group for struct `{}` have been processed, 
-                (all of them have no more threads to execute in the current/next cycle), there was a scheduler that failed, so emitting a global monitor failure",
+                (all of them have no more threads to execute in the current/next cycle), 
+                and there was at least one scheduler that failed, so emitting a global monitor failure",
                 failed_scheduler.struct_name
             );
             eprintln!(
                 "All schedulers failed: No transactions match the waveform for DUT `{}`",
                 failed_scheduler.struct_name
+            );
+            eprintln!(
+                "Trace inferred so far by failed scheduler: {}",
+                failed_scheduler
+                    .output_buffer
+                    .iter()
+                    .map(|augmented_prot_app| {
+                        format!("{}", augmented_prot_app.protocol_application)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
             );
             failed_scheduler.emit_error(trace, ctx)?;
         }
@@ -327,8 +356,8 @@ impl GlobalScheduler {
     ) -> String {
         match (ctx.show_waveform_time, ctx.show_thread_ids) {
             (true, true) | (true, false) => {
-                let start_time = self.trace.format_time(entry.start_time_step, ctx.time_unit);
-                let end_time = self.trace.format_time(entry.end_time_step, ctx.time_unit);
+                let start_time = self.trace.format_time(entry.start_time_step);
+                let end_time = self.trace.format_time(entry.end_time_step);
                 if ctx.show_thread_ids {
                     format!(
                         "{};  // [time: {} -> {}] (thread {})",
@@ -356,6 +385,7 @@ impl GlobalScheduler {
         }
 
         let mut trace_ended = false;
+        let mut steps_taken: u32 = 0;
 
         loop {
             for scheduler_group in self.scheduler_groups.iter_mut() {
@@ -397,25 +427,38 @@ impl GlobalScheduler {
                 break;
             }
 
+            // If there is a scheduler group where for every scheduler in the group,
+            // its `current` and `next` queues are both empty,
+            // this means no transaction can match the waveform for this group
+            if !ctx.multiple_structs {
+                for scheduler_group in &self.scheduler_groups {
+                    let no_transactions = scheduler_group
+                        .iter()
+                        .all(|scheduler| scheduler.current.is_empty() && scheduler.next.is_empty());
+                    if no_transactions {
+                        return Err(anyhow::anyhow!(
+                            "No transactions matched in scheduler group for struct {}",
+                            scheduler_group[0].struct_name
+                        ));
+                    }
+                }
+            }
+
+            // Stop early if --max-steps was specified and we've hit the limit
+            steps_taken += 1;
+            if let Some(max) = ctx.max_steps {
+                if steps_taken >= max {
+                    info!("GlobalScheduler: Reached --max-steps limit of {max}, stopping early");
+                    break;
+                }
+            }
+
             // Advance the trace (only once for all schedulers)
             let step_result = self.trace.step();
-
-            if ctx.show_waveform_time {
-                let time_str = self
-                    .trace
-                    .format_time(self.trace.time_step(), ctx.time_unit);
-                info!("GlobalScheduler: Advancing to time {}", time_str);
-            } else {
-                info!("GlobalScheduler: Advancing to next cycle");
-            }
 
             // Advance all schedulers to their next cycle
             for scheduler_group in self.scheduler_groups.iter_mut() {
                 for scheduler in scheduler_group.iter_mut() {
-                    info!(
-                        "GlobalScheduler: Advancing scheduler for `{}` to the next cycle",
-                        scheduler.struct_name
-                    );
                     scheduler.advance_to_next_cycle(ctx, &self.trace);
                 }
             }
