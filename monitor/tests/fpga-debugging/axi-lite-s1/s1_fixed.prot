@@ -1,0 +1,118 @@
+// ARGS: --wave fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle
+
+struct ReadSubordinate {
+    // Read address channel 
+    in  S_AXI_ARVALID: u1,
+    in  S_AXI_ARADDR: u7,
+    out S_AXI_ARREADY: u1,
+
+    // Read data channel
+    in  S_AXI_RREADY: u1,
+    out S_AXI_RVALID: u1,
+    out S_AXI_RDATA: u32,
+}
+
+struct WriteSubordinate {
+    // Write address channel
+    in  S_AXI_AWVALID: u1,
+    in  S_AXI_AWADDR: u7,
+    out S_AXI_AWREADY: u1,
+
+    // Write data channel
+    in  S_AXI_WVALID: u1,
+    in  S_AXI_WDATA: u32,
+    out S_AXI_WREADY: u1,
+
+    // Write response channel
+    in  S_AXI_BREADY: u1,
+    out S_AXI_BVALID: u1,
+    out S_AXI_BRESP: u2,
+}
+
+prot write<DUT: WriteSubordinate>(addr: u7, data: u32, resp: u2, n: uint) {
+    DUT.S_AXI_AWVALID := 1'b1;
+    DUT.S_AXI_AWADDR := addr;
+
+    DUT.S_AXI_WVALID := 1'b1;
+    DUT.S_AXI_WDATA := data;
+
+    // technically this should be `while !AWREADY && !WREADY { step() }`
+    // but our DSL doesn't have `&&`. Without loss of generality,
+    // we wait for AWREADY to become 1
+    while !(DUT.S_AXI_AWREADY == 1'b1) {
+        step();   
+    }
+    // Assuming AWREADY & WREADY become 1 together 
+    // (this is allowed in the AXI spec and the DUT exhibits this behavior)
+    assert_eq(DUT.S_AXI_WREADY, 1'b1); 
+    
+    step();
+
+    // Remove constraints on AWVALID and WVALID
+    DUT.S_AXI_AWVALID := X;
+    DUT.S_AXI_WVALID := X;
+
+    // Wait for BVALID to become 1
+    while !(DUT.S_AXI_BVALID == 1'b1) {
+        step();
+    }
+    // BVALID is now 1
+    // Wait for some no. of cycles before BREADY becomes 1
+    repeat n iterations {
+        step();
+        // BVALID must remain stable after it becomes 1
+        assert_eq(DUT.S_AXI_BVALID, 1'b1);
+    }
+    DUT.S_AXI_BREADY := 1'b1;
+    assert_eq(DUT.S_AXI_BRESP, resp);
+    step();
+}
+
+
+#[idle]
+prot idle<DUT: ReadSubordinate>() {
+    DUT.S_AXI_ARVALID := 1'b0;
+    DUT.S_AXI_ARADDR  := X;
+    DUT.S_AXI_RREADY  := 1'b0;
+    step();
+}
+
+#[idle]
+prot idle<DUT: WriteSubordinate>() {
+    DUT.S_AXI_AWVALID := 1'b0;
+    DUT.S_AXI_AWADDR  := X;
+    DUT.S_AXI_WVALID  := 1'b0;
+    DUT.S_AXI_WDATA   := X;
+    DUT.S_AXI_BREADY  := 1'b0;
+    step();
+}
+
+prot read<DUT: ReadSubordinate>(addr: u7, data: u32) {
+    // Address handshake
+    DUT.S_AXI_ARVALID := 1'b1;
+    DUT.S_AXI_ARADDR  := addr;
+    DUT.S_AXI_RREADY  := 1'b1;
+
+    // Wait until read address becomes valid 
+    while (DUT.S_AXI_ARREADY == 1'b0) {
+        step();
+    }
+    
+    // Not sure if this step is required
+    step();
+
+    // TODO: Unclear whether `VALID` and `READY` for read address
+    // can be deasserted here or have to remain stable
+    
+    // Wait until read data becomes valid
+    while (DUT.S_AXI_RVALID == 1'b0) {
+        step();
+    }
+
+    DUT.S_AXI_RREADY := 1'b1;
+    assert_eq(DUT.S_AXI_RDATA, data);
+    step();
+
+    DUT.S_AXI_RREADY := 1'b0;
+    step();
+}
