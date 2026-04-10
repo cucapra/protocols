@@ -8,9 +8,8 @@ use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-pub struct BackwardsInterpreter<T: SignalTrace> {
-    trace: T,
-    transactions: Vec<ProtoInfo>,
+pub struct BackwardsInterpreter {
+    protos: Vec<ProtoInfo>,
     instance_id: u32,
     include_in_progress: bool,
     step: u32,
@@ -18,23 +17,32 @@ pub struct BackwardsInterpreter<T: SignalTrace> {
     next: Vec<Path>,
     failed: Vec<Path>,
     traces: Traces,
+    state: BIState,
 }
+
+pub type Failures = Vec<(TraceId, Vec<Failure>)>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum BIResult {
+enum BIResult {
     Ok,
-    Done,
-    Fail(Vec<(TraceId, Vec<Failure>)>),
+    Step,
+    Fail(Failures),
+}
+#[derive(Debug, Clone, PartialEq)]
+pub enum BIState {
+    Ready,
+    AtEndOfStep,
+    Finished,
+    Failed(Failures),
 }
 
-impl<T: SignalTrace> BackwardsInterpreter<T> {
+impl BackwardsInterpreter {
     pub fn new<'a>(
-        transactions_and_symbols: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
-        trace: T,
+        protos_and_syms: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
         instance_id: u32,
         include_in_progress: bool,
     ) -> Self {
-        let transactions: Vec<_> = transactions_and_symbols
+        let protos: Vec<_> = protos_and_syms
             .enumerate()
             .map(|(proto_id, (t, sym))| {
                 let next_stmt = t.next_stmt_mapping();
@@ -48,11 +56,10 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             .collect();
         let step = 0;
         let mut traces = Traces::default();
-        let active = Path::new(&mut traces).fork(transactions.iter(), &mut traces);
+        let active = Path::new(&mut traces).fork(protos.iter(), &mut traces);
 
         Self {
-            transactions,
-            trace,
+            protos,
             instance_id,
             include_in_progress,
             step,
@@ -60,33 +67,66 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
             next: vec![],
             failed: vec![],
             traces,
+            state: BIState::Ready,
         }
-    }
-
-    pub fn step_to_ns(&self, logical_step: u32) -> String {
-        self.trace.step_to_ns(logical_step)
-    }
-
-    pub fn run(&mut self) -> BIResult {
-        let mut r = self.exec_stmt();
-        while r == BIResult::Ok {
-            r = self.exec_stmt();
-        }
-        r
     }
 
     pub fn protocol_traces(&self) -> &Traces {
         &self.traces
     }
 
+    pub fn has_failed(&self) -> bool {
+        self.failures().is_some()
+    }
+
+    pub fn failures(&self) -> Option<&Failures> {
+        if let BIState::Failed(f) = &self.state {
+            Some(f)
+        } else {
+            None
+        }
+    }
+
+    pub fn exec_step<T: SignalTrace>(&mut self, trace: &T) -> std::result::Result<(), Failures> {
+        match self.state.clone() {
+            BIState::Ready => {}
+            BIState::AtEndOfStep => {
+                self.active.append(&mut self.next);
+                self.step += 1;
+                self.state = BIState::Ready;
+            }
+            BIState::Finished => {
+                unreachable!("Should never call exec_step on a finished BI!")
+            }
+            BIState::Failed(f) => {
+                return Err(f);
+            }
+        }
+        loop {
+            match self.exec_stmt(trace) {
+                BIResult::Ok => {}
+                BIResult::Step => {
+                    self.state = BIState::AtEndOfStep;
+                    return Ok(());
+                }
+                BIResult::Fail(f) => {
+                    self.state = BIState::Failed(f.clone());
+                    return Err(f);
+                }
+            }
+        }
+    }
+
     /// execute a single statement
-    fn exec_stmt(&mut self) -> BIResult {
+    fn exec_stmt<T: SignalTrace>(&mut self, trace: &T) -> BIResult {
         if let Some(mut path) = self.active.pop() {
             // println!("{}", path.thread_string());
 
             // execute one path
-            let (r, pc) = path.exec_stmt(&self.transactions, &|sym| {
-                self.trace.get(self.instance_id, sym)
+            let (r, pc) = path.exec_stmt(&self.protos, &|sym| {
+                let value = trace.get(self.instance_id, sym);
+                // println!("{sym:?} = {} : bv<{}>", value.to_dec_str(), value.width());
+                value
             });
 
             // append protocols that finish to trace
@@ -100,7 +140,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     self.active.push(path);
                 }
                 PathResult::Fork => {
-                    let mut new_paths = path.fork(self.transactions.iter(), &mut self.traces);
+                    let mut new_paths = path.fork(self.protos.iter(), &mut self.traces);
                     debug_assert!(new_paths.iter().all(|p| !p.failed()));
                     self.active.append(&mut new_paths);
                 }
@@ -133,7 +173,7 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                         "path should be ready to run the next step"
                     );
                     debug_assert!(!path.failed(), "{path:?}");
-                    let mut new_paths = path.fork(self.transactions.iter(), &mut self.traces);
+                    let mut new_paths = path.fork(self.protos.iter(), &mut self.traces);
                     self.next.append(&mut new_paths);
                 }
                 PathResult::Failed => {
@@ -174,29 +214,26 @@ impl<T: SignalTrace> BackwardsInterpreter<T> {
                     self.traces.remove(thread.trace_id);
                 }
 
-                // step trace
-                if self.trace.step() == StepResult::Done {
-                    if self.include_in_progress {
-                        // at the end of the trace, we add unfinished transactions to the trace
-                        for path in self.next.iter() {
-                            let mut active = path.active.clone();
-                            active.sort_by_key(|t| u32::MAX - t.start_step);
-                            for thread in active {
-                                self.traces.append(
-                                    path.trace_id,
-                                    thread_to_call(&self.transactions, thread, None),
-                                );
-                            }
-                        }
-                    }
-                    BIResult::Done
-                } else {
-                    self.active.append(&mut self.next);
-                    self.step += 1;
-                    BIResult::Ok
+                BIResult::Step
+            }
+        }
+    }
+
+    /// Called after the last step.
+    pub fn finish(&mut self) {
+        debug_assert!(matches!(self.state, BIState::AtEndOfStep));
+        if self.include_in_progress {
+            // at the end of the trace, we add unfinished transactions to the trace
+            for path in self.next.iter() {
+                let mut active = path.active.clone();
+                active.sort_by_key(|t| u32::MAX - t.start_step);
+                for thread in active {
+                    self.traces
+                        .append(path.trace_id, thread_to_call(&self.protos, thread, None));
                 }
             }
         }
+        self.state = BIState::Finished;
     }
 }
 
@@ -461,7 +498,7 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            // println!("{:?}", &ti.proto[stmt]);
+            // println!("[{}]: {:?}", self.name, &ti.proto[stmt]);
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
@@ -581,6 +618,8 @@ impl Thread {
         let assignments = std::mem::take(&mut self.pin_assignments);
         // go from last assignment to first
         for (stmt, pin, expr) in assignments.into_iter().rev() {
+            // println!("{:?}, {}, {:?}", &ti.proto[stmt], ti.sym[pin].full_name(&ti.sym), &ti.proto[expr]);
+
             // only the final assignment to a pin matters
             if !pins_assigned.contains(&pin) {
                 pins_assigned.insert(pin);
@@ -632,6 +671,7 @@ impl Thread {
         } else {
             if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
                 if let ArgValue::Data(d) = &mut self.arg_values[arg_id] {
+                    // println!("ARG: {} ({:?}) = {} : {}", ti.sym[_arg.symbol()].full_name(&ti.sym), _arg.symbol(), lhs_value.to_dec_str(), lhs_value.width());
                     d.define_value(lhs_value);
                 } else {
                     unreachable!("assignments/assert_eq must involve data values (bit vectors)!")

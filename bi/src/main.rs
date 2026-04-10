@@ -117,62 +117,98 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
+    let mut trace =
+        WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
-    let mut bi = BackwardsInterpreter::new(parsed_ir.iter(), trace, 0, cli.include_in_progress);
-    let r = bi.run();
+    let mut bis: Vec<_> = instances
+        .iter()
+        .enumerate()
+        .map(|(inst_id, inst)| {
+            let protos = designs[&inst.design]
+                .transaction_ids
+                .iter()
+                .map(|id| &parsed_ir[*id]);
+            BackwardsInterpreter::new(protos, inst_id as u32, cli.include_in_progress)
+        })
+        .collect();
 
-    if let BIResult::Fail(failures) = r {
-        for (ii, (trace_id, fails)) in failures.into_iter().enumerate() {
-            if ii > 0 {
-                println!();
-            }
-            let mut trace = bi.protocol_traces().get_trace(trace_id);
-            trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            print_trace(
-                ii,
-                &trace,
-                cli.show_steps,
-                cli.show_waveform_time,
-                cli.display_hex,
-                |step| bi.step_to_ns(step),
-            );
-
-            for fail in fails {
-                let proto = &parsed_ir[fail.proto_id].0;
-                let msg = format!(
-                    "[{}] executing step {} of the transaction: {} != {}",
-                    fail.thread_name,
-                    fail.thread_local_step,
-                    fail.a.to_hex_str(),
-                    fail.b.to_hex_str()
-                );
-                d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+    loop {
+        // step all backwards interpreters that have not failed
+        for bi in bis.iter_mut() {
+            if !bi.has_failed() {
+                let _ = bi.exec_step(&trace);
             }
         }
+        // step shared trace
+        if trace.step() == StepResult::Done {
+            break;
+        }
+    }
 
+    for bi in bis.iter_mut() {
+        if !bi.has_failed() {
+            bi.finish();
+        }
+    }
+
+    // display results
+    let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
+    for bi in bis {
+        if let Some(failures) = bi.failures() {
+            for (ii, (trace_id, fails)) in failures.into_iter().enumerate() {
+                if ii > 0 {
+                    println!();
+                }
+                let mut proto_trace = bi.protocol_traces().get_trace(*trace_id);
+                proto_trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
+                print_trace(
+                    ii,
+                    &proto_trace,
+                    cli.show_steps,
+                    cli.show_waveform_time,
+                    cli.display_hex,
+                    |step| trace.step_to_ns(step),
+                );
+
+                for fail in fails {
+                    let proto = &parsed_ir[fail.proto_id].0;
+                    let msg = format!(
+                        "[{}] executing step {} of the transaction: {} != {}",
+                        fail.thread_name,
+                        fail.thread_local_step,
+                        fail.a.to_hex_str(),
+                        fail.b.to_hex_str()
+                    );
+                    d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+                }
+            }
+        } else {
+            let unique_traces = bi.protocol_traces().unique_traces();
+            let num_traces = unique_traces.len();
+            for (ii, mut proto_trace) in unique_traces.into_iter().enumerate() {
+                if cli.max_traces == Some(ii as u32) {
+                    println!("Displayed {}/{} traces.", ii, num_traces);
+                    break;
+                }
+                proto_trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
+                if ii > 0 {
+                    println!();
+                }
+                print_trace(
+                    ii,
+                    &proto_trace,
+                    cli.show_steps,
+                    cli.show_waveform_time,
+                    cli.display_hex,
+                    |step| trace.step_to_ns(step),
+                );
+            }
+        }
+    }
+
+    if at_least_one_has_failed {
         Err("Monitor failed".into())
     } else {
-        let unique_traces = bi.protocol_traces().unique_traces();
-        let num_traces = unique_traces.len();
-        for (ii, mut trace) in unique_traces.into_iter().enumerate() {
-            if cli.max_traces == Some(ii as u32) {
-                println!("Displayed {}/{} traces.", ii, num_traces);
-                break;
-            }
-            trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
-            if ii > 0 {
-                println!();
-            }
-            print_trace(
-                ii,
-                &trace,
-                cli.show_steps,
-                cli.show_waveform_time,
-                cli.display_hex,
-                |step| bi.step_to_ns(step),
-            );
-        }
         Ok(())
     }
 }
