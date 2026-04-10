@@ -30,6 +30,8 @@ struct WriteSubordinate {
     out S_AXI_BRESP: u2,
 }
 
+// Note: this is still WIP (this is simpler than the protocol we discussed
+// yesterday for ease of debugging for now)
 prot write<DUT: WriteSubordinate>(addr: u7, data: u32, resp: u2, n: uint) {
     repeat n iterations {
         DUT.S_AXI_AWVALID := 1'b0;
