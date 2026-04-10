@@ -1,4 +1,5 @@
-// ARGS: --wave fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:AXILSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle
+// ARGS: --wave fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle
+// RETURN: 1
 
 struct ReadSubordinate {
     // Read address channel 
@@ -30,6 +31,10 @@ struct WriteSubordinate {
 }
 
 prot write<DUT: WriteSubordinate>(addr: u7, data: u32, resp: u2, n: uint) {
+    repeat n iterations {
+        DUT.S_AXI_AWVALID := 1'b0;
+        step();
+    }
     DUT.S_AXI_AWVALID := 1'b1;
     DUT.S_AXI_AWADDR := addr;
 
@@ -83,12 +88,12 @@ prot idle<DUT: WriteSubordinate>() {
     DUT.S_AXI_AWADDR  := X;
     DUT.S_AXI_WVALID  := 1'b0;
     DUT.S_AXI_WDATA   := X;
-    DUT.S_AXI_BREADY  := 1'b0;
     step();
 }
 
-
-prot read<DUT: ReadSubordinate>(addr: u7, data: u32) {
+// RREADY is asserted before RVALID 
+// (This is allowed in section A2.3.2.2 of the AXI spec)
+prot read_v1<DUT: ReadSubordinate>(addr: u7, data: u32) {
     DUT.S_AXI_ARVALID := 1'b1;
     DUT.S_AXI_ARADDR := addr;
     
@@ -109,5 +114,50 @@ prot read<DUT: ReadSubordinate>(addr: u7, data: u32) {
         step();
     }
     assert_eq(DUT.S_AXI_RDATA, data);
+    step();
+}
+
+// RVALID is asserted before RREADY
+// (This is allowed in section A2.3.2.2 of the AXI spec)
+prot read_v2<DUT: ReadSubordinate>(addr: u7, data: u32, n: uint) {
+    DUT.S_AXI_ARVALID := 1'b1;
+    DUT.S_AXI_ARADDR := addr;
+    
+    // Wait for ARREADY to become 1
+    while !(DUT.S_AXI_ARREADY == 1'b1) {
+        step();
+    }
+    // ARREADY is now 1
+
+    step();
+   
+    // Wait for RVALID to become 1
+    // AXI spec says that ARVALID & ARREADY must both be 1
+    // before RVALID can be asserted (A2.3.2.2)
+    while !(DUT.S_AXI_RVALID == 1'b1) {
+        step();
+    }
+    // RVALID is now 1
+
+    // While we are waiting for RREADY to become 1, 
+    // another read address request cannot arrive 
+    // (i.e. ARREADY has to remain 0). That is, we have to acknowledge
+    // the read data before another read address request can arrive.
+    assert_eq(DUT.S_AXI_ARREADY, 1'b0);
+
+    // Wait until RREADY becomes 1
+    repeat n iterations {
+        DUT.S_AXI_RREADY := 1'b0;
+        // Check that RVALID remains stable
+        assert_eq(DUT.S_AXI_RVALID, 1'b1);
+        step();
+    }
+    // Check that ARREADY remains 0 (i.e. no conflicting read address request)
+    assert_eq(DUT.S_AXI_ARREADY, 1'b0);
+
+    // Perform data transfer on the read data channel
+    DUT.S_AXI_RREADY := 1'b1;
+    assert_eq(DUT.S_AXI_RDATA, data);
+
     step();
 }
