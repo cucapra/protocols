@@ -90,7 +90,7 @@ prot idle<DUT: WriteSubordinate>() {
     step();
 }
 
-// RREADY is asserted before RVALID
+// RREADY is asserted before RVALID 
 // (This is allowed in section A2.3.2.2 of the AXI spec)
 prot read_v1<DUT: ReadSubordinate>(addr: u7, data: u32) {
     DUT.S_AXI_ARVALID := 1'b1;
@@ -104,6 +104,7 @@ prot read_v1<DUT: ReadSubordinate>(addr: u7, data: u32) {
 
     step();
 
+    assert_eq(DUT.S_AXI_ARREADY, 1'b0);
     DUT.S_AXI_RREADY := 1'b1;
 
     // Wait for RVALID to become 1
@@ -111,6 +112,7 @@ prot read_v1<DUT: ReadSubordinate>(addr: u7, data: u32) {
     // before RVALID can be asserted (A2.3.2.2)
     while !(DUT.S_AXI_RVALID == 1'b1) {
         step();
+        assert_eq(DUT.S_AXI_ARREADY, 1'b0);
     }
     assert_eq(DUT.S_AXI_RDATA, data);
     step();
