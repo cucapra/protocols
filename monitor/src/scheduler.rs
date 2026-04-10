@@ -65,6 +65,10 @@ pub struct Scheduler {
     /// Note: if there is just one single struct, this string is empty
     pub struct_name: String,
 
+    /// The instance ID of the DUT instance this scheduler is monitoring.
+    /// Used to look up the correct signals in the waveform trace.
+    pub instance_id: u32,
+
     /// Output buffer, where each element is an `OutputEntry`
     /// (defined in `types.rs`).
     pub output_buffer: AugmentedTrace,
@@ -114,14 +118,16 @@ impl Scheduler {
     }
 
     /// Initializes a `Scheduler` with one scheduled thread for each `(Transcation, SymbolTable)`
-    /// pair in the argument `transactions`, along with a `GlobalContext` that is
-    /// shared across all threads
+    /// pair in the argument `transactions`.
+    /// The `instance_id` indicates the `struct` for which the scheduler is exploring
+    /// transaction traces (this is useful in `.prot` files when multiple
+    /// `struct`s are defined).
     pub fn initialize(
         transactions: Vec<(Transaction, SymbolTable)>,
-        ctx: &GlobalContext,
         trace: &WaveSignalTrace,
         struct_name: String,
         dut_symbol_id: SymbolId,
+        instance_id: u32,
     ) -> Self {
         let cycle_count = 0;
         let mut thread_id = 0;
@@ -152,10 +158,10 @@ impl Scheduler {
         let interpreter = Interpreter::new(
             initial_transaction,
             initial_symbol_table,
-            ctx,
             trace,
             cycle_count,
             dut_symbol_id,
+            instance_id,
         );
         Self {
             current: current_threads,
@@ -170,6 +176,7 @@ impl Scheduler {
             finished_thread: None,
             possible_transactions: transactions,
             struct_name,
+            instance_id,
             output_buffer: AugmentedTrace::default(),
         }
     }
@@ -177,7 +184,7 @@ impl Scheduler {
     /// Call this function exactly once at the beginning of each cycle
     /// (**Don't** call this on a cloned `Scheduler` that is created from a `fork`)
     #[allow(unused_variables)]
-    pub fn begin_cycle(&mut self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
+    pub fn begin_cycle(&mut self, trace: &WaveSignalTrace) {
         // Clear auxiliary fields at the beginning of each cycle
         // to track which start cycles fork/finish in THIS cycle
         self.forked_start_cycles.clear();
@@ -264,7 +271,7 @@ impl Scheduler {
             for (symbol_id, expected_value) in &thread.constraints {
                 let symbol_name = thread.symbol_table.full_name_from_symbol_id(symbol_id);
 
-                match trace.get(ctx.instance_id, *symbol_id) {
+                match trace.get(self.instance_id, *symbol_id) {
                     Ok(trace_value) => {
                         if trace_value != *expected_value {
                             info!(
@@ -831,11 +838,30 @@ impl Scheduler {
                     // This determines if we need to move threads to/from different queues
                     match thread.transaction[next_stmt_id] {
                         Stmt::Step => {
-                            // info!(
-                            //     "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
-                            //     thread.global_thread_id(ctx),
-                            //     thread.transaction.clone().name,
-                            // );
+                            // If the current statement itself is a `fork()`,
+                            // it means this thread started directly at the fork
+                            // (e.g. `exited_thread` from `handle_repeat_loops`, i.e.
+                            // the thread that exits the `repeat_loop`
+                            // with `loop_arg = Known(n)` set to some `n`).
+                            // We need to handle the fork (by returning `ExplicitFork` early)
+                            // before moving the current thread
+                            // to the `next` queue, but only if no other threads from the same
+                            // start cycle have already forked this cycle (to avoid duplicates)
+                            if matches!(thread.transaction[current_stmt_id], Stmt::Fork) {
+                                thread.has_forked = true;
+                                let already_forked =
+                                    self.forked_start_cycles.contains(&thread.start_cycle);
+                                if !already_forked {
+                                    self.forked_start_cycles.insert(thread.start_cycle);
+                                    thread.current_stmt_id = next_stmt_id;
+                                    return Ok(ThreadResult::ExplicitFork {
+                                        parent: Box::new(thread),
+                                    });
+                                }
+                                // If another thread from the same start cycle,
+                                // has already forked in this cycle,
+                                // we just fall through to the normal Step logic below
+                            }
 
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`

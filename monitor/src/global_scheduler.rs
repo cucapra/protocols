@@ -17,9 +17,14 @@ use crate::{
 use rustc_hash::FxHashSet;
 
 pub struct GlobalScheduler {
-    /// Each element in the outer `Vec` corresponds to a `struct`.
-    /// Each element in the inner `VecDeque` is a scheduler clone
-    /// (which explores different possible protocol traces).
+    /// A `Vec` of `SchedulerGroup`s, where each `SchedulerGroup` is a
+    /// collection of all schedulers for the same `struct` in our DSL.
+    /// Note that `SchedulerGroup` is defined as a type alias:
+    /// ```
+    /// type SchedulerGroup = VecDeque<Scheduler>
+    /// ```
+    /// where each element in the `VecDeque` on the RHS is a scheduler clone
+    /// that is exploring a candidate transaction trace
     pub scheduler_groups: Vec<SchedulerGroup>,
 
     /// The waveform supplied by the user (shared across all schedulers)
@@ -389,9 +394,9 @@ impl GlobalScheduler {
 
         loop {
             for scheduler_group in self.scheduler_groups.iter_mut() {
-                // Begin cycle for each schedulers in all scheduler groups
+                // Begin cycle for each scheduler in this scheduler group
                 for scheduler in scheduler_group.iter_mut() {
-                    scheduler.begin_cycle(&self.trace, ctx);
+                    scheduler.begin_cycle(&self.trace);
                 }
 
                 // Process each scheduler group and handle forks

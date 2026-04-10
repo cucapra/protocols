@@ -190,13 +190,11 @@ fn main() -> anyhow::Result<()> {
     // Check if we have multiple structs/designs
     let multiple_structs = dut_designs.len() > 1;
 
-    // Create a GlobalContext that is shared across all schedulers
-    let ctx = GlobalContext::new(&cli, 0, multiple_structs);
-
     // Multi-struct mode: create a GlobalScheduler with one scheduler per design
     let mut schedulers = vec![];
 
-    for design in dut_designs.into_iter() {
+    // We use the index of `design` in `dut_designs` as our `instance_id`
+    for (instance_id, design) in dut_designs.into_iter().enumerate() {
         // Filter transactions that belong to this design
         let design_transactions: Vec<(Transaction, SymbolTable)> = design
             .transaction_ids
@@ -211,10 +209,10 @@ fn main() -> anyhow::Result<()> {
         // Create a scheduler for this design, using the design name as the struct name
         let scheduler = Scheduler::initialize(
             design_transactions,
-            &ctx,
             &trace,
             design.name.clone(),
             design.symbol_id,
+            instance_id as u32,
         );
 
         schedulers.push(scheduler);
@@ -223,6 +221,10 @@ fn main() -> anyhow::Result<()> {
     // Create a `GlobalScheduler` whose `schedulers` field
     // contains all the initialized schedulers
     let mut global_scheduler = GlobalScheduler::new(schedulers, trace);
+
+    // Create a GlobalContext that is shared across all schedulers
+    // (regardless of which `struct` they belong to)
+    let ctx = GlobalContext::new(&cli, multiple_structs);
 
     if let Err(error_msg) = global_scheduler.run(&ctx) {
         eprintln!("{error_msg}");
