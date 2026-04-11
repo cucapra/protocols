@@ -35,10 +35,14 @@ pub struct GlobalScheduler {
 /// (See `types.rs` for the definition of a *scheduler group*)
 /// Returns a `SchedulerGroup` of all schedulers that have been processed
 /// for the current clock cycle.
+/// The `other_groups` argument is only for error reporting purposes (printing
+/// out the traces inferred by other scheduler groups, i.e. schedulers for
+/// other `structs`) if the current scheduler group fails.
 fn process_group_cycles(
     scheduler_group: SchedulerGroup,
     trace: &WaveSignalTrace,
     ctx: &GlobalContext,
+    other_groups: &[&SchedulerGroup],
 ) -> anyhow::Result<SchedulerGroup> {
     info!("Entered process_group_cycles function");
 
@@ -170,16 +174,45 @@ fn process_group_cycles(
                 failed_scheduler.struct_name
             );
             eprintln!(
-                "Trace inferred so far by failed scheduler: {}",
+                "Trace inferred so far by failed scheduler:\n{}",
                 failed_scheduler
                     .output_buffer
                     .iter()
                     .map(|augmented_prot_app| {
-                        format!("{}", augmented_prot_app.protocol_application)
+                        let start_time = trace.format_time(augmented_prot_app.start_time_step);
+                        let end_time = trace.format_time(augmented_prot_app.end_time_step);
+                        format!(
+                            "\t{}; // [time: {} -> {}]",
+                            augmented_prot_app.protocol_application, start_time, end_time
+                        )
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
             );
+            // Print the traces inferred by the other scheduler groups
+            // (for debugging purposes)
+            for other_group in other_groups {
+                if let Some(other_scheduler) = other_group.front() {
+                    eprintln!(
+                        "Trace inferred so far by scheduler for `{}`:\n{}",
+                        other_scheduler.struct_name,
+                        other_scheduler
+                            .output_buffer
+                            .iter()
+                            .map(|augmented_prot_app| {
+                                let start_time =
+                                    trace.format_time(augmented_prot_app.start_time_step);
+                                let end_time = trace.format_time(augmented_prot_app.end_time_step);
+                                format!(
+                                    "\t{}; // [time: {} -> {}]",
+                                    augmented_prot_app.protocol_application, start_time, end_time
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
+                }
+            }
             failed_scheduler.emit_error(trace, ctx)?;
         }
     }
@@ -393,15 +426,23 @@ impl GlobalScheduler {
         let mut steps_taken: u32 = 0;
 
         loop {
-            for scheduler_group in self.scheduler_groups.iter_mut() {
+            for i in 0..self.scheduler_groups.len() {
                 // Begin cycle for each scheduler in this scheduler group
-                for scheduler in scheduler_group.iter_mut() {
+                for scheduler in self.scheduler_groups[i].iter_mut() {
                     scheduler.begin_cycle(&self.trace);
                 }
 
                 // Process each scheduler group and handle forks
-                let schedulers = std::mem::take(scheduler_group);
-                *scheduler_group = process_group_cycles(schedulers, &self.trace, ctx)?;
+                let schedulers = std::mem::take(&mut self.scheduler_groups[i]);
+                let other_groups: Vec<&SchedulerGroup> = self
+                    .scheduler_groups
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| *j != i)
+                    .map(|(_, g)| g)
+                    .collect();
+                let result = process_group_cycles(schedulers, &self.trace, ctx, &other_groups)?;
+                self.scheduler_groups[i] = result;
             }
 
             // If we've reached the end of the trace,
@@ -430,23 +471,6 @@ impl GlobalScheduler {
                     }
                 }
                 break;
-            }
-
-            // If there is a scheduler group where for every scheduler in the group,
-            // its `current` and `next` queues are both empty,
-            // this means no transaction can match the waveform for this group
-            if !ctx.multiple_structs {
-                for scheduler_group in &self.scheduler_groups {
-                    let no_transactions = scheduler_group
-                        .iter()
-                        .all(|scheduler| scheduler.current.is_empty() && scheduler.next.is_empty());
-                    if no_transactions {
-                        return Err(anyhow::anyhow!(
-                            "No transactions matched in scheduler group for struct {}",
-                            scheduler_group[0].struct_name
-                        ));
-                    }
-                }
             }
 
             // Stop early if --max-steps was specified and we've hit the limit
