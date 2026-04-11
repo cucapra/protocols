@@ -107,7 +107,16 @@ prot read_v1<DUT: ReadSubordinate>(addr: u7, data: u32) {
 
     step();
 
+    // While we are waiting for RREADY to become 1, 
+    // another read address request cannot arrive 
+    // (i.e. ARREADY has to remain 0). That is, we have to acknowledge
+    // the read data before another read address request can arrive.
     assert_eq(DUT.S_AXI_ARREADY, 1'b0);
+
+    // Once ARREADY is de-asserted, ARVALID is allowed to be any value
+    DUT.S_AXI_ARVALID := X;
+
+    // Manager sets RREADY to 1 to begin transfer on read data channel
     DUT.S_AXI_RREADY := 1'b1;
 
     // Wait for RVALID to become 1
@@ -148,6 +157,9 @@ prot read_v2<DUT: ReadSubordinate>(addr: u7, data: u32, n: uint) {
     // (i.e. ARREADY has to remain 0). That is, we have to acknowledge
     // the read data before another read address request can arrive.
     assert_eq(DUT.S_AXI_ARREADY, 1'b0);
+    
+    // Once ARREADY is de-asserted, ARVALID is allowed to be any value
+    DUT.S_AXI_ARVALID := X;
 
     // Wait until RREADY becomes 1
     repeat n iterations {
