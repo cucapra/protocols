@@ -6,38 +6,43 @@ This README was taken from: https://github.com/efeslab/hardware-bugbase/blob/bug
 
 Bug type: Reset-Data Asynchrony
 
+According to the Brave New World artifact, this bug occurs in an AXI-Stream 
+FIFO, where despite a `reset` transaction having occurred, the FIFO 
+erroneously continues to accept data being pushed (`ready` is set to 1).
 
-Data should not be accepted when reseting (input_tready should not be 1 when reseting)
-
-### Synthetic Code
-```verilog
-
-// reset synchronization
-always @(posedge input_clk or posedge async_rst) begin
-    if (async_rst) begin
-        input_rst_sync1 <= 1;
-        input_rst_sync2 <= 1;
-        input_rst_sync3 <= 1;
-    end else begin
-        input_rst_sync1 <= 0;
-        input_rst_sync2 <= input_rst_sync1 | output_rst_sync1;
-        input_rst_sync3 <= input_rst_sync2;
-    end
-end
-
-// write
-always @(posedge input_clk) begin
-    if (input_rst_sync3) begin
-        wr_ptr <= 0;
-        wr_ptr_gray <= 0;
-    end else if (write) begin
-        mem[wr_ptr[ADDR_WIDTH-1:0]] <= data_in;
-        wr_ptr_next = wr_ptr + 1;
-        wr_ptr <= wr_ptr_next;
-        wr_ptr_gray <= wr_ptr_next ^ (wr_ptr_next >> 1);
-    end
-end
-
-assign input_axis_tready = ~full;  //Buggy here, should be ~full & ~input_rst_sync3;
+In the fixed waveform, the monitor infers that a `reset` transaction
+is followed by an `idle` transaction from 0-50ns, after which data
+begins to be `push`-ed:
 
 ```
+trace {
+    Sender::reset();  // [time: 0ns -> 25ns]
+    Receiver::reset();  // [time: 0ns -> 25ns]
+    Sender::idle();  // [time: 25ns -> 50ns]
+    Receiver::idle();  // [time: 25ns -> 50ns]
+    Sender::push(1);  // [time: 50ns -> 75ns]
+    ...
+}
+```
+
+
+<img src="./c4_fixed_waveform.png" width=800 />
+
+
+In the buggy waveform, at 25ns, the monitor reports that no transaction
+matches the waveform:
+
+```
+All schedulers failed: No transactions match the waveform for DUT `Receiver`
+Trace inferred so far by failed scheduler:
+	Receiver::reset(); // [time: 0ns -> 25ns]
+Trace inferred so far by scheduler for `Sender`:
+	Sender::reset(); // [time: 0ns -> 25ns]
+Failure at 50ns: No transactions match the waveform in `fpga-debugging/axis-async-fifo-c4/c4_buggy.fst`.
+```
+
+This is because at 25ns, the `Receiver` is not `idle` (since `m_axis_tready = 1`, not 0),
+nor is it being `reset` (since `rst = 0`), and no valid data is being `pop`-ed, 
+so no transaction can be inferred, surfacing the protocol violation bug.
+
+<img src="./c4_buggy_waveform.png" width=800 />
