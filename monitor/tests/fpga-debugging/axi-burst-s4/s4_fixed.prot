@@ -1,0 +1,62 @@
+// ARGS: --wave fpga-debugging/axi-burst-s4/s4_fixed.fst --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns
+
+// AXI4 write subordinate
+struct WriteSubordinate {
+    // Write address channel
+    in  m_awvalid: u1,
+    in  m_awaddr: u32,
+    in  m_awlen: u8,
+    out s_awready: u1,
+
+    // Write data channel
+    in  m_wvalid: u1,
+    in  m_wdata: u32,
+    in  m_wlast: u1,
+    out s_wready: u1,
+
+    // This DUT does not use the write response channel, so we omit
+    // the BREADY, BRESP and BVALID signals
+}
+
+#[idle]
+prot idle<DUT: WriteSubordinate>() {
+    DUT.m_awvalid := 1'b0;
+    DUT.m_wvalid := 1'b0;
+    step();
+}
+
+
+prot write_burst<DUT: WriteSubordinate>(addr: u32, last_data: u32, n: uint, awlen: uint) {
+    repeat n iterations {
+        DUT.m_awvalid := 1'b0;
+        step();
+    }
+    DUT.m_awvalid := 1'b1;
+    DUT.m_awaddr := addr;
+    DUT.m_awlen := awlen;  
+    while !(DUT.s_awready == 1'b1) { 
+        step(); 
+    }
+    step();
+    
+    repeat awlen iterations {
+        DUT.m_wvalid := 1'b1;
+        // We don't have "array" types in our DSL, so we ignore the 
+        // data that is transferred during the first `awlen` beats
+        // (Otherwise, we would have an assignment to `DUT.m_wdata` here)
+        DUT.m_wlast := 1'b0;    
+        while !(DUT.s_wready == 1'b1) { 
+            step(); 
+        }
+        step();
+    }
+
+    DUT.m_wvalid := 1'b1;
+    DUT.m_wlast := 1'b1;
+    DUT.m_wdata := last_data;
+    while !(DUT.s_wready == 1'b1) {
+        step(); 
+    }
+
+    step();
+}

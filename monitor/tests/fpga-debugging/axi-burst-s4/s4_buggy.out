@@ -1,0 +1,19 @@
+prot write_burst<DUT: AXI4>(addr: u32, data: u32, awlen: uint) {
+      DUT.m_awvalid := 1;
+      DUT.m_awaddr  := addr;
+      DUT.m_awlen   := awlen;   // captures awlen from the waveform (m_awlen is an out signal)
+      while (DUT.s_awready == 0) { step(); }
+      step();
+
+      repeat awlen iterations {
+          DUT.m_wvalid := 1;
+          DUT.m_wlast  := 0;    // constrained — must be 0 for non-last beats
+          while (DUT.s_wready == 0) { step(); }
+          step();
+      }
+
+      DUT.m_wvalid := 1;
+      DUT.m_wlast  := 1;        // constrained — must be 1 on last beat
+      while (DUT.s_wready == 0) { step(); }
+      step();
+  }
