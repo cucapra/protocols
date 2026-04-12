@@ -1,9 +1,6 @@
 // ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns
 // RETURN: 1
 
-// AXI-Stream asynchronous FIFO 
-// Struct fields map to module I/O ports in `c4_fixed.v`
-
 // Only `Sender` supports `push`
 struct Sender {
     // Active-high reset signal 
@@ -36,13 +33,7 @@ struct Receiver {
 
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
 // Performs data transfer when s_axis_tvalid and s_axis_tready are both 1
-//
-// Arguments:
-//   data - Payload byte to write to FIFO
-
-prot push<DUT: Sender>(
-    data: u8,
-) {
+prot push<DUT: Sender>(data: u8) {
     DUT.rst := 1'b0;
 
     // Update the data field and set receiver's valid bit to 1 to indicate 
@@ -60,34 +51,22 @@ prot push<DUT: Sender>(
 }
 
 // POP: Read data from FIFO via AXI-Stream sender interface
-// Data transfer occurs when `m_axis_tvalid` and `m_axis_tready` are both 1
-// simultaneously — this encodes the AXI handshake requirement that both valid
-// and ready must be asserted at the same clock edge for a transfer.
-//
-// In a correct implementation, the FIFO holds m_axis_tready=0 until reset
-// synchronization (input_rst_sync3) completes (~3 cycles after async_rst
-// de-asserts), ensuring no data is accepted during the reset sync window.
-// If m_axis_tready=1 but m_axis_tvalid=0 at the start of a pop, that means
-// the FIFO is accepting before data is available — a sign of the bug.
-//
-// Output Arguments:
-//   data - Expected payload byte from FIFO
-prot pop<DUT: Receiver>(
-    data: u8,
-) {
+prot pop<DUT: Receiver>(data: u8) {
     DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;
 
-    // Both valid and ready must be simultaneously asserted (AXI handshake).
-    // This assertion fails on the buggy waveform where m_axis_tready=1
-    // immediately after reset but m_axis_tvalid=0 (no data ready yet),
-    // preventing the monitor from assigning pop to that early time window.
+    // Valid needs to be 1 in order for data exchange to occur
+    // Note: we don't use a while-loop here to wait for `m_axis_tvalid` to become 1,
+    // since when `m_axis_tready = 1 && m_axis_tvalid = 0`, that means the environment is ready 
+    // to read the popped data but the DUT has no valid data on its output ports. 
+    // This situation should not be described in a `pop` transaction,
+    // so we just assert that `m_axis_tvalid` must be 1 during a `pop` transaction
+    // without waiting for it to become 1. 
     assert_eq(DUT.m_axis_tvalid, 1'b1);
 
     // One cycle for the transfer to complete
     step();
 
-    // Capture output data
     assert_eq(DUT.m_axis_tdata, data);
 
     // Release inputs after transaction (i.e. release all constraints)
@@ -118,7 +97,6 @@ prot idle<DUT: Receiver>() {
     DUT.rst := 1'b0;
 
     // Ensure no pop handshake by setting ready = 0
-    // (Pop handshake requires m_axis_tvalid && m_axis_tready)
     DUT.m_axis_tready := 1'b0;
 
     step();
