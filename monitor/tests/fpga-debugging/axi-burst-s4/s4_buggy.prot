@@ -1,6 +1,9 @@
 // ARGS: --wave fpga-debugging/axi-burst-s4/s4_buggy.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 
 // RETURN: 1
 
+// To surface the bug, it is sufficient to just model the write address/data channels,
+// so we omit the read channels from this protocol definition for simplicity.
+
 // AXI4 write subordinate
 struct WriteSubordinate {
     // Write address channel
