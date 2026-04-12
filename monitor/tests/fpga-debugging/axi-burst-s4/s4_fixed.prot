@@ -25,7 +25,13 @@ prot idle<DUT: WriteSubordinate>() {
     step();
 }
 
-
+// Performs a burst write transfer of length `awlen` to the specified address.
+// Since our DSL doesn't have array types, we only include `last_data` (the last
+// data value transferred in the burst) as a parameter for simplicity. 
+// Note: even though `awlen` appears as an argument for a `repeat` loop,
+// we give it the type `u8` instead of `uint`, as we need to first infer
+// the burst length (via the assignment `DUT.m_awlen := awlen`), which
+// then determines how many iterations the `repeat` loop runs for.
 prot write_burst<DUT: WriteSubordinate>(addr: u32, last_data: u32, awlen: u8) {
     DUT.m_awvalid := 1'b1;
     DUT.m_awaddr := addr;
