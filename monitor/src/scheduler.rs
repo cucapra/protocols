@@ -65,6 +65,10 @@ pub struct Scheduler {
     /// Note: if there is just one single struct, this string is empty
     pub struct_name: String,
 
+    /// The instance ID of the DUT instance this scheduler is monitoring.
+    /// Used to look up the correct signals in the waveform trace.
+    pub instance_id: u32,
+
     /// Output buffer, where each element is an `OutputEntry`
     /// (defined in `types.rs`).
     pub output_buffer: AugmentedTrace,
@@ -83,13 +87,11 @@ impl Scheduler {
 
     /// Prints the internal state of the scheduler
     /// (i.e. the contents of all 4 queues + current scheduling cycle)
+    #[allow(dead_code)]
     pub fn print_scheduler_state(&self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
         let time_step = trace.time_step();
         let header = if ctx.show_waveform_time {
-            format!(
-                "SCHEDULER STATE, TIME {}:",
-                trace.format_time(time_step, ctx.time_unit)
-            )
+            format!("SCHEDULER STATE, TIME {}:", trace.format_time(time_step))
         } else {
             format!("SCHEDULER STATE, CYCLE {}:", self.cycle_count)
         };
@@ -116,14 +118,16 @@ impl Scheduler {
     }
 
     /// Initializes a `Scheduler` with one scheduled thread for each `(Transcation, SymbolTable)`
-    /// pair in the argument `transactions`, along with a `GlobalContext` that is
-    /// shared across all threads
+    /// pair in the argument `transactions`.
+    /// The `instance_id` indicates the `struct` for which the scheduler is exploring
+    /// transaction traces (this is useful in `.prot` files when multiple
+    /// `struct`s are defined).
     pub fn initialize(
         transactions: Vec<(Transaction, SymbolTable)>,
-        ctx: &GlobalContext,
         trace: &WaveSignalTrace,
         struct_name: String,
         dut_symbol_id: SymbolId,
+        instance_id: u32,
     ) -> Self {
         let cycle_count = 0;
         let mut thread_id = 0;
@@ -154,10 +158,10 @@ impl Scheduler {
         let interpreter = Interpreter::new(
             initial_transaction,
             initial_symbol_table,
-            ctx,
             trace,
             cycle_count,
             dut_symbol_id,
+            instance_id,
         );
         Self {
             current: current_threads,
@@ -172,18 +176,20 @@ impl Scheduler {
             finished_thread: None,
             possible_transactions: transactions,
             struct_name,
+            instance_id,
             output_buffer: AugmentedTrace::default(),
         }
     }
 
     /// Call this function exactly once at the beginning of each cycle
     /// (**Don't** call this on a cloned `Scheduler` that is created from a `fork`)
-    pub fn begin_cycle(&mut self, trace: &WaveSignalTrace, ctx: &GlobalContext) {
+    #[allow(unused_variables)]
+    pub fn begin_cycle(&mut self, trace: &WaveSignalTrace) {
         // Clear auxiliary fields at the beginning of each cycle
         // to track which start cycles fork/finish in THIS cycle
         self.forked_start_cycles.clear();
         self.finished_thread = None;
-        self.print_scheduler_state(trace, ctx);
+        // self.print_scheduler_state(trace, ctx);
     }
 
     /// Runs the scheduler in the current cycle by repeating the following steps.
@@ -206,10 +212,10 @@ impl Scheduler {
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
     ) -> Result<CycleResult, SchedulerError> {
-        info!(
-            "Inside `Scheduler::process_current_queue` for {} scheduler",
-            self.struct_name
-        );
+        // info!(
+        //     "Inside `Scheduler::process_current_queue` for {} scheduler",
+        //     self.struct_name
+        // );
 
         // Process each thread. Note that
         // this function returns early when a thread `fork`s, with the
@@ -253,7 +259,7 @@ impl Scheduler {
             // If any constraints failed, figure out the right time-step/cycle
             // to display in the logs
             let time_str = if ctx.show_waveform_time {
-                trace.format_time(trace.time_step(), ctx.time_unit)
+                trace.format_time(trace.time_step())
             } else {
                 format!("cycle {}", self.interpreter.trace_cycle_count)
             };
@@ -265,7 +271,7 @@ impl Scheduler {
             for (symbol_id, expected_value) in &thread.constraints {
                 let symbol_name = thread.symbol_table.full_name_from_symbol_id(symbol_id);
 
-                match trace.get(ctx.instance_id, *symbol_id) {
+                match trace.get(self.instance_id, *symbol_id) {
                     Ok(trace_value) => {
                         if trace_value != *expected_value {
                             info!(
@@ -336,13 +342,13 @@ impl Scheduler {
             let finished = threads_with_start_time(&self.finished, start_cycle);
             if finished.len() > 1 {
                 let start_time = if ctx.show_waveform_time {
-                    trace.format_time(finished[0].start_time_step, ctx.time_unit)
+                    trace.format_time(finished[0].start_time_step)
                 } else {
                     format!("cycle {}", start_cycle)
                 };
                 let end_time_step = trace.time_step();
                 let end_time = if ctx.show_waveform_time {
-                    trace.format_time(end_time_step, ctx.time_unit)
+                    trace.format_time(end_time_step)
                 } else {
                     format!("cycle {}", self.cycle_count)
                 };
@@ -365,7 +371,7 @@ impl Scheduler {
             let next = threads_with_start_time(&self.next, start_cycle);
             if !next.is_empty() {
                 let start_time_str = if ctx.show_waveform_time {
-                    trace.format_time(finished_thread.start_time_step, ctx.time_unit)
+                    trace.format_time(finished_thread.start_time_step)
                 } else {
                     format!("cycle {}", finished_thread.start_cycle)
                 };
@@ -435,7 +441,7 @@ impl Scheduler {
         // Print all the threads that finished & failed during the most recent step
         if !self.failed.is_empty() {
             if ctx.show_waveform_time {
-                let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+                let time_str = trace.format_time(trace.time_step());
                 info!(
                     "Threads that failed at time {}: {}",
                     time_str,
@@ -469,7 +475,7 @@ impl Scheduler {
 
         if !self.finished.is_empty() {
             if ctx.show_waveform_time {
-                let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
+                let time_str = trace.format_time(trace.time_step());
                 info!(
                     "Threads that finished at time {}: {}",
                     time_str,
@@ -537,15 +543,15 @@ impl Scheduler {
         self.cycle_count += 1;
         self.interpreter.trace_cycle_count += 1;
 
-        if ctx.show_waveform_time {
-            let time_str = trace.format_time(trace.time_step(), ctx.time_unit);
-            info!("Advancing to time {}, setting current = next", time_str);
-        } else {
-            info!(
-                "Advancing to cycle {}, setting current = next",
-                self.cycle_count
-            );
-        }
+        // if ctx.show_waveform_time {
+        //     let time_str = trace.format_time(trace.time_step());
+        //     info!("Advancing to time {}, setting current = next", time_str);
+        // } else {
+        //     info!(
+        //         "Advancing to cycle {}, setting current = next",
+        //         self.cycle_count
+        //     );
+        // }
     }
 
     /// Marks the trace as having ended
@@ -561,7 +567,7 @@ impl Scheduler {
     pub fn emit_error(&self, trace: &WaveSignalTrace, ctx: &GlobalContext) -> anyhow::Result<()> {
         self.print_step_count(ctx);
         let time_str = if ctx.show_waveform_time {
-            trace.format_time(trace.time_step(), ctx.time_unit)
+            trace.format_time(trace.time_step())
         } else {
             format!("cycle {}", self.interpreter.trace_cycle_count)
         };
@@ -602,10 +608,13 @@ impl Scheduler {
         n: u64,
     ) -> ThreadResult {
         repeat_info!(
-            "Thread {}: RepeatLoop fork at cycle {} — spawning exited_thread (Known({})) and speculative_thread (Speculative({}))",
+            "Thread {} (`{}`): RepeatLoop fork at cycle {} — spawning exited_thread (Thread {}, Known({})) and speculative_thread (Thread {}, Speculative({}))",
             current_thread.thread_id,
+            current_thread.transaction.name,
             self.cycle_count,
+            self.num_threads,
             n,
+            current_thread.thread_id,
             n + 1
         );
         // Create a new thread `exited_thread` that is identical
@@ -633,8 +642,9 @@ impl Scheduler {
             .insert(loop_arg_symbol_id, BitVecValue::ones(loop_arg_bitwidth));
 
         repeat_info!(
-            "Exited thread ({}) has args_mapping {}\n",
+            "Exited thread ({}, `{}`) has args_mapping {}\n",
             exited_thread.thread_id,
+            exited_thread.transaction.name,
             serialize_args_mapping(
                 &exited_thread.args_mapping,
                 &exited_thread.symbol_table,
@@ -679,11 +689,11 @@ impl Scheduler {
         trace: &WaveSignalTrace,
         ctx: &GlobalContext,
     ) -> Result<ThreadResult, SchedulerError> {
-        info!(
-            "Running thread {} (transaction `{}`) till next `step()`...",
-            thread.global_thread_id(ctx),
-            self.format_transaction_name(ctx, thread.transaction.name.clone())
-        );
+        // info!(
+        //     "Running thread {} (transaction `{}`) till next `step()`...",
+        //     thread.global_thread_id(ctx),
+        //     self.format_transaction_name(ctx, thread.transaction.name.clone())
+        // );
 
         // Perform a context switch (use the argument thread's `Transaction`
         // & associated `SymbolTable` / `NextStmtMap`)
@@ -867,17 +877,11 @@ impl Scheduler {
                                 // we just fall through to the normal Step logic below
                             }
 
-                            info!(
-                                "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
-                                thread.global_thread_id(ctx),
-                                thread.transaction.clone().name,
-                            );
-
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
                             self.next.push_back(thread);
-                            self.print_scheduler_state(trace, ctx);
+                            // self.print_scheduler_state(trace, ctx);
                             return Ok(ThreadResult::Completed);
                         }
                         Stmt::Fork => {
@@ -890,11 +894,11 @@ impl Scheduler {
                                 self.forked_start_cycles.contains(&thread.start_cycle);
 
                             if already_forked {
-                                info!(
-                                    "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
-                                    thread.global_thread_id(ctx),
-                                    thread.start_cycle
-                                );
+                                // info!(
+                                //     "Thread {} called `fork()`, but another thread from the same start cycle (cycle {}) already forked in this cycle. Skipping fork to avoid duplicates.",
+                                //     thread.global_thread_id(ctx),
+                                //     thread.start_cycle
+                                // );
                                 // Continue from the fork statement onwards
                                 current_stmt_id = next_stmt_id;
                             } else {
@@ -942,14 +946,15 @@ impl Scheduler {
                             first_start_cycle
                         );
                         self.failed.push_back(thread);
-                        self.print_scheduler_state(trace, ctx);
+                        // self.print_scheduler_state(trace, ctx);
                         return Ok(ThreadResult::Completed);
                     }
 
                     repeat_info!(
-                        "Thread {} (`{}`) finished successfully, adding to `finished` queue",
+                        "Thread {} (`{}`) finished successfully at time {}, adding to `finished` queue",
                         thread.global_thread_id(ctx),
-                        self.format_transaction_name(ctx, thread.transaction.name.clone())
+                        self.format_transaction_name(ctx, thread.transaction.name.clone()),
+                        trace.format_time(trace.time_step())
                     );
 
                     // Record this thread as having finished in this cycle
@@ -983,7 +988,7 @@ impl Scheduler {
                             self.format_transaction_name(ctx, thread.transaction.name.clone())
                         );
                         self.failed.push_back(thread.clone());
-                        self.print_scheduler_state(trace, ctx);
+                        // self.print_scheduler_state(trace, ctx);
                         return Ok(ThreadResult::Completed);
                     }
 
@@ -1041,7 +1046,7 @@ impl Scheduler {
                         self.serialize_monitor_error(err, trace, ctx)
                     );
                     self.failed.push_back(thread);
-                    self.print_scheduler_state(trace, ctx);
+                    // self.print_scheduler_state(trace, ctx);
                     return Ok(ThreadResult::Completed);
                 }
             }
@@ -1088,7 +1093,7 @@ impl Scheduler {
                 cycle_count,
             }) => {
                 let time_str = if ctx.show_waveform_time {
-                    trace.format_time(trace.time_step(), ctx.time_unit)
+                    trace.format_time(trace.time_step())
                 } else {
                     format!("cycle {}", cycle_count)
                 };

@@ -21,6 +21,7 @@ pub type Queue = VecDeque<Thread>;
 /// Formats a queue's contents into a pretty-printed string
 /// Note: we can't implement the `Display` trait for `Queue` since
 /// `Queue` is just a type alias
+#[allow(dead_code)]
 pub fn format_queue(
     queue: &Queue,
     ctx: &GlobalContext,
@@ -40,6 +41,7 @@ pub fn format_queue(
 }
 
 /// Formats a single thread with context-aware timing information
+#[allow(dead_code)]
 pub fn format_thread(
     thread: &Thread,
     ctx: &GlobalContext,
@@ -47,10 +49,7 @@ pub fn format_thread(
     struct_name: &str,
 ) -> String {
     let start_info = if ctx.show_waveform_time {
-        format!(
-            "Start time: {}",
-            trace.format_time(thread.start_time_step, ctx.time_unit)
-        )
+        format!("Start time: {}", trace.format_time(thread.start_time_step))
     } else {
         format!("Start cycle: {}", thread.start_cycle)
     };

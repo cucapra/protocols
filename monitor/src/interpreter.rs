@@ -45,6 +45,12 @@ pub struct Interpreter {
 
     /// The SymbolId of the DUT (design under test)
     pub dut_symbol_id: SymbolId,
+
+    /// The `instance_id` of the DUT (which determines which `struct`
+    /// in our DSL for which we are inferring transactions).
+    /// This field is useful when we have a `.prot` file with multiple
+    /// `struct`s.
+    pub instance_id: u32,
 }
 
 impl Interpreter {
@@ -69,7 +75,7 @@ impl Interpreter {
             } else {
                 let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
                 let time_str = if ctx.show_waveform_time {
-                    trace.format_time(trace.time_step(), ctx.time_unit)
+                    trace.format_time(trace.time_step())
                 } else {
                     format!("cycle {}", self.trace_cycle_count)
                 };
@@ -120,10 +126,10 @@ impl Interpreter {
     pub fn new(
         transaction: Transaction,
         symbol_table: SymbolTable,
-        ctx: &GlobalContext,
         trace: &WaveSignalTrace,
         trace_cycle_count: u32,
         dut_symbol_id: SymbolId,
+        instance_id: u32,
     ) -> Self {
         let mut args_mapping = FxHashMap::default();
         let mut known_bits = FxHashMap::default();
@@ -151,11 +157,6 @@ impl Interpreter {
             known_bits.insert(*pin_id, BitVecValue::ones(bitwidth));
         }
 
-        info!(
-            "initial args_mapping:\n{}",
-            serialize_args_mapping(&args_mapping, &symbol_table, ctx.display_hex)
-        );
-
         Self {
             transaction: transaction.clone(),
             symbol_table,
@@ -166,6 +167,7 @@ impl Interpreter {
             trace_cycle_count,
             dut_symbol_id,
             loop_args: FxHashMap::default(),
+            instance_id,
         }
     }
 
@@ -189,11 +191,11 @@ impl Interpreter {
                     Ok(ExprValue::Concrete(value.clone()))
                 }
                 // Otherwise, try to fetch the value from the trace
-                else if let Ok(value) = trace.get(ctx.instance_id, *sym_id) {
+                else if let Ok(value) = trace.get(self.instance_id, *sym_id) {
                     if ctx.show_waveform_time {
                         info!(
                             "Trace @ time {}: `{}` has value {}",
-                            trace.format_time(trace.time_step(), ctx.time_unit),
+                            trace.format_time(trace.time_step()),
                             name,
                             serialize_bitvec(&value, ctx.display_hex)
                         );
@@ -418,7 +420,7 @@ impl Interpreter {
         ctx: &GlobalContext,
         trace: &WaveSignalTrace,
     ) -> ExecutionResult<()> {
-        if let Ok(value) = trace.get(ctx.instance_id, trace_symbol) {
+        if let Ok(value) = trace.get(self.instance_id, trace_symbol) {
             // Only modify the args_mapping if `out_param_symbol`
             // is currently *not* present
             // (Clippy suggested checking if the `Entry` is `Vacant`
@@ -809,7 +811,7 @@ impl Interpreter {
 
                         // If the `rhs` is a constant or an identifier,
                         // we compare it with the trace's value for the LHS
-                        if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        if let Ok(trace_value) = trace.get(self.instance_id, *lhs_symbol_id) {
                             // If they're different, we report an error
                             if rhs_value != trace_value {
                                 Err(ExecutionError::value_disagrees_with_trace(
@@ -883,7 +885,7 @@ impl Interpreter {
                                 // further bit-slicing here, since we've
                                 // already evaluated `slice_expr[msb:lsb]`
 
-                                if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id)
+                                if let Ok(trace_value) = trace.get(self.instance_id, *lhs_symbol_id)
                                 {
                                     // If they're different, we report an error
                                     if rhs_value != trace_value {
@@ -965,7 +967,7 @@ impl Interpreter {
                             "RHS of assignment is a symbol `{}` ({}) that is not in the args_mapping, adding it...",
                             symbol_name, rhs_symbol_id
                         );
-                        if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id) {
+                        if let Ok(trace_value) = trace.get(self.instance_id, *lhs_symbol_id) {
                             self.args_mapping
                                 .insert(*rhs_symbol_id, trace_value.clone());
                             info!(
@@ -1019,7 +1021,7 @@ impl Interpreter {
 
                                 // Look up the trace value corresponding
                                 // to the LHS
-                                if let Ok(trace_value) = trace.get(ctx.instance_id, *lhs_symbol_id)
+                                if let Ok(trace_value) = trace.get(self.instance_id, *lhs_symbol_id)
                                 {
                                     // Look up the width of `sliced_symbol_id`
                                     // based on its type in the `SymbolTable`.

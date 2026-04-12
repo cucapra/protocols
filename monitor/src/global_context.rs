@@ -4,47 +4,16 @@
 
 use crate::Cli;
 
-/// Time unit for displaying waveform times
-#[derive(Debug, Clone, Copy)]
-pub enum TimeUnit {
-    FemtoSeconds,
-    PicoSeconds,
-    NanoSeconds,
-    MicroSeconds,
-    MilliSeconds,
-    Seconds,
-    Auto, // Auto-select based on the maximum time value
-}
-
-impl TimeUnit {
-    /// Parses a string into the corresponding `TImeUnit`
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "fs" => Some(TimeUnit::FemtoSeconds),
-            "ps" => Some(TimeUnit::PicoSeconds),
-            "ns" => Some(TimeUnit::NanoSeconds),
-            "us" => Some(TimeUnit::MicroSeconds),
-            "ms" => Some(TimeUnit::MilliSeconds),
-            "s" => Some(TimeUnit::Seconds),
-            "auto" => Some(TimeUnit::Auto),
-            _ => None,
-        }
-    }
-}
-
-/// The `GlobalContext` stores fields which are common
-/// to all threads, e.g.:
-/// - the `Design` (since all threads are working over the same `Design`)
-/// - other immutable fields (configuration flags)
-///   Note: The `WaveSignalTrace` is owned by `GlobalScheduler` and passed
-///   as needed
+/// The `GlobalContext` stores fields which are common to all scheduler groups
+/// (regardless of which `struct` they belong to), such as CLI configuration
+/// flags.
+/// Note: The `WaveSignalTrace` is owned by `GlobalScheduler` and passed
+/// as needed.
+#[derive(Clone)]
 pub struct GlobalContext {
     /// The name of the waveform file supplied by the user
     /// (Only used for error-reporting purposes)
     pub waveform_file: String,
-
-    /// The `instance_id` corresponding to the DUT instance
-    pub instance_id: u32,
 
     /// Indicates whether to print integer literals
     /// using hexadecimal (if `false`, we default to using decimal).
@@ -53,9 +22,6 @@ pub struct GlobalContext {
     /// Indicates whether to display the start & end waveform time for each
     /// inferred transaction
     pub show_waveform_time: bool,
-
-    /// The time unit to use for displaying waveform times
-    pub time_unit: TimeUnit,
 
     /// Indicates whether to print the no. of logical steps (i.e. clock cycles)
     /// taken by the monitor
@@ -70,26 +36,30 @@ pub struct GlobalContext {
     /// Indicates whether to print out `idle` transactions (regardless of
     /// whether they've been annotated with `#[idle]`)
     pub include_idle: bool,
+
+    /// If `Some(n)`, the monitor stops after processing `n` clock cycles.
+    /// Useful for quickly testing a protocol against the beginning of a
+    /// large waveform without waiting for the full trace to be processed.
+    pub max_steps: Option<u32>,
 }
 
 impl GlobalContext {
-    /// Creates a new `GlobalContext` with the provided `design`
-    /// and configuration flags as specified by the user via the `Cli`.
+    /// Creates a new `GlobalContext` with
+    /// the configuration flags as specified by the user via the `Cli`.
     /// The `display_hex` field indicates whether to print integer literals
     /// in hexadecimal (if `false`, we default to using decimal).
     /// Note: this function is meant to be called from `main.rs` only
     /// upon monitor initialization.
-    pub fn new(cli: &Cli, instance_id: u32, time_unit: TimeUnit, multiple_structs: bool) -> Self {
+    pub fn new(cli: &Cli, multiple_structs: bool) -> Self {
         Self {
             waveform_file: cli.wave.clone(),
-            instance_id,
             display_hex: cli.display_hex,
             show_waveform_time: cli.show_waveform_time,
-            time_unit,
             print_num_steps: cli.print_num_steps,
             multiple_structs,
             show_thread_ids: cli.show_thread_ids,
             include_idle: cli.include_idle,
+            max_steps: cli.max_steps,
         }
     }
 }
