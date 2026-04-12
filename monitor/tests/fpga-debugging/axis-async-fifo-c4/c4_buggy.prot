@@ -1,68 +1,37 @@
 // ARGS: --wave fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns
-
-// AXI-Stream asynchronous FIFO 
-// Struct fields map to module I/O ports in `c4_buggy.v`
+// RETURN: 1
 
 // AXI-Stream asynchronous FIFO 
 // Struct fields map to module I/O ports in `c4_fixed.v`
 
+// Only `Sender` supports `push`
 struct Sender {
-    // Control signals
-    in rst: u1,                   // Active-high reset signal
+    // Active-high reset signal 
+    // Note: AXI-Stream says reset should be active-low, 
+    // but this DUT uses active-high instead
+    in rst: u1,                  
 
-    // AXI-Stream receiver Interface (FIFO input/write side)
-    in s_axis_tdata: u8,          // receiver data bus (payload)
-    in s_axis_tkeep: u1,          // receiver byte-lane keeper (valid bytes indicator)
-    in s_axis_tvalid: u1,         // receiver valid signal (initiator has valid data)
-    in s_axis_tlast: u1,          // receiver last signal (marks end of frame/packet)
-    in s_axis_tid: u8,            // receiver transaction ID (for routing/ordering)
-    in s_axis_tdest: u8,          // receiver destination ID (routing information)
-    in s_axis_tuser: u1,          // receiver user-defined sideband (e.g., error flags)
- 
-    // AXI-Stream sender Interface (FIFO output/read side)
-    in m_axis_tready: u1,         // sender ready signal (receiver can accept data)
-
-    // Output fields for the sender
-    out m_axis_tdata: u8,         // sender data bus (payload)
-    out m_axis_tkeep: u1,         // sender byte-lane keeper
-    out m_axis_tvalid: u1,        // sender valid signal (FIFO has valid data)
-    out m_axis_tlast: u1,         // sender last signal (end of frame)
-    out m_axis_tid: u8,           // sender transaction ID
-    out m_axis_tdest: u8,         // sender destination ID
-    out m_axis_tuser: u1,         // sender user-defined sideband
-
-    // Output fields for the receiver
-    out s_axis_tready: u1,        // receiver ready signal (FIFO can accept data)  
+    // The Sender recieves VALID and DATA signals from the environment
+    // (data to be written, i.e. pushed to the FIFO),
+    // and outputs a READY signal, indicating that the FIFO can accept new data
+    in s_axis_tdata: u8,         
+    in s_axis_tvalid: u1,        
+    out s_axis_tready: u1,
 }
 
 // Only `Receiver` supports `pop`
 struct Receiver {
-    // Control signals
-    in rst: u1,                   // Active-high reset signal
-
-    // AXI-Stream receiver Interface (FIFO input/write side)
-    in s_axis_tdata: u8,          // receiver data bus (payload)
-    in s_axis_tkeep: u1,          // receiver byte-lane keeper (valid bytes indicator)
-    in s_axis_tvalid: u1,         // receiver valid signal (initiator has valid data)
-    in s_axis_tlast: u1,          // receiver last signal (marks end of frame/packet)
-    in s_axis_tid: u8,            // receiver transaction ID (for routing/ordering)
-    in s_axis_tdest: u8,          // receiver destination ID (routing information)
-    in s_axis_tuser: u1,          // receiver user-defined sideband (e.g., error flags)
- 
-    // AXI-Stream sender Interface (FIFO output/read side)
-    in m_axis_tready: u1,         // sender ready signal (receiver can accept data)
-
-    // Output fields for the sender
-    out m_axis_tdata: u8,         // sender data bus (payload)
-    out m_axis_tkeep: u1,         // sender byte-lane keeper
-    out m_axis_tvalid: u1,        // sender valid signal (FIFO has valid data)
-    out m_axis_tlast: u1,         // sender last signal (end of frame)
-    out m_axis_tid: u8,           // sender transaction ID
-    out m_axis_tdest: u8,         // sender destination ID
-    out m_axis_tuser: u1,         // sender user-defined sideband
-
-    // Output fields for the receiver
-    out s_axis_tready: u1,        // receiver ready signal (FIFO can accept data)  
+    // Active-high reset signal 
+    // Note: AXI-Stream says reset should be active-low, 
+    // but this DUT uses active-high instead
+    in rst: u1,                   
+    
+    // The Receiver receives a READY signal from the environment 
+    // (environment is ready to read data that is popped from the FIFO)
+    // and outputs a VALID signal + the data being popped
+    in m_axis_tready: u1,        
+    out m_axis_tvalid: u1,
+    out m_axis_tdata: u8, 
 }
 
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
@@ -92,6 +61,14 @@ prot push<DUT: Sender>(
 
 // POP: Read data from FIFO via AXI-Stream sender interface
 // Data transfer occurs when `m_axis_tvalid` and `m_axis_tready` are both 1
+// simultaneously — this encodes the AXI handshake requirement that both valid
+// and ready must be asserted at the same clock edge for a transfer.
+//
+// In a correct implementation, the FIFO holds m_axis_tready=0 until reset
+// synchronization (input_rst_sync3) completes (~3 cycles after async_rst
+// de-asserts), ensuring no data is accepted during the reset sync window.
+// If m_axis_tready=1 but m_axis_tvalid=0 at the start of a pop, that means
+// the FIFO is accepting before data is available — a sign of the bug.
 //
 // Output Arguments:
 //   data - Expected payload byte from FIFO
@@ -101,10 +78,11 @@ prot pop<DUT: Receiver>(
     DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;
 
-    // Wait for FIFO to have valid data available
-    while (!(DUT.m_axis_tvalid == 1'b1)) {
-        step();
-    }
+    // Both valid and ready must be simultaneously asserted (AXI handshake).
+    // This assertion fails on the buggy waveform where m_axis_tready=1
+    // immediately after reset but m_axis_tvalid=0 (no data ready yet),
+    // preventing the monitor from assigning pop to that early time window.
+    assert_eq(DUT.m_axis_tvalid, 1'b1);
 
     // One cycle for the transfer to complete
     step();
@@ -114,7 +92,6 @@ prot pop<DUT: Receiver>(
 
     // Release inputs after transaction (i.e. release all constraints)
     DUT.m_axis_tready := X;
-    DUT.s_axis_tvalid := X;  
     DUT.rst := X;   
 
     fork();
@@ -131,14 +108,8 @@ prot idle<DUT: Sender>() {
     // (Push handshake requires s_axis_tvalid && s_axis_tready)
     DUT.s_axis_tvalid := 1'b0;
 
-    // All other input signals are don't care when valid = 0
+    // Data is DontCare when valid = 0
     DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-    DUT.m_axis_tready := X;
 
     step();
 }
@@ -150,21 +121,16 @@ prot idle<DUT: Receiver>() {
     // (Pop handshake requires m_axis_tvalid && m_axis_tready)
     DUT.m_axis_tready := 1'b0;
 
-    // All other input signals are don't care when ready = 0
-    DUT.s_axis_tdata := X;
-    DUT.s_axis_tkeep := X;
-    DUT.s_axis_tvalid := X;
-    DUT.s_axis_tlast := X;
-    DUT.s_axis_tid := X;
-    DUT.s_axis_tdest := X;
-    DUT.s_axis_tuser := X;
-
     step();
 }
 
 // RESET: Assert reset signal to initialize FIFO
 prot reset<DUT: Sender>() {
     DUT.rst := 1'b1;
+
+    // Valid must be low when reset is asserted (AXI-Stream spec section 2.8.2) 
+    DUT.s_axis_tvalid := 1'b0;
+
     step();
 }
 
@@ -172,5 +138,9 @@ prot reset<DUT: Sender>() {
 // structs are now treated separately in the new monitor implementation
 prot reset<DUT: Receiver>() {
     DUT.rst := 1'b1; 
+
+    // Valid must be low when reset is asserted (AXI-Stream spec section 2.8.2)
+    assert_eq(DUT.m_axis_tvalid, 1'b0);
+
     step();
 }
