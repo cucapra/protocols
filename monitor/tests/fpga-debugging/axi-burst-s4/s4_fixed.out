@@ -1,0 +1,4 @@
+// trace 0
+trace {
+    write_burst(1152, 3700821297, 15);  // [time: 0.19ns -> 0.332ns]
+}
