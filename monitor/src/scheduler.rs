@@ -877,12 +877,6 @@ impl Scheduler {
                                 // we just fall through to the normal Step logic below
                             }
 
-                            // info!(
-                            //     "Thread {} (transaction `{}`) called `step()`, moving to `next` queue",
-                            //     thread.global_thread_id(ctx),
-                            //     thread.transaction.clone().name,
-                            // );
-
                             // if the thread is moving to the `next` queue,
                             // its `current_stmt_id` is updated to be `next_stmt_id`
                             thread.current_stmt_id = next_stmt_id;
