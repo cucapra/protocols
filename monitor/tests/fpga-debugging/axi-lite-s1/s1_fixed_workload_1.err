@@ -1,0 +1,9 @@
+All schedulers failed: No transactions match the waveform for DUT `ReadSubordinate`
+Trace inferred so far by failed scheduler:
+	ReadSubordinate::idle(); // [time: 0ns -> 25ns]
+	ReadSubordinate::read_v2(64, 0, 0); // [time: 25ns -> 100ns]
+Trace inferred so far by scheduler for `WriteSubordinate`:
+	WriteSubordinate::idle(); // [time: 0ns -> 25ns]
+Failure at 125ns: No transactions match the waveform in `fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd`.
+Possible transactions: [idle, read_v1, read_v2]
+Error: Monitor failed
