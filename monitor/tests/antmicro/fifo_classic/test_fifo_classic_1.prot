@@ -16,7 +16,7 @@ struct WBSubordinate {
     // Address of the request
     in wishbone_adr: u30,
 
-    // Data that is written to the subordinate (during WRITE requests)
+    // Data that is written to the subordinate (during WRITE requests) 
     in wishbone_dat_w: u32,
 
     // Reset signal
@@ -26,7 +26,7 @@ struct WBSubordinate {
     // has been fulfilled.
     out wishbone_ack: u1,
 
-    // Data returned by the subordinate to the manager
+    // Data returned by the subordinate to the manager 
     // as a response to READ requests
     // This is valid only when ACK is true
     out wishbone_dat_r: u32,
@@ -36,9 +36,9 @@ struct WBSubordinate {
 // everything else is DontCare
 #[idle]
 prot idle<DUT: WBSubordinate>() {
-    // Reset signal is 1 (since reset is active-low)
+    // Reset signal is 1 (since reset is active-low) 
     // to distinguish the `idle` & `reset` protocols
-    DUT.reset := 1'b1;
+    DUT.reset := 1'b1;  
     DUT.wishbone_cyc := 1'b0;
     DUT.wishbone_stb := 1'b0;
     DUT.wishbone_we := X;
@@ -60,8 +60,8 @@ prot reset<DUT: WBSubordinate>() {
 
     step();
 
-    // Wishbone spec (Rule 3.20): CYC & STB must be 0 at the next rising clock
-    // edge after RESET has been asserted (set to 0),
+    // Wishbone spec (Rule 3.20): CYC & STB must be 0 at the next rising clock 
+    // edge after RESET has been asserted (set to 0), 
     // all other signals are undefined (DontCare)
     DUT.wishbone_cyc := 1'b0;
     DUT.wishbone_stb := 1'b0;
@@ -72,6 +72,7 @@ prot reset<DUT: WBSubordinate>() {
 
 // Writes a `data` value to the subordinate at the given address
 prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+    DUT.reset := 1'b1; // No reset (reset is active-high)
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
@@ -87,30 +88,13 @@ prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     while (DUT.wishbone_ack == 1'b0) {
         step();
     }
-    // ACK = 1 is sustained for one cycle
-    step();
-
-    // After the ACK, CYC and STB are DontCare: the manager is free to either
-    // keep them asserted
-    // (for block reads, section 8.4.2, Permission 3.40, Observation 3.55)
-    // or deassert them (for single reads, section 3.1.3.1).
-    // Since STB is DontCare, per Rule 3.60, the address/data/WE don't
-    // contain semantically valid values, so these are also DontCare.
-
-    // Note: this DUT doesn't contain `TGC/BLK` signals, which we would
-    // use to distinguish between single writes from block writes (section 3.1.5)
-
-    DUT.wishbone_cyc := X;
-    DUT.wishbone_stb := X;
-    DUT.wishbone_we := X;
-    DUT.wishbone_adr := X;
-    DUT.wishbone_dat_w := X;
-
+    // One cycle for data transfer
     step();
 }
 
-// Reads one single `data` value from the subordinate
+// Reads one single `data` value from the subordinate 
 prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+    DUT.reset := 1'b1; // No reset (reset is active-high)
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
@@ -133,24 +117,6 @@ prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
     // i.e. data is only valid when ACK is high)
     assert_eq(DUT.wishbone_dat_r, data);
-
-    step();
-
-    // After the ACK, CYC and STB are DontCare: the manager is free to either
-    // keep them asserted
-    // (for block reads, section 8.4.2, Permission 3.40, Observation 3.55)
-    // or deassert them (for single reads, section 3.1.3.1).
-    // Since STB is DontCare, per Rule 3.60, the address/data/WE don't
-    // contain semantically valid values, so these are also DontCare.
-
-    // Note: this DUT doesn't contain `TGC/BLK` signals, which we would
-    // use to distinguish between single writes from block writes (section 3.1.5)
-
-    DUT.wishbone_cyc := X;
-    DUT.wishbone_stb := X;
-    DUT.wishbone_we := X;
-    DUT.wishbone_adr := X;
-    DUT.wishbone_dat_w := X;
 
     step();
 }
