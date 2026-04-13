@@ -825,7 +825,7 @@ impl RepeatValue {
                 } else {
                     *v += 1;
                 }
-                debug_assert!(*v < *b);
+                debug_assert!(*v < *b, "{} < {}", *v, *b);
             }
         }
     }

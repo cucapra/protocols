@@ -1,0 +1,9 @@
+// trace 0
+trace {
+    reset();  // [time: 20ns -> 40ns]
+    reset();  // [time: 40ns -> 60ns]
+    read(67108864, 2993300090, 0);  // [time: 110ns -> 130ns]
+    reset();  // [time: 170.001ns -> 190.001ns]
+    reset();  // [time: 190.001ns -> 210.001ns]
+    write(67108864, 3921107982, 0);  // [time: 240.001ns -> 260.001ns]
+}
