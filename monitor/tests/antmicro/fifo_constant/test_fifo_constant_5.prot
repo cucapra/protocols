@@ -135,22 +135,4 @@ prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     assert_eq(DUT.wishbone_dat_r, data);
 
     step();
-
-    // After the ACK, CYC and STB are DontCare: the manager is free to either
-    // keep them asserted 
-    // (for block reads, section 8.4.2, Permission 3.40, Observation 3.55) 
-    // or deassert them (for single reads, section 3.1.3.1). 
-    // Since STB is DontCare, per Rule 3.60, the address/data/WE don't 
-    // contain semantically valid values, so these are also DontCare.
-
-    // Note: this DUT doesn't contain `TGC/BLK` signals, which we would 
-    // use to distinguish between single writes from block writes (section 3.1.5)
-
-    DUT.wishbone_cyc := X;
-    DUT.wishbone_stb := X;
-    DUT.wishbone_we := X;
-    DUT.wishbone_adr := X;
-    DUT.wishbone_dat_w := X;
-    
-    step();
 }
