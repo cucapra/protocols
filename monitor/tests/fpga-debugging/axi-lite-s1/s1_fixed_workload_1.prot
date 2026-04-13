@@ -1,4 +1,5 @@
 // ARGS: --wave fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle
+// RETURN: 1
 
 struct ReadSubordinate {
     // Read address channel 

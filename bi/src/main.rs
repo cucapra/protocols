@@ -120,15 +120,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut trace =
         WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
 
+    let bi_protos: Vec<Vec<_>> = instances
+        .iter()
+        .map(|inst| {
+            designs[&inst.design]
+                .transaction_ids
+                .iter()
+                .map(|id| parsed_ir[*id].clone())
+                .collect()
+        })
+        .collect();
+
     let mut bis: Vec<_> = instances
         .iter()
         .enumerate()
-        .map(|(inst_id, inst)| {
-            let protos = designs[&inst.design]
-                .transaction_ids
-                .iter()
-                .map(|id| &parsed_ir[*id]);
-            BackwardsInterpreter::new(protos, inst_id as u32, cli.include_in_progress)
+        .zip(bi_protos.iter())
+        .map(|((inst_id, inst), protos)| {
+            BackwardsInterpreter::new(protos.iter(), inst_id as u32, cli.include_in_progress)
         })
         .collect();
 
@@ -153,9 +161,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
-    for bi in bis {
+    for (bi, parsed_ir) in bis.into_iter().zip(bi_protos) {
         if let Some(failures) = bi.failures() {
-            for (ii, (trace_id, fails)) in failures.into_iter().enumerate() {
+            for (ii, (trace_id, fails)) in failures.iter().enumerate() {
                 if ii > 0 {
                     println!();
                 }

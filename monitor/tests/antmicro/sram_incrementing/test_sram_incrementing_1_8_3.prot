@@ -1,0 +1,122 @@
+// ARGS: --wave antmicro/sram_incrementing/test_sram_incrementing_1_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns
+
+// Wishbone B3 (Classic mode) subordinate
+struct WBSubordinate {
+    // Cycle is high anytime an active pipeline session is occurring
+    in wishbone_cyc: u1,
+
+    // Strobe is high when there is a request to the subordinate
+    // (akin to Valid in AXI-Lite, i.e. they indicate the manager
+    // has something to transfer)
+    in wishbone_stb: u1,
+
+    // Write-enable (true for write-requests)
+    in wishbone_we: u1,
+
+    // Address of the request
+    in wishbone_adr: u30,
+
+    // Data that is written to the subordinate (during WRITE requests) 
+    in wishbone_dat_w: u32,
+
+    // Reset signal
+    in reset: u1,
+
+    // Response from the subordinate, indicating that the request
+    // has been fulfilled.
+    out wishbone_ack: u1,
+
+    // Data returned by the subordinate to the manager 
+    // as a response to READ requests
+    // This is valid only when ACK is true
+    out wishbone_dat_r: u32,
+}
+
+// Both cyc & stb are low when the subordinate is idle,
+// everything else is DontCare
+#[idle]
+prot idle<DUT: WBSubordinate>() {
+    // Reset signal is 1 (since reset is active-low) 
+    // to distinguish the `idle` & `reset` protocols
+    DUT.reset := 1'b1;  
+    DUT.wishbone_cyc := 1'b0;
+    DUT.wishbone_stb := 1'b0;
+    DUT.wishbone_we := X;
+    DUT.wishbone_adr := X;
+    DUT.wishbone_dat_w := X;
+    step();
+}
+
+// Resets the subordinate
+prot reset<DUT: WBSubordinate>() {
+    // Reset signal is 0 (active-low)
+    DUT.reset := 1'b0;
+
+    DUT.wishbone_cyc := X;
+    DUT.wishbone_stb := X;
+    DUT.wishbone_we := X;
+    DUT.wishbone_adr := X;
+    DUT.wishbone_dat_w := X;
+
+    step();
+
+    // Wishbone spec (Rule 3.20): CYC & STB must be 0 at the next rising clock 
+    // edge after RESET has been asserted (set to 0), 
+    // all other signals are undefined (DontCare)
+    DUT.wishbone_cyc := 1'b0;
+    DUT.wishbone_stb := 1'b0;
+    DUT.reset := X;
+
+    step();
+}
+
+// Writes a `data` value to the subordinate at the given address
+prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+    DUT.reset := 1'b1; // No reset (reset is active-high)
+    DUT.wishbone_cyc := 1'b1;
+    // Wait a variable no. of cycles until manager sets `stb` to 1
+    repeat num_cycles iterations {
+        DUT.wishbone_stb := 1'b0;
+        step();
+    }
+    DUT.wishbone_stb := 1'b1;
+    DUT.wishbone_we := 1'b1;
+    DUT.wishbone_adr := addr;
+    DUT.wishbone_dat_w := data;
+
+    // Wait till the subordinate Acks
+    while (DUT.wishbone_ack == 1'b0) {
+        step();
+    }
+    // One cycle for data transfer
+    step();
+}
+
+// Reads one single `data` value from the subordinate 
+prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+    DUT.reset := 1'b1; // No reset (reset is active-high)
+    DUT.wishbone_cyc := 1'b1;
+    // Wait a variable no. of cycles until manager sets `stb` to 1
+    repeat num_cycles iterations {
+        DUT.wishbone_stb := 1'b0;
+        step();
+    }
+    DUT.wishbone_stb := 1'b1;
+    DUT.wishbone_we := 1'b0;
+    DUT.wishbone_adr := addr;
+
+    // Input data to the subordinate during reads is DontCare
+    DUT.wishbone_dat_w := X;
+
+    // Wait for subordinate to Ack
+    while (DUT.wishbone_ack == 1'b0) {
+        step();
+    }
+
+    // ACK is now high, and data is valid in the same cycle as ACK
+    // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
+    // i.e. data is only valid when ACK is high)
+    assert_eq(DUT.wishbone_dat_r, data);
+
+    step();
+}
