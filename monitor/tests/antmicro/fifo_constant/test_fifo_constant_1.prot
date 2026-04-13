@@ -72,6 +72,7 @@ prot reset<DUT: WBSubordinate>() {
 
 // Writes a `data` value to the subordinate at the given address
 prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+    DUT.reset := 1'b1; // No reset (reset is active-high)
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
@@ -93,6 +94,7 @@ prot write<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
 
 // Reads one single `data` value from the subordinate 
 prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
+    DUT.reset := 1'b1; // No reset (reset is active-high)
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
     repeat num_cycles iterations {
