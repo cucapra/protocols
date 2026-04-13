@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},
@@ -744,6 +744,20 @@ impl Scheduler {
                         current_stmt_id = loop_body_id;
                     }
                     continue;
+                }
+
+                // Handle case where the loop argument is already in the thread's
+                // `args_mapping` (e.g. a value for it has already been
+                // inferred, via a previous assignment)
+                if !thread.loop_args_state.contains_key(&loop_arg_symbol_id) {
+                    if let Some(loop_arg) = thread.args_mapping.get(&loop_arg_symbol_id) {
+                        let n = loop_arg.to_u64().unwrap_or_else(|| {
+                            panic!("Unable to convert {} to u64", loop_arg.to_bit_str())
+                        });
+                        thread
+                            .loop_args_state
+                            .insert(loop_arg_symbol_id, LoopArgState::Known(n));
+                    }
                 }
 
                 // Now we need to handle the case when the value of a `LoopArg`
