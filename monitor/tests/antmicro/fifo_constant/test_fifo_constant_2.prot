@@ -128,13 +128,13 @@ prot read<DUT: WBSubordinate>(addr: u30, data: u32, num_cycles: uint) {
     while (DUT.wishbone_ack == 1'b0) {
         step();
     }
-    // ACK = 1 is sustained for one cycle
-    step();
 
     // ACK is now high, and data is valid in the same cycle as ACK
     // (Rule 3.65 from Wishbone spec: "slave interfaces must qualify DAT_O with ACK_O",
     // i.e. data is only valid when ACK is high)
     assert_eq(DUT.wishbone_dat_r, data);
+
+    step();
     
     // After the ACK, CYC and STB are DontCare: the manager is free to either
     // keep them asserted 
