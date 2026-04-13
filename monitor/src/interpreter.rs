@@ -69,7 +69,7 @@ impl Interpreter {
             } else {
                 let name = self.symbol_table[symbol_id].full_name(&self.symbol_table);
                 let time_str = if ctx.show_waveform_time {
-                    trace.format_time(trace.time_step(), ctx.time_unit)
+                    trace.format_time(trace.time_step())
                 } else {
                     format!("cycle {}", self.trace_cycle_count)
                 };
@@ -193,7 +193,7 @@ impl Interpreter {
                     if ctx.show_waveform_time {
                         info!(
                             "Trace @ time {}: `{}` has value {}",
-                            trace.format_time(trace.time_step(), ctx.time_unit),
+                            trace.format_time(trace.time_step()),
                             name,
                             serialize_bitvec(&value, ctx.display_hex)
                         );
