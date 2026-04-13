@@ -211,7 +211,9 @@ fn check_stmt_types(
         Stmt::RepeatLoop(count_expr, bodyid) => {
             // Typecheck the no. of iterations (which must be a uint type)
             let num_iterations_type = check_expr_types(tr, st, handler, count_expr)?;
-            if let Type::UnsignedInt = num_iterations_type {
+            // Temporarily allow the argument to repeat loops to have type `u8`
+            // (For the purposes of the protocol for the Brave New World `axi-burst-s4` bug)
+            if matches!(num_iterations_type, Type::UnsignedInt | Type::BitVec(8)) {
                 // Then, type-check the loop body
                 check_stmt_types(tr, st, handler, bodyid)
             } else {
