@@ -1,0 +1,28 @@
+// ARGS: --protocol antmicro/sram_classic/test_sram_classic_1_0.prot --verilog ../../../protocols-evaluation/wishbone/wishbone-interconnect-burst-mode-benchmark/hw/*.v --module tb --max-steps 1000
+
+// Unlike the FIFO (where reads stall indefinitely as the FIFO testbench 
+// prefills the FIFO without using the Wishbone bus), the SRAM doesn't have 
+// this problem, i.e. we can do both writes and reads to the same address. 
+// The base address of the SRAM base address 0x10000000 (this is byte-addressable memory), 
+// but the Wishbone data transfers occur in words that are 4-bytes each, so 
+// the base Wishbone word address is 0x10000000 / 4 = 0x04000000.
+
+// In this transaction trace, we write four words at four consecutive word addresses, 
+// then read them back.
+
+trace {
+    idle();
+    idle();
+    reset();
+    reset();
+    idle();
+    write(0x1, 0x04000000, 0x00000001, 0);
+    write(0x1, 0x04000001, 0x00000002, 0);
+    write(0x1, 0x04000002, 0x00000003, 0);
+    write(0x1, 0x04000003, 0x00000004, 0);
+    idle();
+    read(0x1, 0x04000000, 0x00000001, 0);
+    read(0x1, 0x04000001, 0x00000002, 0);
+    read(0x1, 0x04000002, 0x00000003, 0);
+    read(0x1, 0x04000003, 0x00000004, 0);
+}

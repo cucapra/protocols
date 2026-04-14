@@ -17,3 +17,7 @@ command = "cargo run --release --quiet --package protocols-monitor -- -p {filena
 output.out = "-"
 output.prof = "2"
 
+[envs.roundtrip]
+command = "uv run ../../scripts/roundtrip_case.py {filename} {args} --include-idle"
+binary = true
+output.rt = "-"
