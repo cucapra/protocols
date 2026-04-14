@@ -5,7 +5,6 @@
 
 #[macro_use]
 mod macros;
-mod axi_experiment;
 mod designs;
 mod global_context;
 mod global_scheduler;
@@ -81,7 +80,7 @@ struct Cli {
     #[arg(long, value_name = "SHOW_THREAD_IDS")]
     show_thread_ids: bool,
 
-    /// Note: this CLI flag is no longer used (only support ns for simplicity)
+    /// Time unit to use when displaying waveform times (e.g. "ns", "s"). Defaults to "ns".
     #[arg(long, value_name = "TIME_UNIT", requires = "show_waveform_time")]
     time_unit: Option<String>,
 
@@ -173,8 +172,14 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     // parse waveform
-    let trace = WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())
-        .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
+    let trace = WaveSignalTrace::open(
+        &cli.wave,
+        &designs,
+        &instances,
+        cli.sample_posedge.clone(),
+        cli.time_unit.clone(),
+    )
+    .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
     // Support multiple structs & designs
     let dut_designs: Vec<&Design> = instances

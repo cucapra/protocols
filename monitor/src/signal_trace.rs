@@ -69,6 +69,10 @@ pub struct WaveSignalTrace {
     /// Note that this field is only `Some` if the user passes an argument
     /// to the optional `--sample_posedge` CLI argument
     clock_signal: Option<SignalRef>,
+
+    /// The time unit to use when formatting time values.
+    /// Note: we only support "ns" and "s" at the moment for simplicity.
+    time_unit: String,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -89,33 +93,39 @@ impl WaveSignalTrace {
         self.wave.time_table()[time_step as usize]
     }
 
-    /// Formats a time value from the waveform as nanoseconds
+    /// Formats a time value from the waveform using the configured time unit
     pub fn format_time(&self, time_step: u32) -> String {
         let time_value = self.time_value(time_step);
 
-        // Convert raw time value to nanoseconds using the waveform's timescale
-        const FS_PER_NS: u64 = 1_000_000;
+        // Convert raw time value to nanoseconds using the waveform's timescale.
+        const FS_PER_NS: f64 = 1_000_000.0;
         let time_ns = if let Some(timescale) = self.wave.hierarchy().timescale() {
-            let fs_per_unit: u64 = match timescale.unit {
-                wellen::TimescaleUnit::FemtoSeconds => 1,
-                wellen::TimescaleUnit::PicoSeconds => 1_000,
-                wellen::TimescaleUnit::NanoSeconds => 1_000_000,
-                wellen::TimescaleUnit::MicroSeconds => 1_000_000_000,
-                wellen::TimescaleUnit::MilliSeconds => 1_000_000_000_000,
-                wellen::TimescaleUnit::Seconds => 1_000_000_000_000_000,
-                _ => 1,
+            let fs_per_unit: f64 = match timescale.unit {
+                wellen::TimescaleUnit::FemtoSeconds => 1.0,
+                wellen::TimescaleUnit::PicoSeconds => 1_000.0,
+                wellen::TimescaleUnit::NanoSeconds => 1_000_000.0,
+                wellen::TimescaleUnit::MicroSeconds => 1_000_000_000.0,
+                wellen::TimescaleUnit::MilliSeconds => 1_000_000_000_000.0,
+                wellen::TimescaleUnit::Seconds => 1_000_000_000_000_000.0,
+                _ => 1.0,
             };
-            (time_value * timescale.factor as u64 * fs_per_unit) as f64 / FS_PER_NS as f64
+            (time_value as f64) * (timescale.factor as f64) * fs_per_unit / FS_PER_NS
         } else {
             time_value as f64
         };
 
-        if (time_ns - time_ns.round()).abs() < 1e-10 {
-            format!("{}ns", time_ns as u64)
+        // Convert from ns to s if needed
+        let (time_out, unit_str) = match self.time_unit.as_str() {
+            "s" => (time_ns / 1_000_000_000.0, "s"),
+            _ => (time_ns, "ns"),
+        };
+
+        if (time_out - time_out.round()).abs() < 1e-10 {
+            format!("{}{}", time_out as u64, unit_str)
         } else {
-            let formatted = format!("{:.3}", time_ns);
+            let formatted = format!("{:.3}", time_out);
             let trimmed = formatted.trim_end_matches('0').trim_end_matches('.');
-            format!("{}ns", trimmed)
+            format!("{}{}", trimmed, unit_str)
         }
     }
 
@@ -128,6 +138,7 @@ impl WaveSignalTrace {
         designs: &FxHashMap<String, Design>,
         instances: &[Instance],
         sample_posedge: Option<String>,
+        time_unit: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
         let mut wave = wellen::simple::read(filename)?;
 
@@ -167,6 +178,8 @@ impl WaveSignalTrace {
             time_step: 0,
 
             clock_signal,
+
+            time_unit: time_unit.unwrap_or_else(|| "ns".to_string()),
         })
     }
 

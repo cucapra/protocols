@@ -1,0 +1,6 @@
+error: the following required arguments were not provided:
+  --wave <WAVE_FILE>
+
+Usage: protocols-monitor --protocol <PROTOCOLS_FILE> --wave <WAVE_FILE> --show-waveform-time --instances <INSTANCES>... --sample-posedge <SIGNAL_TO_SAMPLE_ON_RISING_EDGE> --time-unit <TIME_UNIT> --max-steps <MAX_STEPS>
+
+For more information, try '--help'.
