@@ -5,7 +5,6 @@
 
 #[macro_use]
 mod macros;
-mod axi_experiment;
 mod designs;
 mod global_context;
 mod global_scheduler;
