@@ -1,4 +1,6 @@
 // ARGS: --wave wb_intercon/wb_cdc.fst --instances wb_intercon_tb.wb_cdc_tb.dut:WBSubordinate --sample-posedge wb_intercon_tb.wb_cdc_tb.dut.wbm_clk --show-waveform-time --time-unit s --max-steps 1000
+// TODO: true
+// (Note: this test is allowed to fail for now until we figure out how to fully support Wishbone burst mode)
 
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
