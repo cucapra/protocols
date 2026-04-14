@@ -124,9 +124,10 @@ impl BackwardsInterpreter {
 
             // execute one path
             let (r, pc) = path.exec_stmt(&self.protos, &|sym| {
-                let value = trace.get(self.instance_id, sym);
+                // let value = trace.get(self.instance_id, sym);
                 // println!("{sym:?} = {} : bv<{}>", value.to_dec_str(), value.width());
-                value
+                // value
+                trace.get(self.instance_id, sym)
             });
 
             // append protocols that finish to trace
