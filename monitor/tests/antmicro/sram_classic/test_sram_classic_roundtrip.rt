@@ -1,0 +1,40 @@
+trace_block: 0
+trace_result: PASS
+matched_monitor_trace_index: 0
+interpreter_trace:
+trace {
+    idle();
+    idle();
+    reset();
+    reset();
+    idle();
+    write(1, 67108864, 1, 0);
+    write(1, 67108865, 2, 0);
+    write(1, 67108866, 3, 0);
+    write(1, 67108867, 4, 0);
+    idle();
+    read(1, 67108864, 1, 0);
+    read(1, 67108865, 2, 0);
+    read(1, 67108866, 3, 0);
+    read(1, 67108867, 4, 0);
+}
+
+parsed_monitor_trace_candidates:
+candidate_monitor_trace: 0
+trace {
+    idle();
+    idle();
+    reset();
+    reset();
+    idle();
+    write(1, 67108864, 1, 0);
+    write(1, 67108865, 2, 0);
+    write(1, 67108866, 3, 0);
+    write(1, 67108867, 4, 0);
+    idle();
+    read(1, 67108864, 1, 0);
+    read(1, 67108865, 2, 0);
+    read(1, 67108866, 3, 0);
+    read(1, 67108867, 4, 0);
+}
+
