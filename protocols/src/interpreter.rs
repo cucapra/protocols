@@ -14,8 +14,8 @@ use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 
 /// Per-thread input value: either a concrete assignment or DontCare
@@ -231,9 +231,10 @@ impl<'a> Evaluator<'a> {
                 patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
             for input_expr in input_exprs {
                 // Find the protocol symbol corresponding to this input expression
-                if let Some(input_sym) = input_mapping
-                    .iter()
-                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
+                if let Some(input_sym) =
+                    input_mapping
+                        .iter()
+                        .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
                 {
                     // output_dependencies: output -> Vec<input> (inputs this output depends on)
                     if let Some(vec) = output_dependencies.get_mut(out_sym) {
@@ -840,21 +841,11 @@ impl<'a> Evaluator<'a> {
 
         // Check if assigning to this input port is forbidden (after observing a dependent output)
         if self.forbidden_inputs.contains(symbol_id) {
-            if expr_val != ExprValue::DontCare {
-                let name = self.st[symbol_id].name();
-                return Err(ExecutionError::forbidden_input_assignment(
-                    name.to_string(),
-                    *expr_id,
-                ));
-            } else {
-                // If we do a DontCare assignment to an input that is already forbidden,
-                // we preserve the existing value for it by returning early
-                // This menas that the existing Concrete entry for this input
-                // in `Interpreter.per_thread_input_vals` is preserved,
-                // which prevents another concurrent thread from randomizing
-                // this value away
-                return Ok(());
-            }
+            let name = self.st[symbol_id].name();
+            return Err(ExecutionError::forbidden_input_assignment(
+                name.to_string(),
+                *expr_id,
+            ));
         }
 
         // Determine new value
