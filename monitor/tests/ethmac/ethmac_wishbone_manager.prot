@@ -1,6 +1,7 @@
 // ARGS: --instances tb_ethernet:WBManager --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns
 // TODO: true
 // RETURN: 2
+// (Note: this test is allowed to fail on CI because the waveform file is too large to be stored on GitHub)
 
 // Wishbone B3 (Classic mode) manager 
 struct WBManager {
