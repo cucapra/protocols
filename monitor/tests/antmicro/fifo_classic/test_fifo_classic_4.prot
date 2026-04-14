@@ -62,13 +62,6 @@ prot reset<DUT: WBSubordinate>() {
     DUT.wishbone_dat_w := X;
 
     step();
-
-    // Wishbone spec (Rule 3.20): CYC & STB must be 0 at the next rising clock 
-    // edge after wb_rst has been asserted (set to 0), 
-    // all other signals are undefined (DontCare)
-
-    // However, this DUT doesn't abide by this rule,
-    // so the `reset` protocol just terminates here
 }
 
 // Writes a `data` value to the subordinate at the given address
