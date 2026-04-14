@@ -840,21 +840,11 @@ impl<'a> Evaluator<'a> {
 
         // Check if assigning to this input port is forbidden (after observing a dependent output)
         if self.forbidden_inputs.contains(symbol_id) {
-            if expr_val != ExprValue::DontCare {
-                let name = self.st[symbol_id].name();
-                return Err(ExecutionError::forbidden_input_assignment(
-                    name.to_string(),
-                    *expr_id,
-                ));
-            } else {
-                // If we do a DontCare assignment to an input that is already forbidden,
-                // we preserve the existing value for it by returning early
-                // This menas that the existing Concrete entry for this input
-                // in `Interpreter.per_thread_input_vals` is preserved,
-                // which prevents another concurrent thread from randomizing
-                // this value away
-                return Ok(());
-            }
+            let name = self.st[symbol_id].name();
+            return Err(ExecutionError::forbidden_input_assignment(
+                name.to_string(),
+                *expr_id,
+            ));
         }
 
         // Determine new value

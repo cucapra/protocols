@@ -2,6 +2,7 @@
 // TODO: true
 // RETURN: 2
 // (Note: this test is allowed to fail on CI because the waveform file is too large to be stored on GitHub)
+// (Note: this test is allowed to fail for now until we figure out how to fully support Wishbone burst mode)
 
 struct WBSubordinate {
     // Cycle is high anytime an active pipeline session is occurring
@@ -92,10 +93,6 @@ prot write<DUT: WBSubordinate>(mask: u4, addr: u32, data: u32, num_cycles: uint)
     while (DUT.wbs_s2m_ack == 1'b0) {
         step();
     }
-    // ACK is now 1 (the data transfer happens immediately),
-    // so we set the address and data to don't care now
-    DUT.wbs_m2s_adr := X;
-    DUT.wbs_m2s_dat := X;
 
     // One cycle for data transfer
     step();

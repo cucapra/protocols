@@ -83,11 +83,6 @@ prot write<DUT: WBSubordinate>(mask: u4, addr: u30, data: u32, num_cycles: uint)
     while (DUT.wishbone_ack == 1'b0) {
         step();
     }
-    // ACK is now 1 (the data transfer happens immediately),
-    // so we set the address and data to don't care now
-    DUT.wishbone_adr := X;
-    DUT.wishbone_dat_w := X;
-    
     // One cycle for data transfer
     step();
 }
