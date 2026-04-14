@@ -23,7 +23,7 @@ struct WBSubordinate {
     in reset: u1,
 
     // Mask for data in/out from client
-    in wishbone_sel: u1,
+    in wishbone_sel: u4,
 
     // Response from the subordinate, indicating that the request
     // has been fulfilled.
@@ -64,17 +64,15 @@ prot reset<DUT: WBSubordinate>() {
     step();
 
     // Wishbone spec (Rule 3.20): CYC & STB must be 0 at the next rising clock 
-    // edge after RESET has been asserted (set to 0), 
+    // edge after wb_rst has been asserted (set to 0), 
     // all other signals are undefined (DontCare)
-    DUT.wishbone_cyc := 1'b0;
-    DUT.wishbone_stb := 1'b0;
-    DUT.reset := X;
 
-    step();
+    // However, this DUT doesn't abide by this rule,
+    // so the `reset` protocol just terminates here
 }
 
 // Writes a `data` value to the subordinate at the given address
-prot write<DUT: WBSubordinate>(mask: u1, addr: u30, data: u32, num_cycles: uint) {
+prot write<DUT: WBSubordinate>(mask: u4, addr: u30, data: u32, num_cycles: uint) {
     DUT.reset := 1'b1; // No reset (reset is active-high)
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
@@ -92,12 +90,17 @@ prot write<DUT: WBSubordinate>(mask: u1, addr: u30, data: u32, num_cycles: uint)
     while (DUT.wishbone_ack == 1'b0) {
         step();
     }
+    // ACK is now 1 (the data transfer happens immediately),
+    // so we set the address and data to don't care now
+    DUT.wishbone_adr := X;
+    DUT.wishbone_dat_w := X;
+    
     // One cycle for data transfer
     step();
 }
 
 // Reads one single `data` value from the subordinate 
-prot read<DUT: WBSubordinate>(mask: u1, addr: u30, data: u32, num_cycles: uint) {
+prot read<DUT: WBSubordinate>(mask: u4, addr: u30, data: u32, num_cycles: uint) {
     DUT.reset := 1'b1; // No reset (reset is active-high)
     DUT.wishbone_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
