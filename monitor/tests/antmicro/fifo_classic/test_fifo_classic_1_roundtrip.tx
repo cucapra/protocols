@@ -1,4 +1,15 @@
-// trace 0
+// ARGS: --protocol antmicro/fifo_classic/test_fifo_classic_1.prot --verilog ../../../protocols-evaluation/wishbone/wishbone-interconnect-burst-mode-benchmark/hw/*.v --module tb --max-steps 1000 
+
+// The original testbench speaks a separate protocol
+// which allows it to prefill the fifo without using
+// the wishbone bus.
+// We currently do not support coordinating two separate interfaces
+// in a single trace file and thus we cannot replicate this.
+// Since the fifo is empty, any read will stall indefinitely.
+// Writes are fine as they go to a different fifo. However, after 8 writes, the
+// fifo is full and we have no way of emptying it.
+
+
 trace {
     idle();
     idle();
