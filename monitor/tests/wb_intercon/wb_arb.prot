@@ -21,6 +21,9 @@ struct WBSubordinate {
     // Reset signal
     in wb_rst: u1,
 
+    // Mask for data in/out from client
+    in wbs_m2s_sel: u4,
+
     // Response from the subordinate, indicating that the request
     // has been fulfilled.
     out wbs_s2m_ack: u1,
@@ -46,6 +49,7 @@ prot idle<DUT: WBSubordinate>() {
 
 // Resets the subordinate
 prot reset<DUT: WBSubordinate>() {
+    // Reset signal is 1 (active-high)
     DUT.wb_rst := 1'b1;
 
     DUT.wbs_m2s_cyc := X;
@@ -67,7 +71,7 @@ prot reset<DUT: WBSubordinate>() {
 }
 
 // Writes a `data` value to the subordinate at the given address
-prot write<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
+prot write<DUT: WBSubordinate>(mask: u4, addr: u32, data: u32, num_cycles: uint) {
     DUT.wb_rst := 1'b0; 
     DUT.wbs_m2s_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
@@ -78,6 +82,7 @@ prot write<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
     DUT.wbs_m2s_stb := 1'b1;
     DUT.wbs_m2s_we := 1'b1;
     DUT.wbs_m2s_adr := addr;
+    DUT.wbs_m2s_sel := mask;
     DUT.wbs_m2s_dat := data;
 
     // Wait till the subordinate Acks
@@ -94,7 +99,7 @@ prot write<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
 }
 
 // Reads one single `data` value from the subordinate 
-prot read<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
+prot read<DUT: WBSubordinate>(mask: u4, addr: u32, data: u32, num_cycles: uint) {
     DUT.wb_rst := 1'b0; 
     DUT.wbs_m2s_cyc := 1'b1;
     // Wait a variable no. of cycles until manager sets `stb` to 1
@@ -105,6 +110,7 @@ prot read<DUT: WBSubordinate>(addr: u32, data: u32, num_cycles: uint) {
     DUT.wbs_m2s_stb := 1'b1;
     DUT.wbs_m2s_we := 1'b0;
     DUT.wbs_m2s_adr := addr;
+    DUT.wbs_m2s_sel := mask;
 
     // Input data to the subordinate during reads is DontCare
     DUT.wbs_m2s_dat := X;
