@@ -1,0 +1,20 @@
+// https://cdn.opencores.org/downloads/wbspec_b4.pdf
+// Illustration 3-10
+// A0: 0x1234
+// A1: 0x5678
+// D0: 0xfeef
+// D1: 0xaaff
+ADR[31:0]    x 0x1234  0x1234 x 0x5678 0x5678 x
+DAT_I[31:0]  x      x  0xfeef x      x 0xaaff x
+DAT_O[31:0]  x      x       x x      x      x x
+WE           x      0       0 0      0      0 x
+SEL[3:0]     x    0xf     0xf x    0xf    0xf x
+STB          0      1       1 0      1      1 0 // <- strictly speaking should be allowed to be x in the last cycle
+ACK          0      0       1 0      0      1 0
+CYC          0      1       1 1      1      1 0
+// extra pins not included in the original illustration
+RST          0      0       0 0      0      0 0
+ERR          0      0       0 0      0      0 0
+CTI[2:0]     0      0       0 0      0      0 0
+BTE[1:0]     x      x       x x      x      x x
+// we ignore TGA/TGD/TGC

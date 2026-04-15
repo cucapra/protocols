@@ -46,9 +46,17 @@ prot RST<self: Wishbone>() {
     step();
 }
 
-prot idle<self: Wishbone>() {
+#[idle]
+prot idle_no_cycle<self: Wishbone>() {
     self.RST := 1'b0;
     self.CYC := 1'b0;
+    step();
+}
+
+prot idle_continue_cycle<self: Wishbone>() {
+    self.RST := 1'b0;
+    self.CYC := 1'b1;
+    self.STB := 1'b0;
     step();
 }
 
