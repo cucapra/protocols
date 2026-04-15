@@ -9,7 +9,7 @@ use protocols::design::Design;
 use protocols::ir::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, SignalEncoding, SignalRef, TimescaleUnit};
+use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, TimeTable, Timescale, TimescaleUnit};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug, PartialEq)]
@@ -31,7 +31,7 @@ pub trait SignalTrace {
     /// for the given instance.
     fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue;
 
-    fn step_to_ns(&self, logical_step: u32) -> String;
+    fn step_to_time(&self) -> StepToTime;
 }
 
 /// The `WaveSamplingMode` determines how signals from a waveform are sampled
@@ -337,13 +337,31 @@ impl SignalTrace for WaveSignalTrace {
         })
     }
 
-    fn step_to_ns(&self, logical_step: u32) -> String {
-        let time = if let Some(time_table_idx) = self.step_to_idx.get(logical_step as usize) {
-            self.wave.time_table()[*time_table_idx as usize]
-        } else {
-            *self.wave.time_table().last().unwrap()
-        };
-        if let Some(timescale) = self.wave.hierarchy().timescale() {
+    fn step_to_time(&self) -> StepToTime {
+        let tt = self.wave.time_table();
+        StepToTime {
+            logical_step_to_time: self
+                .step_to_idx
+                .iter()
+                .map(|step| tt[*step as usize].clone())
+                .collect(),
+            timescale: self.wave.hierarchy().timescale(),
+        }
+    }
+}
+
+pub struct StepToTime {
+    logical_step_to_time: Vec<wellen::Time>,
+    timescale: Option<Timescale>,
+}
+
+impl StepToTime {
+    pub fn step_to_ns(&self, logical_step: u32) -> String {
+        let time = *self
+            .logical_step_to_time
+            .get(logical_step as usize)
+            .unwrap_or_else(|| self.logical_step_to_time.last().unwrap());
+        if let Some(timescale) = self.timescale.as_ref() {
             let time = time * timescale.factor as u64;
             match timescale.unit {
                 TimescaleUnit::FemtoSeconds => format!("{}ns", time as f64 / 1000.0 / 1000.0),
@@ -358,7 +376,7 @@ impl SignalTrace for WaveSignalTrace {
 }
 
 /// for our custom ASCI based wave trace format
-struct AsciWaveTrace {
+pub struct AsciWaveTrace {
     // pin id -> step
     values: Vec<Vec<BitVecValue>>,
     pins: Vec<(String, WidthInt)>,
@@ -369,10 +387,37 @@ struct AsciWaveTrace {
 impl AsciWaveTrace {
     pub fn open(
         filename: impl AsRef<std::path::Path>,
-        rnd: &mut impl Rng,
+        designs: &FxHashMap<String, Design>,
+        instances: &[Instance],
     ) -> std::io::Result<Self> {
+        let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
         let content = std::fs::read_to_string(filename)?;
-        Ok(Self::parse(&content, rnd))
+        let mut trace = Self::parse(&content, &mut rnd);
+
+        // populate pin map
+        for (inst_id, inst) in instances.iter().enumerate() {
+            let design = &designs[&inst.design];
+            for (pin_id, pin) in design.pins.iter() {
+                let name = if inst.name.is_empty() {
+                    pin.name().to_string()
+                } else {
+                    format!("{}.{}", inst.name, pin.name())
+                };
+                let key = (inst_id as u32, *pin_id);
+                if let Some(wave_id) = trace.pins.iter().position(|(n, _)| n == &name) {
+                    assert_eq!(
+                        trace.pins[wave_id].1,
+                        pin.bitwidth(),
+                        "Width missmatch for {name}"
+                    );
+                    trace.symbol_map.insert(key, wave_id);
+                } else {
+                    panic!("Unable to find pin {name}");
+                }
+            }
+        }
+
+        Ok(trace)
     }
 
     pub fn parse(content: &str, rnd: &mut impl Rng) -> Self {
@@ -486,8 +531,12 @@ impl SignalTrace for AsciWaveTrace {
         self.values[pin_id][self.step as usize].clone()
     }
 
-    fn step_to_ns(&self, logical_step: u32) -> String {
-        format!("{}ns", logical_step)
+    fn step_to_time(&self) -> StepToTime {
+        let num_steps = self.values[0].len() as Time;
+        StepToTime {
+            logical_step_to_time: (0..num_steps).collect(),
+            timescale: None,
+        }
     }
 }
 
@@ -511,7 +560,7 @@ CYC_O        0      1       1 0
 // we ignore TGA/TGD/TGC
         "#;
 
-        let mut rnd = rand::rng();
+        let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
         let trace = AsciWaveTrace::parse(content, &mut rnd);
         let expected_pins = [
             ("ADR_O", 32u32),

@@ -116,10 +116,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
-    // parse waveform
-    let mut trace =
-        WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())?;
-
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
         .map(|inst| {
@@ -140,24 +136,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    loop {
-        // step all backwards interpreters that have not failed
-        for bi in bis.iter_mut() {
-            if !bi.has_failed() {
-                let _ = bi.exec_step(&trace);
-            }
+    let step_to_time = {
+        // try to parse FST, VCD or GHW file
+        if let Ok(mut trace) =
+            WaveSignalTrace::open(&cli.wave, &designs, &instances, cli.sample_posedge.clone())
+        {
+            run_bis(bis.as_mut_slice(), &mut trace)
+        } else {
+            // otherwise, we might be dealing with our own custom ASCI format
+            let mut trace = AsciWaveTrace::open(&cli.wave, &designs, &instances)?;
+            run_bis(bis.as_mut_slice(), &mut trace)
         }
-        // step shared trace
-        if trace.step() == StepResult::Done {
-            break;
-        }
-    }
-
-    for bi in bis.iter_mut() {
-        if !bi.has_failed() {
-            bi.finish();
-        }
-    }
+    };
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
@@ -175,7 +165,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     cli.show_steps,
                     cli.show_waveform_time,
                     cli.display_hex,
-                    |step| trace.step_to_ns(step),
+                    |step| step_to_time.step_to_ns(step),
                 );
 
                 for fail in fails {
@@ -208,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     cli.show_steps,
                     cli.show_waveform_time,
                     cli.display_hex,
-                    |step| trace.step_to_ns(step),
+                    |step| step_to_time.step_to_ns(step),
                 );
             }
         }
@@ -219,6 +209,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Ok(())
     }
+}
+
+fn run_bis(bis: &mut [BackwardsInterpreter], trace: &mut impl SignalTrace) -> StepToTime {
+    loop {
+        // step all backwards interpreters that have not failed
+        for bi in bis.iter_mut() {
+            if !bi.has_failed() {
+                let _ = bi.exec_step(trace);
+            }
+        }
+        // step shared trace
+        if trace.step() == StepResult::Done {
+            break;
+        }
+    }
+
+    for bi in bis.iter_mut() {
+        if !bi.has_failed() {
+            bi.finish();
+        }
+    }
+
+    trace.step_to_time()
 }
 
 fn print_trace(
