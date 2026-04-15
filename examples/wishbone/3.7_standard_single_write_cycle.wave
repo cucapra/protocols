@@ -1,0 +1,45 @@
+// https://cdn.opencores.org/downloads/wbspec_b4.pdf
+// Illustration 3-7
+RST          0      0       0 0
+ADR[31:0]    X 0x1234  0x1234 X
+DAT_I[31:0]  X      X       X X
+DAT_O[31:0]  X 0xffff  0xffff X
+WE           0      1       1 0
+SEL[3:0]     X    0xf     0xf X
+STB          0      1       1 0
+ACK          0      0       1 0
+CYC          0      1       1 0
+// extra pins not included in the original illustration
+ERR          0      0       0 0
+CTI[2:0]     0      0       0 0
+BTE[1:0]     x      x       x x
+// we ignore TGA/TGD/TGC
+
+// while the waveform does not explicitly show this, the ack can come immediately
+RST               0 0
+ADR[31:0]    0x1234 X
+DAT_I[31:0]       X X
+DAT_O[31:0]  0xffff X
+WE                1 0
+SEL[3:0]        0xf X
+STB               1 0
+ACK               1 0
+CYC               1 0
+ERR               0 0
+CTI[2:0]          0 0
+BTE[1:0]          x x
+
+
+// multiple delay cycles are also allowed
+RST               0      0      0      0 0
+ADR[31:0]    0x1234 0x1234 0x1234 0x1234 X
+DAT_I[31:0]       X      X      X      X X
+DAT_O[31:0]  0xffff 0xffff 0xffff 0xffff X
+WE                1      1      1      1 0
+SEL[3:0]        0xf    0xf    0xf    0xf X
+STB               1      1      1      1 0
+ACK               0      0      0      1 0
+CYC               1      1      1      1 0
+ERR               0      0      0      0 0
+CTI[2:0]          0      0      0      0 0
+BTE[1:0]          X      X      X      X X
