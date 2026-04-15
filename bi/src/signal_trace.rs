@@ -9,7 +9,7 @@ use protocols::design::Design;
 use protocols::ir::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, TimeTable, Timescale, TimescaleUnit};
+use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug, PartialEq)]
@@ -343,7 +343,7 @@ impl SignalTrace for WaveSignalTrace {
             logical_step_to_time: self
                 .step_to_idx
                 .iter()
-                .map(|step| tt[*step as usize].clone())
+                .map(|step| tt[*step as usize])
                 .collect(),
             timescale: self.wave.hierarchy().timescale(),
         }
@@ -473,12 +473,12 @@ fn parse_name_and_width(value: &str) -> (String, WidthInt) {
     if let Some(start) = value.find('[') {
         let col_pos = value.find(':').expect("missing `:`");
         assert!(col_pos > start);
-        let msb: WidthInt = (&value[start + 1..col_pos])
+        let msb: WidthInt = value[start + 1..col_pos]
             .parse()
             .expect("failed to parse MSB");
         let end = value.find(']').expect("missing `]`");
         assert!(end > col_pos);
-        let lsb: WidthInt = (&value[col_pos + 1..end])
+        let lsb: WidthInt = value[col_pos + 1..end]
             .parse()
             .expect("failed to parse LSB");
         assert!(msb >= lsb);
@@ -494,10 +494,10 @@ fn parse_value(value: &str, width: WidthInt, rnd: &mut impl Rng) -> BitVecValue 
     let value = value.to_lowercase();
     let r = if value == "x" {
         BitVecValue::random(rnd, width)
-    } else if value.starts_with("0x") {
-        BitVecValue::from_hex_str(&value[2..]).unwrap()
-    } else if value.starts_with("0b") {
-        BitVecValue::from_bit_str(&value[2..]).unwrap()
+    } else if let Some(v) = value.strip_prefix("0x") {
+        BitVecValue::from_hex_str(v).unwrap()
+    } else if let Some(v) = value.strip_prefix("0b") {
+        BitVecValue::from_bit_str(v).unwrap()
     } else {
         BitVecValue::from_str_radix(&value, 10, width).unwrap()
     };
