@@ -1,0 +1,19 @@
+// https://cdn.opencores.org/downloads/wbspec_b4.pdf
+// Illustration 3-14
+// For whatever reason the wishbone spec illustrates
+// data changes happening on rising _and_ falling clock edges.
+// We thus implement posedge and negedge as a step.
+ADR[31:0]    x 0x1234  0x1234 x x 0x1234 0x1234 x
+DAT_I[31:0]  x      x  0xfeef x x      x      x x
+DAT_O[31:0]  x      x       x x x 0x5678 0x5678 x
+WE           x      0       0 0 0      1      1 0
+SEL[3:0]     x    0xf     0xf x x    0xf    0xf x
+STB          0      1       1 0 0      1      1 0
+ACK          0      0       1 0 0      0      1 0
+CYC          0      1       1 1 1      1      1 0
+// extra pins not included in the original illustration
+RST          0      0       0 0 0      0      0 0
+ERR          0      0       0 0 0      0      0 0
+CTI[2:0]     0      0       0 0 0      0      0 0
+BTE[1:0]     x      x       x x x      x      x x
+// we ignore TGA/TGD/TGC
