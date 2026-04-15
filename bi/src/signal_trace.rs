@@ -428,6 +428,8 @@ impl AsciWaveTrace {
             step: 0,
         };
 
+        let mut pin_ids: FxHashMap<String, usize> = FxHashMap::default();
+
         for mut line in content.lines() {
             // strip comments
             if let Some(pos) = line.find("//") {
@@ -439,9 +441,14 @@ impl AsciWaveTrace {
                 continue;
             }
             // parse signal
-            let (name, width, values) = parse_signal_line(line, rnd);
-            out.values.push(values);
-            out.pins.push((name, width));
+            let (name, width, mut values) = parse_signal_line(line, rnd);
+            if let Some(existing_id) = pin_ids.get(&name) {
+                out.values[*existing_id].append(&mut values);
+            } else {
+                pin_ids.insert(name.clone(), out.pins.len());
+                out.values.push(values);
+                out.pins.push((name, width));
+            }
         }
 
         debug_assert_eq!(out.pins.len(), out.values.len());
@@ -449,7 +456,12 @@ impl AsciWaveTrace {
             let num_steps = out.values[0].len();
             assert!(
                 out.values.iter().all(|v| v.len() == num_steps),
-                "different pins have a different number of signal values!"
+                "different pins have a different number of signal values!\n{:?}",
+                out.pins
+                    .iter()
+                    .zip(out.values.iter().map(|v| v.len()))
+                    .map(|((name, _), l)| format!("{name}: {l}"))
+                    .collect::<Vec<_>>()
             );
         }
 
