@@ -4,10 +4,10 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::Instance;
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue, WidthInt};
 use protocols::design::Design;
 use protocols::ir::SymbolId;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalEncoding, SignalRef, TimescaleUnit};
 
@@ -354,5 +354,202 @@ impl SignalTrace for WaveSignalTrace {
         } else {
             format!("{}ns", time)
         }
+    }
+}
+
+/// for our custom ASCI based wave trace format
+struct AsciWaveTrace {
+    // pin id -> step
+    values: Vec<Vec<BitVecValue>>,
+    pins: Vec<(String, WidthInt)>,
+    symbol_map: FxHashMap<(u32, SymbolId), usize>,
+    step: u32,
+}
+
+impl AsciWaveTrace {
+    pub fn open(
+        filename: impl AsRef<std::path::Path>,
+        rnd: &mut impl Rng,
+    ) -> std::io::Result<Self> {
+        let content = std::fs::read_to_string(filename)?;
+        Ok(Self::parse(&content, rnd))
+    }
+
+    pub fn parse(content: &str, rnd: &mut impl Rng) -> Self {
+        let mut out = Self {
+            values: vec![],
+            pins: vec![],
+            symbol_map: Default::default(),
+            step: 0,
+        };
+
+        for mut line in content.lines() {
+            // strip comments
+            if let Some(pos) = line.find("//") {
+                line = &line[0..pos];
+            }
+            // strip whitespace
+            line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            // parse signal
+            let (name, width, values) = parse_signal_line(line, rnd);
+            out.values.push(values);
+            out.pins.push((name, width));
+        }
+
+        debug_assert_eq!(out.pins.len(), out.values.len());
+        if !out.pins.is_empty() {
+            let num_steps = out.values[0].len();
+            assert!(
+                out.values.iter().all(|v| v.len() == num_steps),
+                "different pins have a different number of signal values!"
+            );
+        }
+
+        out
+    }
+}
+
+fn parse_signal_line(line: &str, rnd: &mut impl Rng) -> (String, WidthInt, Vec<BitVecValue>) {
+    let tokens = tokenize(line);
+    assert!(!tokens.is_empty());
+    let (name, width) = parse_name_and_width(tokens[0]);
+    let values = tokens
+        .into_iter()
+        .skip(1)
+        .map(|t| parse_value(t, width, rnd))
+        .collect();
+    (name, width, values)
+}
+
+fn parse_name_and_width(value: &str) -> (String, WidthInt) {
+    if let Some(start) = value.find('[') {
+        let col_pos = value.find(':').expect("missing `:`");
+        assert!(col_pos > start);
+        let msb: WidthInt = (&value[start + 1..col_pos])
+            .parse()
+            .expect("failed to parse MSB");
+        let end = value.find(']').expect("missing `]`");
+        assert!(end > col_pos);
+        let lsb: WidthInt = (&value[col_pos + 1..end])
+            .parse()
+            .expect("failed to parse LSB");
+        assert!(msb >= lsb);
+        let width = msb - lsb + 1;
+        let name = value[0..start].to_string();
+        (name, width)
+    } else {
+        (value.to_string(), 1)
+    }
+}
+
+fn parse_value(value: &str, width: WidthInt, rnd: &mut impl Rng) -> BitVecValue {
+    let value = value.to_lowercase();
+    let r = if value == "x" {
+        BitVecValue::random(rnd, width)
+    } else if value.starts_with("0x") {
+        BitVecValue::from_hex_str(&value[2..]).unwrap()
+    } else if value.starts_with("0b") {
+        BitVecValue::from_bit_str(&value[2..]).unwrap()
+    } else {
+        BitVecValue::from_str_radix(&value, 10, width).unwrap()
+    };
+    if r.width() < width {
+        r.zero_extend(width - r.width())
+    } else {
+        r
+    }
+}
+
+fn tokenize(line: &str) -> Vec<&str> {
+    line.split(|c: char| c.is_whitespace())
+        .filter(|e| !e.is_empty())
+        .collect()
+}
+
+impl SignalTrace for AsciWaveTrace {
+    fn step(&mut self) -> StepResult {
+        let num_steps = self.values[0].len();
+        debug_assert!(self.values.iter().all(|v| v.len() == num_steps));
+        if self.step + 1 < num_steps as u32 {
+            self.step += 1;
+            StepResult::Ok
+        } else {
+            StepResult::Done
+        }
+    }
+
+    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
+        let pin_id = self.symbol_map[&(instance_id, pin)];
+        self.values[pin_id][self.step as usize].clone()
+    }
+
+    fn step_to_ns(&self, logical_step: u32) -> String {
+        format!("{}ns", logical_step)
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_asci_trace() {
+        let content = r#"
+// https://cdn.opencores.org/downloads/wbspec_b4.pdf
+// Illustration 3-5
+ADR_O[31:0]  X 0x1234  0x1234 X
+DAT_I[31:0]  X      X  0xffff X
+DAT_O[31:0]  X      X       X X
+WE_O         0      0       0 0
+SEL_O[3:0]   X    0xf     0xf X
+STB_O        0      1       1 0
+ACK_I        0      0       1 0
+CYC_O        0      1       1 0
+// we ignore TGA/TGD/TGC
+        "#;
+
+        let mut rnd = rand::rng();
+        let trace = AsciWaveTrace::parse(content, &mut rnd);
+        let expected_pins = [
+            ("ADR_O", 32u32),
+            ("DAT_I", 32),
+            ("DAT_O", 32),
+            ("WE_O", 1),
+            ("SEL_O", 4),
+            ("STB_O", 1),
+            ("ACK_I", 1),
+            ("CYC_O", 1),
+        ];
+        assert_eq!(
+            trace.pins.iter().map(|(n, _)| n).collect::<Vec<_>>(),
+            expected_pins.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            trace.pins.iter().map(|(_, w)| *w).collect::<Vec<_>>(),
+            expected_pins.iter().map(|(_, w)| *w).collect::<Vec<_>>()
+        );
+
+        assert_eq!(trace.values[0][1].to_hex_str(), "00001234", "ADR_O");
+        assert_eq!(trace.values[0][2].to_hex_str(), "00001234", "ADR_O");
+        assert!(trace.values[3].iter().all(|v| v.is_false()), "WE_O");
+        assert_eq!(
+            trace.values[5]
+                .iter()
+                .map(|v| v.is_true())
+                .collect::<Vec<_>>(),
+            [false, true, true, false],
+            "STB_O"
+        );
+        assert_eq!(
+            trace.values[6]
+                .iter()
+                .map(|v| v.is_true())
+                .collect::<Vec<_>>(),
+            [false, false, true, false],
+            "ACK_O"
+        );
     }
 }
