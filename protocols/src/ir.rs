@@ -258,15 +258,20 @@ impl std::ops::Not for Dir {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Type {
     /// Non-negative integer with no upper bound.
     UnsignedInt,
     BitVec(u32),
-    Struct(StructId),
+    Struct(String, Vec<Field>),
+    Seq(TypeId),
     /// Type taken on when we do not know the actual type yet
     Unknown,
 }
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct TypeId(u32);
+entity_impl!(TypeId, "type");
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SymbolKind {
@@ -402,43 +407,8 @@ impl BoxedExpr {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub struct StructId(u32);
-entity_impl!(StructId, "struct");
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Struct {
-    name: String,
-    pins: Vec<Field>,
-}
 
-impl Struct {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn pins(&self) -> &Vec<Field> {
-        &self.pins
-    }
-
-    /// Retrieves the names of all the fields of a `Struct` that
-    /// have a given `direction` (either `Dir::In` or `Dir::Out`),
-    /// returning an `Iterator` of field name `String`s.
-    /// (Note: the names returned here are *not* fully-qualified -- instead
-    /// it is the caller's responsibility to qualify the field names
-    /// by the name of the struct *instance*. We do not do this in this
-    /// method as we only have access to the name of the *struct type*
-    /// here, as opposed to the name of the *struct instance*.)
-    pub fn get_fields_by_direction(&self, direction: Dir) -> impl Iterator<Item = String> {
-        self.pins.iter().filter_map(move |field| {
-            if field.dir == direction {
-                Some(field.name.clone())
-            } else {
-                None
-            }
-        })
-    }
-}
 
 /// Datatype representing a `Field` in a `Struct`, contains:
 /// - The name of the field
@@ -448,11 +418,11 @@ impl Struct {
 pub struct Field {
     name: String,
     dir: Dir,
-    tpe: Type,
+    tpe: TypeId,
 }
 
 impl Field {
-    pub fn new(name: String, dir: Dir, tpe: Type) -> Self {
+    pub fn new(name: String, dir: Dir, tpe: TypeId) -> Self {
         Self { name, dir, tpe }
     }
 
@@ -463,13 +433,10 @@ impl Field {
         self.dir
     }
 
-    pub fn tpe(&self) -> Type {
-        self.tpe
-    }
 
     /// Computes the bitwidth of a `Field`. Note: this function panics
     /// if the `Type` of a `Field` is *not* a `BitVec`.
-    pub fn bitwidth(&self) -> u32 {
+    pub fn bitwidth(&self, sym: &SymbolTable) -> u32 {
         self.tpe.bitwidth()
     }
 }
@@ -482,8 +449,8 @@ entity_impl!(SymbolId, "symbol");
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
     by_name_sym: FxHashMap<String, SymbolId>,
-    structs: PrimaryMap<StructId, Struct>,
-    by_name_struct: FxHashMap<String, StructId>,
+    types: PrimaryMap<TypeId, Type>,
+    name_to_type: FxHashMap<String, TypeId>,
 }
 
 /// Pretty-printer for `SymbolTable`s
@@ -608,19 +575,21 @@ impl SymbolTable {
         id
     }
 
-    pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
+    pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> TypeId {
+        let tpe =
+
         let s = Struct {
             name: name.to_string(),
             pins,
         };
         let id = self.structs.push(s);
 
-        self.by_name_struct.insert(name, id);
+        self.name_to_type.insert(name, id);
         id
     }
 
     pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
-        self.by_name_struct.get(name).copied()
+        self.name_to_type.get(name).copied()
     }
 
     pub fn struct_ids(&self) -> Vec<StructId> {

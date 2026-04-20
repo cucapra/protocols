@@ -632,7 +632,7 @@ impl ParserContext<'_> {
         }
     }
 
-    fn parse_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Type, String> {
+    fn parse_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<TypeId, String> {
         if pair.as_rule() == Rule::tpe {
             let inner_type =
                 self.expect_rule(pair.clone().into_inner().next(), &pair, "Expected type")?;
