@@ -207,7 +207,7 @@ impl ParserContext<'_> {
         Ok(expr_id)
     }
 
-    fn parse_struct(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<StructId, String> {
+    fn parse_struct(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<TypeId, String> {
         let mut inner_rules = pair.clone().into_inner();
         let struct_name = self
             .expect_rule(inner_rules.next(), &pair, "Expected struct name")?

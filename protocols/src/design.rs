@@ -62,18 +62,13 @@ pub fn find_designs<'a>(
     for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
         if let Some(dut_symbol_id) = transaction.type_param {
             // We assume type parameters have to be structs
-            let struct_id = match symbol_table[dut_symbol_id].tpe() {
-                Type::Struct(id) => id,
+            let (struct_name, pins_vec) = match symbol_table[dut_symbol_id].tpe(&symbol_table).clone() {
+                Type::Struct(name, fields) => (name, fields),
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
             };
-            let struct_name = symbol_table[struct_id].name().to_string();
             if let Some(design) = designs.get_mut(&struct_name) {
                 design.transaction_ids.push(transaction_id);
             } else {
-                // Extract all the fields from the struct
-                // (`Field`s are also called `pin`s`)
-                let pins_vec: Vec<Field> = symbol_table[struct_id].pins().clone();
-
                 // For each pin, look up its associated `SymbolId` in the symbol table
                 // This returns an association list mapping `SymbolId`s to their associated pins
                 // Concretely, what we do is take each pin `p` and find

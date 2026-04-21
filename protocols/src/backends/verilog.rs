@@ -73,14 +73,14 @@ pub fn to_verilog(
             Dir::In => writeln!(
                 out,
                 "  reg [{}:0] {}_{};",
-                field.bitwidth() - 1,
+                field.bitwidth(&design_sym_tb) - 1,
                 instance_name,
                 field.name()
             )?,
             Dir::Out => writeln!(
                 out,
                 "  wire [{}:0] {}_{};",
-                field.bitwidth() - 1,
+                field.bitwidth(&design_sym_tb) - 1,
                 instance_name,
                 field.name()
             )?,

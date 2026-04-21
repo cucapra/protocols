@@ -282,29 +282,15 @@ pub enum SymbolKind {
 }
 
 impl Type {
-    /// Checks whether two types are *equivalent*,
-    /// i.e. if two bit-vector types have the same length,
-    /// or if two `struct`s have the same `StructId`.
-    /// NB: this function returns `false` if either type is `Unknown`,
-    /// or if any of the aforementioned cases don't hold.
-    pub fn is_equivalent(&self, other: &Type) -> bool {
-        match (self, other) {
-            (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
-            (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
-            // TODO: type inferencing to infer unknown == LHS
-            (Type::Unknown, _) | (_, Type::Unknown) => false,
-            _ => false,
-        }
-    }
-
     /// Computes the bitwidth of a `Type`. Note: this function panics
     /// if the `Type` is *not* a `BitVec`.
     pub fn bitwidth(&self) -> u32 {
         match self {
             Type::BitVec(width) => *width,
-            Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::Struct(_, _) => panic!("Unable to compute bitwidth for a struct type"),
             Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
+            Type::Seq(_) => panic!("Unable to compute bitwidth for Type::Seq"),
         }
     }
 }
@@ -431,13 +417,6 @@ impl Field {
     }
     pub fn dir(&self) -> Dir {
         self.dir
-    }
-
-
-    /// Computes the bitwidth of a `Field`. Note: this function panics
-    /// if the `Type` of a `Field` is *not* a `BitVec`.
-    pub fn bitwidth(&self, sym: &SymbolTable) -> u32 {
-        self.tpe.bitwidth()
     }
 }
 
@@ -576,24 +555,14 @@ impl SymbolTable {
     }
 
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> TypeId {
-        let tpe =
-
-        let s = Struct {
-            name: name.to_string(),
-            pins,
-        };
-        let id = self.structs.push(s);
-
+        let tpe = Type::Struct(name.clone(), pins);
+        let id = self.types.push(tpe);
         self.name_to_type.insert(name, id);
         id
     }
 
-    pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
-        self.name_to_type.get(name).copied()
-    }
-
-    pub fn struct_ids(&self) -> Vec<StructId> {
-        self.structs.keys().collect()
+    pub fn name_to_type(&mut self, name: &str) -> Option<&Type> {
+        self.name_to_type.get(name).map(|id| &self.types[id])
     }
 
     pub fn get_children(&self, parent_name: &SymbolId) -> Vec<SymbolId> {
@@ -632,19 +601,19 @@ impl Index<&SymbolId> for SymbolTable {
     }
 }
 
-impl Index<StructId> for SymbolTable {
-    type Output = Struct;
+impl Index<TypeId> for SymbolTable {
+    type Output = Type;
 
-    fn index(&self, index: StructId) -> &Self::Output {
-        &self.structs[index]
+    fn index(&self, index: TypeId) -> &Self::Output {
+        &self.types[index]
     }
 }
 
-impl Index<&StructId> for SymbolTable {
-    type Output = Struct;
+impl Index<&TypeId> for SymbolTable {
+    type Output = Type;
 
-    fn index(&self, index: &StructId) -> &Self::Output {
-        &self.structs[*index]
+    fn index(&self, index: &TypeId) -> &Self::Output {
+        &self.types[*index]
     }
 }
 
@@ -678,8 +647,8 @@ impl SymbolTableEntry {
         &self.name
     }
 
-    pub fn tpe(&self) -> Type {
-        self.tpe
+    pub fn tpe(&self, st: &SymbolTable) -> &Type {
+        st[self.tpe]
     }
 
     /// Retrieves the `SymbolID` of the parent symbol

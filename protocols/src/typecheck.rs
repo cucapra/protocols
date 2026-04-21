@@ -40,7 +40,7 @@ fn check_expr_types(
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
-) -> anyhow::Result<Type> {
+) -> anyhow::Result<TypeId> {
     match &tr[expr_id] {
         Expr::Const(bitvec) => {
             // Constants have bit-vector types whose length correspond
