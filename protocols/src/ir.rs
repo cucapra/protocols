@@ -161,12 +161,12 @@ impl Transaction {
 
     /// Extracts the types of the arguments for a transaction, using the
     /// provided `symbol_table` to look up `SymbolId`s
-    pub fn get_arg_types(&self, symbol_table: &SymbolTable) -> Vec<Type> {
+    pub fn get_arg_types(&self, symbol_table: &SymbolTable) -> Vec<&Type> {
         let mut arg_types = vec![];
         for arg in &self.args {
             let symbol_id = arg.symbol;
             let symbol_table_entry = &symbol_table[symbol_id];
-            arg_types.push(symbol_table_entry.tpe)
+            arg_types.push(&symbol_table[symbol_table_entry.tpe])
         }
         arg_types
     }
@@ -258,15 +258,19 @@ impl std::ops::Not for Dir {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Type {
     /// Non-negative integer with no upper bound.
     UnsignedInt,
     BitVec(u32),
-    Struct(StructId),
+    Struct(String, Vec<Field>),
     /// Type taken on when we do not know the actual type yet
     Unknown,
 }
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct TypeId(u32);
+entity_impl!(TypeId, "type");
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SymbolKind {
@@ -285,7 +289,7 @@ impl Type {
     pub fn is_equivalent(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::BitVec(vec1), Type::BitVec(vec2)) => vec1 == vec2,
-            (Type::Struct(id1), Type::Struct(id2)) => id1 == id2,
+            (Type::Struct(name1, _), Type::Struct(name2, _)) => name1 == name2,
             // TODO: type inferencing to infer unknown == LHS
             (Type::Unknown, _) | (_, Type::Unknown) => false,
             _ => false,
@@ -297,7 +301,7 @@ impl Type {
     pub fn bitwidth(&self) -> u32 {
         match self {
             Type::BitVec(width) => *width,
-            Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::Struct(_, _) => panic!("Unable to compute bitwidth for a struct type"),
             Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
         }
@@ -448,11 +452,11 @@ impl Struct {
 pub struct Field {
     name: String,
     dir: Dir,
-    tpe: Type,
+    tpe: TypeId,
 }
 
 impl Field {
-    pub fn new(name: String, dir: Dir, tpe: Type) -> Self {
+    pub fn new(name: String, dir: Dir, tpe: TypeId) -> Self {
         Self { name, dir, tpe }
     }
 
@@ -463,14 +467,14 @@ impl Field {
         self.dir
     }
 
-    pub fn tpe(&self) -> Type {
+    pub fn tpe(&self) -> TypeId {
         self.tpe
     }
 
     /// Computes the bitwidth of a `Field`. Note: this function panics
     /// if the `Type` of a `Field` is *not* a `BitVec`.
-    pub fn bitwidth(&self) -> u32 {
-        self.tpe.bitwidth()
+    pub fn bitwidth(&self, st: &SymbolTable) -> u32 {
+        st[self.tpe].bitwidth()
     }
 }
 
@@ -484,6 +488,7 @@ pub struct SymbolTable {
     by_name_sym: FxHashMap<String, SymbolId>,
     structs: PrimaryMap<StructId, Struct>,
     by_name_struct: FxHashMap<String, StructId>,
+    types: PrimaryMap<TypeId, Type>,
 }
 
 /// Pretty-printer for `SymbolTable`s
@@ -533,7 +538,7 @@ impl std::fmt::Display for SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn add_without_parent(&mut self, name: String, tpe: Type, kind: SymbolKind) -> SymbolId {
+    pub fn add_without_parent(&mut self, name: String, tpe: TypeId, kind: SymbolKind) -> SymbolId {
         assert!(
             !name.contains('.'),
             "hierarchical names need to be handled externally"
@@ -572,8 +577,7 @@ impl SymbolTable {
             "hierarchical names need to be handled externally"
         );
 
-        let existing_pin = if let Type::Struct(structid) = self.entries[parent].tpe() {
-            let fields = self.structs[structid].pins();
+        let existing_pin = if let Type::Struct(_, fields) = self.entries[parent].tpe() {
             fields.iter().find(|field| field.name == name)
         } else {
             None
@@ -679,6 +683,22 @@ impl Index<&StructId> for SymbolTable {
     }
 }
 
+impl Index<TypeId> for SymbolTable {
+    type Output = Type;
+
+    fn index(&self, index: TypeId) -> &Self::Output {
+        &self.types[index]
+    }
+}
+
+impl Index<&TypeId> for SymbolTable {
+    type Output = Type;
+
+    fn index(&self, index: &TypeId) -> &Self::Output {
+        &self.types[*index]
+    }
+}
+
 impl Index<Arg> for SymbolTable {
     type Output = SymbolTableEntry;
 
@@ -698,7 +718,7 @@ impl Index<&Arg> for SymbolTable {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SymbolTableEntry {
     name: String,
-    tpe: Type,
+    tpe: TypeId,
     kind: SymbolKind,
     /// Used to compute the fully qualified name.
     parent: Option<SymbolId>,
@@ -709,7 +729,7 @@ impl SymbolTableEntry {
         &self.name
     }
 
-    pub fn tpe(&self) -> Type {
+    pub fn tpe(&self) -> TypeId {
         self.tpe
     }
 

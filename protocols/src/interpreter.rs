@@ -404,7 +404,7 @@ impl<'a> Evaluator<'a> {
                     // If all other threads have DontCare, randomize
                     if !any_other_concrete {
                         let width = match self.st[*symbol_id].tpe() {
-                            Type::BitVec(w) => w,
+                            Type::BitVec(w) => *w,
                             _ => panic!("Expected BitVec type for input"),
                         };
                         let random_val = BitVecValue::random(&mut self.rng, width);
@@ -545,7 +545,7 @@ impl<'a> Evaluator<'a> {
                     None => {
                         // All threads have DontCare, randomize
                         let width = match self.st[symbol_id].tpe() {
-                            Type::BitVec(w) => w,
+                            Type::BitVec(w) => *w,
                             _ => panic!("Expected BitVec type for input"),
                         };
                         let random_val = BitVecValue::random(&mut self.rng, width);
