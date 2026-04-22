@@ -643,6 +643,11 @@ impl ParserContext<'_> {
                     Ok(Type::BitVec(size))
                 }
                 Rule::uint_tpe => Ok(Type::UnsignedInt),
+                Rule::seq_tpe => {
+                    let inner_tpe = self.parse_type(inner_type.into_inner().next().unwrap())?;
+                    let seq_id = self.st.add_seq(inner_tpe);
+                    Ok(Type::Seq(seq_id))
+                }
                 _ => {
                     let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
                     self.handler

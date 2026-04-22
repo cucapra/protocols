@@ -88,6 +88,14 @@ fn check_expr_types(
                     handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
+                Type::Seq(_) => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of seq `{}`. (We also do not allow indexing!)",
+                        serialize_type(st, ty)
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
                 Type::UnsignedInt => {
                     let error_msg = "Invalid slice operation: can't take bit-slices of uint";
                     handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);

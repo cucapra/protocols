@@ -24,6 +24,7 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
         Type::BitVec(t) => format!("u{}", t),
         Type::UnsignedInt => "uint".to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
+        Type::Seq(seq_id) => format!("[{}]", serialize_type(st, st[seq_id].tpe())),
         Type::Unknown => "unknown".to_string(),
     }
 }

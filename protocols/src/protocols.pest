@@ -41,11 +41,10 @@ expr = { atom ~ (bin_op ~ atom)*}
 
 id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
-tpe = { seq_tpe | scalar_tpe }
-scalar_tpe = { uint_tpe | bv_tpe }
+tpe = { seq_tpe | uint_tpe | bv_tpe }
 uint_tpe = { "uint" }
 bv_tpe = { "u" ~ dec_integer }
-seq_tpe = {"[" ~ scalar_tpe ~ "]"}
+seq_tpe = {"[" ~ tpe ~ "]"}
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
 step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}
@@ -63,8 +62,7 @@ while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
 // Concrete syntax is `repeat num_iterations iterations { ... }`
 bounded_loop = { "repeat" ~ expr ~ "iterations" ~ "{" ~ stmt* ~ "}" }
 
-// TODO: why do we need to use expr instead of id here?
-for_in_loop = { "for" ~ expr ~ "in" ~ id ~ "{" ~ stmt* ~ "}" }
+for_in_loop = { "for" ~ expr ~ "in" ~ expr ~ "{" ~ stmt* ~ "}" }
 
 // Assertions
 assert_eq = { "assert_eq" ~ "(" ~ expr ~ "," ~ expr ~ ")" ~ ";" }

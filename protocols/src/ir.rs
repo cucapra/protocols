@@ -264,6 +264,7 @@ pub enum Type {
     UnsignedInt,
     BitVec(u32),
     Struct(StructId),
+    Seq(SeqId),
     /// Type taken on when we do not know the actual type yet
     Unknown,
 }
@@ -298,6 +299,7 @@ impl Type {
         match self {
             Type::BitVec(width) => *width,
             Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::Seq(_) => panic!("Unable to compute bitwidth for a `[..]`, seq type"),
             Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
         }
@@ -403,6 +405,20 @@ impl BoxedExpr {
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct SeqId(u32);
+entity_impl!(SeqId, "seq");
+
+/// A silly little bit of indirection to work around the fact that we do not have TypeId.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Seq(Type);
+
+impl Seq {
+    pub fn tpe(&self) -> Type {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct StructId(u32);
 entity_impl!(StructId, "struct");
 
@@ -483,6 +499,7 @@ pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
     by_name_sym: FxHashMap<String, SymbolId>,
     structs: PrimaryMap<StructId, Struct>,
+    seq: PrimaryMap<SeqId, Seq>,
     by_name_struct: FxHashMap<String, StructId>,
 }
 
@@ -608,6 +625,10 @@ impl SymbolTable {
         id
     }
 
+    pub fn add_seq(&mut self, inner: Type) -> SeqId {
+        self.seq.push(Seq(inner))
+    }
+
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
         let s = Struct {
             name: name.to_string(),
@@ -676,6 +697,22 @@ impl Index<&StructId> for SymbolTable {
 
     fn index(&self, index: &StructId) -> &Self::Output {
         &self.structs[*index]
+    }
+}
+
+impl Index<SeqId> for SymbolTable {
+    type Output = Seq;
+
+    fn index(&self, index: SeqId) -> &Self::Output {
+        &self.seq[index]
+    }
+}
+
+impl Index<&SeqId> for SymbolTable {
+    type Output = Seq;
+
+    fn index(&self, index: &SeqId) -> &Self::Output {
+        &self.seq[*index]
     }
 }
 
