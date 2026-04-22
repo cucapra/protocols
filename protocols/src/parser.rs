@@ -465,14 +465,17 @@ impl ParserContext<'_> {
 
     fn parse_for_in_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.clone().into_inner();
-        let id_expr =
+        let id_rule =
             self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
-        let identifier = self.parse_expr(id_expr.into_inner())?;
+        let id_name = id_rule.as_str().to_string();
+        let sym = self
+            .st
+            .add_without_parent(id_name, Type::Unknown, SymbolKind::LoopVar);
         let seq_expr =
             self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
         let seq = self.parse_expr(seq_expr.into_inner())?;
         let body = self.parse_stmt_block(inner_rules)?;
-        Ok(Stmt::ForInLoop(identifier, seq, body))
+        Ok(Stmt::ForInLoop(sym, seq, body))
     }
 
     fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {

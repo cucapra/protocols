@@ -62,7 +62,8 @@ while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
 // Concrete syntax is `repeat num_iterations iterations { ... }`
 bounded_loop = { "repeat" ~ expr ~ "iterations" ~ "{" ~ stmt* ~ "}" }
 
-for_in_loop = { "for" ~ expr ~ "in" ~ expr ~ "{" ~ stmt* ~ "}" }
+// TODO: why does path_id work, but not path_id?
+for_in_loop = { "for" ~ path_id ~ "in" ~ expr ~ "{" ~ stmt* ~ "}" }
 
 // Assertions
 assert_eq = { "assert_eq" ~ "(" ~ expr ~ "," ~ expr ~ ")" ~ ";" }

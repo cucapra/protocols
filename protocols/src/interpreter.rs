@@ -946,7 +946,7 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_for_in_loop(
         &mut self,
-        identifier: &ExprId,
+        identifier: &SymbolId,
         seq: &ExprId,
         stmt_id: &StmtId,
         loop_body_id: &StmtId,

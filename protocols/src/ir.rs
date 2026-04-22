@@ -275,6 +275,7 @@ pub enum SymbolKind {
     InPort,
     OutPort,
     Arg(u16),
+    LoopVar,
 }
 
 impl Type {
@@ -320,7 +321,7 @@ pub enum Stmt {
     /// Bounded loop with fixed no. of iterations
     /// (`ExprId` is the no. of iterations, `StmtId` is the loop body)
     RepeatLoop(ExprId, StmtId),
-    ForInLoop(ExprId, ExprId, StmtId),
+    ForInLoop(SymbolId, ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
 }
