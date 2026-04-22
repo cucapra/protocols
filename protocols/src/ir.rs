@@ -786,6 +786,13 @@ impl SymbolTableEntry {
             None
         }
     }
+
+    pub fn is_arg(&self) -> bool {
+        self.as_arg_index().is_some()
+    }
+    pub fn is_loop_var(&self) -> bool {
+        matches!(self.kind, SymbolKind::LoopVar)
+    }
 }
 
 #[cfg(test)]

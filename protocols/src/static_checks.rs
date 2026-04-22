@@ -294,9 +294,9 @@ pub fn check_assignment_rhs_wf(
         }
         Expr::Sym(symbol_id) => {
             // The only kind of identifier which is allowed on
-            // the RHS of an assignment is an input parameter
-            // All other kinds of identifiers are forbidden
-            if tr.is_param(*symbol_id) {
+            // the RHS of an assignment is a parameter or a loop variable
+            let sym = &symbol_table[symbol_id];
+            if sym.is_loop_var() || sym.is_arg() {
                 Ok(())
             } else {
                 // Only output fields of structs are allowed to appear on the RHS of assignments
