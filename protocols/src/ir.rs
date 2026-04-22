@@ -590,6 +590,11 @@ impl SymbolTable {
         self[symbol_id].full_name(self)
     }
 
+    pub fn update_type(&mut self, symbol_id: SymbolId, tpe: Type) {
+        let entry = self.entries.get_mut(symbol_id).unwrap();
+        entry.tpe = tpe;
+    }
+
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
         assert!(
             !name.contains('.'),

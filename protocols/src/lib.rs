@@ -31,11 +31,11 @@ pub fn frontend(
     skip_static_step_fork_checks: bool,
 ) -> anyhow::Result<Vec<(ir::Transaction, ir::SymbolTable)>> {
     // Parse protocols file
-    let transactions_symbol_tables: Vec<(ir::Transaction, ir::SymbolTable)> =
+    let mut transactions_symbol_tables: Vec<(ir::Transaction, ir::SymbolTable)> =
         parser::parse_file(filename, diag).map_err(|e| anyhow!(e))?;
 
     // Type-check the parsed transactions
-    typecheck::type_check(&transactions_symbol_tables, diag)?;
+    typecheck::type_check(&mut transactions_symbol_tables, diag)?;
 
     // check for fork and step errors
     let error_count = if skip_static_step_fork_checks {

@@ -155,7 +155,7 @@ fn check_expr_types(
 
 fn check_stmt_types(
     tr: &Transaction,
-    st: &SymbolTable,
+    st: &mut SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
 ) -> anyhow::Result<()> {
@@ -235,8 +235,31 @@ fn check_stmt_types(
                 Err(anyhow!(error_msg))
             }
         }
-        Stmt::ForInLoop(id_expr, seq_expr, bodyid) => {
-            todo!("typecheck for-in")
+        Stmt::ForInLoop(id_symbol, seq_expr, bodyid) => {
+            let seq_expr_tpe = check_expr_types(tr, st, handler, seq_expr)?;
+            if let Type::Seq(seq_id) = seq_expr_tpe {
+                let inner = st[seq_id].tpe();
+                if let Type::BitVec(_) = inner {
+                    // update type of id_expr to be the inner type
+                    st.update_type(*id_symbol, inner);
+                    // check body
+                    check_stmt_types(tr, st, handler, bodyid)
+                } else {
+                    let error_msg = format!(
+                        "Only bit-vector sequences are currently supported in loops, not {}.",
+                        serialize_type(st, seq_expr_tpe)
+                    );
+                    handler.emit_diagnostic_expr(tr, seq_expr, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            } else {
+                let error_msg = format!(
+                    "Must be a sequence expression, not {}.",
+                    serialize_type(st, seq_expr_tpe)
+                );
+                handler.emit_diagnostic_expr(tr, seq_expr, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             // Conditions for if-statement must have type `BitVec(1)`
@@ -298,7 +321,7 @@ fn check_stmt_types(
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
 pub fn type_check(
-    trs: &Vec<(Transaction, SymbolTable)>,
+    trs: &mut [(Transaction, SymbolTable)],
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
     for (tr, st) in trs {
