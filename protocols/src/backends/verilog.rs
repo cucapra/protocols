@@ -258,6 +258,9 @@ fn stmt_to_verilog(
         Stmt::RepeatLoop(_, _) => {
             todo!("repeat loop")
         }
+        Stmt::ForInLoop(_, _, _) => {
+            todo!("for-in loop")
+        }
         Stmt::IfElse(_, _, _) => {
             todo!("if/else")
         }

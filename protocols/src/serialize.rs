@@ -185,6 +185,14 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
+        Stmt::ForInLoop(id_expr, seq_expr, stmt_id) => {
+            format!(
+                "for {} in {} {{ {} }}",
+                serialize_expr(tr, st, id_expr),
+                serialize_expr(tr, st, seq_expr),
+                serialize_stmt(tr, st, stmt_id)
+            )
+        }
         Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
             format!(
                 "if {} {{ {} }} {{ {} }}",
@@ -244,6 +252,17 @@ pub fn build_statements(
                 "{}repeat {} iterations {{",
                 "  ".repeat(index),
                 serialize_expr(tr, st, count)
+            )?;
+            build_statements(out, tr, st, bodyid, index + 1)?;
+            writeln!(out, "{}}}", "  ".repeat(index))?;
+        }
+        Stmt::ForInLoop(id_expr, seq_expr, bodyid) => {
+            writeln!(
+                out,
+                "{}for {} in {} {{",
+                "  ".repeat(index),
+                serialize_expr(tr, st, id_expr),
+                serialize_expr(tr, st, seq_expr)
             )?;
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;

@@ -81,7 +81,7 @@ fn analyze_stmt(
             state
         }
         // control flow
-        Stmt::While(_, body) | Stmt::RepeatLoop(_, body) => {
+        Stmt::While(_, body) | Stmt::RepeatLoop(_, body) | Stmt::ForInLoop(_, _, body) => {
             let mut body_state = analyze_stmt(diag, error_count, proto, *body, State::default());
             if body_state.steps == StepCount::Bounded(0) {
                 diag.emit_diagnostic_stmt(

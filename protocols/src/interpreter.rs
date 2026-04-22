@@ -747,6 +747,9 @@ impl<'a> Evaluator<'a> {
             Stmt::RepeatLoop(num_iters_id, loop_body_id) => {
                 self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
             }
+            Stmt::ForInLoop(identifier, seq, loop_body_id) => {
+                self.evaluate_for_in_loop(identifier, seq, stmt_id, loop_body_id)
+            }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
                 Ok(self.next_stmt_map[stmt_id])
@@ -939,6 +942,16 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
+    }
+
+    fn evaluate_for_in_loop(
+        &mut self,
+        identifier: &ExprId,
+        seq: &ExprId,
+        stmt_id: &StmtId,
+        loop_body_id: &StmtId,
+    ) -> ExecutionResult<Option<StmtId>> {
+        todo!("for-in loop")
     }
 
     fn evaluate_assert_eq(

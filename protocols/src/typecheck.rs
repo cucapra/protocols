@@ -233,6 +233,9 @@ fn check_stmt_types(
                 Err(anyhow!(error_msg))
             }
         }
+        Stmt::ForInLoop(id_expr, seq_expr, bodyid) => {
+            todo!("typecheck for-in")
+        }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             // Conditions for if-statement must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;

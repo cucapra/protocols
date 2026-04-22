@@ -320,6 +320,7 @@ pub enum Stmt {
     /// Bounded loop with fixed no. of iterations
     /// (`ExprId` is the no. of iterations, `StmtId` is the loop body)
     RepeatLoop(ExprId, StmtId),
+    ForInLoop(ExprId, ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
 }

@@ -358,6 +358,7 @@ impl ParserContext<'_> {
                 Rule::fork => self.parse_fork(inner_pair)?,
                 Rule::while_loop => self.parse_while(inner_pair)?,
                 Rule::bounded_loop => self.parse_bounded_loop(inner_pair)?,
+                Rule::for_in_loop => self.parse_for_in_loop(inner_pair)?,
                 Rule::cond => self.parse_cond(inner_pair)?,
                 Rule::assert_eq => self.parse_assert_eq(inner_pair)?,
                 _ => {
@@ -460,6 +461,18 @@ impl ParserContext<'_> {
         let num_iterations = self.parse_expr(expr_rule.into_inner())?;
         let body = self.parse_stmt_block(inner_rules)?;
         Ok(Stmt::RepeatLoop(num_iterations, body))
+    }
+
+    fn parse_for_in_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let id_expr =
+            self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
+        let identifier = self.parse_expr(id_expr.into_inner())?;
+        let seq_expr =
+            self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
+        let seq = self.parse_expr(seq_expr.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::ForInLoop(identifier, seq, body))
     }
 
     fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
