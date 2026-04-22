@@ -363,6 +363,8 @@ pub enum Expr {
     Unary(UnaryOp, ExprId),
     /// Slice: args are msb first, then lsb
     Slice(ExprId, u32, u32),
+    /// Inside a ForInLoop, this evaluates to true/false dending on what iteration we are on
+    IsLastIteration,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -372,6 +374,7 @@ pub enum BoxedExpr {
     Const(BitVecValue, usize, usize),
     Sym(SymbolId, usize, usize),
     DontCare(usize, usize),
+    IsLastIteration(usize, usize),
     // unary
     Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
     // binary
@@ -387,6 +390,7 @@ impl BoxedExpr {
             BoxedExpr::Const(_, start, _) => *start,
             BoxedExpr::Sym(_, start, _) => *start,
             BoxedExpr::DontCare(start, _) => *start,
+            BoxedExpr::IsLastIteration(start, _) => *start,
             BoxedExpr::Binary(_, _, _, start, _) => *start,
             BoxedExpr::Unary(_, _, start, _) => *start,
             BoxedExpr::Slice(_, _, _, start, _) => *start,
@@ -399,6 +403,7 @@ impl BoxedExpr {
             BoxedExpr::Const(_, _, end) => *end,
             BoxedExpr::Sym(_, _, end) => *end,
             BoxedExpr::DontCare(_, end) => *end,
+            BoxedExpr::IsLastIteration(_, end) => *end,
             BoxedExpr::Binary(_, _, _, _, end) => *end,
             BoxedExpr::Unary(_, _, _, end) => *end,
             BoxedExpr::Slice(_, _, _, _, end) => *end,

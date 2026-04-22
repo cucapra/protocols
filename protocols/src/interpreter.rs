@@ -634,6 +634,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
+            Expr::IsLastIteration => todo!("implement is_last()"),
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
                 let rhs_val = self.evaluate_expr(rhs_id)?;

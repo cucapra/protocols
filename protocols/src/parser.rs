@@ -133,6 +133,7 @@ impl ParserContext<'_> {
                         Ok(BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end))
                     }
                     Rule::expr => self.parse_boxed_expr(primary.into_inner()),
+                    Rule::is_last_expr => Ok(BoxedExpr::IsLastIteration(start, end)),
                     rule => unreachable!("Expr::parse expected atom, found {:?}", rule),
                 }
             })
@@ -181,6 +182,11 @@ impl ParserContext<'_> {
             }
             BoxedExpr::DontCare(start, end) => {
                 let expr_id = self.tr.e(Expr::DontCare);
+                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                expr_id
+            }
+            BoxedExpr::IsLastIteration(start, end) => {
+                let expr_id = self.tr.e(Expr::IsLastIteration);
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }

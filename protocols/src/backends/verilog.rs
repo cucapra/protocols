@@ -357,6 +357,7 @@ fn expr_to_verilog(
                 write!(out, ")[{msb}:{lsb}]")
             }
         }
+        Expr::IsLastIteration => todo!("loops"),
     }
 }
 

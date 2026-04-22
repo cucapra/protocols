@@ -148,6 +148,8 @@ fn check_expr_types(
                 Ok(Type::BitVec(1))
             }
         }
+        // evaluates to true or false
+        Expr::IsLastIteration => Ok(Type::BitVec(1)),
     }
 }
 

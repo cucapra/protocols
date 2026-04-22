@@ -122,6 +122,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_string(),
+        Expr::IsLastIteration => "is_last()".to_string(),
         Expr::Unary(unary_op, expr_id) => {
             let e = serialize_expr(tr, st, expr_id);
             format!("{}({})", unary_op, e)

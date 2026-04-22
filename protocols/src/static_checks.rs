@@ -167,6 +167,7 @@ pub fn check_condition_wf(
     let expr = &tr[expr_id];
     match expr {
         Expr::Const(_) => Ok(()),
+        Expr::IsLastIteration => Ok(()),
         Expr::Sym(symbol_id) => {
             // Check if the identifier is a DUT port (either input or output)
             check_if_symbol_is_dut_port(
@@ -238,6 +239,7 @@ pub fn check_assertion_arg_wf(
         Expr::Slice(sliced_expr, _, _) => {
             check_assertion_arg_wf(sliced_expr, tr, symbol_table, handler)
         }
+        Expr::IsLastIteration => todo!(),
     }
 }
 
@@ -342,6 +344,7 @@ pub fn check_assignment_rhs_wf(
             // (Note: we do not allow the inner expression to be `DontCare`)
             check_assignment_rhs_wf(inner_expr, false, tr, symbol_table, handler)
         }
+        Expr::IsLastIteration => todo!(),
     }
 }
 
