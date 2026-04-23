@@ -7,6 +7,7 @@
 
 use crate::diagnostic::DiagnosticHandler;
 use anyhow::anyhow;
+use rustc_hash::FxHashMap;
 
 pub mod backends;
 pub mod design;
@@ -60,11 +61,6 @@ pub fn transaction_frontend<'a>(
     protos: impl Iterator<Item = &'a (ir::Transaction, ir::SymbolTable)>,
     diag: &mut DiagnosticHandler,
 ) -> anyhow::Result<Traces> {
-    // Maps a transaction's name to its argument types
-    let mut transaction_arg_types = rustc_hash::FxHashMap::default();
-    for (tx, symbol_table) in protos {
-        transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
-    }
-
-    transactions_parser::parse_transactions_file(filename, diag, transaction_arg_types)
+    let protos: FxHashMap<String, _> = protos.map(|(p, st)| (p.name.clone(), (p, st))).collect();
+    transactions_parser::parse_transactions_file(filename, diag, &protos)
 }

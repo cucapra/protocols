@@ -9,6 +9,7 @@ use protocols::diagnostic::DiagnosticHandler;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
 use protocols::setup::setup_test_environment;
+use protocols::transaction_frontend;
 use protocols::transactions_parser::parse_transactions_file;
 use rustc_hash::FxHashMap;
 
@@ -131,12 +132,6 @@ fn main() -> anyhow::Result<()> {
     let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
         parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
 
-    // Maps a transaction's name to its argument types
-    let mut transaction_arg_types = FxHashMap::default();
-    for (tx, symbol_table) in &transactions_and_symbols {
-        transaction_arg_types.insert(tx.name.clone(), tx.get_arg_types(symbol_table));
-    }
-
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new(
         color_choice,
@@ -144,11 +139,7 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces = parse_transactions_file(
-        cli.transactions,
-        transactions_handler,
-        transaction_arg_types,
-    )?;
+    let traces = transaction_frontend(cli.transactions, parsed_data.iter(), transactions_handler)?;
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {

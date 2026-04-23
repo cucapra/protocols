@@ -10,6 +10,7 @@ use crate::ir::*;
 use crate::scheduler::Todo;
 use crate::serialize::serialize_bitvec;
 use baa::{BitVecOps, BitVecValue};
+use itertools::Itertools;
 use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
@@ -221,24 +222,35 @@ impl<'a> Evaluator<'a> {
         }
 
         for symbol_id in dut_symbols {
-            let symbol_name = st[symbol_id].name();
-
-            if let Some(input_ref) = sys
-                .inputs
-                .iter()
-                .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
-            {
-                input_mapping.insert(*symbol_id, *input_ref);
+            let sym = &st[symbol_id];
+            if sym.is_in_port() {
+                let input = sys
+                    .inputs
+                    .iter()
+                    .find(|i| ctx.get_symbol_name(**i).unwrap() == sym.name())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Failed to find input with name '{}'. Available inputs: {:?}",
+                            sym.name(),
+                            sys.inputs
+                                .iter()
+                                .map(|o| ctx.get_symbol_name(*o).unwrap())
+                                .collect::<Vec<_>>()
+                        )
+                    });
+                input_mapping.insert(*symbol_id, *input);
             } else {
+                assert!(sym.is_port());
                 // check if the DUT symbol is an output
                 let output = sys
                     .outputs
                     .iter()
-                    .find(|o| ctx[o.name] == symbol_name)
+                    .find(|o| ctx[o.name] == sym.name())
                     .unwrap_or_else(|| {
                         panic!(
-                            "Failed to find output with name '{}' in system outputs",
-                            symbol_name
+                            "Failed to find output with name '{}' in system outputs. Available outputs: {:?}",
+                            sym.name(),
+                            sys.outputs.iter().map(|o| &ctx[o.name]).collect::<Vec<_>>()
                         )
                     });
                 output_mapping.insert(*symbol_id, *output);

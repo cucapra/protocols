@@ -1,6 +1,7 @@
 use crate::interpreter::Value;
-use crate::ir::Type;
+use crate::ir::{SymbolTable, Transaction, Type};
 use crate::scheduler::TodoItem;
+use crate::serialize::serialize_type;
 use crate::{diagnostic::*, setup::bv};
 use anyhow::anyhow;
 use baa::BitVecValue;
@@ -18,7 +19,7 @@ struct TransactionsParser;
 pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-    transaction_arg_types: FxHashMap<String, Vec<Type>>,
+    protos: &FxHashMap<String, (&Transaction, &SymbolTable)>,
 ) -> anyhow::Result<Vec<Vec<TodoItem>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
@@ -52,20 +53,15 @@ pub fn parse_transactions_file(
                     // First element should be the function name (ident)
                     let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-                    let arg_types =
-                        transaction_arg_types
-                            .get(&function_name)
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "Unable to fetch argument types for transaction {function_name}"
-                                )
-                            });
+                    let (proto, st) = protos.get(&function_name).unwrap_or_else(|| {
+                        panic!("Unable to fetch argument types for transaction {function_name}")
+                    });
 
                     // Parse arguments if they exist
                     let mut args: Vec<Value> = vec![];
                     if let Some(arglist_pair) = transaction_inner.next() {
                         if arglist_pair.as_rule() == Rule::arglist {
-                            args = parse_arglist(arglist_pair, handler, fileid, arg_types)?;
+                            args = parse_arglist(st, arglist_pair, handler, fileid, proto)?;
                         }
                     }
 
@@ -87,14 +83,16 @@ pub fn parse_transactions_file(
 /// - `fileid`: file descriptor
 /// - `arg_types`: Slice containing the expected type of each argument
 fn parse_arglist(
+    st: &SymbolTable,
     arglist_pair: Pair<Rule>,
     handler: &mut DiagnosticHandler,
     fileid: usize,
-    arg_types: &[Type],
+    proto: &Transaction,
 ) -> anyhow::Result<Vec<Value>> {
     let mut args = vec![];
 
     let arg_pairs = collect_arg_pairs(arglist_pair);
+    let arg_types = proto.get_arg_types(st);
 
     // Check that the no. of arguments supplied matches the type
     if arg_pairs.len() != arg_types.len() {
@@ -111,7 +109,7 @@ fn parse_arglist(
     }
 
     for (arg_pair, ty) in arg_pairs.into_iter().zip(arg_types.iter()) {
-        let arg_value = parse_arg(arg_pair, ty, handler, fileid)?;
+        let arg_value = parse_arg(st, arg_pair, ty, handler, fileid)?;
         args.push(arg_value);
     }
     Ok(args)
@@ -184,6 +182,7 @@ impl IntFormat {
 }
 
 fn parse_arg(
+    st: &SymbolTable,
     arg_pair: Pair<Rule>,
     ty: &Type,
     handler: &mut DiagnosticHandler,
@@ -195,14 +194,25 @@ fn parse_arg(
     let value: Value = match arg_pair.as_rule() {
         Rule::scalar_arg => parse_scalar_arg(arg_pair, ty, handler, fileid)?.into(),
         Rule::seq_arg => {
-            // seq_arg contains an arg_list
-            let arg_list = arg_pair.into_inner().next().unwrap();
-            let elements = collect_arg_pairs(arg_list);
-            let values: Result<Vec<_>, _> = elements
-                .into_iter()
-                .map(|arg_pair| parse_scalar_arg(arg_pair, ty, handler, fileid))
-                .collect();
-            values?.into()
+            // check type before further parsing
+            if let Type::Seq(seq_id) = ty {
+                let inner_ty = st[seq_id].tpe();
+                // seq_arg contains an arg_list
+                let arg_list = arg_pair.into_inner().next().unwrap();
+                let elements = collect_arg_pairs(arg_list);
+                let values: Result<Vec<_>, _> = elements
+                    .into_iter()
+                    .map(|arg_pair| parse_scalar_arg(arg_pair, &inner_ty, handler, fileid))
+                    .collect();
+                values?.into()
+            } else {
+                let msg = format!(
+                    "Invalid sequence of values for argument of type {}",
+                    serialize_type(st, ty.clone())
+                );
+                handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                return Err(anyhow!(msg));
+            }
         }
         other => unreachable!("unexpected rule: {:?}", other),
     };
