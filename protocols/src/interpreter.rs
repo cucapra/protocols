@@ -1030,7 +1030,30 @@ impl<'a> Evaluator<'a> {
         stmt_id: &StmtId,
         loop_body_id: &StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
-        todo!("for-in loop")
+        // figure out size of seq
+        let seq_symbol_id = if let Expr::Sym(id) = &self.tr[seq] {
+            id
+        } else {
+            unreachable!("The sequence in an evaluate for loop must always be a symbol.");
+        };
+        let seq_values: &[BitVecValue] = (&self.args_mapping[seq_symbol_id]).try_into().unwrap();
+
+        // if we have never iterated on this loop, create entry and add number of iterations
+        let remaining = *(self
+            .bounded_loop_remaining_iters
+            .entry(*stmt_id)
+            .or_insert(seq_values.len() as u128));
+        if remaining == 0 {
+            // done, go to next statement
+            self.bounded_loop_remaining_iters.remove(stmt_id);
+            Ok(self.next_stmt_map[stmt_id])
+        } else {
+            // update count and enter loop
+            *self.bounded_loop_remaining_iters.get_mut(stmt_id).unwrap() -= 1;
+            let seq_index = seq_values.len() - remaining as usize;
+            println!("TODO: seq_index: {seq_index}");
+            Ok(Some(*loop_body_id))
+        }
     }
 
     fn evaluate_assert_eq(
