@@ -143,6 +143,8 @@ pub struct Evaluator<'a> {
     args_mapping: FxHashMap<SymbolId, Value>,
     input_mapping: FxHashMap<SymbolId, ExprRef>,
     output_mapping: FxHashMap<SymbolId, Output>,
+    /// stack of loop variables, need to be searched right to left
+    loop_vars: Vec<(SymbolId, BitVecValue)>,
 
     // Combinational dependency tracking
     /// Maps `input |-> Vec<output>` (outputs that are affected by this input)
@@ -341,6 +343,7 @@ impl<'a> Evaluator<'a> {
             assertions_enabled: false,
             bounded_loop_remaining_iters: FxHashMap::default(),
             rng,
+            loop_vars: vec![],
         }
     }
 
@@ -702,11 +705,15 @@ impl<'a> Evaluator<'a> {
                     } else {
                         unreachable!("the expression is expected to evaluate to a scalar value!")
                     }
+                } else if let Some((_, bv)) =
+                    self.loop_vars.iter().rev().find(|(id, _)| id == sym_id)
+                {
+                    Ok(ExprValue::Concrete(bv.clone()))
                 } else {
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,
                         name.to_string(),
-                        "input, output, or args mapping".to_string(),
+                        "input, output, args, or loopvar mapping".to_string(),
                         *expr_id,
                     ))
                 }
@@ -1025,7 +1032,7 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_for_in_loop(
         &mut self,
-        identifier: &SymbolId,
+        loop_var_sym: &SymbolId,
         seq: &ExprId,
         stmt_id: &StmtId,
         loop_body_id: &StmtId,
@@ -1037,22 +1044,31 @@ impl<'a> Evaluator<'a> {
             unreachable!("The sequence in an evaluate for loop must always be a symbol.");
         };
         let seq_values: &[BitVecValue] = (&self.args_mapping[seq_symbol_id]).try_into().unwrap();
-
-        // if we have never iterated on this loop, create entry and add number of iterations
-        let remaining = *(self
-            .bounded_loop_remaining_iters
-            .entry(*stmt_id)
-            .or_insert(seq_values.len() as u128));
-        if remaining == 0 {
-            // done, go to next statement
-            self.bounded_loop_remaining_iters.remove(stmt_id);
+        if seq_values.is_empty() {
             Ok(self.next_stmt_map[stmt_id])
         } else {
-            // update count and enter loop
-            *self.bounded_loop_remaining_iters.get_mut(stmt_id).unwrap() -= 1;
-            let seq_index = seq_values.len() - remaining as usize;
-            println!("TODO: seq_index: {seq_index}");
-            Ok(Some(*loop_body_id))
+            // pop loop var if it exists
+            if self.bounded_loop_remaining_iters.contains_key(stmt_id) {
+                self.loop_vars.pop();
+            }
+            // if we have never iterated on this loop, create entry and add number of iterations
+            let remaining = *(self
+                .bounded_loop_remaining_iters
+                .entry(*stmt_id)
+                .or_insert(seq_values.len() as u128));
+
+            if remaining == 0 {
+                // done, remove loop var and go to next statement
+                self.bounded_loop_remaining_iters.remove(stmt_id);
+                Ok(self.next_stmt_map[stmt_id])
+            } else {
+                // update count and enter loop
+                *self.bounded_loop_remaining_iters.get_mut(stmt_id).unwrap() -= 1;
+                let seq_index = seq_values.len() - remaining as usize;
+                self.loop_vars
+                    .push((*loop_var_sym, seq_values[seq_index].clone()));
+                Ok(Some(*loop_body_id))
+            }
         }
     }
 
