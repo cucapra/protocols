@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::DiagnosticEmitter;
 use crate::errors::{ExecutionError, ExecutionResult};
-use crate::interpreter::{Evaluator, ThreadInputValue};
+use crate::interpreter::{Evaluator, ThreadInputValue, Value};
 use crate::ir::*;
 
 use patronus::expr::Context;
@@ -22,10 +22,10 @@ use patronus::system::TransitionSystem;
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
 pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
-type ArgMap<'a> = FxHashMap<&'a str, BitVecValue>;
+type ArgMap<'a> = FxHashMap<&'a str, Value>;
 
 /// A `TodoItem` corresponds to a function call in a transaction `.tx` file
-pub type TodoItem = (String, Vec<BitVecValue>);
+pub type TodoItem = (String, Vec<Value>);
 
 /// A `TransactionInfo` is a triple of the form
 /// `(Transaction, SymbolTable, NextStmtMap)`.

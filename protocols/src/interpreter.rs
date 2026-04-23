@@ -18,6 +18,68 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
+/// A concrete value of any type.
+#[derive(Debug, Clone)]
+pub struct Value(ValueKind);
+
+#[derive(Debug, Clone)]
+enum ValueKind {
+    Scalar(BitVecValue),
+    Seq(Vec<BitVecValue>),
+}
+
+impl TryFrom<Value> for BitVecValue {
+    type Error = ();
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Scalar(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for &'a BitVecValue {
+    type Error = ();
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Scalar(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<BitVecValue> for Value {
+    fn from(value: BitVecValue) -> Self {
+        Value(ValueKind::Scalar(value))
+    }
+}
+
+impl TryFrom<Value> for Vec<BitVecValue> {
+    type Error = ();
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Seq(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<Vec<BitVecValue>> for Value {
+    fn from(value: Vec<BitVecValue>) -> Self {
+        Value(ValueKind::Seq(value))
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for &'a [BitVecValue] {
+    type Error = ();
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Seq(v)) => Ok(v.as_slice()),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Per-thread input value: either a concrete assignment or DontCare
 #[derive(Debug, Clone)]
 pub enum ThreadInputValue {
@@ -77,7 +139,7 @@ pub struct Evaluator<'a> {
     st: &'a SymbolTable,
     sim: Interpreter,
 
-    args_mapping: FxHashMap<SymbolId, BitVecValue>,
+    args_mapping: FxHashMap<SymbolId, Value>,
     input_mapping: FxHashMap<SymbolId, ExprRef>,
     output_mapping: FxHashMap<SymbolId, Output>,
 
@@ -125,7 +187,7 @@ impl<'a> Evaluator<'a> {
 
     /// Creates a new `Evaluator`
     pub fn new(
-        args: FxHashMap<&str, BitVecValue>,
+        args: FxHashMap<&str, Value>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
         ctx: &'a patronus::expr::Context,
@@ -273,8 +335,8 @@ impl<'a> Evaluator<'a> {
     /// Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
-        args: FxHashMap<&str, BitVecValue>,
-    ) -> FxHashMap<SymbolId, BitVecValue> {
+        args: FxHashMap<&str, Value>,
+    ) -> FxHashMap<SymbolId, Value> {
         let mut args_mapping = FxHashMap::default();
         for (name, value) in &args {
             if let Some(symbol_id) = st.symbol_id_from_name(name) {
@@ -623,7 +685,11 @@ impl<'a> Evaluator<'a> {
                         self.sim.get((output).expr).try_into().unwrap(),
                     ))
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(bvv.clone()))
+                    if let Ok(bv) = bvv.clone().try_into() {
+                        Ok(ExprValue::Concrete(bv))
+                    } else {
+                        unreachable!("the expression is expected to evaluate to a scalar value!")
+                    }
                 } else {
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,

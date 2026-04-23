@@ -1,8 +1,10 @@
+use crate::interpreter::Value;
 use crate::ir::Type;
 use crate::scheduler::TodoItem;
 use crate::{diagnostic::*, setup::bv};
 use anyhow::anyhow;
 use baa::BitVecValue;
+use itertools::Itertools;
 use pest::{Parser, error::InputLocation, iterators::Pair};
 use pest_derive::Parser;
 use rustc_hash::FxHashMap;
@@ -60,7 +62,7 @@ pub fn parse_transactions_file(
                             });
 
                     // Parse arguments if they exist
-                    let mut args: Vec<BitVecValue> = vec![];
+                    let mut args: Vec<Value> = vec![];
                     if let Some(arglist_pair) = transaction_inner.next() {
                         if arglist_pair.as_rule() == Rule::arglist {
                             args = parse_arglist(arglist_pair, handler, fileid, arg_types)?;
@@ -89,7 +91,7 @@ fn parse_arglist(
     handler: &mut DiagnosticHandler,
     fileid: usize,
     arg_types: &[Type],
-) -> anyhow::Result<Vec<BitVecValue>> {
+) -> anyhow::Result<Vec<Value>> {
     let mut args = vec![];
 
     let arg_pairs = collect_arg_pairs(arglist_pair);
@@ -108,7 +110,7 @@ fn parse_arglist(
         return Err(anyhow!(msg));
     }
 
-    for (arg_pair, ty) in arg_pairs.iter().zip(arg_types.iter()) {
+    for (arg_pair, ty) in arg_pairs.into_iter().zip(arg_types.iter()) {
         let arg_value = parse_arg(arg_pair, ty, handler, fileid)?;
         args.push(arg_value);
     }
@@ -181,14 +183,40 @@ impl IntFormat {
     }
 }
 
+fn parse_arg(
+    arg_pair: Pair<Rule>,
+    ty: &Type,
+    handler: &mut DiagnosticHandler,
+    fileid: usize,
+) -> anyhow::Result<Value> {
+    // we get an `arg` which is either a `scalar_arg` or a `seq_arg`
+    let arg_pair = arg_pair.clone().into_inner().next().unwrap();
+
+    let value: Value = match arg_pair.as_rule() {
+        Rule::scalar_arg => parse_scalar_arg(arg_pair, ty, handler, fileid)?.into(),
+        Rule::seq_arg => {
+            // seq_arg contains an arg_list
+            let arg_list = arg_pair.into_inner().next().unwrap();
+            let elements = collect_arg_pairs(arg_list);
+            let values: Result<Vec<_>, _> = elements
+                .into_iter()
+                .map(|arg_pair| parse_scalar_arg(arg_pair, ty, handler, fileid))
+                .collect();
+            values?.into()
+        }
+        other => unreachable!("unexpected rule: {:?}", other),
+    };
+    Ok(value)
+}
+
 /// Parses one single argument to a transaction, returning a `BitVecValue`
 /// Arguments:
 /// - `arg_pair` is a `Pair` produced by the parser derived by Pest
 /// - `ty`: The expected type of the argument
 /// - `handler` is the handler for emitting error diagnostics
 /// - `fileid`: file descriptor
-fn parse_arg(
-    arg_pair: &Pair<Rule>,
+fn parse_scalar_arg(
+    arg_pair: Pair<Rule>, // must be a scalar_arg
     ty: &Type,
     handler: &mut DiagnosticHandler,
     fileid: usize,
@@ -201,7 +229,7 @@ fn parse_arg(
         Type::UnsignedInt => 64, // we just treat unsigned integers as 64 bit for now
         _ => {
             let msg = format!("Unsupported argument type: {:?}", ty);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
     };
@@ -215,7 +243,7 @@ fn parse_arg(
         let binary_str = stripped.replace('_', "");
         if binary_str.is_empty() {
             let msg = format!("Empty binary integer: '{}'", arg_str);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         } else if !binary_str.chars().all(|c| c == '0' || c == '1') {
             // Ensure that all characters are binary digits
@@ -223,7 +251,7 @@ fn parse_arg(
                 "Invalid binary integer '{}': contains non-binary digits",
                 arg_str
             );
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
         Ok(IntFormat::Binary.parse_bitvec_value(binary_str, bitwidth))
@@ -235,7 +263,7 @@ fn parse_arg(
         let hex_str = stripped.replace('_', "");
         if hex_str.is_empty() {
             let msg = format!("Empty hexadecimal integer: '{}'", arg_str);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         } else if !hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
             // Ensure that all characters are hex digits
@@ -243,7 +271,7 @@ fn parse_arg(
                 "Invalid hexadecimal integer '{}': contains non-hex digits",
                 arg_str
             );
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
 
@@ -253,7 +281,7 @@ fn parse_arg(
         let decimal_str = arg_str.replace('_', "");
         if decimal_str.is_empty() {
             let msg = format!("Empty argument: '{}'", arg_str);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         } else if !decimal_str.chars().all(|c| c.is_ascii_digit()) {
             // Validate that all characters are decimal digits
@@ -261,7 +289,7 @@ fn parse_arg(
                 "Invalid decimal integer '{}': contains non-digit characters",
                 arg_str
             );
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
         Ok(IntFormat::Decimal.parse_bitvec_value(decimal_str, bitwidth))

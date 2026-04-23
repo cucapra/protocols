@@ -6,6 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::diagnostic::{DiagnosticHandler, Level};
+use crate::interpreter::Value;
 use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
 use crate::serialize::{serialize_bitvec, serialize_expr};
 use baa::BitVecValue;
@@ -651,7 +652,7 @@ impl DiagnosticEmitter {
         error: &ExecutionError,
         transaction: &Transaction,
         symbol_table: &SymbolTable,
-        todo_args: &[BitVecValue],
+        todo_args: &[Value],
     ) {
         match error {
             ExecutionError::Evaluation(eval_err) => {
@@ -996,7 +997,7 @@ impl DiagnosticEmitter {
         error: &AssertionError,
         transaction: &Transaction,
         _symbol_table: &SymbolTable,
-        todo_args: &[BitVecValue],
+        todo_args: &[Value],
     ) {
         match error {
             AssertionError::EqualityFailed {

@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::interpreter::Value;
 use crate::{interpreter::ExprValue, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
@@ -89,6 +90,19 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
     }
 }
 
+pub fn serialize_value(value: &Value, display_hex: bool) -> String {
+    if let Ok(bv) = value.try_into() {
+        serialize_bitvec(bv, display_hex)
+    } else {
+        let seq: &[BitVecValue] = value.try_into().unwrap();
+        let elements: Vec<_> = seq
+            .into_iter()
+            .map(|bv| serialize_bitvec(bv, display_hex))
+            .collect();
+        format!("[{}]", elements.join(","))
+    }
+}
+
 /// Pretty-prints the arguments map, where `SymbolId`s are rendered using
 /// the corresponding string variable name according to the `SymbolTable`.
 /// When printing, we sort the keys by lexicographic order of variable names
@@ -96,7 +110,7 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
 /// The `display_hex` argument indicates whether to display integer literals
 /// using hexadeimcal (if `false`, we default to using decimal).
 pub fn serialize_args_mapping(
-    args_mapping: &FxHashMap<SymbolId, BitVecValue>,
+    args_mapping: &FxHashMap<SymbolId, Value>,
     symbol_table: &SymbolTable,
     display_hex: bool,
 ) -> String {
@@ -108,7 +122,7 @@ pub fn serialize_args_mapping(
                 "({}) {}: {}",
                 symbol_id,
                 symbol_table[*symbol_id].name(),
-                serialize_bitvec(value, display_hex)
+                serialize_value(value, display_hex)
             )
         })
         .collect::<Vec<String>>()

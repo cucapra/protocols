@@ -24,6 +24,8 @@ pub mod transactions_parser;
 pub mod typecheck;
 mod yosys;
 
+use interpreter::Value;
+
 /// Simple frontend which loads a single protocols file, type checks and returns the AST.
 pub fn frontend(
     filename: impl AsRef<std::path::Path>,
@@ -50,7 +52,7 @@ pub fn frontend(
     }
 }
 
-pub type Traces = Vec<Vec<(String, Vec<baa::BitVecValue>)>>;
+pub type Traces = Vec<Vec<(String, Vec<Value>)>>;
 
 /// Simple frontend for loading a transaction trace file (*.tx)
 pub fn transaction_frontend<'a>(

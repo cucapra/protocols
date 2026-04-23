@@ -144,7 +144,7 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces: Vec<Vec<(String, Vec<baa::BitVecValue>)>> = parse_transactions_file(
+    let traces = parse_transactions_file(
         cli.transactions,
         transactions_handler,
         transaction_arg_types,

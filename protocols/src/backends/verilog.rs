@@ -160,6 +160,7 @@ pub fn to_verilog(
                 if !is_first {
                     write!(out, ", ")?;
                 }
+                let arg: BitVecValue = arg.clone().try_into().unwrap();
                 write!(out, "'h{}", arg.to_hex_str())?;
             }
             writeln!(out, "); join_none")?;
