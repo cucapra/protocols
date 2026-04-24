@@ -383,9 +383,9 @@ impl Path {
                     self.next.push(thread);
                     (PathResult::Ok, None)
                 }
-                ThreadResult::RepeatLoop => {
+                ThreadResult::RepeatLoop(iters) => {
                     let tid = thread.transaction_id;
-                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid]);
+                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid], iters);
                     (PathResult::Branch(vec![a, b]), None)
                 }
                 ThreadResult::FinalStep => (
@@ -448,7 +448,8 @@ struct Thread {
 #[derive(Debug, Clone)]
 enum ThreadResult {
     Ok,
-    RepeatLoop,
+    // fork a repeat loop, argument is the number of iterations already taken
+    RepeatLoop(u64),
     Step,
     Fork,
     FinalStepAndFork,
@@ -457,7 +458,7 @@ enum ThreadResult {
 }
 
 impl Thread {
-    fn exec_repeat_loop_branch(self, ti: &ProtoInfo) -> (Thread, Thread) {
+    fn exec_repeat_loop_branch(self, ti: &ProtoInfo, iters: u64) -> (Thread, Thread) {
         let stmt = self.next_stmt.expect("");
         debug_assert!(
             matches!(&ti.proto[stmt], Stmt::RepeatLoop(_, _)),
@@ -471,25 +472,19 @@ impl Thread {
             );
         };
 
-        // check to make sure the loop stack works as expected
-        let (check_stmt_id, value) = self.loop_iter_counts.last().unwrap().clone();
-        assert_eq!(
-            check_stmt_id, body,
-            "something went wrong with the loop iter counts stack"
-        );
-
         // if we take the repeat loop branch, we just keep the count and go into the body
         let mut taken = self.clone();
-        taken.name = format!("{}{}?", taken.name, value + 1);
+        taken.name = format!("{}{}?", taken.name, iters + 1);
         taken.next_stmt = Some(body);
+        taken.loop_iter_counts.push((stmt, iters));
 
         // of we do not take the branch, we jump after the loop and freeze the value
         let mut not_taken = self;
         not_taken.arg_values[arg_id]
             .as_scalar()
             .expect("must be a scalar")
-            .define_value(BitVecValue::from_u64(value, 64));
-        not_taken.name = format!("{}{value}!", not_taken.name);
+            .define_value(BitVecValue::from_u64(iters, 64));
+        not_taken.name = format!("{}{iters}!", not_taken.name);
         not_taken.next_stmt = ti.next_stmt[&stmt];
 
         // we need to explore both versions of our thread
@@ -558,31 +553,31 @@ impl Thread {
                         .expect("must be a scalar arg");
 
                     // have we executed this loop before?
-                    if let Some((check_stmt_id, iters)) = self.loop_iter_counts.last()
+                    let iters = if let Some((check_stmt_id, iters)) =
+                        self.loop_iter_counts.last().cloned()
                         && check_stmt_id == stmt
                     {
-                        // do we know the maximum number of iterations?
-                        if let Some(max_iters) = max_iter_value.get_known() {
-                            todo!()
-                        }
-                    }
+                        self.loop_iter_counts.pop().unwrap();
+                        iters + 1
+                    } else {
+                        0
+                    };
 
-                    // check to see if the number of iterations is known
-                    // in this case we essentially just have a for(i=0; i < max_iters; i++) loop
+                    // do we know the maximum number of iterations?
                     if let Some(max_iters) = max_iter_value.get_known() {
-                        if arg_value.current_value() < max_iters {
-                            arg_value.increment_current_value();
-                            self.next_stmt = Some(*body);
-                        } else {
-                            // this will make the current value overflow and go back to zero
-                            arg_value.increment_current_value();
+                        let max_iters = max_iters.to_u64().unwrap();
+                        if iters == max_iters {
                             self.next_stmt = ti.next_stmt[&stmt]; // exit loop
+                        } else {
+                            assert!(iters < max_iters);
+                            self.loop_iter_counts.push((stmt, iters + 1));
+                            self.next_stmt = Some(*body);
                         }
                         Ok
                     } else {
                         // we do not actually know the correct number of steps, and we need to explore both possibilities
                         // this must happen outside of this method since it involves cloning the thread
-                        RepeatLoop
+                        RepeatLoop(iters)
                     }
                 }
                 Stmt::ForInLoop(loop_var_id, seq_expr, body) => {
