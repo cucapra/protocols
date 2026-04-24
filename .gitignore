@@ -32,3 +32,4 @@ run_dir/
 # Include images of  waveforms in Brave New World bug readme
 !monitor/tests/fpga-debugging/axis-async-fifo-c4/*.png
 
+/*.fst
