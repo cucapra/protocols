@@ -556,6 +556,10 @@ impl<'a> Scheduler<'a> {
             return;
         }
 
+        // tracks if we have encountered an assign or assert statement
+        // we only fire the last statement is not a step if this is true
+        let mut has_done_useful_work = false;
+
         // keep evaluating until we hit a Step, hit the end, or error out:
         loop {
             info!(
@@ -664,7 +668,10 @@ impl<'a> Scheduler<'a> {
                             thread.has_forked = true;
                             thread.prev_fork_stmt_id = Some(next_id);
                         }
-
+                        Stmt::AssertEq(_, _) | Stmt::Assign(_, _) => {
+                            has_done_useful_work = true;
+                            current_stmt_id = next_id;
+                        }
                         _ => {
                             // default "just keep going" case
                             current_stmt_id = next_id;
@@ -682,7 +689,7 @@ impl<'a> Scheduler<'a> {
                         // Thread completed execution successfully
                         // If the thread hasn't forked yet, implicit fork will happen below
                         info!("  Execution complete, no more statements.");
-                    } else {
+                    } else if has_done_useful_work {
                         // Last executed statement wasn't `step()`, report an error
                         info!(
                             " ERROR: Last executed statement in this thread wasn't `step()`, terminating thread"

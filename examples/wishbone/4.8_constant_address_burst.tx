@@ -3,6 +3,6 @@ trace {
   reset();
   // we have to use the FIFO address to make this work with our RTL
   write_burst_const(0b1111, 0x34000000, [0x1111, 0x2222, 0x3333, 0x4444]);
-  // normal write
-  // write(0b1111, 0x34000000, 0x1111);
+  // extra idle cycle to make things look better on the signal trace
+  idle_no_cycle();
 }
