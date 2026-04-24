@@ -713,7 +713,14 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
-            Expr::IsLastIteration => todo!("implement is_last()"),
+            Expr::IsLastIteration => {
+                let (_, max_iter, iter_count) = self
+                    .loop_info
+                    .last()
+                    .expect("is_last() must be inside of a loop!");
+                let is_last = *iter_count + 1 == *max_iter;
+                Ok(ExprValue::Concrete(BitVecValue::from_bool(is_last)))
+            }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
                 let rhs_val = self.evaluate_expr(rhs_id)?;
