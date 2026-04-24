@@ -7,10 +7,9 @@
 
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
-use crate::scheduler::Todo;
+use crate::scheduler::Thread;
 use crate::serialize::serialize_bitvec;
 use baa::{BitVecOps, BitVecValue};
-use itertools::Itertools;
 use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
@@ -143,8 +142,10 @@ pub struct Evaluator<'a> {
     args_mapping: FxHashMap<SymbolId, Value>,
     input_mapping: FxHashMap<SymbolId, ExprRef>,
     output_mapping: FxHashMap<SymbolId, Output>,
-    /// stack of loop variables, need to be searched right to left
-    loop_vars: Vec<(SymbolId, BitVecValue)>,
+    /// _Dynamic:_ stack of loop variables, need to be searched right to left
+    pub loop_vars: Vec<(SymbolId, BitVecValue)>,
+    /// _Dynamic_: for-in/repeat loop information: loop statement id, max
+    pub loop_info: Vec<(StmtId, u64, u64)>,
 
     // Combinational dependency tracking
     /// Maps `input |-> Vec<output>` (outputs that are affected by this input)
@@ -176,9 +177,6 @@ pub struct Evaluator<'a> {
 
     /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
-
-    // Maps a `StmtId` pair to the no. of iterations remaining for that particular loop.
-    bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -341,9 +339,9 @@ impl<'a> Evaluator<'a> {
             per_thread_input_vals,
             current_todo_idx: 0,
             assertions_enabled: false,
-            bounded_loop_remaining_iters: FxHashMap::default(),
             rng,
             loop_vars: vec![],
+            loop_info: vec![],
         }
     }
 
@@ -365,13 +363,14 @@ impl<'a> Evaluator<'a> {
 
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
-    pub fn context_switch(&mut self, todo: Todo<'a>, todo_idx: usize) {
-        self.tr = todo.tr;
-        self.st = todo.st;
-        self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
-        self.next_stmt_map = todo.next_stmt_map;
-        self.current_todo_idx = todo_idx;
-        self.bounded_loop_remaining_iters = todo.bounded_loop_remaining_iters;
+    pub fn context_switch(&mut self, thread: Thread<'a>) {
+        self.tr = thread.todo.tr;
+        self.st = thread.todo.st;
+        self.args_mapping = Evaluator::generate_args_mapping(self.st, thread.todo.args.clone());
+        self.next_stmt_map = thread.todo.next_stmt_map.clone();
+        self.current_todo_idx = thread.todo_idx;
+        self.loop_info = thread.loop_info.clone();
+        self.loop_vars = thread.loop_vars.clone();
 
         // Clear forbidden inputs (combinational dependency tracking)
         self.forbidden_inputs.clear();
@@ -578,11 +577,6 @@ impl<'a> Evaluator<'a> {
     /// Used by the scheduler to check for conflicting assignments across threads.
     pub fn per_thread_input_vals(&self) -> &FxHashMap<SymbolId, PerThreadValues> {
         &self.per_thread_input_vals
-    }
-
-    /// Returns a clone of the bounded loop remaining iterations map.
-    pub fn bounded_loop_remaining_iters(&self) -> FxHashMap<StmtId, u128> {
-        self.bounded_loop_remaining_iters.clone()
     }
 
     /// Get the next statement after the given statement
@@ -981,20 +975,22 @@ impl<'a> Evaluator<'a> {
         bounded_loop_id: &StmtId,
         loop_body_id: &StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
-        // Key for the `bounded_loop_remaining_iters` map, which tracks
-        // the no. of iterations remaining for each bounded loop
-        if let Some(num_iterations) = self.bounded_loop_remaining_iters.get_mut(bounded_loop_id) {
-            *num_iterations -= 1;
-            if *num_iterations == 0 {
-                // Exit the loop
-                self.bounded_loop_remaining_iters.remove(bounded_loop_id);
+        // check to see if there is an entry for this loop
+        if let Some((info_stmt_id, max_iter, iter_count)) = self.loop_info.last().cloned()
+            && info_stmt_id == *bounded_loop_id
+        {
+            // we are already executing this loop
+            self.loop_info.pop().unwrap();
+            if iter_count + 1 == max_iter {
+                // done
                 Ok(self.next_stmt_map[bounded_loop_id])
             } else {
-                // There are still non-zero iterations remaining,
-                // so execute the loop body again
+                self.loop_info
+                    .push((*bounded_loop_id, max_iter, iter_count + 1));
                 Ok(Some(*loop_body_id))
             }
         } else {
+            // start loop execution
             // We've not encountered this bounded loop before,
             // so we have to evaluate the no. of iters that the user specified
             let num_iters_result = self.evaluate_expr(num_iters_id)?;
@@ -1007,12 +1003,9 @@ impl<'a> Evaluator<'a> {
                     ))
                 }
                 ExprValue::Concrete(bvv) => {
-                    // Note: `BitVecValue` doesn't have a `to_u128` method,
-                    // so we have to use `to_u64` and then cast to `u128`
                     let num_iterations = bvv
                         .to_u64()
-                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer")
-                        as u128;
+                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer");
 
                     // If the user wrote `repeat 0 iterations { ... }`,
                     // skip the loop and proceed to the next stmt
@@ -1021,8 +1014,7 @@ impl<'a> Evaluator<'a> {
                     } else {
                         // Keep track of the no. of loop iterations,
                         // and execute the loop body
-                        self.bounded_loop_remaining_iters
-                            .insert(*bounded_loop_id, num_iterations);
+                        self.loop_info.push((*bounded_loop_id, num_iterations, 0));
                         Ok(Some(*loop_body_id))
                     }
                 }
@@ -1044,29 +1036,30 @@ impl<'a> Evaluator<'a> {
             unreachable!("The sequence in an evaluate for loop must always be a symbol.");
         };
         let seq_values: &[BitVecValue] = (&self.args_mapping[seq_symbol_id]).try_into().unwrap();
-        if seq_values.is_empty() {
-            Ok(self.next_stmt_map[stmt_id])
-        } else {
-            // pop loop var if it exists
-            if self.bounded_loop_remaining_iters.contains_key(stmt_id) {
-                self.loop_vars.pop();
-            }
-            // if we have never iterated on this loop, create entry and add number of iterations
-            let remaining = *(self
-                .bounded_loop_remaining_iters
-                .entry(*stmt_id)
-                .or_insert(seq_values.len() as u128));
 
-            if remaining == 0 {
-                // done, remove loop var and go to next statement
-                self.bounded_loop_remaining_iters.remove(stmt_id);
+        // check to see if there is an entry for this loop
+        if let Some((info_stmt_id, max_iter, iter_count)) = self.loop_info.last().cloned()
+            && info_stmt_id == *stmt_id
+        {
+            // we are already executing this loop
+            self.loop_info.pop().unwrap();
+            let (var_sym_id, _) = self.loop_vars.pop().unwrap();
+            assert_eq!(var_sym_id, *loop_var_sym);
+            if iter_count + 1 == max_iter {
                 Ok(self.next_stmt_map[stmt_id])
             } else {
-                // update count and enter loop
-                *self.bounded_loop_remaining_iters.get_mut(stmt_id).unwrap() -= 1;
-                let seq_index = seq_values.len() - remaining as usize;
                 self.loop_vars
-                    .push((*loop_var_sym, seq_values[seq_index].clone()));
+                    .push((var_sym_id, seq_values[iter_count as usize + 1].clone()));
+                self.loop_info.push((*stmt_id, max_iter, iter_count + 1));
+                Ok(Some(*loop_body_id))
+            }
+        } else {
+            // start loop execution
+            if seq_values.is_empty() {
+                Ok(self.next_stmt_map[stmt_id])
+            } else {
+                self.loop_vars.push((*loop_var_sym, seq_values[0].clone()));
+                self.loop_info.push((*stmt_id, seq_values.len() as u64, 0));
                 Ok(Some(*loop_body_id))
             }
         }

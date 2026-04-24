@@ -44,15 +44,6 @@ pub struct Todo<'a> {
     pub args: ArgMap<'a>,
     /// Maps each `StmtId` to an optional `StmtId` of the next statement
     pub next_stmt_map: NextStmtMap,
-
-    /// Maps a `StmtId` pair to the no. of iterations remaining
-    /// for that particular loop.              
-    /// - **Invariant**: the no. of remaining iterations is always non-zero
-    ///   (if it reaches zero, we remove the entry from this map).       
-    /// - In the key, we need the `StmtId` to allow for nested loops,
-    ///   and we also need the `TodoIdx`, since the same `StmtId` could be active
-    ///   in differnt threads.
-    pub bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Todo<'a> {
@@ -67,7 +58,6 @@ impl<'a> Todo<'a> {
             st,
             args,
             next_stmt_map,
-            bounded_loop_remaining_iters: FxHashMap::default(),
         }
     }
 
@@ -96,6 +86,10 @@ pub struct Thread<'a> {
     pub prev_fork_stmt_id: Option<StmtId>,
     /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
     pub todo_idx: usize,
+    /// copy of the loop_vars in the Evaluator for context switching
+    pub loop_vars: Vec<(SymbolId, BitVecValue)>,
+    /// copy of the loop_info in the Evaluator for context switching
+    pub loop_info: Vec<(StmtId, u64, u64)>,
 }
 
 impl<'a> Thread<'a> {
@@ -108,10 +102,12 @@ impl<'a> Thread<'a> {
             current_step: todo.tr.body,
             next_step: None,
             todo_idx,
+            loop_vars: vec![],
             todo,
             prev_fork_stmt_id: None,
             has_stepped: false,
             has_forked: false,
+            loop_info: vec![],
         }
     }
 
@@ -125,10 +121,12 @@ impl<'a> Thread<'a> {
     pub fn save_state(
         &mut self,
         next_step: Option<StmtId>,
-        bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
+        loop_vars: Vec<(SymbolId, BitVecValue)>,
+        loop_info: Vec<(StmtId, u64, u64)>,
     ) {
         self.next_step = next_step;
-        self.todo.bounded_loop_remaining_iters = bounded_loop_remaining_iters;
+        self.loop_vars = loop_vars;
+        self.loop_info = loop_info;
     }
 }
 
@@ -536,8 +534,7 @@ impl<'a> Scheduler<'a> {
         );
 
         info!("  BEFORE context_switch");
-        self.evaluator
-            .context_switch(thread.todo.clone(), thread.todo_idx);
+        self.evaluator.context_switch(thread.clone());
         info!("  AFTER context_switch");
 
         // Initialize thread inputs at cycle START (implicit reapplication)
@@ -551,7 +548,11 @@ impl<'a> Scheduler<'a> {
                 e
             );
             self.results[thread.todo_idx] = Err(e);
-            thread.save_state(None, self.evaluator.bounded_loop_remaining_iters());
+            thread.save_state(
+                None,
+                self.evaluator.loop_vars.clone(),
+                self.evaluator.loop_info.clone(),
+            );
             return;
         }
 
@@ -591,7 +592,8 @@ impl<'a> Scheduler<'a> {
                                 };
                             thread.save_state(
                                 next_step,
-                                self.evaluator.bounded_loop_remaining_iters(),
+                                self.evaluator.loop_vars.clone(),
+                                self.evaluator.loop_info.clone(),
                             );
                             return;
                         }
@@ -610,7 +612,8 @@ impl<'a> Scheduler<'a> {
                                 self.results[thread.todo_idx] = Err(error);
                                 thread.save_state(
                                     None,
-                                    self.evaluator.bounded_loop_remaining_iters(),
+                                    self.evaluator.loop_vars.clone(),
+                                    self.evaluator.loop_info.clone(),
                                 );
                                 return;
                             } else if !thread.has_stepped {
@@ -626,7 +629,8 @@ impl<'a> Scheduler<'a> {
                                 self.results[thread.todo_idx] = Err(error);
                                 thread.save_state(
                                     None,
-                                    self.evaluator.bounded_loop_remaining_iters(),
+                                    self.evaluator.loop_vars.clone(),
+                                    self.evaluator.loop_info.clone(),
                                 );
                                 return;
                             }
@@ -702,7 +706,11 @@ impl<'a> Scheduler<'a> {
             }
         }
         // Save thread state after execution pauses (loop exited via break)
-        thread.save_state(None, self.evaluator.bounded_loop_remaining_iters());
+        thread.save_state(
+            None,
+            self.evaluator.loop_vars.clone(),
+            self.evaluator.loop_info.clone(),
+        );
 
         // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
         if thread.next_step.is_none() {

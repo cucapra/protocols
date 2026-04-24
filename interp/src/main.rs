@@ -10,8 +10,6 @@ use protocols::ir::{SymbolTable, Transaction};
 use protocols::scheduler::Scheduler;
 use protocols::setup::setup_test_environment;
 use protocols::transaction_frontend;
-use protocols::transactions_parser::parse_transactions_file;
-use rustc_hash::FxHashMap;
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]

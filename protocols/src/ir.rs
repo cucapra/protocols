@@ -141,12 +141,10 @@ impl Transaction {
                             self.next_stmt_mapping_helper(*else_stmt_id, new_stmt_after_block),
                         );
                     }
-                    Stmt::While(_, body_id) => {
-                        map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
-                    }
                     // Add a back-edge from the loop body to the current `stmt_id`
-                    // (same as how while-loops are represented in the current AST)
-                    Stmt::RepeatLoop(_, body_id) => {
+                    Stmt::RepeatLoop(_, body_id)
+                    | Stmt::While(_, body_id)
+                    | Stmt::ForInLoop(_, _, body_id) => {
                         map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
                     }
                     _ => {}
