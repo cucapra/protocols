@@ -2,10 +2,10 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use baa::BitVecValue;
 use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::diagnostic::DiagnosticHandler;
+use protocols::interpreter::Value;
 use protocols::ir::{SymbolTable, Transaction};
 use protocols::{frontend, transaction_frontend};
 use std::path::Path;
@@ -45,7 +45,7 @@ enum Cmds {
 fn load_trace(
     protos: &[(Transaction, SymbolTable)],
     transactions: Option<&str>,
-) -> Vec<(String, Vec<BitVecValue>)> {
+) -> Vec<(String, Vec<Value>)> {
     if let Some(filename) = transactions {
         let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
         let traces = transaction_frontend(filename, protos.iter(), &mut d).unwrap();
