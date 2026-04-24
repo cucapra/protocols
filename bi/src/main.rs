@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 mod bi;
+mod constraints;
 mod proto_trace;
 mod signal_trace;
 

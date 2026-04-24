@@ -2,9 +2,10 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use crate::constraints::{ArgValue, RepeatValue};
 use crate::proto_trace::*;
 use crate::signal_trace::*;
-use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
+use baa::{BitVecOps, BitVecValue};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -571,6 +572,9 @@ impl Thread {
                         RepeatLoop
                     }
                 }
+                Stmt::ForInLoop(loop_var_id, seq_expr, body) => {
+                    todo!("for in loop")
+                }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
                         .eval_expr(get_value, &ti.proto, *cond)
@@ -722,6 +726,7 @@ impl Thread {
                 self.eval_expr(get_value, transaction, *e).map(|v| v.not())
             }
             Expr::Slice(_, _, _) => todo!(),
+            Expr::IsLastIteration => todo!("is_last"),
         }
     }
 }
@@ -760,125 +765,4 @@ struct ProtoInfo {
     proto: Transaction,
     sym: SymbolTable,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
-}
-
-#[derive(Debug, Clone)]
-enum ArgValue {
-    Data(DataValue),
-    Repeat(RepeatValue),
-}
-
-impl ArgValue {
-    fn unknown(sym: &SymbolTable, arg: &Arg) -> Self {
-        match sym[arg.symbol()].tpe() {
-            Type::UnsignedInt => Self::Repeat(RepeatValue::default()),
-            Type::BitVec(w) => Self::Data(DataValue::unknown(w)),
-            Type::Struct(_) => unreachable!("args cannot be structs"),
-            Type::Unknown => unreachable!("arg types are always known"),
-        }
-    }
-
-    fn get_known(&self) -> Option<BitVecValue> {
-        match self {
-            ArgValue::Data(d) => d.get_known(),
-            ArgValue::Repeat(RepeatValue::Exactly(v, _)) => {
-                Some(BitVecValue::from_u64(*v as u64, 32))
-            }
-            ArgValue::Repeat(RepeatValue::AtLeast(_)) => None,
-        }
-    }
-
-    fn as_repeat(&mut self) -> Option<&mut RepeatValue> {
-        if let Self::Repeat(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum RepeatValue {
-    AtLeast(u32),
-    Exactly(u32, u32),
-}
-
-impl Default for RepeatValue {
-    fn default() -> Self {
-        Self::AtLeast(0)
-    }
-}
-
-impl RepeatValue {
-    fn current_value(&self) -> u32 {
-        match self {
-            RepeatValue::AtLeast(v) => *v,
-            RepeatValue::Exactly(_, v) => *v,
-        }
-    }
-
-    fn increment_current_value(&mut self) {
-        match self {
-            RepeatValue::AtLeast(v) => *v += 1,
-            RepeatValue::Exactly(b, v) => {
-                if *v + 1 == *b {
-                    *v = 0;
-                } else {
-                    *v += 1;
-                }
-                debug_assert!(*v < *b, "{} < {}", *v, *b);
-            }
-        }
-    }
-
-    fn num_iters(&self) -> Option<u32> {
-        match self {
-            RepeatValue::AtLeast(_) => None,
-            RepeatValue::Exactly(b, _) => Some(*b),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DataValue {
-    value: BitVecValue,
-    known: BitVecValue,
-}
-
-impl DataValue {
-    fn unknown(width: WidthInt) -> Self {
-        Self {
-            value: BitVecValue::zero(width),
-            known: BitVecValue::zero(width),
-        }
-    }
-
-    fn get_known(&self) -> Option<BitVecValue> {
-        if self.known.is_all_ones() {
-            Some(self.value.clone())
-        } else {
-            None
-        }
-    }
-
-    #[allow(dead_code)]
-    fn bit_is_known(&self, bit: WidthInt) -> bool {
-        self.known.is_bit_set(bit)
-    }
-
-    #[allow(dead_code)]
-    fn define_bit(&mut self, bit: WidthInt, value: u8) {
-        debug_assert!(!self.bit_is_known(bit));
-        debug_assert!(bit < self.value.width());
-        if value != 0 {
-            self.value.set_bit(bit);
-        }
-        self.known.set_bit(bit);
-    }
-
-    fn define_value(&mut self, value: BitVecValue) {
-        debug_assert_eq!(self.value.width(), value.width());
-        self.value = value;
-        self.known = BitVecValue::ones(self.value.width());
-    }
 }
