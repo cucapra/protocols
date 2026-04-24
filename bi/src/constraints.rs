@@ -4,19 +4,30 @@
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
 use protocols::ir::{Arg, SymbolTable, Type};
+use protocols::serialize::serialize_type;
 
 #[derive(Debug, Clone)]
 pub enum ArgValue {
+    Seq(SeqValue),
     Data(DataValue),
-    Repeat(RepeatValue),
 }
 
 impl ArgValue {
     pub fn unknown(sym: &SymbolTable, arg: &Arg) -> Self {
         match sym[arg.symbol()].tpe() {
-            Type::UnsignedInt => Self::Repeat(RepeatValue::default()),
+            // model undigned int ad u64
+            Type::UnsignedInt => Self::Data(DataValue::unknown(64)),
             Type::BitVec(w) => Self::Data(DataValue::unknown(w)),
-            Type::Seq(_) => todo!("handle seq constraints"),
+            Type::Seq(seq_id) => {
+                if let Type::BitVec(w) = sym[seq_id].tpe() {
+                    Self::Seq(SeqValue::unknown(w))
+                } else {
+                    todo!(
+                        "Only [u..] is supported. Not: {}",
+                        serialize_type(sym, sym[seq_id].tpe())
+                    )
+                }
+            }
             Type::Struct(_) => unreachable!("args cannot be structs"),
             Type::Unknown => unreachable!("arg types are always known"),
         }
@@ -25,60 +36,23 @@ impl ArgValue {
     pub fn get_known(&self) -> Option<BitVecValue> {
         match self {
             ArgValue::Data(d) => d.get_known(),
-            ArgValue::Repeat(RepeatValue::Exactly(v, _)) => {
-                Some(BitVecValue::from_u64(*v as u64, 32))
-            }
-            ArgValue::Repeat(RepeatValue::AtLeast(_)) => None,
+            ArgValue::Seq(_) => todo!("seq value get known"),
         }
     }
 
-    pub fn as_repeat(&mut self) -> Option<&mut RepeatValue> {
-        if let Self::Repeat(v) = self {
+    pub fn as_seq(&mut self) -> Option<&mut SeqValue> {
+        if let Self::Seq(v) = self {
             Some(v)
         } else {
             None
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub enum RepeatValue {
-    AtLeast(u32),
-    Exactly(u32, u32),
-}
-
-impl Default for RepeatValue {
-    fn default() -> Self {
-        Self::AtLeast(0)
-    }
-}
-
-impl RepeatValue {
-    pub fn current_value(&self) -> u32 {
-        match self {
-            RepeatValue::AtLeast(v) => *v,
-            RepeatValue::Exactly(_, v) => *v,
-        }
-    }
-
-    pub fn increment_current_value(&mut self) {
-        match self {
-            RepeatValue::AtLeast(v) => *v += 1,
-            RepeatValue::Exactly(b, v) => {
-                if *v + 1 == *b {
-                    *v = 0;
-                } else {
-                    *v += 1;
-                }
-                debug_assert!(*v < *b, "{} < {}", *v, *b);
-            }
-        }
-    }
-
-    pub fn num_iters(&self) -> Option<u32> {
-        match self {
-            RepeatValue::AtLeast(_) => None,
-            RepeatValue::Exactly(b, _) => Some(*b),
+    pub fn as_scalar(&mut self) -> Option<&mut DataValue> {
+        if let Self::Data(v) = self {
+            Some(v)
+        } else {
+            None
         }
     }
 }
@@ -97,7 +71,7 @@ impl DataValue {
         }
     }
 
-    fn get_known(&self) -> Option<BitVecValue> {
+    pub fn get_known(&self) -> Option<BitVecValue> {
         if self.known.is_all_ones() {
             Some(self.value.clone())
         } else {
@@ -124,5 +98,24 @@ impl DataValue {
         debug_assert_eq!(self.value.width(), value.width());
         self.value = value;
         self.known = BitVecValue::ones(self.value.width());
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SeqValue {
+    width: WidthInt,
+    /// indicates that there is a constraint that enforces the length to be exactly what
+    /// the current `values.len()` is
+    len_is_known: bool,
+    values: Vec<DataValue>,
+}
+
+impl SeqValue {
+    fn unknown(width: WidthInt) -> Self {
+        Self {
+            width,
+            len_is_known: false,
+            values: vec![],
+        }
     }
 }

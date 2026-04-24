@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::constraints::{ArgValue, RepeatValue};
+use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
 use baa::{BitVecOps, BitVecValue};
@@ -337,6 +337,7 @@ impl Path {
                     pin_assignments: vec![],
                     start_step: self.step,
                     failures: vec![],
+                    loop_iter_counts: vec![],
                 };
                 p.active.push(t);
                 p
@@ -435,6 +436,7 @@ struct Thread {
     name: String,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
+    loop_iter_counts: Vec<(StmtId, u64)>,
     arg_values: Vec<ArgValue>,
     pin_assignments: Vec<(StmtId, SymbolId, ExprId)>,
     has_forked: bool,
@@ -469,24 +471,25 @@ impl Thread {
             );
         };
 
-        // if we take the repeat loop branch, we up the value
+        // check to make sure the loop stack works as expected
+        let (check_stmt_id, value) = self.loop_iter_counts.last().unwrap().clone();
+        assert_eq!(
+            check_stmt_id, body,
+            "something went wrong with the loop iter counts stack"
+        );
+
+        // if we take the repeat loop branch, we just keep the count and go into the body
         let mut taken = self.clone();
-        let arg_value = taken.arg_values[arg_id]
-            .as_repeat()
-            .expect("must be a uint arg");
-        arg_value.increment_current_value();
-        let value = arg_value.current_value();
-        taken.name = format!("{}{value}?", taken.name);
+        taken.name = format!("{}{}?", taken.name, value + 1);
         taken.next_stmt = Some(body);
 
-        // of we do not take the branch, we jump after the loop
+        // of we do not take the branch, we jump after the loop and freeze the value
         let mut not_taken = self;
-        let arg_value = not_taken.arg_values[arg_id]
-            .as_repeat()
-            .expect("must be a uint arg");
-        let max_iter = arg_value.current_value();
-        *arg_value = RepeatValue::Exactly(max_iter, 0);
-        not_taken.name = format!("{}{max_iter}!", not_taken.name);
+        not_taken.arg_values[arg_id]
+            .as_scalar()
+            .expect("must be a scalar")
+            .define_value(BitVecValue::from_u64(value, 64));
+        not_taken.name = format!("{}{value}!", not_taken.name);
         not_taken.next_stmt = ti.next_stmt[&stmt];
 
         // we need to explore both versions of our thread
@@ -546,17 +549,27 @@ impl Thread {
                     Ok
                 }
                 Stmt::RepeatLoop(repetitions, body) => {
-                    let arg_id = as_arg(&ti.proto, *repetitions)
+                    let max_iter_arg_id = as_arg(&ti.proto, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument")
                         .0;
 
-                    let arg_value = self.arg_values[arg_id]
-                        .as_repeat()
-                        .expect("must be a repeat arg");
+                    let max_iter_value = self.arg_values[max_iter_arg_id]
+                        .as_scalar()
+                        .expect("must be a scalar arg");
+
+                    // have we executed this loop before?
+                    if let Some((check_stmt_id, iters)) = self.loop_iter_counts.last()
+                        && check_stmt_id == stmt
+                    {
+                        // do we know the maximum number of iterations?
+                        if let Some(max_iters) = max_iter_value.get_known() {
+                            todo!()
+                        }
+                    }
 
                     // check to see if the number of iterations is known
                     // in this case we essentially just have a for(i=0; i < max_iters; i++) loop
-                    if let Some(max_iters) = arg_value.num_iters() {
+                    if let Some(max_iters) = max_iter_value.get_known() {
                         if arg_value.current_value() < max_iters {
                             arg_value.increment_current_value();
                             self.next_stmt = Some(*body);
@@ -573,6 +586,12 @@ impl Thread {
                     }
                 }
                 Stmt::ForInLoop(loop_var_id, seq_expr, body) => {
+                    let arg_id = as_arg(&ti.proto, *seq_expr)
+                        .expect("for-in sequence argument needs to be an argument to the protocol")
+                        .0;
+                    let arg_value = self.arg_values[arg_id]
+                        .as_seq()
+                        .expect("must be a repeat arg");
                     todo!("for in loop")
                 }
                 Stmt::IfElse(cond, tru, fals) => {
@@ -675,12 +694,10 @@ impl Thread {
             }
         } else {
             if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
-                if let ArgValue::Data(d) = &mut self.arg_values[arg_id] {
-                    // println!("ARG: {} ({:?}) = {} : {}", ti.sym[_arg.symbol()].full_name(&ti.sym), _arg.symbol(), lhs_value.to_dec_str(), lhs_value.width());
-                    d.define_value(lhs_value);
-                } else {
-                    unreachable!("assignments/assert_eq must involve data values (bit vectors)!")
-                }
+                self.arg_values[arg_id]
+                    .as_scalar()
+                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
+                    .define_value(lhs_value);
                 // println!(
                 //     "[{}] Discovered that ?? = {}",
                 //     self.name,
