@@ -28,7 +28,6 @@ obj_dir/
 
 # Verilog backend
 run_dir/
-tb.v
 
 # Include images of  waveforms in Brave New World bug readme
 !monitor/tests/fpga-debugging/axis-async-fifo-c4/*.png
