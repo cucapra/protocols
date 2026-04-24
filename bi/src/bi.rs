@@ -436,7 +436,9 @@ struct Thread {
     name: String,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
-    loop_iter_counts: Vec<(StmtId, u64)>,
+    /// repeat/for loop statement, iteration count, for-in loops also have a loop variable that can
+    /// be used inside the loop
+    loop_iter_counts: Vec<(StmtId, u64, Option<SymbolId>)>,
     arg_values: Vec<ArgValue>,
     pin_assignments: Vec<(StmtId, SymbolId, ExprId)>,
     has_forked: bool,
@@ -460,30 +462,43 @@ enum ThreadResult {
 impl Thread {
     fn exec_repeat_loop_branch(self, ti: &ProtoInfo, iters: u64) -> (Thread, Thread) {
         let stmt = self.next_stmt.expect("");
-        debug_assert!(
-            matches!(&ti.proto[stmt], Stmt::RepeatLoop(_, _)),
-            "repeat loop!"
-        );
-        let (body, arg_id) = if let Stmt::RepeatLoop(arg, body) = &ti.proto[stmt] {
-            (*body, as_arg(&ti.proto, *arg).unwrap().0)
-        } else {
-            unreachable!(
-                "this function may only be called when executing a repeat loop statement!"
-            );
+        let (body, arg_expr, maybe_loop_var) = match ti.proto[stmt].clone() {
+            Stmt::RepeatLoop(arg, body) => (body, arg, None),
+            Stmt::ForInLoop(loop_var, arg, body) => (body, arg, Some(loop_var)),
+            _ => unreachable!(
+                "We should only get here if the current statement is a repeat of for-in loop"
+            ),
         };
+        let arg_id = as_arg(&ti.proto, arg_expr).unwrap().0;
 
         // if we take the repeat loop branch, we just keep the count and go into the body
         let mut taken = self.clone();
         taken.name = format!("{}{}?", taken.name, iters + 1);
         taken.next_stmt = Some(body);
-        taken.loop_iter_counts.push((stmt, iters));
+        taken.loop_iter_counts.push((stmt, iters, maybe_loop_var));
+        if maybe_loop_var.is_some() {
+            // we need to add one more element to the argument
+            taken.arg_values[arg_id]
+                .as_seq()
+                .expect("must be a seq")
+                .increment_unknown_len();
+        }
 
         // of we do not take the branch, we jump after the loop and freeze the value
         let mut not_taken = self;
-        not_taken.arg_values[arg_id]
-            .as_scalar()
-            .expect("must be a scalar")
-            .define_value(BitVecValue::from_u64(iters, 64));
+        if maybe_loop_var.is_none() {
+            // repeat loop
+            not_taken.arg_values[arg_id]
+                .as_scalar()
+                .expect("must be a scalar")
+                .define_value(BitVecValue::from_u64(iters, 64));
+        } else {
+            // for-in loop
+            not_taken.arg_values[arg_id]
+                .as_seq()
+                .expect("must be a seq")
+                .freeze_len();
+        }
         not_taken.name = format!("{}{iters}!", not_taken.name);
         not_taken.next_stmt = ti.next_stmt[&stmt];
 
@@ -544,24 +559,16 @@ impl Thread {
                     Ok
                 }
                 Stmt::RepeatLoop(repetitions, body) => {
+                    // how often have we executed this thread on the current execution path
+                    let iters = self.get_inner_loop_iters(stmt);
+
+                    // retrieve num iteration argument
                     let max_iter_arg_id = as_arg(&ti.proto, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument")
                         .0;
-
                     let max_iter_value = self.arg_values[max_iter_arg_id]
                         .as_scalar()
                         .expect("must be a scalar arg");
-
-                    // have we executed this loop before?
-                    let iters = if let Some((check_stmt_id, iters)) =
-                        self.loop_iter_counts.last().cloned()
-                        && check_stmt_id == stmt
-                    {
-                        self.loop_iter_counts.pop().unwrap();
-                        iters + 1
-                    } else {
-                        0
-                    };
 
                     // do we know the maximum number of iterations?
                     if let Some(max_iters) = max_iter_value.get_known() {
@@ -570,7 +577,7 @@ impl Thread {
                             self.next_stmt = ti.next_stmt[&stmt]; // exit loop
                         } else {
                             assert!(iters < max_iters);
-                            self.loop_iter_counts.push((stmt, iters + 1));
+                            self.loop_iter_counts.push((stmt, iters + 1, None));
                             self.next_stmt = Some(*body);
                         }
                         Ok
@@ -581,13 +588,33 @@ impl Thread {
                     }
                 }
                 Stmt::ForInLoop(loop_var_id, seq_expr, body) => {
+                    // how often have we executed this thread on the current execution path
+                    let iters = self.get_inner_loop_iters(stmt);
+
+                    // retrieve sequence argument
                     let arg_id = as_arg(&ti.proto, *seq_expr)
                         .expect("for-in sequence argument needs to be an argument to the protocol")
                         .0;
                     let arg_value = self.arg_values[arg_id]
                         .as_seq()
                         .expect("must be a repeat arg");
-                    todo!("for in loop")
+
+                    // do we know the maximum number of iterations?
+                    if let Some(max_iters) = arg_value.get_known_len() {
+                        if iters == max_iters {
+                            self.next_stmt = ti.next_stmt[&stmt]; // exit loop
+                        } else {
+                            assert!(iters < max_iters);
+                            self.loop_iter_counts
+                                .push((stmt, iters + 1, Some(*loop_var_id)));
+                            self.next_stmt = Some(*body);
+                        }
+                        Ok
+                    } else {
+                        // we do not actually know the correct number of steps, and we need to explore both possibilities
+                        // this must happen outside of this method since it involves cloning the thread
+                        RepeatLoop(iters)
+                    }
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
@@ -623,6 +650,18 @@ impl Thread {
             }
         } else {
             unreachable!("should have finished with a step!")
+        }
+    }
+
+    fn get_inner_loop_iters(&mut self, stmt: StmtId) -> u64 {
+        // have we executed this loop before?
+        if let Some((check_stmt_id, iters, _)) = self.loop_iter_counts.last().cloned()
+            && check_stmt_id == stmt
+        {
+            self.loop_iter_counts.pop().unwrap();
+            iters + 1
+        } else {
+            0
         }
     }
 

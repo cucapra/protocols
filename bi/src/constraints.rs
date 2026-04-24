@@ -118,4 +118,22 @@ impl SeqValue {
             values: vec![],
         }
     }
+
+    pub fn get_known_len(&self) -> Option<u64> {
+        if self.len_is_known {
+            Some(self.values.len() as u64)
+        } else {
+            None
+        }
+    }
+
+    pub fn freeze_len(&mut self) {
+        debug_assert!(!self.len_is_known);
+        self.len_is_known = true;
+    }
+
+    pub fn increment_unknown_len(&mut self) {
+        debug_assert!(!self.len_is_known);
+        self.values.push(DataValue::unknown(self.width));
+    }
 }
