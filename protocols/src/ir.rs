@@ -415,11 +415,14 @@ entity_impl!(SeqId, "seq");
 
 /// A silly little bit of indirection to work around the fact that we do not have TypeId.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Seq(Type);
+pub struct Seq(Type, u64);
 
 impl Seq {
     pub fn tpe(&self) -> Type {
         self.0
+    }
+    pub fn min_len(&self) -> u64 {
+        self.1
     }
 }
 
@@ -635,8 +638,8 @@ impl SymbolTable {
         id
     }
 
-    pub fn add_seq(&mut self, inner: Type) -> SeqId {
-        self.seq.push(Seq(inner))
+    pub fn add_seq(&mut self, inner: Type, min_size: u64) -> SeqId {
+        self.seq.push(Seq(inner, min_size))
     }
 
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {

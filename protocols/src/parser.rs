@@ -667,7 +667,12 @@ impl ParserContext<'_> {
                 Rule::uint_tpe => Ok(Type::UnsignedInt),
                 Rule::seq_tpe => {
                     let inner_tpe = self.parse_type(inner_type.into_inner().next().unwrap())?;
-                    let seq_id = self.st.add_seq(inner_tpe);
+                    let seq_id = self.st.add_seq(inner_tpe, 0);
+                    Ok(Type::Seq(seq_id))
+                }
+                Rule::seq_plus_tpe => {
+                    let inner_tpe = self.parse_type(inner_type.into_inner().next().unwrap())?;
+                    let seq_id = self.st.add_seq(inner_tpe, 1);
                     Ok(Type::Seq(seq_id))
                 }
                 _ => {

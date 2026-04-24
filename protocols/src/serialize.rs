@@ -25,7 +25,14 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
         Type::BitVec(t) => format!("u{}", t),
         Type::UnsignedInt => "uint".to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
-        Type::Seq(seq_id) => format!("[{}]", serialize_type(st, st[seq_id].tpe())),
+        Type::Seq(seq_id) => {
+            let suffix = match st[seq_id].min_len() {
+                0 => "",
+                1 => "+",
+                other => unreachable!("unexpected min length of {other}"),
+            };
+            format!("[{}]{suffix}", serialize_type(st, st[seq_id].tpe()))
+        }
         Type::Unknown => "unknown".to_string(),
     }
 }

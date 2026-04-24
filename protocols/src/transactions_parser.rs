@@ -197,13 +197,30 @@ fn parse_arg(
             if let Type::Seq(seq_id) = ty {
                 let inner_ty = st[seq_id].tpe();
                 // seq_arg contains an arg_list
-                let arg_list = arg_pair.into_inner().next().unwrap();
-                let elements = collect_arg_pairs(arg_list);
-                let values: Result<Vec<_>, _> = elements
-                    .into_iter()
-                    .map(|arg_pair| parse_scalar_arg(arg_pair, &inner_ty, handler, fileid))
-                    .collect();
-                values?.into()
+                let values = if let Some(arg_list) = arg_pair.clone().into_inner().next() {
+                    let elements = collect_arg_pairs(arg_list);
+                    let values: Result<Vec<_>, _> = elements
+                        .into_iter()
+                        .map(|arg_pair| parse_scalar_arg(arg_pair, &inner_ty, handler, fileid))
+                        .collect();
+                    values?
+                } else {
+                    // empty sequence
+                    vec![]
+                };
+
+                // check length
+                let min_len = st[seq_id].min_len() as usize;
+                if values.len() < min_len {
+                    let msg = format!(
+                        "Invalid sequence of values for argument of type {}. At least {} elements are required.",
+                        serialize_type(st, *ty),
+                        min_len
+                    );
+                    handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                    return Err(anyhow!(msg));
+                }
+                values.into()
             } else {
                 let msg = format!(
                     "Invalid sequence of values for argument of type {}",

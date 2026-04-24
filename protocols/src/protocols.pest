@@ -41,10 +41,11 @@ expr = { atom ~ (bin_op ~ atom)*}
 
 id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
-tpe = { seq_tpe | uint_tpe | bv_tpe }
+tpe = { seq_plus_tpe | seq_tpe | uint_tpe | bv_tpe }
 uint_tpe = { "uint" }
 bv_tpe = { "u" ~ dec_integer }
 seq_tpe = {"[" ~ tpe ~ "]"}
+seq_plus_tpe = {"[" ~ tpe ~ "]+"}
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
 step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}

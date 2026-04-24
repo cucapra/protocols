@@ -127,7 +127,7 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     step();
 }
 
-prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]) {
+prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
     // no RST
     self.RST := 1'b0;
     // constant burst cycle (in which case bte is don't care)
