@@ -338,6 +338,7 @@ impl Path {
                     start_step: self.step,
                     failures: vec![],
                     loop_iter_counts: vec![],
+                    effectful_stmt_in_step: false,
                 };
                 p.active.push(t);
                 p
@@ -388,7 +389,7 @@ impl Path {
                     let (a, b) = thread.exec_repeat_loop_branch(&tis[tid], iters);
                     (PathResult::Branch(vec![a, b]), None)
                 }
-                ThreadResult::FinalStep => (
+                ThreadResult::FinalStep | ThreadResult::FinishedWithoutStep => (
                     PathResult::Ok,
                     Some(thread_to_call(tis, thread, Some(self.step))),
                 ),
@@ -445,6 +446,9 @@ struct Thread {
     step: u32,
     start_step: u32,
     failures: Vec<Failure>,
+    // keeps track of whether an effectful statement like assign or assert has been encountered in
+    // this step
+    effectful_stmt_in_step: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -456,6 +460,7 @@ enum ThreadResult {
     Fork,
     FinalStepAndFork,
     FinalStep,
+    FinishedWithoutStep,
     Failed,
 }
 
@@ -513,7 +518,7 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            // println!("[{}]: {:?}", self.name, &ti.proto[stmt]);
+            println!("[{}]: {:?}", self.name, &ti.proto[stmt]);
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
@@ -523,12 +528,14 @@ impl Thread {
                     // we apply all pin assignments at the end of a step
                     self.pin_assignments.push((stmt, *lhs, *rhs));
                     self.next_stmt = ti.next_stmt[&stmt];
+                    self.effectful_stmt_in_step = true;
                     Ok
                 }
                 Stmt::Step => {
                     self.next_stmt = ti.next_stmt[&stmt];
                     let assign_ok = self.check_assignments(ti, get_value);
                     self.step += 1;
+                    self.effectful_stmt_in_step = false;
 
                     match (assign_ok, self.next_stmt.is_none(), self.has_forked) {
                         // we found a constraint violation from the assignments
@@ -545,6 +552,7 @@ impl Thread {
                     assert!(self.step > 0, "[{}] Cannot fork at step zero!", self.name);
                     self.has_forked = true;
                     self.next_stmt = ti.next_stmt[&stmt];
+                    self.effectful_stmt_in_step = true;
                     Fork
                 }
                 Stmt::While(cond, body) => {
@@ -628,6 +636,7 @@ impl Thread {
                     Ok
                 }
                 Stmt::AssertEq(lhs, rhs) => {
+                    self.effectful_stmt_in_step = true;
                     let (port, other) = match (
                         as_dut_port_symbol(&ti.proto, *lhs),
                         as_dut_port_symbol(&ti.proto, *rhs),
@@ -649,7 +658,11 @@ impl Thread {
                 }
             }
         } else {
-            unreachable!("should have finished with a step!")
+            assert!(
+                !self.effectful_stmt_in_step,
+                "should not finish without a final step!"
+            );
+            FinishedWithoutStep
         }
     }
 
