@@ -805,7 +805,9 @@ impl Thread {
                 self.eval_expr(get_value, transaction, *e).map(|v| v.not())
             }
             Expr::Slice(_, _, _) => todo!(),
-            Expr::IsLastIteration => todo!("is_last"),
+            Expr::IsLastIteration => {
+                todo!("is_last() currently needs to be handled directly when evaluating branches")
+            }
         }
     }
 }
