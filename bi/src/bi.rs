@@ -735,7 +735,7 @@ impl Thread {
         }
 
         let lhs_value = get_value(lhs);
-        if let Some(rhs_value) = self.eval_expr(get_value, &ti.proto, rhs) {
+        if let ExprValue::Known(rhs_value) = self.eval_expr(get_value, &ti.proto, rhs) {
             if rhs_value != lhs_value {
                 // println!(
                 //     "[{}] found a disagreement: {} =/= {}",
@@ -777,39 +777,59 @@ impl Thread {
         get_value: &impl Fn(SymbolId) -> BitVecValue,
         transaction: &Transaction,
         expr: ExprId,
-    ) -> Option<BitVecValue> {
+    ) -> ExprValue {
         if let Some((arg_id, _)) = as_arg(transaction, expr) {
-            return self.arg_values[arg_id].get_known();
-        }
-        match &transaction[expr] {
-            Expr::Const(value) => Some(value.clone()),
-            Expr::Sym(dut_port) => Some(get_value(*dut_port)),
-            Expr::DontCare => None,
-            Expr::Binary(op, a, b) => {
-                self.eval_expr(get_value, transaction, *a)
-                    .and_then(|a_value| {
-                        self.eval_expr(get_value, transaction, *b)
-                            .map(|b_value| match op {
+            if let Some(value) = self.arg_values[arg_id].get_known() {
+                ExprValue::Known(value)
+            } else {
+                ExprValue::Unknown
+            }
+        } else {
+            match &transaction[expr] {
+                Expr::Const(value) => ExprValue::Known(value.clone()),
+                Expr::Sym(dut_port) => ExprValue::Known(get_value(*dut_port)),
+                Expr::DontCare => ExprValue::DontCare,
+                Expr::Binary(op, a, b) => {
+                    let a = self.eval_expr(get_value, transaction, *a);
+                    let b = self.eval_expr(get_value, transaction, *b);
+                    match (a, b) {
+                        (ExprValue::Known(a), ExprValue::Known(b)) => {
+                            let res = match op {
                                 BinOp::Equal => {
-                                    if a_value.is_equal(&b_value) {
+                                    if a.is_equal(&b) {
                                         BitVecValue::new_true()
                                     } else {
                                         BitVecValue::new_false()
                                     }
                                 }
-                                BinOp::Concat => a_value.concat(&b_value),
-                            })
-                    })
-            }
-            Expr::Unary(UnaryOp::Not, e) => {
-                self.eval_expr(get_value, transaction, *e).map(|v| v.not())
-            }
-            Expr::Slice(_, _, _) => todo!(),
-            Expr::IsLastIteration => {
-                todo!("is_last() currently needs to be handled directly when evaluating branches")
+                                BinOp::Concat => a.concat(&b),
+                            };
+                            ExprValue::Known(res)
+                        }
+                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
+                        (ExprValue::Unknown, _) | (_, ExprValue::Unknown) => ExprValue::Unknown,
+                        (ExprValue::DependsOnIsLast, _) | (_, ExprValue::DependsOnIsLast) => {
+                            ExprValue::DependsOnIsLast
+                        }
+                    }
+                }
+                Expr::Unary(UnaryOp::Not, e) => match self.eval_expr(get_value, transaction, *e) {
+                    ExprValue::Known(v) => ExprValue::Known(v.not()),
+                    other => other,
+                },
+                Expr::Slice(_, _, _) => todo!(),
+                Expr::IsLastIteration => ExprValue::DependsOnIsLast,
             }
         }
     }
+}
+
+#[derive(Debug, Clone)]
+enum ExprValue {
+    Known(BitVecValue),
+    DontCare,
+    Unknown,
+    DependsOnIsLast,
 }
 
 /// returns a dut port symbol if the expression corresponds to one
