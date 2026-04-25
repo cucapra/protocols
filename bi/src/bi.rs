@@ -607,8 +607,17 @@ impl Thread {
                         .as_seq()
                         .expect("must be a repeat arg");
 
+                    // minimum number of iterations
+                    let min_len =
+                        if let Type::Seq(seq_id) = ti.sym[ti.proto.args[arg_id].symbol()].tpe() {
+                            ti.sym[seq_id].min_len()
+                        } else {
+                            unreachable!("must be sequence type")
+                        };
+
                     // do we know the maximum number of iterations?
                     if let Some(max_iters) = arg_value.get_known_len() {
+                        debug_assert!(max_iters >= min_len);
                         if iters == max_iters {
                             self.next_stmt = ti.next_stmt[&stmt]; // exit loop
                         } else {
@@ -617,6 +626,12 @@ impl Thread {
                                 .push((stmt, iters + 1, Some(*loop_var_id)));
                             self.next_stmt = Some(*body);
                         }
+                        Ok
+                    } else if iters < min_len {
+                        // there is no branching, we need to iterate!
+                        self.loop_iter_counts
+                            .push((stmt, iters + 1, Some(*loop_var_id)));
+                        self.next_stmt = Some(*body);
                         Ok
                     } else {
                         // we do not actually know the correct number of steps, and we need to explore both possibilities
