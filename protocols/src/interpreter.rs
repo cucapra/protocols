@@ -80,6 +80,28 @@ impl<'a> TryFrom<&'a Value> for &'a [BitVecValue] {
     }
 }
 
+impl Value {
+    pub fn to_hex_str(&self) -> String {
+        match &self.0 {
+            ValueKind::Scalar(bv) => bv.to_hex_str(),
+            ValueKind::Seq(values) => {
+                let values: Vec<_> = values.iter().map(|v| v.to_hex_str()).collect();
+                format!("[{}]", values.join(", "))
+            }
+        }
+    }
+
+    pub fn to_dec_str(&self) -> String {
+        match &self.0 {
+            ValueKind::Scalar(bv) => bv.to_dec_str(),
+            ValueKind::Seq(values) => {
+                let values: Vec<_> = values.iter().map(|v| v.to_dec_str()).collect();
+                format!("[{}]", values.join(", "))
+            }
+        }
+    }
+}
+
 /// Per-thread input value: either a concrete assignment or DontCare
 #[derive(Debug, Clone)]
 pub enum ThreadInputValue {

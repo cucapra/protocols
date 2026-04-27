@@ -3,6 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
+use protocols::interpreter::Value;
 use protocols::ir::{Arg, SymbolTable, Type};
 use protocols::serialize::serialize_type;
 
@@ -33,10 +34,10 @@ impl ArgValue {
         }
     }
 
-    pub fn get_known(&self) -> Option<BitVecValue> {
+    pub fn get_known(&self) -> Option<Value> {
         match self {
-            ArgValue::Data(d) => d.get_known(),
-            ArgValue::Seq(_) => todo!("seq value get known"),
+            ArgValue::Seq(s) => s.get_known().map(|v| v.into()),
+            ArgValue::Data(d) => d.get_known().map(|v| v.into()),
         }
     }
 
@@ -57,6 +58,14 @@ impl ArgValue {
     }
 
     pub fn as_scalar_mut(&mut self) -> Option<&mut DataValue> {
+        if let Self::Data(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_scalar(&self) -> Option<&DataValue> {
         if let Self::Data(v) = self {
             Some(v)
         } else {
@@ -135,11 +144,20 @@ impl SeqValue {
         }
     }
 
-    pub fn get_known(&self, index: u64) -> Option<BitVecValue> {
+    pub fn get_known(&self) -> Option<Vec<BitVecValue>> {
+        let knowns: Vec<_> = self.values.iter().map(|v| v.get_known()).collect();
+        if knowns.iter().all(|e| e.is_some()) {
+            Some(knowns.into_iter().map(|e| e.unwrap()).collect())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_known_at(&self, index: u64) -> Option<BitVecValue> {
         self.values[index as usize].get_known()
     }
 
-    pub fn define_value(&mut self, index: u64, value: BitVecValue) {
+    pub fn define_value_at(&mut self, index: u64, value: BitVecValue) {
         self.values[index as usize].define_value(value);
     }
 

@@ -767,7 +767,7 @@ impl Thread {
                 self.arg_values[arg_id]
                     .as_seq_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_value(index, lhs_value);
+                    .define_value_at(index, lhs_value);
                 None
             }
             ExprValue::UnknownArg(arg_id) => {
@@ -792,6 +792,8 @@ impl Thread {
                 if ti.sym[sym_id].is_arg() {
                     let arg_index = sym_as_arg(&ti.proto, *sym_id).unwrap().0;
                     self.arg_values[arg_index]
+                        .as_scalar()
+                        .expect("only scalar arguments should ever be evaluated")
                         .get_known()
                         .map(ExprValue::Known)
                         .unwrap_or(ExprValue::UnknownArg(arg_index))
@@ -811,7 +813,7 @@ impl Thread {
                             .as_seq()
                             .expect("must be a repeat arg");
                         arg_value
-                            .get_known(iter)
+                            .get_known_at(iter)
                             .map(ExprValue::Known)
                             .unwrap_or(ExprValue::UnknownSeqArg(arg_id, iter))
                     } else {
