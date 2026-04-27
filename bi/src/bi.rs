@@ -484,7 +484,7 @@ impl Thread {
         if maybe_loop_var.is_some() {
             // we need to add one more element to the argument
             taken.arg_values[arg_id]
-                .as_seq()
+                .as_seq_mut()
                 .expect("must be a seq")
                 .increment_unknown_len();
         }
@@ -500,7 +500,7 @@ impl Thread {
         } else {
             // for-in loop
             not_taken.arg_values[arg_id]
-                .as_seq()
+                .as_seq_mut()
                 .expect("must be a seq")
                 .freeze_len();
         }
@@ -604,7 +604,7 @@ impl Thread {
                         .expect("for-in sequence argument needs to be an argument to the protocol")
                         .0;
                     let arg_value = self.arg_values[arg_id]
-                        .as_seq()
+                        .as_seq_mut()
                         .expect("must be a repeat arg");
 
                     // minimum number of iterations
@@ -775,23 +775,23 @@ impl Thread {
     fn eval_expr(
         &self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
-        transaction: &Transaction,
+        proto: &Transaction,
         expr: ExprId,
     ) -> ExprValue {
-        if let Some((arg_id, _)) = as_arg(transaction, expr) {
+        if let Some((arg_id, _)) = as_arg(proto, expr) {
             if let Some(value) = self.arg_values[arg_id].get_known() {
                 ExprValue::Known(value)
             } else {
                 ExprValue::Unknown
             }
         } else {
-            match &transaction[expr] {
+            match &proto[expr] {
                 Expr::Const(value) => ExprValue::Known(value.clone()),
                 Expr::Sym(dut_port) => ExprValue::Known(get_value(*dut_port)),
                 Expr::DontCare => ExprValue::DontCare,
                 Expr::Binary(op, a, b) => {
-                    let a = self.eval_expr(get_value, transaction, *a);
-                    let b = self.eval_expr(get_value, transaction, *b);
+                    let a = self.eval_expr(get_value, proto, *a);
+                    let b = self.eval_expr(get_value, proto, *b);
                     match (a, b) {
                         (ExprValue::Known(a), ExprValue::Known(b)) => {
                             let res = match op {
@@ -813,12 +813,38 @@ impl Thread {
                         }
                     }
                 }
-                Expr::Unary(UnaryOp::Not, e) => match self.eval_expr(get_value, transaction, *e) {
+                Expr::Unary(UnaryOp::Not, e) => match self.eval_expr(get_value, proto, *e) {
                     ExprValue::Known(v) => ExprValue::Known(v.not()),
                     other => other,
                 },
                 Expr::Slice(_, _, _) => todo!(),
-                Expr::IsLastIteration => ExprValue::DependsOnIsLast,
+                Expr::IsLastIteration => {
+                    let (stmt, iter_count, loop_var) = *self.loop_iter_counts.last().unwrap();
+                    match &proto[stmt] {
+                        Stmt::ForInLoop(_, seq_expr, _) => {
+                            // retrieve sequence argument
+                            let arg_id = as_arg(&proto, *seq_expr)
+                                .expect("for-in sequence argument needs to be an argument to the protocol")
+                                .0;
+                            let arg_value = self.arg_values[arg_id]
+                                .as_seq()
+                                .expect("must be a repeat arg");
+                            if let Some(max_iter) = arg_value.get_known_len() {
+                                if max_iter == iter_count + 1 {
+                                    ExprValue::Known(BitVecValue::new_true())
+                                } else {
+                                    ExprValue::Known(BitVecValue::new_false())
+                                }
+                            } else
+                        }
+                        Stmt::RepeatLoop(_, _) => {
+                            todo!("implement is_last for repeat loops!");
+                        }
+                        other => unreachable!("{:?}", other),
+                    }
+
+                    ExprValue::DependsOnIsLast
+                },
             }
         }
     }
@@ -830,6 +856,16 @@ enum ExprValue {
     DontCare,
     Unknown,
     DependsOnIsLast,
+}
+
+impl ExprValue {
+    fn expect(self, msg: &str) -> BitVecValue {
+        if let ExprValue::Known(v) = self {
+            v
+        } else {
+            panic!("{self:?} is not known! {}", msg)
+        }
+    }
 }
 
 /// returns a dut port symbol if the expression corresponds to one

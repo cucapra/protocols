@@ -40,7 +40,15 @@ impl ArgValue {
         }
     }
 
-    pub fn as_seq(&mut self) -> Option<&mut SeqValue> {
+    pub fn as_seq_mut(&mut self) -> Option<&mut SeqValue> {
+        if let Self::Seq(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_seq(&self) -> Option<&SeqValue> {
         if let Self::Seq(v) = self {
             Some(v)
         } else {
@@ -107,6 +115,10 @@ pub struct SeqValue {
     /// indicates that there is a constraint that enforces the length to be exactly what
     /// the current `values.len()` is
     len_is_known: bool,
+    /// The minimum number of elements, this is initially determined by the type ([] vs []+).
+    /// However, the same mechanism is used to mark path on which a for-in loop needs to be executed
+    /// at least one more time.
+    min_len: usize,
     values: Vec<DataValue>,
 }
 
