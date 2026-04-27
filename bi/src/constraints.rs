@@ -56,7 +56,7 @@ impl ArgValue {
         }
     }
 
-    pub fn as_scalar(&mut self) -> Option<&mut DataValue> {
+    pub fn as_scalar_mut(&mut self) -> Option<&mut DataValue> {
         if let Self::Data(v) = self {
             Some(v)
         } else {
@@ -133,6 +133,14 @@ impl SeqValue {
         } else {
             None
         }
+    }
+
+    pub fn get_known(&self, index: u64) -> Option<BitVecValue> {
+        self.values[index as usize].get_known()
+    }
+
+    pub fn define_value(&mut self, index: u64, value: BitVecValue) {
+        self.values[index as usize].define_value(value);
     }
 
     pub fn freeze_len(&mut self) {

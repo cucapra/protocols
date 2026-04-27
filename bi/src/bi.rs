@@ -494,7 +494,7 @@ impl Thread {
         if maybe_loop_var.is_none() {
             // repeat loop
             not_taken.arg_values[arg_id]
-                .as_scalar()
+                .as_scalar_mut()
                 .expect("must be a scalar")
                 .define_value(BitVecValue::from_u64(iters, 64));
         } else {
@@ -582,7 +582,7 @@ impl Thread {
                         .expect("repeat loop repetition count needs to be an argument")
                         .0;
                     let max_iter_value = self.arg_values[max_iter_arg_id]
-                        .as_scalar()
+                        .as_scalar_mut()
                         .expect("must be a scalar arg");
 
                     // do we know the maximum number of iterations?
@@ -742,40 +742,42 @@ impl Thread {
         }
 
         let lhs_value = get_value(lhs);
-        if let ExprValue::Known(rhs_value) = self.eval_expr(get_value, ti, rhs) {
-            if rhs_value != lhs_value {
-                // println!(
-                //     "[{}] found a disagreement: {} =/= {}",
-                //     self.name,
-                //     lhs_value.to_bit_str(),
-                //     rhs_value.to_bit_str()
-                // );
-                Some(Failure {
-                    thread_local_step: self.step,
-                    proto_id: ti.proto_id,
-                    thread_name: self.name.clone(),
-                    stmt,
-                    a: lhs_value,
-                    b: rhs_value,
-                })
-            } else {
+        match self.eval_expr(get_value, ti, rhs) {
+            ExprValue::Known(rhs_value) => {
+                if rhs_value != lhs_value {
+                    // println!(
+                    //     "[{}] found a disagreement: {} =/= {}",
+                    //     self.name,
+                    //     lhs_value.to_bit_str(),
+                    //     rhs_value.to_bit_str()
+                    // );
+                    Some(Failure {
+                        thread_local_step: self.step,
+                        proto_id: ti.proto_id,
+                        thread_name: self.name.clone(),
+                        stmt,
+                        a: lhs_value,
+                        b: rhs_value,
+                    })
+                } else {
+                    None
+                }
+            }
+            ExprValue::UnknownSeqArg(arg_id, index) => {
+                self.arg_values[arg_id]
+                    .as_seq_mut()
+                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
+                    .define_value(index, lhs_value);
                 None
             }
-        } else {
-            if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
+            ExprValue::UnknownArg(arg_id) => {
                 self.arg_values[arg_id]
-                    .as_scalar()
+                    .as_scalar_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
                     .define_value(lhs_value);
-                // println!(
-                //     "[{}] Discovered that ?? = {}",
-                //     self.name,
-                //     lhs_value.to_bit_str()
-                // );
-            } else {
-                todo!()
+                None
             }
-            None
+            other => todo!("deal with {other:?} on rhs of assignment"),
         }
     }
 
@@ -788,14 +790,33 @@ impl Thread {
         match &ti.proto[expr] {
             Expr::Sym(sym_id) => {
                 if ti.sym[sym_id].is_arg() {
-                    self.arg_values[sym_as_arg(&ti.proto, *sym_id).unwrap().0]
+                    let arg_index = sym_as_arg(&ti.proto, *sym_id).unwrap().0;
+                    self.arg_values[arg_index]
                         .get_known()
-                        .map(|v| ExprValue::Known(v))
-                        .unwrap_or(ExprValue::Unknown)
+                        .map(ExprValue::Known)
+                        .unwrap_or(ExprValue::UnknownArg(arg_index))
                 } else if ti.sym[sym_id].is_port() {
                     ExprValue::Known(get_value(*sym_id))
                 } else if ti.sym[sym_id].is_loop_var() {
-                    todo!("evaluate loop vars")
+                    let (stmt, iter, _) = *self.loop_iter_counts.iter().rev().find(|(_, _, a)| *a == Some(*sym_id)).expect("failed to find loop variable. Are we outside of the corresponding for-in loop?");
+                    if let Stmt::ForInLoop(check_sym_id, seq_expr, _) = ti.proto[stmt] {
+                        debug_assert_eq!(check_sym_id, *sym_id);
+                        // retrieve sequence argument
+                        let arg_id = as_arg(&ti.proto, seq_expr)
+                            .expect(
+                                "for-in sequence argument needs to be an argument to the protocol",
+                            )
+                            .0;
+                        let arg_value = self.arg_values[arg_id]
+                            .as_seq()
+                            .expect("must be a repeat arg");
+                        arg_value
+                            .get_known(iter)
+                            .map(ExprValue::Known)
+                            .unwrap_or(ExprValue::UnknownSeqArg(arg_id, iter))
+                    } else {
+                        unreachable!("Only for-in loops can have loop variables!");
+                    }
                 } else {
                     unreachable!("unknown symbol kind!")
                 }
@@ -820,7 +841,18 @@ impl Thread {
                         ExprValue::Known(res)
                     }
                     (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
-                    (ExprValue::Unknown, _) | (_, ExprValue::Unknown) => ExprValue::Unknown,
+                    (
+                        ExprValue::Unknown
+                        | ExprValue::UnknownArg(_)
+                        | ExprValue::UnknownSeqArg(_, _),
+                        _,
+                    )
+                    | (
+                        _,
+                        ExprValue::Unknown
+                        | ExprValue::UnknownArg(_)
+                        | ExprValue::UnknownSeqArg(_, _),
+                    ) => ExprValue::Unknown,
                     (ExprValue::DependsOnIsLast, _) | (_, ExprValue::DependsOnIsLast) => {
                         ExprValue::DependsOnIsLast
                     }
@@ -832,7 +864,7 @@ impl Thread {
             },
             Expr::Slice(_, _, _) => todo!(),
             Expr::IsLastIteration => {
-                let (stmt, iter_count, loop_var) = *self.loop_iter_counts.last().unwrap();
+                let (stmt, iter_count, _) = *self.loop_iter_counts.last().unwrap();
                 match &ti.proto[stmt] {
                     Stmt::ForInLoop(_, seq_expr, _) => {
                         // retrieve sequence argument
@@ -876,6 +908,8 @@ enum ExprValue {
     Known(BitVecValue),
     DontCare,
     Unknown,
+    UnknownArg(usize),
+    UnknownSeqArg(usize, u64),
     DependsOnIsLast,
 }
 
