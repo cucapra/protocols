@@ -20,7 +20,7 @@ impl ArgValue {
             Type::BitVec(w) => Self::Data(DataValue::unknown(w)),
             Type::Seq(seq_id) => {
                 if let Type::BitVec(w) = sym[seq_id].tpe() {
-                    Self::Seq(SeqValue::unknown(w))
+                    Self::Seq(SeqValue::unknown(w, sym[seq_id].min_len()))
                 } else {
                     todo!(
                         "Only [u..] is supported. Not: {}",
@@ -115,19 +115,15 @@ pub struct SeqValue {
     /// indicates that there is a constraint that enforces the length to be exactly what
     /// the current `values.len()` is
     len_is_known: bool,
-    /// The minimum number of elements, this is initially determined by the type ([] vs []+).
-    /// However, the same mechanism is used to mark path on which a for-in loop needs to be executed
-    /// at least one more time.
-    min_len: usize,
     values: Vec<DataValue>,
 }
 
 impl SeqValue {
-    fn unknown(width: WidthInt) -> Self {
+    fn unknown(width: WidthInt, min_len: u64) -> Self {
         Self {
             width,
             len_is_known: false,
-            values: vec![],
+            values: vec![DataValue::unknown(width); min_len as usize],
         }
     }
 
@@ -147,5 +143,9 @@ impl SeqValue {
     pub fn increment_unknown_len(&mut self) {
         debug_assert!(!self.len_is_known);
         self.values.push(DataValue::unknown(self.width));
+    }
+
+    pub fn min_len(&self) -> u64 {
+        self.values.len() as u64
     }
 }

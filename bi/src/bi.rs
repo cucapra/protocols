@@ -518,8 +518,15 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            println!("[{}]: {:?}", self.name, &ti.proto[stmt]);
+            println!(
+                "[{}]: {:?} ({:?})",
+                self.name, &ti.proto[stmt], self.loop_iter_counts
+            );
             match &ti.proto[stmt] {
+                Stmt::Block(stmt_ids) if stmt_ids.is_empty() => {
+                    self.next_stmt = ti.next_stmt[&stmt];
+                    Ok
+                }
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
                     Ok
@@ -557,7 +564,7 @@ impl Thread {
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self
-                        .eval_expr(get_value, &ti.proto, *cond)
+                        .eval_expr(get_value, ti, *cond)
                         .expect("while condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*body)
@@ -608,12 +615,12 @@ impl Thread {
                         .expect("must be a repeat arg");
 
                     // minimum number of iterations
-                    let min_len =
-                        if let Type::Seq(seq_id) = ti.sym[ti.proto.args[arg_id].symbol()].tpe() {
-                            ti.sym[seq_id].min_len()
-                        } else {
-                            unreachable!("must be sequence type")
-                        };
+                    let min_len = arg_value.min_len();
+
+                    println!(
+                        "iters={iters}, min={min_len:?}, len={:?}",
+                        arg_value.get_known_len()
+                    );
 
                     // do we know the maximum number of iterations?
                     if let Some(max_iters) = arg_value.get_known_len() {
@@ -623,14 +630,14 @@ impl Thread {
                         } else {
                             assert!(iters < max_iters);
                             self.loop_iter_counts
-                                .push((stmt, iters + 1, Some(*loop_var_id)));
+                                .push((stmt, iters, Some(*loop_var_id)));
                             self.next_stmt = Some(*body);
                         }
                         Ok
                     } else if iters < min_len {
                         // there is no branching, we need to iterate!
                         self.loop_iter_counts
-                            .push((stmt, iters + 1, Some(*loop_var_id)));
+                            .push((stmt, iters, Some(*loop_var_id)));
                         self.next_stmt = Some(*body);
                         Ok
                     } else {
@@ -641,7 +648,7 @@ impl Thread {
                 }
                 Stmt::IfElse(cond, tru, fals) => {
                     let cond_value = self
-                        .eval_expr(get_value, &ti.proto, *cond)
+                        .eval_expr(get_value, ti, *cond)
                         .expect("if condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*tru)
@@ -735,7 +742,7 @@ impl Thread {
         }
 
         let lhs_value = get_value(lhs);
-        if let ExprValue::Known(rhs_value) = self.eval_expr(get_value, &ti.proto, rhs) {
+        if let ExprValue::Known(rhs_value) = self.eval_expr(get_value, ti, rhs) {
             if rhs_value != lhs_value {
                 // println!(
                 //     "[{}] found a disagreement: {} =/= {}",
@@ -775,76 +782,90 @@ impl Thread {
     fn eval_expr(
         &self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
-        proto: &Transaction,
+        ti: &ProtoInfo,
         expr: ExprId,
     ) -> ExprValue {
-        if let Some((arg_id, _)) = as_arg(proto, expr) {
-            if let Some(value) = self.arg_values[arg_id].get_known() {
-                ExprValue::Known(value)
-            } else {
-                ExprValue::Unknown
+        match &ti.proto[expr] {
+            Expr::Sym(sym_id) => {
+                if ti.sym[sym_id].is_arg() {
+                    self.arg_values[sym_as_arg(&ti.proto, *sym_id).unwrap().0]
+                        .get_known()
+                        .map(|v| ExprValue::Known(v))
+                        .unwrap_or(ExprValue::Unknown)
+                } else if ti.sym[sym_id].is_port() {
+                    ExprValue::Known(get_value(*sym_id))
+                } else if ti.sym[sym_id].is_loop_var() {
+                    todo!("evaluate loop vars")
+                } else {
+                    unreachable!("unknown symbol kind!")
+                }
             }
-        } else {
-            match &proto[expr] {
-                Expr::Const(value) => ExprValue::Known(value.clone()),
-                Expr::Sym(dut_port) => ExprValue::Known(get_value(*dut_port)),
-                Expr::DontCare => ExprValue::DontCare,
-                Expr::Binary(op, a, b) => {
-                    let a = self.eval_expr(get_value, proto, *a);
-                    let b = self.eval_expr(get_value, proto, *b);
-                    match (a, b) {
-                        (ExprValue::Known(a), ExprValue::Known(b)) => {
-                            let res = match op {
-                                BinOp::Equal => {
-                                    if a.is_equal(&b) {
-                                        BitVecValue::new_true()
-                                    } else {
-                                        BitVecValue::new_false()
-                                    }
+            Expr::Const(value) => ExprValue::Known(value.clone()),
+            Expr::DontCare => ExprValue::DontCare,
+            Expr::Binary(op, a, b) => {
+                let a = self.eval_expr(get_value, ti, *a);
+                let b = self.eval_expr(get_value, ti, *b);
+                match (a, b) {
+                    (ExprValue::Known(a), ExprValue::Known(b)) => {
+                        let res = match op {
+                            BinOp::Equal => {
+                                if a.is_equal(&b) {
+                                    BitVecValue::new_true()
+                                } else {
+                                    BitVecValue::new_false()
                                 }
-                                BinOp::Concat => a.concat(&b),
-                            };
-                            ExprValue::Known(res)
+                            }
+                            BinOp::Concat => a.concat(&b),
+                        };
+                        ExprValue::Known(res)
+                    }
+                    (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
+                    (ExprValue::Unknown, _) | (_, ExprValue::Unknown) => ExprValue::Unknown,
+                    (ExprValue::DependsOnIsLast, _) | (_, ExprValue::DependsOnIsLast) => {
+                        ExprValue::DependsOnIsLast
+                    }
+                }
+            }
+            Expr::Unary(UnaryOp::Not, e) => match self.eval_expr(get_value, ti, *e) {
+                ExprValue::Known(v) => ExprValue::Known(v.not()),
+                other => other,
+            },
+            Expr::Slice(_, _, _) => todo!(),
+            Expr::IsLastIteration => {
+                let (stmt, iter_count, loop_var) = *self.loop_iter_counts.last().unwrap();
+                match &ti.proto[stmt] {
+                    Stmt::ForInLoop(_, seq_expr, _) => {
+                        // retrieve sequence argument
+                        let arg_id = as_arg(&ti.proto, *seq_expr)
+                            .expect(
+                                "for-in sequence argument needs to be an argument to the protocol",
+                            )
+                            .0;
+                        let arg_value = self.arg_values[arg_id]
+                            .as_seq()
+                            .expect("must be a repeat arg");
+                        // 1) Is the number of iterations known precisely?
+                        if let Some(max_iter) = arg_value.get_known_len() {
+                            if max_iter == iter_count + 1 {
+                                ExprValue::Known(BitVecValue::new_true())
+                            } else {
+                                ExprValue::Known(BitVecValue::new_false())
+                            }
                         }
-                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
-                        (ExprValue::Unknown, _) | (_, ExprValue::Unknown) => ExprValue::Unknown,
-                        (ExprValue::DependsOnIsLast, _) | (_, ExprValue::DependsOnIsLast) => {
+                        // 2) is there a lower bound to the number of iterations
+                        else if arg_value.min_len() > iter_count {
+                            ExprValue::Known(BitVecValue::new_false())
+                        }
+                        // 3) otherwise, it could be either, meaning that we will have to branch
+                        else {
                             ExprValue::DependsOnIsLast
                         }
                     }
-                }
-                Expr::Unary(UnaryOp::Not, e) => match self.eval_expr(get_value, proto, *e) {
-                    ExprValue::Known(v) => ExprValue::Known(v.not()),
-                    other => other,
-                },
-                Expr::Slice(_, _, _) => todo!(),
-                Expr::IsLastIteration => {
-                    let (stmt, iter_count, loop_var) = *self.loop_iter_counts.last().unwrap();
-                    match &proto[stmt] {
-                        Stmt::ForInLoop(_, seq_expr, _) => {
-                            // retrieve sequence argument
-                            let arg_id = as_arg(&proto, *seq_expr)
-                                .expect("for-in sequence argument needs to be an argument to the protocol")
-                                .0;
-                            let arg_value = self.arg_values[arg_id]
-                                .as_seq()
-                                .expect("must be a repeat arg");
-                            if let Some(max_iter) = arg_value.get_known_len() {
-                                if max_iter == iter_count + 1 {
-                                    ExprValue::Known(BitVecValue::new_true())
-                                } else {
-                                    ExprValue::Known(BitVecValue::new_false())
-                                }
-                            } else
-                        }
-                        Stmt::RepeatLoop(_, _) => {
-                            todo!("implement is_last for repeat loops!");
-                        }
-                        other => unreachable!("{:?}", other),
+                    Stmt::RepeatLoop(_, _) => {
+                        todo!("implement is_last for repeat loops!");
                     }
-
-                    ExprValue::DependsOnIsLast
-                },
+                    other => unreachable!("{:?}", other),
+                }
             }
         }
     }
@@ -886,14 +907,18 @@ fn as_dut_port_symbol(transaction: &Transaction, expr: ExprId) -> Option<SymbolI
 /// returns argument and id if the expression corresponds to one
 fn as_arg(transaction: &Transaction, expr: ExprId) -> Option<(usize, Arg)> {
     match &transaction[expr] {
-        Expr::Sym(sym_id) => transaction
-            .args
-            .iter()
-            .enumerate()
-            .find(|(_, a)| a.symbol() == *sym_id)
-            .map(|(i, a)| (i, *a)),
+        Expr::Sym(sym_id) => sym_as_arg(transaction, *sym_id),
         _ => None,
     }
+}
+
+fn sym_as_arg(transaction: &Transaction, sym_id: SymbolId) -> Option<(usize, Arg)> {
+    transaction
+        .args
+        .iter()
+        .enumerate()
+        .find(|(_, a)| a.symbol() == sym_id)
+        .map(|(i, a)| (i, *a))
 }
 
 #[derive(Debug)]
