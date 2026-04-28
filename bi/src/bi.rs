@@ -866,6 +866,8 @@ impl Thread {
             },
             Expr::Slice(_, _, _) => todo!(),
             Expr::IsLastIteration => {
+                // The iter_count is the number of _completed_ iterations.
+                // So, on the first iteration: `iter_count == 0`
                 let (stmt, iter_count, _) = *self.loop_iter_counts.last().unwrap();
                 match &ti.proto[stmt] {
                     Stmt::ForInLoop(_, seq_expr, _) => {
@@ -887,7 +889,7 @@ impl Thread {
                             }
                         }
                         // 2) is there a lower bound to the number of iterations
-                        else if arg_value.min_len() > iter_count {
+                        else if arg_value.min_len() > iter_count + 1 {
                             ExprValue::Known(BitVecValue::new_false())
                         }
                         // 3) otherwise, it could be either, meaning that we will have to branch
