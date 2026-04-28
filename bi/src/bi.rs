@@ -131,6 +131,8 @@ impl BackwardsInterpreter {
                 trace.get(self.instance_id, sym)
             });
 
+            // println!("path.exec_stmt(...) -> {r:?}");
+
             // append protocols that finish to trace
             if let Some(value) = pc {
                 self.traces.append(path.trace_id, value);
@@ -159,11 +161,20 @@ impl BackwardsInterpreter {
                         }))
                 }
                 PathResult::FinishedStep => {
+                    debug_assert!(path.failed.is_empty(), "failed thread");
+                    debug_assert!(
+                        path.next.len() + path.active.len() > 0,
+                        "No active or next threads!"
+                    );
                     debug_assert!(
                         !path.active.is_empty()
                             && path.next.is_empty()
                             && path.step == self.step + 1,
-                        "path should be ready to run the next step"
+                        "path should be ready to run the next step. active: {}, next: {}, path.step: {}, global.step + 1: {}",
+                        path.active.len(),
+                        path.next.len(),
+                        path.step,
+                        self.step + 1
                     );
                     debug_assert!(!path.failed(), "{path:?}");
                     self.next.push(path);
@@ -360,7 +371,7 @@ impl Path {
         self.active.sort_by_key(|t| u32::MAX - t.start_step);
         if let Some(mut thread) = self.active.pop() {
             let r = thread.exec_stmt(&tis[thread.transaction_id], get_value);
-            // println!("{r:?}");
+            // println!("thread.exec_stmt(...) -> {r:?}");
             match r {
                 ThreadResult::Failed => {
                     self.failed.push(thread);
@@ -553,10 +564,10 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            println!(
-                "[{}]: {:?} ({:?})",
-                self.name, &ti.proto[stmt], self.loop_iter_counts
-            );
+            // println!(
+            //     "[{}]: {:?} ({:?})",
+            //     self.name, &ti.proto[stmt], self.loop_iter_counts
+            // );
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) if stmt_ids.is_empty() => {
                     self.next_stmt = ti.next_stmt[&stmt];
@@ -652,10 +663,10 @@ impl Thread {
                     // minimum number of iterations
                     let min_len = arg_value.min_len();
 
-                    println!(
-                        "iters={iters}, min={min_len:?}, len={:?}",
-                        arg_value.get_known_len()
-                    );
+                    // println!(
+                    //     "iters={iters}, min={min_len:?}, len={:?}",
+                    //     arg_value.get_known_len()
+                    // );
 
                     // do we know the maximum number of iterations?
                     if let Some(max_iters) = arg_value.get_known_len() {
