@@ -389,6 +389,11 @@ impl Path {
                     let (a, b) = thread.exec_repeat_loop_branch(&tis[tid], iters);
                     (PathResult::Branch(vec![a, b]), None)
                 }
+                ThreadResult::ForkIsLast(loop_stmt) => {
+                    let tid = thread.transaction_id;
+                    let (a, b) = thread.exec_is_last_branch(&tis[tid], loop_stmt);
+                    (PathResult::Branch(vec![a, b]), None)
+                }
                 ThreadResult::FinalStep | ThreadResult::FinishedWithoutStep => (
                     PathResult::Ok,
                     Some(thread_to_call(tis, thread, Some(self.step))),
@@ -456,6 +461,8 @@ enum ThreadResult {
     Ok,
     // fork a repeat loop, argument is the number of iterations already taken
     RepeatLoop(u64),
+    // fork to resolve is last with for-in/repeat loop statement id
+    ForkIsLast(StmtId),
     Step,
     Fork,
     FinalStepAndFork,
@@ -509,6 +516,34 @@ impl Thread {
 
         // we need to explore both versions of our thread
         (taken, not_taken)
+    }
+
+    fn exec_is_last_branch(mut self, ti: &ProtoInfo, loop_stmt_id: StmtId) -> (Thread, Thread) {
+        match ti.proto[loop_stmt_id].clone() {
+            Stmt::RepeatLoop(arg, _) => todo!("add support for repeat loop"),
+            Stmt::ForInLoop(_, arg, _) => {
+                let arg_id = as_arg(&ti.proto, arg).unwrap().0;
+
+                // for making is_last true, we just need to flip the current (minimum) length to be
+                // the known, fixed length
+                let mut is_last_thread = self.clone();
+                is_last_thread.name = format!("{}L", self.name);
+                is_last_thread.arg_values[arg_id]
+                    .as_seq_mut()
+                    .unwrap()
+                    .freeze_len();
+
+                // to make is_last true, we up the minimum length by one
+                self.arg_values[arg_id]
+                    .as_seq_mut()
+                    .unwrap()
+                    .increment_unknown_len();
+                (is_last_thread, self)
+            }
+            _ => unreachable!(
+                "We should only get here if the current statement is a repeat of for-in loop"
+            ),
+        }
     }
 
     fn exec_stmt(
@@ -646,17 +681,18 @@ impl Thread {
                         RepeatLoop(iters)
                     }
                 }
-                Stmt::IfElse(cond, tru, fals) => {
-                    let cond_value = self
-                        .eval_expr(get_value, ti, *cond)
-                        .expect("if condition is always concrete");
-                    self.next_stmt = if cond_value.is_true() {
-                        Some(*tru)
-                    } else {
-                        Some(*fals)
-                    };
-                    Ok
-                }
+                Stmt::IfElse(cond, tru, fals) => match self.eval_expr(get_value, ti, *cond) {
+                    ExprValue::Known(cond_value) => {
+                        self.next_stmt = if cond_value.is_true() {
+                            Some(*tru)
+                        } else {
+                            Some(*fals)
+                        };
+                        Ok
+                    }
+                    ExprValue::DependsOnIsLast(stmt) => ForkIsLast(stmt),
+                    other => todo!("if condition is {other:?}"),
+                },
                 Stmt::AssertEq(lhs, rhs) => {
                     self.effectful_stmt_in_step = true;
                     let (port, other) = match (
@@ -855,8 +891,8 @@ impl Thread {
                         | ExprValue::UnknownArg(_)
                         | ExprValue::UnknownSeqArg(_, _),
                     ) => ExprValue::Unknown,
-                    (ExprValue::DependsOnIsLast, _) | (_, ExprValue::DependsOnIsLast) => {
-                        ExprValue::DependsOnIsLast
+                    (ExprValue::DependsOnIsLast(s), _) | (_, ExprValue::DependsOnIsLast(s)) => {
+                        ExprValue::DependsOnIsLast(s)
                     }
                 }
             }
@@ -894,7 +930,7 @@ impl Thread {
                         }
                         // 3) otherwise, it could be either, meaning that we will have to branch
                         else {
-                            ExprValue::DependsOnIsLast
+                            ExprValue::DependsOnIsLast(stmt)
                         }
                     }
                     Stmt::RepeatLoop(_, _) => {
@@ -914,7 +950,7 @@ enum ExprValue {
     Unknown,
     UnknownArg(usize),
     UnknownSeqArg(usize, u64),
-    DependsOnIsLast,
+    DependsOnIsLast(StmtId),
 }
 
 impl ExprValue {
