@@ -103,6 +103,7 @@ impl BackwardsInterpreter {
                 return Err(f);
             }
         }
+        // println!("-------{}: {:?}", self.step, self.state);
         loop {
             match self.exec_stmt(trace) {
                 BIResult::Ok => {}
@@ -405,7 +406,25 @@ impl Path {
                     let (a, b) = thread.exec_is_last_branch(&tis[tid], loop_stmt);
                     (PathResult::Branch(vec![a, b]), None)
                 }
-                ThreadResult::FinalStep | ThreadResult::FinishedWithoutStep => (
+                ThreadResult::FinishedWithoutStep => {
+                    // When this happens, it means that we executed some "effectless" statements
+                    // in this step and the transaction essentially ended the step before.
+                    let res = if !thread.has_forked {
+                        // implicit fork
+                        assert!(
+                            !self.has_forked_this_step,
+                            "another thread already forked in the same thread!"
+                        );
+                        assert!(!self.fork_next_step);
+                        self.has_forked_this_step = true;
+                        PathResult::Fork
+                    } else {
+                        PathResult::Ok
+                    };
+                    let proto_call = thread_to_call(tis, thread, Some(self.step - 1));
+                    (res, Some(proto_call))
+                }
+                ThreadResult::FinalStep => (
                     PathResult::Ok,
                     Some(thread_to_call(tis, thread, Some(self.step))),
                 ),
