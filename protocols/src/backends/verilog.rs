@@ -410,17 +410,17 @@ pub mod tests {
             (
                 "add".into(),
                 vec![
-                    BitVecValue::from_i64(2, 32),
-                    BitVecValue::from_i64(5, 32),
-                    BitVecValue::from_i64(7, 32),
+                    BitVecValue::from_i64(2, 32).into(),
+                    BitVecValue::from_i64(5, 32).into(),
+                    BitVecValue::from_i64(7, 32).into(),
                 ],
             ),
             (
                 "add".into(),
                 vec![
-                    BitVecValue::from_i64(34, 32),
-                    BitVecValue::from_i64(5, 32),
-                    BitVecValue::from_i64(39, 32),
+                    BitVecValue::from_i64(34, 32).into(),
+                    BitVecValue::from_i64(5, 32).into(),
+                    BitVecValue::from_i64(39, 32).into(),
                 ],
             ),
         ];

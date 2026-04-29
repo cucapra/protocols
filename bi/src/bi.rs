@@ -550,7 +550,7 @@ impl Thread {
 
     fn exec_is_last_branch(mut self, ti: &ProtoInfo, loop_stmt_id: StmtId) -> (Thread, Thread) {
         match ti.proto[loop_stmt_id].clone() {
-            Stmt::RepeatLoop(arg, _) => todo!("add support for repeat loop"),
+            Stmt::RepeatLoop(_arg, _) => todo!("add support for repeat loop"),
             Stmt::ForInLoop(_, arg, _) => {
                 let arg_id = as_arg(&ti.proto, arg).unwrap().0;
 

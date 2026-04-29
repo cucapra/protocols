@@ -364,8 +364,8 @@ mod tests {
         let mut handler = DiagnosticHandler::default();
         let result = parse_file(file_name, &mut handler);
         let content = match result {
-            Ok(trs) => {
-                let _ = type_check(&trs, &mut handler);
+            Ok(mut trs) => {
+                let _ = type_check(&mut trs, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -480,6 +480,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        let _ = type_check(&vec![(tr, symbols)], &mut handler);
+        let _ = type_check(&mut vec![(tr, symbols)], &mut handler);
     }
 }
