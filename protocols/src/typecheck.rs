@@ -480,6 +480,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        let _ = type_check(&mut vec![(tr, symbols)], &mut handler);
+        let _ = type_check(&mut [(tr, symbols)], &mut handler);
     }
 }
