@@ -3,10 +3,11 @@ use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},
-    serialize::{serialize_args_mapping, serialize_bitvec},
+    serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
 
+use crate::interpreter::serialize_monitor_args_mapping;
 use crate::{
     global_context::GlobalContext,
     interpreter::Interpreter,
@@ -645,7 +646,7 @@ impl Scheduler {
             "Exited thread ({}, `{}`) has args_mapping {}\n",
             exited_thread.thread_id,
             exited_thread.transaction.name,
-            serialize_args_mapping(
+            serialize_monitor_args_mapping(
                 &exited_thread.args_mapping,
                 &exited_thread.symbol_table,
                 false
