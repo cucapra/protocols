@@ -224,7 +224,7 @@ fn parse_arg(
             } else {
                 let msg = format!(
                     "Invalid sequence of values for argument of type {}",
-                    serialize_type(st, ty.clone())
+                    serialize_type(st, *ty)
                 );
                 handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
                 return Err(anyhow!(msg));

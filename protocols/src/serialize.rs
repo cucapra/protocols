@@ -103,7 +103,7 @@ pub fn serialize_value(value: &Value, display_hex: bool) -> String {
     } else {
         let seq: &[BitVecValue] = value.try_into().unwrap();
         let elements: Vec<_> = seq
-            .into_iter()
+            .iter()
             .map(|bv| serialize_bitvec(bv, display_hex))
             .collect();
         format!("[{}]", elements.join(","))
