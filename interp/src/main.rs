@@ -61,6 +61,11 @@ struct Cli {
     /// Skips the static checks for step/fork errors.
     #[arg(long)]
     skip_static_step_fork_checks: bool,
+
+    /// Optimize the underlying transition system before simulation.
+    /// This might change the combinational dependencies.
+    #[arg(long)]
+    simplify_rtl: bool,
 }
 
 /// Examples (enables all tracing logs):
@@ -123,6 +128,7 @@ fn main() -> anyhow::Result<()> {
         cli.module,
         protocols_handler,
         cli.skip_static_step_fork_checks,
+        cli.simplify_rtl,
     )?;
 
     // Nikil says we have to do this step in order to convert

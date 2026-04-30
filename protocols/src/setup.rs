@@ -63,8 +63,13 @@ pub fn setup_test_environment(
     top_module: Option<String>,
     handler: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
+    simplify_rtl: bool,
 ) -> anyhow::Result<TestEnv> {
-    let (ctx, sys) = create_sim_context(verilog_paths, top_module);
+    let (mut ctx, mut sys) = create_sim_context(verilog_paths, top_module);
+    if simplify_rtl {
+        patronus::system::transform::replace_anonymous_inputs_with_zero(&mut ctx, &mut sys);
+        patronus::system::transform::simplify_expressions(&mut ctx, &mut sys);
+    }
     let parsed = frontend(transaction_filename, handler, skip_static_step_fork_checks)?;
     Ok((parsed, ctx, sys))
 }
