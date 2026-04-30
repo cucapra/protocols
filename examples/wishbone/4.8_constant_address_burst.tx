@@ -1,3 +1,4 @@
+// ARGS: --verilog wishbone/rtl/dut.v wishbone/rtl/tb.v --module tb --protocol wishbone/wishbone.prot
 trace {
   // to make this work with RTL, we need to reset
   reset();
