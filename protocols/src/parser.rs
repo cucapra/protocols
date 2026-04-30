@@ -133,6 +133,7 @@ impl ParserContext<'_> {
                         Ok(BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end))
                     }
                     Rule::expr => self.parse_boxed_expr(primary.into_inner()),
+                    Rule::is_last_expr => Ok(BoxedExpr::IsLastIteration(start, end)),
                     rule => unreachable!("Expr::parse expected atom, found {:?}", rule),
                 }
             })
@@ -181,6 +182,11 @@ impl ParserContext<'_> {
             }
             BoxedExpr::DontCare(start, end) => {
                 let expr_id = self.tr.e(Expr::DontCare);
+                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                expr_id
+            }
+            BoxedExpr::IsLastIteration(start, end) => {
+                let expr_id = self.tr.e(Expr::IsLastIteration);
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
@@ -358,6 +364,7 @@ impl ParserContext<'_> {
                 Rule::fork => self.parse_fork(inner_pair)?,
                 Rule::while_loop => self.parse_while(inner_pair)?,
                 Rule::bounded_loop => self.parse_bounded_loop(inner_pair)?,
+                Rule::for_in_loop => self.parse_for_in_loop(inner_pair)?,
                 Rule::cond => self.parse_cond(inner_pair)?,
                 Rule::assert_eq => self.parse_assert_eq(inner_pair)?,
                 _ => {
@@ -460,6 +467,21 @@ impl ParserContext<'_> {
         let num_iterations = self.parse_expr(expr_rule.into_inner())?;
         let body = self.parse_stmt_block(inner_rules)?;
         Ok(Stmt::RepeatLoop(num_iterations, body))
+    }
+
+    fn parse_for_in_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let id_rule =
+            self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
+        let id_name = id_rule.as_str().to_string();
+        let sym = self
+            .st
+            .add_without_parent(id_name, Type::Unknown, SymbolKind::LoopVar);
+        let seq_expr =
+            self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
+        let seq = self.parse_expr(seq_expr.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::ForInLoop(sym, seq, body))
     }
 
     fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
@@ -643,6 +665,16 @@ impl ParserContext<'_> {
                     Ok(Type::BitVec(size))
                 }
                 Rule::uint_tpe => Ok(Type::UnsignedInt),
+                Rule::seq_tpe => {
+                    let inner_tpe = self.parse_type(inner_type.into_inner().next().unwrap())?;
+                    let seq_id = self.st.add_seq(inner_tpe, 0);
+                    Ok(Type::Seq(seq_id))
+                }
+                Rule::seq_plus_tpe => {
+                    let inner_tpe = self.parse_type(inner_type.into_inner().next().unwrap())?;
+                    let seq_id = self.st.add_seq(inner_tpe, 1);
+                    Ok(Type::Seq(seq_id))
+                }
                 _ => {
                     let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
                     self.handler

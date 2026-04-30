@@ -53,6 +53,20 @@ pub struct Interpreter {
     pub instance_id: u32,
 }
 
+/// internal adapter to deal with the fact that the monitor does support sequence types and
+/// all values are bit-vectors
+pub(crate) fn serialize_monitor_args_mapping(
+    args_mapping: &FxHashMap<SymbolId, BitVecValue>,
+    symbol_table: &SymbolTable,
+    display_hex: bool,
+) -> String {
+    let normalized_args = args_mapping
+        .iter()
+        .map(|(k, v)| (*k, v.clone().into()))
+        .collect();
+    serialize_args_mapping(&normalized_args, symbol_table, display_hex)
+}
+
 impl Interpreter {
     /// Attempts to builds a `ProtocolApplication` from the current interpreter state.
     /// `struct_name` is left as `None` — the caller (Scheduler) is responsible
@@ -85,7 +99,11 @@ impl Interpreter {
                     time_str,
                     name,
                     symbol_id,
-                    serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
+                    serialize_monitor_args_mapping(
+                        &self.args_mapping,
+                        &self.symbol_table,
+                        ctx.display_hex
+                    )
                 );
                 return None;
             }
@@ -241,7 +259,7 @@ impl Interpreter {
                 } else {
                     info!(
                         "args_mapping: \n{}",
-                        serialize_args_mapping(
+                        serialize_monitor_args_mapping(
                             &self.args_mapping,
                             &self.symbol_table,
                             ctx.display_hex
@@ -397,6 +415,7 @@ impl Interpreter {
                     )),
                 }
             }
+            Expr::IsLastIteration => todo!("add support for is_last() expression"),
         }
     }
 
@@ -451,7 +470,11 @@ impl Interpreter {
         } else {
             info!(
                 "args_mapping: \n{}",
-                serialize_args_mapping(&self.args_mapping, &self.symbol_table, ctx.display_hex)
+                serialize_monitor_args_mapping(
+                    &self.args_mapping,
+                    &self.symbol_table,
+                    ctx.display_hex
+                )
             );
 
             let trace_symbol_name = self.symbol_table.full_name_from_symbol_id(&trace_symbol);
@@ -495,6 +518,7 @@ impl Interpreter {
                 // in `scheduler.rs`, so this case is unreachable
                 unreachable!("Repeat loops handled in `scheduler.rs` already")
             }
+            Stmt::ForInLoop(_, _, _) => todo!("add support for for-in loops"),
             Stmt::Step | Stmt::Fork => {
                 // The scheduler handles `step`s and `fork`s.
                 // Here, we simply return the next statement to run
@@ -834,15 +858,15 @@ impl Interpreter {
 
                                 // If LHS is a DUT input port (has a parent) and RHS is a constant,
                                 // add this as a constraint that must hold after stepping
-                                if let Expr::Const(_) = rhs_expr {
-                                    if self.symbol_table[*lhs_symbol_id].parent().is_some() {
-                                        info!(
-                                            "Adding constraint: {} must equal {}",
-                                            lhs_name,
-                                            serialize_bitvec(&rhs_value, ctx.display_hex)
-                                        );
-                                        self.constraints.insert(*lhs_symbol_id, rhs_value.clone());
-                                    }
+                                if let Expr::Const(_) = rhs_expr
+                                    && self.symbol_table[*lhs_symbol_id].parent().is_some()
+                                {
+                                    info!(
+                                        "Adding constraint: {} must equal {}",
+                                        lhs_name,
+                                        serialize_bitvec(&rhs_value, ctx.display_hex)
+                                    );
+                                    self.constraints.insert(*lhs_symbol_id, rhs_value.clone());
                                 }
 
                                 Ok(())

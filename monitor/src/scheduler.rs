@@ -3,10 +3,11 @@ use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
     ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},
-    serialize::{serialize_args_mapping, serialize_bitvec},
+    serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
 
+use crate::interpreter::serialize_monitor_args_mapping;
 use crate::{
     global_context::GlobalContext,
     interpreter::Interpreter,
@@ -645,7 +646,7 @@ impl Scheduler {
             "Exited thread ({}, `{}`) has args_mapping {}\n",
             exited_thread.thread_id,
             exited_thread.transaction.name,
-            serialize_args_mapping(
+            serialize_monitor_args_mapping(
                 &exited_thread.args_mapping,
                 &exited_thread.symbol_table,
                 false
@@ -749,15 +750,15 @@ impl Scheduler {
                 // Handle case where the loop argument is already in the thread's
                 // `args_mapping` (e.g. a value for it has already been
                 // inferred, via a previous assignment)
-                if !thread.loop_args_state.contains_key(&loop_arg_symbol_id) {
-                    if let Some(loop_arg) = thread.args_mapping.get(&loop_arg_symbol_id) {
-                        let n = loop_arg.to_u64().unwrap_or_else(|| {
-                            panic!("Unable to convert {} to u64", loop_arg.to_bit_str())
-                        });
-                        thread
-                            .loop_args_state
-                            .insert(loop_arg_symbol_id, LoopArgState::Known(n));
-                    }
+                if !thread.loop_args_state.contains_key(&loop_arg_symbol_id)
+                    && let Some(loop_arg) = thread.args_mapping.get(&loop_arg_symbol_id)
+                {
+                    let n = loop_arg.to_u64().unwrap_or_else(|| {
+                        panic!("Unable to convert {} to u64", loop_arg.to_bit_str())
+                    });
+                    thread
+                        .loop_args_state
+                        .insert(loop_arg_symbol_id, LoopArgState::Known(n));
                 }
 
                 // Now we need to handle the case when the value of a `LoopArg`

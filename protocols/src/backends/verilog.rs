@@ -160,6 +160,7 @@ pub fn to_verilog(
                 if !is_first {
                     write!(out, ", ")?;
                 }
+                let arg: BitVecValue = arg.clone().try_into().unwrap();
                 write!(out, "'h{}", arg.to_hex_str())?;
             }
             writeln!(out, "); join_none")?;
@@ -258,6 +259,9 @@ fn stmt_to_verilog(
         Stmt::RepeatLoop(_, _) => {
             todo!("repeat loop")
         }
+        Stmt::ForInLoop(_, _, _) => {
+            todo!("for-in loop")
+        }
         Stmt::IfElse(_, _, _) => {
             todo!("if/else")
         }
@@ -354,6 +358,7 @@ fn expr_to_verilog(
                 write!(out, ")[{msb}:{lsb}]")
             }
         }
+        Expr::IsLastIteration => todo!("loops"),
     }
 }
 
@@ -405,17 +410,17 @@ pub mod tests {
             (
                 "add".into(),
                 vec![
-                    BitVecValue::from_i64(2, 32),
-                    BitVecValue::from_i64(5, 32),
-                    BitVecValue::from_i64(7, 32),
+                    BitVecValue::from_i64(2, 32).into(),
+                    BitVecValue::from_i64(5, 32).into(),
+                    BitVecValue::from_i64(7, 32).into(),
                 ],
             ),
             (
                 "add".into(),
                 vec![
-                    BitVecValue::from_i64(34, 32),
-                    BitVecValue::from_i64(5, 32),
-                    BitVecValue::from_i64(39, 32),
+                    BitVecValue::from_i64(34, 32).into(),
+                    BitVecValue::from_i64(5, 32).into(),
+                    BitVecValue::from_i64(39, 32).into(),
                 ],
             ),
         ];

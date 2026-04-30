@@ -21,12 +21,14 @@ integer = ${ width ~ "'" ~ (bin ~ bin_integer | oct ~ oct_integer | hex ~ hex_in
 
 dont_care = { "X" }
 
+is_last_expr = {"is_last" ~ "(" ~ ")"}
+
 // Expressions
 
 // Slicing
 slice = { path_id ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
 
-primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | path_id}
+primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     not = { "!" }
@@ -39,14 +41,16 @@ expr = { atom ~ (bin_op ~ atom)*}
 
 id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
-tpe = { uint_tpe | bv_tpe }
+tpe = { seq_plus_tpe | seq_tpe | uint_tpe | bv_tpe }
 uint_tpe = { "uint" }
 bv_tpe = { "u" ~ dec_integer }
+seq_tpe = {"[" ~ tpe ~ "]"}
+seq_plus_tpe = {"[" ~ tpe ~ "]+"}
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
 step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}
 fork = { "fork" ~ "()" ~ ";"}
-stmt = _{ (assign | step | fork | while_loop | bounded_loop | cond | assert_eq ) }
+stmt = _{ (assign | step | fork | while_loop | bounded_loop | for_in_loop | cond | assert_eq ) }
 dir = { "in" | "out" }
 arg = { path_id ~ ":" ~ tpe }
 arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
@@ -58,6 +62,9 @@ while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
 // Bounded loop (fixed no. of iterations)
 // Concrete syntax is `repeat num_iterations iterations { ... }`
 bounded_loop = { "repeat" ~ expr ~ "iterations" ~ "{" ~ stmt* ~ "}" }
+
+// TODO: why does path_id work, but not path_id?
+for_in_loop = { "for" ~ path_id ~ "in" ~ expr ~ "{" ~ stmt* ~ "}" }
 
 // Assertions
 assert_eq = { "assert_eq" ~ "(" ~ expr ~ "," ~ expr ~ ")" ~ ";" }

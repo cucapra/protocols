@@ -1,0 +1,9 @@
+// ARGS: --verilog wishbone/rtl/dut.v wishbone/rtl/tb.v --module tb --protocol wishbone/wishbone.prot
+trace {
+  // to make this work with RTL, we need to reset
+  reset();
+  // we have to use the FIFO address to make this work with our RTL
+  write_burst_const(0b1111, 0x34000000, [0x1111, 0x2222, 0x3333, 0x4444]);
+  // extra idle cycle to make things look better on the signal trace
+  idle_no_cycle();
+}

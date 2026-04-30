@@ -2,9 +2,10 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
-use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
+use baa::{BitVecOps, BitVecValue};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -102,6 +103,7 @@ impl BackwardsInterpreter {
                 return Err(f);
             }
         }
+        // println!("-------{}: {:?}", self.step, self.state);
         loop {
             match self.exec_stmt(trace) {
                 BIResult::Ok => {}
@@ -129,6 +131,8 @@ impl BackwardsInterpreter {
                 // value
                 trace.get(self.instance_id, sym)
             });
+
+            // println!("path.exec_stmt(...) -> {r:?}");
 
             // append protocols that finish to trace
             if let Some(value) = pc {
@@ -158,11 +162,20 @@ impl BackwardsInterpreter {
                         }))
                 }
                 PathResult::FinishedStep => {
+                    debug_assert!(path.failed.is_empty(), "failed thread");
+                    debug_assert!(
+                        path.next.len() + path.active.len() > 0,
+                        "No active or next threads!"
+                    );
                     debug_assert!(
                         !path.active.is_empty()
                             && path.next.is_empty()
                             && path.step == self.step + 1,
-                        "path should be ready to run the next step"
+                        "path should be ready to run the next step. active: {}, next: {}, path.step: {}, global.step + 1: {}",
+                        path.active.len(),
+                        path.next.len(),
+                        path.step,
+                        self.step + 1
                     );
                     debug_assert!(!path.failed(), "{path:?}");
                     self.next.push(path);
@@ -336,6 +349,8 @@ impl Path {
                     pin_assignments: vec![],
                     start_step: self.step,
                     failures: vec![],
+                    loop_iter_counts: vec![],
+                    effectful_stmt_in_step: false,
                 };
                 p.active.push(t);
                 p
@@ -357,7 +372,7 @@ impl Path {
         self.active.sort_by_key(|t| u32::MAX - t.start_step);
         if let Some(mut thread) = self.active.pop() {
             let r = thread.exec_stmt(&tis[thread.transaction_id], get_value);
-            // println!("{r:?}");
+            // println!("thread.exec_stmt(...) -> {r:?}");
             match r {
                 ThreadResult::Failed => {
                     self.failed.push(thread);
@@ -381,10 +396,33 @@ impl Path {
                     self.next.push(thread);
                     (PathResult::Ok, None)
                 }
-                ThreadResult::RepeatLoop => {
+                ThreadResult::RepeatLoop(iters) => {
                     let tid = thread.transaction_id;
-                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid]);
+                    let (a, b) = thread.exec_repeat_loop_branch(&tis[tid], iters);
                     (PathResult::Branch(vec![a, b]), None)
+                }
+                ThreadResult::ForkIsLast(loop_stmt) => {
+                    let tid = thread.transaction_id;
+                    let (a, b) = thread.exec_is_last_branch(&tis[tid], loop_stmt);
+                    (PathResult::Branch(vec![a, b]), None)
+                }
+                ThreadResult::FinishedWithoutStep => {
+                    // When this happens, it means that we executed some "effectless" statements
+                    // in this step and the transaction essentially ended the step before.
+                    let res = if !thread.has_forked {
+                        // implicit fork
+                        assert!(
+                            !self.has_forked_this_step,
+                            "another thread already forked in the same thread!"
+                        );
+                        assert!(!self.fork_next_step);
+                        self.has_forked_this_step = true;
+                        PathResult::Fork
+                    } else {
+                        PathResult::Ok
+                    };
+                    let proto_call = thread_to_call(tis, thread, Some(self.step - 1));
+                    (res, Some(proto_call))
                 }
                 ThreadResult::FinalStep => (
                     PathResult::Ok,
@@ -434,62 +472,108 @@ struct Thread {
     name: String,
     transaction_id: usize,
     next_stmt: Option<StmtId>,
+    /// repeat/for loop statement, iteration count, for-in loops also have a loop variable that can
+    /// be used inside the loop
+    loop_iter_counts: Vec<(StmtId, u64, Option<SymbolId>)>,
     arg_values: Vec<ArgValue>,
     pin_assignments: Vec<(StmtId, SymbolId, ExprId)>,
     has_forked: bool,
     step: u32,
     start_step: u32,
     failures: Vec<Failure>,
+    // keeps track of whether an effectful statement like assign or assert has been encountered in
+    // this step
+    effectful_stmt_in_step: bool,
 }
 
 #[derive(Debug, Clone)]
 enum ThreadResult {
     Ok,
-    RepeatLoop,
+    // fork a repeat loop, argument is the number of iterations already taken
+    RepeatLoop(u64),
+    // fork to resolve is last with for-in/repeat loop statement id
+    ForkIsLast(StmtId),
     Step,
     Fork,
     FinalStepAndFork,
     FinalStep,
+    FinishedWithoutStep,
     Failed,
 }
 
 impl Thread {
-    fn exec_repeat_loop_branch(self, ti: &ProtoInfo) -> (Thread, Thread) {
+    fn exec_repeat_loop_branch(self, ti: &ProtoInfo, iters: u64) -> (Thread, Thread) {
         let stmt = self.next_stmt.expect("");
-        debug_assert!(
-            matches!(&ti.proto[stmt], Stmt::RepeatLoop(_, _)),
-            "repeat loop!"
-        );
-        let (body, arg_id) = if let Stmt::RepeatLoop(arg, body) = &ti.proto[stmt] {
-            (*body, as_arg(&ti.proto, *arg).unwrap().0)
-        } else {
-            unreachable!(
-                "this function may only be called when executing a repeat loop statement!"
-            );
+        let (body, arg_expr, maybe_loop_var) = match ti.proto[stmt].clone() {
+            Stmt::RepeatLoop(arg, body) => (body, arg, None),
+            Stmt::ForInLoop(loop_var, arg, body) => (body, arg, Some(loop_var)),
+            _ => unreachable!(
+                "We should only get here if the current statement is a repeat of for-in loop"
+            ),
         };
+        let arg_id = as_arg(&ti.proto, arg_expr).unwrap().0;
 
-        // if we take the repeat loop branch, we up the value
+        // if we take the repeat loop branch, we just keep the count and go into the body
         let mut taken = self.clone();
-        let arg_value = taken.arg_values[arg_id]
-            .as_repeat()
-            .expect("must be a uint arg");
-        arg_value.increment_current_value();
-        let value = arg_value.current_value();
-        taken.name = format!("{}{value}?", taken.name);
+        taken.name = format!("{}{}?", taken.name, iters + 1);
         taken.next_stmt = Some(body);
+        taken.loop_iter_counts.push((stmt, iters, maybe_loop_var));
+        if maybe_loop_var.is_some() {
+            // we need to add one more element to the argument
+            taken.arg_values[arg_id]
+                .as_seq_mut()
+                .expect("must be a seq")
+                .increment_unknown_len();
+        }
 
-        // of we do not take the branch, we jump after the loop
+        // of we do not take the branch, we jump after the loop and freeze the value
         let mut not_taken = self;
-        let arg_value = not_taken.arg_values[arg_id]
-            .as_repeat()
-            .expect("must be a uint arg");
-        let max_iter = arg_value.current_value();
-        *arg_value = RepeatValue::Exactly(max_iter, 0);
-        not_taken.name = format!("{}{max_iter}!", not_taken.name);
+        if maybe_loop_var.is_none() {
+            // repeat loop
+            not_taken.arg_values[arg_id]
+                .as_scalar_mut()
+                .expect("must be a scalar")
+                .define_value(BitVecValue::from_u64(iters, 64));
+        } else {
+            // for-in loop
+            not_taken.arg_values[arg_id]
+                .as_seq_mut()
+                .expect("must be a seq")
+                .freeze_len();
+        }
+        not_taken.name = format!("{}{iters}!", not_taken.name);
         not_taken.next_stmt = ti.next_stmt[&stmt];
 
         // we need to explore both versions of our thread
         (taken, not_taken)
+    }
+
+    fn exec_is_last_branch(mut self, ti: &ProtoInfo, loop_stmt_id: StmtId) -> (Thread, Thread) {
+        match ti.proto[loop_stmt_id].clone() {
+            Stmt::RepeatLoop(_arg, _) => todo!("add support for repeat loop"),
+            Stmt::ForInLoop(_, arg, _) => {
+                let arg_id = as_arg(&ti.proto, arg).unwrap().0;
+
+                // for making is_last true, we just need to flip the current (minimum) length to be
+                // the known, fixed length
+                let mut is_last_thread = self.clone();
+                is_last_thread.name = format!("{}L", self.name);
+                is_last_thread.arg_values[arg_id]
+                    .as_seq_mut()
+                    .unwrap()
+                    .freeze_len();
+
+                // to make is_last true, we up the minimum length by one
+                self.arg_values[arg_id]
+                    .as_seq_mut()
+                    .unwrap()
+                    .increment_unknown_len();
+                (is_last_thread, self)
+            }
+            _ => unreachable!(
+                "We should only get here if the current statement is a repeat of for-in loop"
+            ),
+        }
     }
 
     fn exec_stmt(
@@ -499,8 +583,15 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            // println!("[{}]: {:?}", self.name, &ti.proto[stmt]);
+            // println!(
+            //     "[{}]: {:?} ({:?})",
+            //     self.name, &ti.proto[stmt], self.loop_iter_counts
+            // );
             match &ti.proto[stmt] {
+                Stmt::Block(stmt_ids) if stmt_ids.is_empty() => {
+                    self.next_stmt = ti.next_stmt[&stmt];
+                    Ok
+                }
                 Stmt::Block(stmt_ids) => {
                     self.next_stmt = stmt_ids.first().cloned();
                     Ok
@@ -509,12 +600,14 @@ impl Thread {
                     // we apply all pin assignments at the end of a step
                     self.pin_assignments.push((stmt, *lhs, *rhs));
                     self.next_stmt = ti.next_stmt[&stmt];
+                    self.effectful_stmt_in_step = true;
                     Ok
                 }
                 Stmt::Step => {
                     self.next_stmt = ti.next_stmt[&stmt];
                     let assign_ok = self.check_assignments(ti, get_value);
                     self.step += 1;
+                    self.effectful_stmt_in_step = false;
 
                     match (assign_ok, self.next_stmt.is_none(), self.has_forked) {
                         // we found a constraint violation from the assignments
@@ -531,11 +624,12 @@ impl Thread {
                     assert!(self.step > 0, "[{}] Cannot fork at step zero!", self.name);
                     self.has_forked = true;
                     self.next_stmt = ti.next_stmt[&stmt];
+                    self.effectful_stmt_in_step = true;
                     Fork
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self
-                        .eval_expr(get_value, &ti.proto, *cond)
+                        .eval_expr(get_value, ti, *cond)
                         .expect("while condition is always concrete");
                     self.next_stmt = if cond_value.is_true() {
                         Some(*body)
@@ -545,44 +639,92 @@ impl Thread {
                     Ok
                 }
                 Stmt::RepeatLoop(repetitions, body) => {
-                    let arg_id = as_arg(&ti.proto, *repetitions)
+                    // how often have we executed this thread on the current execution path
+                    let iters = self.get_inner_loop_iters(stmt);
+
+                    // retrieve num iteration argument
+                    let max_iter_arg_id = as_arg(&ti.proto, *repetitions)
                         .expect("repeat loop repetition count needs to be an argument")
                         .0;
+                    let max_iter_value = self.arg_values[max_iter_arg_id]
+                        .as_scalar_mut()
+                        .expect("must be a scalar arg");
 
-                    let arg_value = self.arg_values[arg_id]
-                        .as_repeat()
-                        .expect("must be a repeat arg");
-
-                    // check to see if the number of iterations is known
-                    // in this case we essentially just have a for(i=0; i < max_iters; i++) loop
-                    if let Some(max_iters) = arg_value.num_iters() {
-                        if arg_value.current_value() < max_iters {
-                            arg_value.increment_current_value();
-                            self.next_stmt = Some(*body);
-                        } else {
-                            // this will make the current value overflow and go back to zero
-                            arg_value.increment_current_value();
+                    // do we know the maximum number of iterations?
+                    if let Some(max_iters) = max_iter_value.get_known() {
+                        let max_iters = max_iters.to_u64().unwrap();
+                        if iters == max_iters {
                             self.next_stmt = ti.next_stmt[&stmt]; // exit loop
+                        } else {
+                            assert!(iters < max_iters);
+                            self.loop_iter_counts.push((stmt, iters + 1, None));
+                            self.next_stmt = Some(*body);
                         }
                         Ok
                     } else {
                         // we do not actually know the correct number of steps, and we need to explore both possibilities
                         // this must happen outside of this method since it involves cloning the thread
-                        RepeatLoop
+                        RepeatLoop(iters)
                     }
                 }
-                Stmt::IfElse(cond, tru, fals) => {
-                    let cond_value = self
-                        .eval_expr(get_value, &ti.proto, *cond)
-                        .expect("if condition is always concrete");
-                    self.next_stmt = if cond_value.is_true() {
-                        Some(*tru)
+                Stmt::ForInLoop(loop_var_id, seq_expr, body) => {
+                    // how often have we executed this thread on the current execution path
+                    let iters = self.get_inner_loop_iters(stmt);
+
+                    // retrieve sequence argument
+                    let arg_id = as_arg(&ti.proto, *seq_expr)
+                        .expect("for-in sequence argument needs to be an argument to the protocol")
+                        .0;
+                    let arg_value = self.arg_values[arg_id]
+                        .as_seq_mut()
+                        .expect("must be a repeat arg");
+
+                    // minimum number of iterations
+                    let min_len = arg_value.min_len();
+
+                    // println!(
+                    //     "iters={iters}, min={min_len:?}, len={:?}",
+                    //     arg_value.get_known_len()
+                    // );
+
+                    // do we know the maximum number of iterations?
+                    if let Some(max_iters) = arg_value.get_known_len() {
+                        debug_assert!(max_iters >= min_len);
+                        if iters == max_iters {
+                            self.next_stmt = ti.next_stmt[&stmt]; // exit loop
+                        } else {
+                            assert!(iters < max_iters);
+                            self.loop_iter_counts
+                                .push((stmt, iters, Some(*loop_var_id)));
+                            self.next_stmt = Some(*body);
+                        }
+                        Ok
+                    } else if iters < min_len {
+                        // there is no branching, we need to iterate!
+                        self.loop_iter_counts
+                            .push((stmt, iters, Some(*loop_var_id)));
+                        self.next_stmt = Some(*body);
+                        Ok
                     } else {
-                        Some(*fals)
-                    };
-                    Ok
+                        // we do not actually know the correct number of steps, and we need to explore both possibilities
+                        // this must happen outside of this method since it involves cloning the thread
+                        RepeatLoop(iters)
+                    }
                 }
+                Stmt::IfElse(cond, tru, fals) => match self.eval_expr(get_value, ti, *cond) {
+                    ExprValue::Known(cond_value) => {
+                        self.next_stmt = if cond_value.is_true() {
+                            Some(*tru)
+                        } else {
+                            Some(*fals)
+                        };
+                        Ok
+                    }
+                    ExprValue::DependsOnIsLast(stmt) => ForkIsLast(stmt),
+                    other => todo!("if condition is {other:?}"),
+                },
                 Stmt::AssertEq(lhs, rhs) => {
+                    self.effectful_stmt_in_step = true;
                     let (port, other) = match (
                         as_dut_port_symbol(&ti.proto, *lhs),
                         as_dut_port_symbol(&ti.proto, *rhs),
@@ -604,7 +746,23 @@ impl Thread {
                 }
             }
         } else {
-            unreachable!("should have finished with a step!")
+            assert!(
+                !self.effectful_stmt_in_step,
+                "should not finish without a final step!"
+            );
+            FinishedWithoutStep
+        }
+    }
+
+    fn get_inner_loop_iters(&mut self, stmt: StmtId) -> u64 {
+        // have we executed this loop before?
+        if let Some((check_stmt_id, iters, _)) = self.loop_iter_counts.last().cloned()
+            && check_stmt_id == stmt
+        {
+            self.loop_iter_counts.pop().unwrap();
+            iters + 1
+        } else {
+            0
         }
     }
 
@@ -650,78 +808,187 @@ impl Thread {
         }
 
         let lhs_value = get_value(lhs);
-        if let Some(rhs_value) = self.eval_expr(get_value, &ti.proto, rhs) {
-            if rhs_value != lhs_value {
-                // println!(
-                //     "[{}] found a disagreement: {} =/= {}",
-                //     self.name,
-                //     lhs_value.to_bit_str(),
-                //     rhs_value.to_bit_str()
-                // );
-                Some(Failure {
-                    thread_local_step: self.step,
-                    proto_id: ti.proto_id,
-                    thread_name: self.name.clone(),
-                    stmt,
-                    a: lhs_value,
-                    b: rhs_value,
-                })
-            } else {
+        match self.eval_expr(get_value, ti, rhs) {
+            ExprValue::Known(rhs_value) => {
+                if rhs_value != lhs_value {
+                    // println!(
+                    //     "[{}] found a disagreement: {} =/= {}",
+                    //     self.name,
+                    //     lhs_value.to_bit_str(),
+                    //     rhs_value.to_bit_str()
+                    // );
+                    Some(Failure {
+                        thread_local_step: self.step,
+                        proto_id: ti.proto_id,
+                        thread_name: self.name.clone(),
+                        stmt,
+                        a: lhs_value,
+                        b: rhs_value,
+                    })
+                } else {
+                    None
+                }
+            }
+            ExprValue::UnknownSeqArg(arg_id, index) => {
+                self.arg_values[arg_id]
+                    .as_seq_mut()
+                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
+                    .define_value_at(index, lhs_value);
                 None
             }
-        } else {
-            if let Some((arg_id, _arg)) = as_arg(&ti.proto, rhs) {
-                if let ArgValue::Data(d) = &mut self.arg_values[arg_id] {
-                    // println!("ARG: {} ({:?}) = {} : {}", ti.sym[_arg.symbol()].full_name(&ti.sym), _arg.symbol(), lhs_value.to_dec_str(), lhs_value.width());
-                    d.define_value(lhs_value);
-                } else {
-                    unreachable!("assignments/assert_eq must involve data values (bit vectors)!")
-                }
-                // println!(
-                //     "[{}] Discovered that ?? = {}",
-                //     self.name,
-                //     lhs_value.to_bit_str()
-                // );
-            } else {
-                todo!()
+            ExprValue::UnknownArg(arg_id) => {
+                self.arg_values[arg_id]
+                    .as_scalar_mut()
+                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
+                    .define_value(lhs_value);
+                None
             }
-            None
+            other => todo!("deal with {other:?} on rhs of assignment"),
         }
     }
 
     fn eval_expr(
         &self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
-        transaction: &Transaction,
+        ti: &ProtoInfo,
         expr: ExprId,
-    ) -> Option<BitVecValue> {
-        if let Some((arg_id, _)) = as_arg(transaction, expr) {
-            return self.arg_values[arg_id].get_known();
-        }
-        match &transaction[expr] {
-            Expr::Const(value) => Some(value.clone()),
-            Expr::Sym(dut_port) => Some(get_value(*dut_port)),
-            Expr::DontCare => None,
+    ) -> ExprValue {
+        match &ti.proto[expr] {
+            Expr::Sym(sym_id) => {
+                if ti.sym[sym_id].is_arg() {
+                    let arg_index = sym_as_arg(&ti.proto, *sym_id).unwrap().0;
+                    self.arg_values[arg_index]
+                        .as_scalar()
+                        .expect("only scalar arguments should ever be evaluated")
+                        .get_known()
+                        .map(ExprValue::Known)
+                        .unwrap_or(ExprValue::UnknownArg(arg_index))
+                } else if ti.sym[sym_id].is_port() {
+                    ExprValue::Known(get_value(*sym_id))
+                } else if ti.sym[sym_id].is_loop_var() {
+                    let (stmt, iter, _) = *self.loop_iter_counts.iter().rev().find(|(_, _, a)| *a == Some(*sym_id)).expect("failed to find loop variable. Are we outside of the corresponding for-in loop?");
+                    if let Stmt::ForInLoop(check_sym_id, seq_expr, _) = ti.proto[stmt] {
+                        debug_assert_eq!(check_sym_id, *sym_id);
+                        // retrieve sequence argument
+                        let arg_id = as_arg(&ti.proto, seq_expr)
+                            .expect(
+                                "for-in sequence argument needs to be an argument to the protocol",
+                            )
+                            .0;
+                        let arg_value = self.arg_values[arg_id]
+                            .as_seq()
+                            .expect("must be a repeat arg");
+                        arg_value
+                            .get_known_at(iter)
+                            .map(ExprValue::Known)
+                            .unwrap_or(ExprValue::UnknownSeqArg(arg_id, iter))
+                    } else {
+                        unreachable!("Only for-in loops can have loop variables!");
+                    }
+                } else {
+                    unreachable!("unknown symbol kind!")
+                }
+            }
+            Expr::Const(value) => ExprValue::Known(value.clone()),
+            Expr::DontCare => ExprValue::DontCare,
             Expr::Binary(op, a, b) => {
-                self.eval_expr(get_value, transaction, *a)
-                    .and_then(|a_value| {
-                        self.eval_expr(get_value, transaction, *b)
-                            .map(|b_value| match op {
-                                BinOp::Equal => {
-                                    if a_value.is_equal(&b_value) {
-                                        BitVecValue::new_true()
-                                    } else {
-                                        BitVecValue::new_false()
-                                    }
+                let a = self.eval_expr(get_value, ti, *a);
+                let b = self.eval_expr(get_value, ti, *b);
+                match (a, b) {
+                    (ExprValue::Known(a), ExprValue::Known(b)) => {
+                        let res = match op {
+                            BinOp::Equal => {
+                                if a.is_equal(&b) {
+                                    BitVecValue::new_true()
+                                } else {
+                                    BitVecValue::new_false()
                                 }
-                                BinOp::Concat => a_value.concat(&b_value),
-                            })
-                    })
+                            }
+                            BinOp::Concat => a.concat(&b),
+                        };
+                        ExprValue::Known(res)
+                    }
+                    (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
+                    (
+                        ExprValue::Unknown
+                        | ExprValue::UnknownArg(_)
+                        | ExprValue::UnknownSeqArg(_, _),
+                        _,
+                    )
+                    | (
+                        _,
+                        ExprValue::Unknown
+                        | ExprValue::UnknownArg(_)
+                        | ExprValue::UnknownSeqArg(_, _),
+                    ) => ExprValue::Unknown,
+                    (ExprValue::DependsOnIsLast(s), _) | (_, ExprValue::DependsOnIsLast(s)) => {
+                        ExprValue::DependsOnIsLast(s)
+                    }
+                }
             }
-            Expr::Unary(UnaryOp::Not, e) => {
-                self.eval_expr(get_value, transaction, *e).map(|v| v.not())
-            }
+            Expr::Unary(UnaryOp::Not, e) => match self.eval_expr(get_value, ti, *e) {
+                ExprValue::Known(v) => ExprValue::Known(v.not()),
+                other => other,
+            },
             Expr::Slice(_, _, _) => todo!(),
+            Expr::IsLastIteration => {
+                // The iter_count is the number of _completed_ iterations.
+                // So, on the first iteration: `iter_count == 0`
+                let (stmt, iter_count, _) = *self.loop_iter_counts.last().unwrap();
+                match &ti.proto[stmt] {
+                    Stmt::ForInLoop(_, seq_expr, _) => {
+                        // retrieve sequence argument
+                        let arg_id = as_arg(&ti.proto, *seq_expr)
+                            .expect(
+                                "for-in sequence argument needs to be an argument to the protocol",
+                            )
+                            .0;
+                        let arg_value = self.arg_values[arg_id]
+                            .as_seq()
+                            .expect("must be a repeat arg");
+                        // 1) Is the number of iterations known precisely?
+                        if let Some(max_iter) = arg_value.get_known_len() {
+                            if max_iter == iter_count + 1 {
+                                ExprValue::Known(BitVecValue::new_true())
+                            } else {
+                                ExprValue::Known(BitVecValue::new_false())
+                            }
+                        }
+                        // 2) is there a lower bound to the number of iterations
+                        else if arg_value.min_len() > iter_count + 1 {
+                            ExprValue::Known(BitVecValue::new_false())
+                        }
+                        // 3) otherwise, it could be either, meaning that we will have to branch
+                        else {
+                            ExprValue::DependsOnIsLast(stmt)
+                        }
+                    }
+                    Stmt::RepeatLoop(_, _) => {
+                        todo!("implement is_last for repeat loops!");
+                    }
+                    other => unreachable!("{:?}", other),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum ExprValue {
+    Known(BitVecValue),
+    DontCare,
+    Unknown,
+    UnknownArg(usize),
+    UnknownSeqArg(usize, u64),
+    DependsOnIsLast(StmtId),
+}
+
+impl ExprValue {
+    fn expect(self, msg: &str) -> BitVecValue {
+        if let ExprValue::Known(v) = self {
+            v
+        } else {
+            panic!("{self:?} is not known! {}", msg)
         }
     }
 }
@@ -744,14 +1011,18 @@ fn as_dut_port_symbol(transaction: &Transaction, expr: ExprId) -> Option<SymbolI
 /// returns argument and id if the expression corresponds to one
 fn as_arg(transaction: &Transaction, expr: ExprId) -> Option<(usize, Arg)> {
     match &transaction[expr] {
-        Expr::Sym(sym_id) => transaction
-            .args
-            .iter()
-            .enumerate()
-            .find(|(_, a)| a.symbol() == *sym_id)
-            .map(|(i, a)| (i, *a)),
+        Expr::Sym(sym_id) => sym_as_arg(transaction, *sym_id),
         _ => None,
     }
+}
+
+fn sym_as_arg(transaction: &Transaction, sym_id: SymbolId) -> Option<(usize, Arg)> {
+    transaction
+        .args
+        .iter()
+        .enumerate()
+        .find(|(_, a)| a.symbol() == sym_id)
+        .map(|(i, a)| (i, *a))
 }
 
 #[derive(Debug)]
@@ -760,125 +1031,4 @@ struct ProtoInfo {
     proto: Transaction,
     sym: SymbolTable,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
-}
-
-#[derive(Debug, Clone)]
-enum ArgValue {
-    Data(DataValue),
-    Repeat(RepeatValue),
-}
-
-impl ArgValue {
-    fn unknown(sym: &SymbolTable, arg: &Arg) -> Self {
-        match sym[arg.symbol()].tpe() {
-            Type::UnsignedInt => Self::Repeat(RepeatValue::default()),
-            Type::BitVec(w) => Self::Data(DataValue::unknown(w)),
-            Type::Struct(_) => unreachable!("args cannot be structs"),
-            Type::Unknown => unreachable!("arg types are always known"),
-        }
-    }
-
-    fn get_known(&self) -> Option<BitVecValue> {
-        match self {
-            ArgValue::Data(d) => d.get_known(),
-            ArgValue::Repeat(RepeatValue::Exactly(v, _)) => {
-                Some(BitVecValue::from_u64(*v as u64, 32))
-            }
-            ArgValue::Repeat(RepeatValue::AtLeast(_)) => None,
-        }
-    }
-
-    fn as_repeat(&mut self) -> Option<&mut RepeatValue> {
-        if let Self::Repeat(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum RepeatValue {
-    AtLeast(u32),
-    Exactly(u32, u32),
-}
-
-impl Default for RepeatValue {
-    fn default() -> Self {
-        Self::AtLeast(0)
-    }
-}
-
-impl RepeatValue {
-    fn current_value(&self) -> u32 {
-        match self {
-            RepeatValue::AtLeast(v) => *v,
-            RepeatValue::Exactly(_, v) => *v,
-        }
-    }
-
-    fn increment_current_value(&mut self) {
-        match self {
-            RepeatValue::AtLeast(v) => *v += 1,
-            RepeatValue::Exactly(b, v) => {
-                if *v + 1 == *b {
-                    *v = 0;
-                } else {
-                    *v += 1;
-                }
-                debug_assert!(*v < *b, "{} < {}", *v, *b);
-            }
-        }
-    }
-
-    fn num_iters(&self) -> Option<u32> {
-        match self {
-            RepeatValue::AtLeast(_) => None,
-            RepeatValue::Exactly(b, _) => Some(*b),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DataValue {
-    value: BitVecValue,
-    known: BitVecValue,
-}
-
-impl DataValue {
-    fn unknown(width: WidthInt) -> Self {
-        Self {
-            value: BitVecValue::zero(width),
-            known: BitVecValue::zero(width),
-        }
-    }
-
-    fn get_known(&self) -> Option<BitVecValue> {
-        if self.known.is_all_ones() {
-            Some(self.value.clone())
-        } else {
-            None
-        }
-    }
-
-    #[allow(dead_code)]
-    fn bit_is_known(&self, bit: WidthInt) -> bool {
-        self.known.is_bit_set(bit)
-    }
-
-    #[allow(dead_code)]
-    fn define_bit(&mut self, bit: WidthInt, value: u8) {
-        debug_assert!(!self.bit_is_known(bit));
-        debug_assert!(bit < self.value.width());
-        if value != 0 {
-            self.value.set_bit(bit);
-        }
-        self.known.set_bit(bit);
-    }
-
-    fn define_value(&mut self, value: BitVecValue) {
-        debug_assert_eq!(self.value.width(), value.width());
-        self.value = value;
-        self.known = BitVecValue::ones(self.value.width());
-    }
 }

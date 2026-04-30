@@ -4,6 +4,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::interpreter::Value;
 use crate::{interpreter::ExprValue, ir::*};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
@@ -24,6 +25,14 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
         Type::BitVec(t) => format!("u{}", t),
         Type::UnsignedInt => "uint".to_string(),
         Type::Struct(structid) => st[structid].name().to_owned(),
+        Type::Seq(seq_id) => {
+            let suffix = match st[seq_id].min_len() {
+                0 => "",
+                1 => "+",
+                other => unreachable!("unexpected min length of {other}"),
+            };
+            format!("[{}]{suffix}", serialize_type(st, st[seq_id].tpe()))
+        }
         Type::Unknown => "unknown".to_string(),
     }
 }
@@ -88,6 +97,19 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
     }
 }
 
+pub fn serialize_value(value: &Value, display_hex: bool) -> String {
+    if let Ok(bv) = value.try_into() {
+        serialize_bitvec(bv, display_hex)
+    } else {
+        let seq: &[BitVecValue] = value.try_into().unwrap();
+        let elements: Vec<_> = seq
+            .iter()
+            .map(|bv| serialize_bitvec(bv, display_hex))
+            .collect();
+        format!("[{}]", elements.join(","))
+    }
+}
+
 /// Pretty-prints the arguments map, where `SymbolId`s are rendered using
 /// the corresponding string variable name according to the `SymbolTable`.
 /// When printing, we sort the keys by lexicographic order of variable names
@@ -95,7 +117,7 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
 /// The `display_hex` argument indicates whether to display integer literals
 /// using hexadeimcal (if `false`, we default to using decimal).
 pub fn serialize_args_mapping(
-    args_mapping: &FxHashMap<SymbolId, BitVecValue>,
+    args_mapping: &FxHashMap<SymbolId, Value>,
     symbol_table: &SymbolTable,
     display_hex: bool,
 ) -> String {
@@ -107,7 +129,7 @@ pub fn serialize_args_mapping(
                 "({}) {}: {}",
                 symbol_id,
                 symbol_table[*symbol_id].name(),
-                serialize_bitvec(value, display_hex)
+                serialize_value(value, display_hex)
             )
         })
         .collect::<Vec<String>>()
@@ -121,6 +143,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_string(),
+        Expr::IsLastIteration => "is_last()".to_string(),
         Expr::Unary(unary_op, expr_id) => {
             let e = serialize_expr(tr, st, expr_id);
             format!("{}({})", unary_op, e)
@@ -184,6 +207,14 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
                 serialize_stmt(tr, st, stmt_id)
             )
         }
+        Stmt::ForInLoop(id, seq_expr, stmt_id) => {
+            format!(
+                "for {} in {} {{ {} }}",
+                st[id].name(),
+                serialize_expr(tr, st, seq_expr),
+                serialize_stmt(tr, st, stmt_id)
+            )
+        }
         Stmt::IfElse(expr_id, stmt_id1, stmt_id2) => {
             format!(
                 "if {} {{ {} }} {{ {} }}",
@@ -243,6 +274,17 @@ pub fn build_statements(
                 "{}repeat {} iterations {{",
                 "  ".repeat(index),
                 serialize_expr(tr, st, count)
+            )?;
+            build_statements(out, tr, st, bodyid, index + 1)?;
+            writeln!(out, "{}}}", "  ".repeat(index))?;
+        }
+        Stmt::ForInLoop(id, seq_expr, bodyid) => {
+            writeln!(
+                out,
+                "{}for {} in {} {{",
+                "  ".repeat(index),
+                st[id].name(),
+                serialize_expr(tr, st, seq_expr)
             )?;
             build_statements(out, tr, st, bodyid, index + 1)?;
             writeln!(out, "{}}}", "  ".repeat(index))?;

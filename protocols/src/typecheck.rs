@@ -88,6 +88,14 @@ fn check_expr_types(
                     handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
+                Type::Seq(_) => {
+                    let error_msg = format!(
+                        "Invalid slice operation: can't take bit-slices of seq `{}`. (We also do not allow indexing!)",
+                        serialize_type(st, ty)
+                    );
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
                 Type::UnsignedInt => {
                     let error_msg = "Invalid slice operation: can't take bit-slices of uint";
                     handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
@@ -140,12 +148,14 @@ fn check_expr_types(
                 Ok(Type::BitVec(1))
             }
         }
+        // evaluates to true or false
+        Expr::IsLastIteration => Ok(Type::BitVec(1)),
     }
 }
 
 fn check_stmt_types(
     tr: &Transaction,
-    st: &SymbolTable,
+    st: &mut SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
 ) -> anyhow::Result<()> {
@@ -225,6 +235,32 @@ fn check_stmt_types(
                 Err(anyhow!(error_msg))
             }
         }
+        Stmt::ForInLoop(id_symbol, seq_expr, bodyid) => {
+            let seq_expr_tpe = check_expr_types(tr, st, handler, seq_expr)?;
+            if let Type::Seq(seq_id) = seq_expr_tpe {
+                let inner = st[seq_id].tpe();
+                if let Type::BitVec(_) = inner {
+                    // update type of id_expr to be the inner type
+                    st.update_type(*id_symbol, inner);
+                    // check body
+                    check_stmt_types(tr, st, handler, bodyid)
+                } else {
+                    let error_msg = format!(
+                        "Only bit-vector sequences are currently supported in loops, not {}.",
+                        serialize_type(st, seq_expr_tpe)
+                    );
+                    handler.emit_diagnostic_expr(tr, seq_expr, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            } else {
+                let error_msg = format!(
+                    "Must be a sequence expression, not {}.",
+                    serialize_type(st, seq_expr_tpe)
+                );
+                handler.emit_diagnostic_expr(tr, seq_expr, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             // Conditions for if-statement must have type `BitVec(1)`
             let cond_type = check_expr_types(tr, st, handler, cond)?;
@@ -285,7 +321,7 @@ fn check_stmt_types(
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
 pub fn type_check(
-    trs: &Vec<(Transaction, SymbolTable)>,
+    trs: &mut [(Transaction, SymbolTable)],
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
     for (tr, st) in trs {
@@ -328,8 +364,8 @@ mod tests {
         let mut handler = DiagnosticHandler::default();
         let result = parse_file(file_name, &mut handler);
         let content = match result {
-            Ok(trs) => {
-                let _ = type_check(&trs, &mut handler);
+            Ok(mut trs) => {
+                let _ = type_check(&mut trs, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -444,6 +480,6 @@ mod tests {
         tr.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         tr.body = tr.s(Stmt::Block(body));
-        let _ = type_check(&vec![(tr, symbols)], &mut handler);
+        let _ = type_check(&mut [(tr, symbols)], &mut handler);
     }
 }

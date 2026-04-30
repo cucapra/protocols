@@ -141,12 +141,10 @@ impl Transaction {
                             self.next_stmt_mapping_helper(*else_stmt_id, new_stmt_after_block),
                         );
                     }
-                    Stmt::While(_, body_id) => {
-                        map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
-                    }
                     // Add a back-edge from the loop body to the current `stmt_id`
-                    // (same as how while-loops are represented in the current AST)
-                    Stmt::RepeatLoop(_, body_id) => {
+                    Stmt::RepeatLoop(_, body_id)
+                    | Stmt::While(_, body_id)
+                    | Stmt::ForInLoop(_, _, body_id) => {
                         map.extend(self.next_stmt_mapping_helper(*body_id, Some(stmt_id)));
                     }
                     _ => {}
@@ -264,6 +262,7 @@ pub enum Type {
     UnsignedInt,
     BitVec(u32),
     Struct(StructId),
+    Seq(SeqId),
     /// Type taken on when we do not know the actual type yet
     Unknown,
 }
@@ -274,6 +273,7 @@ pub enum SymbolKind {
     InPort,
     OutPort,
     Arg(u16),
+    LoopVar,
 }
 
 impl Type {
@@ -298,6 +298,7 @@ impl Type {
         match self {
             Type::BitVec(width) => *width,
             Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
+            Type::Seq(_) => panic!("Unable to compute bitwidth for a `[..]`, seq type"),
             Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
         }
@@ -318,6 +319,7 @@ pub enum Stmt {
     /// Bounded loop with fixed no. of iterations
     /// (`ExprId` is the no. of iterations, `StmtId` is the loop body)
     RepeatLoop(ExprId, StmtId),
+    ForInLoop(SymbolId, ExprId, StmtId),
     IfElse(ExprId, StmtId, StmtId),
     AssertEq(ExprId, ExprId),
 }
@@ -359,6 +361,8 @@ pub enum Expr {
     Unary(UnaryOp, ExprId),
     /// Slice: args are msb first, then lsb
     Slice(ExprId, u32, u32),
+    /// Inside a ForInLoop, this evaluates to true/false dending on what iteration we are on
+    IsLastIteration,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -368,6 +372,7 @@ pub enum BoxedExpr {
     Const(BitVecValue, usize, usize),
     Sym(SymbolId, usize, usize),
     DontCare(usize, usize),
+    IsLastIteration(usize, usize),
     // unary
     Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
     // binary
@@ -383,6 +388,7 @@ impl BoxedExpr {
             BoxedExpr::Const(_, start, _) => *start,
             BoxedExpr::Sym(_, start, _) => *start,
             BoxedExpr::DontCare(start, _) => *start,
+            BoxedExpr::IsLastIteration(start, _) => *start,
             BoxedExpr::Binary(_, _, _, start, _) => *start,
             BoxedExpr::Unary(_, _, start, _) => *start,
             BoxedExpr::Slice(_, _, _, start, _) => *start,
@@ -395,10 +401,28 @@ impl BoxedExpr {
             BoxedExpr::Const(_, _, end) => *end,
             BoxedExpr::Sym(_, _, end) => *end,
             BoxedExpr::DontCare(_, end) => *end,
+            BoxedExpr::IsLastIteration(_, end) => *end,
             BoxedExpr::Binary(_, _, _, _, end) => *end,
             BoxedExpr::Unary(_, _, _, end) => *end,
             BoxedExpr::Slice(_, _, _, _, end) => *end,
         }
+    }
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct SeqId(u32);
+entity_impl!(SeqId, "seq");
+
+/// A silly little bit of indirection to work around the fact that we do not have TypeId.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Seq(Type, u64);
+
+impl Seq {
+    pub fn tpe(&self) -> Type {
+        self.0
+    }
+    pub fn min_len(&self) -> u64 {
+        self.1
     }
 }
 
@@ -483,6 +507,7 @@ pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
     by_name_sym: FxHashMap<String, SymbolId>,
     structs: PrimaryMap<StructId, Struct>,
+    seq: PrimaryMap<SeqId, Seq>,
     by_name_struct: FxHashMap<String, StructId>,
 }
 
@@ -566,6 +591,11 @@ impl SymbolTable {
         self[symbol_id].full_name(self)
     }
 
+    pub fn update_type(&mut self, symbol_id: SymbolId, tpe: Type) {
+        let entry = self.entries.get_mut(symbol_id).unwrap();
+        entry.tpe = tpe;
+    }
+
     pub fn add_with_parent(&mut self, name: String, parent: SymbolId) -> SymbolId {
         assert!(
             !name.contains('.'),
@@ -606,6 +636,10 @@ impl SymbolTable {
         let id = self.entries.push(entry);
         self.by_name_sym.insert(lookup_name, id);
         id
+    }
+
+    pub fn add_seq(&mut self, inner: Type, min_size: u64) -> SeqId {
+        self.seq.push(Seq(inner, min_size))
     }
 
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
@@ -679,6 +713,22 @@ impl Index<&StructId> for SymbolTable {
     }
 }
 
+impl Index<SeqId> for SymbolTable {
+    type Output = Seq;
+
+    fn index(&self, index: SeqId) -> &Self::Output {
+        &self.seq[index]
+    }
+}
+
+impl Index<&SeqId> for SymbolTable {
+    type Output = Seq;
+
+    fn index(&self, index: &SeqId) -> &Self::Output {
+        &self.seq[*index]
+    }
+}
+
 impl Index<Arg> for SymbolTable {
     type Output = SymbolTableEntry;
 
@@ -735,12 +785,25 @@ impl SymbolTableEntry {
     pub fn is_port(&self) -> bool {
         matches!(self.kind, SymbolKind::InPort | SymbolKind::OutPort)
     }
+    pub fn is_in_port(&self) -> bool {
+        matches!(self.kind, SymbolKind::InPort)
+    }
+    pub fn is_out_port(&self) -> bool {
+        matches!(self.kind, SymbolKind::InPort)
+    }
     pub fn as_arg_index(&self) -> Option<usize> {
         if let SymbolKind::Arg(index) = self.kind {
             Some(index as usize)
         } else {
             None
         }
+    }
+
+    pub fn is_arg(&self) -> bool {
+        self.as_arg_index().is_some()
+    }
+    pub fn is_loop_var(&self) -> bool {
+        matches!(self.kind, SymbolKind::LoopVar)
     }
 }
 

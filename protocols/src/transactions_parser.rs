@@ -1,5 +1,7 @@
-use crate::ir::Type;
+use crate::interpreter::Value;
+use crate::ir::{SymbolTable, Transaction, Type};
 use crate::scheduler::TodoItem;
+use crate::serialize::serialize_type;
 use crate::{diagnostic::*, setup::bv};
 use anyhow::anyhow;
 use baa::BitVecValue;
@@ -16,7 +18,7 @@ struct TransactionsParser;
 pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-    transaction_arg_types: FxHashMap<String, Vec<Type>>,
+    protos: &FxHashMap<String, (&Transaction, &SymbolTable)>,
 ) -> anyhow::Result<Vec<Vec<TodoItem>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
@@ -50,21 +52,16 @@ pub fn parse_transactions_file(
                     // First element should be the function name (ident)
                     let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-                    let arg_types =
-                        transaction_arg_types
-                            .get(&function_name)
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "Unable to fetch argument types for transaction {function_name}"
-                                )
-                            });
+                    let (proto, st) = protos.get(&function_name).unwrap_or_else(|| {
+                        panic!("Unable to fetch argument types for transaction {function_name}")
+                    });
 
                     // Parse arguments if they exist
-                    let mut args: Vec<BitVecValue> = vec![];
-                    if let Some(arglist_pair) = transaction_inner.next() {
-                        if arglist_pair.as_rule() == Rule::arglist {
-                            args = parse_arglist(arglist_pair, handler, fileid, arg_types)?;
-                        }
+                    let mut args: Vec<Value> = vec![];
+                    if let Some(arglist_pair) = transaction_inner.next()
+                        && arglist_pair.as_rule() == Rule::arglist
+                    {
+                        args = parse_arglist(st, arglist_pair, handler, fileid, proto)?;
                     }
 
                     trace_todos.push((function_name, args));
@@ -85,14 +82,16 @@ pub fn parse_transactions_file(
 /// - `fileid`: file descriptor
 /// - `arg_types`: Slice containing the expected type of each argument
 fn parse_arglist(
+    st: &SymbolTable,
     arglist_pair: Pair<Rule>,
     handler: &mut DiagnosticHandler,
     fileid: usize,
-    arg_types: &[Type],
-) -> anyhow::Result<Vec<BitVecValue>> {
+    proto: &Transaction,
+) -> anyhow::Result<Vec<Value>> {
     let mut args = vec![];
 
     let arg_pairs = collect_arg_pairs(arglist_pair);
+    let arg_types = proto.get_arg_types(st);
 
     // Check that the no. of arguments supplied matches the type
     if arg_pairs.len() != arg_types.len() {
@@ -108,8 +107,8 @@ fn parse_arglist(
         return Err(anyhow!(msg));
     }
 
-    for (arg_pair, ty) in arg_pairs.iter().zip(arg_types.iter()) {
-        let arg_value = parse_arg(arg_pair, ty, handler, fileid)?;
+    for (arg_pair, ty) in arg_pairs.into_iter().zip(arg_types.iter()) {
+        let arg_value = parse_arg(st, arg_pair, ty, handler, fileid)?;
         args.push(arg_value);
     }
     Ok(args)
@@ -181,14 +180,69 @@ impl IntFormat {
     }
 }
 
+fn parse_arg(
+    st: &SymbolTable,
+    arg_pair: Pair<Rule>,
+    ty: &Type,
+    handler: &mut DiagnosticHandler,
+    fileid: usize,
+) -> anyhow::Result<Value> {
+    // we get an `arg` which is either a `scalar_arg` or a `seq_arg`
+    let arg_pair = arg_pair.clone().into_inner().next().unwrap();
+
+    let value: Value = match arg_pair.as_rule() {
+        Rule::scalar_arg => parse_scalar_arg(arg_pair, ty, handler, fileid)?.into(),
+        Rule::seq_arg => {
+            // check type before further parsing
+            if let Type::Seq(seq_id) = ty {
+                let inner_ty = st[seq_id].tpe();
+                // seq_arg contains an arg_list
+                let values = if let Some(arg_list) = arg_pair.clone().into_inner().next() {
+                    let elements = collect_arg_pairs(arg_list);
+                    let values: Result<Vec<_>, _> = elements
+                        .into_iter()
+                        .map(|arg_pair| parse_scalar_arg(arg_pair, &inner_ty, handler, fileid))
+                        .collect();
+                    values?
+                } else {
+                    // empty sequence
+                    vec![]
+                };
+
+                // check length
+                let min_len = st[seq_id].min_len() as usize;
+                if values.len() < min_len {
+                    let msg = format!(
+                        "Invalid sequence of values for argument of type {}. At least {} elements are required.",
+                        serialize_type(st, *ty),
+                        min_len
+                    );
+                    handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                    return Err(anyhow!(msg));
+                }
+                values.into()
+            } else {
+                let msg = format!(
+                    "Invalid sequence of values for argument of type {}",
+                    serialize_type(st, *ty)
+                );
+                handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                return Err(anyhow!(msg));
+            }
+        }
+        other => unreachable!("unexpected rule: {:?}", other),
+    };
+    Ok(value)
+}
+
 /// Parses one single argument to a transaction, returning a `BitVecValue`
 /// Arguments:
 /// - `arg_pair` is a `Pair` produced by the parser derived by Pest
 /// - `ty`: The expected type of the argument
 /// - `handler` is the handler for emitting error diagnostics
 /// - `fileid`: file descriptor
-fn parse_arg(
-    arg_pair: &Pair<Rule>,
+fn parse_scalar_arg(
+    arg_pair: Pair<Rule>, // must be a scalar_arg
     ty: &Type,
     handler: &mut DiagnosticHandler,
     fileid: usize,
@@ -201,7 +255,7 @@ fn parse_arg(
         Type::UnsignedInt => 64, // we just treat unsigned integers as 64 bit for now
         _ => {
             let msg = format!("Unsupported argument type: {:?}", ty);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
     };
@@ -215,7 +269,7 @@ fn parse_arg(
         let binary_str = stripped.replace('_', "");
         if binary_str.is_empty() {
             let msg = format!("Empty binary integer: '{}'", arg_str);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         } else if !binary_str.chars().all(|c| c == '0' || c == '1') {
             // Ensure that all characters are binary digits
@@ -223,7 +277,7 @@ fn parse_arg(
                 "Invalid binary integer '{}': contains non-binary digits",
                 arg_str
             );
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
         Ok(IntFormat::Binary.parse_bitvec_value(binary_str, bitwidth))
@@ -235,7 +289,7 @@ fn parse_arg(
         let hex_str = stripped.replace('_', "");
         if hex_str.is_empty() {
             let msg = format!("Empty hexadecimal integer: '{}'", arg_str);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         } else if !hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
             // Ensure that all characters are hex digits
@@ -243,7 +297,7 @@ fn parse_arg(
                 "Invalid hexadecimal integer '{}': contains non-hex digits",
                 arg_str
             );
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
 
@@ -253,7 +307,7 @@ fn parse_arg(
         let decimal_str = arg_str.replace('_', "");
         if decimal_str.is_empty() {
             let msg = format!("Empty argument: '{}'", arg_str);
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         } else if !decimal_str.chars().all(|c| c.is_ascii_digit()) {
             // Validate that all characters are decimal digits
@@ -261,7 +315,7 @@ fn parse_arg(
                 "Invalid decimal integer '{}': contains non-digit characters",
                 arg_str
             );
-            handler.emit_diagnostic_parsing(&msg, fileid, arg_pair, Level::Error);
+            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
             return Err(anyhow!(msg));
         }
         Ok(IntFormat::Decimal.parse_bitvec_value(decimal_str, bitwidth))

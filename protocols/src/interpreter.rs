@@ -7,7 +7,7 @@
 
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
-use crate::scheduler::Todo;
+use crate::scheduler::Thread;
 use crate::serialize::serialize_bitvec;
 use baa::{BitVecOps, BitVecValue};
 use log::info;
@@ -17,6 +17,90 @@ use patronus::system::Output;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
+
+/// A concrete value of any type.
+#[derive(Debug, Clone)]
+pub struct Value(ValueKind);
+
+#[derive(Debug, Clone)]
+enum ValueKind {
+    Scalar(BitVecValue),
+    Seq(Vec<BitVecValue>),
+}
+
+impl TryFrom<Value> for BitVecValue {
+    type Error = ();
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Scalar(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for &'a BitVecValue {
+    type Error = ();
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Scalar(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<BitVecValue> for Value {
+    fn from(value: BitVecValue) -> Self {
+        Value(ValueKind::Scalar(value))
+    }
+}
+
+impl TryFrom<Value> for Vec<BitVecValue> {
+    type Error = ();
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Seq(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<Vec<BitVecValue>> for Value {
+    fn from(value: Vec<BitVecValue>) -> Self {
+        Value(ValueKind::Seq(value))
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for &'a [BitVecValue] {
+    type Error = ();
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value(ValueKind::Seq(v)) => Ok(v.as_slice()),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Value {
+    pub fn to_hex_str(&self) -> String {
+        match &self.0 {
+            ValueKind::Scalar(bv) => bv.to_hex_str(),
+            ValueKind::Seq(values) => {
+                let values: Vec<_> = values.iter().map(|v| v.to_hex_str()).collect();
+                format!("[{}]", values.join(", "))
+            }
+        }
+    }
+
+    pub fn to_dec_str(&self) -> String {
+        match &self.0 {
+            ValueKind::Scalar(bv) => bv.to_dec_str(),
+            ValueKind::Seq(values) => {
+                let values: Vec<_> = values.iter().map(|v| v.to_dec_str()).collect();
+                format!("[{}]", values.join(", "))
+            }
+        }
+    }
+}
 
 /// Per-thread input value: either a concrete assignment or DontCare
 #[derive(Debug, Clone)]
@@ -77,9 +161,13 @@ pub struct Evaluator<'a> {
     st: &'a SymbolTable,
     sim: Interpreter,
 
-    args_mapping: FxHashMap<SymbolId, BitVecValue>,
+    args_mapping: FxHashMap<SymbolId, Value>,
     input_mapping: FxHashMap<SymbolId, ExprRef>,
     output_mapping: FxHashMap<SymbolId, Output>,
+    /// _Dynamic:_ stack of loop variables, need to be searched right to left
+    pub loop_vars: Vec<(SymbolId, BitVecValue)>,
+    /// _Dynamic_: for-in/repeat loop information: loop statement id, max
+    pub loop_info: Vec<(StmtId, u64, u64)>,
 
     // Combinational dependency tracking
     /// Maps `input |-> Vec<output>` (outputs that are affected by this input)
@@ -111,9 +199,6 @@ pub struct Evaluator<'a> {
 
     /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
-
-    // Maps a `StmtId` pair to the no. of iterations remaining for that particular loop.
-    bounded_loop_remaining_iters: FxHashMap<StmtId, u128>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -125,7 +210,7 @@ impl<'a> Evaluator<'a> {
 
     /// Creates a new `Evaluator`
     pub fn new(
-        args: FxHashMap<&str, BitVecValue>,
+        args: FxHashMap<&str, Value>,
         tr: &'a Transaction,
         st: &'a SymbolTable,
         ctx: &'a patronus::expr::Context,
@@ -159,24 +244,35 @@ impl<'a> Evaluator<'a> {
         }
 
         for symbol_id in dut_symbols {
-            let symbol_name = st[symbol_id].name();
-
-            if let Some(input_ref) = sys
-                .inputs
-                .iter()
-                .find(|i| ctx.get_symbol_name(**i).unwrap() == symbol_name)
-            {
-                input_mapping.insert(*symbol_id, *input_ref);
+            let sym = &st[symbol_id];
+            if sym.is_in_port() {
+                let input = sys
+                    .inputs
+                    .iter()
+                    .find(|i| ctx.get_symbol_name(**i).unwrap() == sym.name())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Failed to find input with name '{}'. Available inputs: {:?}",
+                            sym.name(),
+                            sys.inputs
+                                .iter()
+                                .map(|o| ctx.get_symbol_name(*o).unwrap())
+                                .collect::<Vec<_>>()
+                        )
+                    });
+                input_mapping.insert(*symbol_id, *input);
             } else {
+                assert!(sym.is_port());
                 // check if the DUT symbol is an output
                 let output = sys
                     .outputs
                     .iter()
-                    .find(|o| ctx[o.name] == symbol_name)
+                    .find(|o| ctx[o.name] == sym.name())
                     .unwrap_or_else(|| {
                         panic!(
-                            "Failed to find output with name '{}' in system outputs",
-                            symbol_name
+                            "Failed to find output with name '{}' in system outputs. Available outputs: {:?}",
+                            sym.name(),
+                            sys.outputs.iter().map(|o| &ctx[o.name]).collect::<Vec<_>>()
                         )
                     });
                 output_mapping.insert(*symbol_id, *output);
@@ -265,16 +361,17 @@ impl<'a> Evaluator<'a> {
             per_thread_input_vals,
             current_todo_idx: 0,
             assertions_enabled: false,
-            bounded_loop_remaining_iters: FxHashMap::default(),
             rng,
+            loop_vars: vec![],
+            loop_info: vec![],
         }
     }
 
     /// Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
-        args: FxHashMap<&str, BitVecValue>,
-    ) -> FxHashMap<SymbolId, BitVecValue> {
+        args: FxHashMap<&str, Value>,
+    ) -> FxHashMap<SymbolId, Value> {
         let mut args_mapping = FxHashMap::default();
         for (name, value) in &args {
             if let Some(symbol_id) = st.symbol_id_from_name(name) {
@@ -288,13 +385,14 @@ impl<'a> Evaluator<'a> {
 
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
-    pub fn context_switch(&mut self, todo: Todo<'a>, todo_idx: usize) {
-        self.tr = todo.tr;
-        self.st = todo.st;
-        self.args_mapping = Evaluator::generate_args_mapping(self.st, todo.args);
-        self.next_stmt_map = todo.next_stmt_map;
-        self.current_todo_idx = todo_idx;
-        self.bounded_loop_remaining_iters = todo.bounded_loop_remaining_iters;
+    pub fn context_switch(&mut self, thread: Thread<'a>) {
+        self.tr = thread.todo.tr;
+        self.st = thread.todo.st;
+        self.args_mapping = Evaluator::generate_args_mapping(self.st, thread.todo.args.clone());
+        self.next_stmt_map = thread.todo.next_stmt_map.clone();
+        self.current_todo_idx = thread.todo_idx;
+        self.loop_info = thread.loop_info.clone();
+        self.loop_vars = thread.loop_vars.clone();
 
         // Clear forbidden inputs (combinational dependency tracking)
         self.forbidden_inputs.clear();
@@ -503,11 +601,6 @@ impl<'a> Evaluator<'a> {
         &self.per_thread_input_vals
     }
 
-    /// Returns a clone of the bounded loop remaining iterations map.
-    pub fn bounded_loop_remaining_iters(&self) -> FxHashMap<StmtId, u128> {
-        self.bounded_loop_remaining_iters.clone()
-    }
-
     /// Get the next statement after the given statement
     pub fn next_stmt(&self, stmt_id: &StmtId) -> Option<StmtId> {
         self.next_stmt_map.get(stmt_id).copied().flatten()
@@ -579,34 +672,34 @@ impl<'a> Evaluator<'a> {
                 // Check if reading this port is forbidden (count > 0)
                 // For inputs: count > 0 when DontCare was assigned
                 // For outputs: count > 0 when a dependent input has DontCare
-                if let Some(&count) = self.forbidden_read_counts.get(sym_id) {
-                    if count > 0 {
-                        // Collect the (full_name, stmt_id) of each DontCare input this port depends on
-                        let dep_inputs = self
-                            .output_dependencies
-                            .get(sym_id)
-                            .cloned()
-                            .unwrap_or_else(|| vec![*sym_id]);
-                        let unassigned_inputs: Vec<(String, Option<StmtId>)> = dep_inputs
-                            .iter()
-                            .filter_map(|input_id| {
-                                let per_thread = self.per_thread_input_vals.get(input_id)?;
-                                // Find any thread that assigned DontCare to this input
-                                let (_, (val, stmt_id)) =
-                                    per_thread.iter().find(|(_, (val, _))| val.is_dont_care())?;
-                                if val.is_dont_care() {
-                                    Some((self.st[input_id].full_name(self.st), *stmt_id))
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        return Err(ExecutionError::forbidden_port_read(
-                            name.clone(),
-                            unassigned_inputs,
-                            *expr_id,
-                        ));
-                    }
+                if let Some(&count) = self.forbidden_read_counts.get(sym_id)
+                    && count > 0
+                {
+                    // Collect the (full_name, stmt_id) of each DontCare input this port depends on
+                    let dep_inputs = self
+                        .output_dependencies
+                        .get(sym_id)
+                        .cloned()
+                        .unwrap_or_else(|| vec![*sym_id]);
+                    let unassigned_inputs: Vec<(String, Option<StmtId>)> = dep_inputs
+                        .iter()
+                        .filter_map(|input_id| {
+                            let per_thread = self.per_thread_input_vals.get(input_id)?;
+                            // Find any thread that assigned DontCare to this input
+                            let (_, (val, stmt_id)) =
+                                per_thread.iter().find(|(_, (val, _))| val.is_dont_care())?;
+                            if val.is_dont_care() {
+                                Some((self.st[input_id].full_name(self.st), *stmt_id))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    return Err(ExecutionError::forbidden_port_read(
+                        name.clone(),
+                        unassigned_inputs,
+                        *expr_id,
+                    ));
                 }
 
                 if let Some(expr_ref) = self.input_mapping.get(sym_id) {
@@ -623,17 +716,33 @@ impl<'a> Evaluator<'a> {
                         self.sim.get((output).expr).try_into().unwrap(),
                     ))
                 } else if let Some(bvv) = self.args_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(bvv.clone()))
+                    if let Ok(bv) = bvv.clone().try_into() {
+                        Ok(ExprValue::Concrete(bv))
+                    } else {
+                        unreachable!("the expression is expected to evaluate to a scalar value!")
+                    }
+                } else if let Some((_, bv)) =
+                    self.loop_vars.iter().rev().find(|(id, _)| id == sym_id)
+                {
+                    Ok(ExprValue::Concrete(bv.clone()))
                 } else {
                     Err(ExecutionError::symbol_not_found(
                         *sym_id,
                         name.to_string(),
-                        "input, output, or args mapping".to_string(),
+                        "input, output, args, or loopvar mapping".to_string(),
                         *expr_id,
                     ))
                 }
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
+            Expr::IsLastIteration => {
+                let (_, max_iter, iter_count) = self
+                    .loop_info
+                    .last()
+                    .expect("is_last() must be inside of a loop!");
+                let is_last = *iter_count + 1 == *max_iter;
+                Ok(ExprValue::Concrete(BitVecValue::from_bool(is_last)))
+            }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
                 let rhs_val = self.evaluate_expr(rhs_id)?;
@@ -746,6 +855,9 @@ impl<'a> Evaluator<'a> {
             }
             Stmt::RepeatLoop(num_iters_id, loop_body_id) => {
                 self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
+            }
+            Stmt::ForInLoop(identifier, seq, loop_body_id) => {
+                self.evaluate_for_in_loop(identifier, seq, stmt_id, loop_body_id)
             }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
@@ -892,20 +1004,22 @@ impl<'a> Evaluator<'a> {
         bounded_loop_id: &StmtId,
         loop_body_id: &StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
-        // Key for the `bounded_loop_remaining_iters` map, which tracks
-        // the no. of iterations remaining for each bounded loop
-        if let Some(num_iterations) = self.bounded_loop_remaining_iters.get_mut(bounded_loop_id) {
-            *num_iterations -= 1;
-            if *num_iterations == 0 {
-                // Exit the loop
-                self.bounded_loop_remaining_iters.remove(bounded_loop_id);
+        // check to see if there is an entry for this loop
+        if let Some((info_stmt_id, max_iter, iter_count)) = self.loop_info.last().cloned()
+            && info_stmt_id == *bounded_loop_id
+        {
+            // we are already executing this loop
+            self.loop_info.pop().unwrap();
+            if iter_count + 1 == max_iter {
+                // done
                 Ok(self.next_stmt_map[bounded_loop_id])
             } else {
-                // There are still non-zero iterations remaining,
-                // so execute the loop body again
+                self.loop_info
+                    .push((*bounded_loop_id, max_iter, iter_count + 1));
                 Ok(Some(*loop_body_id))
             }
         } else {
+            // start loop execution
             // We've not encountered this bounded loop before,
             // so we have to evaluate the no. of iters that the user specified
             let num_iters_result = self.evaluate_expr(num_iters_id)?;
@@ -918,12 +1032,9 @@ impl<'a> Evaluator<'a> {
                     ))
                 }
                 ExprValue::Concrete(bvv) => {
-                    // Note: `BitVecValue` doesn't have a `to_u128` method,
-                    // so we have to use `to_u64` and then cast to `u128`
                     let num_iterations = bvv
                         .to_u64()
-                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer")
-                        as u128;
+                        .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer");
 
                     // If the user wrote `repeat 0 iterations { ... }`,
                     // skip the loop and proceed to the next stmt
@@ -932,11 +1043,53 @@ impl<'a> Evaluator<'a> {
                     } else {
                         // Keep track of the no. of loop iterations,
                         // and execute the loop body
-                        self.bounded_loop_remaining_iters
-                            .insert(*bounded_loop_id, num_iterations);
+                        self.loop_info.push((*bounded_loop_id, num_iterations, 0));
                         Ok(Some(*loop_body_id))
                     }
                 }
+            }
+        }
+    }
+
+    fn evaluate_for_in_loop(
+        &mut self,
+        loop_var_sym: &SymbolId,
+        seq: &ExprId,
+        stmt_id: &StmtId,
+        loop_body_id: &StmtId,
+    ) -> ExecutionResult<Option<StmtId>> {
+        // figure out size of seq
+        let seq_symbol_id = if let Expr::Sym(id) = &self.tr[seq] {
+            id
+        } else {
+            unreachable!("The sequence in an evaluate for loop must always be a symbol.");
+        };
+        let seq_values: &[BitVecValue] = (&self.args_mapping[seq_symbol_id]).try_into().unwrap();
+
+        // check to see if there is an entry for this loop
+        if let Some((info_stmt_id, max_iter, iter_count)) = self.loop_info.last().cloned()
+            && info_stmt_id == *stmt_id
+        {
+            // we are already executing this loop
+            self.loop_info.pop().unwrap();
+            let (var_sym_id, _) = self.loop_vars.pop().unwrap();
+            assert_eq!(var_sym_id, *loop_var_sym);
+            if iter_count + 1 == max_iter {
+                Ok(self.next_stmt_map[stmt_id])
+            } else {
+                self.loop_vars
+                    .push((var_sym_id, seq_values[iter_count as usize + 1].clone()));
+                self.loop_info.push((*stmt_id, max_iter, iter_count + 1));
+                Ok(Some(*loop_body_id))
+            }
+        } else {
+            // start loop execution
+            if seq_values.is_empty() {
+                Ok(self.next_stmt_map[stmt_id])
+            } else {
+                self.loop_vars.push((*loop_var_sym, seq_values[0].clone()));
+                self.loop_info.push((*stmt_id, seq_values.len() as u64, 0));
+                Ok(Some(*loop_body_id))
             }
         }
     }

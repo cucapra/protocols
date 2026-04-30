@@ -19,8 +19,9 @@ use pest::RuleType;
 use pest::iterators::Pair;
 use rustc_hash::FxHashSet;
 
+use crate::interpreter::Value;
 use crate::ir::*;
-use crate::serialize::serialize_bitvec;
+use crate::serialize::{serialize_bitvec, serialize_value};
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -476,7 +477,7 @@ impl DiagnosticHandler {
         expr2_id: &ExprId,
         eval1: &BitVecValue,
         eval2: &BitVecValue,
-        todo_args: &[BitVecValue],
+        todo_args: &[Value],
     ) {
         let buffer = &mut self.create_buffer();
 
@@ -492,7 +493,7 @@ impl DiagnosticHandler {
             } else {
                 let args_str = todo_args
                     .iter()
-                    .map(|v| serialize_bitvec(v, self.display_hex))
+                    .map(|v| serialize_value(v, self.display_hex))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", tr.name, args_str)
