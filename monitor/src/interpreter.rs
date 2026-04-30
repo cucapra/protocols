@@ -858,15 +858,15 @@ impl Interpreter {
 
                                 // If LHS is a DUT input port (has a parent) and RHS is a constant,
                                 // add this as a constraint that must hold after stepping
-                                if let Expr::Const(_) = rhs_expr {
-                                    if self.symbol_table[*lhs_symbol_id].parent().is_some() {
-                                        info!(
-                                            "Adding constraint: {} must equal {}",
-                                            lhs_name,
-                                            serialize_bitvec(&rhs_value, ctx.display_hex)
-                                        );
-                                        self.constraints.insert(*lhs_symbol_id, rhs_value.clone());
-                                    }
+                                if let Expr::Const(_) = rhs_expr
+                                    && self.symbol_table[*lhs_symbol_id].parent().is_some()
+                                {
+                                    info!(
+                                        "Adding constraint: {} must equal {}",
+                                        lhs_name,
+                                        serialize_bitvec(&rhs_value, ctx.display_hex)
+                                    );
+                                    self.constraints.insert(*lhs_symbol_id, rhs_value.clone());
                                 }
 
                                 Ok(())

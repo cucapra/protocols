@@ -58,10 +58,10 @@ pub fn parse_transactions_file(
 
                     // Parse arguments if they exist
                     let mut args: Vec<Value> = vec![];
-                    if let Some(arglist_pair) = transaction_inner.next() {
-                        if arglist_pair.as_rule() == Rule::arglist {
-                            args = parse_arglist(st, arglist_pair, handler, fileid, proto)?;
-                        }
+                    if let Some(arglist_pair) = transaction_inner.next()
+                        && arglist_pair.as_rule() == Rule::arglist
+                    {
+                        args = parse_arglist(st, arglist_pair, handler, fileid, proto)?;
                     }
 
                     trace_todos.push((function_name, args));

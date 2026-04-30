@@ -475,11 +475,11 @@ impl GlobalScheduler {
 
             // Stop early if --max-steps was specified and we've hit the limit
             steps_taken += 1;
-            if let Some(max) = ctx.max_steps {
-                if steps_taken >= max {
-                    info!("GlobalScheduler: Reached --max-steps limit of {max}, stopping early");
-                    break;
-                }
+            if let Some(max) = ctx.max_steps
+                && steps_taken >= max
+            {
+                info!("GlobalScheduler: Reached --max-steps limit of {max}, stopping early");
+                break;
             }
 
             // Advance the trace (only once for all schedulers)
