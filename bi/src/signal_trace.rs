@@ -200,7 +200,10 @@ fn find_instances(
                                     clock_signal = Some(signal_ref);
                                 } else {
                                     // If not found in instance scope, use `lookup_var`
-                                    match hierachy.lookup_var(&clock_signal_parts, var_name) {
+                                    match hierachy.lookup_var(
+                                        &clock_signal_parts[0..clock_signal_parts.len() - 1],
+                                        var_name,
+                                    ) {
                                         Some(var_ref) => {
                                             let signal_ref = hierachy[var_ref].signal_ref();
                                             clock_signal = Some(signal_ref);
