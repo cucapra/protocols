@@ -166,9 +166,9 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
 prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
     // no RST
     self.RST := 1'b0;
-    // constant burst cycle (in which case bte is don't care)
-    self.CTI := 3'b001;
-    self.BTE := X;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b00;
 
     // in our simple version, we always drive cyc and stb together
     self.CYC := 1'b1;
