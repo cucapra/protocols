@@ -162,3 +162,39 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
         step();
     }    
 }
+
+prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+    // no RST
+    self.RST := 1'b0;
+    // constant burst cycle (in which case bte is don't care)
+    self.CTI := 3'b001;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        self.ADR := start_addr + iter_count();
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
