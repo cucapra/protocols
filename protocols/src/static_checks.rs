@@ -324,10 +324,8 @@ pub fn check_assignment_rhs_wf(
                 }
             }
         }
-        Expr::Binary(BinOp::Concat, expr_id1, expr_id2) => {
-            // Recursively check whether the two operands are well-formed
-            // (Note that we disallow `DontCare`s to appear as arguments
-            // to the concatenation)
+        // add and concat are allowed
+        Expr::Binary(BinOp::Concat | BinOp::Add, expr_id1, expr_id2) => {
             check_assignment_rhs_wf(expr_id1, false, tr, symbol_table, handler)?;
             check_assignment_rhs_wf(expr_id2, false, tr, symbol_table, handler)
         }
@@ -347,7 +345,7 @@ pub fn check_assignment_rhs_wf(
             check_assignment_rhs_wf(inner_expr, false, tr, symbol_table, handler)
         }
         Expr::IsLastIteration => todo!(),
-        Expr::IterCount(_) => todo!(),
+        Expr::IterCount(_) => Ok(()),
     }
 }
 
