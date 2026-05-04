@@ -103,7 +103,7 @@ impl BackwardsInterpreter {
                 return Err(f);
             }
         }
-        // println!("-------{}: {:?}", self.step, self.state);
+        println!("-------{}: {:?}", self.step, self.state);
         loop {
             match self.exec_stmt(trace) {
                 BIResult::Ok => {}
@@ -517,6 +517,7 @@ impl Thread {
         let mut taken = self.clone();
         taken.name = format!("{}{}?", taken.name, iters + 1);
         taken.next_stmt = Some(body);
+        println!("[{}] continue loop with iters={iters}", taken.name);
         taken.loop_iter_counts.push((stmt, iters, maybe_loop_var));
         if maybe_loop_var.is_some() {
             // we need to add one more element to the argument
@@ -534,6 +535,10 @@ impl Thread {
                 .as_scalar_mut()
                 .expect("must be a scalar")
                 .define_value(BitVecValue::from_u64(iters, 64));
+            println!(
+                "[{}] exit loop with iters={iters}",
+                &format!("{}{iters}!", not_taken.name)
+            );
         } else {
             // for-in loop
             not_taken.arg_values[arg_id]
@@ -583,10 +588,10 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            // println!(
-            //     "[{}]: {:?} ({:?})",
-            //     self.name, &ti.proto[stmt], self.loop_iter_counts
-            // );
+            println!(
+                "[{}]: {:?} ({:?})",
+                self.name, &ti.proto[stmt], self.loop_iter_counts
+            );
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) if stmt_ids.is_empty() => {
                     self.next_stmt = ti.next_stmt[&stmt];
@@ -641,6 +646,7 @@ impl Thread {
                 Stmt::RepeatLoop(repetitions, body) => {
                     // how often have we executed this thread on the current execution path
                     let iters = self.get_inner_loop_iters(stmt);
+                    println!("[{}] repeat: current iteration count: {iters} ", self.name);
 
                     // retrieve num iteration argument
                     let max_iter_arg_id = as_arg(&ti.proto, *repetitions)
@@ -653,11 +659,15 @@ impl Thread {
                     // do we know the maximum number of iterations?
                     if let Some(max_iters) = max_iter_value.get_known() {
                         let max_iters = max_iters.to_u64().unwrap();
+                        println!(
+                            "[{}] repeat: we know the maximum number of iterations is: {max_iters} ",
+                            self.name
+                        );
                         if iters == max_iters {
                             self.next_stmt = ti.next_stmt[&stmt]; // exit loop
                         } else {
-                            assert!(iters < max_iters);
-                            self.loop_iter_counts.push((stmt, iters + 1, None));
+                            assert!(iters < max_iters, "{iters} >= {max_iters}");
+                            self.loop_iter_counts.push((stmt, iters, None));
                             self.next_stmt = Some(*body);
                         }
                         Ok
