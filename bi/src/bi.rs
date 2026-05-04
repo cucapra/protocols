@@ -909,6 +909,12 @@ impl Thread {
                         };
                         ExprValue::Known(res)
                     }
+                    // special case for addition with zero
+                    (ExprValue::Known(zero), other) | (other, ExprValue::Known(zero))
+                        if matches!(op, BinOp::Add) && zero.is_zero() =>
+                    {
+                        other
+                    }
                     (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
                     (
                         ExprValue::Unknown
