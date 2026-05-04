@@ -743,63 +743,35 @@ impl<'a> Evaluator<'a> {
                 let is_last = *iter_count + 1 == *max_iter;
                 Ok(ExprValue::Concrete(BitVecValue::from_bool(is_last)))
             }
-            Expr::IterCount(_) => {
-                todo!("iter_count");
+            Expr::IterCount(width) => {
+                let (_, _, iter_count) = self
+                    .loop_info
+                    .last()
+                    .expect("is_last() must be inside of a loop!");
+                let value = BitVecValue::from_u64(*iter_count, *width);
+                Ok(ExprValue::Concrete(value))
             }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
                 let rhs_val = self.evaluate_expr(rhs_id)?;
-                match bin_op {
-                    BinOp::Add => todo!("add"),
-                    BinOp::Equal => match (&lhs_val, &rhs_val) {
-                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                            Err(ExecutionError::dont_care_operation(
-                                "equality".to_string(),
-                                "binary expression".to_string(),
-                                *expr_id,
-                            ))
-                        }
-                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            if lhs.width() != rhs.width() {
-                                Err(ExecutionError::arithmetic_error(
-                                    "Equal".to_string(),
-                                    format!(
-                                        "Width mismatch in EQUAL operation: lhs width = {}, rhs width = {}",
-                                        lhs.width(),
-                                        rhs.width()
-                                    ),
-                                    *expr_id,
-                                ))
-                            } else if lhs == rhs {
+                match (&lhs_val, &rhs_val) {
+                    (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
+                        Err(ExecutionError::dont_care_operation(
+                            format!("{bin_op}"),
+                            "binary expression".to_string(),
+                            *expr_id,
+                        ))
+                    }
+                    (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => match bin_op {
+                        BinOp::Equal => {
+                            if lhs == rhs {
                                 Ok(ExprValue::Concrete(BitVecValue::new_true()))
                             } else {
                                 Ok(ExprValue::Concrete(BitVecValue::new_false()))
                             }
                         }
-                    },
-                    BinOp::Concat => match (&lhs_val, &rhs_val) {
-                        (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
-                            Err(ExecutionError::dont_care_operation(
-                                "CONCAT".to_string(),
-                                "binary expression".to_string(),
-                                *expr_id,
-                            ))
-                        }
-                        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-                            if lhs.width() != rhs.width() {
-                                Err(ExecutionError::arithmetic_error(
-                                    "And".to_string(),
-                                    format!(
-                                        "Width mismatch in AND operation: lhs width = {}, rhs width = {}",
-                                        lhs.width(),
-                                        rhs.width()
-                                    ),
-                                    *expr_id,
-                                ))
-                            } else {
-                                Ok(ExprValue::Concrete(lhs.concat(rhs)))
-                            }
-                        }
+                        BinOp::Concat => Ok(ExprValue::Concrete(lhs.concat(rhs))),
+                        BinOp::Add => Ok(ExprValue::Concrete(lhs.add(rhs))),
                     },
                 }
             }
