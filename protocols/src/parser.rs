@@ -6,7 +6,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::ir::Stmt;
-use baa::BitVecValue;
+use baa::{BitVecValue, WidthInt};
 use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
@@ -28,6 +28,7 @@ lazy_static::lazy_static! {
         // Precedence is defined lowest to highest
         PrattParser::new()
             .op(Op::infix(eq, Left))
+            .op(Op::infix(add, Left))
             .op(Op::infix(concat, Left))
             .op(Op::prefix(not))
     };
@@ -134,6 +135,15 @@ impl ParserContext<'_> {
                     }
                     Rule::expr => self.parse_boxed_expr(primary.into_inner()),
                     Rule::is_last_expr => Ok(BoxedExpr::IsLastIteration(start, end)),
+                    Rule::iter_count_expr => {
+                        let mut inner = primary.clone().into_inner();
+                        if let Some(width_str) = inner.next().unwrap().as_str().strip_prefix('u') {
+                            let width: WidthInt = width_str.parse().unwrap();
+                            Ok(BoxedExpr::IterCount(width, start, end))
+                        } else {
+                            unreachable!("width should always start with u")
+                        }
+                    }
                     rule => unreachable!("Expr::parse expected atom, found {:?}", rule),
                 }
             })
@@ -145,6 +155,7 @@ impl ParserContext<'_> {
                 let op = match op.as_rule() {
                     Rule::eq => BinOp::Equal,
                     Rule::concat => BinOp::Concat,
+                    Rule::add => BinOp::Add,
                     rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
                 };
                 Ok(BoxedExpr::Binary(
@@ -187,6 +198,11 @@ impl ParserContext<'_> {
             }
             BoxedExpr::IsLastIteration(start, end) => {
                 let expr_id = self.tr.e(Expr::IsLastIteration);
+                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                expr_id
+            }
+            BoxedExpr::IterCount(width, start, end) => {
+                let expr_id = self.tr.e(Expr::IterCount(width));
                 self.tr.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }

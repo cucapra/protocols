@@ -743,10 +743,14 @@ impl<'a> Evaluator<'a> {
                 let is_last = *iter_count + 1 == *max_iter;
                 Ok(ExprValue::Concrete(BitVecValue::from_bool(is_last)))
             }
+            Expr::IterCount(_) => {
+                todo!("iter_count");
+            }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
                 let lhs_val = self.evaluate_expr(lhs_id)?;
                 let rhs_val = self.evaluate_expr(rhs_id)?;
                 match bin_op {
+                    BinOp::Add => todo!("add"),
                     BinOp::Equal => match (&lhs_val, &rhs_val) {
                         (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
                             Err(ExecutionError::dont_care_operation(

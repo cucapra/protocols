@@ -22,19 +22,21 @@ integer = ${ width ~ "'" ~ (bin ~ bin_integer | oct ~ oct_integer | hex ~ hex_in
 dont_care = { "X" }
 
 is_last_expr = {"is_last" ~ "(" ~ ")"}
+iter_count_expr = {"iter_count" ~ "::" ~ "<" ~ bv_tpe ~ ">" ~ "(" ~ ")"}
 
 // Expressions
 
 // Slicing
 slice = { path_id ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
 
-primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | path_id}
+primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter_count_expr | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     not = { "!" }
-bin_op = _{ eq | concat }
+bin_op = _{ eq | concat | add }
     eq = { "==" }
-    concat = { "+" }
+    concat = { "##" }
+    add = { "+" }
 
 // handle binary operations and indexing operations
 expr = { atom ~ (bin_op ~ atom)*}
