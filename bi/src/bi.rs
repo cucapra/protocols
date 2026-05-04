@@ -6,8 +6,10 @@ use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
 use baa::{BitVecOps, BitVecValue};
+use patronus::expr;
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::fmt::{Debug, Formatter};
 
 pub struct BackwardsInterpreter {
     protos: Vec<ProtoInfo>,
@@ -351,6 +353,7 @@ impl Path {
                     failures: vec![],
                     loop_iter_counts: vec![],
                     effectful_stmt_in_step: false,
+                    ctx: expr::Context::default(),
                 };
                 p.active.push(t);
                 p
@@ -466,7 +469,7 @@ fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: Option<u32>) -> ProtoC
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Thread {
     #[allow(dead_code)]
     name: String,
@@ -484,6 +487,14 @@ struct Thread {
     // keeps track of whether an effectful statement like assign or assert has been encountered in
     // this step
     effectful_stmt_in_step: bool,
+    /// use to make symbolic expressions
+    ctx: patronus::expr::Context,
+}
+
+impl Debug for Thread {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Thread({})", self.name)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -583,10 +594,10 @@ impl Thread {
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
-            // println!(
-            //     "[{}]: {:?} ({:?})",
-            //     self.name, &ti.proto[stmt], self.loop_iter_counts
-            // );
+            println!(
+                "[{}]: {:?} ({:?})",
+                self.name, &ti.proto[stmt], self.loop_iter_counts
+            );
             match &ti.proto[stmt] {
                 Stmt::Block(stmt_ids) if stmt_ids.is_empty() => {
                     self.next_stmt = ti.next_stmt[&stmt];
@@ -597,6 +608,9 @@ impl Thread {
                     Ok
                 }
                 Stmt::Assign(lhs, rhs) => {
+                    // we partially evaluate the rhs here in order to eagerly execute
+                    // context dependent expressions like `iter_count` and `is_last`.
+
                     // we apply all pin assignments at the end of a step
                     self.pin_assignments.push((stmt, *lhs, *rhs));
                     self.next_stmt = ti.next_stmt[&stmt];
@@ -777,7 +791,12 @@ impl Thread {
         let assignments = std::mem::take(&mut self.pin_assignments);
         // go from last assignment to first
         for (stmt, pin, expr) in assignments.into_iter().rev() {
-            // println!("{:?}, {}, {:?}", &ti.proto[stmt], ti.sym[pin].full_name(&ti.sym), &ti.proto[expr]);
+            println!(
+                "{:?}, {}, {:?}",
+                &ti.proto[stmt],
+                ti.sym[pin].full_name(&ti.sym),
+                &ti.proto[expr]
+            );
 
             // only the final assignment to a pin matters
             if !pins_assigned.contains(&pin) {
@@ -829,26 +848,29 @@ impl Thread {
                     None
                 }
             }
-            ExprValue::UnknownSeqArg(arg_id, index) => {
-                self.arg_values[arg_id]
-                    .as_seq_mut()
-                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_value_at(index, lhs_value);
-                None
+            ExprValue::Unknown(expr) => {
+                todo!("extract args")
             }
-            ExprValue::UnknownArg(arg_id) => {
-                self.arg_values[arg_id]
-                    .as_scalar_mut()
-                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_value(lhs_value);
-                None
-            }
+            // ExprValue::UnknownSeqArg(arg_id, index) => {
+            //     self.arg_values[arg_id]
+            //         .as_seq_mut()
+            //         .expect("assignments/assert_eq must involve data values (bit vectors)!")
+            //         .define_value_at(index, lhs_value);
+            //     None
+            // }
+            // ExprValue::UnknownArg(arg_id) => {
+            //     self.arg_values[arg_id]
+            //         .as_scalar_mut()
+            //         .expect("assignments/assert_eq must involve data values (bit vectors)!")
+            //         .define_value(lhs_value);
+            //     None
+            // }
             other => todo!("deal with {other:?} on rhs of assignment"),
         }
     }
 
     fn eval_expr(
-        &self,
+        &mut self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
         ti: &ProtoInfo,
         expr: ExprId,
@@ -909,19 +931,16 @@ impl Thread {
                         };
                         ExprValue::Known(res)
                     }
+                    (ExprValue::Unknown(a), ExprValue::Unknown(b)) => {
+                        let res = match op {
+                            BinOp::Equal => self.ctx.equal(a, b),
+                            BinOp::Concat => self.ctx.concat(a, b),
+                            BinOp::Add => self.ctx.add(a, b),
+                        };
+                        ExprValue::Unknown(res)
+                    }
                     (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
-                    (
-                        ExprValue::Unknown
-                        | ExprValue::UnknownArg(_)
-                        | ExprValue::UnknownSeqArg(_, _),
-                        _,
-                    )
-                    | (
-                        _,
-                        ExprValue::Unknown
-                        | ExprValue::UnknownArg(_)
-                        | ExprValue::UnknownSeqArg(_, _),
-                    ) => ExprValue::Unknown,
+                    (ExprValue::Unknown(_), _) | (_, ExprValue::Unknown(_)) => todo!(),
                     (ExprValue::DependsOnIsLast(s), _) | (_, ExprValue::DependsOnIsLast(s)) => {
                         ExprValue::DependsOnIsLast(s)
                     }
@@ -985,9 +1004,7 @@ impl Thread {
 enum ExprValue {
     Known(BitVecValue),
     DontCare,
-    Unknown,
-    UnknownArg(usize),
-    UnknownSeqArg(usize, u64),
+    Unknown(expr::ExprRef),
     DependsOnIsLast(StmtId),
 }
 
