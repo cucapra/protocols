@@ -829,18 +829,18 @@ impl Thread {
                     None
                 }
             }
-            ExprValue::UnknownArg(arg_id, Some(index), msb, lsb) => {
+            ExprValue::UnknownArg(arg_id, Some(index), _msb, lsb) => {
                 self.arg_values[arg_id]
                     .as_seq_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_value_at(index, lhs_value);
+                    .define_bits_at(index, lhs_value, lsb);
                 None
             }
-            ExprValue::UnknownArg(arg_id, None, msb, lsb) => {
+            ExprValue::UnknownArg(arg_id, None, _msb, lsb) => {
                 self.arg_values[arg_id]
                     .as_scalar_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_value(lhs_value);
+                    .define_bits(lhs_value, lsb);
                 None
             }
             other => todo!("deal with {other:?} on rhs of assignment"),
@@ -857,7 +857,7 @@ impl Thread {
             Expr::Sym(sym_id) => {
                 if ti.sym[sym_id].is_arg() {
                     let arg_index = sym_as_arg(&ti.proto, *sym_id).unwrap().0;
-                    let mut arg = self.arg_values[arg_index]
+                    let arg = self.arg_values[arg_index]
                         .as_scalar()
                         .expect("only scalar arguments should ever be evaluated");
                     arg.get_known()

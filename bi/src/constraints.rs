@@ -182,8 +182,8 @@ impl SeqValue {
         self.values[index as usize].get_known()
     }
 
-    pub fn define_value_at(&mut self, index: u64, value: BitVecValue) {
-        self.values[index as usize].define_value(value);
+    pub fn define_bits_at(&mut self, index: u64, value: BitVecValue, lsb: u32) {
+        self.values[index as usize].define_bits(value, lsb);
     }
 
     pub fn freeze_len(&mut self) {
