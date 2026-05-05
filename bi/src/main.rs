@@ -346,21 +346,3 @@ fn parse_instance(duts: &FxHashMap<String, Design>, arg: &str) -> Instance {
         _ => panic!("unexpected instance argument: {arg}"),
     }
 }
-
-fn parse_renames(renames: &[String], duts: &FxHashMap<String, Design>, instances: &[Instance]) {
-    assert_eq!(
-        instances.len(),
-        1,
-        "renaming currently only works for a single instance!"
-    );
-    let dut = &duts[&instances[0].design];
-    for arg in renames.iter() {
-        let parts: Vec<&str> = arg.split('=').map(|p| p.trim()).collect();
-        match parts.as_slice() {
-            [struct_field, dut_pin] => {
-                println!("TODO: {struct_field} <=> {dut_pin}");
-            }
-            _ => panic!("unexpected rename argument: {arg}"),
-        }
-    }
-}
