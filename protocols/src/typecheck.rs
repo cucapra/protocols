@@ -1,4 +1,4 @@
-// Copyright 2024 Cornell University
+// Copyright 2024-2026 Cornell University
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
@@ -7,7 +7,6 @@
 
 use anyhow::{Context, anyhow};
 use baa::BitVecOps;
-use std::cmp::Ordering::{Equal, Greater, Less};
 
 use crate::{
     diagnostic::*,
@@ -49,66 +48,31 @@ fn check_expr_types(
         }
         Expr::Sym(symid) => Ok(st[symid].tpe()),
         Expr::DontCare => Ok(Type::Unknown),
-        Expr::Slice(sym_expr, start_idx, end_idx) => {
+        Expr::Slice(sym_expr, msb, lsb) => {
             // To type-check `e[i:j]`, first typecheck `e` and make sure
             // it is a actually a bit-vector
             let ty = check_expr_types(tr, st, handler, sym_expr)?;
-            match ty {
-                Type::BitVec(expr_width) => match start_idx.cmp(end_idx) {
-                    Equal => Ok(Type::BitVec(1)),
-                    Greater => {
-                        // Make sure the width of the bitslice is at most
-                        // the width of the entire bit-vector
-                        let slice_width = start_idx - end_idx;
-                        if slice_width <= expr_width {
-                            Ok(Type::BitVec(slice_width))
-                        } else {
-                            emit_bitslice_type_error(
-                                *start_idx, *end_idx, expr_width, handler, tr, expr_id,
-                            )
-                        }
+            if let Type::BitVec(expr_width) = ty {
+                if msb >= lsb {
+                    if *msb < expr_width {
+                        let width = msb - lsb + 1;
+                        Ok(Type::BitVec(width))
+                    } else {
+                        emit_bitslice_type_error(*msb, *lsb, expr_width, handler, tr, expr_id)
                     }
-                    Less => {
-                        // Emit an error message when `i < j` in `e[i:j]`
-                        // (we expect `i >= j`,
-                        // since `i` is the MSB & `j` is the LSB)
-                        let error_msg = format!(
-                            "Invalid slice operation: [{}:{}] on width {} (MSB {} is less than LSB {}, which is the other way round)",
-                            start_idx, end_idx, expr_width, start_idx, end_idx
-                        );
-                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
-                        Err(anyhow!(error_msg))
-                    }
-                },
-                Type::Struct(struct_id) => {
-                    let error_msg = format!(
-                        "Invalid slice operation: can't take bit-slices of struct {}",
-                        st[struct_id].name()
-                    );
+                } else {
+                    let error_msg =
+                        format!("Invalid slice operation: msb ({msb}) is smaller than lsb ({lsb})");
                     handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
-                Type::Seq(_) => {
-                    let error_msg = format!(
-                        "Invalid slice operation: can't take bit-slices of seq `{}`. (We also do not allow indexing!)",
-                        serialize_type(st, ty)
-                    );
-                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
-                    Err(anyhow!(error_msg))
-                }
-                Type::UnsignedInt => {
-                    let error_msg = "Invalid slice operation: can't take bit-slices of uint";
-                    handler.emit_diagnostic_expr(tr, expr_id, error_msg, Level::Error);
-                    Err(anyhow!(error_msg))
-                }
-                Type::Unknown => {
-                    let error_msg = format!(
-                        "Invalid slice operation: can't take bit-slices of expr {} with Unknown type",
-                        serialize_expr(tr, st, expr_id)
-                    );
-                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
-                    Err(anyhow!(error_msg))
-                }
+            } else {
+                let error_msg = format!(
+                    "Invalid slice operation: can't take bit-slices of {}",
+                    serialize_type(st, ty)
+                );
+                handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
             }
         }
         Expr::Unary(UnaryOp::Not, not_exprid) => {
