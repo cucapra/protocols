@@ -198,3 +198,114 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
         step();
     }
 }
+
+prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b01; // wrap 4
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 2 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:4] ## (start_addr[3:2] + iter_count::<u2>()) ## start_addr[1:0];
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b10; // wrap 8
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 3 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:5] ## (start_addr[4:2] + iter_count::<u3>()) ## start_addr[1:0];
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b11; // wrap 16
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 4 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:6] ## (start_addr[5:2] + iter_count::<u4>()) ## start_addr[1:0];
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}

@@ -9,7 +9,7 @@ use crate::errors::{ExecutionError, ExecutionResult};
 use crate::ir::*;
 use crate::scheduler::Thread;
 use crate::serialize::serialize_bitvec;
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecOps, BitVecValue, WidthInt};
 use log::info;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
@@ -748,7 +748,8 @@ impl<'a> Evaluator<'a> {
                     .loop_info
                     .last()
                     .expect("is_last() must be inside of a loop!");
-                let value = BitVecValue::from_u64(*iter_count, *width);
+                let mask = mask64(*width);
+                let value = BitVecValue::from_u64(*iter_count & mask, *width);
                 Ok(ExprValue::Concrete(value))
             }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
@@ -1095,5 +1096,15 @@ impl<'a> Evaluator<'a> {
         } else {
             Ok(())
         }
+    }
+}
+
+#[inline]
+fn mask64(width: WidthInt) -> u64 {
+    debug_assert!(width <= 64);
+    if width == 64 {
+        u64::MAX
+    } else {
+        (1u64 << width) - 1
     }
 }
