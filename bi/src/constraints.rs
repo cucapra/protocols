@@ -88,6 +88,11 @@ impl DataValue {
         }
     }
 
+    pub fn width(&self) -> u32 {
+        debug_assert_eq!(self.value.width(), self.known.width());
+        self.value.width()
+    }
+
     pub fn get_known(&self) -> Option<BitVecValue> {
         if self.known.is_all_ones() {
             Some(self.value.clone())
@@ -116,6 +121,22 @@ impl DataValue {
         self.value = value;
         self.known = BitVecValue::ones(self.value.width());
     }
+
+    pub fn define_bits(&mut self, value: BitVecValue, lsb: u32) {
+        if lsb == 0 {
+            self.define_value(value);
+        } else {
+            debug_assert!(self.value.width() >= value.width());
+            let msb = self.value.width() - 1 - lsb;
+            debug_assert!(msb >= lsb);
+            debug_assert!(self.value.width() > msb);
+            let already_known = !self.known.slice(msb, lsb).is_zero();
+            debug_assert!(!already_known);
+            for bit in lsb..(msb) + 1 {
+                self.define_bit(bit, value.is_bit_set(bit - lsb) as u8);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -134,6 +155,10 @@ impl SeqValue {
             len_is_known: false,
             values: vec![DataValue::unknown(width); min_len as usize],
         }
+    }
+
+    pub fn element_width(&self) -> u32 {
+        self.width
     }
 
     pub fn get_known_len(&self) -> Option<u64> {

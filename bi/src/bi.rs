@@ -5,7 +5,7 @@
 use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecOps, BitVecValue, WidthInt};
 use protocols::ir::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -829,14 +829,14 @@ impl Thread {
                     None
                 }
             }
-            ExprValue::UnknownSeqArg(arg_id, index) => {
+            ExprValue::UnknownArg(arg_id, Some(index), msb, lsb) => {
                 self.arg_values[arg_id]
                     .as_seq_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
                     .define_value_at(index, lhs_value);
                 None
             }
-            ExprValue::UnknownArg(arg_id) => {
+            ExprValue::UnknownArg(arg_id, None, msb, lsb) => {
                 self.arg_values[arg_id]
                     .as_scalar_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
@@ -857,12 +857,12 @@ impl Thread {
             Expr::Sym(sym_id) => {
                 if ti.sym[sym_id].is_arg() {
                     let arg_index = sym_as_arg(&ti.proto, *sym_id).unwrap().0;
-                    self.arg_values[arg_index]
+                    let mut arg = self.arg_values[arg_index]
                         .as_scalar()
-                        .expect("only scalar arguments should ever be evaluated")
-                        .get_known()
+                        .expect("only scalar arguments should ever be evaluated");
+                    arg.get_known()
                         .map(ExprValue::Known)
-                        .unwrap_or(ExprValue::UnknownArg(arg_index))
+                        .unwrap_or(ExprValue::UnknownArg(arg_index, None, arg.width() - 1, 0))
                 } else if ti.sym[sym_id].is_port() {
                     ExprValue::Known(get_value(*sym_id))
                 } else if ti.sym[sym_id].is_loop_var() {
@@ -881,7 +881,12 @@ impl Thread {
                         arg_value
                             .get_known_at(iter)
                             .map(ExprValue::Known)
-                            .unwrap_or(ExprValue::UnknownSeqArg(arg_id, iter))
+                            .unwrap_or(ExprValue::UnknownArg(
+                                arg_id,
+                                Some(iter),
+                                arg_value.element_width() - 1,
+                                0,
+                            ))
                     } else {
                         unreachable!("Only for-in loops can have loop variables!");
                     }
@@ -915,19 +920,20 @@ impl Thread {
                     {
                         other
                     }
-                    (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
+                    // special case: concatenating two continuous slices of the same argument
                     (
-                        ExprValue::Unknown
-                        | ExprValue::UnknownArg(_)
-                        | ExprValue::UnknownSeqArg(_, _),
-                        _,
-                    )
-                    | (
-                        _,
-                        ExprValue::Unknown
-                        | ExprValue::UnknownArg(_)
-                        | ExprValue::UnknownSeqArg(_, _),
-                    ) => ExprValue::Unknown,
+                        ExprValue::UnknownArg(a_id, a_index, a_msb, a_lsb),
+                        ExprValue::UnknownArg(b_id, b_index, b_msb, b_lsb),
+                    ) if matches!(op, BinOp::Concat)
+                        && (a_id == b_id)
+                        && (a_index == b_index)
+                        && (a_lsb == b_msb + 1) =>
+                    {
+                        ExprValue::UnknownArg(a_id, a_index, a_msb, b_lsb)
+                    }
+                    (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
+                    (ExprValue::Unknown | ExprValue::UnknownArg(..), _)
+                    | (_, ExprValue::Unknown | ExprValue::UnknownArg(..)) => ExprValue::Unknown,
                     (ExprValue::DependsOnIsLast(s), _) | (_, ExprValue::DependsOnIsLast(s)) => {
                         ExprValue::DependsOnIsLast(s)
                     }
@@ -937,7 +943,13 @@ impl Thread {
                 ExprValue::Known(v) => ExprValue::Known(v.not()),
                 other => other,
             },
-            Expr::Slice(_, _, _) => todo!(),
+            Expr::Slice(e, msb, lsb) => match self.eval_expr(get_value, ti, *e) {
+                ExprValue::Known(v) => ExprValue::Known(v.slice(*msb, *lsb)),
+                ExprValue::UnknownArg(id, index, _, lsb_old) => {
+                    ExprValue::UnknownArg(id, index, msb + lsb_old, lsb + lsb_old)
+                }
+                other => other,
+            },
             Expr::IsLastIteration => {
                 // The iter_count is the number of _completed_ iterations.
                 // So, on the first iteration: `iter_count == 0`
@@ -977,13 +989,25 @@ impl Thread {
                 }
             }
             Expr::IterCount(width) => {
-                let (_, iter_count, _) = *self
+                let (_, iter_count, _) = self
                     .loop_iter_counts
                     .last()
-                    .expect("called iter_count outside of a loop!");
-                ExprValue::Known(BitVecValue::from_u64(iter_count, *width))
+                    .expect("is_last() must be inside of a loop!");
+                let mask = mask64(*width);
+                let value = BitVecValue::from_u64(*iter_count & mask, *width);
+                ExprValue::Known(value)
             }
         }
+    }
+}
+
+#[inline]
+fn mask64(width: WidthInt) -> u64 {
+    debug_assert!(width <= 64);
+    if width == 64 {
+        u64::MAX
+    } else {
+        (1u64 << width) - 1
     }
 }
 
@@ -992,8 +1016,8 @@ enum ExprValue {
     Known(BitVecValue),
     DontCare,
     Unknown,
-    UnknownArg(usize),
-    UnknownSeqArg(usize, u64),
+    /// arg_id, optional index for sequence args, msb, lsb
+    UnknownArg(usize, Option<u64>, u32, u32),
     DependsOnIsLast(StmtId),
 }
 
