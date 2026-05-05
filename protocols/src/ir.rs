@@ -342,6 +342,7 @@ pub enum LocationId {
 pub enum BinOp {
     Equal,
     Concat,
+    Add,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -363,6 +364,9 @@ pub enum Expr {
     Slice(ExprId, u32, u32),
     /// Inside a ForInLoop, this evaluates to true/false dending on what iteration we are on
     IsLastIteration,
+    /// Inside a loop, this evaluates to the current number of _finished_ iterations.
+    /// So in the first iteration, this evaluates to zero.
+    IterCount(u32),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -373,6 +377,7 @@ pub enum BoxedExpr {
     Sym(SymbolId, usize, usize),
     DontCare(usize, usize),
     IsLastIteration(usize, usize),
+    IterCount(u32, usize, usize),
     // unary
     Binary(BinOp, Box<BoxedExpr>, Box<BoxedExpr>, usize, usize),
     // binary
@@ -389,6 +394,7 @@ impl BoxedExpr {
             BoxedExpr::Sym(_, start, _) => *start,
             BoxedExpr::DontCare(start, _) => *start,
             BoxedExpr::IsLastIteration(start, _) => *start,
+            BoxedExpr::IterCount(_, start, _) => *start,
             BoxedExpr::Binary(_, _, _, start, _) => *start,
             BoxedExpr::Unary(_, _, start, _) => *start,
             BoxedExpr::Slice(_, _, _, start, _) => *start,
@@ -402,6 +408,7 @@ impl BoxedExpr {
             BoxedExpr::Sym(_, _, end) => *end,
             BoxedExpr::DontCare(_, end) => *end,
             BoxedExpr::IsLastIteration(_, end) => *end,
+            BoxedExpr::IterCount(_, _, end) => *end,
             BoxedExpr::Binary(_, _, _, _, end) => *end,
             BoxedExpr::Unary(_, _, _, end) => *end,
             BoxedExpr::Slice(_, _, _, _, end) => *end,

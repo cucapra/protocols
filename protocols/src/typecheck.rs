@@ -128,28 +128,78 @@ fn check_expr_types(
                 Ok(inner_type)
             }
         }
-        Expr::Binary(BinOp::Concat, lhs, rhs) | Expr::Binary(BinOp::Equal, lhs, rhs) => {
+        Expr::Binary(op, lhs, rhs) => {
             let lhs_type = check_expr_types(tr, st, handler, lhs)?;
             let rhs_type = check_expr_types(tr, st, handler, rhs)?;
-            if lhs_type.is_equivalent(&rhs_type) {
-                Ok(Type::BitVec(1))
-            } else {
-                let lhs_type_str = serialize_type(st, lhs_type);
-                let rhs_type_str = serialize_type(st, rhs_type);
-                handler.emit_diagnostic_expr(
-                    tr,
-                    expr_id,
-                    &format!(
-                        "Type mismatch in binary operation: {} and {}",
-                        lhs_type_str, rhs_type_str
-                    ),
-                    Level::Error,
-                );
-                Ok(Type::BitVec(1))
+            match op {
+                BinOp::Equal => {
+                    if lhs_type.is_equivalent(&rhs_type) {
+                        Ok(Type::BitVec(1))
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!(
+                                "Type mismatch in binary operation: {} and {}",
+                                lhs_type_str, rhs_type_str
+                            ),
+                            Level::Error,
+                        );
+                        Ok(Type::BitVec(1))
+                    }
+                }
+                BinOp::Concat => {
+                    if let (Type::BitVec(msb_w), Type::BitVec(lsb_w)) = (lhs_type, rhs_type) {
+                        Ok(Type::BitVec(msb_w + lsb_w))
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!("Cannot concatenate: {} and {}", lhs_type_str, rhs_type_str),
+                            Level::Error,
+                        );
+                        // TODO: error!
+                        Ok(Type::BitVec(1))
+                    }
+                }
+                BinOp::Add => {
+                    if let (Type::BitVec(aw), Type::BitVec(bw)) = (lhs_type, rhs_type) {
+                        if aw == bw {
+                            Ok(Type::BitVec(aw))
+                        } else {
+                            let lhs_type_str = serialize_type(st, lhs_type);
+                            let rhs_type_str = serialize_type(st, rhs_type);
+                            handler.emit_diagnostic_expr(
+                                tr,
+                                expr_id,
+                                &format!("Cannot add: {} and {}", lhs_type_str, rhs_type_str),
+                                Level::Error,
+                            );
+                            // TODO: error!
+                            Ok(Type::BitVec(1))
+                        }
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!("Cannot add: {} and {}", lhs_type_str, rhs_type_str),
+                            Level::Error,
+                        );
+                        // TODO: error!
+                        Ok(Type::BitVec(1))
+                    }
+                }
             }
         }
         // evaluates to true or false
         Expr::IsLastIteration => Ok(Type::BitVec(1)),
+        Expr::IterCount(width) => Ok(Type::BitVec(*width)),
     }
 }
 

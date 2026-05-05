@@ -62,7 +62,8 @@ impl std::fmt::Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BinOp::Equal => write!(f, "=="),
-            BinOp::Concat => write!(f, "+"),
+            BinOp::Concat => write!(f, "##"),
+            BinOp::Add => write!(f, "+"),
         }
     }
 }
@@ -144,6 +145,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_string(),
         Expr::IsLastIteration => "is_last()".to_string(),
+        Expr::IterCount(width) => format!("iter_count::<u{width}>()"),
         Expr::Unary(unary_op, expr_id) => {
             let e = serialize_expr(tr, st, expr_id);
             format!("{}({})", unary_op, e)

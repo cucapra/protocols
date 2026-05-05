@@ -905,8 +905,15 @@ impl Thread {
                                 }
                             }
                             BinOp::Concat => a.concat(&b),
+                            BinOp::Add => a.add(&b),
                         };
                         ExprValue::Known(res)
+                    }
+                    // special case for addition with zero
+                    (ExprValue::Known(zero), other) | (other, ExprValue::Known(zero))
+                        if matches!(op, BinOp::Add) && zero.is_zero() =>
+                    {
+                        other
                     }
                     (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => ExprValue::DontCare,
                     (
@@ -968,6 +975,13 @@ impl Thread {
                     }
                     other => unreachable!("{:?}", other),
                 }
+            }
+            Expr::IterCount(width) => {
+                let (_, iter_count, _) = *self
+                    .loop_iter_counts
+                    .last()
+                    .expect("called iter_count outside of a loop!");
+                ExprValue::Known(BitVecValue::from_u64(iter_count, *width))
             }
         }
     }

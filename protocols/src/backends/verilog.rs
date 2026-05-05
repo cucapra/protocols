@@ -345,6 +345,13 @@ fn expr_to_verilog(
             expr_to_verilog(st, proto, sym_verilog, out, *b)?;
             write!(out, "}}")
         }
+        Expr::Binary(BinOp::Add, a, b) => {
+            write!(out, "(")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *a)?;
+            write!(out, " + ")?;
+            expr_to_verilog(st, proto, sym_verilog, out, *b)?;
+            write!(out, ")")
+        }
         Expr::Unary(UnaryOp::Not, e) => {
             write!(out, "~")?;
             expr_to_verilog(st, proto, sym_verilog, out, *e)
@@ -359,6 +366,7 @@ fn expr_to_verilog(
             }
         }
         Expr::IsLastIteration => todo!("loops"),
+        Expr::IterCount(_) => todo!("loops"),
     }
 }
 

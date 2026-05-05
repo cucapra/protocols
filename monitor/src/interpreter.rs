@@ -329,6 +329,7 @@ impl Interpreter {
                             }
                         }
                     },
+                    BinOp::Add => todo!("add support for `add`"),
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
@@ -416,6 +417,7 @@ impl Interpreter {
                 }
             }
             Expr::IsLastIteration => todo!("add support for is_last() expression"),
+            Expr::IterCount(_) => todo!("add support for iter_count() expression"),
         }
     }
 
