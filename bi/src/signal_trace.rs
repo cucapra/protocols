@@ -91,13 +91,19 @@ impl WaveSignalTrace {
         filename: &impl AsRef<std::path::Path>,
         designs: &FxHashMap<String, Design>,
         instances: &[Instance],
+        renames: &FxHashMap<String, String>,
         sample_posedge: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
         let mut wave = wellen::simple::read(filename)?;
 
         // find instances in the waveform hierarchy
-        let (port_map, clock_signal) =
-            find_instances(wave.hierarchy(), designs, instances, sample_posedge);
+        let (port_map, clock_signal) = find_instances(
+            wave.hierarchy(),
+            designs,
+            instances,
+            renames,
+            sample_posedge,
+        );
 
         // Determine the sampling mode based on the vavlue received
         // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
@@ -155,6 +161,7 @@ fn find_instances(
     hierachy: &Hierarchy,
     designs: &FxHashMap<String, Design>,
     instances: &[Instance],
+    renames: &FxHashMap<String, String>,
     sample_posedge: Option<String>,
 ) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
     let mut port_map = FxHashMap::default();
@@ -172,10 +179,14 @@ fn find_instances(
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
             for (pin_id, pin) in design.pins.iter() {
+                let pin_name = renames
+                    .get(pin.name())
+                    .cloned()
+                    .unwrap_or(pin.name().to_string());
                 // find a variable that has a matching name
                 if let Some(var) = instance_scope
                     .vars(hierachy)
-                    .find(|v| hierachy[*v].name(hierachy) == pin.name())
+                    .find(|v| hierachy[*v].name(hierachy) == pin_name)
                 {
                     let key = PortKey {
                         instance_id: inst_id as u32,
@@ -224,7 +235,7 @@ fn find_instances(
                         pin.bitwidth(),
                         "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
                         waveform_bits,
-                        pin.name(),
+                        pin_name,
                         pin.bitwidth()
                     );
 
@@ -392,6 +403,7 @@ impl AsciWaveTrace {
         filename: impl AsRef<std::path::Path>,
         designs: &FxHashMap<String, Design>,
         instances: &[Instance],
+        renames: &FxHashMap<String, String>,
     ) -> std::io::Result<Self> {
         let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
         let content = std::fs::read_to_string(filename)?;
@@ -401,10 +413,14 @@ impl AsciWaveTrace {
         for (inst_id, inst) in instances.iter().enumerate() {
             let design = &designs[&inst.design];
             for (pin_id, pin) in design.pins.iter() {
+                let pin_name = renames
+                    .get(pin.name())
+                    .cloned()
+                    .unwrap_or(pin.name().to_string());
                 let name = if inst.name.is_empty() {
-                    pin.name().to_string()
+                    pin_name
                 } else {
-                    format!("{}.{}", inst.name, pin.name())
+                    format!("{}.{}", inst.name, pin_name)
                 };
                 let key = (inst_id as u32, *pin_id);
                 if let Some(wave_id) = trace.pins.iter().position(|(n, _)| n == &name) {
