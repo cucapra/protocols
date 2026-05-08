@@ -600,6 +600,7 @@ impl SymbolTable {
 
     pub fn update_type(&mut self, symbol_id: SymbolId, tpe: Type) {
         let entry = self.entries.get_mut(symbol_id).unwrap();
+        debug_assert_eq!(entry.tpe, Type::Unknown, "Not unknown: {:?}", entry.tpe);
         entry.tpe = tpe;
     }
 

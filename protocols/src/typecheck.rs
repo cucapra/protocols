@@ -34,7 +34,7 @@ fn emit_bitslice_type_error(
 
 /// Typechecks an expression (identified by its `ExprId`) with respect to
 /// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
-fn check_expr_types(
+fn type_check_expr(
     tr: &Transaction,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
@@ -51,7 +51,7 @@ fn check_expr_types(
         Expr::Slice(sym_expr, msb, lsb) => {
             // To type-check `e[i:j]`, first typecheck `e` and make sure
             // it is a actually a bit-vector
-            let ty = check_expr_types(tr, st, handler, sym_expr)?;
+            let ty = type_check_expr(tr, st, handler, sym_expr)?;
             if let Type::BitVec(expr_width) = ty {
                 if msb >= lsb {
                     if *msb < expr_width {
@@ -76,7 +76,7 @@ fn check_expr_types(
             }
         }
         Expr::Unary(UnaryOp::Not, not_exprid) => {
-            let inner_type = check_expr_types(tr, st, handler, not_exprid)?;
+            let inner_type = type_check_expr(tr, st, handler, not_exprid)?;
             if let Type::BitVec(1) = inner_type {
                 Ok(inner_type)
             } else {
@@ -93,8 +93,8 @@ fn check_expr_types(
             }
         }
         Expr::Binary(op, lhs, rhs) => {
-            let lhs_type = check_expr_types(tr, st, handler, lhs)?;
-            let rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            let lhs_type = type_check_expr(tr, st, handler, lhs)?;
+            let rhs_type = type_check_expr(tr, st, handler, rhs)?;
             match op {
                 BinOp::Equal => {
                     if lhs_type.is_equivalent(&rhs_type) {
@@ -167,7 +167,7 @@ fn check_expr_types(
     }
 }
 
-fn check_stmt_types(
+fn type_check_stmt(
     tr: &Transaction,
     st: &mut SymbolTable,
     handler: &mut DiagnosticHandler,
@@ -182,7 +182,7 @@ fn check_stmt_types(
 
             // Then, type-check the two sides of the assignment
             let lhs_type = st[lhs].tpe();
-            let mut rhs_type = check_expr_types(tr, st, handler, rhs)?;
+            let mut rhs_type = type_check_expr(tr, st, handler, rhs)?;
             // If the RHS type is `Unknown`, we infer it to be
             // the same type as the LHS
             if rhs_type == Type::Unknown {
@@ -216,13 +216,13 @@ fn check_stmt_types(
         }
         Stmt::While(cond, bodyid) => {
             // Guards for while-loops must have type `BitVec(1)`
-            let cond_type = check_expr_types(tr, st, handler, cond)?;
+            let cond_type = type_check_expr(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
                 // If the loop guard typechecks, make sure it is well-formed
                 check_condition_wf(cond, tr, st, handler)?;
 
                 // Then, type-check the body of the while-loop
-                check_stmt_types(tr, st, handler, bodyid)
+                type_check_stmt(tr, st, handler, bodyid)
             } else {
                 let error_msg = format!(
                     "Invalid type for [while] condition: {}",
@@ -234,12 +234,12 @@ fn check_stmt_types(
         }
         Stmt::RepeatLoop(count_expr, bodyid) => {
             // Typecheck the no. of iterations (which must be a uint type)
-            let num_iterations_type = check_expr_types(tr, st, handler, count_expr)?;
+            let num_iterations_type = type_check_expr(tr, st, handler, count_expr)?;
             // Temporarily allow the argument to repeat loops to have type `u8`
             // (For the purposes of the protocol for the Brave New World `axi-burst-s4` bug)
             if matches!(num_iterations_type, Type::UnsignedInt | Type::BitVec(8)) {
                 // Then, type-check the loop body
-                check_stmt_types(tr, st, handler, bodyid)
+                type_check_stmt(tr, st, handler, bodyid)
             } else {
                 let error_msg = format!(
                     "Invalid type for no. of iterations in bounded loop: expected unsigned integer but got {} instead",
@@ -250,14 +250,14 @@ fn check_stmt_types(
             }
         }
         Stmt::ForInLoop(id_symbol, seq_expr, bodyid) => {
-            let seq_expr_tpe = check_expr_types(tr, st, handler, seq_expr)?;
+            let seq_expr_tpe = type_check_expr(tr, st, handler, seq_expr)?;
             if let Type::Seq(seq_id) = seq_expr_tpe {
                 let inner = st[seq_id].tpe();
                 if let Type::BitVec(_) = inner {
                     // update type of id_expr to be the inner type
                     st.update_type(*id_symbol, inner);
                     // check body
-                    check_stmt_types(tr, st, handler, bodyid)
+                    type_check_stmt(tr, st, handler, bodyid)
                 } else {
                     let error_msg = format!(
                         "Only bit-vector sequences are currently supported in loops, not {}.",
@@ -277,14 +277,14 @@ fn check_stmt_types(
         }
         Stmt::IfElse(cond, ifbody, elsebody) => {
             // Conditions for if-statement must have type `BitVec(1)`
-            let cond_type = check_expr_types(tr, st, handler, cond)?;
+            let cond_type = type_check_expr(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
                 // If the condition typechecks, make sure it is well-formed
                 check_condition_wf(cond, tr, st, handler)?;
 
                 // Then, type-check the bodies of the `then` & `else` branches
-                check_stmt_types(tr, st, handler, ifbody)?;
-                check_stmt_types(tr, st, handler, elsebody)
+                type_check_stmt(tr, st, handler, ifbody)?;
+                type_check_stmt(tr, st, handler, elsebody)
             } else {
                 let error_msg = format!(
                     "Type mismatch in If/Else condition: {}",
@@ -296,8 +296,8 @@ fn check_stmt_types(
         }
         Stmt::AssertEq(exprid1, exprid2) => {
             // First, type-check the two arguments to `assert_eq` separately
-            let expr1_type = check_expr_types(tr, st, handler, exprid1)?;
-            let expr2_type = check_expr_types(tr, st, handler, exprid2)?;
+            let expr1_type = type_check_expr(tr, st, handler, exprid1)?;
+            let expr2_type = type_check_expr(tr, st, handler, exprid2)?;
 
             // Check that the types of both arguments are equivalent
             if expr1_type.is_equivalent(&expr2_type) {
@@ -325,7 +325,7 @@ fn check_stmt_types(
         }
         Stmt::Block(stmts) => {
             for stmtid in stmts {
-                check_stmt_types(tr, st, handler, stmtid)?;
+                type_check_stmt(tr, st, handler, stmtid)?;
             }
             Ok(())
         }
@@ -344,13 +344,7 @@ pub fn type_check(
             debug_assert_eq!(st[arg].as_arg_index(), Some(index), "{}", st[arg].name());
         }
 
-        for expr_id in tr.expr_ids() {
-            check_expr_types(tr, st, handler, &expr_id)?;
-        }
-
-        for stmt_id in tr.stmt_ids() {
-            check_stmt_types(tr, st, handler, &stmt_id)?;
-        }
+        type_check_stmt(tr, st, handler, &tr.body)?;
     }
     Ok(())
 }
