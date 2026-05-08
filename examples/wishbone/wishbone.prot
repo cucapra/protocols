@@ -5,7 +5,7 @@ struct Wishbone {
     // acknowledge (from server)
     out ACK: u1,
     // address (from client)
-    in ADR: u32,
+    in ADR: u30, // 2 LSBs are assumed to be zero
     // cycle output, indicates bus cycle in progress (from client)
     in CYC: u1,
     // read data from server
@@ -15,7 +15,7 @@ struct Wishbone {
     // error from server
     out ERR: u1,
     // mask for data in/out from client
-    in SEL: u4,
+    in SEL: u1,
     // indicates a valid transfer cycle from client
     in STB: u1,
     // write enable (i.e. not read) from client
@@ -40,7 +40,7 @@ struct Wishbone {
 }
 
 prot reset<self: Wishbone>() {
-    self.RST := 1'b1;
+    self.RST := 1'b0;
     self.CYC := 1'b0;
     self.STB := 1'b0;
     step();
@@ -48,21 +48,21 @@ prot reset<self: Wishbone>() {
 
 #[idle]
 prot idle_no_cycle<self: Wishbone>() {
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     self.CYC := 1'b0;
     step();
 }
 
 prot idle_continue_cycle<self: Wishbone>() {
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     self.CYC := 1'b1;
     self.STB := 1'b0;
     step();
 }
 
-prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+prot write<self: Wishbone>(addr: u30, data: u32) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // classic cycle (in which case bte is don't care)
     self.CTI := 3'b0;
     self.BTE := X;
@@ -76,7 +76,7 @@ prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
 
     // apply parameters
     self.ADR := addr;
-    self.SEL := mask;
+    self.SEL := 1'b1;
     self.DAT_O := data;
 
     // TODO: masking
@@ -94,9 +94,9 @@ prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     step();
 }
 
-prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+prot read<self: Wishbone>(addr: u30, data: u32) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // classic cycle (in which case bte is don't care)
     self.CTI := 3'b0;
     self.BTE := X;
@@ -110,7 +110,7 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
 
     // apply parameters
     self.ADR := addr;
-    self.SEL := mask;
+    self.SEL := 1'b1;
     self.DAT_O := X;
 
     while self.ACK == 1'b0 {
@@ -127,9 +127,9 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     step();
 }
 
-prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
+prot write_burst_const<self: Wishbone>(addr: u30, data: [u32]+) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // constant burst cycle (in which case bte is don't care)
     self.CTI := 3'b001;
     self.BTE := X;
@@ -143,7 +143,7 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
 
     // apply parameters
     self.ADR := addr;
-    self.SEL := mask;
+    self.SEL := 1'b1;
 
     for d in data {
         self.DAT_O := d;
@@ -163,9 +163,9 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
     }    
 }
 
-prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_linear<self: Wishbone>(start_addr: u30, data: [u32]+) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // incremental linear burst
     self.CTI := 3'b010;
     self.BTE := 2'b00;
@@ -178,10 +178,10 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
     self.WE := 1'b1;
 
     // apply parameters
-    self.SEL := mask;
+    self.SEL := 1'b1;
 
     for d in data {
-        self.ADR := start_addr + iter_count::<u32>();
+        self.ADR := start_addr + iter_count::<u30>();
         self.DAT_O := d;
 
         // indicate end of cycle for last item
@@ -199,9 +199,9 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
     }
 }
 
-prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_4<self: Wishbone>(start_addr: u30, data: [u32]+) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // incremental linear burst
     self.CTI := 3'b010;
     self.BTE := 2'b01; // wrap 4
@@ -214,11 +214,11 @@ prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, dat
     self.WE := 1'b1;
 
     // apply parameters
-    self.SEL := mask;
+    self.SEL := 1'b1;
 
     for d in data {
         // we increment the last 2 bits, modulo the 2-bits that are always zero because of the 32-bit interface
-        self.ADR := start_addr[31:4] ## (start_addr[3:2] + iter_count::<u2>()) ## start_addr[1:0];
+        self.ADR := start_addr[29:2] ## (start_addr[1:0] + iter_count::<u2>());
         self.DAT_O := d;
 
         // indicate end of cycle for last item
@@ -236,9 +236,9 @@ prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, dat
     }
 }
 
-prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_8<self: Wishbone>(start_addr: u30, data: [u32]+) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // incremental linear burst
     self.CTI := 3'b010;
     self.BTE := 2'b10; // wrap 8
@@ -251,11 +251,11 @@ prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, dat
     self.WE := 1'b1;
 
     // apply parameters
-    self.SEL := mask;
+    self.SEL := 1'b1;
 
     for d in data {
         // we increment the last 3 bits, modulo the 2-bits that are always zero because of the 32-bit interface
-        self.ADR := start_addr[31:5] ## (start_addr[4:2] + iter_count::<u3>()) ## start_addr[1:0];
+        self.ADR := start_addr[29:3] ## (start_addr[2:0] + iter_count::<u3>());
         self.DAT_O := d;
 
         // indicate end of cycle for last item
@@ -273,9 +273,9 @@ prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, dat
     }
 }
 
-prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_16<self: Wishbone>(start_addr: u30, data: [u32]+) {
     // no RST
-    self.RST := 1'b0;
+    self.RST := 1'b1;
     // incremental linear burst
     self.CTI := 3'b010;
     self.BTE := 2'b11; // wrap 16
@@ -288,11 +288,11 @@ prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, da
     self.WE := 1'b1;
 
     // apply parameters
-    self.SEL := mask;
+    self.SEL := 1'b1;
 
     for d in data {
         // we increment the last 4 bits, modulo the 2-bits that are always zero because of the 32-bit interface
-        self.ADR := start_addr[31:6] ## (start_addr[5:2] + iter_count::<u4>()) ## start_addr[1:0];
+        self.ADR := start_addr[29:4] ## (start_addr[3:0] + iter_count::<u4>());
         self.DAT_O := d;
 
         // indicate end of cycle for last item
