@@ -234,6 +234,42 @@ prot write_burst_increment_linear<self: Wishbone>(start_addr: u30, data: [u32]+)
     }
 }
 
+prot read_burst_increment_linear<self: Wishbone>(start_addr: u30, data: [u32]+) {
+    // no RST
+    self.RST := 1'b1;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b00;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := 1'b1;
+
+    for d in data {
+        self.ADR := start_addr + iter_count::<u30>();
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d);
+        step();
+    }
+}
+
 prot write_burst_increment_wrap_4<self: Wishbone>(start_addr: u30, data: [u32]+) {
     // no RST
     self.RST := 1'b1;
@@ -267,6 +303,43 @@ prot write_burst_increment_wrap_4<self: Wishbone>(start_addr: u30, data: [u32]+)
         }
 
         // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_increment_wrap_4<self: Wishbone>(start_addr: u30, data: [u32]+) {
+    // no RST
+    self.RST := 1'b1;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b01; // wrap 4
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := 1'b1;
+
+    for d in data {
+        // we increment the last 2 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[29:2] ## (start_addr[1:0] + iter_count::<u2>());
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d);
         step();
     }
 }
@@ -308,6 +381,43 @@ prot write_burst_increment_wrap_8<self: Wishbone>(start_addr: u30, data: [u32]+)
     }
 }
 
+prot read_burst_increment_wrap_8<self: Wishbone>(start_addr: u30, data: [u32]+) {
+    // no RST
+    self.RST := 1'b1;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b10; // wrap 8
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := 1'b1;
+
+    for d in data {
+        // we increment the last 3 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[29:3] ## (start_addr[2:0] + iter_count::<u3>());
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d);
+        step();
+    }
+}
+
 prot write_burst_increment_wrap_16<self: Wishbone>(start_addr: u30, data: [u32]+) {
     // no RST
     self.RST := 1'b1;
@@ -341,6 +451,43 @@ prot write_burst_increment_wrap_16<self: Wishbone>(start_addr: u30, data: [u32]+
         }
 
         // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_increment_wrap_16<self: Wishbone>(start_addr: u30, data: [u32]+) {
+    // no RST
+    self.RST := 1'b1;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b11; // wrap 16
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := 1'b1;
+
+    for d in data {
+        // we increment the last 4 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[29:4] ## (start_addr[3:0] + iter_count::<u4>());
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d);
         step();
     }
 }
