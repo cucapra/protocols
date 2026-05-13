@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use crate::interpreter::Value;
-use crate::{interpreter::ExprValue, ir::*};
+use crate::{ast::*, interpreter::ExprValue};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;

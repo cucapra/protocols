@@ -6,7 +6,7 @@
 //! # Design extraction
 //! This module contains code to extract/infer Verilog designs from `struct` and protocol declarations.
 
-use crate::ir::{Field, Protocol, SymbolId, SymbolTable, Type};
+use crate::ast::{Field, Protocol, SymbolId, SymbolTable, Type};
 use crate::serialize::serialize_field;
 use log::info;
 use rustc_hash::FxHashMap;

@@ -1,5 +1,5 @@
+use crate::ast::{Protocol, SymbolTable, Type};
 use crate::interpreter::Value;
-use crate::ir::{Protocol, SymbolTable, Type};
 use crate::scheduler::TodoItem;
 use crate::serialize::serialize_type;
 use crate::{diagnostic::*, setup::bv};

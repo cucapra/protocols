@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::ir::Stmt;
+use crate::ast::Stmt;
 use baa::{BitVecValue, WidthInt};
 use pest::Parser;
 use pest::error::InputLocation;
@@ -14,7 +14,7 @@ use pest::pratt_parser::PrattParser;
 use pest_derive::Parser;
 use std::vec;
 
-use crate::{diagnostic::*, ir::*};
+use crate::{ast::*, diagnostic::*};
 
 #[derive(Parser)]
 #[grammar = "protocols.pest"]

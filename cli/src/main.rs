@@ -3,10 +3,10 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use clap::*;
+use protocols::ast::{Protocol, SymbolTable};
 use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::interpreter::Value;
-use protocols::ir::{Protocol, SymbolTable};
 use protocols::{frontend, transaction_frontend};
 use std::path::Path;
 

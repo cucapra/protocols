@@ -2,9 +2,9 @@ use std::collections::hash_map::Entry;
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use protocols::{
+    ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp},
     errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
-    ir::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp},
     scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };

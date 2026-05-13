@@ -6,8 +6,8 @@
 use crate::Instance;
 use anyhow::Context;
 use baa::BitVecValue;
+use protocols::ast::SymbolId;
 use protocols::design::Design;
-use protocols::ir::SymbolId;
 use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalEncoding, SignalRef};

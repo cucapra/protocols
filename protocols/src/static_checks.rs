@@ -3,8 +3,8 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::{
+    ast::{BinOp, Dir, Expr, ExprId, LocationId, Protocol, StmtId, SymbolId, SymbolTable, Type},
     diagnostic::{DiagnosticHandler, Level},
-    ir::{BinOp, Dir, Expr, ExprId, LocationId, Protocol, StmtId, SymbolId, SymbolTable, Type},
     serialize::serialize_expr,
 };
 use anyhow::anyhow;

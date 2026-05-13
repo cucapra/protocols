@@ -6,7 +6,7 @@ use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
 use baa::{BitVecOps, BitVecValue, WidthInt};
-use protocols::ir::*;
+use protocols::ast::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct BackwardsInterpreter {

@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use baa::{BitVecOps, BitVecValue};
 use protocols::{
+    ast::{Expr, Protocol, Stmt, StmtId, SymbolId, SymbolTable},
     errors::{EvaluationError, ExecutionError},
-    ir::{Expr, Protocol, Stmt, StmtId, SymbolId, SymbolTable},
     serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;

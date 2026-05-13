@@ -3,8 +3,8 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
+use protocols::ast::{Arg, SymbolTable, Type};
 use protocols::interpreter::Value;
-use protocols::ir::{Arg, SymbolTable, Type};
 use protocols::serialize::serialize_type;
 
 #[derive(Debug, Clone)]

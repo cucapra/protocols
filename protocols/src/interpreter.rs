@@ -5,8 +5,8 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::ast::*;
 use crate::errors::{ExecutionError, ExecutionResult};
-use crate::ir::*;
 use crate::scheduler::Thread;
 use crate::serialize::serialize_bitvec;
 use baa::{BitVecOps, BitVecValue, WidthInt};

@@ -4,7 +4,7 @@
 
 use baa::BitVecValue;
 use protocols::{
-    ir::{Protocol, StmtId, SymbolId, SymbolTable},
+    ast::{Protocol, StmtId, SymbolId, SymbolTable},
     scheduler::NextStmtMap,
     serialize::serialize_stmt,
 };

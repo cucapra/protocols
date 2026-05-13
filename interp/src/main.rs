@@ -5,8 +5,8 @@
 use clap::ColorChoice;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
+use protocols::ast::{Protocol, SymbolTable};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{Protocol, SymbolTable};
 use protocols::scheduler::Scheduler;
 use protocols::setup::setup_test_environment;
 use protocols::transaction_frontend;

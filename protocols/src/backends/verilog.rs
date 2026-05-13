@@ -2,8 +2,8 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use crate::ast::*;
 use crate::design::{Design, find_designs};
-use crate::ir::*;
 use crate::scheduler::TodoItem;
 use baa::{BitVecOps, BitVecValue};
 use rustc_hash::FxHashMap;

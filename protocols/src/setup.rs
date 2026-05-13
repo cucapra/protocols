@@ -5,10 +5,10 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use crate::ast::{Protocol, SymbolTable};
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::ExecutionError;
 use crate::frontend;
-use crate::ir::{Protocol, SymbolTable};
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use baa::BitVecValue;
 use std::path::PathBuf;

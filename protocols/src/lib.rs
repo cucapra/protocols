@@ -9,12 +9,12 @@ use crate::diagnostic::DiagnosticHandler;
 use anyhow::anyhow;
 use rustc_hash::FxHashMap;
 
+pub mod ast;
 pub mod backends;
 pub mod design;
 pub mod diagnostic;
 pub mod errors;
 pub mod interpreter;
-pub mod ir;
 pub mod parser;
 pub mod scheduler;
 pub mod serialize;
@@ -32,9 +32,9 @@ pub fn frontend(
     filename: impl AsRef<std::path::Path>,
     diag: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
-) -> anyhow::Result<Vec<(ir::Protocol, ir::SymbolTable)>> {
+) -> anyhow::Result<Vec<(ast::Protocol, ast::SymbolTable)>> {
     // Parse protocols file
-    let mut transactions_symbol_tables: Vec<(ir::Protocol, ir::SymbolTable)> =
+    let mut transactions_symbol_tables: Vec<(ast::Protocol, ast::SymbolTable)> =
         parser::parse_file(filename, diag).map_err(|e| anyhow!(e))?;
 
     // Type-check the parsed transactions
@@ -58,7 +58,7 @@ pub type Traces = Vec<Vec<(String, Vec<Value>)>>;
 /// Simple frontend for loading a transaction trace file (*.tx)
 pub fn transaction_frontend<'a>(
     filename: impl AsRef<std::path::Path>,
-    protos: impl Iterator<Item = &'a (ir::Protocol, ir::SymbolTable)>,
+    protos: impl Iterator<Item = &'a (ast::Protocol, ast::SymbolTable)>,
     diag: &mut DiagnosticHandler,
 ) -> anyhow::Result<Traces> {
     let protos: FxHashMap<String, _> = protos.map(|(p, st)| (p.name.clone(), (p, st))).collect();

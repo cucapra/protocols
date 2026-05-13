@@ -9,8 +9,8 @@ use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 
 use crate::{
+    ast::*,
     diagnostic::*,
-    ir::*,
     serialize::*,
     static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf},
 };

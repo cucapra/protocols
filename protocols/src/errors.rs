@@ -5,9 +5,9 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::ast::{ExprId, Protocol, StmtId, SymbolId, SymbolTable};
 use crate::diagnostic::{DiagnosticHandler, Level};
 use crate::interpreter::Value;
-use crate::ir::{ExprId, Protocol, StmtId, SymbolId, SymbolTable};
 use crate::serialize::{serialize_bitvec, serialize_expr};
 use baa::BitVecValue;
 use std::fmt;

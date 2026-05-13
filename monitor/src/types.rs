@@ -11,7 +11,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use protocols::ir::StmtId;
+use protocols::ast::StmtId;
 
 use crate::{scheduler::Scheduler, thread::Thread};
 
