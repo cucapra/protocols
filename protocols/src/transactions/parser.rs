@@ -11,7 +11,7 @@ use pest_derive::Parser;
 use rustc_hash::FxHashMap;
 
 #[derive(Parser)]
-#[grammar = "frontend/transactions.pest"]
+#[grammar = "transactions/transactions.pest"]
 struct TransactionsParser;
 
 /// Parses a transaction file (specified at `filepath`) using a particular `DiagnosticHandler`.
