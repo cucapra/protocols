@@ -21,7 +21,7 @@ fn emit_bitslice_type_error(
     end_idx: u32,
     expr_width: u32,
     handler: &mut DiagnosticHandler,
-    tr: &Transaction,
+    tr: &Protocol,
     expr_id: &ExprId,
 ) -> anyhow::Result<Type> {
     let error_msg = format!(
@@ -35,7 +35,7 @@ fn emit_bitslice_type_error(
 /// Typechecks an expression (identified by its `ExprId`) with respect to
 /// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
 fn type_check_expr(
-    tr: &Transaction,
+    tr: &Protocol,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
@@ -168,7 +168,7 @@ fn type_check_expr(
 }
 
 fn type_check_stmt(
-    tr: &Transaction,
+    tr: &Protocol,
     st: &mut SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
@@ -335,7 +335,7 @@ fn type_check_stmt(
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
 pub fn type_check(
-    trs: &mut [(Transaction, SymbolTable)],
+    trs: &mut [(Protocol, SymbolTable)],
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
     for (tr, st) in trs {
@@ -465,7 +465,7 @@ mod tests {
         let input =
             std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
-        let mut tr = Transaction::new("func_arg_invalid".to_string());
+        let mut tr = Protocol::new("func_arg_invalid".to_string());
         tr.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         let b_expr = tr.e(Expr::Sym(b));

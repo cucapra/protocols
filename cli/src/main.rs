@@ -6,7 +6,7 @@ use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::interpreter::Value;
-use protocols::ir::{SymbolTable, Transaction};
+use protocols::ir::{Protocol, SymbolTable};
 use protocols::{frontend, transaction_frontend};
 use std::path::Path;
 
@@ -43,7 +43,7 @@ enum Cmds {
 }
 
 fn load_trace(
-    protos: &[(Transaction, SymbolTable)],
+    protos: &[(Protocol, SymbolTable)],
     transactions: Option<&str>,
 ) -> Vec<(String, Vec<Value>)> {
     if let Some(filename) = transactions {
@@ -63,7 +63,7 @@ fn load_trace(
 }
 
 fn make_verilog_tb(
-    protos: &[(Transaction, SymbolTable)],
+    protos: &[(Protocol, SymbolTable)],
     verilog_tb: String,
     transactions: Option<String>,
     vcd_out: Option<String>,
@@ -89,7 +89,7 @@ fn make_verilog_tb(
 }
 
 fn run_verilog_tb(
-    protos: &[(Transaction, SymbolTable)],
+    protos: &[(Protocol, SymbolTable)],
     run_dir: String,
     transactions: Option<String>,
     clock: Option<String>,

@@ -156,7 +156,7 @@ pub type TodoIdx = usize;
 /// thread, with the `Scheduler` struct responsible for keeping track of
 /// different threads.
 pub struct Evaluator<'a> {
-    tr: &'a Transaction,
+    tr: &'a Protocol,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
     sim: Interpreter,
@@ -211,7 +211,7 @@ impl<'a> Evaluator<'a> {
     /// Creates a new `Evaluator`
     pub fn new(
         args: FxHashMap<&str, Value>,
-        tr: &'a Transaction,
+        tr: &'a Protocol,
         st: &'a SymbolTable,
         ctx: &'a patronus::expr::Context,
         sys: &'a patronus::system::TransitionSystem,

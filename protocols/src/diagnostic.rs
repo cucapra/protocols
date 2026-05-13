@@ -186,7 +186,7 @@ impl DiagnosticHandler {
 
     pub fn emit_diagnostic_expr(
         &mut self,
-        tr: &Transaction,
+        tr: &Protocol,
         expr_id: &ExprId,
         message: &str,
         level: Level,
@@ -290,7 +290,7 @@ impl DiagnosticHandler {
     /// Emits a diagnostic message for one single statement
     pub fn emit_diagnostic_stmt(
         &mut self,
-        tr: &Transaction,
+        tr: &Protocol,
         stmt_id: &StmtId,
         message: &str,
         level: Level,
@@ -302,7 +302,7 @@ impl DiagnosticHandler {
     /// Use this when the same statement can have different errors for different threads.
     pub fn emit_diagnostic_stmt_for_thread(
         &mut self,
-        tr: &Transaction,
+        tr: &Protocol,
         stmt_id: &StmtId,
         message: &str,
         level: Level,
@@ -346,7 +346,7 @@ impl DiagnosticHandler {
     /// based on the `LocationId` variant
     pub fn emit_diagnostic(
         &mut self,
-        tr: &Transaction,
+        tr: &Protocol,
         location_id: &LocationId,
         message: &str,
         level: Level,
@@ -364,7 +364,7 @@ impl DiagnosticHandler {
     /// Emits a diagnostic message that concerns multiple statements
     pub fn emit_diagnostic_multi_stmt(
         &mut self,
-        tr: &Transaction,
+        tr: &Protocol,
         stmt_ids: &[StmtId],
         messages: &[&str],
         main_message: &str,
@@ -407,7 +407,7 @@ impl DiagnosticHandler {
     /// related statements (e.g., the assignments that caused a forbidden read).
     pub fn emit_diagnostic_expr_with_stmts(
         &mut self,
-        tr: &Transaction,
+        tr: &Protocol,
         expr_id: &ExprId,
         expr_message: &str,
         stmt_labels: &[(StmtId, String)],
@@ -465,14 +465,14 @@ impl DiagnosticHandler {
     }
 
     /// Emits an error message when an `assert_eq` fails. Arguments are:
-    /// - The enclosing `Transaction`
+    /// - The enclosing `Protocol`
     /// - The `ExprId`s of the two arguments to the `assert_eq`
     /// - The values that the two `Expr`s evaluate to
-    /// - The arguments `todo_args` supplied to the transaction
+    /// - The arguments `todo_args` supplied to the protocol
     ///   (for more info in the error msg)
     pub fn emit_diagnostic_assertion(
         &mut self,
-        tr: &Transaction,
+        proto: &Protocol,
         expr1_id: &ExprId,
         expr2_id: &ExprId,
         eval1: &BitVecValue,
@@ -482,27 +482,27 @@ impl DiagnosticHandler {
         let buffer = &mut self.create_buffer();
 
         if let (Some((start1, end1, fileid1)), Some((start2, end2, fileid2))) =
-            (tr.get_expr_loc(*expr1_id), tr.get_expr_loc(*expr2_id))
+            (proto.get_expr_loc(*expr1_id), proto.get_expr_loc(*expr2_id))
         {
             assert!(
                 fileid1 == fileid2,
                 "Expressions must be in the same file for assertion error"
             );
-            let transaction_call = if todo_args.is_empty() {
-                format!("{}()", tr.name)
+            let proto_call = if todo_args.is_empty() {
+                format!("{}()", proto.name)
             } else {
                 let args_str = todo_args
                     .iter()
                     .map(|v| serialize_value(v, self.display_hex))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{}({})", tr.name, args_str)
+                format!("{}({})", proto.name, args_str)
             };
             let diagnostic = Diagnostic {
                 title: format!("Error in file {}", fileid1),
                 message: format!(
-                    "The two expressions did not evaluate to the same value (in transaction `{}`)",
-                    transaction_call
+                    "The two expressions did not evaluate to the same value (in protocol `{}`)",
+                    proto_call
                 ),
                 level: Level::Error,
                 locations: self.error_locations(vec![(
@@ -562,7 +562,7 @@ mod tests {
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::InPort);
         let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::InPort);
 
-        let mut tr = Transaction::new("test_transaction".to_string());
+        let mut tr = Protocol::new("test_transaction".to_string());
         let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         tr.s(Stmt::Assign(a, one_expr));

@@ -7,7 +7,7 @@
 
 use crate::diagnostic::{DiagnosticHandler, Level};
 use crate::interpreter::Value;
-use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
+use crate::ir::{ExprId, Protocol, StmtId, SymbolId, SymbolTable};
 use crate::serialize::{serialize_bitvec, serialize_expr};
 use baa::BitVecValue;
 use std::fmt;
@@ -650,7 +650,7 @@ impl DiagnosticEmitter {
     pub fn emit_execution_error(
         handler: &mut DiagnosticHandler,
         error: &ExecutionError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         symbol_table: &SymbolTable,
         todo_args: &[Value],
     ) {
@@ -682,7 +682,7 @@ impl DiagnosticEmitter {
     pub fn emit_evaluation_error(
         handler: &mut DiagnosticHandler,
         error: &EvaluationError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         symbol_table: &SymbolTable,
     ) {
         match error {
@@ -852,7 +852,7 @@ impl DiagnosticEmitter {
     pub fn emit_thread_error(
         handler: &mut DiagnosticHandler,
         error: &ThreadError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         _symbol_table: &SymbolTable,
     ) {
         match error {
@@ -956,7 +956,7 @@ impl DiagnosticEmitter {
     pub fn emit_symbol_error(
         handler: &mut DiagnosticHandler,
         error: &SymbolError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         _symbol_table: &SymbolTable,
     ) {
         match error {
@@ -995,7 +995,7 @@ impl DiagnosticEmitter {
     pub fn emit_assertion_error(
         handler: &mut DiagnosticHandler,
         error: &AssertionError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         _symbol_table: &SymbolTable,
         todo_args: &[Value],
     ) {

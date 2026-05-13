@@ -4,7 +4,7 @@ use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use protocols::{
     errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
     interpreter::ExprValue,
-    ir::{BinOp, Expr, ExprId, Stmt, StmtId, SymbolId, SymbolTable, Transaction, UnaryOp},
+    ir::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp},
     scheduler::NextStmtMap,
     serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
 };
@@ -20,7 +20,7 @@ use crate::{
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct Interpreter {
-    pub transaction: Transaction,
+    pub transaction: Protocol,
     pub symbol_table: SymbolTable,
     pub next_stmt_map: NextStmtMap,
 
@@ -142,7 +142,7 @@ impl Interpreter {
 
     /// Creates a new Interpreter for a given `Transaction`
     pub fn new(
-        transaction: Transaction,
+        transaction: Protocol,
         symbol_table: SymbolTable,
         trace: &WaveSignalTrace,
         trace_cycle_count: u32,

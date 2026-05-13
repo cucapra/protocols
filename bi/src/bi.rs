@@ -39,7 +39,7 @@ pub enum BIState {
 
 impl BackwardsInterpreter {
     pub fn new<'a>(
-        protos_and_syms: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
+        protos_and_syms: impl Iterator<Item = &'a (Protocol, SymbolTable)>,
         instance_id: u32,
         include_in_progress: bool,
     ) -> Self {
@@ -1032,7 +1032,7 @@ impl ExprValue {
 }
 
 /// returns a dut port symbol if the expression corresponds to one
-fn as_dut_port_symbol(transaction: &Transaction, expr: ExprId) -> Option<SymbolId> {
+fn as_dut_port_symbol(transaction: &Protocol, expr: ExprId) -> Option<SymbolId> {
     match &transaction[expr] {
         Expr::Sym(sym_id) => {
             // we assume that the only symbols are dut ports and arguments
@@ -1047,14 +1047,14 @@ fn as_dut_port_symbol(transaction: &Transaction, expr: ExprId) -> Option<SymbolI
 }
 
 /// returns argument and id if the expression corresponds to one
-fn as_arg(transaction: &Transaction, expr: ExprId) -> Option<(usize, Arg)> {
+fn as_arg(transaction: &Protocol, expr: ExprId) -> Option<(usize, Arg)> {
     match &transaction[expr] {
         Expr::Sym(sym_id) => sym_as_arg(transaction, *sym_id),
         _ => None,
     }
 }
 
-fn sym_as_arg(transaction: &Transaction, sym_id: SymbolId) -> Option<(usize, Arg)> {
+fn sym_as_arg(transaction: &Protocol, sym_id: SymbolId) -> Option<(usize, Arg)> {
     transaction
         .args
         .iter()
@@ -1066,7 +1066,7 @@ fn sym_as_arg(transaction: &Transaction, sym_id: SymbolId) -> Option<(usize, Arg
 #[derive(Debug)]
 struct ProtoInfo {
     proto_id: usize,
-    proto: Transaction,
+    proto: Protocol,
     sym: SymbolTable,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
 }

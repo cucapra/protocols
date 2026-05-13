@@ -12,20 +12,20 @@ use rustc_hash::FxHashMap;
 use std::ops::Index;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Transaction {
-    /// The name of the `Transaction`
+pub struct Protocol {
+    /// The name of the `Protocol`
     pub name: String,
 
-    /// List of `Arg`s to the `Transaction`
+    /// List of `Arg`s to the `Protocol`
     pub args: Vec<Arg>,
 
-    /// The body of the `Transaction`, identified by its `StmtId`
+    /// The body of the `Protocol`, identified by its `StmtId`
     pub body: StmtId,
 
     /// Optional type parameter (identified by its `SymbolId`)
     pub type_param: Option<SymbolId>,
 
-    /// Whether the transaction has been marked as `idle` with `#[idle]`
+    /// Whether the protocol has been marked as `idle` with `#[idle]`
     pub is_idle: bool,
 
     /// Maps `ExprId`s to their corresponding `Expr`s
@@ -40,7 +40,7 @@ pub struct Transaction {
     stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
 }
 
-impl Transaction {
+impl Protocol {
     pub fn new(name: String) -> Self {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
@@ -190,7 +190,7 @@ impl Transaction {
     }
 }
 
-impl Index<ExprId> for Transaction {
+impl Index<ExprId> for Protocol {
     type Output = Expr;
 
     fn index(&self, index: ExprId) -> &Self::Output {
@@ -198,7 +198,7 @@ impl Index<ExprId> for Transaction {
     }
 }
 
-impl Index<&ExprId> for Transaction {
+impl Index<&ExprId> for Protocol {
     type Output = Expr;
 
     fn index(&self, index: &ExprId) -> &Self::Output {
@@ -206,7 +206,7 @@ impl Index<&ExprId> for Transaction {
     }
 }
 
-impl Index<StmtId> for Transaction {
+impl Index<StmtId> for Protocol {
     type Output = Stmt;
 
     fn index(&self, index: StmtId) -> &Self::Output {
@@ -214,7 +214,7 @@ impl Index<StmtId> for Transaction {
     }
 }
 
-impl Index<&StmtId> for Transaction {
+impl Index<&StmtId> for Protocol {
     type Output = Stmt;
 
     fn index(&self, index: &StmtId) -> &Self::Output {
@@ -856,7 +856,7 @@ mod tests {
         println!("\n{}", symbols);
 
         // 2) create transaction
-        let mut add = Transaction::new("add".to_string());
+        let mut add = Protocol::new("add".to_string());
         add.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         // 3) create expressions
@@ -913,7 +913,7 @@ mod tests {
         assert_eq!(symbols["oo"], symbols[oo]);
 
         // 2) create transaction
-        let mut calyx_go_done = Transaction::new("calyx_go_done".to_string());
+        let mut calyx_go_done = Protocol::new("calyx_go_done".to_string());
         calyx_go_done.args = vec![Arg::new(ii), Arg::new(oo)];
         calyx_go_done.type_param = Some(dut);
 

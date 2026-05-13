@@ -7,7 +7,7 @@ use crate::ir::*;
 /// 3. protocols must end in a step
 /// 4. a loop must contain at least one step, otherwise the protocol can never terminate
 pub fn check_step_and_fork(
-    protocols: &Vec<(Transaction, SymbolTable)>,
+    protocols: &Vec<(Protocol, SymbolTable)>,
     diag: &mut DiagnosticHandler,
 ) -> u32 {
     let mut error_count = 0;
@@ -26,14 +26,14 @@ pub fn check_step_and_fork(
     error_count
 }
 
-fn is_step(proto: &Transaction, stmt: StmtId) -> bool {
+fn is_step(proto: &Protocol, stmt: StmtId) -> bool {
     matches!(&proto[stmt], Stmt::Step)
 }
 
 fn analyze_stmt(
     diag: &mut DiagnosticHandler,
     error_count: &mut u32,
-    proto: &Transaction,
+    proto: &Protocol,
     stmt: StmtId,
     mut state: State,
 ) -> State {

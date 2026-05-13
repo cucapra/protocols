@@ -31,13 +31,13 @@ pub type TodoItem = (String, Vec<Value>);
 /// `(Transaction, SymbolTable, NextStmtMap)`.
 /// This is passed to the interpreter when we want to execute
 /// a single transaction.
-type TransactionInfo<'a> = (&'a Transaction, &'a SymbolTable, NextStmtMap);
+type TransactionInfo<'a> = (&'a Protocol, &'a SymbolTable, NextStmtMap);
 
 /// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
 #[derive(Debug, Clone)]
 pub struct Todo<'a> {
     /// The associated `Transaction`
-    pub tr: &'a Transaction,
+    pub tr: &'a Protocol,
     /// The associated `SymbolTable`
     pub st: &'a SymbolTable,
     /// The associated argument values (a map from variable names to their values)
@@ -48,7 +48,7 @@ pub struct Todo<'a> {
 
 impl<'a> Todo<'a> {
     pub fn new(
-        tr: &'a Transaction,
+        tr: &'a Protocol,
         st: &'a SymbolTable,
         args: ArgMap<'a>,
         next_stmt_map: NextStmtMap,
@@ -220,7 +220,7 @@ impl<'a> Scheduler<'a> {
     /// - A Patronus simulator (`sim`)
     /// - and a `DiagnosticHandler` for emitting errors (`handler`)
     pub fn new(
-        transactions_and_symbols: Vec<(&'a Transaction, &'a SymbolTable)>,
+        transactions_and_symbols: Vec<(&'a Protocol, &'a SymbolTable)>,
         todos: Vec<TodoItem>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,

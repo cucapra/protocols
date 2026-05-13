@@ -6,7 +6,7 @@ use clap::ColorChoice;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
 use protocols::diagnostic::DiagnosticHandler;
-use protocols::ir::{SymbolTable, Transaction};
+use protocols::ir::{Protocol, SymbolTable};
 use protocols::scheduler::Scheduler;
 use protocols::setup::setup_test_environment;
 use protocols::transaction_frontend;
@@ -127,7 +127,7 @@ fn main() -> anyhow::Result<()> {
 
     // Nikil says we have to do this step in order to convert
     // `Vec<(Transaction, SymbolTable)>` into `Vec<(&Transaction, &SymbolTable)>`
-    let transactions_and_symbols: Vec<(&Transaction, &SymbolTable)> =
+    let transactions_and_symbols: Vec<(&Protocol, &SymbolTable)> =
         parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file

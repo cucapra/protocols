@@ -4,7 +4,7 @@
 
 use baa::BitVecValue;
 use protocols::{
-    ir::{StmtId, SymbolId, SymbolTable, Transaction},
+    ir::{Protocol, StmtId, SymbolId, SymbolTable},
     scheduler::NextStmtMap,
     serialize::serialize_stmt,
 };
@@ -38,7 +38,7 @@ pub struct Thread {
     pub start_time_step: u32,
 
     /// The `Transaction` that this `Thread` is running
-    pub transaction: Transaction,
+    pub transaction: Protocol,
 
     /// The `SymbolTable` associated with the `Transaction`
     pub symbol_table: SymbolTable,
@@ -106,7 +106,7 @@ impl Thread {
     ///   accordingly based on the pins' values at the beginning of the signal trace.
     pub fn new(
         scheduler_name: String,
-        transaction: Transaction,
+        transaction: Protocol,
         symbol_table: SymbolTable,
         next_stmt_map: NextStmtMap,
         thread_id: u32,

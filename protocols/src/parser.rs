@@ -37,7 +37,7 @@ lazy_static::lazy_static! {
 pub struct ParserContext<'a> {
     pub st: &'a mut SymbolTable,
     pub fileid: usize,
-    pub tr: &'a mut Transaction,
+    pub tr: &'a mut Protocol,
     pub handler: &'a mut DiagnosticHandler,
 }
 
@@ -710,7 +710,7 @@ impl ParserContext<'_> {
 pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-) -> Result<Vec<(Transaction, SymbolTable)>, String> {
+) -> Result<Vec<(Protocol, SymbolTable)>, String> {
     let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     let fileid = handler.add_file(name, input.clone());
@@ -740,7 +740,7 @@ pub fn parse_file(
             let mut context = ParserContext {
                 st: base_st,
                 fileid,
-                tr: &mut Transaction::new("".to_string()),
+                tr: &mut Protocol::new("".to_string()),
                 handler,
             };
             if let Err(e) = context.parse_struct(pair) {
@@ -751,7 +751,7 @@ pub fn parse_file(
         } else if pair.as_rule() == Rule::fun {
             // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
             let st = &mut base_st.clone();
-            let mut tr = Transaction::new("".to_string());
+            let mut tr = Protocol::new("".to_string());
             let mut context: ParserContext<'_> = ParserContext {
                 st,
                 fileid,
@@ -769,7 +769,7 @@ pub fn parse_file(
 pub fn parsing_helper(
     transaction_filename: &str,
     handler: &mut DiagnosticHandler,
-) -> Vec<(Transaction, SymbolTable)> {
+) -> Vec<(Protocol, SymbolTable)> {
     let result = parse_file(transaction_filename, handler);
     match result {
         Ok(success_vec) => success_vec,

@@ -4,7 +4,7 @@
 
 use crate::{
     diagnostic::{DiagnosticHandler, Level},
-    ir::{BinOp, Dir, Expr, ExprId, LocationId, StmtId, SymbolId, SymbolTable, Transaction, Type},
+    ir::{BinOp, Dir, Expr, ExprId, LocationId, Protocol, StmtId, SymbolId, SymbolTable, Type},
     serialize::serialize_expr,
 };
 use anyhow::anyhow;
@@ -46,7 +46,7 @@ pub fn check_if_symbol_is_dut_port(
     symbol_id: SymbolId,
     direction: Option<Dir>,
     location_id: LocationId,
-    tr: &Transaction,
+    tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
     lang_feature: LangFeature,
@@ -160,7 +160,7 @@ pub fn check_if_symbol_is_dut_port(
 ///   are also expected as inputs (for error message purposes)
 pub fn check_condition_wf(
     expr_id: &ExprId,
-    tr: &Transaction,
+    tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
@@ -203,7 +203,7 @@ pub fn check_condition_wf(
 ///   are also expected as inputs (for error message purposes)
 pub fn check_assertion_arg_wf(
     expr_id: &ExprId,
-    tr: &Transaction,
+    tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
@@ -253,7 +253,7 @@ pub fn check_assertion_arg_wf(
 pub fn check_assertion_wf(
     expr_id1: &ExprId,
     expr_id2: &ExprId,
-    tr: &Transaction,
+    tr: &Protocol,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
@@ -277,7 +277,7 @@ pub fn check_assertion_wf(
 pub fn check_assignment_rhs_wf(
     rhs_expr_id: &ExprId,
     dont_cares_allowed: bool,
-    tr: &Transaction,
+    tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
@@ -360,7 +360,7 @@ pub fn check_assignment_wf(
     lhs_symbol_id: &SymbolId,
     rhs_expr_id: &ExprId,
     stmt_id: &StmtId,
-    tr: &Transaction,
+    tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {

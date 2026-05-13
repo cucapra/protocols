@@ -1,5 +1,5 @@
 use crate::interpreter::Value;
-use crate::ir::{SymbolTable, Transaction, Type};
+use crate::ir::{Protocol, SymbolTable, Type};
 use crate::scheduler::TodoItem;
 use crate::serialize::serialize_type;
 use crate::{diagnostic::*, setup::bv};
@@ -18,7 +18,7 @@ struct TransactionsParser;
 pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-    protos: &FxHashMap<String, (&Transaction, &SymbolTable)>,
+    protos: &FxHashMap<String, (&Protocol, &SymbolTable)>,
 ) -> anyhow::Result<Vec<Vec<TodoItem>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
@@ -86,7 +86,7 @@ fn parse_arglist(
     arglist_pair: Pair<Rule>,
     handler: &mut DiagnosticHandler,
     fileid: usize,
-    proto: &Transaction,
+    proto: &Protocol,
 ) -> anyhow::Result<Vec<Value>> {
     let mut args = vec![];
 

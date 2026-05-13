@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 // todo: add `interface` and `module` to protocol language and remove pin argument
 pub fn to_verilog(
     testbench_name: &str,
-    protos: &[(Transaction, SymbolTable)],
+    protos: &[(Protocol, SymbolTable)],
     pins: &[(String, PinAnnotation)],
     vcd_out: Option<&str>,
     transactions: &[TodoItem],
@@ -26,7 +26,7 @@ pub fn to_verilog(
     let (_, module) = modules.into_iter().next().unwrap();
 
     // derive the instance name from the first protocol
-    let first_proto_id = *module.transaction_ids.first().unwrap();
+    let first_proto_id = *module.protocol_ids.first().unwrap();
     // for the design we can use any symbol table
     let instance_name_id = protos[first_proto_id].0.type_param.unwrap();
     let design_sym_tb = protos[first_proto_id].1.clone();
@@ -133,7 +133,7 @@ pub fn to_verilog(
     writeln!(out)?;
 
     // one task for each protocol
-    for &proto_id in module.transaction_ids.iter() {
+    for &proto_id in module.protocol_ids.iter() {
         let (proto, st) = &protos[proto_id];
         let sym_verilog = gen_sym_to_verilog_map(st, proto, &module, &instance_name);
         proto_to_verilog(st, proto, &sym_verilog, out)?;
@@ -180,7 +180,7 @@ pub fn to_verilog(
 
 fn proto_to_verilog(
     st: &SymbolTable,
-    proto: &Transaction,
+    proto: &Protocol,
     sym_verilog: &FxHashMap<SymbolId, String>,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
@@ -207,7 +207,7 @@ fn proto_to_verilog(
 
 fn gen_sym_to_verilog_map(
     st: &SymbolTable,
-    proto: &Transaction,
+    proto: &Protocol,
     m: &Design,
     instance_name: &str,
 ) -> FxHashMap<SymbolId, String> {
@@ -228,7 +228,7 @@ fn gen_sym_to_verilog_map(
 
 fn stmt_to_verilog(
     st: &SymbolTable,
-    proto: &Transaction,
+    proto: &Protocol,
     indent: &str,
     sym_verilog: &FxHashMap<SymbolId, String>,
     out: &mut impl std::io::Write,
@@ -274,7 +274,7 @@ fn stmt_to_verilog(
 
 fn assert_eq_to_verilog(
     st: &SymbolTable,
-    proto: &Transaction,
+    proto: &Protocol,
     indent: &str,
     sym_verilog: &FxHashMap<SymbolId, String>,
     out: &mut impl std::io::Write,
@@ -322,7 +322,7 @@ fn assert_eq_to_verilog(
 
 fn expr_to_verilog(
     st: &SymbolTable,
-    proto: &Transaction,
+    proto: &Protocol,
     sym_verilog: &FxHashMap<SymbolId, String>,
     out: &mut impl std::io::Write,
     e: ExprId,
@@ -397,7 +397,7 @@ pub mod tests {
     use crate::frontend;
 
     fn backend(
-        protos: &[(Transaction, SymbolTable)],
+        protos: &[(Protocol, SymbolTable)],
         pins: &[(String, PinAnnotation)],
         transactions: &[TodoItem],
     ) -> String {

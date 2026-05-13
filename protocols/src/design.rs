@@ -6,7 +6,7 @@
 //! # Design extraction
 //! This module contains code to extract/infer Verilog designs from `struct` and protocol declarations.
 
-use crate::ir::{Field, SymbolId, SymbolTable, Transaction, Type};
+use crate::ir::{Field, Protocol, SymbolId, SymbolTable, Type};
 use crate::serialize::serialize_field;
 use log::info;
 use rustc_hash::FxHashMap;
@@ -20,9 +20,9 @@ pub struct Design {
     pub symbol_id: SymbolId,
     /// Pins from a struct, along with their associated `SymbolId`s
     pub pins: Vec<(SymbolId, Field)>,
-    /// Index of transactions that use this struct
-    /// (e.g. an "Adder" supports these transactions)
-    pub transaction_ids: Vec<usize>,
+    /// Index of protocols that use this struct
+    /// (e.g. an "Adder" supports these protocols)
+    pub protocol_ids: Vec<usize>,
 }
 
 /// Pretty-prints a `Design` with respect to the current `SymbolTable`
@@ -46,21 +46,21 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
         .collect::<Vec<_>>()
         .join(",\n");
     format!(
-        "Design {{\n\tname: {}\n{}\npins: [\n{}\n]\ntransaction_ids: {:?}\n}}",
-        design.name, symbol_str, pins_str, design.transaction_ids
+        "Design {{\n\tname: {}\n{}\npins: [\n{}\n]\nprotocol_ids: {:?}\n}}",
+        design.name, symbol_str, pins_str, design.protocol_ids
     )
 }
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
 /// returning a `HashMap` from struct names to the actual `Design`
 pub fn find_designs<'a>(
-    transactions: impl Iterator<Item = &'a (Transaction, SymbolTable)>,
+    protos: impl Iterator<Item = &'a (Protocol, SymbolTable)>,
 ) -> FxHashMap<String, Design> {
-    // Maps the name of the transaction to metadata about the struct (design)
+    // Maps the name of the protocol to metadata about the struct (design)
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut designs: FxHashMap<String, Design> = FxHashMap::default();
-    for (transaction_id, (transaction, symbol_table)) in transactions.enumerate() {
-        if let Some(dut_symbol_id) = transaction.type_param {
+    for (proto_id, (proto, symbol_table)) in protos.enumerate() {
+        if let Some(dut_symbol_id) = proto.type_param {
             // We assume type parameters have to be structs
             let struct_id = match symbol_table[dut_symbol_id].tpe() {
                 Type::Struct(id) => id,
@@ -68,7 +68,7 @@ pub fn find_designs<'a>(
             };
             let struct_name = symbol_table[struct_id].name().to_string();
             if let Some(design) = designs.get_mut(&struct_name) {
-                design.transaction_ids.push(transaction_id);
+                design.protocol_ids.push(proto_id);
             } else {
                 // Extract all the fields from the struct
                 // (`Field`s are also called `pin`s`)
@@ -103,13 +103,13 @@ pub fn find_designs<'a>(
                     name: struct_name.clone(),
                     pins: pins_with_ids,
                     symbol_id: dut_symbol_id,
-                    transaction_ids: vec![transaction_id],
+                    protocol_ids: vec![proto_id],
                 };
                 info!("Inserting {}", serialize_design(symbol_table, &design));
                 designs.insert(struct_name, design);
             }
         }
-        // skipping any transactions that are not associated with a DUT
+        // skipping any protocols that are not associated with a DUT
     }
     designs
 }

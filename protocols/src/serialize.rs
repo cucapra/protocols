@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use std::io::Write;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
-pub fn serialize_to_string(trs: Vec<(Transaction, SymbolTable)>) -> std::io::Result<String> {
+pub fn serialize_to_string(trs: Vec<(Protocol, SymbolTable)>) -> std::io::Result<String> {
     let mut out = Vec::new();
     serialize(&mut out, trs)?;
     let out = String::from_utf8(out).unwrap();
@@ -139,7 +139,7 @@ pub fn serialize_args_mapping(
 
 /// Pretty-prints an `Expression` (identified by its `ExprId`) using the current
 /// `Transaction` and `SymbolTable`
-pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> String {
+pub fn serialize_expr(tr: &Protocol, st: &SymbolTable, expr_id: &ExprId) -> String {
     match &tr[expr_id] {
         Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
@@ -170,7 +170,7 @@ pub fn serialize_expr(tr: &Transaction, st: &SymbolTable, expr_id: &ExprId) -> S
 
 /// Pretty-prints a `Statement` (identified by its `StmtId`) using the current
 /// `Transaction` and `SymbolTable`
-pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> String {
+pub fn serialize_stmt(tr: &Protocol, st: &SymbolTable, stmt_id: &StmtId) -> String {
     match &tr[stmt_id] {
         Stmt::Block(stmt_ids) => {
             // Only print the at most 2 statements in a block for brevity
@@ -240,7 +240,7 @@ pub fn serialize_stmt(tr: &Transaction, st: &SymbolTable, stmt_id: &StmtId) -> S
 /// with the amount of indentation specified by `index`
 pub fn build_statements(
     out: &mut impl Write,
-    tr: &Transaction,
+    tr: &Protocol,
     st: &SymbolTable,
     stmtid: &StmtId,
     index: usize,
@@ -344,10 +344,7 @@ pub fn serialize_structs(
 
 /// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to the provided
 /// output buffer `out`
-pub fn serialize(
-    out: &mut impl Write,
-    trs: Vec<(Transaction, SymbolTable)>,
-) -> std::io::Result<()> {
+pub fn serialize(out: &mut impl Write, trs: Vec<(Protocol, SymbolTable)>) -> std::io::Result<()> {
     let (_, st) = &trs[0];
 
     if !st.struct_ids().is_empty() {
@@ -583,7 +580,7 @@ pub mod tests {
         assert_eq!(symbols["dut.a"], symbols[dut_a]);
 
         // 2) create transaction
-        let mut easycond = Transaction::new("easycond".to_string());
+        let mut easycond = Protocol::new("easycond".to_string());
         easycond.args = vec![Arg::new(a), Arg::new(b)];
         easycond.type_param = Some(dut);
 

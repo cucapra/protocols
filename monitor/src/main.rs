@@ -27,7 +27,7 @@ use log::LevelFilter;
 use protocols::design::{Design, find_designs};
 use protocols::diagnostic::DiagnosticHandler;
 use protocols::frontend;
-use protocols::ir::{SymbolTable, Transaction};
+use protocols::ir::{Protocol, SymbolTable};
 use std::io::Write;
 
 // From the top-level directory, run:
@@ -150,7 +150,7 @@ fn main() -> anyhow::Result<()> {
         DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
-    let transactions_symbol_tables: Vec<(Transaction, SymbolTable)> = frontend(
+    let transactions_symbol_tables: Vec<(Protocol, SymbolTable)> = frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
@@ -201,8 +201,8 @@ fn main() -> anyhow::Result<()> {
     // We use the index of `design` in `dut_designs` as our `instance_id`
     for (instance_id, design) in dut_designs.into_iter().enumerate() {
         // Filter transactions that belong to this design
-        let design_transactions: Vec<(Transaction, SymbolTable)> = design
-            .transaction_ids
+        let design_transactions: Vec<(Protocol, SymbolTable)> = design
+            .protocol_ids
             .iter()
             .map(|&idx| transactions_symbol_tables[idx].clone())
             .collect();

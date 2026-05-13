@@ -8,7 +8,7 @@
 use crate::diagnostic::DiagnosticHandler;
 use crate::errors::ExecutionError;
 use crate::frontend;
-use crate::ir::{SymbolTable, Transaction};
+use crate::ir::{Protocol, SymbolTable};
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use baa::BitVecValue;
 use std::path::PathBuf;
@@ -47,7 +47,7 @@ pub fn create_sim_context(
 }
 
 pub type TestEnv = (
-    Vec<(Transaction, SymbolTable)>,
+    Vec<(Protocol, SymbolTable)>,
     patronus::expr::Context,
     patronus::system::TransitionSystem,
 );

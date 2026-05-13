@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use baa::{BitVecOps, BitVecValue};
 use protocols::{
     errors::{EvaluationError, ExecutionError},
-    ir::{Expr, Stmt, StmtId, SymbolId, SymbolTable, Transaction},
+    ir::{Expr, Protocol, Stmt, StmtId, SymbolId, SymbolTable},
     serialize::serialize_bitvec,
 };
 use rustc_hash::FxHashSet;
@@ -59,7 +59,7 @@ pub struct Scheduler {
 
     /// All possible transactions (along with their corresponding `SymbolTable`s)
     /// (This is used when forking new threads)
-    pub possible_transactions: Vec<(Transaction, SymbolTable)>,
+    pub possible_transactions: Vec<(Protocol, SymbolTable)>,
 
     /// The name of the struct this scheduler is monitoring
     /// (Used for prefixing transaction names in multi-struct scenarios)
@@ -124,7 +124,7 @@ impl Scheduler {
     /// transaction traces (this is useful in `.prot` files when multiple
     /// `struct`s are defined).
     pub fn initialize(
-        transactions: Vec<(Transaction, SymbolTable)>,
+        transactions: Vec<(Protocol, SymbolTable)>,
         trace: &WaveSignalTrace,
         struct_name: String,
         dut_symbol_id: SymbolId,
