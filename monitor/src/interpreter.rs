@@ -7,11 +7,11 @@ use crate::{
     types::{LoopArgState, ProtocolApplication},
 };
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
+use protocols::errors::{
+    AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError,
+};
 use protocols::frontend::ast::{
     BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp,
-};
-use protocols::frontend::errors::{
-    AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError,
 };
 use protocols::frontend::serialize::{
     serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt,

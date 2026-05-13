@@ -4,7 +4,6 @@ use anyhow::anyhow;
 pub mod ast;
 pub mod design;
 pub mod diagnostic;
-pub mod errors;
 pub mod parser;
 pub mod serialize;
 pub mod static_checks;

@@ -12,8 +12,8 @@ use crate::{
 };
 use anyhow::anyhow;
 use baa::{BitVecOps, BitVecValue};
+use protocols::errors::{EvaluationError, ExecutionError};
 use protocols::frontend::ast::{Expr, Protocol, Stmt, StmtId, SymbolId, SymbolTable};
-use protocols::frontend::errors::{EvaluationError, ExecutionError};
 use protocols::frontend::serialize::serialize_bitvec;
 use rustc_hash::FxHashSet;
 

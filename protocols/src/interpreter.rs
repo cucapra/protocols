@@ -6,8 +6,8 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::Value;
+use crate::errors::{ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
-use crate::frontend::errors::{ExecutionError, ExecutionResult};
 use crate::frontend::serialize::serialize_bitvec;
 use crate::scheduler::Thread;
 use baa::{BitVecOps, BitVecValue, WidthInt};
