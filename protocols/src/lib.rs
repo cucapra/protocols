@@ -11,7 +11,9 @@ pub mod interpreter;
 pub mod scheduler;
 pub mod setup;
 pub mod transactions;
+mod value;
 mod yosys;
 
 pub use frontend::frontend;
 pub use transactions::transaction_frontend;
+pub use value::Value;

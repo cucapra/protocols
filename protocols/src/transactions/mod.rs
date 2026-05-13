@@ -1,6 +1,6 @@
+use crate::Value;
 use crate::frontend::ast;
 use crate::frontend::diagnostic::DiagnosticHandler;
-use crate::interpreter::Value;
 use rustc_hash::FxHashMap;
 
 pub mod parser;

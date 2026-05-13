@@ -4,9 +4,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::Value;
 use crate::frontend::ast::*;
 use crate::interpreter::ExprValue;
-use crate::interpreter::Value;
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;

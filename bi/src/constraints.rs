@@ -3,9 +3,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
+use protocols::Value;
 use protocols::frontend::ast::{Arg, SymbolTable, Type};
 use protocols::frontend::serialize::serialize_type;
-use protocols::interpreter::Value;
 
 #[derive(Debug, Clone)]
 pub enum ArgValue {

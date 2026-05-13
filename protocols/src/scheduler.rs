@@ -13,8 +13,9 @@ use crate::frontend::ast::*;
 use crate::frontend::diagnostic::DiagnosticHandler;
 use crate::frontend::errors::DiagnosticEmitter;
 use crate::frontend::errors::{ExecutionError, ExecutionResult};
-use crate::interpreter::{Evaluator, ThreadInputValue, Value};
+use crate::interpreter::{Evaluator, ThreadInputValue};
 
+use crate::Value;
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;

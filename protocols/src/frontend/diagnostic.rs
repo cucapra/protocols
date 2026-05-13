@@ -19,9 +19,9 @@ use pest::RuleType;
 use pest::iterators::Pair;
 use rustc_hash::FxHashSet;
 
+use crate::Value;
 use crate::frontend::ast::*;
 use crate::frontend::serialize::{serialize_bitvec, serialize_value};
-use crate::interpreter::Value;
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]

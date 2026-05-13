@@ -1,7 +1,7 @@
+use crate::Value;
 use crate::frontend::ast::{Protocol, SymbolTable, Type};
 use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::serialize_type;
-use crate::interpreter::Value;
 use crate::scheduler::TodoItem;
 use crate::setup::bv;
 use anyhow::anyhow;
