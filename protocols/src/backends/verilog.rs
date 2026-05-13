@@ -2,8 +2,8 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::ast::*;
-use crate::design::{Design, find_designs};
+use crate::frontend::ast::*;
+use crate::frontend::design::{Design, find_designs};
 use crate::scheduler::TodoItem;
 use baa::{BitVecOps, BitVecValue};
 use rustc_hash::FxHashMap;
@@ -393,8 +393,8 @@ pub enum PinAnnotation {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::diagnostic::DiagnosticHandler;
     use crate::frontend;
+    use crate::frontend::diagnostic::DiagnosticHandler;
 
     fn backend(
         protos: &[(Protocol, SymbolTable)],

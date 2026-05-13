@@ -1,21 +1,23 @@
 use std::collections::hash_map::Entry;
 
-use baa::{BitVecMutOps, BitVecOps, BitVecValue};
-use protocols::{
-    ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp},
-    errors::{AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError},
-    interpreter::ExprValue,
-    scheduler::NextStmtMap,
-    serialize::{serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt},
-};
-use rustc_hash::FxHashMap;
-
 use crate::{
     global_context::GlobalContext,
     signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
     thread::Thread,
     types::{LoopArgState, ProtocolApplication},
 };
+use baa::{BitVecMutOps, BitVecOps, BitVecValue};
+use protocols::frontend::ast::{
+    BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp,
+};
+use protocols::frontend::errors::{
+    AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError,
+};
+use protocols::frontend::serialize::{
+    serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt,
+};
+use protocols::{interpreter::ExprValue, scheduler::NextStmtMap};
+use rustc_hash::FxHashMap;
 
 #[allow(dead_code)]
 #[derive(Clone)]

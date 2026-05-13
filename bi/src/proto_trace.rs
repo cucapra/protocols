@@ -5,7 +5,7 @@
 //! # Protocol Traces and Error Reporting
 
 use baa::BitVecValue;
-use protocols::ast::StmtId;
+use protocols::frontend::ast::StmtId;
 use protocols::interpreter::Value;
 
 /// A `ProtoTrace` (protocol trace) is just a type alias for a list

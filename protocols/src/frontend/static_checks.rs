@@ -2,11 +2,11 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{
-    ast::{BinOp, Dir, Expr, ExprId, LocationId, Protocol, StmtId, SymbolId, SymbolTable, Type},
-    diagnostic::{DiagnosticHandler, Level},
-    serialize::serialize_expr,
+use crate::frontend::ast::{
+    BinOp, Dir, Expr, ExprId, LocationId, Protocol, StmtId, SymbolId, SymbolTable, Type,
 };
+use crate::frontend::diagnostic::{DiagnosticHandler, Level};
+use crate::frontend::serialize::serialize_expr;
 use anyhow::anyhow;
 
 /// Enum representing *language features* for which static well-formedness

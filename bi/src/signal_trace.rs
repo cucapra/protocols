@@ -5,8 +5,8 @@
 
 use crate::Instance;
 use baa::{BitVecOps, BitVecValue, WidthInt};
-use protocols::ast::SymbolId;
-use protocols::design::Design;
+use protocols::frontend::ast::SymbolId;
+use protocols::frontend::design::Design;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};

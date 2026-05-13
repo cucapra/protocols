@@ -5,10 +5,10 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::ast::*;
-use crate::errors::{ExecutionError, ExecutionResult};
+use crate::frontend::ast::*;
+use crate::frontend::errors::{ExecutionError, ExecutionResult};
+use crate::frontend::serialize::serialize_bitvec;
 use crate::scheduler::Thread;
-use crate::serialize::serialize_bitvec;
 use baa::{BitVecOps, BitVecValue, WidthInt};
 use log::info;
 use patronus::expr::ExprRef;

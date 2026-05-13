@@ -1,5 +1,5 @@
-use crate::ast::*;
-use crate::diagnostic::{DiagnosticHandler, Level};
+use crate::frontend::ast::*;
+use crate::frontend::diagnostic::{DiagnosticHandler, Level};
 
 /// Conservative static analysis for our step and fork rules:
 /// 1. fork must come after a step

@@ -14,9 +14,9 @@ use crate::signal_trace::*;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
-use protocols::design::{Design, find_designs};
-use protocols::diagnostic::{DiagnosticHandler, Level};
 use protocols::frontend;
+use protocols::frontend::design::{Design, find_designs};
+use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Args for the monitor CLI

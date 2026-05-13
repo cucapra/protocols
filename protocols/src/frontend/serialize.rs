@@ -4,8 +4,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
+use crate::frontend::ast::*;
+use crate::interpreter::ExprValue;
 use crate::interpreter::Value;
-use crate::{ast::*, interpreter::ExprValue};
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
@@ -405,8 +406,8 @@ pub mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-    use crate::diagnostic::DiagnosticHandler;
-    use crate::parser::parse_file;
+    use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::frontend::parser::parse_file;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();

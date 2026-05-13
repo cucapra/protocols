@@ -5,24 +5,16 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::diagnostic::DiagnosticHandler;
 use anyhow::anyhow;
+use frontend::diagnostic::DiagnosticHandler;
+use frontend::{ast, parser, static_fork_step_check, transactions_parser, typecheck};
 use rustc_hash::FxHashMap;
 
-pub mod ast;
 pub mod backends;
-pub mod design;
-pub mod diagnostic;
-pub mod errors;
+pub mod frontend;
 pub mod interpreter;
-pub mod parser;
 pub mod scheduler;
-pub mod serialize;
 pub mod setup;
-pub mod static_checks;
-mod static_fork_step_check;
-pub mod transactions_parser;
-pub mod typecheck;
 mod yosys;
 
 use interpreter::Value;

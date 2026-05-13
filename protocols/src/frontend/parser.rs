@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::ast::Stmt;
+use crate::frontend::ast::Stmt;
 use baa::{BitVecValue, WidthInt};
 use pest::Parser;
 use pest::error::InputLocation;
@@ -14,10 +14,11 @@ use pest::pratt_parser::PrattParser;
 use pest_derive::Parser;
 use std::vec;
 
-use crate::{ast::*, diagnostic::*};
+use crate::frontend::ast::*;
+use crate::frontend::diagnostic::*;
 
 #[derive(Parser)]
-#[grammar = "protocols.pest"]
+#[grammar = "frontend/protocols.pest"]
 struct ProtocolParser;
 
 lazy_static::lazy_static! {

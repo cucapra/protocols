@@ -8,7 +8,7 @@
 
 use std::collections::VecDeque;
 
-use protocols::serialize::serialize_stmt;
+use protocols::frontend::serialize::serialize_stmt;
 
 use crate::{global_context::GlobalContext, signal_trace::WaveSignalTrace, thread::Thread};
 

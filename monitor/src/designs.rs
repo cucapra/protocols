@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use protocols::design::Design;
+use protocols::frontend::design::Design;
 use rustc_hash::FxHashMap;
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string

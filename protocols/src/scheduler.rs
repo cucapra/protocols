@@ -9,10 +9,10 @@ use baa::{BitVecOps, BitVecValue};
 use log::info;
 use rustc_hash::FxHashMap;
 
-use crate::ast::*;
-use crate::diagnostic::DiagnosticHandler;
-use crate::errors::DiagnosticEmitter;
-use crate::errors::{ExecutionError, ExecutionResult};
+use crate::frontend::ast::*;
+use crate::frontend::diagnostic::DiagnosticHandler;
+use crate::frontend::errors::DiagnosticEmitter;
+use crate::frontend::errors::{ExecutionError, ExecutionResult};
 use crate::interpreter::{Evaluator, ThreadInputValue, Value};
 
 use patronus::expr::Context;

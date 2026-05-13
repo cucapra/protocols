@@ -1,12 +1,3 @@
-use anyhow::anyhow;
-use baa::{BitVecOps, BitVecValue};
-use protocols::{
-    ast::{Expr, Protocol, Stmt, StmtId, SymbolId, SymbolTable},
-    errors::{EvaluationError, ExecutionError},
-    serialize::serialize_bitvec,
-};
-use rustc_hash::FxHashSet;
-
 use crate::interpreter::serialize_monitor_args_mapping;
 use crate::{
     global_context::GlobalContext,
@@ -19,6 +10,12 @@ use crate::{
         ThreadResult,
     },
 };
+use anyhow::anyhow;
+use baa::{BitVecOps, BitVecValue};
+use protocols::frontend::ast::{Expr, Protocol, Stmt, StmtId, SymbolId, SymbolTable};
+use protocols::frontend::errors::{EvaluationError, ExecutionError};
+use protocols::frontend::serialize::serialize_bitvec;
+use rustc_hash::FxHashSet;
 
 /// Scheduler for handling the multiple threads in the monitor
 #[derive(Clone)]
