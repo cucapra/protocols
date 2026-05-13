@@ -501,7 +501,7 @@ impl DiagnosticHandler {
             let diagnostic = Diagnostic {
                 title: format!("Error in file {}", fileid1),
                 message: format!(
-                    "The two expressions did not evaluate to the same value (in protocol `{}`)",
+                    "The two expressions did not evaluate to the same value (in transaction `{}`)",
                     proto_call
                 ),
                 level: Level::Error,
