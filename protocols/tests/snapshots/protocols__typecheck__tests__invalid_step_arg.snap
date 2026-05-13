@@ -1,9 +1,0 @@
----
-source: src/typecheck.rs
-expression: content
----
-error: Step call expected single positive integer as argument, got 0.
-  ┌─ tests/misc/invalid_step_arg.prot:8:3
-  │
-8 │   step(0);
-  │   ^^^^^^^^ Step call expected single positive integer as argument, got 0.
