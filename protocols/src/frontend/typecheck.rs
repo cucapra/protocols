@@ -5,16 +5,13 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::Context;
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use baa::BitVecOps;
 
 use crate::frontend::ast::*;
 use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::*;
-use crate::frontend::static_checks::check_assertion_wf;
-use crate::frontend::static_checks::check_assignment_wf;
-use crate::frontend::static_checks::check_condition_wf;
+use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf};
 use crate::frontend::symbol::*;
 
 /// Helper function for emitting error messages related to invalid bit-slices

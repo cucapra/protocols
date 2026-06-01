@@ -3,20 +3,12 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::BitVecOps;
-use baa::BitVecValue;
-use baa::WidthInt;
+use baa::{BitVecOps, BitVecValue, WidthInt};
 use protocols::frontend::design::Design;
 use protocols::frontend::symbol::SymbolId;
-use rand::Rng;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
-use wellen::Hierarchy;
-use wellen::SignalEncoding;
-use wellen::SignalRef;
-use wellen::Time;
-use wellen::Timescale;
-use wellen::TimescaleUnit;
+use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};
 
 use crate::Instance;
 

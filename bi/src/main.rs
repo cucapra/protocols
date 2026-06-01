@@ -9,17 +9,12 @@ mod proto_trace;
 mod signal_trace;
 
 use baa::BitVecOps;
-use clap::ColorChoice;
-use clap::Parser;
-use clap_verbosity_flag::Verbosity;
-use clap_verbosity_flag::WarnLevel;
+use clap::{ColorChoice, Parser};
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
-use protocols::frontend::design::Design;
-use protocols::frontend::design::find_designs;
-use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::diagnostic::Level;
-use rustc_hash::FxHashMap;
-use rustc_hash::FxHashSet;
+use protocols::frontend::design::{Design, find_designs};
+use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::bi::*;
 use crate::proto_trace::*;

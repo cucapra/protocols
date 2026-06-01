@@ -8,16 +8,11 @@ use rustc_hash::FxHashSet;
 
 use crate::global_context::GlobalContext;
 use crate::scheduler::Scheduler;
-use crate::signal_trace::SignalTrace;
-use crate::signal_trace::StepResult;
-use crate::signal_trace::WaveSignalTrace;
+use crate::signal_trace::{SignalTrace, StepResult, WaveSignalTrace};
 use crate::thread::Thread;
-use crate::types::AugmentedProtocolApplication;
-use crate::types::AugmentedTrace;
-use crate::types::CycleResult;
-use crate::types::SchedulerError;
-use crate::types::SchedulerGroup;
-use crate::types::Trace;
+use crate::types::{
+    AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, SchedulerGroup, Trace
+};
 
 pub struct GlobalScheduler {
     /// A `Vec` of `SchedulerGroup`s, where each `SchedulerGroup` is a

@@ -7,16 +7,14 @@
 
 use std::vec;
 
-use baa::BitVecValue;
-use baa::WidthInt;
+use baa::{BitVecValue, WidthInt};
 use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use pest_derive::Parser;
 
-use crate::frontend::ast::Stmt;
-use crate::frontend::ast::*;
+use crate::frontend::ast::{Stmt, *};
 use crate::frontend::diagnostic::*;
 use crate::frontend::symbol::*;
 

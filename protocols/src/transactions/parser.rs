@@ -10,8 +10,7 @@ use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::serialize_type;
-use crate::frontend::symbol::SymbolTable;
-use crate::frontend::symbol::Type;
+use crate::frontend::symbol::{SymbolTable, Type};
 use crate::scheduler::TodoItem;
 use crate::setup::bv;
 

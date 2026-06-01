@@ -5,27 +5,20 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::BitVecOps;
-use baa::BitVecValue;
-use baa::WidthInt;
+use baa::{BitVecOps, BitVecValue, WidthInt};
 use log::info;
 use patronus::expr::ExprRef;
-use patronus::sim::InitKind;
-use patronus::sim::Interpreter;
-use patronus::sim::Simulator;
+use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::Output;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rustc_hash::FxHashMap;
 
 use crate::Value;
-use crate::errors::ExecutionError;
-use crate::errors::ExecutionResult;
+use crate::errors::{ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
 use crate::frontend::serialize::serialize_bitvec;
-use crate::frontend::symbol::SymbolId;
-use crate::frontend::symbol::SymbolTable;
-use crate::frontend::symbol::Type;
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::scheduler::Thread;
 
 /// Per-thread input value: either a concrete assignment or DontCare

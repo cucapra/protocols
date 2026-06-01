@@ -2,11 +2,9 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use clap::ColorChoice;
-use clap::Parser;
-use clap_verbosity_flag::Verbosity;
-use clap_verbosity_flag::WarnLevel;
+use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;

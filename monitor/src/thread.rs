@@ -3,11 +3,9 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use baa::BitVecValue;
-use protocols::frontend::ast::Protocol;
-use protocols::frontend::ast::StmtId;
+use protocols::frontend::ast::{Protocol, StmtId};
 use protocols::frontend::serialize::serialize_stmt;
-use protocols::frontend::symbol::SymbolId;
-use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::scheduler::NextStmtMap;
 use rustc_hash::FxHashMap;
 

@@ -5,14 +5,11 @@
 use std::path::Path;
 
 use clap::*;
-use protocols::Value;
-use protocols::backends::PinAnnotation;
-use protocols::backends::to_verilog;
-use protocols::frontend;
+use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
-use protocols::transaction_frontend;
+use protocols::{Value, frontend, transaction_frontend};
 
 #[derive(Parser, Debug)]
 struct Args {

@@ -7,8 +7,7 @@
 
 use std::collections::VecDeque;
 use std::fmt;
-use std::ops::Deref;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 
 use protocols::frontend::ast::StmtId;
 

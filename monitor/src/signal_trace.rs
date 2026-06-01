@@ -9,9 +9,7 @@ use protocols::frontend::design::Design;
 use protocols::frontend::symbol::SymbolId;
 use rand::SeedableRng;
 use rustc_hash::FxHashMap;
-use wellen::Hierarchy;
-use wellen::SignalEncoding;
-use wellen::SignalRef;
+use wellen::{Hierarchy, SignalEncoding, SignalRef};
 
 use crate::Instance;
 

@@ -1,30 +1,19 @@
 use anyhow::anyhow;
-use baa::BitVecOps;
-use baa::BitVecValue;
-use protocols::errors::EvaluationError;
-use protocols::errors::ExecutionError;
-use protocols::frontend::ast::Expr;
-use protocols::frontend::ast::Protocol;
-use protocols::frontend::ast::Stmt;
-use protocols::frontend::ast::StmtId;
+use baa::{BitVecOps, BitVecValue};
+use protocols::errors::{EvaluationError, ExecutionError};
+use protocols::frontend::ast::{Expr, Protocol, Stmt, StmtId};
 use protocols::frontend::serialize::serialize_bitvec;
-use protocols::frontend::symbol::SymbolId;
-use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use rustc_hash::FxHashSet;
 
 use crate::global_context::GlobalContext;
-use crate::interpreter::Interpreter;
-use crate::interpreter::serialize_monitor_args_mapping;
+use crate::interpreter::{Interpreter, serialize_monitor_args_mapping};
 use crate::queue::*;
-use crate::signal_trace::SignalTrace;
-use crate::signal_trace::WaveSignalTrace;
+use crate::signal_trace::{SignalTrace, WaveSignalTrace};
 use crate::thread::Thread;
-use crate::types::AugmentedProtocolApplication;
-use crate::types::AugmentedTrace;
-use crate::types::CycleResult;
-use crate::types::LoopArgState;
-use crate::types::SchedulerError;
-use crate::types::ThreadResult;
+use crate::types::{
+    AugmentedProtocolApplication, AugmentedTrace, CycleResult, LoopArgState, SchedulerError, ThreadResult
+};
 
 /// Scheduler for handling the multiple threads in the monitor
 #[derive(Clone)]

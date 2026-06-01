@@ -6,8 +6,7 @@
 
 use std::io::Write;
 
-use baa::BitVecOps;
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 

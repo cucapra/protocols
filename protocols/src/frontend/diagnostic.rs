@@ -9,24 +9,19 @@ use std::io::Write;
 
 use baa::BitVecValue;
 use clap::ColorChoice;
-use codespan_reporting::diagnostic::Diagnostic as CodespanDiagnostic;
-use codespan_reporting::diagnostic::Label as CodespanLabel;
-use codespan_reporting::diagnostic::LabelStyle;
-use codespan_reporting::diagnostic::Severity;
+use codespan_reporting::diagnostic::{
+    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity
+};
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::Buffer;
-use codespan_reporting::term::termcolor::Color;
-use codespan_reporting::term::termcolor::ColorSpec;
-use codespan_reporting::term::termcolor::WriteColor;
+use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
 use pest::RuleType;
 use pest::iterators::Pair;
 use rustc_hash::FxHashSet;
 
 use crate::Value;
 use crate::frontend::ast::*;
-use crate::frontend::serialize::serialize_bitvec;
-use crate::frontend::serialize::serialize_value;
+use crate::frontend::serialize::{serialize_bitvec, serialize_value};
 
 /// Track Errors
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -561,9 +556,7 @@ mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-    use crate::frontend::symbol::SymbolKind;
-    use crate::frontend::symbol::SymbolTable;
-    use crate::frontend::symbol::Type;
+    use crate::frontend::symbol::{SymbolKind, SymbolTable, Type};
 
     #[test]
     fn test_emit_diagnostic() {

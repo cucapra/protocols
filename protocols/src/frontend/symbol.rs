@@ -1,7 +1,6 @@
 use std::ops::Index;
 
-use cranelift_entity::PrimaryMap;
-use cranelift_entity::entity_impl;
+use cranelift_entity::{PrimaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 
 use crate::frontend::serialize::serialize_type;

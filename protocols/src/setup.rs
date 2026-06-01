@@ -14,9 +14,7 @@ use crate::frontend;
 use crate::frontend::ast::Protocol;
 use crate::frontend::diagnostic::DiagnosticHandler;
 use crate::frontend::symbol::SymbolTable;
-use crate::yosys::ProjectConf;
-use crate::yosys::YosysEnv;
-use crate::yosys::yosys_to_btor;
+use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 
 /// Takes a vec of paths to Verilog files and the name of a top-level module,
 /// and returns a (Patronus `Context`, Patronus `TransitionSystem` pair)

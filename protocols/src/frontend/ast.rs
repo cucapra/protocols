@@ -8,17 +8,11 @@
 use std::ops::Index;
 
 use baa::BitVecValue;
-use cranelift_entity::PrimaryMap;
-use cranelift_entity::SecondaryMap;
-use cranelift_entity::entity_impl;
+use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 
-use crate::frontend::serialize::build_statements;
-use crate::frontend::serialize::serialize_expr;
-use crate::frontend::symbol::Arg;
-use crate::frontend::symbol::SymbolId;
-use crate::frontend::symbol::SymbolTable;
-use crate::frontend::symbol::Type;
+use crate::frontend::serialize::{build_statements, serialize_expr};
+use crate::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Protocol {

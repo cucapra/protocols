@@ -11,10 +11,7 @@ use rustc_hash::FxHashMap;
 
 use crate::frontend::ast::Protocol;
 use crate::frontend::serialize::serialize_field;
-use crate::frontend::symbol::Field;
-use crate::frontend::symbol::SymbolId;
-use crate::frontend::symbol::SymbolTable;
-use crate::frontend::symbol::Type;
+use crate::frontend::symbol::{Field, SymbolId, SymbolTable, Type};
 
 /// Metadata associated with a design (i.e. a `struct` in the Protocols language)
 #[derive(Debug, Clone)]

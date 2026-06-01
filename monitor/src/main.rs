@@ -17,23 +17,17 @@ mod types;
 
 use std::io::Write;
 
-use anyhow::Context;
-use anyhow::anyhow;
-use clap::ColorChoice;
-use clap::Parser;
-use clap_verbosity_flag::Verbosity;
-use clap_verbosity_flag::WarnLevel;
+use anyhow::{Context, anyhow};
+use clap::{ColorChoice, Parser};
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
 use protocols::frontend;
 use protocols::frontend::ast::Protocol;
-use protocols::frontend::design::Design;
-use protocols::frontend::design::find_designs;
+use protocols::frontend::design::{Design, find_designs};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 
-use crate::designs::Instance;
-use crate::designs::collects_design_names;
-use crate::designs::parse_instance;
+use crate::designs::{Instance, collects_design_names, parse_instance};
 use crate::global_context::GlobalContext;
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
