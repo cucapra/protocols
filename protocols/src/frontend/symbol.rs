@@ -1,3 +1,10 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
+
 use std::ops::Index;
 
 use cranelift_entity::{PrimaryMap, entity_impl};
