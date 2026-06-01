@@ -11,7 +11,8 @@ use crate::scheduler::Scheduler;
 use crate::signal_trace::{SignalTrace, StepResult, WaveSignalTrace};
 use crate::thread::Thread;
 use crate::types::{
-    AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, SchedulerGroup, Trace
+    AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, SchedulerGroup,
+    Trace,
 };
 
 pub struct GlobalScheduler {

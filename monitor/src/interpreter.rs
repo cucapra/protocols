@@ -2,11 +2,11 @@ use std::collections::hash_map::Entry;
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use protocols::errors::{
-    AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError
+    AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError,
 };
 use protocols::frontend::ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, UnaryOp};
 use protocols::frontend::serialize::{
-    serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt
+    serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt,
 };
 use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::interpreter::ExprValue;

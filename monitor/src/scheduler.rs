@@ -12,7 +12,8 @@ use crate::queue::*;
 use crate::signal_trace::{SignalTrace, WaveSignalTrace};
 use crate::thread::Thread;
 use crate::types::{
-    AugmentedProtocolApplication, AugmentedTrace, CycleResult, LoopArgState, SchedulerError, ThreadResult
+    AugmentedProtocolApplication, AugmentedTrace, CycleResult, LoopArgState, SchedulerError,
+    ThreadResult,
 };
 
 /// Scheduler for handling the multiple threads in the monitor

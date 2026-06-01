@@ -10,7 +10,7 @@ use std::io::Write;
 use baa::BitVecValue;
 use clap::ColorChoice;
 use codespan_reporting::diagnostic::{
-    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity
+    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
 };
 use codespan_reporting::files::SimpleFiles;
 use codespan_reporting::term;
