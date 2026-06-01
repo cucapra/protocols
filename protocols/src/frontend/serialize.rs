@@ -4,13 +4,17 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Francis Pham <fdp25@cornell.edu>
 
-use crate::Value;
-use crate::frontend::ast::*;
-use crate::interpreter::ExprValue;
-use baa::{BitVecOps, BitVecValue};
+use std::io::Write;
+
+use baa::BitVecOps;
+use baa::BitVecValue;
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
-use std::io::Write;
+
+use crate::Value;
+use crate::frontend::ast::*;
+use crate::frontend::symbol::*;
+use crate::interpreter::ExprValue;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
 pub fn serialize_to_string(trs: Vec<(Protocol, SymbolTable)>) -> std::io::Result<String> {
@@ -400,9 +404,10 @@ pub fn serialize(out: &mut impl Write, trs: Vec<(Protocol, SymbolTable)>) -> std
 
 #[cfg(test)]
 pub mod tests {
+    use std::path::Path;
+
     use baa::BitVecValue;
     use insta::Settings;
-    use std::path::Path;
     use strip_ansi_escapes::strip_str;
 
     use super::*;

@@ -10,7 +10,9 @@ use std::collections::VecDeque;
 
 use protocols::frontend::serialize::serialize_stmt;
 
-use crate::{global_context::GlobalContext, signal_trace::WaveSignalTrace, thread::Thread};
+use crate::global_context::GlobalContext;
+use crate::signal_trace::WaveSignalTrace;
+use crate::thread::Thread;
 
 /// `Queue` is just a type alias for `VecDeque<Thread>`.
 /// We use a `VecDeque` instead of `Vec`, since `VecDeque::pop_back` produces

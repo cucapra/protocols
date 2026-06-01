@@ -1,14 +1,19 @@
-use crate::Value;
-use crate::frontend::ast::{Protocol, SymbolTable, Type};
-use crate::frontend::diagnostic::*;
-use crate::frontend::serialize::serialize_type;
-use crate::scheduler::TodoItem;
-use crate::setup::bv;
 use anyhow::anyhow;
 use baa::BitVecValue;
-use pest::{Parser, error::InputLocation, iterators::Pair};
+use pest::Parser;
+use pest::error::InputLocation;
+use pest::iterators::Pair;
 use pest_derive::Parser;
 use rustc_hash::FxHashMap;
+
+use crate::Value;
+use crate::frontend::ast::Protocol;
+use crate::frontend::diagnostic::*;
+use crate::frontend::serialize::serialize_type;
+use crate::frontend::symbol::SymbolTable;
+use crate::frontend::symbol::Type;
+use crate::scheduler::TodoItem;
+use crate::setup::bv;
 
 #[derive(Parser)]
 #[grammar = "transactions/transactions.pest"]

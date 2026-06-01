@@ -2,11 +2,17 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::frontend::ast::*;
-use crate::frontend::design::{Design, find_designs};
-use crate::scheduler::TodoItem;
-use baa::{BitVecOps, BitVecValue};
+use baa::BitVecOps;
+use baa::BitVecValue;
 use rustc_hash::FxHashMap;
+
+use crate::frontend::ast::*;
+use crate::frontend::design::Design;
+use crate::frontend::design::find_designs;
+use crate::frontend::symbol::Dir;
+use crate::frontend::symbol::SymbolId;
+use crate::frontend::symbol::SymbolTable;
+use crate::scheduler::TodoItem;
 
 // todo: add `interface` and `module` to protocol language and remove pin argument
 pub fn to_verilog(

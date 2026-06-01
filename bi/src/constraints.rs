@@ -2,10 +2,15 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
+use baa::BitVecMutOps;
+use baa::BitVecOps;
+use baa::BitVecValue;
+use baa::WidthInt;
 use protocols::Value;
-use protocols::frontend::ast::{Arg, SymbolTable, Type};
 use protocols::frontend::serialize::serialize_type;
+use protocols::frontend::symbol::Arg;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::symbol::Type;
 
 #[derive(Debug, Clone)]
 pub enum ArgValue {

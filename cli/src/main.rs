@@ -2,13 +2,17 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use std::path::Path;
+
 use clap::*;
 use protocols::Value;
-use protocols::backends::{PinAnnotation, to_verilog};
-use protocols::frontend::ast::{Protocol, SymbolTable};
+use protocols::backends::PinAnnotation;
+use protocols::backends::to_verilog;
+use protocols::frontend;
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::{frontend, transaction_frontend};
-use std::path::Path;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::transaction_frontend;
 
 #[derive(Parser, Debug)]
 struct Args {

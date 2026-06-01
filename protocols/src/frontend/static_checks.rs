@@ -2,12 +2,21 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::frontend::ast::{
-    BinOp, Dir, Expr, ExprId, LocationId, Protocol, StmtId, SymbolId, SymbolTable, Type,
-};
-use crate::frontend::diagnostic::{DiagnosticHandler, Level};
-use crate::frontend::serialize::serialize_expr;
 use anyhow::anyhow;
+
+use crate::frontend::ast::BinOp;
+use crate::frontend::ast::Expr;
+use crate::frontend::ast::ExprId;
+use crate::frontend::ast::LocationId;
+use crate::frontend::ast::Protocol;
+use crate::frontend::ast::StmtId;
+use crate::frontend::diagnostic::DiagnosticHandler;
+use crate::frontend::diagnostic::Level;
+use crate::frontend::serialize::serialize_expr;
+use crate::frontend::symbol::Dir;
+use crate::frontend::symbol::SymbolId;
+use crate::frontend::symbol::SymbolTable;
+use crate::frontend::symbol::Type;
 
 /// Enum representing *language features* for which static well-formedness
 /// checks need to be performed

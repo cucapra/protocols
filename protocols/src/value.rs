@@ -6,7 +6,8 @@
 
 //! Shared value representation.
 
-use baa::{BitVecOps, BitVecValue};
+use baa::BitVecOps;
+use baa::BitVecValue;
 
 /// A concrete value of any type.
 #[derive(Debug, Clone)]

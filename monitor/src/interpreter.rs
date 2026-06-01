@@ -1,23 +1,37 @@
 use std::collections::hash_map::Entry;
 
-use crate::{
-    global_context::GlobalContext,
-    signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
-    thread::Thread,
-    types::{LoopArgState, ProtocolApplication},
-};
-use baa::{BitVecMutOps, BitVecOps, BitVecValue};
-use protocols::errors::{
-    AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError,
-};
-use protocols::frontend::ast::{
-    BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp,
-};
-use protocols::frontend::serialize::{
-    serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt,
-};
-use protocols::{interpreter::ExprValue, scheduler::NextStmtMap};
+use baa::BitVecMutOps;
+use baa::BitVecOps;
+use baa::BitVecValue;
+use protocols::errors::AssertionError;
+use protocols::errors::EvaluationError;
+use protocols::errors::ExecutionError;
+use protocols::errors::ExecutionResult;
+use protocols::errors::SymbolError;
+use protocols::frontend::ast::BinOp;
+use protocols::frontend::ast::Expr;
+use protocols::frontend::ast::ExprId;
+use protocols::frontend::ast::Protocol;
+use protocols::frontend::ast::Stmt;
+use protocols::frontend::ast::StmtId;
+use protocols::frontend::ast::UnaryOp;
+use protocols::frontend::serialize::serialize_args_mapping;
+use protocols::frontend::serialize::serialize_bitvec;
+use protocols::frontend::serialize::serialize_expr;
+use protocols::frontend::serialize::serialize_stmt;
+use protocols::frontend::symbol::SymbolId;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::interpreter::ExprValue;
+use protocols::scheduler::NextStmtMap;
 use rustc_hash::FxHashMap;
+
+use crate::global_context::GlobalContext;
+use crate::signal_trace::PortKey;
+use crate::signal_trace::SignalTrace;
+use crate::signal_trace::WaveSignalTrace;
+use crate::thread::Thread;
+use crate::types::LoopArgState;
+use crate::types::ProtocolApplication;
 
 #[allow(dead_code)]
 #[derive(Clone)]

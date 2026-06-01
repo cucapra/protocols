@@ -3,4 +3,5 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 mod verilog;
 
-pub use verilog::{PinAnnotation, to_verilog};
+pub use verilog::PinAnnotation;
+pub use verilog::to_verilog;

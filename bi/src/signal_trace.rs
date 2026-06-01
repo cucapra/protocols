@@ -3,13 +3,22 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::Instance;
-use baa::{BitVecOps, BitVecValue, WidthInt};
-use protocols::frontend::ast::SymbolId;
+use baa::BitVecOps;
+use baa::BitVecValue;
+use baa::WidthInt;
 use protocols::frontend::design::Design;
-use rand::{Rng, SeedableRng};
+use protocols::frontend::symbol::SymbolId;
+use rand::Rng;
+use rand::SeedableRng;
 use rustc_hash::FxHashMap;
-use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};
+use wellen::Hierarchy;
+use wellen::SignalEncoding;
+use wellen::SignalRef;
+use wellen::Time;
+use wellen::Timescale;
+use wellen::TimescaleUnit;
+
+use crate::Instance;
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug, PartialEq)]

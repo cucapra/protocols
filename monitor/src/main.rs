@@ -15,20 +15,29 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Instance, collects_design_names, parse_instance};
+use std::io::Write;
+
+use anyhow::Context;
+use anyhow::anyhow;
+use clap::ColorChoice;
+use clap::Parser;
+use clap_verbosity_flag::Verbosity;
+use clap_verbosity_flag::WarnLevel;
+use log::LevelFilter;
+use protocols::frontend;
+use protocols::frontend::ast::Protocol;
+use protocols::frontend::design::Design;
+use protocols::frontend::design::find_designs;
+use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::symbol::SymbolTable;
+
+use crate::designs::Instance;
+use crate::designs::collects_design_names;
+use crate::designs::parse_instance;
 use crate::global_context::GlobalContext;
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
-use anyhow::{Context, anyhow};
-use clap::{ColorChoice, Parser};
-use clap_verbosity_flag::{Verbosity, WarnLevel};
-use log::LevelFilter;
-use protocols::frontend;
-use protocols::frontend::ast::{Protocol, SymbolTable};
-use protocols::frontend::design::{Design, find_designs};
-use protocols::frontend::diagnostic::DiagnosticHandler;
-use std::io::Write;
 
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder

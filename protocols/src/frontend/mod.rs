@@ -1,5 +1,6 @@
-use crate::frontend::diagnostic::DiagnosticHandler;
 use anyhow::anyhow;
+
+use crate::frontend::diagnostic::DiagnosticHandler;
 
 pub mod ast;
 pub mod design;
@@ -8,6 +9,7 @@ pub mod parser;
 pub mod serialize;
 pub mod static_checks;
 pub mod static_fork_step_check;
+pub mod symbol;
 pub mod typecheck;
 
 /// Simple frontend which loads a single protocols file, type checks and returns the AST.
@@ -15,9 +17,9 @@ pub fn frontend(
     filename: impl AsRef<std::path::Path>,
     diag: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
-) -> anyhow::Result<Vec<(ast::Protocol, ast::SymbolTable)>> {
+) -> anyhow::Result<Vec<(ast::Protocol, symbol::SymbolTable)>> {
     // Parse protocols file
-    let mut transactions_symbol_tables: Vec<(ast::Protocol, ast::SymbolTable)> =
+    let mut transactions_symbol_tables: Vec<(ast::Protocol, symbol::SymbolTable)> =
         parser::parse_file(filename, diag).map_err(|e| anyhow!(e))?;
 
     // Type-check the parsed transactions

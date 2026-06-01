@@ -2,12 +2,17 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use baa::BitVecOps;
+use baa::BitVecValue;
+use baa::WidthInt;
+use protocols::frontend::ast::*;
+use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable};
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
+
 use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
-use baa::{BitVecOps, BitVecValue, WidthInt};
-use protocols::frontend::ast::*;
-use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct BackwardsInterpreter {
     protos: Vec<ProtoInfo>,
