@@ -8,6 +8,7 @@
 pub mod backends;
 pub mod errors;
 pub mod frontend;
+pub mod ir;
 pub mod interpreter;
 pub mod scheduler;
 pub mod setup;
