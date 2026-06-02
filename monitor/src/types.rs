@@ -5,15 +5,14 @@
 /*! Miscellaneous type definitions for the monitor live in this file
  */
 
-use std::{
-    collections::VecDeque,
-    fmt,
-    ops::{Deref, DerefMut},
-};
+use std::collections::VecDeque;
+use std::fmt;
+use std::ops::{Deref, DerefMut};
 
 use protocols::frontend::ast::StmtId;
 
-use crate::{scheduler::Scheduler, thread::Thread};
+use crate::scheduler::Scheduler;
+use crate::thread::Thread;
 
 /// Represents a protocol application like `add(1, 2, 3)` which appears
 /// in the protocol trace produced by the monitor.

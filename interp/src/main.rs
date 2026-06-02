@@ -2,11 +2,12 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use clap::ColorChoice;
-use clap::Parser;
-use clap_verbosity_flag::{Verbosity, WarnLevel, log::LevelFilter};
-use protocols::frontend::ast::{Protocol, SymbolTable};
+use clap::{ColorChoice, Parser};
+use clap_verbosity_flag::log::LevelFilter;
+use clap_verbosity_flag::{Verbosity, WarnLevel};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::symbol::SymbolTable;
 use protocols::scheduler::Scheduler;
 use protocols::setup::setup_test_environment;
 use protocols::transaction_frontend;

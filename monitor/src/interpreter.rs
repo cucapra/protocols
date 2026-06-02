@@ -1,23 +1,22 @@
 use std::collections::hash_map::Entry;
 
-use crate::{
-    global_context::GlobalContext,
-    signal_trace::{PortKey, SignalTrace, WaveSignalTrace},
-    thread::Thread,
-    types::{LoopArgState, ProtocolApplication},
-};
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use protocols::errors::{
     AssertionError, EvaluationError, ExecutionError, ExecutionResult, SymbolError,
 };
-use protocols::frontend::ast::{
-    BinOp, Expr, ExprId, Protocol, Stmt, StmtId, SymbolId, SymbolTable, UnaryOp,
-};
+use protocols::frontend::ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, UnaryOp};
 use protocols::frontend::serialize::{
     serialize_args_mapping, serialize_bitvec, serialize_expr, serialize_stmt,
 };
-use protocols::{interpreter::ExprValue, scheduler::NextStmtMap};
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
+use protocols::interpreter::ExprValue;
+use protocols::scheduler::NextStmtMap;
 use rustc_hash::FxHashMap;
+
+use crate::global_context::GlobalContext;
+use crate::signal_trace::{PortKey, SignalTrace, WaveSignalTrace};
+use crate::thread::Thread;
+use crate::types::{LoopArgState, ProtocolApplication};
 
 #[allow(dead_code)]
 #[derive(Clone)]

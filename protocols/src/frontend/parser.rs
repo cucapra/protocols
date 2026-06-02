@@ -5,17 +5,18 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::frontend::ast::Stmt;
+use std::vec;
+
 use baa::{BitVecValue, WidthInt};
 use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;
 use pest_derive::Parser;
-use std::vec;
 
-use crate::frontend::ast::*;
+use crate::frontend::ast::{Stmt, *};
 use crate::frontend::diagnostic::*;
+use crate::frontend::symbol::*;
 
 #[derive(Parser)]
 #[grammar = "frontend/protocols.pest"]

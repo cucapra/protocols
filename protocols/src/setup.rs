@@ -5,13 +5,16 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+use std::path::PathBuf;
+
+use baa::BitVecValue;
+
 use crate::errors::ExecutionError;
 use crate::frontend;
-use crate::frontend::ast::{Protocol, SymbolTable};
+use crate::frontend::ast::Protocol;
 use crate::frontend::diagnostic::DiagnosticHandler;
+use crate::frontend::symbol::SymbolTable;
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
-use baa::BitVecValue;
-use std::path::PathBuf;
 
 /// Takes a vec of paths to Verilog files and the name of a top-level module,
 /// and returns a (Patronus `Context`, Patronus `TransitionSystem` pair)

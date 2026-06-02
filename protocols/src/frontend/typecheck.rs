@@ -12,6 +12,7 @@ use crate::frontend::ast::*;
 use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::*;
 use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf};
+use crate::frontend::symbol::*;
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -351,12 +352,12 @@ pub fn type_check(
 mod tests {
     use std::path::Path;
 
-    use crate::frontend::parser::parse_file;
     use baa::BitVecValue;
     use insta::Settings;
     use strip_ansi_escapes::strip_str;
 
     use super::*;
+    use crate::frontend::parser::parse_file;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();

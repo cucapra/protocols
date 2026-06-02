@@ -5,12 +5,15 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use std::fmt;
+
+use baa::BitVecValue;
+
 use crate::Value;
-use crate::frontend::ast::{ExprId, Protocol, StmtId, SymbolId, SymbolTable};
+use crate::frontend::ast::{ExprId, Protocol, StmtId};
 use crate::frontend::diagnostic::{DiagnosticHandler, Level};
 use crate::frontend::serialize::{serialize_bitvec, serialize_expr};
-use baa::BitVecValue;
-use std::fmt;
+use crate::frontend::symbol::{SymbolId, SymbolTable};
 
 /// Main error type for the scheduler and evaluator system
 #[derive(Debug, Clone, PartialEq)]

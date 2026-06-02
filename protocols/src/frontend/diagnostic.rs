@@ -549,12 +549,14 @@ impl DiagnosticHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use baa::BitVecValue;
     use insta::Settings;
-    use std::path::Path;
     use strip_ansi_escapes::strip_str;
 
     use super::*;
+    use crate::frontend::symbol::{SymbolKind, SymbolTable, Type};
 
     #[test]
     fn test_emit_diagnostic() {

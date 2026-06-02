@@ -8,9 +8,6 @@ mod constraints;
 mod proto_trace;
 mod signal_trace;
 
-use crate::bi::*;
-use crate::proto_trace::*;
-use crate::signal_trace::*;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
@@ -18,6 +15,10 @@ use protocols::frontend;
 use protocols::frontend::design::{Design, find_designs};
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use rustc_hash::{FxHashMap, FxHashSet};
+
+use crate::bi::*;
+use crate::proto_trace::*;
+use crate::signal_trace::*;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]

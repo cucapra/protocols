@@ -4,17 +4,16 @@
 
 use std::collections::VecDeque;
 
-use crate::{
-    global_context::GlobalContext,
-    scheduler::Scheduler,
-    signal_trace::{SignalTrace, StepResult, WaveSignalTrace},
-    thread::Thread,
-    types::{
-        AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, SchedulerGroup,
-        Trace,
-    },
-};
 use rustc_hash::FxHashSet;
+
+use crate::global_context::GlobalContext;
+use crate::scheduler::Scheduler;
+use crate::signal_trace::{SignalTrace, StepResult, WaveSignalTrace};
+use crate::thread::Thread;
+use crate::types::{
+    AugmentedProtocolApplication, AugmentedTrace, CycleResult, SchedulerError, SchedulerGroup,
+    Trace,
+};
 
 pub struct GlobalScheduler {
     /// A `Vec` of `SchedulerGroup`s, where each `SchedulerGroup` is a

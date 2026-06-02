@@ -7,18 +7,17 @@
 
 use baa::{BitVecOps, BitVecValue};
 use log::info;
-use rustc_hash::FxHashMap;
-
-use crate::errors::DiagnosticEmitter;
-use crate::errors::{ExecutionError, ExecutionResult};
-use crate::frontend::ast::*;
-use crate::frontend::diagnostic::DiagnosticHandler;
-use crate::interpreter::{Evaluator, ThreadInputValue};
-
-use crate::Value;
 use patronus::expr::Context;
 use patronus::sim::Interpreter;
 use patronus::system::TransitionSystem;
+use rustc_hash::FxHashMap;
+
+use crate::Value;
+use crate::errors::{DiagnosticEmitter, ExecutionError, ExecutionResult};
+use crate::frontend::ast::*;
+use crate::frontend::diagnostic::DiagnosticHandler;
+use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::interpreter::{Evaluator, ThreadInputValue};
 
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)

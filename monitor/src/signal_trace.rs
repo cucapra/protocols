@@ -3,14 +3,15 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::Instance;
 use anyhow::Context;
 use baa::BitVecValue;
-use protocols::frontend::ast::SymbolId;
 use protocols::frontend::design::Design;
+use protocols::frontend::symbol::SymbolId;
 use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalEncoding, SignalRef};
+
+use crate::Instance;
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]

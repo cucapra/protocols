@@ -2,12 +2,15 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{global_context::GlobalContext, types::LoopArgState};
 use baa::BitVecValue;
-use protocols::frontend::ast::{Protocol, StmtId, SymbolId, SymbolTable};
+use protocols::frontend::ast::{Protocol, StmtId};
 use protocols::frontend::serialize::serialize_stmt;
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::scheduler::NextStmtMap;
 use rustc_hash::FxHashMap;
+
+use crate::global_context::GlobalContext;
+use crate::types::LoopArgState;
 
 /// The local context associated with an individual thread,
 /// storing information such as:

@@ -15,20 +15,23 @@ mod signal_trace;
 mod thread;
 mod types;
 
-use crate::designs::{Instance, collects_design_names, parse_instance};
-use crate::global_context::GlobalContext;
-use crate::global_scheduler::GlobalScheduler;
-use crate::scheduler::Scheduler;
-use crate::signal_trace::WaveSignalTrace;
+use std::io::Write;
+
 use anyhow::{Context, anyhow};
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
 use protocols::frontend;
-use protocols::frontend::ast::{Protocol, SymbolTable};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::{Design, find_designs};
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use std::io::Write;
+use protocols::frontend::symbol::SymbolTable;
+
+use crate::designs::{Instance, collects_design_names, parse_instance};
+use crate::global_context::GlobalContext;
+use crate::global_scheduler::GlobalScheduler;
+use crate::scheduler::Scheduler;
+use crate::signal_trace::WaveSignalTrace;
 
 // From the top-level directory, run:
 // $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
