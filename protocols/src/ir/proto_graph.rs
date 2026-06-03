@@ -125,10 +125,6 @@ impl ProtoGraph {
         self.nodes.iter()
     }
 
-    pub fn op(&self, op_id: OpId) -> &Op {
-        &self.ops[op_id]
-    }
-
     /// push an action `a` onto `node_id`
     pub fn push_action(&mut self, node_id: NodeId, a: Action) {
         self.nodes[node_id].actions.push(a);
@@ -198,6 +194,38 @@ impl Index<&ExprId> for ProtoGraph {
 
     fn index(&self, index: &ExprId) -> &Self::Output {
         &self.ctx[index]
+    }
+}
+
+impl Index<NodeId> for ProtoGraph {
+    type Output = Node;
+
+    fn index(&self, index: NodeId) -> &Self::Output {
+        &self.nodes[index]
+    }
+}
+
+impl Index<&NodeId> for ProtoGraph {
+    type Output = Node;
+
+    fn index(&self, index: &NodeId) -> &Self::Output {
+        &self.nodes[*index]
+    }
+}
+
+impl Index<OpId> for ProtoGraph {
+    type Output = Op;
+
+    fn index(&self, index: OpId) -> &Self::Output {
+        &self.ops[index]
+    }
+}
+
+impl Index<&OpId> for ProtoGraph {
+    type Output = Op;
+
+    fn index(&self, index: &OpId) -> &Self::Output {
+        &self.ops[*index]
     }
 }
 

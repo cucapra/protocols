@@ -111,6 +111,19 @@ impl Protocol {
         }
     }
 
+    /// an empty Protocol AST with a given ProtocolContext `ctx` 
+    pub fn from_context(ctx: ProtocolContext) -> Self {
+        let mut stmts = PrimaryMap::new();
+        let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
+        let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
+        Self {
+            ctx,
+            body: block_id,
+            stmts,
+            stmt_loc,
+        }
+    }
+
     /// add a new expression to the transaction
     pub fn e(&mut self, expr: Expr) -> ExprId {
         self.ctx.exprs.push(expr)

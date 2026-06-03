@@ -392,54 +392,24 @@ impl<'a> Evaluator<'a> {
         }
 
         // Apply value to sim
-        if let Some(expr_ref) = self.input_mapping.get(symbol_id) {
-            match new_val {
-                ThreadInputValue::Concrete(bvv) => {
-                    // Always apply Concrete values immediately
-                    self.sim.set(*expr_ref, &bvv);
-                }
-                ThreadInputValue::DontCare => {
-                    // Check if any OTHER thread has Concrete for this pin
-                    let any_other_concrete =
-                        if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
-                            per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
-                                other_idx != todo_idx
-                                    && matches!(other_val, ThreadInputValue::Concrete(_))
-                            })
-                        } else {
-                            false
-                        };
+        if self.input_mapping.contains_key(symbol_id) {
+            let any_other_concrete = if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
+                per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
+                    other_idx != todo_idx && matches!(other_val, ThreadInputValue::Concrete(_))
+                })
+            } else {
+                false
+            };
 
-                    let symbol_name = self.st[*symbol_id].name();
-                    log::info!(
-                        "Applying DontCare for {} (todo_idx={}): any_other_concrete={}",
-                        symbol_name,
-                        todo_idx,
-                        any_other_concrete
-                    );
+            let symbol_name = self.st[*symbol_id].name();
+            log::info!(
+                "Applying value for {} (todo_idx={}): any_other_concrete={}",
+                symbol_name,
+                todo_idx,
+                any_other_concrete
+            );
 
-                    // If all other threads have DontCare, randomize
-                    if !any_other_concrete {
-                        let width = match self.st[*symbol_id].tpe() {
-                            Type::BitVec(w) => w,
-                            _ => panic!("Expected BitVec type for input"),
-                        };
-                        let random_val = BitVecValue::random(&mut self.rng, width);
-                        log::info!(
-                            "  Randomizing {} to {}",
-                            symbol_name,
-                            serialize_bitvec(&random_val, false)
-                        );
-                        self.sim.set(*expr_ref, &random_val);
-                    } else {
-                        log::info!(
-                            "  NOT randomizing {} (another thread has Concrete)",
-                            symbol_name
-                        );
-                    }
-                    // Otherwise do nothing - leave the Concrete value in place
-                }
-            }
+            self.write_input_value_to_sim(symbol_id, &new_val, !any_other_concrete);
         }
 
         Ok(())
@@ -581,7 +551,35 @@ impl<'a> Evaluator<'a> {
         self.sim.step();
     }
 
-    fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
+    pub fn write_input_value_to_sim(
+        &mut self,
+        symbol_id: &SymbolId,
+        value: &ThreadInputValue,
+        randomize_dont_care: bool,
+    ) {
+        let expr_ref = *self
+            .input_mapping
+            .get(symbol_id)
+            .unwrap_or_else(|| panic!("expected input symbol {symbol_id}"));
+
+        match value {
+            ThreadInputValue::Concrete(bvv) => {
+                self.sim.set(expr_ref, bvv);
+            }
+            ThreadInputValue::DontCare => {
+                if randomize_dont_care {
+                    let width = match self.st[*symbol_id].tpe() {
+                        Type::BitVec(w) => w,
+                        _ => panic!("expected BitVec type for input {symbol_id}"),
+                    };
+                    let random_val = BitVecValue::random(&mut self.rng, width);
+                    self.sim.set(expr_ref, &random_val);
+                }
+            }
+        }
+    }
+
+    pub fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
         let expr = &self.tr[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),

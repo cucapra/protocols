@@ -63,7 +63,7 @@ fn format_op(
     symbols: &SymbolTable,
     op_id: crate::ir::proto_graph::OpId,
 ) -> String {
-    match protocol.op(op_id) {
+    match &protocol[op_id] {
         Op::Assign(symbol_id, expr_id) => format!(
             "{} := {}",
             symbols.full_name_from_symbol_id(symbol_id),
