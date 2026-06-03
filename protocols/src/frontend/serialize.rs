@@ -5,6 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 
 use std::io::Write;
+use std::ops::Index;
 
 use baa::{BitVecOps, BitVecValue};
 use itertools::Itertools;
@@ -141,26 +142,29 @@ pub fn serialize_args_mapping(
         .join("\n")
 }
 
-/// Pretty-prints an `Expression` (identified by its `ExprId`) using the current
-/// `Transaction` and `SymbolTable`
-pub fn serialize_expr(tr: &Protocol, st: &SymbolTable, expr_id: &ExprId) -> String {
-    match &tr[expr_id] {
+/// Pretty-prints an `Expression` (identified by its `ExprId`)
+/// from any expression store that can index by `ExprId`.
+pub fn serialize_expr<E>(exprs: &E, st: &SymbolTable, expr_id: &ExprId) -> String
+where
+    E: Index<ExprId, Output = Expr>,
+{
+    match &exprs[*expr_id] {
         Expr::Const(val) => val.to_u64().unwrap().to_string(),
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_string(),
         Expr::IsLastIteration => "is_last()".to_string(),
         Expr::IterCount(width) => format!("iter_count::<u{width}>()"),
         Expr::Unary(unary_op, expr_id) => {
-            let e = serialize_expr(tr, st, expr_id);
+            let e = serialize_expr(exprs, st, expr_id);
             format!("{}({})", unary_op, e)
         }
         Expr::Binary(op, lhs, rhs) => {
-            let e1 = serialize_expr(tr, st, lhs);
-            let e2 = serialize_expr(tr, st, rhs);
+            let e1 = serialize_expr(exprs, st, lhs);
+            let e2 = serialize_expr(exprs, st, rhs);
             format!("{e1} {op} {e2}")
         }
         Expr::Slice(expr, idx1, idx2) => {
-            let e = serialize_expr(tr, st, expr);
+            let e = serialize_expr(exprs, st, expr);
             let i = idx1.to_string();
             if *idx2 == *idx1 {
                 format!("{}[{}]", e, i)
