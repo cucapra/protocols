@@ -1,3 +1,4 @@
+pub mod graphviz;
 pub mod lowering;
 mod proto_graph;
 
