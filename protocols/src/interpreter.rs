@@ -393,13 +393,14 @@ impl<'a> Evaluator<'a> {
 
         // Apply value to sim
         if self.input_mapping.contains_key(symbol_id) {
-            let any_other_concrete = if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
-                per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
-                    other_idx != todo_idx && matches!(other_val, ThreadInputValue::Concrete(_))
-                })
-            } else {
-                false
-            };
+            let any_other_concrete =
+                if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
+                    per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
+                        other_idx != todo_idx && matches!(other_val, ThreadInputValue::Concrete(_))
+                    })
+                } else {
+                    false
+                };
 
             let symbol_name = self.st[*symbol_id].name();
             log::info!(

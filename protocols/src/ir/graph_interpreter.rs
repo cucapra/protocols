@@ -10,6 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::Value;
 use crate::frontend::ast::Protocol;
+use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ExprValue, ThreadInputValue};
 use crate::ir::proto_graph::{Op, ProtoGraph};
@@ -79,31 +80,32 @@ pub fn interpret(
             .filter(|transition| evaluate_guard(&mut evaluator, transition.guard))
             .collect();
 
-        if done_triggered {
-            assert!(
-                satisfied_transitions.is_empty(),
-                "done triggered alongside a satisfied transition out of {curr}"
-            );
-            return;
-        }
+        // FIXME: I don't know if this iff property is true
+        // if it is, there is no need for a done state
+        // likely it won't be, maybe with repeat/for_in
+        // for now, it's useful to sanity check straight-line code
+        assert!(
+            // done <==> no outgoing transitions are triggered
+            done_triggered && satisfied_transitions.is_empty()
+                || !done_triggered && !satisfied_transitions.is_empty(),
+            "done triggered alongside a satisfied transition out of {curr}"
+        );
 
-        if satisfied_transitions.is_empty() {
-            panic!("done not triggered though there are no satisfying transitions out of {curr}");
-        }
-
+        // this isn't an NFA
         assert!(
             satisfied_transitions.len() <= 1,
             "multiple transitions simultaneously satisfied out of {curr}"
         );
 
-        let transition = satisfied_transitions.into_iter().next().unwrap();
-
-        if transition.consumes_step {
-            evaluator.finalize_inputs_for_cycle();
-            evaluator.sim_step();
+        match satisfied_transitions.into_iter().next() {
+            Some(t) => {
+                if t.consumes_step {
+                    evaluator.sim_step();
+                }
+                curr = t.target;
+            }
+            None => break,
         }
-
-        curr = transition.target;
     }
 }
 
@@ -134,7 +136,12 @@ fn assert_eq_exprs(
     match (lhs, rhs) {
         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
             assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");
-            assert!(lhs.is_equal(&rhs), "assert_eq failed");
+            assert!(
+                lhs.is_equal(&rhs),
+                "assert_eq failed: lhs={} rhs={}",
+                serialize_bitvec(&lhs, false),
+                serialize_bitvec(&rhs, false)
+            );
         }
         _ => panic!("assert_eq on DontCare"),
     }

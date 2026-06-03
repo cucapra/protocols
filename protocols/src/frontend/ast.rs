@@ -111,7 +111,7 @@ impl Protocol {
         }
     }
 
-    /// an empty Protocol AST with a given ProtocolContext `ctx` 
+    /// an empty Protocol AST with a given ProtocolContext `ctx`
     pub fn from_context(ctx: ProtocolContext) -> Self {
         let mut stmts = PrimaryMap::new();
         let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
