@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use std::ops::Index;
+use std::ops::{Deref, DerefMut, Index};
 
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
@@ -15,15 +15,12 @@ use crate::frontend::serialize::{build_statements, serialize_expr};
 use crate::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Protocol {
+pub struct ProtocolContext {
     /// The name of the `Protocol`
     pub name: String,
 
     /// List of `Arg`s to the `Protocol`
     pub args: Vec<Arg>,
-
-    /// The body of the `Protocol`, identified by its `StmtId`
-    pub body: StmtId,
 
     /// Optional type parameter (identified by its `SymbolId`)
     pub type_param: Option<SymbolId>,
@@ -37,42 +34,27 @@ pub struct Protocol {
     /// The distinguished `ExprId` corresponding to `DontCare`
     dont_care_id: ExprId,
 
-    /// Maps `StmtId`s to their corresponding `Stmt`s
-    stmts: PrimaryMap<StmtId, Stmt>,
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
-    stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
 }
 
-impl Protocol {
+impl ProtocolContext {
     pub fn new(name: String) -> Self {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
-        let mut stmts = PrimaryMap::new();
-        let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
         let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
-        let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
             name,
             args: Vec::default(),
-            body: block_id,
-            type_param: None, // guaranteed to become Some after parsing by grammar constraints
-            is_idle: false,   // By default, transactions are *not* marked as `idle`
+            type_param: None,
+            is_idle: false,
             exprs,
             dont_care_id,
-            stmts,
             expr_loc,
-            stmt_loc,
         }
     }
 
-    /// add a new expression to the transaction
     pub fn e(&mut self, expr: Expr) -> ExprId {
         self.exprs.push(expr)
-    }
-
-    /// add a new statement to the transaction
-    pub fn s(&mut self, stmt: Stmt) -> StmtId {
-        self.stmts.push(stmt)
     }
 
     pub fn expr_dont_care(&self) -> ExprId {
@@ -83,16 +65,80 @@ impl Protocol {
         self.exprs.keys().collect()
     }
 
-    pub fn stmt_ids(&self) -> Vec<StmtId> {
-        self.stmts.keys().collect()
-    }
-
     pub fn add_expr_loc(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
         self.expr_loc[expr_id] = (start, end, fileid);
     }
 
     pub fn get_expr_loc(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
         self.expr_loc.get(expr_id).copied()
+    }
+
+    pub fn exprs_clone(&self) -> PrimaryMap<ExprId, Expr> {
+        self.exprs.clone()
+    }
+
+    pub fn dont_care_id(&self) -> ExprId {
+        self.dont_care_id
+    }
+
+    pub fn expr_loc_clone(&self) -> SecondaryMap<ExprId, (usize, usize, usize)> {
+        self.expr_loc.clone()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Protocol {
+    pub ctx: ProtocolContext,
+
+    /// The body of the `Protocol`, identified by its `StmtId`
+    pub body: StmtId,
+
+    /// Maps `StmtId`s to their corresponding `Stmt`s
+    stmts: PrimaryMap<StmtId, Stmt>,
+    stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
+}
+
+impl Protocol {
+    pub fn new(name: String) -> Self {
+        let mut stmts = PrimaryMap::new();
+        let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
+        let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
+        Self {
+            ctx: ProtocolContext::new(name),
+            body: block_id,
+            stmts,
+            stmt_loc,
+        }
+    }
+
+    /// add a new expression to the transaction
+    pub fn e(&mut self, expr: Expr) -> ExprId {
+        self.ctx.exprs.push(expr)
+    }
+
+    /// add a new statement to the transaction
+    pub fn s(&mut self, stmt: Stmt) -> StmtId {
+        self.stmts.push(stmt)
+    }
+
+    pub fn expr_dont_care(&self) -> ExprId {
+        self.ctx.expr_dont_care()
+    }
+
+    pub fn expr_ids(&self) -> Vec<ExprId> {
+        self.ctx.expr_ids()
+    }
+
+    pub fn stmt_ids(&self) -> Vec<StmtId> {
+        self.stmts.keys().collect()
+    }
+
+    pub fn add_expr_loc(&mut self, expr_id: ExprId, start: usize, end: usize, fileid: usize) {
+        self.ctx.add_expr_loc(expr_id, start, end, fileid);
+    }
+
+    pub fn get_expr_loc(&self, expr_id: ExprId) -> Option<(usize, usize, usize)> {
+        self.ctx.get_expr_loc(expr_id)
     }
 
     pub fn add_stmt_loc(&mut self, stmt_id: StmtId, start: usize, end: usize, fileid: usize) {
@@ -191,9 +237,36 @@ impl Protocol {
         let _ = build_statements(&mut buffer, self, symbol_table, stmt_id, 0);
         String::from_utf8(buffer).unwrap().trim_end().to_string()
     }
+
+    // convenience clone accessors for constructing an IR from a Protocol AST
+    pub fn exprs_clone(&self) -> PrimaryMap<ExprId, Expr> {
+        self.ctx.exprs_clone()
+    }
+
+    pub fn dont_care_id(&self) -> ExprId {
+        self.ctx.dont_care_id()
+    }
+
+    pub fn expr_loc_clone(&self) -> SecondaryMap<ExprId, (usize, usize, usize)> {
+        self.ctx.expr_loc_clone()
+    }
 }
 
-impl Index<ExprId> for Protocol {
+impl Deref for Protocol {
+    type Target = ProtocolContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ctx
+    }
+}
+
+impl DerefMut for Protocol {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ctx
+    }
+}
+
+impl Index<ExprId> for ProtocolContext {
     type Output = Expr;
 
     fn index(&self, index: ExprId) -> &Self::Output {
@@ -201,11 +274,27 @@ impl Index<ExprId> for Protocol {
     }
 }
 
-impl Index<&ExprId> for Protocol {
+impl Index<&ExprId> for ProtocolContext {
     type Output = Expr;
 
     fn index(&self, index: &ExprId) -> &Self::Output {
         &self.exprs[*index]
+    }
+}
+
+impl Index<ExprId> for Protocol {
+    type Output = Expr;
+
+    fn index(&self, index: ExprId) -> &Self::Output {
+        &self.ctx.exprs[index]
+    }
+}
+
+impl Index<&ExprId> for Protocol {
+    type Output = Expr;
+
+    fn index(&self, index: &ExprId) -> &Self::Output {
+        &self.ctx.exprs[*index]
     }
 }
 

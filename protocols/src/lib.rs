@@ -9,6 +9,7 @@ pub mod backends;
 pub mod errors;
 pub mod frontend;
 pub mod interpreter;
+pub mod ir;
 pub mod scheduler;
 pub mod setup;
 pub mod transactions;
