@@ -1,1 +1,5 @@
 protocols/tests/adders/adder_d1/add_multitrace.tx
+protocols/tests/adders/adder_d1/conditional_add.tx
+protocols/tests/adders/adder_d1/both_threads_fail.tx
+protocols/tests/adders/adder_d1/both_threads_pass.tx
+protocols/tests/counters/counter.tx

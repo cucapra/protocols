@@ -1,0 +1,30 @@
+---
+source: protocols/src/ir/graphviz.rs
+expression: content
+---
+digraph "count_up" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node4 [label="[1] assert_eq(dut.s, 0)"];
+  node4 -> node3 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node6 [label=""];
+  node6 -> node5 [label="1"];
+  node7 [label=""];
+  node7 -> node8 [label="!(dut.s == dut.a)"];
+  node7 -> node6 [label="!(!(dut.s == dut.a))"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node9 [label="[1] dut.a := a"];
+  node9 -> node7 [label="1"];
+}

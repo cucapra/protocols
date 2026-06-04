@@ -28,5 +28,4 @@ warning: Inferred RHS type as u32 from LHS type u32.
 84 │   DUT.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
-trace 0 executed successfully
-assert_eq failed: lhs=10 rhs=9
+assert_eq failed: lhs=5 rhs=3

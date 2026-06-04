@@ -2,6 +2,53 @@
 source: protocols/src/ir/graphviz.rs
 expression: content
 ---
+digraph "add_combinational_illegal_observation_in_conditional" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label=""];
+  node3 -> node2 [label="1"];
+  node4 [label=""];
+  node4 -> node3 [label="1"];
+  node5 [label=""];
+  node5 -> node3 [label="1"];
+  node6 [label=""];
+  node6 -> node4 [label="DUT.s == 0"];
+  node6 -> node5 [label="!(DUT.s == 0)"];
+  node7 [label="[1] DUT.a := a"];
+  node7 -> node6 [label="1"];
+  node8 [label="[1] DUT.b := X"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] DUT.a := X"];
+  node9 -> node8 [label="1"];
+}
+
+digraph "add_combinational_illegal_observation_in_assertion" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node6 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(DUT.s, s)"];
+  node3 -> node2 [label="1"];
+  node4 [label="[1] DUT.a := a"];
+  node4 -> node3 [label="1"];
+  node5 [label="[1] DUT.b := X"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] DUT.a := X"];
+  node6 -> node5 [label="1"];
+}
+
 digraph "add_combinational_legal_observation_illegal_assignment" {
   rankdir=LR;
   node [shape=box];
@@ -21,4 +68,22 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node6 [label=""];
   node6 -> node4 [label="DUT.s == 0"];
   node6 -> node5 [label="!(DUT.s == 0)"];
+}
+
+digraph "add_combinational" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node5 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node2 [label="1"];
+  node4 [label="[1] DUT.b := b"];
+  node4 -> node3 [label="1"];
+  node5 [label="[1] DUT.a := a"];
+  node5 -> node4 [label="1"];
 }
