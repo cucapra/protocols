@@ -22,6 +22,10 @@ axis:
 adders:
   turnt --env interp $(find protocols/tests/adders -type f -name '*.tx') 
 
+# Only run graph-interpreter tests that are explicitly enabled
+graph_interp:
+  turnt --env graph_interp $(cat protocols/tests/graph_interp_allowlist.txt)
+
 # Only run interpreter tests for the ALU examples
 alus:
   turnt --env interp $(find protocols/tests/alus -type f -name '*.tx') 

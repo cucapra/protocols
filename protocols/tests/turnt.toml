@@ -1,2 +1,8 @@
 [envs.interp]
 command = "cargo interp --color never --transactions {filename} {args}"
+output.out = "-"
+
+[envs.graph_interp]
+default = false
+command = "cargo run -q -p protocols-cli --bin graph-interp -- --transactions {filename} {args} 2>&1"
+output.graphout = "-"
