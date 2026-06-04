@@ -117,4 +117,36 @@ mod tests {
         let dot = to_dot_string(&ir, &symbols);
         snap("ir_graphviz_add_d1", dot);
     }
+
+    #[test]
+    fn test_add_comb_dot_snapshot() {
+        let mut handler = DiagnosticHandler::default();
+        let parsed = parse_file("tests/adders/adder_d0/add_d0.prot", &mut handler).unwrap();
+        let (ast, symbols) = parsed
+            .into_iter()
+            .find(|(ast, _)| ast.name == "add_combinational_legal_observation_illegal_assignment")
+            .unwrap();
+        let ir = lower_ast_to_ir(ast);
+
+        let dot = to_dot_string(&ir, &symbols);
+        snap("ir_graphviz_add_d0", dot);
+    }
+
+    #[test]
+    fn test_axis_truncated_include_idle_send_data_dot_snapshot() {
+        let mut handler = DiagnosticHandler::default();
+        let parsed = parse_file(
+            "../monitor/tests/wal/advanced/axis_truncated_include_idle.prot",
+            &mut handler,
+        )
+        .unwrap();
+        let (ast, symbols) = parsed
+            .into_iter()
+            .find(|(ast, _)| ast.name == "send_data")
+            .unwrap();
+        let ir = lower_ast_to_ir(ast);
+
+        let dot = to_dot_string(&ir, &symbols);
+        snap("ir_graphviz_axis_truncated_include_idle_send_data", dot);
+    }
 }
