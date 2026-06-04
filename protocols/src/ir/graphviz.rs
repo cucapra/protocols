@@ -96,7 +96,17 @@ mod tests {
 
     use super::*;
 
-    fn snap(name: &str, content: String) {
+    fn snap(name: &str, filename: &str) {
+        let mut handler = DiagnosticHandler::default();
+        let parsed = parse_file(filename, &mut handler).unwrap();
+        let mut content = String::new();
+        for (ast, symbols) in parsed.into_iter() {
+            let ir: ProtoGraph = lower_ast_to_ir(ast);
+            let dot_graph = to_dot_string(&ir, &symbols);
+            // append each digraph into one dot file
+            content += &(dot_graph + "\n");
+        }
+
         let mut settings = Settings::clone_current();
         settings.set_snapshot_path(Path::new("../tests/snapshots"));
         settings.bind(|| {
@@ -106,47 +116,19 @@ mod tests {
 
     #[test]
     fn test_add_d1_dot_snapshot() {
-        let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file("tests/adders/adder_d1/add_d1.prot", &mut handler).unwrap();
-        let (ast, symbols) = parsed
-            .into_iter()
-            .find(|(ast, _)| ast.name == "add")
-            .unwrap();
-        let ir = lower_ast_to_ir(ast);
-
-        let dot = to_dot_string(&ir, &symbols);
-        snap("ir_graphviz_add_d1", dot);
+        snap("ir_graphviz_add_d1", "tests/adders/adder_d1/add_d1.prot");
     }
 
     #[test]
     fn test_add_comb_dot_snapshot() {
-        let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file("tests/adders/adder_d0/add_d0.prot", &mut handler).unwrap();
-        let (ast, symbols) = parsed
-            .into_iter()
-            .find(|(ast, _)| ast.name == "add_combinational_legal_observation_illegal_assignment")
-            .unwrap();
-        let ir = lower_ast_to_ir(ast);
-
-        let dot = to_dot_string(&ir, &symbols);
-        snap("ir_graphviz_add_d0", dot);
+        snap("ir_graphviz_add_d0", "tests/adders/adder_d0/add_d0.prot");
     }
 
     #[test]
     fn test_axis_truncated_include_idle_send_data_dot_snapshot() {
-        let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file(
+        snap(
+            "ir_graphviz_axis_truncated_include_idle_send_data",
             "../monitor/tests/wal/advanced/axis_truncated_include_idle.prot",
-            &mut handler,
-        )
-        .unwrap();
-        let (ast, symbols) = parsed
-            .into_iter()
-            .find(|(ast, _)| ast.name == "send_data")
-            .unwrap();
-        let ir = lower_ast_to_ir(ast);
-
-        let dot = to_dot_string(&ir, &symbols);
-        snap("ir_graphviz_axis_truncated_include_idle_send_data", dot);
+        );
     }
 }

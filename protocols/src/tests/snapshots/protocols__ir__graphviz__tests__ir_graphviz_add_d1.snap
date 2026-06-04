@@ -27,3 +27,103 @@ digraph "add" {
   node9 [label="[1] DUT.a := a"];
   node9 -> node8 [label="1"];
 }
+
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node2 [label="1"];
+  node4 [label="[1] DUT.b := X"];
+  node4 -> node3 [label="1"];
+  node5 [label="[1] DUT.a := X"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] fork"];
+  node6 -> node5 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] DUT.b := b"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] DUT.a := a"];
+  node9 -> node8 [label="1"];
+}
+
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node5 [label="[1] DUT.b := b"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] DUT.a := a"];
+  node6 -> node5 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] DUT.b := b"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] DUT.a := a"];
+  node9 -> node8 [label="1"];
+}
+
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node7 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node6 [label="[1] DUT.b := b"];
+  node6 -> node5 [label="1"];
+  node7 [label="[1] DUT.a := a"];
+  node7 -> node6 [label="1"];
+}
+
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node2 [label="1"];
+  node4 [label=""];
+  node4 -> node3 [label="1 / step"];
+  node5 [label="[1] DUT.b := b"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] DUT.a := a"];
+  node6 -> node5 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] fork"];
+  node8 -> node7 [label="1"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+}
