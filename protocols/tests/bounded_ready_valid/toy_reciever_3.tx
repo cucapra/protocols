@@ -1,0 +1,5 @@
+// ARGS: --verilog bounded_ready_valid/toy_receiver_3.v --protocol bounded_ready_valid/bounded_rv.prot
+// RETURN: 101
+trace {
+    send_data(5);
+}

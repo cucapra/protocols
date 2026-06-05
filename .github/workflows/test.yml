@@ -32,6 +32,8 @@ jobs:
       run: cargo test --verbose
     - name: Run Turnt tests for interpreter
       run: turnt --env interp $(find . -type f -name '*.tx')
+    - name: Run Turnt tests for graph-interpreter
+      run: turnt --env graph_interp $(cat protocols/tests/graph_interp_allowlist.txt)
     - name: Run Turnt tests for monitor
       run: turnt --env monitor $(find . -type f -name '*.prot')
 

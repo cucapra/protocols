@@ -1,3 +1,7 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+
 use crate::frontend::serialize::serialize_expr;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Op, ProtoGraph};
@@ -129,6 +133,19 @@ mod tests {
         snap(
             "ir_graphviz_axis_truncated_include_idle_send_data",
             "../monitor/tests/wal/advanced/axis_truncated_include_idle.prot",
+        );
+    }
+
+    #[test]
+    fn test_counter_snapshot() {
+        snap("ir_graphviz_counter", "tests/counters/counter.prot");
+    }
+
+    #[test]
+    fn test_bounded_ready_valid_snapshot() {
+        snap(
+            "ir_graphviz_bounded_ready_valid",
+            "tests/bounded_ready_valid/bounded_rv.prot",
         );
     }
 }

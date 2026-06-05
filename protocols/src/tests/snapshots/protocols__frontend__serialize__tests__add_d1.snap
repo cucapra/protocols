@@ -60,3 +60,18 @@ fn wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
   assert_eq(s, DUT.s);
   step();
 }
+
+fn add_with_override<DUT: Adder>(a: u32, b: u32, s: u32) {
+  DUT.a := a;
+  if DUT.a == 2 {
+    DUT.a := 0;
+  } else {
+  }
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}

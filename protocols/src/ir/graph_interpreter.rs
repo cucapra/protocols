@@ -110,7 +110,7 @@ pub fn interpret(
 }
 
 fn evaluate_guard(evaluator: &mut Evaluator<'_>, expr_id: crate::frontend::ast::ExprId) -> bool {
-    match evaluator.evaluate_expr(&expr_id).unwrap() {
+    match evaluator.evaluate_expr_raw(&expr_id).unwrap() {
         ExprValue::Concrete(bvv) => !bvv.is_zero(),
         ExprValue::DontCare => panic!("guard evaluated to DontCare"),
     }
@@ -120,7 +120,7 @@ fn expr_to_input_value(
     evaluator: &mut Evaluator<'_>,
     expr_id: &crate::frontend::ast::ExprId,
 ) -> ThreadInputValue {
-    match evaluator.evaluate_expr(expr_id).unwrap() {
+    match evaluator.evaluate_expr_raw(expr_id).unwrap() {
         ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
         ExprValue::DontCare => ThreadInputValue::DontCare,
     }
@@ -131,8 +131,8 @@ fn assert_eq_exprs(
     lhs: &crate::frontend::ast::ExprId,
     rhs: &crate::frontend::ast::ExprId,
 ) {
-    let lhs = evaluator.evaluate_expr(lhs).unwrap();
-    let rhs = evaluator.evaluate_expr(rhs).unwrap();
+    let lhs = evaluator.evaluate_expr_raw(lhs).unwrap();
+    let rhs = evaluator.evaluate_expr_raw(rhs).unwrap();
     match (lhs, rhs) {
         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
             assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");

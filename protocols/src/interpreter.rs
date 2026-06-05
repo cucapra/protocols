@@ -581,6 +581,18 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
+        self.evaluate_expr_inner(expr_id, true)
+    }
+
+    pub fn evaluate_expr_raw(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
+        self.evaluate_expr_inner(expr_id, false)
+    }
+
+    fn evaluate_expr_inner(
+        &mut self,
+        expr_id: &ExprId,
+        check_forbidden_reads: bool,
+    ) -> ExecutionResult<ExprValue> {
         let expr = &self.tr[expr_id];
         match expr {
             Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
@@ -590,7 +602,8 @@ impl<'a> Evaluator<'a> {
                 // Check if reading this port is forbidden (count > 0)
                 // For inputs: count > 0 when DontCare was assigned
                 // For outputs: count > 0 when a dependent input has DontCare
-                if let Some(&count) = self.forbidden_read_counts.get(sym_id)
+                if check_forbidden_reads
+                    && let Some(&count) = self.forbidden_read_counts.get(sym_id)
                     && count > 0
                 {
                     // Collect the (full_name, stmt_id) of each DontCare input this port depends on
@@ -671,8 +684,8 @@ impl<'a> Evaluator<'a> {
                 Ok(ExprValue::Concrete(value))
             }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
-                let lhs_val = self.evaluate_expr(lhs_id)?;
-                let rhs_val = self.evaluate_expr(rhs_id)?;
+                let lhs_val = self.evaluate_expr_inner(lhs_id, check_forbidden_reads)?;
+                let rhs_val = self.evaluate_expr_inner(rhs_id, check_forbidden_reads)?;
                 match (&lhs_val, &rhs_val) {
                     (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
                         Err(ExecutionError::dont_care_operation(
@@ -695,7 +708,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
-                let expr_val = self.evaluate_expr(expr_id)?;
+                let expr_val = self.evaluate_expr_inner(expr_id, check_forbidden_reads)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => match unary_op {
                         UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
@@ -708,7 +721,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::Slice(expr_id, msb, lsb) => {
-                let expr_val = self.evaluate_expr(expr_id)?;
+                let expr_val = self.evaluate_expr_inner(expr_id, check_forbidden_reads)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => {
                         let width = bvv.width();

@@ -29,4 +29,4 @@ warning: Inferred RHS type as u32 from LHS type u32.
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
 trace 0 executed successfully
-assert_eq failed: lhs=10 rhs=9
+trace 1 executed successfully
