@@ -140,4 +140,12 @@ mod tests {
     fn test_counter_snapshot() {
         snap("ir_graphviz_counter", "tests/counters/counter.prot");
     }
+
+    #[test]
+    fn test_bounded_ready_valid_snapshot() {
+        snap(
+            "ir_graphviz_bounded_ready_valid",
+            "tests/bounded_ready_valid/bounded_rv.prot",
+        );
+    }
 }

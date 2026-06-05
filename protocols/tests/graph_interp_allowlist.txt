@@ -3,3 +3,7 @@ protocols/tests/adders/adder_d1/conditional_add.tx
 protocols/tests/adders/adder_d1/both_threads_fail.tx
 protocols/tests/adders/adder_d1/both_threads_pass.tx
 protocols/tests/counters/counter.tx
+protocols/tests/bounded_ready_valid/toy_reciever_0.tx
+protocols/tests/bounded_ready_valid/toy_reciever_1.tx
+protocols/tests/bounded_ready_valid/toy_reciever_2.tx
+protocols/tests/bounded_ready_valid/toy_reciever_3.tx
