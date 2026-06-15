@@ -2,6 +2,7 @@
 source: protocols/src/ir/graphviz.rs
 expression: content
 ---
+== pre-contract ==
 digraph "send_data" {
   rankdir=LR;
   node [shape=box];
@@ -25,6 +26,34 @@ digraph "send_data" {
   node7 -> node6 [label="1"];
 }
 
+== post-contract ==
+digraph "send_data" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] D.m_axis_tdata := data\n[1 + 1 + 1] D.m_axis_tvalid := 1"];
+  node0 -> node1 [label="1 + 1 + 1 + !(!(D.m_axis_tready == 1)) + 1 + 1 / step"];
+  node0 -> node4 [label="1 + 1 + 1 + !(D.m_axis_tready == 1) + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label=""];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="!(!(D.m_axis_tready == 1)) + 1 + 1 / step"];
+  node4 -> node4 [label="!(D.m_axis_tready == 1) + 1 / step"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node6 [label="[1] D.m_axis_tvalid := 1"];
+  node6 -> node1 [label="1 + !(!(D.m_axis_tready == 1)) + 1 + 1 / step"];
+  node6 -> node4 [label="1 + !(D.m_axis_tready == 1) + 1 / step"];
+  node7 [label="[1] D.m_axis_tdata := data\n[1 + 1] D.m_axis_tvalid := 1"];
+  node7 -> node1 [label="1 + 1 + !(!(D.m_axis_tready == 1)) + 1 + 1 / step"];
+  node7 -> node4 [label="1 + 1 + !(D.m_axis_tready == 1) + 1 / step"];
+}
+
+== pre-contract ==
 digraph "idle" {
   rankdir=LR;
   node [shape=box];
@@ -37,4 +66,19 @@ digraph "idle" {
   node2 -> node1 [label="1 / step"];
   node3 [label="[1] D.m_axis_tvalid := 0"];
   node3 -> node2 [label="1"];
+}
+
+== post-contract ==
+digraph "idle" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] D.m_axis_tvalid := 0"];
+  node0 -> node1 [label="1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] D.m_axis_tvalid := 0"];
+  node3 -> node1 [label="1 + 1 / step"];
 }

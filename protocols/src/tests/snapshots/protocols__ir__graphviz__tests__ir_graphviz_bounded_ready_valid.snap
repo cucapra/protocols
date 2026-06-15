@@ -2,6 +2,7 @@
 source: protocols/src/ir/graphviz.rs
 expression: content
 ---
+== pre-contract ==
 digraph "send_data" {
   rankdir=LR;
   node [shape=box];
@@ -36,4 +37,44 @@ digraph "send_data" {
   node12 -> node11 [label="1"];
   node13 [label="[1] D.data := data"];
   node13 -> node12 [label="1"];
+}
+
+== post-contract ==
+digraph "send_data" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] D.data := data\n[1 + 1 + 1] D.valid := 1"];
+  node0 -> node1 [label="1 + 1 + 1 + !(!(D.ready == 1)) + 1 + 1 + 1 / step"];
+  node0 -> node8 [label="1 + 1 + 1 + !(D.ready == 1) + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label=""];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] assert_eq(D.ready, 1)"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node6 [label=""];
+  node6 -> node5 [label="1 / step"];
+  node7 [label=""];
+  node7 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node8 [label=""];
+  node8 -> node1 [label="!(!(D.ready == 1)) + 1 + 1 + 1 + 1 / step"];
+  node8 -> node5 [label="!(D.ready == 1) + 1 / step"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node10 [label=""];
+  node10 -> node1 [label="1 + 1 + 1 / step"];
+  node11 [label=""];
+  node11 -> node1 [label="!(!(D.ready == 1)) + 1 + 1 + 1 / step"];
+  node11 -> node8 [label="!(D.ready == 1) + 1 / step"];
+  node12 [label="[1] D.valid := 1"];
+  node12 -> node1 [label="1 + !(!(D.ready == 1)) + 1 + 1 + 1 / step"];
+  node12 -> node8 [label="1 + !(D.ready == 1) + 1 / step"];
+  node13 [label="[1] D.data := data\n[1 + 1] D.valid := 1"];
+  node13 -> node1 [label="1 + 1 + !(!(D.ready == 1)) + 1 + 1 + 1 / step"];
+  node13 -> node8 [label="1 + 1 + !(D.ready == 1) + 1 / step"];
 }

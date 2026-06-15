@@ -2,6 +2,7 @@
 source: protocols/src/ir/graphviz.rs
 expression: content
 ---
+== pre-contract ==
 digraph "add" {
   rankdir=LR;
   node [shape=box];
@@ -28,6 +29,34 @@ digraph "add" {
   node9 -> node8 [label="1"];
 }
 
+== post-contract ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := a\n[1 + 1 + 1] DUT.b := b"];
+  node0 -> node6 [label="1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1 + 1] fork"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] DUT.b := X\n[1 + 1] assert_eq(s, DUT.s)\n[1 + 1 + 1] fork"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node6 [label="[1] DUT.a := X\n[1 + 1] DUT.b := X\n[1 + 1 + 1] assert_eq(s, DUT.s)\n[1 + 1 + 1 + 1] fork"];
+  node6 -> node1 [label="1 + 1 + 1 + 1 + 1 / step"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] DUT.b := b"];
+  node8 -> node6 [label="1 + 1 / step"];
+  node9 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b"];
+  node9 -> node6 [label="1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "add_fork_early" {
   rankdir=LR;
   node [shape=box];
@@ -54,6 +83,34 @@ digraph "add_fork_early" {
   node9 -> node8 [label="1"];
 }
 
+== post-contract ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := a\n[1 + 1 + 1] DUT.b := b"];
+  node0 -> node6 [label="1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] DUT.b := X\n[1 + 1] assert_eq(s, DUT.s)"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] DUT.a := X\n[1 + 1] DUT.b := X\n[1 + 1 + 1] assert_eq(s, DUT.s)"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node6 [label="[1] fork\n[1 + 1] DUT.a := X\n[1 + 1 + 1] DUT.b := X\n[1 + 1 + 1 + 1] assert_eq(s, DUT.s)"];
+  node6 -> node1 [label="1 + 1 + 1 + 1 + 1 / step"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] DUT.b := b"];
+  node8 -> node6 [label="1 + 1 / step"];
+  node9 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b"];
+  node9 -> node6 [label="1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "add_incorrect" {
   rankdir=LR;
   node [shape=box];
@@ -80,6 +137,34 @@ digraph "add_incorrect" {
   node9 -> node8 [label="1"];
 }
 
+== post-contract ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := a\n[1 + 1 + 1] DUT.b := b"];
+  node0 -> node6 [label="1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1 + 1] fork"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] DUT.b := b\n[1 + 1] assert_eq(s, DUT.s)\n[1 + 1 + 1] fork"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node6 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b\n[1 + 1 + 1] assert_eq(s, DUT.s)\n[1 + 1 + 1 + 1] fork"];
+  node6 -> node1 [label="1 + 1 + 1 + 1 + 1 / step"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] DUT.b := b"];
+  node8 -> node6 [label="1 + 1 / step"];
+  node9 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b"];
+  node9 -> node6 [label="1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "add_incorrect_implicit" {
   rankdir=LR;
   node [shape=box];
@@ -102,6 +187,30 @@ digraph "add_incorrect_implicit" {
   node7 -> node6 [label="1"];
 }
 
+== post-contract ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := a\n[1 + 1 + 1] DUT.b := b"];
+  node0 -> node4 [label="1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1 + 1] fork"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node6 [label="[1] DUT.b := b"];
+  node6 -> node4 [label="1 + 1 / step"];
+  node7 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b"];
+  node7 -> node4 [label="1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "wait_and_add" {
   rankdir=LR;
   node [shape=box];
@@ -128,6 +237,34 @@ digraph "wait_and_add" {
   node9 -> node8 [label="1 / step"];
 }
 
+== post-contract ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node8 [label="1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label=""];
+  node4 -> node3 [label="1 / step"];
+  node5 [label="[1] DUT.b := b"];
+  node5 -> node3 [label="1 + 1 / step"];
+  node6 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b"];
+  node6 -> node3 [label="1 + 1 + 1 / step"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] fork"];
+  node8 -> node6 [label="1 + 1 / step"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+}
+
+== pre-contract ==
 digraph "add_with_override" {
   rankdir=LR;
   node [shape=box];
@@ -161,4 +298,42 @@ digraph "add_with_override" {
   node12 -> node11 [label="!(DUT.a == 2)"];
   node13 [label="[1] DUT.a := a"];
   node13 -> node12 [label="1"];
+}
+
+== post-contract ==
+digraph "add_with_override" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := a\n[1 + 1 + !(DUT.a == 2) + 1 + 1 + 1] DUT.b := b\n[1 + 1 + DUT.a == 2 + 1] DUT.a := 0\n[1 + 1 + DUT.a == 2 + 1 + 1 + 1] DUT.b := b"];
+  node0 -> node6 [label="1 + 1 + !(DUT.a == 2) + 1 + 1 + 1 + 1 / step"];
+  node0 -> node6 [label="1 + 1 + DUT.a == 2 + 1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1 + 1] fork"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] DUT.b := X\n[1 + 1] assert_eq(s, DUT.s)\n[1 + 1 + 1] fork"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node6 [label="[1] DUT.a := X\n[1 + 1] DUT.b := X\n[1 + 1 + 1] assert_eq(s, DUT.s)\n[1 + 1 + 1 + 1] fork"];
+  node6 -> node1 [label="1 + 1 + 1 + 1 + 1 / step"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node8 [label="[1] DUT.b := b"];
+  node8 -> node6 [label="1 + 1 / step"];
+  node9 [label="[1 + 1] DUT.b := b"];
+  node9 -> node6 [label="1 + 1 + 1 / step"];
+  node10 [label="[1] DUT.a := 0\n[1 + 1 + 1] DUT.b := b"];
+  node10 -> node6 [label="1 + 1 + 1 + 1 / step"];
+  node11 [label="[1 + 1 + 1] DUT.b := b"];
+  node11 -> node6 [label="1 + 1 + 1 + 1 / step"];
+  node12 [label="[!(DUT.a == 2) + 1 + 1 + 1] DUT.b := b\n[DUT.a == 2 + 1] DUT.a := 0\n[DUT.a == 2 + 1 + 1 + 1] DUT.b := b"];
+  node12 -> node6 [label="!(DUT.a == 2) + 1 + 1 + 1 + 1 / step"];
+  node12 -> node6 [label="DUT.a == 2 + 1 + 1 + 1 + 1 / step"];
+  node13 [label="[1] DUT.a := a\n[1 + !(DUT.a == 2) + 1 + 1 + 1] DUT.b := b\n[1 + DUT.a == 2 + 1] DUT.a := 0\n[1 + DUT.a == 2 + 1 + 1 + 1] DUT.b := b"];
+  node13 -> node6 [label="1 + !(DUT.a == 2) + 1 + 1 + 1 + 1 / step"];
+  node13 -> node6 [label="1 + DUT.a == 2 + 1 + 1 + 1 + 1 / step"];
 }

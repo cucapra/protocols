@@ -95,6 +95,7 @@ mod tests {
 
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::parser::parse_file;
+    use crate::ir::edge_contract::contract_edges;
     use crate::ir::lowering::lower_ast_to_ir;
     use insta::Settings;
 
@@ -106,9 +107,15 @@ mod tests {
         let mut content = String::new();
         for (ast, symbols) in parsed.into_iter() {
             let ir: ProtoGraph = lower_ast_to_ir(ast);
-            let dot_graph = to_dot_string(&ir, &symbols);
-            // append each digraph into one dot file
-            content += &(dot_graph + "\n");
+            content += "== pre-contract ==\n";
+            content += &to_dot_string(&ir, &symbols);
+            content += "\n";
+
+            let mut contracted_ir = ir.clone();
+            contract_edges(&mut contracted_ir, &symbols);
+            content += "== post-contract ==\n";
+            content += &to_dot_string(&contracted_ir, &symbols);
+            content += "\n";
         }
 
         let mut settings = Settings::clone_current();

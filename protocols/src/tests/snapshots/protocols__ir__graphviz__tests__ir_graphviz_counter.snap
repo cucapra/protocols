@@ -2,6 +2,7 @@
 source: protocols/src/ir/graphviz.rs
 expression: content
 ---
+== pre-contract ==
 digraph "count_up" {
   rankdir=LR;
   node [shape=box];
@@ -27,4 +28,34 @@ digraph "count_up" {
   node8 -> node7 [label="1 / step"];
   node9 [label="[1] dut.a := a"];
   node9 -> node7 [label="1"];
+}
+
+== post-contract ==
+digraph "count_up" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] dut.a := a"];
+  node0 -> node4 [label="1 + 1 + !(!(dut.s == dut.a)) + 1 + 1 / step"];
+  node0 -> node7 [label="1 + 1 + !(dut.s == dut.a) + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] fork"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] assert_eq(dut.s, 0)\n[1 + 1] fork"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node6 [label=""];
+  node6 -> node4 [label="1 + 1 / step"];
+  node7 [label=""];
+  node7 -> node4 [label="!(!(dut.s == dut.a)) + 1 + 1 / step"];
+  node7 -> node7 [label="!(dut.s == dut.a) + 1 / step"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node9 [label="[1] dut.a := a"];
+  node9 -> node4 [label="1 + !(!(dut.s == dut.a)) + 1 + 1 / step"];
+  node9 -> node7 [label="1 + !(dut.s == dut.a) + 1 / step"];
 }

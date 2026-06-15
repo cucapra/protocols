@@ -71,6 +71,14 @@ impl Node {
     pub fn transition_iter(&self) -> impl Iterator<Item = &Transition> {
         self.transitions.iter()
     }
+
+    pub(crate) fn actions_mut(&mut self) -> &mut Vec<Action> {
+        &mut self.actions
+    }
+
+    pub(crate) fn transitions_mut(&mut self) -> &mut Vec<Transition> {
+        &mut self.transitions
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +131,10 @@ impl ProtoGraph {
 
     pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
         self.nodes.iter()
+    }
+
+    pub(crate) fn node_mut(&mut self, node_id: NodeId) -> &mut Node {
+        &mut self.nodes[node_id]
     }
 
     /// push an action `a` onto `node_id`

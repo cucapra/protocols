@@ -2,6 +2,7 @@
 source: protocols/src/ir/graphviz.rs
 expression: content
 ---
+== pre-contract ==
 digraph "add_combinational_illegal_observation_in_conditional" {
   rankdir=LR;
   node [shape=box];
@@ -29,6 +30,39 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   node9 -> node8 [label="1"];
 }
 
+== post-contract ==
+digraph "add_combinational_illegal_observation_in_conditional" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := X\n[1 + 1 + 1] DUT.b := X\n[1 + 1 + 1 + 1] DUT.a := a"];
+  node0 -> node1 [label="1 + 1 + 1 + 1 + !(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node0 -> node1 [label="1 + 1 + 1 + 1 + DUT.s == 0 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label=""];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label=""];
+  node5 -> node1 [label="1 + 1 + 1 / step"];
+  node6 [label=""];
+  node6 -> node1 [label="!(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node6 -> node1 [label="DUT.s == 0 + 1 + 1 + 1 / step"];
+  node7 [label="[1] DUT.a := a"];
+  node7 -> node1 [label="1 + !(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node7 -> node1 [label="1 + DUT.s == 0 + 1 + 1 + 1 / step"];
+  node8 [label="[1] DUT.b := X\n[1 + 1] DUT.a := a"];
+  node8 -> node1 [label="1 + 1 + !(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node8 -> node1 [label="1 + 1 + DUT.s == 0 + 1 + 1 + 1 / step"];
+  node9 [label="[1] DUT.a := X\n[1 + 1] DUT.b := X\n[1 + 1 + 1] DUT.a := a"];
+  node9 -> node1 [label="1 + 1 + 1 + !(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node9 -> node1 [label="1 + 1 + 1 + DUT.s == 0 + 1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "add_combinational_illegal_observation_in_assertion" {
   rankdir=LR;
   node [shape=box];
@@ -49,6 +83,28 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node6 -> node5 [label="1"];
 }
 
+== post-contract ==
+digraph "add_combinational_illegal_observation_in_assertion" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := X\n[1 + 1 + 1] DUT.b := X\n[1 + 1 + 1 + 1] DUT.a := a\n[1 + 1 + 1 + 1 + 1] assert_eq(DUT.s, s)"];
+  node0 -> node1 [label="1 + 1 + 1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(DUT.s, s)"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] DUT.a := a\n[1 + 1] assert_eq(DUT.s, s)"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] DUT.b := X\n[1 + 1] DUT.a := a\n[1 + 1 + 1] assert_eq(DUT.s, s)"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
+  node6 [label="[1] DUT.a := X\n[1 + 1] DUT.b := X\n[1 + 1 + 1] DUT.a := a\n[1 + 1 + 1 + 1] assert_eq(DUT.s, s)"];
+  node6 -> node1 [label="1 + 1 + 1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "add_combinational_legal_observation_illegal_assignment" {
   rankdir=LR;
   node [shape=box];
@@ -70,6 +126,30 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node6 -> node5 [label="!(DUT.s == 0)"];
 }
 
+== post-contract ==
+digraph "add_combinational_legal_observation_illegal_assignment" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + DUT.s == 0 + 1] DUT.a := a"];
+  node0 -> node1 [label="1 + !(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node0 -> node1 [label="1 + DUT.s == 0 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label=""];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] DUT.a := a"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label=""];
+  node5 -> node1 [label="1 + 1 + 1 / step"];
+  node6 [label="[DUT.s == 0 + 1] DUT.a := a"];
+  node6 -> node1 [label="!(DUT.s == 0) + 1 + 1 + 1 / step"];
+  node6 -> node1 [label="DUT.s == 0 + 1 + 1 + 1 / step"];
+}
+
+== pre-contract ==
 digraph "add_combinational" {
   rankdir=LR;
   node [shape=box];
@@ -86,4 +166,23 @@ digraph "add_combinational" {
   node4 -> node3 [label="1"];
   node5 [label="[1] DUT.a := a"];
   node5 -> node4 [label="1"];
+}
+
+== post-contract ==
+digraph "add_combinational" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1 + 1] DUT.a := a\n[1 + 1 + 1] DUT.b := b\n[1 + 1 + 1 + 1] assert_eq(s, DUT.s)"];
+  node0 -> node1 [label="1 + 1 + 1 + 1 + 1 / step"];
+  node1 [label="[1] done"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node1 [label="1 + 1 / step"];
+  node4 [label="[1] DUT.b := b\n[1 + 1] assert_eq(s, DUT.s)"];
+  node4 -> node1 [label="1 + 1 + 1 / step"];
+  node5 [label="[1] DUT.a := a\n[1 + 1] DUT.b := b\n[1 + 1 + 1] assert_eq(s, DUT.s)"];
+  node5 -> node1 [label="1 + 1 + 1 + 1 / step"];
 }
