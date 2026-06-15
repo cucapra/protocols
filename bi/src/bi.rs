@@ -913,6 +913,7 @@ impl Thread {
                             }
                             BinOp::Concat => a.concat(&b),
                             BinOp::Add => a.add(&b),
+                            BinOp::And => a.and(&b),
                         };
                         ExprValue::Known(res)
                     }

@@ -331,6 +331,7 @@ impl Interpreter {
                         }
                     },
                     BinOp::Add => todo!("add support for `add`"),
+                    BinOp::And => todo!("and support for `and`"),
                 }
             }
             Expr::Unary(unary_op, expr_id) => {

@@ -5,37 +5,62 @@ use crate::ir::proto_graph::{Action, ProtoGraph, Transition};
 /// Finds the rightmost eligible edge and contracts it.
 /// Returns `true` if there was an edge to contract.
 fn contract_edge(protocol: &mut ProtoGraph, _symbols: &SymbolTable) -> bool {
+    // get all the nodes in reverse order
     let mut nodes: Vec<_> = protocol.nodes().map(|(node_id, _)| node_id).collect();
     nodes.reverse();
 
+    // pick up the first node in the reverse order
     for lhs_id in nodes {
-        let transitions = protocol[lhs_id].transition_iter().cloned().collect::<Vec<_>>();
+        let transitions = protocol[lhs_id]
+            .transition_iter()
+            .cloned()
+            .collect::<Vec<_>>();
         for (transition_idx, transition) in transitions.into_iter().enumerate().rev() {
+            // we only want to think about collapsing non step-edges
             if transition.consumes_step {
                 continue;
             }
 
+            // get the info on the edge we're transitioning into
             let rhs_id = transition.target;
             let rhs_actions = protocol[rhs_id].action_iter().cloned().collect::<Vec<_>>();
-            let rhs_transitions = protocol[rhs_id].transition_iter().cloned().collect::<Vec<_>>();
+            let rhs_transitions = protocol[rhs_id]
+                .transition_iter()
+                .cloned()
+                .collect::<Vec<_>>();
             let lhs_guard = transition.guard;
 
+            // AND all the actions in the RHS node with the transition guard
             let mut merged_actions = Vec::with_capacity(rhs_actions.len());
-            for action in rhs_actions {
-                let guard = protocol.e(Expr::Binary(BinOp::Add, lhs_guard, action.guard));
-                merged_actions.push(Action::new(guard, action.op));
-            }
+            rhs_actions.into_iter().for_each(|action| {
+                // basic simplification: don't AND to a guard if the RHS is true.
+                let guard = if action.guard == protocol.true_id() {
+                    lhs_guard
+                } else {
+                    protocol.e(Expr::Binary(BinOp::And, lhs_guard, action.guard))
+                };
 
+                merged_actions.push(Action::new(guard, action.op));
+            });
+
+            // AND all the transitions in the RHS node with the transition guard
             let mut merged_transitions = Vec::with_capacity(rhs_transitions.len());
-            for rhs_transition in rhs_transitions {
-                let guard = protocol.e(Expr::Binary(BinOp::Add, lhs_guard, rhs_transition.guard));
+            rhs_transitions.into_iter().for_each(|rhs_transition| {
+                // basic simplification: don't AND to a guard if the RHS is true.
+                let guard = if rhs_transition.guard == protocol.true_id() {
+                    lhs_guard
+                } else {
+                    protocol.e(Expr::Binary(BinOp::And, lhs_guard, rhs_transition.guard))
+                };
+
                 merged_transitions.push(Transition::new(
                     guard,
                     rhs_transition.target,
                     rhs_transition.consumes_step,
                 ));
-            }
+            });
 
+            // ad the correct transitions, remove the transition to the RHS node
             let lhs_node = protocol.node_mut(lhs_id);
             lhs_node.transitions_mut().remove(transition_idx);
             lhs_node.actions_mut().extend(merged_actions);

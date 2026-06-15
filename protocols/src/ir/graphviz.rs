@@ -4,7 +4,8 @@
 
 use crate::frontend::serialize::serialize_expr;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{Op, ProtoGraph};
+use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
@@ -19,7 +20,14 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
     out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
 
     // emit one graphviz node per ir node
-    for (node_id, node) in protocol.nodes() {
+    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
+    let mut q = VecDeque::from([protocol.entry]);
+    // for (node_id, node) in protocol.nodes() {
+    while !q.is_empty() {
+        let node_id = q.pop_front().unwrap();
+        let node = protocol[node_id].clone();
+        seen.insert(node_id);
+
         let mut label_parts = vec![];
 
         // collect action text into the node label
@@ -54,6 +62,9 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
                 transition.target,
                 escape_label(&edge_label)
             ));
+            if !seen.contains(&transition.target) {
+                q.push_back(transition.target);
+            }
         }
     }
 

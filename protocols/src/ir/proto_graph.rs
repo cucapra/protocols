@@ -8,7 +8,7 @@ use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use std::ops::{Deref, DerefMut, Index};
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
 entity_impl!(NodeId, "node");
 

@@ -129,6 +129,24 @@ fn type_check_expr(
                         Ok(Type::BitVec(1))
                     }
                 }
+                BinOp::And => {
+                    if lhs_type.is_equivalent(&rhs_type) {
+                        Ok(lhs_type)
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!(
+                                "Type mismatch in binary operation: {} and {}",
+                                lhs_type_str, rhs_type_str
+                            ),
+                            Level::Error,
+                        );
+                        Ok(lhs_type)
+                    }
+                }
                 BinOp::Add => {
                     if let (Type::BitVec(aw), Type::BitVec(bw)) = (lhs_type, rhs_type) {
                         if aw == bw {

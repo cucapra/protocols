@@ -69,6 +69,7 @@ impl std::fmt::Display for BinOp {
             BinOp::Equal => write!(f, "=="),
             BinOp::Concat => write!(f, "##"),
             BinOp::Add => write!(f, "+"),
+            BinOp::And => write!(f, "&"),
         }
     }
 }
