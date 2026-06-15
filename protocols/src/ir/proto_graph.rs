@@ -52,8 +52,8 @@ impl Transition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 // A node is a (logically) unorded set of actions and transitions
 pub struct Node {
-    actions: Vec<Action>,
-    transitions: Vec<Transition>,
+    pub actions: Vec<Action>,
+    pub transitions: Vec<Transition>,
 }
 
 impl Node {
@@ -62,22 +62,6 @@ impl Node {
             actions: vec![],
             transitions: vec![],
         }
-    }
-
-    pub fn action_iter(&self) -> impl Iterator<Item = &Action> {
-        self.actions.iter()
-    }
-
-    pub fn transition_iter(&self) -> impl Iterator<Item = &Transition> {
-        self.transitions.iter()
-    }
-
-    pub(crate) fn actions_mut(&mut self) -> &mut Vec<Action> {
-        &mut self.actions
-    }
-
-    pub(crate) fn transitions_mut(&mut self) -> &mut Vec<Transition> {
-        &mut self.transitions
     }
 }
 
@@ -194,6 +178,14 @@ impl Index<ExprId> for ProtoGraph {
 
     fn index(&self, index: ExprId) -> &Self::Output {
         &self.ctx[index]
+    }
+}
+
+impl Index<usize> for Node {
+    type Output = Transition;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.transitions[index]
     }
 }
 

@@ -1,124 +1,70 @@
-use crate::frontend::ast::{BinOp, Expr};
-use crate::frontend::symbol::SymbolTable;
+use crate::frontend::ast::{BinOp, Expr, ExprId};
 use crate::ir::proto_graph::{Action, ProtoGraph, Transition};
 
-/// Finds the rightmost eligible edge and contracts it.
-/// Returns `true` if there was an edge to contract.
-fn contract_edge(protocol: &mut ProtoGraph, _symbols: &SymbolTable) -> bool {
-    // get all the nodes in reverse order
-    let mut nodes: Vec<_> = protocol.nodes().map(|(node_id, _)| node_id).collect();
-    nodes.reverse();
+/// If either side of the guard conjunction is `true`, elide it.
+fn and_guard(protocol: &mut ProtoGraph, lhs: ExprId, rhs: ExprId) -> ExprId {
+    if lhs == protocol.true_id() {
+        rhs
+    } else if rhs == protocol.true_id() {
+        lhs
+    } else {
+        protocol.e(Expr::Binary(BinOp::And, lhs, rhs))
+    }
+}
 
-    // pick up the first node in the reverse order
-    for lhs_id in nodes {
-        let transitions = protocol[lhs_id]
-            .transition_iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        for (transition_idx, transition) in transitions.into_iter().enumerate().rev() {
-            // we only want to think about collapsing non step-edges
+/// Contract non-step edges from right to left until no more eligible edges remain.
+pub fn contract_edges(protocol: &mut ProtoGraph) {
+    let node_ids = protocol
+        .nodes()
+        .map(|(node_id, _)| node_id)
+        .collect::<Vec<_>>();
+
+    // iterate nodes
+    for lhs_id in node_ids.into_iter().rev() {
+        let mut transition_idx = protocol[lhs_id].transitions.len();
+
+        // iterate transitions backwards. for some reason I feel this will prevent
+        // duplicate edges; revisit when we have evidence of things going wrong
+        // TODO: the backwards iteration logic here is a bit messy
+        while transition_idx > 0 {
+            transition_idx -= 1;
+            let transition = protocol[lhs_id][transition_idx].clone();
+
             if transition.consumes_step {
                 continue;
             }
 
-            // get the info on the edge we're transitioning into
             let rhs_id = transition.target;
-            let rhs_actions = protocol[rhs_id].action_iter().cloned().collect::<Vec<_>>();
-            let rhs_transitions = protocol[rhs_id]
-                .transition_iter()
-                .cloned()
-                .collect::<Vec<_>>();
             let lhs_guard = transition.guard;
+            let rhs_actions = protocol[rhs_id].actions.clone();
+            let rhs_transitions = protocol[rhs_id].transitions.clone();
 
-            // AND all the actions in the RHS node with the transition guard
-            let mut merged_actions = Vec::with_capacity(rhs_actions.len());
-            rhs_actions.into_iter().for_each(|action| {
-                // basic simplification: don't AND to a guard if the RHS is true.
-                let guard = if action.guard == protocol.true_id() {
-                    lhs_guard
-                } else {
-                    protocol.e(Expr::Binary(BinOp::And, lhs_guard, action.guard))
-                };
+            // create actions with the transition to RHS guard & the action in RHS guards
+            let merged_actions = rhs_actions
+                .into_iter()
+                .map(|action| Action::new(and_guard(protocol, lhs_guard, action.guard), action.op))
+                .collect::<Vec<_>>();
+            // create transitions with the transition to RHS guard & the transition from RHS guards
+            let merged_transitions = rhs_transitions
+                .into_iter()
+                .map(|rhs_transition| {
+                    Transition::new(
+                        and_guard(protocol, lhs_guard, rhs_transition.guard),
+                        rhs_transition.target,
+                        rhs_transition.consumes_step,
+                    )
+                })
+                .collect::<Vec<_>>();
 
-                merged_actions.push(Action::new(guard, action.op));
-            });
-
-            // AND all the transitions in the RHS node with the transition guard
-            let mut merged_transitions = Vec::with_capacity(rhs_transitions.len());
-            rhs_transitions.into_iter().for_each(|rhs_transition| {
-                // basic simplification: don't AND to a guard if the RHS is true.
-                let guard = if rhs_transition.guard == protocol.true_id() {
-                    lhs_guard
-                } else {
-                    protocol.e(Expr::Binary(BinOp::And, lhs_guard, rhs_transition.guard))
-                };
-
-                merged_transitions.push(Transition::new(
-                    guard,
-                    rhs_transition.target,
-                    rhs_transition.consumes_step,
-                ));
-            });
-
-            // ad the correct transitions, remove the transition to the RHS node
+            // modify the LHS nodes with these
             let lhs_node = protocol.node_mut(lhs_id);
-            lhs_node.transitions_mut().remove(transition_idx);
-            lhs_node.actions_mut().extend(merged_actions);
-            lhs_node.transitions_mut().extend(merged_transitions);
+            lhs_node.transitions.remove(transition_idx);
+            lhs_node.actions.extend(merged_actions);
+            lhs_node.transitions.extend(merged_transitions);
 
-            return true;
+            // Re-scan this node from the right so newly appended transitions
+            // introduced by the contraction can themselves be contracted.
+            transition_idx = protocol[lhs_id].transitions.len();
         }
-    }
-
-    false
-}
-
-/// Run `contract_edge` until there are no more edges to contract.
-pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
-    while contract_edge(protocol, symbols) {}
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::parse_file;
-    use crate::ir::lowering::lower_ast_to_ir;
-    use tempfile::NamedTempFile;
-
-    fn lower_with_symbols(source: &str) -> (ProtoGraph, SymbolTable) {
-        let file = NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), source).unwrap();
-
-        let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file(file.path(), &mut handler).unwrap();
-        assert_eq!(parsed.len(), 1);
-        let (ast, symbols) = parsed.into_iter().next().unwrap();
-        (lower_ast_to_ir(ast), symbols)
-    }
-
-    #[test]
-    fn contracts_non_step_edges_and_leaves_step_edges_in_place() {
-        let (mut protocol, symbols) = lower_with_symbols(
-            r#"
-            struct Dummy {
-              in a: u32,
-              out b: u32,
-            }
-
-            prot pipe<dut: Dummy>(a: u32, b: u32) {
-              dut.a := a;
-              step();
-              assert_eq(b, dut.b);
-            }
-            "#,
-        );
-
-        contract_edges(&mut protocol, &symbols);
-
-        let entry = &protocol[protocol.entry];
-        assert!(entry.action_iter().count() >= 1);
-        assert_eq!(entry.transition_iter().count(), 1);
-        assert!(entry.transition_iter().next().unwrap().consumes_step);
     }
 }

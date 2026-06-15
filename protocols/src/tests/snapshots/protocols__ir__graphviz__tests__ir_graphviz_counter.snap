@@ -37,8 +37,8 @@ digraph "count_up" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] dut.a := a"];
-  node0 -> node4 [label="1 & 1 & !(!(dut.s == dut.a)) / step"];
-  node0 -> node7 [label="1 & 1 & !(dut.s == dut.a) / step"];
+  node0 -> node4 [label="!(!(dut.s == dut.a)) / step"];
+  node0 -> node7 [label="!(dut.s == dut.a) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
   node4 -> node1 [label="1 / step"];
   node7 [label=""];
@@ -64,7 +64,7 @@ digraph "count_up_extra_assertion" {
   node9 -> node8 [label="1 / step"];
   node7 [label=""];
   node7 -> node6 [label="1"];
-  node6 [label="[1] assert_eq(dut.s, dut.a)"];
+  node6 [label="[1] assert_eq(dut.s, a)"];
   node6 -> node5 [label="1"];
   node5 [label=""];
   node5 -> node4 [label="1 / step"];
@@ -83,12 +83,12 @@ digraph "count_up_extra_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := a\n[1 & 1 & !(!(dut.s == dut.a))] assert_eq(dut.s, dut.a)"];
-  node0 -> node4 [label="1 & 1 & !(!(dut.s == dut.a)) / step"];
-  node0 -> node8 [label="1 & 1 & !(dut.s == dut.a) / step"];
+  node0 [label="[1] dut.a := a\n[!(!(dut.s == dut.a))] assert_eq(dut.s, a)"];
+  node0 -> node4 [label="!(!(dut.s == dut.a)) / step"];
+  node0 -> node8 [label="!(dut.s == dut.a) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
   node4 -> node1 [label="1 / step"];
-  node8 [label="[!(!(dut.s == dut.a))] assert_eq(dut.s, dut.a)"];
+  node8 [label="[!(!(dut.s == dut.a))] assert_eq(dut.s, a)"];
   node8 -> node4 [label="!(!(dut.s == dut.a)) / step"];
   node8 -> node8 [label="!(dut.s == dut.a) / step"];
   node1 [label="[1] done"];

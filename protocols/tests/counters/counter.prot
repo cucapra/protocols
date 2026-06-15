@@ -30,7 +30,7 @@ prot count_up_extra_assertion<dut: Counter>(a: u64) {
     }
 
     // something after the loop with no step() in between
-    assert_eq(dut.s, dut.a);
+    assert_eq(dut.s, a);
 
     // now, dut.s == dut.a. Since s >= a, stepping once
     // more should result with dut.0 equal 0

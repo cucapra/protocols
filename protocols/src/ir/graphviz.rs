@@ -31,7 +31,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         let mut label_parts = vec![];
 
         // collect action text into the node label
-        for action in node.action_iter() {
+        for action in &node.actions {
             label_parts.push(format!(
                 "[{}] {}",
                 serialize_expr(protocol, symbols, &action.guard),
@@ -47,7 +47,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         ));
 
         // emit graph edges
-        for transition in node.transition_iter() {
+        for transition in &node.transitions {
             let edge_label = if transition.consumes_step {
                 format!(
                     "{} / step",
@@ -99,7 +99,6 @@ fn escape_label(label: &str) -> String {
     // preserve graphviz escapes like \n in labels, only escape quotes here
     label.replace('"', "\\\"")
 }
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -123,7 +122,7 @@ mod tests {
             content += "\n";
 
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir, &symbols);
+            contract_edges(&mut contracted_ir);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, &symbols);
             content += "\n";
