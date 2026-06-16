@@ -354,6 +354,9 @@ fn expr_to_verilog(
             expr_to_verilog(st, proto, sym_verilog, out, *b)?;
             write!(out, ")")
         }
+        Expr::Binary(BinOp::And, _, _) => {
+            todo!("and")
+        }
         Expr::Unary(UnaryOp::Not, e) => {
             write!(out, "~")?;
             expr_to_verilog(st, proto, sym_verilog, out, *e)

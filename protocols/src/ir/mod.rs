@@ -1,3 +1,4 @@
+pub mod edge_contract;
 pub mod graph_interpreter;
 pub mod graphviz;
 pub mod lowering;

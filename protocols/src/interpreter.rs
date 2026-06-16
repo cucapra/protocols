@@ -704,6 +704,7 @@ impl<'a> Evaluator<'a> {
                         }
                         BinOp::Concat => Ok(ExprValue::Concrete(lhs.concat(rhs))),
                         BinOp::Add => Ok(ExprValue::Concrete(lhs.add(rhs))),
+                        BinOp::And => Ok(ExprValue::Concrete(lhs.and(rhs))),
                     },
                 }
             }

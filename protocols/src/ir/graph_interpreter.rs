@@ -15,6 +15,10 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ExprValue, ThreadInputValue};
 use crate::ir::proto_graph::{Op, ProtoGraph};
 
+// TODO: handle ITEs
+// TODO: handle forks
+// TODO: handle irreducible loops
+
 /// interpret a `ProtoGraph`
 pub fn interpret(
     pg: &ProtoGraph,
@@ -37,7 +41,7 @@ pub fn interpret(
 
         // note: this is more of a wellformedness check than anything.
         // even untriggered duplicate assigns to the same input in one node are rejected.
-        for action in node.action_iter() {
+        for action in &node.actions {
             if let Op::Assign(symbol_id, _) = &pg[action.op]
                 && !assigned_inputs.insert(*symbol_id)
             {
@@ -46,7 +50,7 @@ pub fn interpret(
         }
 
         // first pass: buffer any triggered assigns
-        for action in node.action_iter() {
+        for action in &node.actions {
             if let Op::Assign(symbol_id, expr_id) = &pg[action.op]
                 && evaluate_guard(&mut evaluator, action.guard)
             {
@@ -62,7 +66,7 @@ pub fn interpret(
 
         // second pass: after applying buffered inputs, evaluate non-assign actions
         let mut done_triggered = false;
-        for action in node.action_iter() {
+        for action in &node.actions {
             if evaluate_guard(&mut evaluator, action.guard) {
                 match &pg[action.op] {
                     Op::Assign(_, _) => {}
@@ -76,7 +80,8 @@ pub fn interpret(
         }
 
         let satisfied_transitions: Vec<_> = node
-            .transition_iter()
+            .transitions
+            .iter()
             .filter(|transition| evaluate_guard(&mut evaluator, transition.guard))
             .collect();
 

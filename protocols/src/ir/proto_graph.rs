@@ -8,7 +8,7 @@ use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use std::ops::{Deref, DerefMut, Index};
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
 entity_impl!(NodeId, "node");
 
@@ -29,6 +29,11 @@ impl Action {
     pub fn new(guard: ExprId, op: OpId) -> Self {
         Self { guard, op }
     }
+
+    /// use the new guard instead of the old one
+    pub fn with_guard(&self, guard: ExprId) -> Self {
+        Self { guard, op: self.op }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,13 +52,22 @@ impl Transition {
             consumes_step,
         }
     }
+
+    /// use the new guard instead of the old one
+    pub fn with_guard(&self, guard: ExprId) -> Self {
+        Self {
+            guard,
+            target: self.target,
+            consumes_step: self.consumes_step,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 // A node is a (logically) unorded set of actions and transitions
 pub struct Node {
-    actions: Vec<Action>,
-    transitions: Vec<Transition>,
+    pub actions: Vec<Action>,
+    pub transitions: Vec<Transition>,
 }
 
 impl Node {
@@ -62,14 +76,6 @@ impl Node {
             actions: vec![],
             transitions: vec![],
         }
-    }
-
-    pub fn action_iter(&self) -> impl Iterator<Item = &Action> {
-        self.actions.iter()
-    }
-
-    pub fn transition_iter(&self) -> impl Iterator<Item = &Transition> {
-        self.transitions.iter()
     }
 }
 
@@ -123,6 +129,10 @@ impl ProtoGraph {
 
     pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
         self.nodes.iter()
+    }
+
+    pub(crate) fn node_mut(&mut self, node_id: NodeId) -> &mut Node {
+        &mut self.nodes[node_id]
     }
 
     /// push an action `a` onto `node_id`
@@ -182,6 +192,14 @@ impl Index<ExprId> for ProtoGraph {
 
     fn index(&self, index: ExprId) -> &Self::Output {
         &self.ctx[index]
+    }
+}
+
+impl Index<usize> for Node {
+    type Output = Transition;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.transitions[index]
     }
 }
 

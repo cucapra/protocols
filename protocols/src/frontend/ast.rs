@@ -365,6 +365,7 @@ pub enum BinOp {
     Equal,
     Concat,
     Add,
+    And,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

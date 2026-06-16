@@ -4,7 +4,8 @@
 
 use crate::frontend::serialize::serialize_expr;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{Op, ProtoGraph};
+use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
@@ -19,11 +20,18 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
     out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
 
     // emit one graphviz node per ir node
-    for (node_id, node) in protocol.nodes() {
+    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
+    let mut q = VecDeque::from([protocol.entry]);
+    // for (node_id, node) in protocol.nodes() {
+    while !q.is_empty() {
+        let node_id = q.pop_front().unwrap();
+        let node = protocol[node_id].clone();
+        seen.insert(node_id);
+
         let mut label_parts = vec![];
 
         // collect action text into the node label
-        for action in node.action_iter() {
+        for action in &node.actions {
             label_parts.push(format!(
                 "[{}] {}",
                 serialize_expr(protocol, symbols, &action.guard),
@@ -39,7 +47,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         ));
 
         // emit graph edges
-        for transition in node.transition_iter() {
+        for transition in &node.transitions {
             let edge_label = if transition.consumes_step {
                 format!(
                     "{} / step",
@@ -54,6 +62,9 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
                 transition.target,
                 escape_label(&edge_label)
             ));
+            if !seen.contains(&transition.target) {
+                q.push_back(transition.target);
+            }
         }
     }
 
@@ -88,13 +99,13 @@ fn escape_label(label: &str) -> String {
     // preserve graphviz escapes like \n in labels, only escape quotes here
     label.replace('"', "\\\"")
 }
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::parser::parse_file;
+    use crate::ir::edge_contract::contract_edges;
     use crate::ir::lowering::lower_ast_to_ir;
     use insta::Settings;
 
@@ -106,9 +117,16 @@ mod tests {
         let mut content = String::new();
         for (ast, symbols) in parsed.into_iter() {
             let ir: ProtoGraph = lower_ast_to_ir(ast);
-            let dot_graph = to_dot_string(&ir, &symbols);
-            // append each digraph into one dot file
-            content += &(dot_graph + "\n");
+            content += "== pre-contract ==\n";
+            content += &to_dot_string(&ir, &symbols);
+            content += "\n";
+
+            // println!("post contract");
+            let mut contracted_ir = ir.clone();
+            contract_edges(&mut contracted_ir);
+            content += "== post-contract ==\n";
+            content += &to_dot_string(&contracted_ir, &symbols);
+            content += "\n";
         }
 
         let mut settings = Settings::clone_current();

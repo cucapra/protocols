@@ -20,3 +20,24 @@ prot count_up<dut: Counter>(a: u64) {
     fork();
     step();
 }
+
+prot count_up_extra_assertion<dut: Counter>(a: u64) {
+    // Loading dut with values
+    dut.a := a;
+
+    while !(dut.s == dut.a) {
+        step(1);
+    }
+
+    // something after the loop with no step() in between
+    assert_eq(dut.s, a);
+
+    // now, dut.s == dut.a. Since s >= a, stepping once
+    // more should result with dut.0 equal 0
+    step(1);
+    assert_eq(dut.s, 64'b0);
+
+    fork();
+    step();
+}
+
