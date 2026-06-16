@@ -134,10 +134,10 @@ $ cargo interp --verilog protocols/tests/adders/adder_d1/add_d1.v \
 ```
 
 ## Syntax highlighting
-This repository contains a basic VS Code extension which provides syntax highlighting for `.prot` and `.tx` files 
+This repository contains a TextMate Bundle, which provides syntax highlighting for `.prot` and `.tx` files 
 (the `.tx` file format is used to supply a list of transactions to be executed for the interpreter).
 
-**Installation**:
+**VS Code Installation**:
 Add a link to the Protocols VS Code extension directory to your VS Code extensions directory as follows:
 
 ```bash
@@ -146,3 +146,11 @@ $ ln -s <path to protocols root directory>/tools/vscode protocols.protocols-0.0.
 ```
 
 Then, restart VS Code.
+
+**RustRover Installation:**
+Go to `Settings` -> `Editor` -> `TextMate Bundles`. Click the `+` and navigate to `<path to protocols root directory>/tools/vscode` in your file explorer. 
+
+One confirmed, `protocols` should appear as an entry in the `TextMate Bundles` table.
+
+If the syntax highlighting does not immediately load, restart RustRover.
+
