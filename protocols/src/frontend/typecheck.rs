@@ -352,16 +352,17 @@ fn type_check_stmt(
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
 pub fn type_check(
-    trs: &mut [(Protocol, SymbolTable)],
+    st: &mut SymbolTable,
+    protos: &[Protocol],
     handler: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
-    for (tr, st) in trs {
+    for proto in protos {
         // debug sanity check to make sure the symbol table and the argument list are in sync
-        for (index, arg) in tr.args.iter().enumerate() {
+        for (index, arg) in proto.args.iter().enumerate() {
             debug_assert_eq!(st[arg].as_arg_index(), Some(index), "{}", st[arg].name());
         }
 
-        type_check_stmt(tr, st, handler, &tr.body)?;
+        type_check_stmt(proto, st, handler, &proto.body)?;
     }
     Ok(())
 }
@@ -389,8 +390,8 @@ mod tests {
         let mut handler = DiagnosticHandler::default();
         let result = parse_file(file_name, &mut handler);
         let content = match result {
-            Ok(mut trs) => {
-                let _ = type_check(&mut trs, &mut handler);
+            Ok((mut st, protos)) => {
+                let _ = type_check(&mut st, &protos, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -482,29 +483,29 @@ mod tests {
         let input =
             std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
-        let mut tr = Protocol::new("func_arg_invalid".to_string());
-        tr.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
+        let mut prot = Protocol::new("func_arg_invalid".to_string());
+        prot.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
-        let b_expr = tr.e(Expr::Sym(b));
-        tr.add_expr_loc(b_expr, 62, 63, fileid);
-        let b_expr2 = tr.e(Expr::Sym(b));
-        tr.add_expr_loc(b_expr2, 84, 85, fileid);
-        let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
-        tr.add_expr_loc(zero_expr, 106, 107, fileid);
-        let a_assign = tr.s(Stmt::Assign(a, b_expr));
-        let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-        tr.add_expr_loc(one_expr, 1, 1, fileid); // random location
-        tr.add_stmt_loc(a_assign, 57, 64, fileid);
-        let fork = tr.s(Stmt::Fork);
-        tr.add_stmt_loc(fork, 68, 75, fileid);
-        let c_assign = tr.s(Stmt::Assign(c, b_expr));
-        tr.add_stmt_loc(c_assign, 79, 86, fileid);
-        let step = tr.s(Stmt::Step);
-        tr.add_stmt_loc(step, 90, 97, fileid);
-        let s_assign = tr.s(Stmt::Assign(s, zero_expr));
-        tr.add_stmt_loc(s_assign, 101, 108, fileid);
+        let b_expr = prot.e(Expr::Sym(b));
+        prot.add_expr_loc(b_expr, 62, 63, fileid);
+        let b_expr2 = prot.e(Expr::Sym(b));
+        prot.add_expr_loc(b_expr2, 84, 85, fileid);
+        let zero_expr = prot.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        prot.add_expr_loc(zero_expr, 106, 107, fileid);
+        let a_assign = prot.s(Stmt::Assign(a, b_expr));
+        let one_expr = prot.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        prot.add_expr_loc(one_expr, 1, 1, fileid); // random location
+        prot.add_stmt_loc(a_assign, 57, 64, fileid);
+        let fork = prot.s(Stmt::Fork);
+        prot.add_stmt_loc(fork, 68, 75, fileid);
+        let c_assign = prot.s(Stmt::Assign(c, b_expr));
+        prot.add_stmt_loc(c_assign, 79, 86, fileid);
+        let step = prot.s(Stmt::Step);
+        prot.add_stmt_loc(step, 90, 97, fileid);
+        let s_assign = prot.s(Stmt::Assign(s, zero_expr));
+        prot.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
-        tr.body = tr.s(Stmt::Block(body));
-        let _ = type_check(&mut [(tr, symbols)], &mut handler);
+        prot.body = prot.s(Stmt::Block(body));
+        let _ = type_check(&mut symbols, &[prot], &mut handler);
     }
 }

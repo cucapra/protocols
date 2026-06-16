@@ -40,18 +40,20 @@ pub enum BIState {
 }
 
 impl BackwardsInterpreter {
-    pub fn new<'a>(
-        protos_and_syms: impl Iterator<Item = &'a (Protocol, SymbolTable)>,
+    pub fn new(
+        sym: &SymbolTable,
+        protos: &[Protocol],
         instance_id: u32,
         include_in_progress: bool,
     ) -> Self {
-        let protos: Vec<_> = protos_and_syms
+        let protos: Vec<_> = protos
+            .iter()
             .enumerate()
-            .map(|(proto_id, (t, sym))| {
-                let next_stmt = t.next_stmt_mapping();
+            .map(|(proto_id, proto)| {
+                let next_stmt = proto.next_stmt_mapping();
                 ProtoInfo {
                     proto_id,
-                    proto: t.clone(),
+                    proto: proto.clone(),
                     sym: sym.clone(),
                     next_stmt,
                 }

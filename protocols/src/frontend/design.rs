@@ -55,26 +55,24 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
 /// returning a `HashMap` from struct names to the actual `Design`
-pub fn find_designs<'a>(
-    protos: impl Iterator<Item = &'a (Protocol, SymbolTable)>,
-) -> FxHashMap<String, Design> {
+pub fn find_designs<'a>(st: &SymbolTable, protos: &[Protocol]) -> FxHashMap<String, Design> {
     // Maps the name of the protocol to metadata about the struct (design)
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut designs: FxHashMap<String, Design> = FxHashMap::default();
-    for (proto_id, (proto, symbol_table)) in protos.enumerate() {
+    for (proto_id, proto) in protos.iter().enumerate() {
         if let Some(dut_symbol_id) = proto.type_param {
             // We assume type parameters have to be structs
-            let struct_id = match symbol_table[dut_symbol_id].tpe() {
+            let struct_id = match st[dut_symbol_id].tpe() {
                 Type::Struct(id) => id,
                 o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
             };
-            let struct_name = symbol_table[struct_id].name().to_string();
+            let struct_name = st[struct_id].name().to_string();
             if let Some(design) = designs.get_mut(&struct_name) {
                 design.protocol_ids.push(proto_id);
             } else {
                 // Extract all the fields from the struct
                 // (`Field`s are also called `pin`s`)
-                let pins_vec: Vec<Field> = symbol_table[struct_id].pins().clone();
+                let pins_vec: Vec<Field> = st[struct_id].pins().clone();
 
                 // For each pin, look up its associated `SymbolId` in the symbol table
                 // This returns an association list mapping `SymbolId`s to their associated pins
@@ -84,19 +82,18 @@ pub fn find_designs<'a>(
                     .into_iter()
                     .map(|pin| {
                         (
-                            symbol_table
-                                .symbol_id_from_name(&format!(
-                                    "{}.{}",
-                                    symbol_table[dut_symbol_id].name(),
-                                    pin.name()
-                                ))
-                                .unwrap_or_else(|| {
-                                    panic!(
-                                        "Unable to find symbol ID for pin {}, symbol_table is {}",
-                                        pin.name(),
-                                        symbol_table
-                                    )
-                                }),
+                            st.symbol_id_from_name(&format!(
+                                "{}.{}",
+                                st[dut_symbol_id].name(),
+                                pin.name()
+                            ))
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Unable to find symbol ID for pin {}, symbol_table is {}",
+                                    pin.name(),
+                                    st
+                                )
+                            }),
                             pin,
                         )
                     })
@@ -107,7 +104,7 @@ pub fn find_designs<'a>(
                     symbol_id: dut_symbol_id,
                     protocol_ids: vec![proto_id],
                 };
-                info!("Inserting {}", serialize_design(symbol_table, &design));
+                info!("Inserting {}", serialize_design(st, &design));
                 designs.insert(struct_name, design);
             }
         }

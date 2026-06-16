@@ -53,9 +53,12 @@ pub struct Scheduler {
     /// Only one thread per struct should finish per cycle
     finished_thread: Option<(u32, u32, String)>, // (start_cycle, thread_id, transaction_name)
 
-    /// All possible transactions (along with their corresponding `SymbolTable`s)
+    /// All possible transactions
     /// (This is used when forking new threads)
-    pub possible_transactions: Vec<(Protocol, SymbolTable)>,
+    pub possible_transactions: Vec<Protocol>,
+
+    /// The global symbol table.
+    pub symbol_table: SymbolTable,
 
     /// The name of the struct this scheduler is monitoring
     /// (Used for prefixing transaction names in multi-struct scenarios)
@@ -120,7 +123,8 @@ impl Scheduler {
     /// transaction traces (this is useful in `.prot` files when multiple
     /// `struct`s are defined).
     pub fn initialize(
-        transactions: Vec<(Protocol, SymbolTable)>,
+        st: &SymbolTable,
+        protos: &[Protocol],
         trace: &WaveSignalTrace,
         struct_name: String,
         dut_symbol_id: SymbolId,
@@ -131,12 +135,12 @@ impl Scheduler {
         let mut current_threads = Queue::new();
         // Create a new thread for each transaction, then push it to the
         // end of the `current` queue
-        for (transaction, symbol_table) in &transactions {
+        for proto in protos {
             let thread = Thread::new(
                 struct_name.clone(),
-                transaction.clone(),
-                symbol_table.clone(),
-                transaction.next_stmt_mapping(),
+                proto.clone(),
+                st.clone(),
+                proto.next_stmt_mapping(),
                 thread_id,
                 cycle_count,
                 trace.time_step(),
@@ -171,7 +175,8 @@ impl Scheduler {
             trace_ended: false,
             forked_start_cycles: FxHashSet::default(),
             finished_thread: None,
-            possible_transactions: transactions,
+            possible_transactions: protos.to_vec(),
+            symbol_table: st.clone(),
             struct_name,
             instance_id,
             output_buffer: AugmentedTrace::default(),
@@ -513,11 +518,11 @@ impl Scheduler {
                 "Next queue is empty for `{}` scheduler, spawning new threads for cycle {}",
                 self.struct_name, self.cycle_count
             );
-            for (transaction, symbol_table) in &self.possible_transactions {
+            for transaction in &self.possible_transactions {
                 let new_thread = Thread::new(
                     self.struct_name.clone(),
                     transaction.clone(),
-                    symbol_table.clone(),
+                    self.symbol_table.clone(),
                     transaction.next_stmt_mapping(),
                     self.num_threads,
                     self.cycle_count,
@@ -575,7 +580,7 @@ impl Scheduler {
             ctx.waveform_file,
             self.possible_transactions
                 .iter()
-                .map(|(tr, _)| tr.name.clone())
+                .map(|tr| tr.name.clone())
                 .collect::<Vec<_>>()
                 .join(", ")
         );

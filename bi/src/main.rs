@@ -94,9 +94,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
-    let parsed_ir = frontend(cli.protocol, &mut d, skip_static_step_fork_checks)?;
+    let (st, protos) = frontend(cli.protocol, &mut d, skip_static_step_fork_checks)?;
 
-    let designs = find_designs(parsed_ir.iter());
+    let designs = find_designs(&st, &protos);
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -124,12 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let exclude_from_trace = if cli.include_idle {
         FxHashSet::default()
     } else {
-        FxHashSet::from_iter(
-            parsed_ir
-                .iter()
-                .filter(|(t, _)| t.is_idle)
-                .map(|(t, _)| t.name.clone()),
-        )
+        FxHashSet::from_iter(protos.iter().filter(|p| p.is_idle).map(|p| p.name.clone()))
     };
 
     let bi_protos: Vec<Vec<_>> = instances
@@ -138,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             designs[&inst.design]
                 .protocol_ids
                 .iter()
-                .map(|id| parsed_ir[*id].clone())
+                .map(|id| protos[*id].clone())
                 .collect()
         })
         .collect();
@@ -148,7 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .enumerate()
         .zip(bi_protos.iter())
         .map(|((inst_id, inst), protos)| {
-            BackwardsInterpreter::new(protos.iter(), inst_id as u32, cli.include_in_progress)
+            BackwardsInterpreter::new(&st, protos, inst_id as u32, cli.include_in_progress)
         })
         .collect();
 
@@ -189,7 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
                 for fail in fails {
-                    let proto = &parsed_ir[fail.proto_id].0;
+                    let proto = &parsed_ir[fail.proto_id];
                     let msg = format!(
                         "[{}] executing step {} of the transaction: {} != {}",
                         fail.thread_name,

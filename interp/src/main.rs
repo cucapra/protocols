@@ -5,9 +5,7 @@
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
-use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::SymbolTable;
 use protocols::scheduler::Scheduler;
 use protocols::setup::setup_test_environment;
 use protocols::transaction_frontend;
@@ -118,18 +116,13 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
     );
 
-    let (parsed_data, ctx, sys) = setup_test_environment(
+    let ((st, protos), ctx, sys) = setup_test_environment(
         cli.verilog.iter().map(|v| v.as_str()).collect(),
         &cli.protocol,
         cli.module,
         protocols_handler,
         cli.skip_static_step_fork_checks,
     )?;
-
-    // Nikil says we have to do this step in order to convert
-    // `Vec<(Transaction, SymbolTable)>` into `Vec<(&Transaction, &SymbolTable)>`
-    let transactions_and_symbols: Vec<(&Protocol, &SymbolTable)> =
-        parsed_data.iter().map(|ts| (&ts.0, &ts.1)).collect();
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new(
@@ -138,7 +131,7 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces = transaction_frontend(cli.transactions, parsed_data.iter(), transactions_handler)?;
+    let traces = transaction_frontend(cli.transactions, &st, &protos, transactions_handler)?;
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {
@@ -155,7 +148,8 @@ fn main() -> anyhow::Result<()> {
         };
 
         let mut scheduler = Scheduler::new(
-            transactions_and_symbols.clone(),
+            &st,
+            &protos,
             todos,
             &ctx,
             &sys,

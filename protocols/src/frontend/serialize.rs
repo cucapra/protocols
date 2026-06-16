@@ -17,9 +17,9 @@ use crate::frontend::symbol::*;
 use crate::interpreter::ExprValue;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
-pub fn serialize_to_string(trs: Vec<(Protocol, SymbolTable)>) -> std::io::Result<String> {
+pub fn serialize_to_string(st: &SymbolTable, protos: &[Protocol]) -> std::io::Result<String> {
     let mut out = Vec::new();
-    serialize(&mut out, trs)?;
+    serialize(&mut out, st, protos)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
@@ -353,17 +353,19 @@ pub fn serialize_structs(
 
 /// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to the provided
 /// output buffer `out`
-pub fn serialize(out: &mut impl Write, trs: Vec<(Protocol, SymbolTable)>) -> std::io::Result<()> {
-    let (_, st) = &trs[0];
-
+pub fn serialize(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    protos: &[Protocol],
+) -> std::io::Result<()> {
     if !st.struct_ids().is_empty() {
         serialize_structs(out, st, st.struct_ids())?;
     }
 
-    for (tr, st) in trs {
-        write!(out, "fn {}", tr.name)?;
+    for proto in protos {
+        write!(out, "fn {}", proto.name)?;
 
-        if let Some(type_param) = tr.type_param {
+        if let Some(type_param) = proto.type_param {
             write!(
                 out,
                 "<{}: {}>",
@@ -374,11 +376,11 @@ pub fn serialize(out: &mut impl Write, trs: Vec<(Protocol, SymbolTable)>) -> std
 
         write!(out, "(")?;
 
-        if tr.args.is_empty() {
+        if proto.args.is_empty() {
             writeln!(out, ") {{")?;
         } else {
-            for (ii, arg) in tr.args.iter().enumerate() {
-                let last_index = ii == tr.args.len() - 1;
+            for (ii, arg) in proto.args.iter().enumerate() {
+                let last_index = ii == proto.args.len() - 1;
 
                 if last_index {
                     writeln!(
@@ -398,7 +400,7 @@ pub fn serialize(out: &mut impl Write, trs: Vec<(Protocol, SymbolTable)>) -> std
             }
         }
 
-        build_statements(out, &tr, &st, &tr.body, 1)?;
+        build_statements(out, &proto, &st, &proto.body, 1)?;
 
         writeln!(out, "}}\n")?;
     }
@@ -431,7 +433,7 @@ pub mod tests {
         let result = parse_file(filename, &mut handler);
 
         let content = match result {
-            Ok(trs) => serialize_to_string(trs).unwrap(),
+            Ok((st, protos)) => serialize_to_string(&st, &protos).unwrap(),
             Err(_) => strip_str(handler.error_string()),
         };
         println!("{}", content);
@@ -614,9 +616,6 @@ pub mod tests {
             easycond.s(Stmt::Assign(b, one_expr)),
         ];
         easycond.body = easycond.s(Stmt::Block(body));
-        println!(
-            "{}",
-            serialize_to_string(vec![(easycond, symbols)]).unwrap()
-        );
+        println!("{}", serialize_to_string(&symbols, &[easycond]).unwrap());
     }
 }

@@ -50,7 +50,7 @@ pub fn create_sim_context(
 }
 
 pub type TestEnv = (
-    Vec<(Protocol, SymbolTable)>,
+    (SymbolTable, Vec<Protocol>),
     patronus::expr::Context,
     patronus::system::TransitionSystem,
 );

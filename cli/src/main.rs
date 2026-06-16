@@ -44,12 +44,13 @@ enum Cmds {
 }
 
 fn load_trace(
-    protos: &[(Protocol, SymbolTable)],
+    st: &SymbolTable,
+    protos: &[Protocol],
     transactions: Option<&str>,
 ) -> Vec<(String, Vec<Value>)> {
     if let Some(filename) = transactions {
         let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-        let traces = transaction_frontend(filename, protos.iter(), &mut d).unwrap();
+        let traces = transaction_frontend(filename, st, protos, &mut d).unwrap();
         if !traces.is_empty() {
             if traces.len() > 1 {
                 log::warn!("More than 1 trace in {filename}. Picking first one.");
@@ -64,13 +65,14 @@ fn load_trace(
 }
 
 fn make_verilog_tb(
-    protos: &[(Protocol, SymbolTable)],
+    st: &SymbolTable,
+    protos: &[Protocol],
     verilog_tb: String,
     transactions: Option<String>,
     vcd_out: Option<String>,
     clock: Option<String>,
 ) {
-    let trace = load_trace(protos, transactions.as_deref());
+    let trace = load_trace(st, protos, transactions.as_deref());
     let mut pins = vec![];
     if let Some(clock) = clock {
         pins.push((clock, PinAnnotation::Clock));
@@ -80,6 +82,7 @@ fn make_verilog_tb(
     let tb_name = "tb";
     to_verilog(
         tb_name,
+        st,
         protos,
         &pins,
         vcd_out.as_deref(),
@@ -90,7 +93,8 @@ fn make_verilog_tb(
 }
 
 fn run_verilog_tb(
-    protos: &[(Protocol, SymbolTable)],
+    st: &SymbolTable,
+    protos: &[Protocol],
     run_dir: String,
     transactions: Option<String>,
     clock: Option<String>,
@@ -118,6 +122,7 @@ fn run_verilog_tb(
     let verilog_tb_str = abs_cwd.join(verilog_tb).to_str().unwrap().to_string();
     let vcd_out_rel = "dump.vcd";
     make_verilog_tb(
+        st,
         protos,
         verilog_tb_str,
         transactions,
@@ -171,7 +176,7 @@ fn main() {
     // we always parse and type check the protocol file
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let protos = frontend(args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let (st, protos) = frontend(args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
 
     match args.command {
         None => {}
@@ -181,7 +186,7 @@ fn main() {
             vcd_out,
             clock,
         }) => {
-            make_verilog_tb(&protos, verilog_tb, transactions, vcd_out, clock);
+            make_verilog_tb(&st, &protos, verilog_tb, transactions, vcd_out, clock);
         }
         Some(Cmds::RunVerilog {
             run_dir,
@@ -189,7 +194,7 @@ fn main() {
             clock,
             verilog,
         }) => {
-            run_verilog_tb(&protos, run_dir, transactions, clock, verilog);
+            run_verilog_tb(&st, &protos, run_dir, transactions, clock, verilog);
         }
     }
 }

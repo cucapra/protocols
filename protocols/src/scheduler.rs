@@ -220,7 +220,8 @@ impl<'a> Scheduler<'a> {
     /// - A Patronus simulator (`sim`)
     /// - and a `DiagnosticHandler` for emitting errors (`handler`)
     pub fn new(
-        transactions_and_symbols: Vec<(&'a Protocol, &'a SymbolTable)>,
+        st: &'a SymbolTable,
+        protos: &'a [Protocol],
         todos: Vec<TodoItem>,
         ctx: &'a Context,
         sys: &'a TransitionSystem,
@@ -229,9 +230,9 @@ impl<'a> Scheduler<'a> {
         max_steps: u32,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
-        let irs: Vec<TransactionInfo<'a>> = transactions_and_symbols
+        let irs: Vec<TransactionInfo<'a>> = protos
             .into_iter()
-            .map(|(tr, st)| (tr, st, tr.next_stmt_mapping()))
+            .map(|proto| (proto, st, proto.next_stmt_mapping()))
             .collect();
 
         // setup the Evaluator and first Thread

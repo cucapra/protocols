@@ -113,9 +113,9 @@ mod tests {
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file(filename, &mut handler).unwrap();
+        let (symbols, protos) = parse_file(filename, &mut handler).unwrap();
         let mut content = String::new();
-        for (ast, symbols) in parsed.into_iter() {
+        for ast in protos {
             let ir: ProtoGraph = lower_ast_to_ir(ast);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, &symbols);

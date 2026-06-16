@@ -33,7 +33,7 @@ struct Cli {
     skip_static_step_fork_checks: bool,
 }
 
-fn load_protocols(cli: &Cli) -> Vec<(Protocol, SymbolTable)> {
+fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
     frontend(
         &cli.protocol,
@@ -43,9 +43,9 @@ fn load_protocols(cli: &Cli) -> Vec<(Protocol, SymbolTable)> {
     .unwrap()
 }
 
-fn load_traces(cli: &Cli, protos: &[(Protocol, SymbolTable)]) -> Vec<Vec<(String, Vec<Value>)>> {
+fn load_traces(cli: &Cli, st: &SymbolTable, protos: &[Protocol]) -> Vec<Vec<(String, Vec<Value>)>> {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
-    transaction_frontend(&cli.transactions, protos.iter(), &mut handler).unwrap()
+    transaction_frontend(&cli.transactions, st, protos, &mut handler).unwrap()
 }
 
 fn build_arg_map<'a>(
@@ -72,8 +72,8 @@ fn print_panic_payload(payload: Box<dyn std::any::Any + Send>) {
 
 fn main() {
     let cli = Cli::parse();
-    let protos = load_protocols(&cli);
-    let traces = load_traces(&cli, &protos);
+    let (st, protos) = load_protocols(&cli);
+    let traces = load_traces(&cli, &st, &protos);
     let (ctx, sys) = create_sim_context(
         cli.verilog.iter().map(|v| v.as_str()).collect(),
         cli.module.clone(),
@@ -81,12 +81,7 @@ fn main() {
 
     let graphs: FxHashMap<String, _> = protos
         .iter()
-        .map(|(proto, symbols)| {
-            (
-                proto.name.clone(),
-                (lower_ast_to_ir(proto.clone()), symbols),
-            )
-        })
+        .map(|proto| (proto.name.clone(), (lower_ast_to_ir(proto.clone()), &st)))
         .collect();
 
     let old_hook = std::panic::take_hook();
