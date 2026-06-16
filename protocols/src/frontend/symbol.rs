@@ -328,7 +328,11 @@ impl SymbolTable {
     }
 
     /// Takes a string and returns the corresponding `SymbolId` (if one exists)
-    pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
+    pub fn symbol_id_from_name(&self, scope: ScopeId, name: &str) -> Option<SymbolId> {
+        self.by_name_sym[scope].get(name).copied()
+    }
+
+    pub fn symbol_id_from_name_in_active_scope(&self, name: &str) -> Option<SymbolId> {
         self.by_name_sym[self.active_scope].get(name).copied()
     }
 
@@ -529,6 +533,14 @@ impl SymbolTableEntry {
             parent = parent_entry.parent;
         }
         name
+    }
+
+    pub fn scope_name(&self, symbols: &SymbolTable) -> Option<String> {
+        if self.scope == ROOT_SCOPE {
+            None
+        } else {
+            Some(symbols.scopes[self.scope].0.clone())
+        }
     }
 
     pub fn is_port(&self) -> bool {

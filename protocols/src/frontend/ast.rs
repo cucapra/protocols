@@ -12,7 +12,7 @@ use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
-use crate::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
+use crate::frontend::symbol::{Arg, ScopeId, SymbolId, SymbolTable, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolContext {
@@ -35,10 +35,13 @@ pub struct ProtocolContext {
     dont_care_id: ExprId,
 
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
+
+    /// The scope in the [[SymbolTable]] associated with this protocol.
+    pub scope: ScopeId,
 }
 
 impl ProtocolContext {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, scope: ScopeId) -> Self {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
         let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
@@ -50,6 +53,7 @@ impl ProtocolContext {
             exprs,
             dont_care_id,
             expr_loc,
+            scope,
         }
     }
 
@@ -99,12 +103,12 @@ pub struct Protocol {
 }
 
 impl Protocol {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, scope: ScopeId) -> Self {
         let mut stmts = PrimaryMap::new();
         let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
         let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
-            ctx: ProtocolContext::new(name),
+            ctx: ProtocolContext::new(name, scope),
             body: block_id,
             stmts,
             stmt_loc,
@@ -466,6 +470,8 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
+
+        let add_scope = symbols.add_protocol_scope("add");
         let dut = symbols.add_without_parent(
             "dut".to_string(),
             Type::Struct(add_struct),
@@ -481,7 +487,7 @@ mod tests {
         println!("\n{}", symbols);
 
         // 2) create transaction
-        let mut add = Protocol::new("add".to_string());
+        let mut add = Protocol::new("add".to_string(), add_scope);
         add.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         // 3) create expressions
@@ -501,6 +507,7 @@ mod tests {
             add.s(Stmt::Assign(s, dut_s_expr)),
         ];
         add.body = add.s(Stmt::Block(body));
+        symbols.exit_scope();
     }
 
     #[test]
@@ -524,6 +531,7 @@ mod tests {
                 Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
+        let scope = symbols.add_protocol_scope("calyx_go_done");
 
         let dut = symbols.add_without_parent(
             "dut".to_string(),
@@ -538,7 +546,7 @@ mod tests {
         assert_eq!(symbols["oo"], symbols[oo]);
 
         // 2) create transaction
-        let mut calyx_go_done = Protocol::new("calyx_go_done".to_string());
+        let mut calyx_go_done = Protocol::new("calyx_go_done".to_string(), scope);
         calyx_go_done.args = vec![Arg::new(ii), Arg::new(oo)];
         calyx_go_done.type_param = Some(dut);
 
@@ -567,5 +575,6 @@ mod tests {
         ];
 
         calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+        symbols.exit_scope();
     }
 }

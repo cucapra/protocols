@@ -55,7 +55,7 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
 /// returning a `HashMap` from struct names to the actual `Design`
-pub fn find_designs<'a>(st: &SymbolTable, protos: &[Protocol]) -> FxHashMap<String, Design> {
+pub fn find_designs(st: &SymbolTable, protos: &[Protocol]) -> FxHashMap<String, Design> {
     // Maps the name of the protocol to metadata about the struct (design)
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut designs: FxHashMap<String, Design> = FxHashMap::default();
@@ -82,11 +82,10 @@ pub fn find_designs<'a>(st: &SymbolTable, protos: &[Protocol]) -> FxHashMap<Stri
                     .into_iter()
                     .map(|pin| {
                         (
-                            st.symbol_id_from_name(&format!(
-                                "{}.{}",
-                                st[dut_symbol_id].name(),
-                                pin.name()
-                            ))
+                            st.symbol_id_from_name(
+                                proto.scope,
+                                &format!("{}.{}", st[dut_symbol_id].name(), pin.name()),
+                            )
                             .unwrap_or_else(|| {
                                 panic!(
                                     "Unable to find symbol ID for pin {}, symbol_table is {}",

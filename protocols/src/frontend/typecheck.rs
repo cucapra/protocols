@@ -473,6 +473,7 @@ mod tests {
     fn function_argument_test() {
         let mut handler = DiagnosticHandler::default();
         let mut symbols = SymbolTable::default();
+        let scope = symbols.add_protocol_scope("func_arg_invalid");
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1), SymbolKind::Arg(0));
         let b: SymbolId =
             symbols.add_without_parent("b".to_string(), Type::BitVec(1), SymbolKind::Arg(1));
@@ -483,7 +484,7 @@ mod tests {
         let input =
             std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
-        let mut prot = Protocol::new("func_arg_invalid".to_string());
+        let mut prot = Protocol::new("func_arg_invalid".to_string(), scope);
         prot.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         let b_expr = prot.e(Expr::Sym(b));
@@ -506,6 +507,7 @@ mod tests {
         prot.add_stmt_loc(s_assign, 101, 108, fileid);
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         prot.body = prot.s(Stmt::Block(body));
+        symbols.exit_scope();
         let _ = type_check(&mut symbols, &[prot], &mut handler);
     }
 }

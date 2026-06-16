@@ -39,7 +39,7 @@ lazy_static::lazy_static! {
 pub struct ParserContext<'a> {
     pub st: &'a mut SymbolTable,
     pub fileid: usize,
-    pub proto: &'a mut Protocol,
+    pub proto: Protocol,
     pub handler: &'a mut DiagnosticHandler,
 }
 
@@ -66,12 +66,14 @@ impl ParserContext<'_> {
         context_pair: &pest::iterators::Pair<Rule>,
         message: &str,
     ) -> Result<SymbolId, String> {
-        self.st.symbol_id_from_name(name).ok_or_else(|| {
-            let msg = format!("{}: {}", message, name);
-            self.handler
-                .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
-            msg
-        })
+        self.st
+            .symbol_id_from_name_in_active_scope(name)
+            .ok_or_else(|| {
+                let msg = format!("{}: {}", message, name);
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
+                msg
+            })
     }
 
     pub fn parse_boxed_expr(&mut self, pairs: Pairs<Rule>) -> Result<BoxedExpr, String> {
@@ -102,7 +104,7 @@ impl ParserContext<'_> {
                     }
                     Rule::path_id => {
                         let path_id = primary.as_str();
-                        let symbol_id = self.st.symbol_id_from_name(path_id);
+                        let symbol_id = self.st.symbol_id_from_name_in_active_scope(path_id);
                         match symbol_id {
                             Some(id) => Ok(BoxedExpr::Sym(id, start, end)),
                             None => {
@@ -267,7 +269,7 @@ impl ParserContext<'_> {
 
                 let id = id_pair.as_str();
                 self.proto.name = id.to_string();
-                self.st.add_protocol_scope(&self.proto.name);
+                self.proto.ctx.scope = self.st.add_protocol_scope(&self.proto.name);
 
                 if let Some(inner_pair) = inner_rules.next() {
                     match inner_pair.as_rule() {
@@ -744,7 +746,7 @@ pub fn parse_file(
             let mut context = ParserContext {
                 st: &mut st,
                 fileid,
-                proto: &mut Protocol::new("".to_string()),
+                proto: Protocol::new("".to_string(), ROOT_SCOPE),
                 handler,
             };
             if let Err(e) = context.parse_struct(pair) {
@@ -754,15 +756,16 @@ pub fn parse_file(
             }
         } else if pair.as_rule() == Rule::fun {
             // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
-            let mut proto = Protocol::new("".to_string());
             let mut context: ParserContext<'_> = ParserContext {
                 st: &mut st,
                 fileid,
-                proto: &mut proto,
+                proto: Protocol::new("".to_string(), ROOT_SCOPE),
                 handler,
             };
             context.parse_transaction(pair)?;
-
+            let proto = context.proto;
+            assert!(!proto.name.is_empty());
+            assert_ne!(proto.ctx.scope, ROOT_SCOPE);
             protos.push(proto);
         }
     }

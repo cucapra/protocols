@@ -583,6 +583,7 @@ pub mod tests {
                 Field::new("b".to_string(), Dir::In, Type::BitVec(32)),
             ],
         );
+        let scope = symbols.add_protocol_scope("easycond");
         let dut = symbols.add_without_parent(
             "dut".to_string(),
             Type::Struct(dut_struct),
@@ -592,7 +593,7 @@ pub mod tests {
         assert_eq!(symbols["dut.a"], symbols[dut_a]);
 
         // 2) create transaction
-        let mut easycond = Protocol::new("easycond".to_string());
+        let mut easycond = Protocol::new("easycond".to_string(), scope);
         easycond.args = vec![Arg::new(a), Arg::new(b)];
         easycond.type_param = Some(dut);
 
@@ -617,5 +618,6 @@ pub mod tests {
         ];
         easycond.body = easycond.s(Stmt::Block(body));
         println!("{}", serialize_to_string(&symbols, &[easycond]).unwrap());
+        symbols.exit_scope();
     }
 }

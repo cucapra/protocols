@@ -383,8 +383,17 @@ fn sym_to_verilog(
 ) -> std::io::Result<()> {
     debug_assert!(
         sym_verilog.contains_key(s),
-        "Unknown symbol: {} ({s:?})",
-        st[s].full_name(st)
+        "Unknown symbol: {} ({s:?}).\nDid you mean: {:?}",
+        st[s].full_name(st),
+        sym_verilog
+            .iter()
+            .map(|(k, v)| format!(
+                "{k:?} ({:?}.{}) -> {v}",
+                st[k].scope_name(st),
+                st[k].full_name(st)
+            ))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     write!(out, "{}", sym_verilog[s])
 }
