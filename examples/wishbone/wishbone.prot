@@ -28,7 +28,7 @@ struct Wishbone {
     // 2: 8-beat wrap burst
     // 3: 16-beat wrap burst
     in BTE: u2,
-    // cycle type indentifier
+    // cycle type identifier
     // 0: classic cycle
     // 1: constant address burst cycle
     // 2: incrementing burst cycle
