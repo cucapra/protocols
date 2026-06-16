@@ -130,13 +130,12 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
 prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
     // no RST
     self.RST := 1'b0;
+
     // constant burst cycle (in which case bte is don't care)
     self.CTI := 3'b001;
     self.BTE := X;
 
-    // in our simple version, we always drive cyc and stb together
     self.CYC := 1'b1;
-    self.STB := 1'b1;
 
     // we are writing
     self.WE := 1'b1;
@@ -146,6 +145,8 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
     self.SEL := mask;
 
     for d in data {
+        // set STB for at least one cycle
+        self.STB := 1'b1;
         self.DAT_O := d;
 
         // indicate end of cycle for last item
@@ -156,6 +157,12 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
         // wait for ack
         while self.ACK == 1'b0 {
             step();
+            // after the first cycle, STB does not have to remain at one
+            // OBSERVATION 4.00:
+            // "[The server] can use the [CTI_I()] signals to determine the response for the next cycle.
+            //  But it cannot determine the state of [STB_I] for the next cycle,
+            //  therefore it must generate the response independent of [STB_I]."
+            self.STB := X;
         }
 
         // acknowledge is now true for one cycle
