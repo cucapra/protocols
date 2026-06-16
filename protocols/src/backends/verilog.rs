@@ -427,7 +427,7 @@ pub mod tests {
     #[test]
     fn alu_d1_to_verilog() {
         let (st, protos) = frontend(
-            "../tests/alus/alu_d1.prot",
+            &["../tests/alus/alu_d1.prot"],
             &mut DiagnosticHandler::default(),
             false,
         )

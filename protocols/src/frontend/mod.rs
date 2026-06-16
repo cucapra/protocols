@@ -14,16 +14,25 @@ pub mod typecheck;
 
 /// Simple frontend which loads a single protocols file, type checks and returns the AST.
 pub fn frontend(
-    filename: impl AsRef<std::path::Path> + Clone,
+    filenames: &[impl AsRef<std::path::Path>],
     diag: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
 ) -> anyhow::Result<(symbol::SymbolTable, Vec<ast::Protocol>)> {
     // Parse protocols file
-    let (mut st, protos) = parser::parse_file(filename.clone(), diag)
-        .map_err(|e| anyhow!("{}: {}", e, filename.as_ref().to_string_lossy()))?;
+    let (mut st, protos, remaps) = parser::parse_files(filenames, diag).map_err(|e| {
+        anyhow!(
+            "{}: {}",
+            e,
+            filenames
+                .iter()
+                .map(|f| f.as_ref().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
 
     // Type-check the parsed transactions
-    typecheck::type_check(&mut st, &protos, diag)?;
+    typecheck::type_check(&mut st, &protos, &remaps, diag)?;
 
     // check for fork and step errors
     let error_count = if skip_static_step_fork_checks {

@@ -4,7 +4,7 @@ module LitexWishbone : Wishbone {
   in clk : clock @posedge,
   // "interesting" mappings
   in reset : u1 = !Wishbone.RST,
-  in wishbone_adr : u30 = Wishbone.ADR[31:1] with Wishbone.ADR[1:0] == 2'b00,
+  in wishbone_adr : u30 = Wishbone.ADR[31:2] with Wishbone.ADR[1:0] == 2'b00,
   // all other pins just map 1:1
   out wishbone_dat_r : u32 = Wishbone.DAT_I,
   in wishbone_dat_w : u32 = Wishbone.DAT_O,
@@ -13,7 +13,7 @@ module LitexWishbone : Wishbone {
   out wishbone_ack : u1 = Wishbone.ACK,
   in wishbone_we : u1 = Wishbone.WE,
   in wishbone_sel : u4 = Wishbone.SEL,
-  in wishbone_cti : u1 = Wishbone.CTI,
-  in wishbone_bte : u1 = Wishbone.BTE,
+  in wishbone_cti : u3 = Wishbone.CTI,
+  in wishbone_bte : u2 = Wishbone.BTE,
   out wishbone_err : u1 = Wishbone.ERR,
 }

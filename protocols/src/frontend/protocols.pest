@@ -43,6 +43,7 @@ expr = { atom ~ (bin_op ~ atom)*}
 
 id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
 path_id = @{ id ~ ("." ~ id)* }
+non_path_id = @{ id }
 tpe = { seq_plus_tpe | seq_tpe | uint_tpe | bv_tpe }
 uint_tpe = { "uint" }
 bv_tpe = { "u" ~ dec_integer }
@@ -83,7 +84,17 @@ annotation_name = { "idle" }
 // Structs
 field = {dir ~ path_id ~ ":" ~ tpe }
 field_list = { (field ~ "," ~ field_list) | field ~ ","? }
-struct_def = { "struct" ~ path_id ~ "{" ~ field_list? ~ "}" }
+struct_def = { ("struct" | "interface") ~ path_id ~ "{" ~ field_list? ~ "}" }
+
+// modules
+module_impl_list = { (non_path_id ~ "+" ~ module_impl_list) | non_path_id }
+clock_tpe = { "clock" ~ "@posedge" }
+module_entry_tpe = { clock_tpe | tpe  }
+pin_remap_constraint = {"with" ~ expr}
+pin_remap = { "=" ~ expr ~ pin_remap_constraint?}
+module_entry = {dir ~ path_id ~ ":" ~ module_entry_tpe ~ pin_remap? }
+module_entries = { (module_entry ~ "," ~ module_entries) | module_entry ~ ","? }
+module_def = { "module" ~ non_path_id ~ ":" ~ module_impl_list ~ "{" ~ module_entries ~ "}"}
 
 fun = { annotation? ~ "prot" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
-file = { SOI ~ (fun | struct_def)* ~ EOI }
+file = { SOI ~ (fun | struct_def | module_def)* ~ EOI }

@@ -17,5 +17,6 @@ fn calyx_go_done<dut: Calyx>(ii: u32, oo: u32) {
   }
   dut.go := 0;
   dut.ii := X;
-  oo := dut.oo;
+  assert_eq(dut.oo, oo);
+  step();
 }

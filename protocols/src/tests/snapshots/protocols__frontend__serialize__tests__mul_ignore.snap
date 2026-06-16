@@ -17,7 +17,8 @@ fn mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.a := X;
   dut.b := X;
   step();
-  s := dut.s;
+  assert_eq(s, dut.s);
+  step();
 }
 
 fn ignore<dut: Multiplier>(a: u32, b: u32, s: u32) {
@@ -29,5 +30,6 @@ fn ignore<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.a := X;
   dut.b := X;
   step();
-  s := dut.s;
+  assert_eq(s, dut.s);
+  step();
 }

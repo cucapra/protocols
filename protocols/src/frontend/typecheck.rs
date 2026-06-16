@@ -5,14 +5,14 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::{Context, anyhow};
-use baa::BitVecOps;
-
 use crate::frontend::ast::*;
 use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::*;
 use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf};
 use crate::frontend::symbol::*;
+use anyhow::{Context, anyhow, bail};
+use baa::BitVecOps;
+use rustc_hash::FxHashSet;
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -20,7 +20,7 @@ fn emit_bitslice_type_error(
     end_idx: u32,
     expr_width: u32,
     handler: &mut DiagnosticHandler,
-    tr: &Protocol,
+    tr: &ProtocolContext,
     expr_id: &ExprId,
 ) -> anyhow::Result<Type> {
     let error_msg = format!(
@@ -34,7 +34,7 @@ fn emit_bitslice_type_error(
 /// Typechecks an expression (identified by its `ExprId`) with respect to
 /// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
 fn type_check_expr(
-    tr: &Protocol,
+    tr: &ProtocolContext,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
     expr_id: &ExprId,
@@ -349,12 +349,97 @@ fn type_check_stmt(
     }
 }
 
+fn find_symbols(ctx: &ProtocolContext, e: ExprId) -> FxHashSet<SymbolId> {
+    let mut out = FxHashSet::default();
+    let mut todo = vec![e];
+    while let Some(e) = todo.pop() {
+        match ctx[e].clone() {
+            Expr::Const(_) => {}
+            Expr::Sym(s) => {
+                out.insert(s);
+            }
+            Expr::DontCare => {}
+            Expr::Binary(_, a, b) => {
+                todo.push(a);
+                todo.push(b);
+            }
+            Expr::Unary(_, a) => {
+                todo.push(a);
+            }
+            Expr::Slice(a, _, _) => {
+                todo.push(a);
+            }
+            Expr::IsLastIteration => {}
+            Expr::IterCount(_) => {}
+        }
+    }
+    out
+}
+
+/// For input pins,
+fn is_input_map_rhs_ok(
+    ctx: &ProtocolContext,
+    st: &SymbolTable,
+    diag: &mut DiagnosticHandler,
+    name: &str,
+    rhs: ExprId,
+    cond: ExprId,
+) -> bool {
+    let rhs_syms: Vec<_> = find_symbols(ctx, rhs).into_iter().collect();
+    let cond_syms: Vec<_> = find_symbols(ctx, cond).into_iter().collect();
+
+    if let &[other] = rhs_syms.as_slice()
+        && st[other].is_in_port()
+    {
+        if cond_syms.is_empty() || cond_syms == rhs_syms {
+            true
+        } else {
+            let msg = format!(
+                "The condition for the mapping of input pin `{name}` can only depend on the same pin as the mapping."
+            );
+            diag.emit_diagnostic_expr(&ctx, &cond, &msg, Level::Error);
+            false
+        }
+    } else {
+        let msg = format!("Input pin `{name}` must be mapped to a single other pin.");
+        diag.emit_diagnostic_expr(&ctx, &rhs, &msg, Level::Error);
+        false
+    }
+}
+
+/// For output pins, only a direct equivalence to another output pin is allowed.
+fn is_output_map_rhs_ok(
+    ctx: &ProtocolContext,
+    st: &SymbolTable,
+    diag: &mut DiagnosticHandler,
+    name: &str,
+    rhs: ExprId,
+    cond: ExprId,
+) -> bool {
+    if let Expr::Sym(sym_id) = ctx[rhs]
+        && st[sym_id].is_out_port()
+    {
+        if cond == ctx.expr_true() {
+            true
+        } else {
+            let msg = format!("Output pins are not allowed to have a `with` condition ({name}).");
+            diag.emit_diagnostic_expr(&ctx, &cond, &msg, Level::Error);
+            false
+        }
+    } else {
+        let msg = format!("Output pin `{name}` can only be mapped directly to another output pin.");
+        diag.emit_diagnostic_expr(&ctx, &rhs, &msg, Level::Error);
+        false
+    }
+}
+
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
-pub fn type_check(
+pub(crate) fn type_check(
     st: &mut SymbolTable,
     protos: &[Protocol],
-    handler: &mut DiagnosticHandler,
+    remaps: &[RemapModule],
+    diag: &mut DiagnosticHandler,
 ) -> anyhow::Result<()> {
     for proto in protos {
         // debug sanity check to make sure the symbol table and the argument list are in sync
@@ -362,7 +447,49 @@ pub fn type_check(
             debug_assert_eq!(st[arg].as_arg_index(), Some(index), "{}", st[arg].name());
         }
 
-        type_check_stmt(proto, st, handler, &proto.body)?;
+        type_check_stmt(proto, st, diag, &proto.body)?;
+    }
+
+    for remap in remaps {
+        let mut found_err = false;
+        let ctx = &remap.ctx;
+        for m in &remap.mappings {
+            // check that the rhs is of the correct type
+            let rhs_tpe = type_check_expr(ctx, st, diag, &m.rhs)?;
+            if !rhs_tpe.is_equivalent(&m.tpe) {
+                let error_msg = format!(
+                    "Pin remapping has incompatible type: {} : {} vs. {} : {}",
+                    m.name,
+                    serialize_type(st, m.tpe),
+                    serialize_expr(ctx, st, &m.rhs),
+                    serialize_type(st, rhs_tpe)
+                );
+                diag.emit_diagnostic_expr(&remap.ctx, &m.rhs, &error_msg, Level::Error);
+                found_err = true;
+            }
+
+            // the condition must be boolean
+            let cond_type = type_check_expr(ctx, st, diag, &m.cond)?;
+            if !cond_type.is_equivalent(&Type::BitVec(1)) {
+                let error_msg = format!(
+                    "Pin remapping condition for {} does not have bv<1> type: {} : {}",
+                    m.name,
+                    serialize_expr(ctx, st, &m.cond),
+                    serialize_type(st, cond_type)
+                );
+                diag.emit_diagnostic_expr(&remap.ctx, &m.cond, &error_msg, Level::Error);
+                found_err = true;
+            }
+
+            let rhs_ok = match m.dir {
+                Dir::In => is_input_map_rhs_ok(ctx, st, diag, &m.name, m.rhs, m.cond),
+                Dir::Out => is_output_map_rhs_ok(ctx, st, diag, &m.name, m.rhs, m.cond),
+            };
+            found_err |= !rhs_ok;
+        }
+        if found_err {
+            bail!("Type error in {}", remap.name);
+        }
     }
     Ok(())
 }
@@ -390,8 +517,8 @@ mod tests {
         let mut handler = DiagnosticHandler::default();
         let result = parse_file_with_name(file_name, display_filename(file_name), &mut handler);
         let content = match result {
-            Ok((mut st, protos)) => {
-                let _ = type_check(&mut st, &protos, &mut handler);
+            Ok((mut st, protos, remaps)) => {
+                let _ = type_check(&mut st, &protos, &remaps, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -477,7 +604,7 @@ mod tests {
     fn function_argument_test() {
         let mut handler = DiagnosticHandler::default();
         let mut symbols = SymbolTable::default();
-        let scope = symbols.add_protocol_scope("func_arg_invalid");
+        let scope = symbols.enter_scope("func_arg_invalid");
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1), SymbolKind::Arg(0));
         let b: SymbolId =
             symbols.add_without_parent("b".to_string(), Type::BitVec(1), SymbolKind::Arg(1));
@@ -512,6 +639,6 @@ mod tests {
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         prot.body = prot.s(Stmt::Block(body));
         symbols.exit_scope();
-        let _ = type_check(&mut symbols, &[prot], &mut handler);
+        let _ = type_check(&mut symbols, &[prot], &[], &mut handler);
     }
 }

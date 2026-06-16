@@ -49,17 +49,28 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
 pub fn find_a_single_design(
     st: &SymbolTable,
     protos: &[Protocol],
-    filename: &str,
+    filenames: &[impl AsRef<std::path::Path>],
 ) -> anyhow::Result<Design> {
     let designs = find_designs(st, protos);
     if designs.is_empty() {
-        bail!("No protocols found in {}", filename);
+        bail!(
+            "No protocols found in {}",
+            filenames
+                .iter()
+                .map(|f| f.as_ref().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     if designs.len() > 1 {
         let design_names = designs.keys().cloned().collect::<Vec<_>>();
         bail!(
             "There are multiple structs in {}: {}.\nWe need to add a way to select which one we want to use.",
-            filename,
+            filenames
+                .iter()
+                .map(|f| f.as_ref().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", "),
             design_names.join(", ")
         );
     }

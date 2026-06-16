@@ -24,9 +24,13 @@ use crate::signal_trace::*;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Protocol (.prot) file
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     /// Path to a waveform trace (.fst, .vcd, .ghw) file
     #[arg(short, long, value_name = "WAVE_FILE")]
@@ -94,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
-    let (st, protos) = frontend(cli.protocol, &mut d, skip_static_step_fork_checks)?;
+    let (st, protos) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks)?;
 
     let designs = find_designs(&st, &protos);
 

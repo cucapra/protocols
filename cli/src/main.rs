@@ -13,8 +13,13 @@ use protocols::{Value, frontend, transaction_frontend};
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     #[command(subcommand)]
     command: Option<Cmds>,
@@ -178,7 +183,7 @@ fn main() {
     // we always parse and type check the protocol file
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let (st, protos) = frontend(args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let (st, protos) = frontend(&args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
 
     match args.command {
         None => {}

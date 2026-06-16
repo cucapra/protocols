@@ -186,7 +186,7 @@ impl DiagnosticHandler {
 
     pub fn emit_diagnostic_expr(
         &mut self,
-        tr: &Protocol,
+        tr: &ProtocolContext,
         expr_id: &ExprId,
         message: &str,
         level: Level,
@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn test_emit_diagnostic() {
         let mut symbols = SymbolTable::default();
-        let scope = symbols.add_protocol_scope("test_transaction");
+        let scope = symbols.enter_scope("test_transaction");
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::InPort);
         let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::InPort);
 
