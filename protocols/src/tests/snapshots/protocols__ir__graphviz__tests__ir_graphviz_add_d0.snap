@@ -114,8 +114,8 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[DUT.s == 0] DUT.a := a"];
-  node0 -> node1 [label="!(DUT.s == 0) / step"];
   node0 -> node1 [label="DUT.s == 0 / step"];
+  node0 -> node1 [label="!(DUT.s == 0) / step"];
   node1 [label="[1] done"];
   node1 [label="[1] done"];
 }

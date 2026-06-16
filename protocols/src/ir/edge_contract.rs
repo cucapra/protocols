@@ -19,52 +19,49 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
         .map(|(node_id, _)| node_id)
         .collect::<Vec<_>>();
 
-    // iterate nodes
-    for lhs_id in node_ids.into_iter().rev() {
-        let mut transition_idx = protocol[lhs_id].transitions.len();
+    for source_node_id in node_ids.into_iter().rev() {
+        let mut contracted_actions = protocol[source_node_id].actions.clone();
+        let (mut step_transitions, mut pending_transitions): (Vec<_>, Vec<_>) = protocol
+            [source_node_id]
+            .transitions
+            .clone()
+            .into_iter()
+            .partition(|transition| transition.consumes_step);
 
-        // iterate transitions backwards. for some reason I feel this will prevent
-        // duplicate edges; revisit when we have evidence of things going wrong
-        // TODO: the backwards iteration logic here is a bit messy
-        while transition_idx > 0 {
-            transition_idx -= 1;
-            let transition = protocol[lhs_id][transition_idx].clone();
+        while let Some(transition) = pending_transitions.pop() {
+            assert!(!transition.consumes_step);
 
-            if transition.consumes_step {
-                continue;
+            let target_node_id = transition.target;
+            let incoming_guard = transition.guard;
+            let target_actions = protocol[target_node_id].actions.clone();
+            let target_transitions = protocol[target_node_id].transitions.clone();
+
+            // Merge actions from the target node into the source node with the
+            // source transition guard AND-ed on.
+            for action in target_actions {
+                contracted_actions.push(Action::with_guard(
+                    &action,
+                    and_guard(protocol, incoming_guard, action.guard),
+                ));
             }
 
-            let rhs_id = transition.target;
-            let lhs_guard = transition.guard;
-            let rhs_actions = protocol[rhs_id].actions.clone();
-            let rhs_transitions = protocol[rhs_id].transitions.clone();
-
-            // create actions with the transition to RHS guard & the action in RHS guards
-            let merged_actions = rhs_actions
-                .into_iter()
-                .map(|action| Action::new(and_guard(protocol, lhs_guard, action.guard), action.op))
-                .collect::<Vec<_>>();
-            // create transitions with the transition to RHS guard & the transition from RHS guards
-            let merged_transitions = rhs_transitions
-                .into_iter()
-                .map(|rhs_transition| {
-                    Transition::new(
-                        and_guard(protocol, lhs_guard, rhs_transition.guard),
-                        rhs_transition.target,
-                        rhs_transition.consumes_step,
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            // modify the LHS nodes with these
-            let lhs_node = protocol.node_mut(lhs_id);
-            lhs_node.transitions.remove(transition_idx);
-            lhs_node.actions.extend(merged_actions);
-            lhs_node.transitions.extend(merged_transitions);
-
-            // Re-scan this node from the right so newly appended transitions
-            // introduced by the contraction can themselves be contracted.
-            transition_idx = protocol[lhs_id].transitions.len();
+            // Merge transitions out of the target node into the source node with the
+            // source transition guard AND-ed on.
+            for target_transition in target_transitions.into_iter().rev() {
+                let contracted_transition = Transition::with_guard(
+                    &target_transition,
+                    and_guard(protocol, incoming_guard, target_transition.guard),
+                );
+                if contracted_transition.consumes_step {
+                    step_transitions.push(contracted_transition);
+                } else {
+                    pending_transitions.push(contracted_transition);
+                }
+            }
         }
+
+        let source_node = protocol.node_mut(source_node_id);
+        source_node.actions = contracted_actions;
+        source_node.transitions = step_transitions;
     }
 }

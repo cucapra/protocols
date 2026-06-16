@@ -29,6 +29,11 @@ impl Action {
     pub fn new(guard: ExprId, op: OpId) -> Self {
         Self { guard, op }
     }
+
+    /// use the new guard instead of the old one
+    pub fn with_guard(&self, guard: ExprId) -> Self {
+        Self { guard, op: self.op }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +50,15 @@ impl Transition {
             guard,
             target,
             consumes_step,
+        }
+    }
+
+    /// use the new guard instead of the old one
+    pub fn with_guard(&self, guard: ExprId) -> Self {
+        Self {
+            guard,
+            target: self.target,
+            consumes_step: self.consumes_step,
         }
     }
 }

@@ -261,7 +261,7 @@ digraph "add_with_override" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[!(DUT.a == 2)] DUT.b := b\n[DUT.a == 2] DUT.a := 0\n[DUT.a == 2] DUT.b := b"];
+  node0 [label="[1] DUT.a := a\n[DUT.a == 2] DUT.a := 0\n[DUT.a == 2] DUT.b := b\n[!(DUT.a == 2)] DUT.b := b"];
   node0 -> node6 [label="!(DUT.a == 2) / step"];
   node0 -> node6 [label="DUT.a == 2 / step"];
   node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
