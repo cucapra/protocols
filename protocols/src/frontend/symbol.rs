@@ -213,25 +213,36 @@ impl std::fmt::Display for SymbolTable {
 
         // Display symbol table entries
         writeln!(f, "  Symbols:")?;
-        for (symbol_id, entry) in self.entries.iter() {
-            let type_str = serialize_type(self, entry.tpe());
-
-            let parent_str = match entry.parent {
-                Some(parent_id) => format!(
-                    " [parent: symbol{} \"{}\"]",
-                    parent_id.0, self[parent_id].name
-                ),
-                None => "".to_string(),
+        for (scope_id, scope) in self.scopes.iter() {
+            let indent = if scope_id != ROOT_SCOPE {
+                writeln!(f, "  Scope \"{}\":", scope.0)?;
+                "      "
+            } else {
+                "    "
             };
+            for (symbol_id, entry) in self.entries.iter() {
+                if entry.scope != scope_id {
+                    continue;
+                }
+                let type_str = serialize_type(self, entry.tpe());
 
-            writeln!(
-                f,
-                "    symbol{} \"{}\": {}{}",
-                symbol_id.0,
-                entry.full_name(self),
-                type_str,
-                parent_str
-            )?;
+                let parent_str = match entry.parent {
+                    Some(parent_id) => format!(
+                        " [parent: symbol{} \"{}\"]",
+                        parent_id.0, self[parent_id].name
+                    ),
+                    None => "".to_string(),
+                };
+
+                writeln!(
+                    f,
+                    "{indent}symbol{} \"{}\": {}{}",
+                    symbol_id.0,
+                    entry.full_name(self),
+                    type_str,
+                    parent_str
+                )?;
+            }
         }
 
         // Display structs
