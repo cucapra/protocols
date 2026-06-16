@@ -267,6 +267,7 @@ impl ParserContext<'_> {
 
                 let id = id_pair.as_str();
                 self.proto.name = id.to_string();
+                self.st.add_protocol_scope(&self.proto.name);
 
                 if let Some(inner_pair) = inner_rules.next() {
                     match inner_pair.as_rule() {
@@ -336,6 +337,7 @@ impl ParserContext<'_> {
                 }
 
                 self.proto.body = self.parse_stmt_block(inner_rules)?;
+                self.st.exit_scope();
                 Ok(())
             }
             _ => {
