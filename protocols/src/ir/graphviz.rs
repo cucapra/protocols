@@ -173,17 +173,16 @@ fn escape_label(label: &str) -> String {
 mod tests {
     use std::path::Path;
 
+    use super::*;
+    use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::parse_file;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use insta::Settings;
 
-    use super::*;
-
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, protocols) = parse_file(filename, &mut handler).unwrap();
+        let (symbols, protocols) = frontend(&[filename], &mut handler, false).unwrap();
         let mut content = String::new();
         for ast in protocols {
             let ir: ProtoGraph = lower_ast_to_ir(ast, &symbols);

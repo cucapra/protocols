@@ -39,9 +39,13 @@ use crate::signal_trace::WaveSignalTrace;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Protocol (.prot) file
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     /// Path to a waveform trace (.fst, .vcd, .ghw) file
     #[arg(short, long, value_name = "WAVE_FILE")]

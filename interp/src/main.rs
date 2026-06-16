@@ -18,9 +18,13 @@ struct Cli {
     #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
     verilog: Vec<String>,
 
-    /// Path to a Protocol (.prot) file
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     /// Path to a Transactions (.tx) file
     #[arg(short, long, value_name = "TRANSACTIONS_FILE")]

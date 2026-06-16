@@ -19,4 +19,5 @@ prot mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.b := X;
   step();
   assert_eq(s, dut.s);
+  step();
 }

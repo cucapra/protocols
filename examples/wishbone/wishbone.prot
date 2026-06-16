@@ -1,5 +1,5 @@
 // Wishbone pins for this project from the server (the one servicing requests) perspective
-struct Wishbone {
+interface Wishbone {
     // high active RST pin (the wishbone spec requires all signals to be high active)
     in RST: u1,
     // acknowledge (from server)

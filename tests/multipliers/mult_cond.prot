@@ -27,7 +27,8 @@ prot mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
   else {
     fork();
   }
-  dut.c := 1'b1;
+  assert_eq(dut.c, 1'b1);
 
-  s := dut.s;
+  assert_eq(s, dut.s);
+  step();
 }

@@ -8,8 +8,9 @@ struct DualIdentity {
 }
 
 fn if_without_else<dut: DualIdentity>(a: u64, b: u64) {
-  if dut.b == b {
+  if dut.b == 1 {
     dut.a := a;
   } else {
   }
+  step();
 }

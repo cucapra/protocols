@@ -14,8 +14,15 @@ pub fn check_step_and_fork(
 ) -> u32 {
     let mut error_count = 0;
     for proto in protocols {
-        let final_stmts =
-            analyze_stmt(diag, &mut error_count, proto, proto.body, State::default()).final_stmts;
+        let final_stmts = analyze_stmt(
+            diag,
+            &mut error_count,
+            proto,
+            proto.body,
+            State::default(),
+            false,
+        )
+        .final_stmts;
         match final_stmts.as_slice() {
             [one] if !is_step(proto, *one) => {
                 let msg = format!("Final statement in `{}` is not a step.", proto.name);
@@ -38,11 +45,12 @@ fn analyze_stmt(
     proto: &Protocol,
     stmt: StmtId,
     mut state: State,
+    maybe_unreachable: bool,
 ) -> State {
     match &proto[stmt] {
         Stmt::Block(stmts) => {
             for &stmt in stmts {
-                state = analyze_stmt(diag, error_count, proto, stmt, state);
+                state = analyze_stmt(diag, error_count, proto, stmt, state, maybe_unreachable);
             }
             state
         }
@@ -63,16 +71,23 @@ fn analyze_stmt(
             state.forks = match state.forks {
                 ForkCount::Unknown => ForkCount::Unknown,
                 ForkCount::Zero => ForkCount::One(stmt),
-                ForkCount::One(prev) => {
-                    diag.emit_diagnostic_multi_stmt(
-                        proto,
-                        &[prev, stmt],
-                        &["first fork", "second fork"],
-                        "A single protocol may only fork once during its execution.",
-                        Level::Error,
-                    );
-                    *error_count += 1;
-                    ForkCount::One(stmt)
+                ForkCount::One(prev) | ForkCount::MoreThanOne(prev, _) => {
+                    if !maybe_unreachable {
+                        diag.emit_diagnostic_multi_stmt(
+                            proto,
+                            &[prev, stmt],
+                            &["first fork", "second fork"],
+                            "A single protocol may only fork once during its execution.",
+                            Level::Error,
+                        );
+                        *error_count += 1;
+                    }
+                    let new_count = if let ForkCount::MoreThanOne(_, old) = state.forks {
+                        old + 1
+                    } else {
+                        2
+                    };
+                    ForkCount::MoreThanOne(prev, new_count)
                 }
             };
             state.final_stmts = vec![stmt];
@@ -84,7 +99,8 @@ fn analyze_stmt(
         }
         // control flow
         Stmt::While(_, body) | Stmt::RepeatLoop(_, body) | Stmt::ForInLoop(_, _, body) => {
-            let mut body_state = analyze_stmt(diag, error_count, proto, *body, State::default());
+            let mut body_state =
+                analyze_stmt(diag, error_count, proto, *body, State::default(), true);
             if body_state.steps == StepCount::Bounded(0) {
                 diag.emit_diagnostic_stmt(
                     proto,
@@ -116,8 +132,8 @@ fn analyze_stmt(
             state
         }
         Stmt::IfElse(_, tru, fals) => {
-            let after_tru = analyze_stmt(diag, error_count, proto, *tru, state.clone());
-            let mut after_fals = analyze_stmt(diag, error_count, proto, *fals, state);
+            let after_tru = analyze_stmt(diag, error_count, proto, *tru, state.clone(), true);
+            let mut after_fals = analyze_stmt(diag, error_count, proto, *fals, state, true);
             let steps = if after_tru.steps == after_fals.steps {
                 after_tru.steps
             } else {
@@ -169,4 +185,5 @@ enum ForkCount {
     Unknown,
     Zero,
     One(StmtId),
+    MoreThanOne(StmtId, u64),
 }
