@@ -142,13 +142,13 @@ Add a link to the Protocols VS Code extension directory to your VS Code extensio
 
 ```bash
 $ cd $HOME/.vscode/extensions
-$ ln -s <path to protocols root directory>/tools/vscode protocols.protocols-0.0.1
+$ ln -s <path to protocols root directory>/tools/protocols-textmate protocols.protocols-0.0.1
 ```
 
 Then, restart VS Code.
 
 **RustRover Installation:**
-Go to `Settings` -> `Editor` -> `TextMate Bundles`. Click the `+` and navigate to `<path to protocols root directory>/tools/vscode` in your file explorer. 
+Go to `Settings` -> `Editor` -> `TextMate Bundles`. Click the `+` and navigate to `<path to protocols root directory>/tools/protocols-textmate` in your file explorer. 
 
 One confirmed, `protocols` should appear as an entry in the `TextMate Bundles` table.
 
