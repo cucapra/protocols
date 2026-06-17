@@ -8,7 +8,7 @@
 use baa::{BitVecOps, BitVecValue, WidthInt};
 use log::info;
 use patronus::expr::ExprRef;
-use patronus::sim::{InitKind, Interpreter, Simulator};
+use patronus::sim::{Interpreter, Simulator};
 use patronus::system::Output;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -66,6 +66,7 @@ pub enum ExprValue {
     DontCare,
 }
 
+/// FIXME: `Todo` should be named `Transaction` now
 /// Type aliases for `Todo` indices (where a `Todo` is a protocol with
 /// concrete argument values, e.g. `add(1, 2, 3)`)
 pub type TodoIdx = usize;
@@ -263,7 +264,7 @@ impl<'a> Evaluator<'a> {
         }
 
         // Initialize sim, return the transaction!
-        sim.init(InitKind::Zero);
+        sim.init(patronus::sim::InitKind::Zero);
 
         Evaluator {
             tr,
@@ -562,14 +563,13 @@ impl<'a> Evaluator<'a> {
             .input_mapping
             .get(symbol_id)
             .unwrap_or_else(|| panic!("expected input symbol {symbol_id}"));
-
         match value {
             ThreadInputValue::Concrete(bvv) => {
                 self.sim.set(expr_ref, bvv);
             }
             ThreadInputValue::DontCare => {
                 if randomize_dont_care {
-                    let width = match self.st[*symbol_id].tpe() {
+                    let width = match self.st[symbol_id].tpe() {
                         Type::BitVec(w) => w,
                         _ => panic!("expected BitVec type for input {symbol_id}"),
                     };

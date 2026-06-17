@@ -4,7 +4,7 @@ use clap::Parser;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
-use protocols::ir::graph_interpreter;
+use protocols::ir::new_graph_interpreter;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::setup::create_sim_context;
 use protocols::{Value, frontend, transaction_frontend};
@@ -98,7 +98,7 @@ fn main() {
                     .get(&name)
                     .unwrap_or_else(|| panic!("unknown protocol {name}"));
                 let args = build_arg_map(&graph.args, symbols, values);
-                graph_interpreter::interpret(
+                new_graph_interpreter::interpret(
                     graph,
                     symbols,
                     args,

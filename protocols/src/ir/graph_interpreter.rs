@@ -15,10 +15,6 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ExprValue, ThreadInputValue};
 use crate::ir::proto_graph::{Op, ProtoGraph};
 
-// TODO: handle ITEs
-// TODO: handle forks
-// TODO: handle irreducible loops
-
 /// interpret a `ProtoGraph`
 pub fn interpret(
     pg: &ProtoGraph,

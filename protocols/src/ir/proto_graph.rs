@@ -105,16 +105,11 @@ pub struct ProtoGraph {
     /// Reverse map for consumers that still want to evaluate/pretty-print through the AST.
     pat_to_ast_expr: FxHashMap<ExprRef, ExprId>,
 
-    /// Cached Patronus expressions for AST `DontCare` nodes, keyed by type.
-    dont_care_exprs: FxHashMap<PatronusType, ExprRef>,
-
     /// Cached Patronus symbol expressions, keyed by frontend `SymbolId`.
     symbol_exprs: FxHashMap<SymbolId, ExprRef>,
 
-    /// Maps `NodeId`s to their corresponding `Node`s
     nodes: PrimaryMap<NodeId, Node>,
 
-    /// Maps `OpId`s to their corresponding `Op`s
     ops: PrimaryMap<OpId, Op>,
 
     op_loc: SecondaryMap<OpId, (usize, usize, usize)>,
@@ -152,7 +147,6 @@ impl ProtoGraph {
             exprCtx,
             ast_to_pat_expr,
             pat_to_ast_expr,
-            dont_care_exprs: FxHashMap::default(),
             symbol_exprs: FxHashMap::default(),
             nodes,
             ops,
@@ -182,29 +176,22 @@ impl ProtoGraph {
     }
 
     pub fn dont_care_expr(&mut self, tpe: PatronusType) -> ExprRef {
-        if let Some(expr) = self.dont_care_exprs.get(&tpe) {
-            return *expr;
-        }
-
-        let expr = match tpe {
+        match tpe {
             PatronusType::BV(width) => {
-                let name = format!("__dontcare_bv_{width}_{}", self.dont_care_exprs.len());
+                let name = format!("__dontcare__bv_{width}_{}", self.exprCtx.num_exprs());
                 self.exprCtx.bv_symbol(&name, width)
             }
             PatronusType::Array(array_tpe) => {
                 let name = format!(
-                    "__dontcare_arr_{}_{}x{}",
-                    self.dont_care_exprs.len(),
+                    "__dontcare__arr_{}_{}x{}",
+                    self.exprCtx.num_exprs(),
                     array_tpe.index_width,
                     array_tpe.data_width
                 );
                 self.exprCtx
                     .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
             }
-        };
-
-        self.dont_care_exprs.insert(tpe, expr);
-        expr
+        }
     }
 
     pub fn symbol_expr(&mut self, symbol_id: SymbolId, symbols: &SymbolTable) -> ExprRef {
