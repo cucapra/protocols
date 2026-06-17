@@ -5,7 +5,7 @@
 use patronus::expr::{ExprRef, Type as PatronusType};
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, UnaryOp};
-use crate::frontend::symbol::{SymbolTable, Type as FrontType};
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::proto_graph::*;
 
 fn lower_ast_expr_to_patronus(
@@ -15,87 +15,56 @@ fn lower_ast_expr_to_patronus(
     expr: ExprId,
     expected: Option<PatronusType>,
 ) -> ExprRef {
-    let lowered = match &ast[expr] {
+    match &ast[expr] {
         Expr::DontCare => {
             let tpe = expected.unwrap_or(PatronusType::BV(1));
-            let expr_ref = ir.dont_care_expr(tpe);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
-        }
-        Expr::Const(bvv) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
+            match tpe {
+                PatronusType::BV(width) => {
+                    let name = format!("__dontcare__bv_{width}_{}", ir.expr_ctx.num_exprs());
+                    ir.expr_ctx.bv_symbol(&name, width)
+                }
+                PatronusType::Array(array_tpe) => {
+                    let name = format!(
+                        "__dontcare__arr_{}_{}x{}",
+                        ir.expr_ctx.num_exprs(),
+                        array_tpe.index_width,
+                        array_tpe.data_width
+                    );
+                    ir.expr_ctx
+                        .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
+                }
             }
-            let expr_ref = ir.exprCtx.bv_lit(bvv);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
         }
-        Expr::Sym(sym) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
-            let expr_ref = ir.lower_symbol(*sym, symbols);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
-        }
+        Expr::Const(bvv) => ir.expr_ctx.bv_lit(bvv),
+        Expr::Sym(sym) => lower_symbol_expr(ir, symbols, *sym),
         Expr::Binary(BinOp::Equal, lhs, rhs) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
             let lhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *lhs, None);
             let rhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *rhs, None);
-            let expr_ref = ir.exprCtx.equal(lhs_ref, rhs_ref);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
+            ir.expr_ctx.equal(lhs_ref, rhs_ref)
         }
         Expr::Binary(BinOp::Concat, lhs, rhs) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
             let lhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *lhs, None);
             let rhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *rhs, None);
-            let expr_ref = ir.exprCtx.concat(lhs_ref, rhs_ref);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
+            ir.expr_ctx.concat(lhs_ref, rhs_ref)
         }
         Expr::Binary(BinOp::Add, lhs, rhs) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
             let lhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *lhs, None);
             let rhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *rhs, None);
-            let expr_ref = ir.exprCtx.add(lhs_ref, rhs_ref);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
+            ir.expr_ctx.add(lhs_ref, rhs_ref)
         }
         Expr::Binary(BinOp::And, lhs, rhs) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
             let lhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *lhs, None);
             let rhs_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *rhs, None);
-            let expr_ref = ir.exprCtx.and(lhs_ref, rhs_ref);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
+            ir.expr_ctx.and(lhs_ref, rhs_ref)
         }
         Expr::Unary(UnaryOp::Not, inner) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
             let inner_ref =
                 lower_ast_expr_to_patronus(ast, symbols, ir, *inner, Some(PatronusType::BV(1)));
-            let expr_ref = ir.exprCtx.not(inner_ref);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
+            ir.expr_ctx.not(inner_ref)
         }
         Expr::Slice(inner, hi, lo) => {
-            if let Some(expr_ref) = ir.expr_for_ast(expr) {
-                return expr_ref;
-            }
             let inner_ref = lower_ast_expr_to_patronus(ast, symbols, ir, *inner, None);
-            let expr_ref = ir.exprCtx.slice(inner_ref, *hi, *lo);
-            ir.record_expr_mapping(expr, expr_ref);
-            expr_ref
+            ir.expr_ctx.slice(inner_ref, *hi, *lo)
         }
         Expr::IsLastIteration => {
             panic!("loop expressions are not lowered to Patronus yet")
@@ -103,9 +72,28 @@ fn lower_ast_expr_to_patronus(
         Expr::IterCount(_) => {
             panic!("loop expressions are not lowered to Patronus yet")
         }
-    };
+    }
+}
 
-    lowered
+fn lower_symbol_expr(ir: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: SymbolId) -> ExprRef {
+    if let Some(expr) = ir.symbol_expr(symbol_id) {
+        return expr;
+    }
+
+    let entry = &symbols[symbol_id];
+    let full_name = entry.full_name(symbols);
+    let expr = match entry.tpe() {
+        FrontType::BitVec(width) => ir.expr_ctx.bv_symbol(&full_name, width),
+        FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
+            panic!(
+                "unsupported symbol type {} for {}",
+                crate::frontend::serialize::serialize_type(symbols, entry.tpe()),
+                full_name
+            )
+        }
+    };
+    ir.cache_symbol_expr(symbol_id, expr);
+    expr
 }
 
 pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
@@ -146,6 +134,7 @@ fn lower_stmt_to_exit(
         }
         Stmt::Assign(symbol_id, expr_id) => {
             let node_id = ir.n(Node::empty());
+            let _ = lower_symbol_expr(ir, symbols, *symbol_id);
             let rhs_ref = lower_ast_expr_to_patronus(
                 ast,
                 symbols,
@@ -196,14 +185,9 @@ fn lower_stmt_to_exit(
 
             // create the branch node from which we transition into the true or false entry nodes
             let branch_node_id = ir.n(Node::empty());
-            let cond_ref = lower_ast_expr_to_patronus(
-                ast,
-                symbols,
-                ir,
-                *cond,
-                Some(PatronusType::BV(1)),
-            );
-            let negated_cond = ir.exprCtx.not(cond_ref);
+            let cond_ref =
+                lower_ast_expr_to_patronus(ast, symbols, ir, *cond, Some(PatronusType::BV(1)));
+            let negated_cond = ir.expr_ctx.not(cond_ref);
 
             // push transitions from the branch node to the true/false branch with positive/negative guarded transitions
             ir.push_transition(branch_node_id, Transition::new(cond_ref, true_entry, false));
@@ -237,7 +221,7 @@ fn lower_stmt_to_exit(
                 *loop_guard,
                 Some(PatronusType::BV(1)),
             );
-            let negated_loop_guard = ir.exprCtx.not(loop_guard_ref);
+            let negated_loop_guard = ir.expr_ctx.not(loop_guard_ref);
             ir.push_transition(
                 loop_guard_node_id,
                 Transition::new(loop_guard_ref, loop_body_node_id, false),

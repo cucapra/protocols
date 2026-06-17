@@ -1,6 +1,5 @@
 use std::collections::BTreeSet;
 
-use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Action, Op, ProtoGraph, Transition};
 use patronus::expr::ExprRef;
 
@@ -12,12 +11,12 @@ fn and_guard(protocol: &mut ProtoGraph, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
     } else if lhs == rhs {
         lhs
     } else {
-        protocol.exprCtx.and(lhs, rhs)
+        protocol.expr_ctx.and(lhs, rhs)
     }
 }
 
 fn not_guard(protocol: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
-    protocol.exprCtx.not(guard)
+    protocol.expr_ctx.not(guard)
 }
 
 fn or_guard(protocol: &mut ProtoGraph, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
@@ -35,13 +34,14 @@ fn or_guard(protocol: &mut ProtoGraph, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
 
 fn append_action(
     protocol: &mut ProtoGraph,
-    symbols: &SymbolTable,
     actions: &mut Vec<Action>,
     action: Action,
 ) {
     match protocol[action.op].clone() {
         Op::Assign(symbol_id, rhs) => {
-            let default_value = protocol.symbol_expr(symbol_id, symbols);
+            let default_value = protocol
+                .symbol_expr(symbol_id)
+                .unwrap_or_else(|| panic!("missing lowered symbol expression for {symbol_id}"));
 
             // By invariant, there can be at most one existing assignment for this symbol.
             if let Some(existing_action) = actions.iter_mut().find(|prior_action| {
@@ -54,7 +54,7 @@ fn append_action(
                 let merged_rhs = if action.guard == protocol.true_id() {
                     rhs
                 } else {
-                    protocol.exprCtx.ite(action.guard, rhs, existing_rhs)
+                    protocol.expr_ctx.ite(action.guard, rhs, existing_rhs)
                 };
                 let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
                 existing_action.guard = protocol.true_id();
@@ -63,7 +63,7 @@ fn append_action(
                 let merged_rhs = if action.guard == protocol.true_id() {
                     rhs
                 } else {
-                    protocol.exprCtx.ite(action.guard, rhs, default_value)
+                    protocol.expr_ctx.ite(action.guard, rhs, default_value)
                 };
                 actions.push(Action::new(
                     protocol.true_id(),
@@ -123,7 +123,7 @@ fn assert_no_non_step_cycles(protocol: &ProtoGraph) {
     }
 }
 
-pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
+pub fn contract_edges(protocol: &mut ProtoGraph) {
     assert_no_non_step_cycles(protocol);
 
     let node_ids = protocol
@@ -134,7 +134,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     for source_node_id in node_ids.into_iter().rev() {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
         for action in protocol[source_node_id].actions.clone() {
-            append_action(protocol, symbols, &mut contracted_actions, action);
+            append_action(protocol, &mut contracted_actions, action);
         }
 
         let (mut step_transitions, mut pending_transitions): (Vec<_>, Vec<_>) = protocol
@@ -153,11 +153,9 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
             let target_transitions = protocol[target_node_id].transitions.clone();
 
             for action in target_actions {
-                let merged_action = Action::with_guard(
-                    &action,
-                    and_guard(protocol, incoming_guard, action.guard),
-                );
-                append_action(protocol, symbols, &mut contracted_actions, merged_action);
+                let merged_action =
+                    Action::with_guard(&action, and_guard(protocol, incoming_guard, action.guard));
+                append_action(protocol, &mut contracted_actions, merged_action);
             }
 
             for target_transition in target_transitions.into_iter().rev() {

@@ -92,10 +92,10 @@ fn format_op(
 }
 
 fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
-    let expr = &protocol.exprCtx[expr_ref];
-    match protocol.exprCtx.get_symbol_name(expr_ref) {
+    let expr = &protocol.expr_ctx[expr_ref];
+    match protocol.expr_ctx.get_symbol_name(expr_ref) {
         Some(name) if name.starts_with("__dontcare_") => "X".to_string(),
-        _ => expr.serialize_to_str(&protocol.exprCtx),
+        _ => expr.serialize_to_str(&protocol.expr_ctx),
     }
 }
 
@@ -128,7 +128,7 @@ mod tests {
 
             // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir, &symbols);
+            contract_edges(&mut contracted_ir);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, &symbols);
             content += "\n";
