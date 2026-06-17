@@ -453,15 +453,8 @@ mod tests {
         // Manually create the expected result of parsing `add.prot`.
         // Note that the order in which things are created will be different in the parser.
 
-        // 1) declare symbols
+        // 0) declare struct
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
-        let b: SymbolId =
-            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg(2));
-        assert_eq!(symbols["s"], symbols[s]);
-
-        // declare Adder struct
         let add_struct = symbols.add_struct(
             "Adder".to_string(),
             vec![
@@ -471,7 +464,14 @@ mod tests {
             ],
         );
 
+        // 1) declare symbols that are local to the add protocol
         let add_scope = symbols.add_protocol_scope("add");
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
+        let b: SymbolId =
+            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg(2));
+        assert_eq!(symbols["s"], symbols[s]);
+
         let dut = symbols.add_without_parent(
             "dut".to_string(),
             Type::Struct(add_struct),
@@ -515,13 +515,8 @@ mod tests {
         // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
-        // 1) declare symbols
+        // 0) declare struct
         let mut symbols = SymbolTable::default();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // declare DUT struct
         let dut_struct = symbols.add_struct(
             "Calyx".to_string(),
             vec![
@@ -531,8 +526,12 @@ mod tests {
                 Field::new("oo".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
-        let scope = symbols.add_protocol_scope("calyx_go_done");
 
+        // 1) declare symbols local to the calyx_go_done protocol
+        let scope = symbols.add_protocol_scope("calyx_go_done");
+        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
+        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
+        assert_eq!(symbols["oo"], symbols[oo]);
         let dut = symbols.add_without_parent(
             "dut".to_string(),
             Type::Struct(dut_struct),
