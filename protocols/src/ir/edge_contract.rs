@@ -35,6 +35,7 @@ fn or_guard(protocol: &mut ProtoGraph, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
 fn append_action(
     protocol: &mut ProtoGraph,
     actions: &mut Vec<Action>,
+    fork_overlap_guard: &mut Option<ExprRef>,
     action: Action,
 ) {
     match protocol[action.op].clone() {
@@ -71,13 +72,26 @@ fn append_action(
                 ));
             }
         }
-        Op::Fork | Op::Done => {
-            if let Some(existing_action) = actions.iter_mut().find(|prior_action| {
-                matches!(
-                    (&protocol[prior_action.op], &protocol[action.op]),
-                    (Op::Fork, Op::Fork) | (Op::Done, Op::Done)
-                )
-            }) {
+        Op::Fork => {
+            if let Some(existing_action) = actions
+                .iter_mut()
+                .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
+            {
+                let overlap = and_guard(protocol, existing_action.guard, action.guard);
+                *fork_overlap_guard = Some(match fork_overlap_guard.take() {
+                    Some(existing_overlap) => or_guard(protocol, existing_overlap, overlap),
+                    None => overlap,
+                });
+                existing_action.guard = or_guard(protocol, existing_action.guard, action.guard);
+            } else {
+                actions.push(action);
+            }
+        }
+        Op::Done => {
+            if let Some(existing_action) = actions
+                .iter_mut()
+                .find(|prior_action| matches!(protocol[prior_action.op], Op::Done))
+            {
                 existing_action.guard = or_guard(protocol, existing_action.guard, action.guard);
             } else {
                 actions.push(action);
@@ -86,6 +100,7 @@ fn append_action(
         Op::AssertEq(_, _) => {
             actions.push(action);
         }
+        Op::InternalAssert => unreachable!(),
     }
 }
 
@@ -133,8 +148,9 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
 
     for source_node_id in node_ids.into_iter().rev() {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
+        let mut fork_overlap_guard = None;
         for action in protocol[source_node_id].actions.clone() {
-            append_action(protocol, &mut contracted_actions, action);
+            append_action(protocol, &mut contracted_actions, &mut fork_overlap_guard, action);
         }
 
         let (mut step_transitions, mut pending_transitions): (Vec<_>, Vec<_>) = protocol
@@ -155,7 +171,12 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
             for action in target_actions {
                 let merged_action =
                     Action::with_guard(&action, and_guard(protocol, incoming_guard, action.guard));
-                append_action(protocol, &mut contracted_actions, merged_action);
+                append_action(
+                    protocol,
+                    &mut contracted_actions,
+                    &mut fork_overlap_guard,
+                    merged_action,
+                );
             }
 
             for target_transition in target_transitions.into_iter().rev() {
@@ -171,8 +192,47 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
             }
         }
 
+        let internal_assert_op = fork_overlap_guard.map(|_| protocol.o(Op::InternalAssert));
         let source_node = protocol.node_mut(source_node_id);
         source_node.actions = contracted_actions;
+        if let (Some(fork_overlap_guard), Some(internal_assert_op)) =
+            (fork_overlap_guard, internal_assert_op)
+        {
+            source_node
+                .actions
+                .push(Action::new(fork_overlap_guard, internal_assert_op));
+        }
         source_node.transitions = step_transitions;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::ast::ProtocolContext;
+
+    #[test]
+    fn synthesizes_internal_assert_for_overlapping_forks() {
+        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into()));
+        let p = protocol.expr_ctx.bv_symbol("p", 1);
+        let q = protocol.expr_ctx.bv_symbol("q", 1);
+
+        let fork1 = protocol.o(Op::Fork);
+        let fork2 = protocol.o(Op::Fork);
+        protocol.node_mut(protocol.entry).actions = vec![
+            Action::new(p, fork1),
+            Action::new(q, fork2),
+        ];
+
+        contract_edges(&mut protocol);
+
+        let expected_fork_guard = protocol.expr_ctx.or(p, q);
+        let expected_overlap = protocol.expr_ctx.and(p, q);
+        let actions = &protocol[protocol.entry].actions;
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(protocol[actions[0].op], Op::Fork));
+        assert!(matches!(protocol[actions[1].op], Op::InternalAssert));
+        assert_eq!(actions[0].guard, expected_fork_guard);
+        assert_eq!(actions[1].guard, expected_overlap);
     }
 }
