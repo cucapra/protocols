@@ -85,6 +85,7 @@ pub enum Op {
     Assign(SymbolId, ExprRef),
     AssertEq(ExprRef, ExprRef),
     Fork,
+    InternalAssert,
     Done,
 }
 

@@ -229,6 +229,7 @@ pub fn interpret(
                         evaluate_assert_equal(pg, &store, *lhs, *rhs);
                     }
                     Op::Fork => {}
+                    Op::InternalAssert => panic!("internal assert failed"),
                     Op::Done => done_triggered = true,
                 }
             }
