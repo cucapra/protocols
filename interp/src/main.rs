@@ -116,12 +116,13 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
     );
 
-    let ((st, protos), ctx, sys) = setup_test_environment(
+    let (st, protos, sim) = setup_test_environment(
         cli.verilog.iter().map(|v| v.as_str()).collect(),
         &cli.protocol,
         cli.module,
         protocols_handler,
         cli.skip_static_step_fork_checks,
+        cli.fst,
     )?;
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
@@ -140,20 +141,13 @@ fn main() -> anyhow::Result<()> {
         }
 
         // Run each trace in isolation with a fresh interpreter and scheduler.
-        let interpreter = if let Some(waveform_file) = &cli.fst {
-            let waveform_file = with_trace_suffix(waveform_file, trace_index);
-            patronus::sim::Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
-        } else {
-            patronus::sim::Interpreter::new(&ctx, &sys)
-        };
+        let waveform_file = cli.fst.clone().map(|n| with_trace_suffix(n, trace_index));
 
         let mut scheduler = Scheduler::new(
             &st,
             &protos,
             todos,
-            &ctx,
-            &sys,
-            interpreter,
+            sim,
             protocols_handler,
             cli.max_steps.unwrap_or(u32::MAX),
         );

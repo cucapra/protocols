@@ -5,21 +5,18 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::{BitVecOps, BitVecValue, WidthInt};
-use log::info;
-use patronus::expr::ExprRef;
-use patronus::sim::{InitKind, Interpreter, Simulator};
-use patronus::system::Output;
-use rand::SeedableRng;
-use rand::rngs::StdRng;
-use rustc_hash::FxHashMap;
-
 use crate::Value;
+use crate::dut::{PatronusSim, PortId};
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
 use crate::frontend::serialize::serialize_bitvec;
-use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
+use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use crate::scheduler::Thread;
+use baa::{BitVecOps, BitVecValue, WidthInt};
+use log::info;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+use rustc_hash::FxHashMap;
 
 /// Per-thread input value: either a concrete assignment or DontCare
 #[derive(Debug, Clone)]
@@ -78,36 +75,27 @@ pub struct Evaluator<'a> {
     tr: &'a Protocol,
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
-    sim: Interpreter,
 
     args_mapping: FxHashMap<SymbolId, Value>,
-    input_mapping: FxHashMap<SymbolId, ExprRef>,
-    output_mapping: FxHashMap<SymbolId, Output>,
+
     /// _Dynamic:_ stack of loop variables, need to be searched right to left
     pub loop_vars: Vec<(SymbolId, BitVecValue)>,
     /// _Dynamic_: for-in/repeat loop information: loop statement id, max
     pub loop_info: Vec<(StmtId, u64, u64)>,
 
-    // Combinational dependency tracking
-    /// Maps `input |-> Vec<output>` (outputs that are affected by this input)
-    input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
-
-    /// Maps each `output |-> Vec<input>` (inputs that this output is dependent on)
-    output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>>,
-
     /// Tracks inputs that are forbidden to assign to (after observing a dependent output)
-    forbidden_inputs: Vec<SymbolId>,
+    forbidden_inputs: Vec<PortId>,
 
     /// The `forbidden_read_counts` map maintains a count for each input and output pin.
     /// A port is forbidden to READ if its count is greater than zero.
     /// For inputs: count is incremented when DontCare is assigned, decremented when Concrete is assigned.
     /// For outputs: count is incremented when a dependent input is assigned DontCare, decremented when Concrete.
     /// This reference counting handles the case where multiple inputs affect the same output.
-    forbidden_read_counts: FxHashMap<SymbolId, usize>,
+    forbidden_read_counts: FxHashMap<PortId, usize>,
 
     // Per-thread input values for each input pin: input_id -> (thread_id -> value)
     // This serves as both the current cycle's assignments AND the sticky inputs for implicit re-application
-    per_thread_input_vals: FxHashMap<SymbolId, PerThreadValues>,
+    per_thread_input_vals: FxHashMap<PortId, PerThreadValues>,
 
     /// The current todo_idx being executed
     /// (where a `todo` is a transaction with concrete argument values)
@@ -123,8 +111,8 @@ pub struct Evaluator<'a> {
 impl<'a> Evaluator<'a> {
     /// Pretty-prints a `Statement` identified by its `StmtId`
     /// with respect to the current `SymbolTable` associated with this `Evaluator`
-    pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
-        self.tr.format_stmt(stmt_id, self.st)
+    pub fn format_stmt(&self, stmt_id: StmtId) -> String {
+        self.tr.format_stmt(&stmt_id, self.st)
     }
 
     /// Creates a new `Evaluator`
@@ -132,149 +120,27 @@ impl<'a> Evaluator<'a> {
         args: FxHashMap<&str, Value>,
         tr: &'a Protocol,
         st: &'a SymbolTable,
-        ctx: &'a patronus::expr::Context,
-        sys: &'a patronus::system::TransitionSystem,
-        mut sim: Interpreter,
+        sim: &PatronusSim,
     ) -> Self {
         // create mapping from each symbolId to corresponding BitVecValue based on input mapping
         let args_mapping = Evaluator::generate_args_mapping(st, tr, args);
-
-        // create mapping for each of the DUT's children symbols to the input and output mappings
-        let dut = tr.type_param.unwrap();
-        let dut_symbols = &st.get_children(&dut);
-
-        let mut input_mapping = FxHashMap::default();
-        let mut output_mapping = FxHashMap::default();
-
-        for input in &sys.inputs {
-            info!(
-                "Input expr: {:?}, name: {:?}",
-                (input),
-                ctx.get_symbol_name(*input)
-            );
-        }
-
-        for output in &sys.outputs {
-            info!(
-                "Output expr: {:?}, name: {:?}",
-                (output).expr,
-                ctx.get_symbol_name((output).expr)
-            );
-        }
-
-        for symbol_id in dut_symbols {
-            let sym = &st[symbol_id];
-            if sym.is_in_port() {
-                let input = sys
-                    .inputs
-                    .iter()
-                    .find(|i| ctx.get_symbol_name(**i).unwrap() == sym.name())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Failed to find input with name '{}'. Available inputs: {:?}",
-                            sym.name(),
-                            sys.inputs
-                                .iter()
-                                .map(|o| ctx.get_symbol_name(*o).unwrap())
-                                .collect::<Vec<_>>()
-                        )
-                    });
-                input_mapping.insert(*symbol_id, *input);
-            }
-            if sym.is_out_port() {
-                // check if the DUT symbol is an output
-                let output = sys
-                    .outputs
-                    .iter()
-                    .find(|o| ctx[o.name] == sym.name())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Failed to find output with name '{}' in system outputs. Available outputs: {:?}",
-                            sym.name(),
-                            sys.outputs.iter().map(|o| &ctx[o.name]).collect::<Vec<_>>()
-                        )
-                    });
-                output_mapping.insert(*symbol_id, *output);
-            }
-        }
 
         // For simplicity, we initialize an RNG with the seed 0 when generating
         // random values for `DontCare`s
         let rng = StdRng::seed_from_u64(0);
 
         // Initialize per-thread input values (empty maps, populated when threads start)
-        let mut per_thread_input_vals = FxHashMap::default();
-        for symbol_id in input_mapping.keys() {
-            // Verify the symbol has a BitVec type
-            match st[symbol_id].tpe() {
-                Type::BitVec(_) => {
-                    per_thread_input_vals.insert(*symbol_id, FxHashMap::default());
-                }
-                _ => panic!(
-                    "Expected a BitVec type for symbol {}, but found {:?}",
-                    symbol_id,
-                    st[symbol_id].tpe()
-                ),
-            }
-        }
+        let per_thread_input_vals =
+            FxHashMap::from_iter(sim.inputs().map(|i| (i, FxHashMap::default())));
 
-        // Build combinational dependency graphs
-        let mut output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
-        let mut input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
-
-        // Initialize: keys are outputs -> inputs dependent on that ouput, and inputs -> all combinationally dependent outputs
-        for symbol_id in output_mapping.keys() {
-            output_dependencies.insert(*symbol_id, Vec::new());
-        }
-        for symbol_id in input_mapping.keys() {
-            input_dependencies.insert(*symbol_id, Vec::new());
-        }
-
-        // Initialize forbidden input counts to 0
         // Initialize forbidden read counts to 0 for all inputs and outputs
-        let mut forbidden_read_counts = FxHashMap::default();
-        for symbol_id in input_mapping.keys() {
-            forbidden_read_counts.insert(*symbol_id, 0);
-        }
-        for symbol_id in output_mapping.keys() {
-            forbidden_read_counts.insert(*symbol_id, 0);
-        }
-
-        // For each output, find all inputs in its combinational cone of influence
-        for (out_sym, out) in &output_mapping {
-            let input_exprs =
-                patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
-            for input_expr in input_exprs {
-                // Find the protocol symbol corresponding to this input expression
-                if let Some(input_sym) = input_mapping
-                    .iter()
-                    .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
-                {
-                    // output_dependencies: output -> Vec<input> (inputs this output depends on)
-                    if let Some(vec) = output_dependencies.get_mut(out_sym) {
-                        vec.push(input_sym);
-                    }
-                    // input_dependencies: input -> Vec<output> (outputs this input affects)
-                    if let Some(vec) = input_dependencies.get_mut(&input_sym) {
-                        vec.push(*out_sym);
-                    }
-                }
-            }
-        }
-
-        // Initialize sim, return the transaction!
-        sim.init(InitKind::Zero);
+        let forbidden_read_counts = FxHashMap::from_iter(sim.ios().map(|p| (p, 0)));
 
         Evaluator {
             tr,
             next_stmt_map: tr.next_stmt_mapping(),
             st,
-            sim,
             args_mapping,
-            input_mapping,
-            output_mapping,
-            input_dependencies,
-            output_dependencies,
             forbidden_inputs: Vec::new(),
             forbidden_read_counts,
             per_thread_input_vals,
@@ -332,7 +198,8 @@ impl<'a> Evaluator<'a> {
     /// - Note: Conflict checking is deferred to `check_for_conflicts` at end of cycle.
     fn apply_input_value(
         &mut self,
-        symbol_id: &SymbolId,
+        sim: &mut PatronusSim,
+        port_id: PortId,
         todo_idx: usize,
         new_val: ThreadInputValue,
         stmt_id: Option<StmtId>,
@@ -340,7 +207,7 @@ impl<'a> Evaluator<'a> {
         // Get old value for this todo_idx (if any)
         let old_val = self
             .per_thread_input_vals
-            .get(symbol_id)
+            .get(&port_id)
             .and_then(|m| m.get(&todo_idx))
             .map(|(val, _)| val.clone());
 
@@ -352,41 +219,36 @@ impl<'a> Evaluator<'a> {
         if is_dontcare && !was_dontcare {
             // Transitioning TO DontCare (from None or Concrete): increment counts
             // Increment this input's own forbidden count (can't read a DontCare input)
-            if let Some(count) = self.forbidden_read_counts.get_mut(symbol_id) {
+            if let Some(count) = self.forbidden_read_counts.get_mut(&port_id) {
                 *count += 1;
             }
             // Increment forbidden counts for all outputs dependent on this input
-            if let Some(deps) = self.input_dependencies.get(symbol_id) {
-                for dep in deps {
-                    if let Some(count) = self.forbidden_read_counts.get_mut(dep) {
-                        *count += 1;
-                    }
+            for dep in sim.dependent_outputs(port_id) {
+                if let Some(count) = self.forbidden_read_counts.get_mut(&dep) {
+                    *count += 1;
                 }
             }
         } else if !is_dontcare && was_dontcare {
             // Transitioning FROM DontCare (to Concrete): decrement counts
             // Decrement this input's own forbidden count
-            if let Some(count) = self.forbidden_read_counts.get_mut(symbol_id) {
+            if let Some(count) = self.forbidden_read_counts.get_mut(&port_id) {
                 *count = count.saturating_sub(1);
             }
             // Decrement forbidden counts for all outputs dependent on this input
-            if let Some(deps) = self.input_dependencies.get(symbol_id) {
-                for dep in deps {
-                    if let Some(count) = self.forbidden_read_counts.get_mut(dep) {
-                        *count = count.saturating_sub(1);
-                    }
+            for dep in sim.dependent_outputs(port_id) {
+                if let Some(count) = self.forbidden_read_counts.get_mut(&dep) {
+                    *count = count.saturating_sub(1);
                 }
             }
         }
 
         // Update per_thread_input_vals
-        if let Some(per_thread_vals) = self.per_thread_input_vals.get_mut(symbol_id) {
-            let symbol_name = self.st[*symbol_id].name();
+        if let Some(per_thread_vals) = self.per_thread_input_vals.get_mut(&port_id) {
             let was_present = per_thread_vals.contains_key(&todo_idx);
             per_thread_vals.insert(todo_idx, (new_val.clone(), stmt_id));
             log::info!(
                 "apply_input_value: {} for todo_idx={} (was_present={}, new_val={})",
-                symbol_name,
+                sim.port_name(port_id),
                 todo_idx,
                 was_present,
                 new_val
@@ -394,33 +256,34 @@ impl<'a> Evaluator<'a> {
         }
 
         // Apply value to sim
-        if self.input_mapping.contains_key(symbol_id) {
-            let any_other_concrete =
-                if let Some(per_thread_vals) = self.per_thread_input_vals.get(symbol_id) {
-                    per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
-                        other_idx != todo_idx && matches!(other_val, ThreadInputValue::Concrete(_))
-                    })
-                } else {
-                    false
-                };
+        let any_other_concrete =
+            if let Some(per_thread_vals) = self.per_thread_input_vals.get(&port_id) {
+                per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
+                    other_idx != todo_idx && matches!(other_val, ThreadInputValue::Concrete(_))
+                })
+            } else {
+                false
+            };
 
-            let symbol_name = self.st[*symbol_id].name();
-            log::info!(
-                "Applying value for {} (todo_idx={}): any_other_concrete={}",
-                symbol_name,
-                todo_idx,
-                any_other_concrete
-            );
+        log::info!(
+            "Applying value for {} (todo_idx={}): any_other_concrete={}",
+            sim.port_name(port_id),
+            todo_idx,
+            any_other_concrete
+        );
 
-            self.write_input_value_to_sim(symbol_id, &new_val, !any_other_concrete);
-        }
+        self.write_input_value_to_sim(sim, port_id, &new_val, !any_other_concrete);
 
         Ok(())
     }
 
     /// Initializes input values for a todo from its sticky inputs (implicit re-application)
     /// On first run, initializes all inputs to DontCare. On subsequent runs, reapplies existing values.
-    pub fn init_thread_inputs(&mut self, todo_idx: usize) -> ExecutionResult<()> {
+    pub fn init_thread_inputs(
+        &mut self,
+        sim: &mut PatronusSim,
+        todo_idx: usize,
+    ) -> ExecutionResult<()> {
         // Check if this is the first run for this thread (no entries in map)
         let is_first_run = self
             .per_thread_input_vals
@@ -433,27 +296,17 @@ impl<'a> Evaluator<'a> {
             is_first_run
         );
 
-        // Debug: show which inputs have this todo_idx
-        for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
-            if per_thread_vals.contains_key(&todo_idx) {
-                let symbol_name = self.st[*symbol_id].name();
-                log::info!(
-                    "  {} already has entry for todo_idx={}",
-                    symbol_name,
-                    todo_idx
-                );
-            }
-        }
-
         if is_first_run {
             // First run: initialize all inputs to DontCare
-            let all_inputs: Vec<SymbolId> = self.input_mapping.keys().copied().collect();
-            log::info!("  Initializing {} inputs to DontCare", all_inputs.len());
-            for symbol_id in all_inputs {
-                let symbol_name = self.st[symbol_id].name();
-                log::info!("    Setting {} to DontCare (first run)", symbol_name);
+            log::info!("  Initializing all inputs to DontCare");
+            for port_id in sim.inputs() {
+                log::info!(
+                    "    Setting {} to DontCare (first run)",
+                    sim.port_name(port_id)
+                );
                 self.apply_input_value(
-                    &symbol_id,
+                    sim,
+                    port_id,
                     todo_idx,
                     ThreadInputValue::DontCare,
                     None, // DontCare initialization has no associated statement
@@ -461,7 +314,7 @@ impl<'a> Evaluator<'a> {
             }
         } else {
             // Subsequent runs: reapply existing values (implicit assignments)
-            let inputs_to_init: Vec<(SymbolId, ThreadInputValue, Option<StmtId>)> = self
+            let inputs_to_init: Vec<_> = self
                 .per_thread_input_vals
                 .iter()
                 .filter_map(|(symbol_id, per_thread_vals)| {
@@ -471,8 +324,8 @@ impl<'a> Evaluator<'a> {
                 })
                 .collect();
 
-            for (symbol_id, val, stmt_id) in inputs_to_init {
-                self.apply_input_value(&symbol_id, todo_idx, val, stmt_id)?;
+            for (port_id, val, stmt_id) in inputs_to_init {
+                self.apply_input_value(sim, port_id, todo_idx, val, stmt_id)?;
             }
         }
 
@@ -489,7 +342,7 @@ impl<'a> Evaluator<'a> {
 
     /// Returns a reference to the per-thread input values map for conflict checking.
     /// Used by the scheduler to check for conflicting assignments across threads.
-    pub fn per_thread_input_vals(&self) -> &FxHashMap<SymbolId, PerThreadValues> {
+    pub fn per_thread_input_vals(&self) -> &FxHashMap<PortId, PerThreadValues> {
         &self.per_thread_input_vals
     }
 
@@ -502,11 +355,11 @@ impl<'a> Evaluator<'a> {
     /// For each input pin:
     /// - If any thread has a concrete value, apply it to sim (all concrete values must agree if no conflict)
     /// - If all threads have DontCare, randomize the pin
-    pub fn finalize_inputs_for_cycle(&mut self) {
+    pub fn finalize_inputs_for_cycle(&mut self, sim: &mut PatronusSim) {
         // Collect the values to apply (can't mutate self.per_thread_input_vals while iterating)
-        let mut values_to_apply: Vec<(SymbolId, Option<BitVecValue>)> = Vec::new();
+        let mut values_to_apply = vec![];
 
-        for (symbol_id, per_thread_vals) in &self.per_thread_input_vals {
+        for (port_id, per_thread_vals) in &self.per_thread_input_vals {
             // Find any concrete value (if conflicts were checked, all concrete values must agree)
             let concrete_val = per_thread_vals.values().find_map(|(val, _)| {
                 if let ThreadInputValue::Concrete(bvv) = val {
@@ -516,26 +369,21 @@ impl<'a> Evaluator<'a> {
                 }
             });
 
-            values_to_apply.push((*symbol_id, concrete_val));
+            values_to_apply.push((*port_id, concrete_val));
         }
 
         // Now apply the values
-        for (symbol_id, concrete_val) in values_to_apply {
-            if let Some(expr_ref) = self.input_mapping.get(&symbol_id) {
-                match concrete_val {
-                    Some(bvv) => {
-                        // Apply the concrete value
-                        self.sim.set(*expr_ref, &bvv);
-                    }
-                    None => {
-                        // All threads have DontCare, randomize
-                        let width = match self.st[symbol_id].tpe() {
-                            Type::BitVec(w) => w,
-                            _ => panic!("Expected BitVec type for input"),
-                        };
-                        let random_val = BitVecValue::random(&mut self.rng, width);
-                        self.sim.set(*expr_ref, &random_val);
-                    }
+        for (port_id, concrete_val) in values_to_apply {
+            match concrete_val {
+                Some(bvv) => {
+                    // Apply the concrete value
+                    sim.set(port_id, &bvv);
+                }
+                None => {
+                    // All threads have DontCare, randomize
+                    let width = sim.port_width(port_id);
+                    let random_val = BitVecValue::random(&mut self.rng, width);
+                    sim.set(port_id, &random_val);
                 }
             }
         }
@@ -549,122 +397,107 @@ impl<'a> Evaluator<'a> {
         self.assertions_enabled = false;
     }
 
-    /// Steps the simulator
-    pub fn sim_step(&mut self) {
-        self.sim.step();
-    }
-
     pub fn write_input_value_to_sim(
         &mut self,
-        symbol_id: &SymbolId,
+        sim: &mut PatronusSim,
+        port_id: PortId,
         value: &ThreadInputValue,
         randomize_dont_care: bool,
     ) {
-        let expr_ref = *self
-            .input_mapping
-            .get(symbol_id)
-            .unwrap_or_else(|| panic!("expected input symbol {symbol_id}"));
-
         match value {
             ThreadInputValue::Concrete(bvv) => {
-                self.sim.set(expr_ref, bvv);
+                sim.set(port_id, bvv);
             }
             ThreadInputValue::DontCare => {
                 if randomize_dont_care {
-                    let width = match self.st[*symbol_id].tpe() {
-                        Type::BitVec(w) => w,
-                        _ => panic!("expected BitVec type for input {symbol_id}"),
-                    };
+                    let width = sim.port_width(port_id);
                     let random_val = BitVecValue::random(&mut self.rng, width);
-                    self.sim.set(expr_ref, &random_val);
+                    sim.set(port_id, &random_val);
                 }
             }
         }
     }
 
-    pub fn evaluate_expr(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
-        self.evaluate_expr_inner(expr_id, true)
+    pub fn evaluate_expr(
+        &mut self,
+        sim: &PatronusSim,
+        expr_id: ExprId,
+    ) -> ExecutionResult<ExprValue> {
+        self.evaluate_expr_inner(sim, expr_id, true)
     }
 
-    pub fn evaluate_expr_raw(&mut self, expr_id: &ExprId) -> ExecutionResult<ExprValue> {
-        self.evaluate_expr_inner(expr_id, false)
+    pub fn evaluate_expr_raw(
+        &mut self,
+        sim: &PatronusSim,
+        expr_id: ExprId,
+    ) -> ExecutionResult<ExprValue> {
+        self.evaluate_expr_inner(sim, expr_id, false)
     }
 
     fn evaluate_expr_inner(
         &mut self,
-        expr_id: &ExprId,
+        sim: &PatronusSim,
+        expr_id: ExprId,
         check_forbidden_reads: bool,
     ) -> ExecutionResult<ExprValue> {
-        let expr = &self.tr[expr_id];
+        let expr = self.tr[expr_id].clone();
         match expr {
-            Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec.clone())),
+            Expr::Const(bit_vec) => Ok(ExprValue::Concrete(bit_vec)),
             Expr::Sym(sym_id) => {
                 let name = self.st[sym_id].full_name(self.st);
 
                 // Check if reading this port is forbidden (count > 0)
                 // For inputs: count > 0 when DontCare was assigned
                 // For outputs: count > 0 when a dependent input has DontCare
-                if check_forbidden_reads
-                    && let Some(&count) = self.forbidden_read_counts.get(sym_id)
-                    && count > 0
-                {
-                    // Collect the (full_name, stmt_id) of each DontCare input this port depends on
-                    let dep_inputs = self
-                        .output_dependencies
-                        .get(sym_id)
-                        .cloned()
-                        .unwrap_or_else(|| vec![*sym_id]);
-                    let unassigned_inputs: Vec<(String, Option<StmtId>)> = dep_inputs
-                        .iter()
-                        .filter_map(|input_id| {
-                            let per_thread = self.per_thread_input_vals.get(input_id)?;
-                            // Find any thread that assigned DontCare to this input
-                            let (_, (val, stmt_id)) =
-                                per_thread.iter().find(|(_, (val, _))| val.is_dont_care())?;
-                            if val.is_dont_care() {
-                                Some((self.st[input_id].full_name(self.st), *stmt_id))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    return Err(ExecutionError::forbidden_port_read(
-                        name.clone(),
-                        unassigned_inputs,
-                        *expr_id,
-                    ));
+                if self.st[sym_id].is_port() && check_forbidden_reads {
+                    let port_id = sim[sym_id];
+                    let count = self.forbidden_read_counts[&port_id];
+                    if count > 0 {
+                        // Collect the (full_name, stmt_id) of each DontCare input this port depends on
+                        let unassigned_inputs: Vec<(String, Option<StmtId>)> = sim
+                            .coi_inputs(port_id)
+                            .filter_map(|input_port_id| {
+                                let per_thread = self.per_thread_input_vals.get(&input_port_id)?;
+                                // Find any thread that assigned DontCare to this input
+                                let (_, (val, stmt_id)) =
+                                    per_thread.iter().find(|(_, (val, _))| val.is_dont_care())?;
+                                if val.is_dont_care() {
+                                    Some((sim.port_name(input_port_id).to_string(), *stmt_id))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        return Err(ExecutionError::forbidden_port_read(
+                            name.clone(),
+                            unassigned_inputs,
+                            expr_id,
+                        ));
+                    }
                 }
 
-                if let Some(expr_ref) = self.input_mapping.get(sym_id) {
-                    Ok(ExprValue::Concrete(
-                        self.sim.get(*expr_ref).try_into().unwrap(),
-                    ))
-                } else if let Some(output) = self.output_mapping.get(sym_id) {
-                    // Observing an output port forbids assignments to its dependent inputs
-                    if let Some(deps) = self.output_dependencies.get(sym_id) {
-                        self.forbidden_inputs.extend(deps.iter().copied());
+                match self.st[sym_id].kind() {
+                    SymbolKind::Dut => unreachable!("Cannot evaluate a struct expression!"),
+                    SymbolKind::InPort => Ok(ExprValue::Concrete(sim.get(sim[sym_id]))),
+                    SymbolKind::OutPort => {
+                        let port_id = sim[sym_id];
+                        // Observing an output port forbids assignments to its dependent inputs
+                        self.forbidden_inputs.extend(sim.coi_inputs(port_id));
+                        Ok(ExprValue::Concrete(sim.get(port_id)))
                     }
-
-                    Ok(ExprValue::Concrete(
-                        self.sim.get((output).expr).try_into().unwrap(),
-                    ))
-                } else if let Some(bvv) = self.args_mapping.get(sym_id) {
-                    if let Ok(bv) = bvv.clone().try_into() {
-                        Ok(ExprValue::Concrete(bv))
-                    } else {
-                        unreachable!("the expression is expected to evaluate to a scalar value!")
+                    SymbolKind::Arg(_) => {
+                        let value = self.args_mapping[&sym_id].clone();
+                        Ok(ExprValue::Concrete(value.try_into().unwrap()))
                     }
-                } else if let Some((_, bv)) =
-                    self.loop_vars.iter().rev().find(|(id, _)| id == sym_id)
-                {
-                    Ok(ExprValue::Concrete(bv.clone()))
-                } else {
-                    Err(ExecutionError::symbol_not_found(
-                        *sym_id,
-                        name.to_string(),
-                        "input, output, args, or loopvar mapping".to_string(),
-                        *expr_id,
-                    ))
+                    SymbolKind::LoopVar => {
+                        let (_, value) = self
+                            .loop_vars
+                            .iter()
+                            .rev()
+                            .find(|(id, _)| *id == sym_id)
+                            .unwrap();
+                        Ok(ExprValue::Concrete(value.clone()))
+                    }
                 }
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
@@ -681,19 +514,19 @@ impl<'a> Evaluator<'a> {
                     .loop_info
                     .last()
                     .expect("is_last() must be inside of a loop!");
-                let mask = mask64(*width);
-                let value = BitVecValue::from_u64(*iter_count & mask, *width);
+                let mask = mask64(width);
+                let value = BitVecValue::from_u64(*iter_count & mask, width);
                 Ok(ExprValue::Concrete(value))
             }
             Expr::Binary(bin_op, lhs_id, rhs_id) => {
-                let lhs_val = self.evaluate_expr_inner(lhs_id, check_forbidden_reads)?;
-                let rhs_val = self.evaluate_expr_inner(rhs_id, check_forbidden_reads)?;
+                let lhs_val = self.evaluate_expr_inner(sim, lhs_id, check_forbidden_reads)?;
+                let rhs_val = self.evaluate_expr_inner(sim, rhs_id, check_forbidden_reads)?;
                 match (&lhs_val, &rhs_val) {
                     (ExprValue::DontCare, _) | (_, ExprValue::DontCare) => {
                         Err(ExecutionError::dont_care_operation(
                             format!("{bin_op}"),
                             "binary expression".to_string(),
-                            *expr_id,
+                            expr_id,
                         ))
                     }
                     (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => match bin_op {
@@ -711,7 +544,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             Expr::Unary(unary_op, expr_id) => {
-                let expr_val = self.evaluate_expr_inner(expr_id, check_forbidden_reads)?;
+                let expr_val = self.evaluate_expr_inner(sim, expr_id, check_forbidden_reads)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => match unary_op {
                         UnaryOp::Not => Ok(ExprValue::Concrete(bvv.not())),
@@ -719,25 +552,25 @@ impl<'a> Evaluator<'a> {
                     ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
                         "unary operation".to_string(),
                         "unary expression".to_string(),
-                        *expr_id,
+                        expr_id,
                     )),
                 }
             }
             Expr::Slice(expr_id, msb, lsb) => {
-                let expr_val = self.evaluate_expr_inner(expr_id, check_forbidden_reads)?;
+                let expr_val = self.evaluate_expr_inner(sim, expr_id, check_forbidden_reads)?;
                 match expr_val {
                     ExprValue::Concrete(bvv) => {
                         let width = bvv.width();
-                        if *msb < width && *lsb <= *msb {
-                            Ok(ExprValue::Concrete(bvv.slice(*msb, *lsb)))
+                        if msb < width && lsb <= msb {
+                            Ok(ExprValue::Concrete(bvv.slice(msb, lsb)))
                         } else {
-                            Err(ExecutionError::invalid_slice(*expr_id, *msb, *lsb, width))
+                            Err(ExecutionError::invalid_slice(expr_id, msb, lsb, width))
                         }
                     }
                     ExprValue::DontCare => Err(ExecutionError::dont_care_operation(
                         "slice".to_string(),
                         "slice expression".to_string(),
-                        *expr_id,
+                        expr_id,
                     )),
                 }
             }
@@ -752,35 +585,39 @@ impl<'a> Evaluator<'a> {
     /// an argument to this function. This design allows us to keep this field
     /// only within the `Thread` struct and avoid duplicating it in the
     /// `Evaluator` struct.
-    pub fn evaluate_stmt(&mut self, stmt_id: &StmtId) -> ExecutionResult<Option<StmtId>> {
-        match &self.tr[stmt_id] {
+    pub fn evaluate_stmt(
+        &mut self,
+        sim: &mut PatronusSim,
+        stmt_id: StmtId,
+    ) -> ExecutionResult<Option<StmtId>> {
+        match self.tr[stmt_id].clone() {
             Stmt::Assign(symbol_id, expr_id) => {
-                self.evaluate_assign(stmt_id, symbol_id, expr_id)?;
-                Ok(self.next_stmt_map[stmt_id])
+                self.evaluate_assign(sim, stmt_id, symbol_id, expr_id)?;
+                Ok(self.next_stmt_map[&stmt_id])
             }
             Stmt::IfElse(cond_expr_id, then_stmt_id, else_stmt_id) => {
-                self.evaluate_if(cond_expr_id, then_stmt_id, else_stmt_id)
+                self.evaluate_if(sim, cond_expr_id, then_stmt_id, else_stmt_id)
             }
             Stmt::While(loop_guard_id, do_block_id) => {
-                self.evaluate_while(loop_guard_id, stmt_id, do_block_id)
+                self.evaluate_while(sim, loop_guard_id, stmt_id, do_block_id)
             }
             Stmt::RepeatLoop(num_iters_id, loop_body_id) => {
-                self.evaluate_bounded_loop(num_iters_id, stmt_id, loop_body_id)
+                self.evaluate_bounded_loop(sim, num_iters_id, stmt_id, loop_body_id)
             }
             Stmt::ForInLoop(identifier, seq, loop_body_id) => {
-                self.evaluate_for_in_loop(identifier, seq, stmt_id, loop_body_id)
+                self.evaluate_for_in_loop(sim, identifier, seq, stmt_id, loop_body_id)
             }
             Stmt::Step => {
                 // the scheduler will handle the step. simply return the next statement to run
-                Ok(self.next_stmt_map[stmt_id])
+                Ok(self.next_stmt_map[&stmt_id])
             }
             Stmt::Fork => {
                 // the scheduler will handle the fork. simply return the next statement to run
-                Ok(self.next_stmt_map[stmt_id])
+                Ok(self.next_stmt_map[&stmt_id])
             }
             Stmt::AssertEq(expr1, expr2) => {
                 if self.assertions_enabled {
-                    self.evaluate_assert_eq(stmt_id, expr1, expr2)?;
+                    self.evaluate_assert_eq(sim, stmt_id, expr1, expr2)?;
                 } else {
                     info!(
                         "Skipping assertion `{}` ({}) because assertions are disabled",
@@ -803,11 +640,12 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_if(
         &mut self,
-        cond_expr_id: &ExprId,
-        then_stmt_id: &StmtId,
-        else_stmt_id: &StmtId,
+        sim: &PatronusSim,
+        cond_expr_id: ExprId,
+        then_stmt_id: StmtId,
+        else_stmt_id: StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
-        let res = self.evaluate_expr(cond_expr_id)?;
+        let res = self.evaluate_expr(sim, cond_expr_id)?;
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "if".to_string(),
@@ -827,9 +665,10 @@ impl<'a> Evaluator<'a> {
     /// is the `StmtId` of the assignment statement.
     fn evaluate_assign(
         &mut self,
-        stmt_id: &StmtId,
-        symbol_id: &SymbolId,
-        expr_id: &ExprId,
+        sim: &mut PatronusSim,
+        stmt_id: StmtId,
+        symbol_id: SymbolId,
+        expr_id: ExprId,
     ) -> ExecutionResult<()> {
         // Check if this is an input pin
         if !self.input_mapping.contains_key(symbol_id) {
@@ -882,21 +721,22 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_while(
         &mut self,
-        loop_guard_id: &ExprId,
-        while_id: &StmtId,
-        do_block_id: &StmtId,
+        sim: &PatronusSim,
+        loop_guard_id: ExprId,
+        while_id: StmtId,
+        do_block_id: StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
-        let res = self.evaluate_expr(loop_guard_id)?;
+        let res = self.evaluate_expr(sim, loop_guard_id)?;
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "while".to_string(),
-                *loop_guard_id,
+                loop_guard_id,
             )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_true() {
-                    Ok(Some(*do_block_id))
+                    Ok(Some(do_block_id))
                 } else {
-                    Ok(self.next_stmt_map[while_id])
+                    Ok(self.next_stmt_map[&while_id])
                 }
             }
         }

@@ -5,19 +5,16 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::{BitVecOps, BitVecValue};
-use log::info;
-use patronus::expr::Context;
-use patronus::sim::Interpreter;
-use patronus::system::TransitionSystem;
-use rustc_hash::FxHashMap;
-
 use crate::Value;
+use crate::dut::PatronusSim;
 use crate::errors::{DiagnosticEmitter, ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
 use crate::frontend::diagnostic::DiagnosticHandler;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ThreadInputValue};
+use baa::{BitVecOps, BitVecValue};
+use log::info;
+use rustc_hash::FxHashMap;
 
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
@@ -141,6 +138,7 @@ pub enum StepResult<'a> {
 
 /// The `Scheduler` struct contains metadata necessary for scheduling `Thread`s.
 pub struct Scheduler<'a> {
+    sim: PatronusSim,
     /// A `Vec` of `Transaction`s, along with their associated `SymbolTable`s
     /// and `NextStmtMap`s
     irs: Vec<TransactionInfo<'a>>,
@@ -219,14 +217,11 @@ impl<'a> Scheduler<'a> {
     /// - A Patronus transition system (`sys`)
     /// - A Patronus simulator (`sim`)
     /// - and a `DiagnosticHandler` for emitting errors (`handler`)
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         st: &'a SymbolTable,
         protos: &'a [Protocol],
         todos: Vec<TodoItem>,
-        ctx: &'a Context,
-        sys: &'a TransitionSystem,
-        sim: Interpreter,
+        sim: PatronusSim,
         handler: &'a mut DiagnosticHandler,
         max_steps: u32,
     ) -> Self {
@@ -250,9 +245,7 @@ impl<'a> Scheduler<'a> {
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
-            ctx,
-            sys,
-            sim,
+            &sim,
         );
 
         let results_size = todos.len();
@@ -272,6 +265,7 @@ impl<'a> Scheduler<'a> {
             handler,
             max_steps,
             step_happened_this_cycle: false,
+            sim,
         }
     }
 
@@ -326,7 +320,7 @@ impl<'a> Scheduler<'a> {
             }
 
             // No conflicts - finalize input values to sim before stepping
-            self.evaluator.finalize_inputs_for_cycle();
+            self.evaluator.finalize_inputs_for_cycle(&mut self.sim);
 
             // Collect threads that need implicit forking (can't call self.next_todo during drain)
             let mut threads_needing_implicit_fork: Vec<usize> = Vec::new();
@@ -365,7 +359,10 @@ impl<'a> Scheduler<'a> {
                 }
             }
 
-            assert!(threads_needing_implicit_fork.len() <= 1, "can only fork a single time per step");
+            assert!(
+                threads_needing_implicit_fork.len() <= 1,
+                "can only fork a single time per step"
+            );
 
             // Process implicit forks after drain is complete
             for _todo_idx in threads_needing_implicit_fork {
@@ -396,7 +393,7 @@ impl<'a> Scheduler<'a> {
             // 0 timesteps.)
             if self.step_happened_this_cycle {
                 info!("Stepping...");
-                self.evaluator.sim_step();
+                self.sim.step();
                 // Reset flag to ensure that simulator is stepped exactly
                 // once during each cycle
                 self.step_happened_this_cycle = false;
@@ -546,7 +543,10 @@ impl<'a> Scheduler<'a> {
             "  About to call init_thread_inputs for todo_idx={} ({})",
             thread.todo_idx, thread.todo.tr.name
         );
-        if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
+        if let Err(e) = self
+            .evaluator
+            .init_thread_inputs(&mut self.sim, thread.todo_idx)
+        {
             info!(
                 "ERROR during init_thread_inputs: {:?}, terminating thread",
                 e
@@ -571,7 +571,7 @@ impl<'a> Scheduler<'a> {
                 thread.format_stmt(&current_stmt_id)
             );
 
-            match self.evaluator.evaluate_stmt(&current_stmt_id) {
+            match self.evaluator.evaluate_stmt(&mut self.sim, current_stmt_id) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
                     info!(

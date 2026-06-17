@@ -538,6 +538,10 @@ impl SymbolTableEntry {
         }
     }
 
+    pub fn kind(&self) -> SymbolKind {
+        self.kind
+    }
+
     pub fn is_port(&self) -> bool {
         matches!(self.kind, SymbolKind::InPort | SymbolKind::OutPort)
     }

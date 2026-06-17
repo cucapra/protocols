@@ -2,18 +2,15 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use baa::BitVecOps;
-use patronus::expr::Context;
-use patronus::sim::Interpreter;
-use patronus::system::TransitionSystem;
-use rustc_hash::{FxHashMap, FxHashSet};
-
 use crate::Value;
+use crate::dut::PatronusSim;
 use crate::frontend::ast::Protocol;
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ExprValue, ThreadInputValue};
 use crate::ir::proto_graph::{Op, ProtoGraph};
+use baa::BitVecOps;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 // TODO: handle ITEs
 // TODO: handle forks
@@ -24,14 +21,12 @@ pub fn interpret(
     pg: &ProtoGraph,
     st: &SymbolTable,
     args: FxHashMap<&str, Value>,
-    ctx: &Context,
-    sys: &TransitionSystem,
-    sim: Interpreter,
+    mut sim: PatronusSim,
 ) {
     // create a shell AST so we can reuse the existing simulator setup and expr evaluation
     let shell = Protocol::from_context(pg.ctx.clone());
-    let mut evaluator = Evaluator::new(args, &shell, st, ctx, sys, sim);
-    evaluator.init_thread_inputs(0).unwrap();
+    let mut evaluator = Evaluator::new(args, &shell, st, &sim);
+    evaluator.init_thread_inputs(&mut sim, 0).unwrap();
 
     let mut curr = pg.entry;
     loop {
@@ -61,7 +56,8 @@ pub fn interpret(
 
         // apply inputs from the buffer
         for (symbol_id, value) in pending_inputs {
-            evaluator.write_input_value_to_sim(&symbol_id, &value, true);
+            let port_id = sim[symbol_id];
+            evaluator.write_input_value_to_sim(&mut sim, port_id, &value, true);
         }
 
         // second pass: after applying buffered inputs, evaluate non-assign actions

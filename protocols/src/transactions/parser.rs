@@ -12,7 +12,6 @@ use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::serialize_type;
 use crate::frontend::symbol::{SymbolTable, Type};
 use crate::scheduler::TodoItem;
-use crate::setup::bv;
 
 #[derive(Parser)]
 #[grammar = "transactions/transactions.pest"]
@@ -184,6 +183,11 @@ impl IntFormat {
                 .unwrap_or_else(|e| panic!("{} '{}': {}", error_msg, arg_str, e))
         }
     }
+}
+
+/// Creates an owned bit-vector with a particular `value` & `width`
+fn bv(value: u64, width: u32) -> BitVecValue {
+    BitVecValue::from_u64(value, width)
 }
 
 fn parse_arg(
