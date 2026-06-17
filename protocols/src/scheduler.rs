@@ -219,6 +219,7 @@ impl<'a> Scheduler<'a> {
     /// - A Patronus transition system (`sys`)
     /// - A Patronus simulator (`sim`)
     /// - and a `DiagnosticHandler` for emitting errors (`handler`)
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         st: &'a SymbolTable,
         protos: &'a [Protocol],
