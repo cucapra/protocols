@@ -44,9 +44,6 @@ pub struct Interpreter {
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
 
-    /// The SymbolId of the DUT (design under test)
-    pub dut_symbol_id: SymbolId,
-
     /// The `instance_id` of the DUT (which determines which `struct`
     /// in our DSL for which we are inferring transactions).
     /// This field is useful when we have a `.prot` file with multiple
@@ -147,7 +144,6 @@ impl Interpreter {
         symbol_table: SymbolTable,
         trace: &WaveSignalTrace,
         trace_cycle_count: u32,
-        dut_symbol_id: SymbolId,
         instance_id: u32,
     ) -> Self {
         let mut args_mapping = FxHashMap::default();
@@ -184,7 +180,6 @@ impl Interpreter {
             known_bits,
             constraints: FxHashMap::default(),
             trace_cycle_count,
-            dut_symbol_id,
             loop_args: FxHashMap::default(),
             instance_id,
         }

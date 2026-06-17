@@ -29,8 +29,7 @@ pub fn to_verilog(
     let (_, module) = modules.into_iter().next().unwrap();
 
     // derive the instance name from the first protocol
-    let first_proto_id = *module.protocol_ids.first().unwrap();
-    // for the design we can use any symbol table
+    let first_proto_id = module.protocols[0].0;
     let instance_name_id = protos[first_proto_id].type_param.unwrap();
     let instance_name = st[instance_name_id].name().to_string();
 
@@ -70,7 +69,7 @@ pub fn to_verilog(
         "  // variables for the pins of {} : {}",
         instance_name, module.name
     )?;
-    for (_, field) in module.pins.iter() {
+    for field in module.pins.iter() {
         match field.dir() {
             Dir::In => writeln!(
                 out,
@@ -121,7 +120,7 @@ pub fn to_verilog(
     let pin_names = module
         .pins
         .iter()
-        .map(|(_, f)| f.name())
+        .map(|f| f.name())
         .chain(pins.iter().map(|(n, _)| n.as_str()));
     for (ii, name) in pin_names.enumerate() {
         let is_first = ii == 0;
@@ -135,7 +134,7 @@ pub fn to_verilog(
     writeln!(out)?;
 
     // one task for each protocol
-    for &proto_id in module.protocol_ids.iter() {
+    for &(proto_id, _) in module.protocols.iter() {
         let proto = &protos[proto_id];
         let sym_verilog = gen_sym_to_verilog_map(st, proto, &module, &instance_name);
         proto_to_verilog(st, proto, &sym_verilog, out)?;
@@ -221,8 +220,12 @@ fn gen_sym_to_verilog_map(
     }
 
     // dut ports get a prefix
-    for (sym, field) in m.pins.iter() {
-        out.insert(*sym, format!("{instance_name}_{}", field.name()));
+    for (field_idx, field) in m.pins.iter().enumerate() {
+        // symbols in each protocol all map to the same signal
+        for (_, syms) in m.protocols.iter() {
+            let sym = syms[field_idx];
+            out.insert(sym, format!("{instance_name}_{}", field.name()));
+        }
     }
 
     out
