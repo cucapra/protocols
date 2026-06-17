@@ -9,21 +9,21 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
-  node7 [label="[1] D.m_axis_tdata := data"];
-  node7 -> node6 [label="1"];
-  node6 [label="[1] D.m_axis_tvalid := 1"];
-  node6 -> node4 [label="1"];
+  node0 -> node7 [label="1'b1"];
+  node7 [label="[1'b1] D.m_axis_tdata := data"];
+  node7 -> node6 [label="1'b1"];
+  node6 [label="[1'b1] D.m_axis_tvalid := 1'b1"];
+  node6 -> node4 [label="1'b1"];
   node4 [label=""];
-  node4 -> node5 [label="!(D.m_axis_tready == 1)"];
-  node4 -> node3 [label="!(!(D.m_axis_tready == 1))"];
+  node4 -> node5 [label="not(eq(D.m_axis_tready, 1'b1))"];
+  node4 -> node3 [label="not(not(eq(D.m_axis_tready, 1'b1)))"];
   node5 [label=""];
-  node5 -> node4 [label="1 / step"];
+  node5 -> node4 [label="1'b1 / step"];
   node3 [label=""];
-  node3 -> node2 [label="1"];
+  node3 -> node2 [label="1'b1"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node2 -> node1 [label="1'b1 / step"];
+  node1 [label="[1'b1] done"];
 }
 
 == post-contract ==
@@ -32,13 +32,13 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tdata := data\n[1] D.m_axis_tvalid := 1"];
-  node0 -> node1 [label="!(!(D.m_axis_tready == 1)) / step"];
-  node0 -> node4 [label="!(D.m_axis_tready == 1) / step"];
-  node1 [label="[1] done"];
+  node0 [label="[1'b1] D.m_axis_tdata := data\n[1'b1] D.m_axis_tvalid := 1'b1"];
+  node0 -> node1 [label="not(not(eq(D.m_axis_tready, 1'b1))) / step"];
+  node0 -> node4 [label="not(eq(D.m_axis_tready, 1'b1)) / step"];
+  node1 [label="[1'b1] done"];
   node4 [label=""];
-  node4 -> node1 [label="!(!(D.m_axis_tready == 1)) / step"];
-  node4 -> node4 [label="!(D.m_axis_tready == 1) / step"];
+  node4 -> node1 [label="not(not(eq(D.m_axis_tready, 1'b1))) / step"];
+  node4 -> node4 [label="not(eq(D.m_axis_tready, 1'b1)) / step"];
 }
 
 == pre-contract ==
@@ -48,12 +48,12 @@ digraph "idle" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node3 [label="1"];
-  node3 [label="[1] D.m_axis_tvalid := 0"];
-  node3 -> node2 [label="1"];
+  node0 -> node3 [label="1'b1"];
+  node3 [label="[1'b1] D.m_axis_tvalid := 1'b0"];
+  node3 -> node2 [label="1'b1"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node2 -> node1 [label="1'b1 / step"];
+  node1 [label="[1'b1] done"];
 }
 
 == post-contract ==
@@ -62,7 +62,7 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node0 [label="[1'b1] D.m_axis_tvalid := 1'b0"];
+  node0 -> node1 [label="1'b1 / step"];
+  node1 [label="[1'b1] done"];
 }

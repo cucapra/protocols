@@ -108,6 +108,9 @@ pub struct ProtoGraph {
     /// Cached Patronus expressions for AST `DontCare` nodes, keyed by type.
     dont_care_exprs: FxHashMap<PatronusType, ExprRef>,
 
+    /// Cached Patronus symbol expressions, keyed by frontend `SymbolId`.
+    symbol_exprs: FxHashMap<SymbolId, ExprRef>,
+
     /// Maps `NodeId`s to their corresponding `Node`s
     nodes: PrimaryMap<NodeId, Node>,
 
@@ -150,6 +153,7 @@ impl ProtoGraph {
             ast_to_pat_expr,
             pat_to_ast_expr,
             dont_care_exprs: FxHashMap::default(),
+            symbol_exprs: FxHashMap::default(),
             nodes,
             ops,
             op_loc,
@@ -203,6 +207,27 @@ impl ProtoGraph {
         expr
     }
 
+    pub fn symbol_expr(&mut self, symbol_id: SymbolId, symbols: &SymbolTable) -> ExprRef {
+        if let Some(expr) = self.symbol_exprs.get(&symbol_id) {
+            return *expr;
+        }
+
+        let entry = &symbols[symbol_id];
+        let full_name = entry.full_name(symbols);
+        let expr = match entry.tpe() {
+            FrontType::BitVec(width) => self.exprCtx.bv_symbol(&full_name, width),
+            FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
+                panic!(
+                    "unsupported symbol type {} for {}",
+                    crate::frontend::serialize::serialize_type(symbols, entry.tpe()),
+                    full_name
+                )
+            }
+        };
+        self.symbol_exprs.insert(symbol_id, expr);
+        expr
+    }
+
     pub fn lower_and(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
         let ast_lhs = self
             .ast_expr_for(lhs)
@@ -217,18 +242,7 @@ impl ProtoGraph {
     }
 
     pub fn lower_symbol(&mut self, symbol_id: SymbolId, symbols: &SymbolTable) -> ExprRef {
-        let entry = &symbols[symbol_id];
-        let full_name = entry.full_name(symbols);
-        match entry.tpe() {
-            FrontType::BitVec(width) => self.exprCtx.bv_symbol(&full_name, width),
-            FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
-                panic!(
-                    "unsupported symbol type {} for {}",
-                    crate::frontend::serialize::serialize_type(symbols, entry.tpe()),
-                    full_name
-                )
-            }
-        }
+        self.symbol_expr(symbol_id, symbols)
     }
 
     pub fn make_ast_expr(&mut self, expr: AstExpr) -> ExprId {

@@ -9,25 +9,25 @@ digraph "count_up" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
-  node9 [label="[1] dut.a := a"];
-  node9 -> node7 [label="1"];
+  node0 -> node9 [label="1'b1"];
+  node9 [label="[1'b1] dut.a := a"];
+  node9 -> node7 [label="1'b1"];
   node7 [label=""];
-  node7 -> node8 [label="!(dut.s == dut.a)"];
-  node7 -> node6 [label="!(!(dut.s == dut.a))"];
+  node7 -> node8 [label="not(eq(dut.s, dut.a))"];
+  node7 -> node6 [label="not(not(eq(dut.s, dut.a)))"];
   node8 [label=""];
-  node8 -> node7 [label="1 / step"];
+  node8 -> node7 [label="1'b1 / step"];
   node6 [label=""];
-  node6 -> node5 [label="1"];
+  node6 -> node5 [label="1'b1"];
   node5 [label=""];
-  node5 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(dut.s, 0)"];
-  node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node5 -> node4 [label="1'b1 / step"];
+  node4 [label="[1'b1] assert_eq(dut.s, 64'x0000000000000000)"];
+  node4 -> node3 [label="1'b1"];
+  node3 [label="[1'b1] fork"];
+  node3 -> node2 [label="1'b1"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node2 -> node1 [label="1'b1 / step"];
+  node1 [label="[1'b1] done"];
 }
 
 == post-contract ==
@@ -36,15 +36,15 @@ digraph "count_up" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := a"];
-  node0 -> node4 [label="!(!(dut.s == dut.a)) / step"];
-  node0 -> node7 [label="!(dut.s == dut.a) / step"];
-  node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
-  node4 -> node1 [label="1 / step"];
+  node0 [label="[1'b1] dut.a := a"];
+  node0 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
+  node0 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
+  node4 [label="[1'b1] assert_eq(dut.s, 64'x0000000000000000)\n[1'b1] fork"];
+  node4 -> node1 [label="1'b1 / step"];
   node7 [label=""];
-  node7 -> node4 [label="!(!(dut.s == dut.a)) / step"];
-  node7 -> node7 [label="!(dut.s == dut.a) / step"];
-  node1 [label="[1] done"];
+  node7 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
+  node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
+  node1 [label="[1'b1] done"];
 }
 
 == pre-contract ==
@@ -54,27 +54,27 @@ digraph "count_up_extra_assertion" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node10 [label="1"];
-  node10 [label="[1] dut.a := a"];
-  node10 -> node8 [label="1"];
+  node0 -> node10 [label="1'b1"];
+  node10 [label="[1'b1] dut.a := a"];
+  node10 -> node8 [label="1'b1"];
   node8 [label=""];
-  node8 -> node9 [label="!(dut.s == dut.a)"];
-  node8 -> node7 [label="!(!(dut.s == dut.a))"];
+  node8 -> node9 [label="not(eq(dut.s, dut.a))"];
+  node8 -> node7 [label="not(not(eq(dut.s, dut.a)))"];
   node9 [label=""];
-  node9 -> node8 [label="1 / step"];
+  node9 -> node8 [label="1'b1 / step"];
   node7 [label=""];
-  node7 -> node6 [label="1"];
-  node6 [label="[1] assert_eq(dut.s, a)"];
-  node6 -> node5 [label="1"];
+  node7 -> node6 [label="1'b1"];
+  node6 [label="[1'b1] assert_eq(dut.s, a)"];
+  node6 -> node5 [label="1'b1"];
   node5 [label=""];
-  node5 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(dut.s, 0)"];
-  node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node5 -> node4 [label="1'b1 / step"];
+  node4 [label="[1'b1] assert_eq(dut.s, 64'x0000000000000000)"];
+  node4 -> node3 [label="1'b1"];
+  node3 [label="[1'b1] fork"];
+  node3 -> node2 [label="1'b1"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node2 -> node1 [label="1'b1 / step"];
+  node1 [label="[1'b1] done"];
 }
 
 == post-contract ==
@@ -83,13 +83,13 @@ digraph "count_up_extra_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := a\n[!(!(dut.s == dut.a))] assert_eq(dut.s, a)"];
-  node0 -> node4 [label="!(!(dut.s == dut.a)) / step"];
-  node0 -> node8 [label="!(dut.s == dut.a) / step"];
-  node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
-  node4 -> node1 [label="1 / step"];
-  node8 [label="[!(!(dut.s == dut.a))] assert_eq(dut.s, a)"];
-  node8 -> node4 [label="!(!(dut.s == dut.a)) / step"];
-  node8 -> node8 [label="!(dut.s == dut.a) / step"];
-  node1 [label="[1] done"];
+  node0 [label="[1'b1] dut.a := a\n[not(not(eq(dut.s, dut.a)))] assert_eq(dut.s, a)"];
+  node0 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
+  node0 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
+  node4 [label="[1'b1] assert_eq(dut.s, 64'x0000000000000000)\n[1'b1] fork"];
+  node4 -> node1 [label="1'b1 / step"];
+  node8 [label="[not(not(eq(dut.s, dut.a)))] assert_eq(dut.s, a)"];
+  node8 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
+  node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
+  node1 [label="[1'b1] done"];
 }
