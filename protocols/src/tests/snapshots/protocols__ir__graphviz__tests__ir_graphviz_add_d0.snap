@@ -42,8 +42,8 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1'b1] DUT.a := a\n[1'b1] DUT.b := X"];
-  node0 -> node1 [label="not(eq(DUT.s, 32'x00000000)) / step"];
   node0 -> node1 [label="eq(DUT.s, 32'x00000000) / step"];
+  node0 -> node1 [label="not(eq(DUT.s, 32'x00000000)) / step"];
   node1 [label="[1'b1] done"];
   node1 [label="[1'b1] done"];
 }

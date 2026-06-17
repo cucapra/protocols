@@ -85,7 +85,7 @@ pub enum Op {
     Assign(SymbolId, ExprRef),
     AssertEq(ExprRef, ExprRef),
     Fork,
-    InternalAssert,
+    InternalAssertFalse,
     Done,
 }
 
@@ -121,9 +121,9 @@ impl ProtoGraph {
         let op_loc: SecondaryMap<OpId, (usize, usize, usize)> = SecondaryMap::new();
 
         Self {
-            proto_ctx: proto_ctx,
+            proto_ctx,
             entry: entry_id,
-            expr_ctx: expr_ctx,
+            expr_ctx,
             symbol_expr: FxHashMap::default(),
             nodes,
             ops,

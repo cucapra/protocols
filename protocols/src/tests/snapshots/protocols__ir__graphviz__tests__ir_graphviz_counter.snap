@@ -42,8 +42,8 @@ digraph "count_up" {
   node4 [label="[1'b1] assert_eq(dut.s, 64'x0000000000000000)\n[1'b1] fork"];
   node4 -> node1 [label="1'b1 / step"];
   node7 [label=""];
-  node7 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
   node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
+  node7 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
   node1 [label="[1'b1] done"];
 }
 
@@ -89,7 +89,7 @@ digraph "count_up_extra_assertion" {
   node4 [label="[1'b1] assert_eq(dut.s, 64'x0000000000000000)\n[1'b1] fork"];
   node4 -> node1 [label="1'b1 / step"];
   node8 [label="[not(not(eq(dut.s, dut.a)))] assert_eq(dut.s, a)"];
-  node8 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
   node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
+  node8 -> node4 [label="not(not(eq(dut.s, dut.a))) / step"];
   node1 [label="[1'b1] done"];
 }

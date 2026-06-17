@@ -8,8 +8,8 @@ use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::Value;
-use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::frontend::serialize::serialize_bitvec;
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::proto_graph::{Op, ProtoGraph};
 
 enum GraphBinding {
@@ -132,7 +132,12 @@ fn evaluate_input_value(
     }
 }
 
-fn evaluate_assert_equal(protocol: &ProtoGraph, store: &SymbolValueStore, lhs: ExprRef, rhs: ExprRef) {
+fn evaluate_assert_equal(
+    protocol: &ProtoGraph,
+    store: &SymbolValueStore,
+    lhs: ExprRef,
+    rhs: ExprRef,
+) {
     if is_dontcare_expr(protocol, lhs) || is_dontcare_expr(protocol, rhs) {
         panic!("assert_eq on DontCare");
     }
@@ -199,12 +204,7 @@ pub fn interpret(
             let signal_expr = signal_names
                 .get(st[symbol_id].name())
                 .copied()
-                .unwrap_or_else(|| {
-                    panic!(
-                        "missing simulator signal for {}",
-                        st[symbol_id].name()
-                    )
-                });
+                .unwrap_or_else(|| panic!("missing simulator signal for {}", st[symbol_id].name()));
             match value {
                 InputValue::Concrete(bvv) => sim.set(signal_expr, &bvv),
                 InputValue::DontCare => {
@@ -229,7 +229,7 @@ pub fn interpret(
                         evaluate_assert_equal(pg, &store, *lhs, *rhs);
                     }
                     Op::Fork => {}
-                    Op::InternalAssert => panic!("internal assert failed"),
+                    Op::InternalAssertFalse => panic!("internal assert failed"),
                     Op::Done => done_triggered = true,
                 }
             }

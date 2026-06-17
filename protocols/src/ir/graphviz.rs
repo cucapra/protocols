@@ -87,7 +87,7 @@ fn format_op(
             format_expr(protocol, *rhs)
         ),
         Op::Fork => "fork".to_string(),
-        Op::InternalAssert => "internal_assert".to_string(),
+        Op::InternalAssertFalse => "internal_assert_false".to_string(),
         Op::Done => "done".to_string(),
     }
 }

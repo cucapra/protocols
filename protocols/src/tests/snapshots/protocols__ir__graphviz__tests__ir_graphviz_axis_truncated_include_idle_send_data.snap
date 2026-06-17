@@ -37,8 +37,8 @@ digraph "send_data" {
   node0 -> node4 [label="not(eq(D.m_axis_tready, 1'b1)) / step"];
   node1 [label="[1'b1] done"];
   node4 [label=""];
-  node4 -> node1 [label="not(not(eq(D.m_axis_tready, 1'b1))) / step"];
   node4 -> node4 [label="not(eq(D.m_axis_tready, 1'b1)) / step"];
+  node4 -> node1 [label="not(not(eq(D.m_axis_tready, 1'b1))) / step"];
 }
 
 == pre-contract ==
