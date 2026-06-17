@@ -123,7 +123,7 @@ mod tests {
 
             // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir);
+            contract_edges(&mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, &symbols);
             content += "\n";
