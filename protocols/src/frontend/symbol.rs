@@ -287,12 +287,7 @@ impl SymbolTable {
             self.active_scope, ROOT_SCOPE,
             "nested scopes are not supported"
         );
-        assert!(
-            self.scopes
-                .iter()
-                .find(|(_, existing)| existing.0 == name)
-                .is_none()
-        );
+        assert!(!self.scopes.iter().any(|(_, existing)| existing.0 == name));
         let scope_id = self.scopes.push(Scope(name.to_string()));
         self.active_scope = scope_id;
         scope_id
