@@ -261,9 +261,9 @@ digraph "add_with_override" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1'b1] DUT.a := ite(eq(DUT.a, 32'x00000002), 32'x00000000, a)\n[1'b1] DUT.b := ite(not(eq(DUT.a, 32'x00000002)), b, ite(eq(DUT.a, 32'x00000002), b, DUT.b))"];
-  node0 -> node6 [label="not(eq(DUT.a, 32'x00000002)) / step"];
+  node0 [label="[1'b1] DUT.a := ite(eq(DUT.a, 32'x00000002), 32'x00000000, a)\n[1'b1] DUT.b := ite(eq(DUT.a, 32'x00000002), b, ite(not(eq(DUT.a, 32'x00000002)), b, DUT.b))"];
   node0 -> node6 [label="eq(DUT.a, 32'x00000002) / step"];
+  node0 -> node6 [label="not(eq(DUT.a, 32'x00000002)) / step"];
   node6 [label="[1'b1] DUT.a := X\n[1'b1] DUT.b := X\n[1'b1] assert_eq(s, DUT.s)\n[1'b1] fork"];
   node6 -> node1 [label="1'b1 / step"];
   node6 [label="[1'b1] DUT.a := X\n[1'b1] DUT.b := X\n[1'b1] assert_eq(s, DUT.s)\n[1'b1] fork"];
