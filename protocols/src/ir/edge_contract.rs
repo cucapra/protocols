@@ -1,14 +1,14 @@
-use crate::frontend::ast::{BinOp, Expr, ExprId};
 use crate::ir::proto_graph::{Action, ProtoGraph, Transition};
+use patronus::expr::ExprRef;
 
 /// If either side of the guard conjunction is `true`, elide it.
-fn and_guard(protocol: &mut ProtoGraph, lhs: ExprId, rhs: ExprId) -> ExprId {
+fn and_guard(protocol: &mut ProtoGraph, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
     if lhs == protocol.true_id() {
         rhs
     } else if rhs == protocol.true_id() {
         lhs
     } else {
-        protocol.e(Expr::Binary(BinOp::And, lhs, rhs))
+        protocol.lower_and(lhs, rhs)
     }
 }
 

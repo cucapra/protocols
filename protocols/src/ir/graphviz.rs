@@ -2,9 +2,9 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use crate::frontend::serialize::serialize_expr;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use patronus::expr::{ExprRef, SerializableIrNode};
 use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
@@ -34,7 +34,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         for action in &node.actions {
             label_parts.push(format!(
                 "[{}] {}",
-                serialize_expr(protocol, symbols, &action.guard),
+                format_expr(protocol, action.guard),
                 format_op(protocol, symbols, action.op)
             ));
         }
@@ -49,12 +49,9 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         // emit graph edges
         for transition in &node.transitions {
             let edge_label = if transition.consumes_step {
-                format!(
-                    "{} / step",
-                    serialize_expr(protocol, symbols, &transition.guard)
-                )
+                format!("{} / step", format_expr(protocol, transition.guard))
             } else {
-                serialize_expr(protocol, symbols, &transition.guard)
+                format_expr(protocol, transition.guard)
             };
             out.push_str(&format!(
                 "  {} -> {} [label=\"{}\"];\n",
@@ -82,15 +79,23 @@ fn format_op(
         Op::Assign(symbol_id, expr_id) => format!(
             "{} := {}",
             symbols.full_name_from_symbol_id(symbol_id),
-            serialize_expr(protocol, symbols, expr_id)
+            format_expr(protocol, *expr_id)
         ),
         Op::AssertEq(lhs, rhs) => format!(
             "assert_eq({}, {})",
-            serialize_expr(protocol, symbols, lhs),
-            serialize_expr(protocol, symbols, rhs)
+            format_expr(protocol, *lhs),
+            format_expr(protocol, *rhs)
         ),
         Op::Fork => "fork".to_string(),
         Op::Done => "done".to_string(),
+    }
+}
+
+fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+    let expr = &protocol.exprCtx[expr_ref];
+    match protocol.exprCtx.get_symbol_name(expr_ref) {
+        Some(name) if name.starts_with("__dontcare_") => "X".to_string(),
+        _ => expr.serialize_to_str(&protocol.exprCtx),
     }
 }
 
@@ -116,7 +121,7 @@ mod tests {
         let parsed = parse_file(filename, &mut handler).unwrap();
         let mut content = String::new();
         for (ast, symbols) in parsed.into_iter() {
-            let ir: ProtoGraph = lower_ast_to_ir(ast);
+            let ir: ProtoGraph = lower_ast_to_ir(ast, &symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, &symbols);
             content += "\n";

@@ -2,10 +2,12 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use crate::frontend::ast::*;
-use crate::frontend::symbol::SymbolId;
+use crate::frontend::ast::{BinOp, Expr as AstExpr, ExprId, ProtocolContext};
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use patronus::expr::{Context, ExprRef, Type as PatronusType};
+use rustc_hash::FxHashMap;
 use std::ops::{Deref, DerefMut, Index};
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
@@ -21,17 +23,17 @@ entity_impl!(OpId, "op");
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// an Action is a guard and an operation to perform when the guard is true
 pub struct Action {
-    pub guard: ExprId,
+    pub guard: ExprRef,
     pub op: OpId,
 }
 
 impl Action {
-    pub fn new(guard: ExprId, op: OpId) -> Self {
+    pub fn new(guard: ExprRef, op: OpId) -> Self {
         Self { guard, op }
     }
 
     /// use the new guard instead of the old one
-    pub fn with_guard(&self, guard: ExprId) -> Self {
+    pub fn with_guard(&self, guard: ExprRef) -> Self {
         Self { guard, op: self.op }
     }
 }
@@ -39,13 +41,13 @@ impl Action {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A Transition is a guard, a target node, and flag if this transition consumes step
 pub struct Transition {
-    pub guard: ExprId,
+    pub guard: ExprRef,
     pub target: NodeId,
     pub consumes_step: bool,
 }
 
 impl Transition {
-    pub fn new(guard: ExprId, target: NodeId, consumes_step: bool) -> Self {
+    pub fn new(guard: ExprRef, target: NodeId, consumes_step: bool) -> Self {
         Self {
             guard,
             target,
@@ -54,7 +56,7 @@ impl Transition {
     }
 
     /// use the new guard instead of the old one
-    pub fn with_guard(&self, guard: ExprId) -> Self {
+    pub fn with_guard(&self, guard: ExprRef) -> Self {
         Self {
             guard,
             target: self.target,
@@ -81,21 +83,30 @@ impl Node {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
-    Assign(SymbolId, ExprId),
-    AssertEq(ExprId, ExprId),
+    Assign(SymbolId, ExprRef),
+    AssertEq(ExprRef, ExprRef),
     Fork,
     Done,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct ProtoGraph {
-    pub ctx: ProtocolContext,
+    pub protoCtx: ProtocolContext,
 
     /// The entrypoint of the `Protocol`
     pub entry: NodeId,
 
-    /// Other distinguished expressions convenient in lowering
-    true_id: ExprId,
+    /// Patronus expression context
+    pub exprCtx : Context,
+
+    /// Maps AST `ExprId`s to the Patronus `ExprRef`s created during lowering.
+    ast_to_pat_expr: FxHashMap<ExprId, ExprRef>,
+
+    /// Reverse map for consumers that still want to evaluate/pretty-print through the AST.
+    pat_to_ast_expr: FxHashMap<ExprRef, ExprId>,
+
+    /// Cached Patronus expressions for AST `DontCare` nodes, keyed by type.
+    dont_care_exprs: FxHashMap<PatronusType, ExprRef>,
 
     /// Maps `NodeId`s to their corresponding `Node`s
     nodes: PrimaryMap<NodeId, Node>,
@@ -107,6 +118,133 @@ pub struct ProtoGraph {
 }
 
 impl ProtoGraph {
+    pub fn new(mut protoCtx: ProtocolContext) -> Self {
+        let exprCtx = Context::default();
+
+        // Keep explicit AST mirrors for the cached Patronus constants so legacy consumers
+        // can still translate a lowered expression back to an AST expression id.
+        let true_ast = protoCtx.e(AstExpr::Const(BitVecValue::from_u64(1, 1)));
+        let false_ast = protoCtx.e(AstExpr::Const(BitVecValue::from_u64(0, 1)));
+
+        let true_pat = exprCtx.get_true();
+        let false_pat = exprCtx.get_false();
+
+        let mut ast_to_pat_expr = FxHashMap::default();
+        let mut pat_to_ast_expr = FxHashMap::default();
+        ast_to_pat_expr.insert(true_ast, true_pat);
+        ast_to_pat_expr.insert(false_ast, false_pat);
+        pat_to_ast_expr.insert(true_pat, true_ast);
+        pat_to_ast_expr.insert(false_pat, false_ast);
+
+        let mut nodes = PrimaryMap::new();
+        let entry = Node::empty();
+        let entry_id: NodeId = nodes.push(entry);
+
+        let ops = PrimaryMap::new();
+        let op_loc: SecondaryMap<OpId, (usize, usize, usize)> = SecondaryMap::new();
+
+        Self {
+            protoCtx,
+            entry: entry_id,
+            exprCtx,
+            ast_to_pat_expr,
+            pat_to_ast_expr,
+            dont_care_exprs: FxHashMap::default(),
+            nodes,
+            ops,
+            op_loc,
+        }
+    }
+
+    pub fn true_id(&self) -> ExprRef {
+        self.exprCtx.get_true()
+    }
+
+    pub fn false_id(&self) -> ExprRef {
+        self.exprCtx.get_false()
+    }
+
+    pub fn expr_for_ast(&self, expr_id: ExprId) -> Option<ExprRef> {
+        self.ast_to_pat_expr.get(&expr_id).copied()
+    }
+
+    pub fn ast_expr_for(&self, expr_ref: ExprRef) -> Option<ExprId> {
+        self.pat_to_ast_expr.get(&expr_ref).copied()
+    }
+
+    pub fn record_expr_mapping(&mut self, ast_expr: ExprId, pat_expr: ExprRef) {
+        self.ast_to_pat_expr.insert(ast_expr, pat_expr);
+        self.pat_to_ast_expr.insert(pat_expr, ast_expr);
+    }
+
+    pub fn dont_care_expr(&mut self, tpe: PatronusType) -> ExprRef {
+        if let Some(expr) = self.dont_care_exprs.get(&tpe) {
+            return *expr;
+        }
+
+        let expr = match tpe {
+            PatronusType::BV(width) => {
+                let name = format!("__dontcare_bv_{width}_{}", self.dont_care_exprs.len());
+                self.exprCtx.bv_symbol(&name, width)
+            }
+            PatronusType::Array(array_tpe) => {
+                let name = format!(
+                    "__dontcare_arr_{}_{}x{}",
+                    self.dont_care_exprs.len(),
+                    array_tpe.index_width,
+                    array_tpe.data_width
+                );
+                self.exprCtx
+                    .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
+            }
+        };
+
+        self.dont_care_exprs.insert(tpe, expr);
+        expr
+    }
+
+    pub fn lower_and(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let ast_lhs = self
+            .ast_expr_for(lhs)
+            .expect("missing AST mapping for left-hand side of lowered AND");
+        let ast_rhs = self
+            .ast_expr_for(rhs)
+            .expect("missing AST mapping for right-hand side of lowered AND");
+        let ast_expr = self.protoCtx.e(AstExpr::Binary(BinOp::And, ast_lhs, ast_rhs));
+        let pat_expr = self.exprCtx.and(lhs, rhs);
+        self.record_expr_mapping(ast_expr, pat_expr);
+        pat_expr
+    }
+
+    pub fn lower_symbol(&mut self, symbol_id: SymbolId, symbols: &SymbolTable) -> ExprRef {
+        let entry = &symbols[symbol_id];
+        let full_name = entry.full_name(symbols);
+        match entry.tpe() {
+            FrontType::BitVec(width) => self.exprCtx.bv_symbol(&full_name, width),
+            FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
+                panic!(
+                    "unsupported symbol type {} for {}",
+                    crate::frontend::serialize::serialize_type(symbols, entry.tpe()),
+                    full_name
+                )
+            }
+        }
+    }
+
+    pub fn make_ast_expr(&mut self, expr: AstExpr) -> ExprId {
+        self.protoCtx.e(expr)
+    }
+
+    /// Returns the Patronus expression type corresponding to an AST symbol type.
+    pub fn ast_to_patronus_type(tpe: FrontType) -> PatronusType {
+        match tpe {
+            FrontType::BitVec(width) => PatronusType::BV(width),
+            FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
+                panic!("unsupported frontend type for Patronus lowering: {:?}", tpe)
+            }
+        }
+    }
+
     /// add a new node to the IR
     pub fn n(&mut self, node: Node) -> NodeId {
         self.nodes.push(node)
@@ -120,11 +258,6 @@ impl ProtoGraph {
     /// add a new op to the IR
     pub fn o(&mut self, op: Op) -> OpId {
         self.ops.push(op)
-    }
-
-    /// get the convenience expressions
-    pub fn true_id(&self) -> ExprId {
-        self.true_id
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
@@ -144,54 +277,30 @@ impl ProtoGraph {
     pub fn push_transition(&mut self, node_id: NodeId, t: Transition) {
         self.nodes[node_id].transitions.push(t);
     }
-
-    // reuse stuff from the AST
-    pub fn new(mut ctx: ProtocolContext) -> Self {
-        // set the convenience values for lowering
-        // TODO: maybe some expressions are so common they need a canonical map from Expr -> ExprId
-        let true_id = ctx.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-
-        // set up the empty entry node that always transitions to the next key
-        let mut nodes = PrimaryMap::new();
-        let entry = Node::empty();
-        let entry_id: NodeId = nodes.push(entry);
-
-        // set up empty ops map
-        let ops = PrimaryMap::new();
-
-        // set up op_loc with optionals (reuse existing expr_loc)
-        let op_loc: SecondaryMap<OpId, (usize, usize, usize)> = SecondaryMap::new();
-
-        Self {
-            ctx,
-            entry: entry_id,
-            true_id,
-            nodes: nodes.clone(),
-            ops,
-            op_loc,
-        }
-    }
 }
 
 impl Deref for ProtoGraph {
     type Target = ProtocolContext;
 
     fn deref(&self) -> &Self::Target {
-        &self.ctx
+        &self.protoCtx
     }
 }
 
 impl DerefMut for ProtoGraph {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.ctx
+        &mut self.protoCtx
     }
 }
 
-impl Index<ExprId> for ProtoGraph {
-    type Output = Expr;
+impl Index<ExprRef> for ProtoGraph {
+    type Output = AstExpr;
 
-    fn index(&self, index: ExprId) -> &Self::Output {
-        &self.ctx[index]
+    fn index(&self, index: ExprRef) -> &Self::Output {
+        let ast_expr = self
+            .ast_expr_for(index)
+            .unwrap_or_else(|| panic!("missing AST mapping for {index:?}"));
+        &self.protoCtx[ast_expr]
     }
 }
 
@@ -203,11 +312,14 @@ impl Index<usize> for Node {
     }
 }
 
-impl Index<&ExprId> for ProtoGraph {
-    type Output = Expr;
+impl Index<&ExprRef> for ProtoGraph {
+    type Output = AstExpr;
 
-    fn index(&self, index: &ExprId) -> &Self::Output {
-        &self.ctx[index]
+    fn index(&self, index: &ExprRef) -> &Self::Output {
+        let ast_expr = self
+            .ast_expr_for(*index)
+            .unwrap_or_else(|| panic!("missing AST mapping for {index:?}"));
+        &self.protoCtx[ast_expr]
     }
 }
 
@@ -262,7 +374,7 @@ mod tests {
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
         let parsed = parse_file(path, &mut handler).unwrap();
-        let (ast, _symbol_table) = match protocol_name {
+        let (ast, symbol_table) = match protocol_name {
             Some(protocol_name) => parsed
                 .into_iter()
                 .find(|(ast, _)| ast.name == protocol_name)
@@ -272,7 +384,7 @@ mod tests {
                 parsed.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(ast)
+        lower_ast_to_ir(ast, &symbol_table)
     }
 
     #[test]

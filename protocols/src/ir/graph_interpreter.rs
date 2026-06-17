@@ -9,7 +9,7 @@ use patronus::system::TransitionSystem;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::Value;
-use crate::frontend::ast::Protocol;
+use crate::frontend::ast::{ExprId, Protocol};
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ExprValue, ThreadInputValue};
@@ -29,7 +29,7 @@ pub fn interpret(
     sim: Interpreter,
 ) {
     // create a shell AST so we can reuse the existing simulator setup and expr evaluation
-    let shell = Protocol::from_context(pg.ctx.clone());
+    let shell = Protocol::from_context(pg.protoCtx.clone());
     let mut evaluator = Evaluator::new(args, &shell, st, ctx, sys, sim);
     evaluator.init_thread_inputs(0).unwrap();
 
@@ -51,10 +51,27 @@ pub fn interpret(
 
         // first pass: buffer any triggered assigns
         for action in &node.actions {
-            if let Op::Assign(symbol_id, expr_id) = &pg[action.op]
-                && evaluate_guard(&mut evaluator, action.guard)
+            if let Op::Assign(symbol_id, expr_ref) = &pg[action.op]
+                && evaluate_guard(
+                    &mut evaluator,
+                    pg.ast_expr_for(action.guard)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "missing AST mapping for lowered expression {:?}",
+                                action.guard
+                            )
+                        }),
+                )
             {
-                let value = expr_to_input_value(&mut evaluator, expr_id);
+                let ast_expr = pg
+                    .ast_expr_for(*expr_ref)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "missing AST mapping for lowered expression {:?}",
+                            expr_ref
+                        )
+                    });
+                let value = expr_to_input_value(&mut evaluator, ast_expr);
                 pending_inputs.insert(*symbol_id, value);
             }
         }
@@ -67,10 +84,35 @@ pub fn interpret(
         // second pass: after applying buffered inputs, evaluate non-assign actions
         let mut done_triggered = false;
         for action in &node.actions {
-            if evaluate_guard(&mut evaluator, action.guard) {
+            if evaluate_guard(
+                &mut evaluator,
+                pg.ast_expr_for(action.guard)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "missing AST mapping for lowered expression {:?}",
+                            action.guard
+                        )
+                    }),
+            ) {
                 match &pg[action.op] {
                     Op::Assign(_, _) => {}
                     Op::AssertEq(lhs, rhs) => {
+                        let lhs = pg
+                            .ast_expr_for(*lhs)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "missing AST mapping for lowered expression {:?}",
+                                    lhs
+                                )
+                            });
+                        let rhs = pg
+                            .ast_expr_for(*rhs)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "missing AST mapping for lowered expression {:?}",
+                                    rhs
+                                )
+                            });
                         assert_eq_exprs(&mut evaluator, lhs, rhs);
                     }
                     Op::Fork => {}
@@ -82,7 +124,17 @@ pub fn interpret(
         let satisfied_transitions: Vec<_> = node
             .transitions
             .iter()
-            .filter(|transition| evaluate_guard(&mut evaluator, transition.guard))
+            .filter(|transition| {
+                evaluate_guard(
+                    &mut evaluator,
+                    pg.ast_expr_for(transition.guard).unwrap_or_else(|| {
+                        panic!(
+                            "missing AST mapping for lowered expression {:?}",
+                            transition.guard
+                        )
+                    }),
+                )
+            })
             .collect();
 
         // FIXME: I don't know if this iff property is true
@@ -114,30 +166,23 @@ pub fn interpret(
     }
 }
 
-fn evaluate_guard(evaluator: &mut Evaluator<'_>, expr_id: crate::frontend::ast::ExprId) -> bool {
+fn evaluate_guard(evaluator: &mut Evaluator<'_>, expr_id: ExprId) -> bool {
     match evaluator.evaluate_expr_raw(&expr_id).unwrap() {
         ExprValue::Concrete(bvv) => !bvv.is_zero(),
         ExprValue::DontCare => panic!("guard evaluated to DontCare"),
     }
 }
 
-fn expr_to_input_value(
-    evaluator: &mut Evaluator<'_>,
-    expr_id: &crate::frontend::ast::ExprId,
-) -> ThreadInputValue {
-    match evaluator.evaluate_expr_raw(expr_id).unwrap() {
+fn expr_to_input_value(evaluator: &mut Evaluator<'_>, expr_id: ExprId) -> ThreadInputValue {
+    match evaluator.evaluate_expr_raw(&expr_id).unwrap() {
         ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
         ExprValue::DontCare => ThreadInputValue::DontCare,
     }
 }
 
-fn assert_eq_exprs(
-    evaluator: &mut Evaluator<'_>,
-    lhs: &crate::frontend::ast::ExprId,
-    rhs: &crate::frontend::ast::ExprId,
-) {
-    let lhs = evaluator.evaluate_expr_raw(lhs).unwrap();
-    let rhs = evaluator.evaluate_expr_raw(rhs).unwrap();
+fn assert_eq_exprs(evaluator: &mut Evaluator<'_>, lhs: ExprId, rhs: ExprId) {
+    let lhs = evaluator.evaluate_expr_raw(&lhs).unwrap();
+    let rhs = evaluator.evaluate_expr_raw(&rhs).unwrap();
     match (lhs, rhs) {
         (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
             assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");

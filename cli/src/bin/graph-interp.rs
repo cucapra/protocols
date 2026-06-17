@@ -84,7 +84,7 @@ fn main() {
         .map(|(proto, symbols)| {
             (
                 proto.name.clone(),
-                (lower_ast_to_ir(proto.clone()), symbols),
+                (lower_ast_to_ir(proto.clone(), symbols), symbols),
             )
         })
         .collect();

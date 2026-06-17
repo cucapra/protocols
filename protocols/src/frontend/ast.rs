@@ -171,7 +171,7 @@ impl Protocol {
         block_id: StmtId,
         stmt_after_block: Option<StmtId>,
     ) -> FxHashMap<StmtId, Option<StmtId>> {
-        // Precondition: input StmtId refers to the a Stmt::Block variant
+        // Precondition: input StmtId refers to the Stmt::Block variant
         let mut map = FxHashMap::default();
 
         if let Stmt::Block(stmts) = &self.stmts[block_id] {
