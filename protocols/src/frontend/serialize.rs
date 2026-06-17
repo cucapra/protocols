@@ -370,7 +370,7 @@ pub fn serialize(
                 out,
                 "<{}: {}>",
                 st[type_param].name(),
-                serialize_type(&st, st[type_param].tpe())
+                serialize_type(st, st[type_param].tpe())
             )?;
         }
 
@@ -387,20 +387,20 @@ pub fn serialize(
                         out,
                         "{}: {}) {{",
                         st[arg].name(),
-                        serialize_type(&st, st[arg].tpe())
+                        serialize_type(st, st[arg].tpe())
                     )?;
                 } else {
                     write!(
                         out,
                         "{}: {}, ",
                         st[arg].name(),
-                        serialize_type(&st, st[arg].tpe())
+                        serialize_type(st, st[arg].tpe())
                     )?;
                 }
             }
         }
 
-        build_statements(out, &proto, &st, &proto.body, 1)?;
+        build_statements(out, proto, st, &proto.body, 1)?;
 
         writeln!(out, "}}\n")?;
     }

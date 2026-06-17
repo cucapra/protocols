@@ -231,7 +231,7 @@ impl<'a> Scheduler<'a> {
     ) -> Self {
         // Create irs with pre-computed next statement mappings
         let irs: Vec<TransactionInfo<'a>> = protos
-            .into_iter()
+            .iter()
             .map(|proto| (proto, st, proto.next_stmt_mapping()))
             .collect();
 
