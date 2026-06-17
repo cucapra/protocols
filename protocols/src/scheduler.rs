@@ -365,6 +365,8 @@ impl<'a> Scheduler<'a> {
                 }
             }
 
+            assert!(threads_needing_implicit_fork.len() <= 1, "can only fork a single time per step");
+
             // Process implicit forks after drain is complete
             for _todo_idx in threads_needing_implicit_fork {
                 let next_todo_option = self.next_todo(self.next_todo_idx);

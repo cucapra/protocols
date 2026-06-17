@@ -545,7 +545,7 @@ impl SymbolTableEntry {
         matches!(self.kind, SymbolKind::InPort)
     }
     pub fn is_out_port(&self) -> bool {
-        matches!(self.kind, SymbolKind::InPort)
+        matches!(self.kind, SymbolKind::OutPort)
     }
     pub fn as_arg_index(&self) -> Option<usize> {
         if let SymbolKind::Arg(index) = self.kind {

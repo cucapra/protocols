@@ -180,8 +180,8 @@ impl<'a> Evaluator<'a> {
                         )
                     });
                 input_mapping.insert(*symbol_id, *input);
-            } else {
-                assert!(sym.is_port());
+            }
+            if sym.is_out_port() {
                 // check if the DUT symbol is an output
                 let output = sys
                     .outputs
