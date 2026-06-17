@@ -131,9 +131,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .map(|inst| {
             designs[&inst.design]
-                .protocol_ids
+                .protocols
                 .iter()
-                .map(|id| protos[*id].clone())
+                .map(|(id, _)| protos[*id].clone())
                 .collect()
         })
         .collect();
