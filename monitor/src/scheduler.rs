@@ -127,7 +127,6 @@ impl Scheduler {
         protos: &[Protocol],
         trace: &WaveSignalTrace,
         struct_name: String,
-        dut_symbol_id: SymbolId,
         instance_id: u32,
     ) -> Self {
         let cycle_count = 0;
@@ -161,7 +160,6 @@ impl Scheduler {
             initial_symbol_table,
             trace,
             cycle_count,
-            dut_symbol_id,
             instance_id,
         );
         Self {

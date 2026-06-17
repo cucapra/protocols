@@ -204,9 +204,9 @@ fn main() -> anyhow::Result<()> {
     for (instance_id, design) in dut_designs.into_iter().enumerate() {
         // Filter transactions that belong to this design
         let design_transactions: Vec<Protocol> = design
-            .protocol_ids
+            .protocols
             .iter()
-            .map(|&idx| protos[idx].clone())
+            .map(|&(idx, _)| protos[idx].clone())
             .collect();
 
         if design_transactions.is_empty() {
@@ -219,7 +219,6 @@ fn main() -> anyhow::Result<()> {
             &design_transactions,
             &trace,
             design.name.clone(),
-            design.symbol_id,
             instance_id as u32,
         );
 
