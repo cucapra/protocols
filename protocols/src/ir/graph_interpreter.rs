@@ -12,10 +12,6 @@ use crate::ir::proto_graph::{Op, ProtoGraph};
 use baa::BitVecOps;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-// TODO: handle ITEs
-// TODO: handle forks
-// TODO: handle irreducible loops
-
 /// interpret a `ProtoGraph`
 pub fn interpret(
     pg: &ProtoGraph,
