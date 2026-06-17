@@ -1,37 +1,178 @@
-// Copyright 2026 Cornell University
-// released under MIT License
-// author: Nikil Shyamunder <nvs26@cornell.edu>
+use std::convert::TryInto;
 
-use crate::Value;
-use crate::dut::PatronusSim;
-use crate::frontend::ast::Protocol;
-use crate::frontend::serialize::serialize_bitvec;
-use crate::frontend::symbol::{SymbolId, SymbolTable};
-use crate::interpreter::{Evaluator, ExprValue, ThreadInputValue};
-use crate::ir::proto_graph::{Op, ProtoGraph};
-use baa::BitVecOps;
+use baa::{BitVecOps, BitVecValue, Value as BaaValue};
+use patronus::expr::{Context, ExprRef, SymbolValueStore, eval_expr};
+use patronus::sim::{Interpreter, Simulator};
+use patronus::system::TransitionSystem;
+use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-/// interpret a `ProtoGraph`
+use crate::Value;
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
+use crate::frontend::serialize::serialize_bitvec;
+use crate::ir::proto_graph::{Op, ProtoGraph};
+
+enum GraphBinding {
+    System(ExprRef),
+    Arg(Value),
+    DontCare,
+}
+
+#[derive(Debug, Clone)]
+enum InputValue {
+    Concrete(BitVecValue),
+    DontCare,
+}
+
+fn is_dontcare_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> bool {
+    protocol
+        .expr_ctx
+        .get_symbol_name(expr_ref)
+        .is_some_and(|name| name.starts_with("__dontcare_"))
+}
+
+fn build_bindings(
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    args: &FxHashMap<&str, Value>,
+    signal_names: &FxHashMap<String, ExprRef>,
+) -> FxHashMap<ExprRef, GraphBinding> {
+    let mut bindings = FxHashMap::default();
+
+    for idx in 0..protocol.expr_ctx.num_exprs() {
+        let expr_ref = ExprRef::from_index(idx);
+        let Some(name) = protocol.expr_ctx.get_symbol_name(expr_ref) else {
+            continue;
+        };
+
+        if name.starts_with("__dontcare__") {
+            bindings.insert(expr_ref, GraphBinding::DontCare);
+            continue;
+        }
+
+        let Some(symbol_id) = symbols.symbol_id_from_name(name) else {
+            continue;
+        };
+
+        if symbols[symbol_id].is_arg() {
+            let arg_name = symbols[symbol_id].name();
+            let value = args
+                .get(arg_name)
+                .unwrap_or_else(|| panic!("missing argument value for {arg_name}"))
+                .clone();
+            bindings.insert(expr_ref, GraphBinding::Arg(value));
+        } else if symbols[symbol_id].is_port() || symbols[symbol_id].is_loop_var() {
+            let signal_name = symbols[symbol_id].name();
+            let system_expr = signal_names
+                .get(signal_name)
+                .copied()
+                .unwrap_or_else(|| panic!("missing simulator signal for {signal_name}"));
+            bindings.insert(expr_ref, GraphBinding::System(system_expr));
+        }
+    }
+
+    bindings
+}
+
+fn build_value_store(
+    bindings: &FxHashMap<ExprRef, GraphBinding>,
+    sim: &Interpreter,
+) -> SymbolValueStore {
+    let mut store = SymbolValueStore::default();
+
+    for (expr_ref, binding) in bindings {
+        if matches!(binding, GraphBinding::DontCare) {
+            continue;
+        }
+
+        let value = match binding {
+            GraphBinding::System(sys_expr) => sim.get(*sys_expr),
+            GraphBinding::Arg(value) => {
+                let bvv: BitVecValue = value
+                    .clone()
+                    .try_into()
+                    .unwrap_or_else(|_| panic!("unsupported argument type for {:?}", expr_ref));
+                BaaValue::BitVec(bvv)
+            }
+            GraphBinding::DontCare => unreachable!(),
+        };
+
+        match value {
+            BaaValue::BitVec(bv) => store.define_bv(*expr_ref, &bv),
+            BaaValue::Array(arr) => store.define_array(*expr_ref, arr),
+        }
+    }
+
+    store
+}
+
+fn evaluate_guard(protocol: &ProtoGraph, store: &SymbolValueStore, expr_ref: ExprRef) -> bool {
+    if is_dontcare_expr(protocol, expr_ref) {
+        panic!("guard evaluated to DontCare");
+    }
+
+    match eval_expr(&protocol.expr_ctx, store, expr_ref).try_into() {
+        Ok::<BitVecValue, _>(bvv) => !bvv.is_zero(),
+        Err(_) => panic!("guard did not evaluate to a bit-vector"),
+    }
+}
+
+fn evaluate_input_value(
+    protocol: &ProtoGraph,
+    store: &SymbolValueStore,
+    expr_ref: ExprRef,
+) -> InputValue {
+    if is_dontcare_expr(protocol, expr_ref) {
+        return InputValue::DontCare;
+    }
+
+    match eval_expr(&protocol.expr_ctx, store, expr_ref).try_into() {
+        Ok::<BitVecValue, _>(bvv) => InputValue::Concrete(bvv),
+        Err(_) => panic!("assignment rhs did not evaluate to a bit-vector"),
+    }
+}
+
+fn evaluate_assert_equal(protocol: &ProtoGraph, store: &SymbolValueStore, lhs: ExprRef, rhs: ExprRef) {
+    if is_dontcare_expr(protocol, lhs) || is_dontcare_expr(protocol, rhs) {
+        panic!("assert_eq on DontCare");
+    }
+
+    let lhs = eval_expr(&protocol.expr_ctx, store, lhs);
+    let rhs = eval_expr(&protocol.expr_ctx, store, rhs);
+    match (lhs, rhs) {
+        (BaaValue::BitVec(lhs), BaaValue::BitVec(rhs)) => {
+            assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");
+            assert!(
+                lhs.is_equal(&rhs),
+                "assert_eq failed: lhs={} rhs={}",
+                serialize_bitvec(&lhs, false),
+                serialize_bitvec(&rhs, false)
+            );
+        }
+        _ => panic!("assert_eq on non-bit-vector values"),
+    }
+}
+
+/// interpret a `ProtoGraph` using Patronus expressions directly.
 pub fn interpret(
     pg: &ProtoGraph,
     st: &SymbolTable,
     args: FxHashMap<&str, Value>,
-    sim: &mut PatronusSim,
+    sim_ctx: &Context,
+    sys: &TransitionSystem,
+    mut sim: Interpreter,
 ) {
-    // create a shell AST so we can reuse the existing simulator setup and expr evaluation
-    let shell = Protocol::from_context(pg.ctx.clone());
-    let mut evaluator = Evaluator::new(args, &shell, st, sim);
-    evaluator.init_thread_inputs(sim, 0).unwrap();
+    let signal_names = sys.get_name_map(sim_ctx);
+    let bindings = build_bindings(pg, st, &args, &signal_names);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    sim.init(patronus::sim::InitKind::Zero);
 
     let mut curr = pg.entry;
     loop {
         let node = &pg[curr];
-        let mut pending_inputs: FxHashMap<SymbolId, ThreadInputValue> = FxHashMap::default();
+        let mut pending_inputs: FxHashMap<SymbolId, InputValue> = FxHashMap::default();
         let mut assigned_inputs: FxHashSet<SymbolId> = FxHashSet::default();
 
-        // note: this is more of a wellformedness check than anything.
-        // even untriggered duplicate assigns to the same input in one node are rejected.
         for action in &node.actions {
             if let Op::Assign(symbol_id, _) = &pg[action.op]
                 && !assigned_inputs.insert(*symbol_id)
@@ -40,30 +181,52 @@ pub fn interpret(
             }
         }
 
-        // first pass: buffer any triggered assigns
-        for action in &node.actions {
-            if let Op::Assign(symbol_id, expr_id) = pg[action.op]
-                && evaluate_guard(sim, &mut evaluator, action.guard)
-            {
-                let value = expr_to_input_value(sim, &mut evaluator, expr_id);
-                pending_inputs.insert(symbol_id, value);
+        {
+            let store = build_value_store(&bindings, &sim);
+
+            for action in &node.actions {
+                if let Op::Assign(symbol_id, expr_ref) = &pg[action.op]
+                    && evaluate_guard(pg, &store, action.guard)
+                {
+                    let value = evaluate_input_value(pg, &store, *expr_ref);
+
+                    pending_inputs.insert(*symbol_id, value);
+                }
             }
         }
 
-        // apply inputs from the buffer
         for (symbol_id, value) in pending_inputs {
-            let port_id = sim[symbol_id];
-            evaluator.write_input_value_to_sim(sim, port_id, &value, true);
+            let signal_expr = signal_names
+                .get(st[symbol_id].name())
+                .copied()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "missing simulator signal for {}",
+                        st[symbol_id].name()
+                    )
+                });
+            match value {
+                InputValue::Concrete(bvv) => sim.set(signal_expr, &bvv),
+                InputValue::DontCare => {
+                    let width = match st[symbol_id].tpe() {
+                        Type::BitVec(w) => w,
+                        _ => panic!("expected BitVec type for input {symbol_id}"),
+                    };
+                    let random_val = BitVecValue::random(&mut rng, width);
+                    sim.set(signal_expr, &random_val);
+                }
+            }
         }
 
-        // second pass: after applying buffered inputs, evaluate non-assign actions
+        let store = build_value_store(&bindings, &sim);
+
         let mut done_triggered = false;
         for action in &node.actions {
-            if evaluate_guard(sim, &mut evaluator, action.guard) {
-                match pg[action.op] {
+            if evaluate_guard(pg, &store, action.guard) {
+                match &pg[action.op] {
                     Op::Assign(_, _) => {}
                     Op::AssertEq(lhs, rhs) => {
-                        assert_eq_exprs(sim, &mut evaluator, lhs, rhs);
+                        evaluate_assert_equal(pg, &store, *lhs, *rhs);
                     }
                     Op::Fork => {}
                     Op::Done => done_triggered = true,
@@ -74,21 +237,14 @@ pub fn interpret(
         let satisfied_transitions: Vec<_> = node
             .transitions
             .iter()
-            .filter(|transition| evaluate_guard(sim, &mut evaluator, transition.guard))
+            .filter(|transition| evaluate_guard(pg, &store, transition.guard))
             .collect();
 
-        // FIXME: I don't know if this iff property is true
-        // if it is, there is no need for a done state
-        // likely it won't be, maybe with repeat/for_in
-        // for now, it's useful to sanity check straight-line code
         assert!(
-            // done <==> no outgoing transitions are triggered
             done_triggered && satisfied_transitions.is_empty()
                 || !done_triggered && !satisfied_transitions.is_empty(),
             "done triggered alongside a satisfied transition out of {curr}"
         );
-
-        // this isn't an NFA
         assert!(
             satisfied_transitions.len() <= 1,
             "multiple transitions simultaneously satisfied out of {curr}"
@@ -103,49 +259,5 @@ pub fn interpret(
             }
             None => break,
         }
-    }
-}
-
-fn evaluate_guard(
-    sim: &PatronusSim,
-    evaluator: &mut Evaluator<'_>,
-    expr_id: crate::frontend::ast::ExprId,
-) -> bool {
-    match evaluator.evaluate_expr_raw(sim, expr_id).unwrap() {
-        ExprValue::Concrete(bvv) => !bvv.is_zero(),
-        ExprValue::DontCare => panic!("guard evaluated to DontCare"),
-    }
-}
-
-fn expr_to_input_value(
-    sim: &PatronusSim,
-    evaluator: &mut Evaluator<'_>,
-    expr_id: crate::frontend::ast::ExprId,
-) -> ThreadInputValue {
-    match evaluator.evaluate_expr_raw(sim, expr_id).unwrap() {
-        ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
-        ExprValue::DontCare => ThreadInputValue::DontCare,
-    }
-}
-
-fn assert_eq_exprs(
-    sim: &PatronusSim,
-    evaluator: &mut Evaluator<'_>,
-    lhs: crate::frontend::ast::ExprId,
-    rhs: crate::frontend::ast::ExprId,
-) {
-    let lhs = evaluator.evaluate_expr_raw(sim, lhs).unwrap();
-    let rhs = evaluator.evaluate_expr_raw(sim, rhs).unwrap();
-    match (lhs, rhs) {
-        (ExprValue::Concrete(lhs), ExprValue::Concrete(rhs)) => {
-            assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");
-            assert!(
-                lhs.is_equal(&rhs),
-                "assert_eq failed: lhs={} rhs={}",
-                serialize_bitvec(&lhs, false),
-                serialize_bitvec(&rhs, false)
-            );
-        }
-        _ => panic!("assert_eq on DontCare"),
     }
 }
