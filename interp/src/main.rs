@@ -145,7 +145,7 @@ fn main() -> anyhow::Result<()> {
             cli.module.as_deref(),
             &design,
             waveform_file.as_deref(),
-        );
+        )?;
 
         let mut scheduler = Scheduler::new(
             &st,

@@ -7,10 +7,11 @@
 // TODO: add a trait to allow for an alternative backend that uses Verilator to execute things
 
 use crate::frontend::design::Design;
-use crate::frontend::symbol::SymbolId;
+use crate::frontend::symbol::{Dir, SymbolId};
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
+use anyhow::{Context, bail};
 use baa::{BitVecValue, BitVecValueRef};
-use patronus::expr::{Context, ExprRef, TypeCheck};
+use patronus::expr::{ExprRef, TypeCheck};
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::{Output, TransitionSystem};
 use rustc_hash::FxHashMap;
@@ -22,7 +23,7 @@ use std::path::PathBuf;
 pub struct PortId(u32);
 
 pub struct PatronusSim {
-    ctx: Context,
+    ctx: patronus::expr::Context,
     sys: TransitionSystem,
     sim: Interpreter,
     port_map: FxHashMap<SymbolId, PortId>,
@@ -40,7 +41,7 @@ impl PatronusSim {
         top_module: Option<&str>,
         design: &Design,
         waveform_file: Option<&str>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let (ctx, sys) = create_sim_context(verilog_paths, top_module);
 
         let mut sim = if let Some(waveform_file) = waveform_file {
@@ -50,80 +51,81 @@ impl PatronusSim {
         };
         sim.init(InitKind::Zero); // TODO: change to random initialization
 
-        // let mut input_mapping = FxHashMap::default();
-        // let mut output_mapping = FxHashMap::default();
-        //
-        // for symbol_id in dut_symbols {
-        //     let sym = &st[symbol_id];
-        //     if sym.is_in_port() {
-        //         let input = sys
-        //             .inputs
-        //             .iter()
-        //             .find(|i| ctx.get_symbol_name(**i).unwrap() == sym.name())
-        //             .unwrap_or_else(|| {
-        //                 panic!(
-        //                     "Failed to find input with name '{}'. Available inputs: {:?}",
-        //                     sym.name(),
-        //                     sys.inputs
-        //                         .iter()
-        //                         .map(|o| ctx.get_symbol_name(*o).unwrap())
-        //                         .collect::<Vec<_>>()
-        //                 )
-        //             });
-        //         input_mapping.insert(*symbol_id, *input);
-        //     }
-        //     if sym.is_out_port() {
-        //         // check if the DUT symbol is an output
-        //         let output = sys
-        //             .outputs
-        //             .iter()
-        //             .find(|o| ctx[o.name] == sym.name())
-        //             .unwrap_or_else(|| {
-        //                 panic!(
-        //                     "Failed to find output with name '{}' in system outputs. Available outputs: {:?}",
-        //                     sym.name(),
-        //                     sys.outputs.iter().map(|o| &ctx[o.name]).collect::<Vec<_>>()
-        //                 )
-        //             });
-        //         output_mapping.insert(*symbol_id, *output);
-        //     }
-        // }
+        // create port map
+        let mut port_map = FxHashMap::default();
+        let mut outputs = FxHashMap::default();
+        let mut inputs = FxHashMap::default();
+        for (pin_idx, pin) in design.pins.iter().enumerate() {
+            let (expr, pos) = match pin.dir() {
+                Dir::In => {
+                    let pos = sys
+                        .inputs
+                        .iter()
+                        .position(|i| ctx.get_symbol_name(*i).unwrap() == pin.name())
+                        .context("unable to find input pin")?;
+                    (sys.inputs[pos], pos)
+                }
+                Dir::Out => {
+                    let pos = sys
+                        .outputs
+                        .iter()
+                        .position(|o| ctx[o.name] == pin.name())
+                        .context("unable to find output pin")?;
+                    (sys.outputs[pos].expr, pos + sys.inputs.len())
+                }
+            };
+            let port_id = PortId(pos as u32);
+            match pin.dir() {
+                Dir::In => inputs.insert(expr, port_id),
+                Dir::Out => outputs.insert(expr, port_id),
+            };
+            let width = expr
+                .get_bv_type(&ctx)
+                .context("ports must be of bit-vector and not of array type")?;
+            if width != pin.bitwidth() {
+                bail!(
+                    "Width of port `{}` does not match: {width} (Verilog) vs {} (struct)",
+                    pin.name(),
+                    pin.bitwidth()
+                );
+            }
+            for (_, syms) in &design.protocols {
+                port_map.insert(syms[pin_idx], port_id);
+            }
+        }
 
         // Build combinational dependency graphs
-        // let mut output_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
-        // let mut input_dependencies: FxHashMap<SymbolId, Vec<SymbolId>> = FxHashMap::default();
-        //
-        // // Initialize: keys are outputs -> inputs dependent on that ouput, and inputs -> all combinationally dependent outputs
-        // for symbol_id in output_mapping.keys() {
-        //     output_dependencies.insert(*symbol_id, Vec::new());
-        // }
-        // for symbol_id in input_mapping.keys() {
-        //     input_dependencies.insert(*symbol_id, Vec::new());
-        // }
+        let mut output_dependencies = FxHashMap::default();
+        let mut input_dependencies = FxHashMap::default();
 
         // For each output, find all inputs in its combinational cone of influence
-        // for (out_sym, out) in &output_mapping {
-        //     let input_exprs =
-        //         patronus::system::analysis::cone_of_influence_comb(ctx, sys, out.expr);
-        //     for input_expr in input_exprs {
-        //         // Find the protocol symbol corresponding to this input expression
-        //         if let Some(input_sym) = input_mapping
-        //             .iter()
-        //             .find_map(|(k, v)| if *v == input_expr { Some(*k) } else { None })
-        //         {
-        //             // output_dependencies: output -> Vec<input> (inputs this output depends on)
-        //             if let Some(vec) = output_dependencies.get_mut(out_sym) {
-        //                 vec.push(input_sym);
-        //             }
-        //             // input_dependencies: input -> Vec<output> (outputs this input affects)
-        //             if let Some(vec) = input_dependencies.get_mut(&input_sym) {
-        //                 vec.push(*out_sym);
-        //             }
-        //         }
-        //     }
-        // }
+        for out in &sys.outputs {
+            let input_exprs =
+                patronus::system::analysis::cone_of_influence_comb(&ctx, &sys, out.expr);
+            let port_out = outputs[&out.expr];
+            for input_expr in input_exprs {
+                let port_in = inputs[&input_expr];
+                // inputs this output depends on
+                output_dependencies
+                    .entry(port_in)
+                    .or_insert_with(Vec::new)
+                    .push(port_out);
+                // outputs this input affects
+                input_dependencies
+                    .entry(port_out)
+                    .or_insert_with(Vec::new)
+                    .push(port_in);
+            }
+        }
 
-        todo!()
+        Ok(Self {
+            ctx,
+            sys,
+            sim,
+            port_map,
+            input_dependencies,
+            output_dependencies,
+        })
     }
 
     /// outputs that depend on the provided input port
@@ -231,7 +233,7 @@ impl PatronusSim {
 fn create_sim_context<P: AsRef<std::path::Path>>(
     verilog_paths: &[P],
     top_module: Option<&str>,
-) -> (Context, TransitionSystem) {
+) -> (patronus::expr::Context, TransitionSystem) {
     let env = YosysEnv::default();
     let sources: Vec<PathBuf> = verilog_paths
         .iter()

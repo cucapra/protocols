@@ -75,7 +75,7 @@ fn main() {
     let (st, protos) = load_protocols(&cli);
     let traces = load_traces(&cli, &st, &protos);
     let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
-    let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None);
+    let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None).unwrap();
 
     let graphs: FxHashMap<String, _> = protos
         .iter()
