@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, VecDeque};
 
-use crate::ir::proto_graph::{Action, Op, ProtoGraph, Transition};
+use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::ExprRef;
 
 fn append_action(
@@ -74,6 +75,7 @@ fn append_action(
     }
 }
 
+/// returns `protocol` with semantic behavior preserved, but no non-step edges
 pub fn contract_edges(protocol: &mut ProtoGraph) {
     let node_ids = protocol
         .nodes()
@@ -168,6 +170,44 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
     }
 
     // TODO: check all simplifications here
+}
+
+/// returns `protocol` with explicit assignments to every port
+/// if a port `DUT.in` is not already assigned, we simply generate `[1] DUT.in := DUT.in;`
+pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
+    let dut = protocol.type_param.expect("protocol has no DUT");
+    let input_ports: Vec<SymbolId> = symbols
+        .get_children(&dut)
+        .into_iter()
+        .filter(|sym_id| symbols[*sym_id].is_in_port())
+        .collect();
+
+    let node_ids: Vec<NodeId> = protocol.nodes().map(|(node_id, _)| node_id).collect();
+
+    for node_id in node_ids {
+        let node_actions = protocol[node_id].actions.clone();
+
+        let assigned_inputs : Vec<SymbolId> = node_actions.iter().filter_map(|action| {
+            match protocol[action.op] {
+                Op::Assign(symbol_id, _) => Some(symbol_id),
+                _ => None,
+            }
+        }).collect();
+
+        // unassigned_inputs = input_ports - assigned_inputs
+        let unassigned_inputs: Vec<SymbolId> = input_ports
+            .iter()
+            .copied()
+            .filter(|sym_id| !assigned_inputs.contains(sym_id))
+            .collect();
+
+        for symbol_id in unassigned_inputs {
+            // assign the symbol to its current expression (old value)
+            let symbol_expr = protocol.symbol_expr(symbol_id).unwrap();
+            let op = protocol.o(Op::Assign(symbol_id, symbol_expr));
+            protocol.push_action(node_id, Action::new(protocol.true_id(), op))
+        }
+    }
 }
 
 #[cfg(test)]

@@ -174,7 +174,7 @@ mod tests {
 
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::parser::parse_file;
-    use crate::ir::edge_contract::contract_edges;
+    use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use insta::Settings;
 
@@ -195,6 +195,12 @@ mod tests {
             contract_edges(&mut contracted_ir);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, &symbols);
+            content += "\n";
+
+            let mut assignment_normalized_ir = contracted_ir.clone();
+            normalize_assignments(&mut assignment_normalized_ir, &symbols);
+            content += "== post-normalize ==\n";
+            content += &to_dot_string(&assignment_normalized_ir, &symbols);
             content += "\n";
         }
 
