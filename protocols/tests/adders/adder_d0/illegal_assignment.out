@@ -1,7 +1,7 @@
-error: Output 'DUT.s' depends on input(s) 'DUT.b', 'DUT.a' which do not have assigned values ('DUT.b', 'DUT.a' initialized to DontCare and were never assigned a concrete value)
+error: Output 'DUT.s' depends on input(s) 'b', 'a' which do not have assigned values ('b', 'a' initialized to DontCare and were never assigned a concrete value)
    ┌─ adders/adder_d0/add_d0.prot:30:7
    │
 30 │   if (DUT.s == 32'b0) {
-   │       ^^^^^ Output 'DUT.s' depends on input(s) 'DUT.b', 'DUT.a' which do not have assigned values ('DUT.b', 'DUT.a' initialized to DontCare and were never assigned a concrete value)
+   │       ^^^^^ Output 'DUT.s' depends on input(s) 'b', 'a' which do not have assigned values ('b', 'a' initialized to DontCare and were never assigned a concrete value)
 
 Trace 0 execution failed.
