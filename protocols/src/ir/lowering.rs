@@ -6,7 +6,7 @@ use patronus::expr::{ExprRef, Type as PatronusType};
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
-use crate::ir::proto_graph::*;
+use crate::ir::proto_graph::{self, *};
 
 fn lower_ast_expr_to_patronus(
     ast: &Protocol,
@@ -20,12 +20,17 @@ fn lower_ast_expr_to_patronus(
             let tpe = expected.unwrap_or(PatronusType::BV(1));
             match tpe {
                 PatronusType::BV(width) => {
-                    let name = format!("__dontcare__bv_{width}_{}", ir.expr_ctx.num_exprs());
+                    let name = format!(
+                        "{}bv_{width}_{}",
+                        proto_graph::DONTCARE_PREFIX,
+                        ir.expr_ctx.num_exprs()
+                    );
                     ir.expr_ctx.bv_symbol(&name, width)
                 }
                 PatronusType::Array(array_tpe) => {
                     let name = format!(
-                        "__dontcare__arr_{}_{}x{}",
+                        "{}arr_{}_{}x{}",
+                        proto_graph::DONTCARE_PREFIX,
                         ir.expr_ctx.num_exprs(),
                         array_tpe.index_width,
                         array_tpe.data_width
@@ -134,7 +139,7 @@ fn lower_stmt_to_exit(
         }
         Stmt::Assign(symbol_id, expr_id) => {
             let node_id = ir.n(Node::empty());
-            let _ = lower_symbol_expr(ir, symbols, *symbol_id);
+            let default_value = lower_symbol_expr(ir, symbols, *symbol_id);
             let rhs_ref = lower_ast_expr_to_patronus(
                 ast,
                 symbols,
@@ -148,6 +153,8 @@ fn lower_stmt_to_exit(
                     ),
                 }),
             );
+            let guard = ir.true_id();
+            let rhs_ref = ir.expr_ctx.ite(guard, rhs_ref, default_value);
             let op_id = ir.o(Op::Assign(*symbol_id, rhs_ref));
             ir.push_action(node_id, Action::new(ir.true_id(), op_id));
             ir.push_transition(node_id, Transition::new(ir.true_id(), exit, false));

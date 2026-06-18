@@ -2,9 +2,11 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
+use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
-use patronus::expr::{ExprRef, SerializableIrNode};
+use crate::ir::proto_graph::{DONTCARE_PREFIX, NodeId, Op, ProtoGraph};
+use baa::BitVecValue;
+use patronus::expr::{Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
@@ -93,10 +95,71 @@ fn format_op(
 }
 
 fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
-    let expr = &protocol.expr_ctx[expr_ref];
     match protocol.expr_ctx.get_symbol_name(expr_ref) {
-        Some(name) if name.starts_with("__dontcare_") => "X".to_string(),
-        _ => expr.serialize_to_str(&protocol.expr_ctx),
+        Some(name) if name.starts_with(DONTCARE_PREFIX) => "X".to_string(),
+        _ => format_expr_node(protocol, expr_ref),
+    }
+}
+
+fn format_expr_node(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+    match &protocol.expr_ctx[expr_ref] {
+        Expr::BVSymbol { name, .. } => protocol.expr_ctx[*name].to_string(),
+        Expr::BVLiteral(value) => {
+            let value = BitVecValue::from(value.get(&protocol.expr_ctx));
+            serialize_bitvec(&value, false)
+        }
+        Expr::BVSlice { e, hi, lo, .. } => {
+            let inner = format_expr(protocol, *e);
+            if hi == lo {
+                format!("{inner}[{hi}]")
+            } else {
+                format!("{inner}[{hi}:{lo}]")
+            }
+        }
+        Expr::BVNot(e, _) => format!("not({})", format_expr(protocol, *e)),
+        Expr::BVEqual(a, b) => format!(
+            "eq({}, {})",
+            format_expr(protocol, *a),
+            format_expr(protocol, *b)
+        ),
+        Expr::BVConcat(a, b, _) => {
+            format!(
+                "concat({}, {})",
+                format_expr(protocol, *a),
+                format_expr(protocol, *b)
+            )
+        }
+        Expr::BVAnd(a, b, _) => {
+            format!(
+                "and({}, {})",
+                format_expr(protocol, *a),
+                format_expr(protocol, *b)
+            )
+        }
+        Expr::BVOr(a, b, _) => {
+            format!(
+                "or({}, {})",
+                format_expr(protocol, *a),
+                format_expr(protocol, *b)
+            )
+        }
+        Expr::BVAdd(a, b, _) => format!(
+            "add({}, {})",
+            format_expr(protocol, *a),
+            format_expr(protocol, *b)
+        ),
+        Expr::BVIte { cond, tru, fals } => {
+            format!(
+                "ite({}, {}, {})",
+                format_expr(protocol, *cond),
+                format_expr(protocol, *tru),
+                format_expr(protocol, *fals)
+            )
+        }
+        _ => panic!(
+            "unsupported expression in graphviz formatter: {:?}",
+            protocol.expr_ctx[expr_ref]
+        ),
     }
 }
 

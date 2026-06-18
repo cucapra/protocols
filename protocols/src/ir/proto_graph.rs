@@ -5,9 +5,11 @@
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use patronus::expr::{Context, ExprRef};
+use patronus::expr::{Context as ExprContext, ExprRef, Simplifier, SparseExprMap};
 use rustc_hash::FxHashMap;
 use std::ops::{Deref, DerefMut, Index};
+
+pub const DONTCARE_PREFIX: &str = "__dontcare__";
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
@@ -89,7 +91,6 @@ pub enum Op {
     Done,
 }
 
-#[derive(Clone)]
 pub struct ProtoGraph {
     pub proto_ctx: ProtocolContext,
 
@@ -97,7 +98,10 @@ pub struct ProtoGraph {
     pub entry: NodeId,
 
     /// Patronus expression context
-    pub expr_ctx: Context,
+    pub expr_ctx: ExprContext,
+
+    /// Patronus simplifier
+    pub simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
 
     /// Cached Patronus symbol expressions, keyed by frontend `SymbolId`.
     symbol_expr: FxHashMap<SymbolId, ExprRef>,
@@ -110,9 +114,25 @@ pub struct ProtoGraph {
     op_loc: SecondaryMap<OpId, (usize, usize, usize)>,
 }
 
+impl Clone for ProtoGraph {
+    fn clone(&self) -> Self {
+        Self {
+            proto_ctx: self.proto_ctx.clone(),
+            entry: self.entry,
+            expr_ctx: self.expr_ctx.clone(),
+            // we can just make a fresh simplifier
+            simplifier: Simplifier::new(SparseExprMap::default()),
+            symbol_expr: self.symbol_expr.clone(),
+            nodes: self.nodes.clone(),
+            ops: self.ops.clone(),
+            op_loc: self.op_loc.clone(),
+        }
+    }
+}
+
 impl ProtoGraph {
     pub fn new(proto_ctx: ProtocolContext) -> Self {
-        let expr_ctx = Context::default();
+        let expr_ctx = ExprContext::default();
         let mut nodes = PrimaryMap::new();
         let entry = Node::empty();
         let entry_id: NodeId = nodes.push(entry);
@@ -124,6 +144,7 @@ impl ProtoGraph {
             proto_ctx,
             entry: entry_id,
             expr_ctx,
+            simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             nodes,
             ops,
@@ -146,6 +167,20 @@ impl ProtoGraph {
     pub fn cache_symbol_expr(&mut self, symbol_id: SymbolId, expr: ExprRef) {
         self.symbol_expr.insert(symbol_id, expr);
     }
+
+    /// convenience methods for construction simplified
+    /// (p AND q) or (p OR q) expressions
+    pub fn and_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = self.expr_ctx.and(lhs, rhs);
+        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    }
+
+    pub fn or_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = self.expr_ctx.or(lhs, rhs);
+        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    }
+
+    // TODO: add a verify simplifications helper
 
     /// add a new node to the IR
     pub fn n(&mut self, node: Node) -> NodeId {
