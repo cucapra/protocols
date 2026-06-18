@@ -76,17 +76,16 @@ fn main() {
     let (st, protos) = load_protocols(&cli);
     let traces = load_traces(&cli, &st, &protos);
     let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
-    let mut sim = PatronusSim::new(
-        &cli.verilog,
-        cli.module.as_deref(),
-        &design,
-        None,
-    )
-    .unwrap();
+    let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None).unwrap();
 
     let graphs: FxHashMap<String, _> = protos
         .iter()
-        .map(|proto| (proto.name.clone(), (lower_ast_to_ir(proto.clone(), &st), &st)))
+        .map(|proto| {
+            (
+                proto.name.clone(),
+                (lower_ast_to_ir(proto.clone(), &st), &st),
+            )
+        })
         .collect();
 
     let old_hook = std::panic::take_hook();

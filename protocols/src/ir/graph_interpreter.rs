@@ -205,7 +205,7 @@ pub fn interpret(
 ) {
     let bindings = build_bindings(pg, st, &args, sim);
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    let mut store = build_value_store(pg, &bindings, &sim, &mut rng);
+    let mut store = build_value_store(pg, &bindings, sim, &mut rng);
 
     let mut curr = pg.entry;
     loop {
@@ -248,7 +248,7 @@ pub fn interpret(
             }
         }
 
-        update_value_store(&mut store, pg, &bindings, &sim, &mut rng);
+        update_value_store(&mut store, pg, &bindings, sim, &mut rng);
 
         let mut done_triggered = false;
         for action in &node.actions {

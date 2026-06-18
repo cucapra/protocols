@@ -209,12 +209,13 @@ pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     for node_id in node_ids {
         let node_actions = protocol[node_id].actions.clone();
 
-        let assigned_inputs : Vec<SymbolId> = node_actions.iter().filter_map(|action| {
-            match protocol[action.op] {
+        let assigned_inputs: Vec<SymbolId> = node_actions
+            .iter()
+            .filter_map(|action| match protocol[action.op] {
                 Op::Assign(symbol_id, _) => Some(symbol_id),
                 _ => None,
-            }
-        }).collect();
+            })
+            .collect();
 
         // unassigned_inputs = input_ports - assigned_inputs
         let unassigned_inputs: Vec<SymbolId> = input_ports

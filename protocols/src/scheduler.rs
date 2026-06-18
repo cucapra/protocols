@@ -539,10 +539,7 @@ impl<'a> Scheduler<'a> {
             "  About to call init_thread_inputs for todo_idx={} ({})",
             thread.todo_idx, thread.todo.tr.name
         );
-        if let Err(e) = self
-            .evaluator
-            .init_thread_inputs(thread.todo_idx)
-        {
+        if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
             info!(
                 "ERROR during init_thread_inputs: {:?}, terminating thread",
                 e
