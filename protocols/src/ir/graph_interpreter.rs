@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use baa::{BitVecOps, BitVecValue, Value as BaaValue};
-use patronus::expr::{Context, ExprRef, SymbolValueStore, eval_expr};
+use patronus::expr::{Context, ExprRef, SymbolValueStore, TypeCheck, eval_expr};
 use patronus::sim::{Interpreter, Simulator};
 use patronus::system::TransitionSystem;
 use rand::SeedableRng;
@@ -10,10 +10,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::Value;
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
-use crate::ir::proto_graph::{Op, ProtoGraph};
+use crate::ir::proto_graph::{DONTCARE_PREFIX, Op, ProtoGraph};
 
 enum GraphBinding {
-    System(ExprRef),
+    Sim(ExprRef),
     Arg(Value),
     DontCare,
 }
@@ -28,7 +28,7 @@ fn is_dontcare_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> bool {
     protocol
         .expr_ctx
         .get_symbol_name(expr_ref)
-        .is_some_and(|name| name.starts_with("__dontcare_"))
+        .is_some_and(|name| name.starts_with(DONTCARE_PREFIX))
 }
 
 fn build_bindings(
@@ -45,13 +45,15 @@ fn build_bindings(
             continue;
         };
 
-        if name.starts_with("__dontcare__") {
+        if name.starts_with(DONTCARE_PREFIX) {
             bindings.insert(expr_ref, GraphBinding::DontCare);
             continue;
         }
 
         let Some(symbol_id) = symbols.symbol_id_from_name(name) else {
-            continue;
+            unreachable!(
+                "IR symbol `{name}` has no corresponding AST-level symbol; the lowering and symbol table are out of sync"
+            )
         };
 
         if symbols[symbol_id].is_arg() {
@@ -61,13 +63,15 @@ fn build_bindings(
                 .unwrap_or_else(|| panic!("missing argument value for {arg_name}"))
                 .clone();
             bindings.insert(expr_ref, GraphBinding::Arg(value));
-        } else if symbols[symbol_id].is_port() || symbols[symbol_id].is_loop_var() {
+        } else if symbols[symbol_id].is_loop_var() {
+            panic!("loop vars unsupported in the graph interpreter")
+        } else if symbols[symbol_id].is_port() {
             let signal_name = symbols[symbol_id].name();
             let system_expr = signal_names
                 .get(signal_name)
                 .copied()
                 .unwrap_or_else(|| panic!("missing simulator signal for {signal_name}"));
-            bindings.insert(expr_ref, GraphBinding::System(system_expr));
+            bindings.insert(expr_ref, GraphBinding::Sim(system_expr));
         }
     }
 
@@ -75,35 +79,74 @@ fn build_bindings(
 }
 
 fn build_value_store(
+    protocol: &ProtoGraph,
     bindings: &FxHashMap<ExprRef, GraphBinding>,
     sim: &Interpreter,
+    rng: &mut impl rand::Rng,
 ) -> SymbolValueStore {
     let mut store = SymbolValueStore::default();
 
     for (expr_ref, binding) in bindings {
-        if matches!(binding, GraphBinding::DontCare) {
-            continue;
-        }
-
-        let value = match binding {
-            GraphBinding::System(sys_expr) => sim.get(*sys_expr),
+        match binding {
+            GraphBinding::Sim(signal) => match sim.get(*signal) {
+                BaaValue::BitVec(bv) => store.define_bv(*expr_ref, &bv),
+                BaaValue::Array(arr) => store.define_array(*expr_ref, arr),
+            },
             GraphBinding::Arg(value) => {
                 let bvv: BitVecValue = value
                     .clone()
                     .try_into()
                     .unwrap_or_else(|_| panic!("unsupported argument type for {:?}", expr_ref));
-                BaaValue::BitVec(bvv)
+                store.define_bv(*expr_ref, &bvv);
             }
-            GraphBinding::DontCare => unreachable!(),
-        };
-
-        match value {
-            BaaValue::BitVec(bv) => store.define_bv(*expr_ref, &bv),
-            BaaValue::Array(arr) => store.define_array(*expr_ref, arr),
+            GraphBinding::DontCare => {
+                let expr = &protocol.expr_ctx[*expr_ref];
+                if let Some(width) = expr.get_bv_type(&protocol.expr_ctx) {
+                    let value = BitVecValue::random(rng, width);
+                    store.define_bv(*expr_ref, &value);
+                } else {
+                    let tpe = expr.get_array_type(&protocol.expr_ctx).unwrap_or_else(|| {
+                        panic!("dont-care symbol {expr_ref:?} has unsupported type")
+                    });
+                    store.define_array(
+                        *expr_ref,
+                        baa::ArrayValue::random(rng, tpe.index_width, tpe.data_width),
+                    );
+                }
+            }
         }
     }
 
     store
+}
+
+fn update_value_store(
+    store: &mut SymbolValueStore,
+    protocol: &ProtoGraph,
+    bindings: &FxHashMap<ExprRef, GraphBinding>,
+    sim: &Interpreter,
+    rng: &mut impl rand::Rng,
+) {
+    // get the latest sim port values, randomize DontCares
+    for (expr_ref, binding) in bindings {
+        if let GraphBinding::Sim(signal) = binding {
+            store.update(*expr_ref, sim.get(*signal));
+        } else if matches!(binding, GraphBinding::DontCare) {
+            let expr = &protocol.expr_ctx[*expr_ref];
+            if let Some(width) = expr.get_bv_type(&protocol.expr_ctx) {
+                let value = BitVecValue::random(rng, width);
+                store.update(*expr_ref, value.into());
+            } else {
+                let tpe = expr.get_array_type(&protocol.expr_ctx).unwrap_or_else(|| {
+                    panic!("dont-care symbol {expr_ref:?} has unsupported type")
+                });
+                store.update(
+                    *expr_ref,
+                    baa::ArrayValue::random(rng, tpe.index_width, tpe.data_width).into(),
+                );
+            }
+        }
+    }
 }
 
 fn evaluate_guard(protocol: &ProtoGraph, store: &SymbolValueStore, expr_ref: ExprRef) -> bool {
@@ -171,6 +214,7 @@ pub fn interpret(
     let bindings = build_bindings(pg, st, &args, &signal_names);
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     sim.init(patronus::sim::InitKind::Zero);
+    let mut store = build_value_store(pg, &bindings, &sim, &mut rng);
 
     let mut curr = pg.entry;
     loop {
@@ -187,8 +231,6 @@ pub fn interpret(
         }
 
         {
-            let store = build_value_store(&bindings, &sim);
-
             for action in &node.actions {
                 if let Op::Assign(symbol_id, expr_ref) = &pg[action.op]
                     && evaluate_guard(pg, &store, action.guard)
@@ -218,7 +260,7 @@ pub fn interpret(
             }
         }
 
-        let store = build_value_store(&bindings, &sim);
+        update_value_store(&mut store, pg, &bindings, &sim, &mut rng);
 
         let mut done_triggered = false;
         for action in &node.actions {
