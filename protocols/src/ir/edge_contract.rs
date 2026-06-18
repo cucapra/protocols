@@ -1,20 +1,40 @@
 use std::collections::{BTreeSet, VecDeque};
 
-use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::ExprRef;
 
+fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: SymbolId) -> ExprRef {
+    if let Some(expr) = protocol.symbol_expr(symbol_id) {
+        return expr;
+    }
+
+    let entry = &symbols[symbol_id];
+    let full_name = entry.full_name(symbols);
+    let expr = match entry.tpe() {
+        FrontType::BitVec(width) => protocol.expr_ctx.bv_symbol(&full_name, width),
+        FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
+            panic!(
+                "unsupported symbol type {} for {}",
+                crate::frontend::serialize::serialize_type(symbols, entry.tpe()),
+                full_name
+            )
+        }
+    };
+    protocol.cache_symbol_expr(symbol_id, expr);
+    expr
+}
+
 fn append_action(
     protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
     actions: &mut Vec<Action>,
     internal_assert_guard: &mut Option<ExprRef>,
     action: Action,
 ) {
     match protocol[action.op].clone() {
         Op::Assign(symbol_id, rhs) => {
-            let default_value = protocol.symbol_expr(symbol_id).unwrap_or_else(|| {
-                unreachable!("missing lowered symbol expression for {symbol_id}")
-            });
+            let default_value = symbol_expr(protocol, symbols, symbol_id);
 
             // By invariant, there can be at most one existing assignment for this symbol.
             if let Some(existing_action) = actions.iter_mut().find(|prior_action| {
@@ -76,7 +96,7 @@ fn append_action(
 }
 
 /// returns `protocol` with semantic behavior preserved, but no non-step edges
-pub fn contract_edges(protocol: &mut ProtoGraph) {
+pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     let node_ids = protocol
         .nodes()
         .map(|(node_id, _)| node_id)
@@ -88,6 +108,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
         for action in protocol[source_node_id].actions.clone() {
             append_action(
                 protocol,
+                symbols,
                 &mut contracted_actions,
                 &mut internal_assert_guard,
                 action,
@@ -136,6 +157,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph) {
                     Action::with_guard(&action, protocol.and_guard(incoming_guard, action.guard));
                 append_action(
                     protocol,
+                    symbols,
                     &mut contracted_actions,
                     &mut internal_assert_guard,
                     merged_action,
@@ -203,7 +225,7 @@ pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
 
         for symbol_id in unassigned_inputs {
             // assign the symbol to its current expression (old value)
-            let symbol_expr = protocol.symbol_expr(symbol_id).unwrap();
+            let symbol_expr = symbol_expr(protocol, symbols, symbol_id);
             let op = protocol.o(Op::Assign(symbol_id, symbol_expr));
             protocol.push_action(node_id, Action::new(protocol.true_id(), op))
         }
@@ -214,11 +236,12 @@ pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
 mod tests {
     use super::*;
     use crate::frontend::ast::ProtocolContext;
+    use crate::frontend::symbol::ROOT_SCOPE;
     use patronus::expr::SerializableIrNode;
 
     #[test]
     fn synthesizes_internal_assert_for_overlapping_forks() {
-        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into()));
+        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
         let p = protocol.expr_ctx.bv_symbol("p", 1);
         let q = protocol.expr_ctx.bv_symbol("q", 1);
         let r = protocol.expr_ctx.bv_symbol("r", 1);
@@ -232,7 +255,7 @@ mod tests {
             Action::new(r, fork3),
         ];
 
-        contract_edges(&mut protocol);
+        contract_edges(&mut protocol, &SymbolTable::default());
 
         let actions = &protocol[protocol.entry].actions;
         assert_eq!(actions.len(), 2);

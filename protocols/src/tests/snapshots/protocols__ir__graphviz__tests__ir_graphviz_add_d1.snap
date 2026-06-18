@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
+assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -42,6 +43,19 @@ digraph "add" {
   node1 [label="[1] done"];
 }
 
+== post-normalize ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := ite(1, a, DUT.a)\n[1] DUT.b := ite(1, b, DUT.b)"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+}
+
 == pre-contract ==
 digraph "add_fork_early" {
   rankdir=LR;
@@ -80,6 +94,19 @@ digraph "add_fork_early" {
   node6 [label="[1] fork\n[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)"];
   node6 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
+}
+
+== post-normalize ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := ite(1, a, DUT.a)\n[1] DUT.b := ite(1, b, DUT.b)"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] fork\n[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
 }
 
 == pre-contract ==
@@ -122,6 +149,19 @@ digraph "add_incorrect" {
   node1 [label="[1] done"];
 }
 
+== post-normalize ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := ite(1, a, DUT.a)\n[1] DUT.b := ite(1, b, DUT.b)"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, a, DUT.a)\n[1] DUT.b := ite(1, b, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+}
+
 == pre-contract ==
 digraph "add_incorrect_implicit" {
   rankdir=LR;
@@ -156,6 +196,19 @@ digraph "add_incorrect_implicit" {
   node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork"];
   node4 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
+}
+
+== post-normalize ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := ite(1, a, DUT.a)\n[1] DUT.b := ite(1, b, DUT.b)"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
 }
 
 == pre-contract ==
@@ -200,6 +253,23 @@ digraph "wait_and_add" {
   node3 [label="[1] assert_eq(s, DUT.s)"];
   node3 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
+}
+
+== post-normalize ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] fork\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node8 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, a, DUT.a)\n[1] DUT.b := ite(1, b, DUT.b)"];
+  node6 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node3 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
 }
 
 == pre-contract ==
@@ -270,4 +340,21 @@ digraph "add_with_override" {
   node6 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
   node1 [label="[1] done"];
+}
+
+== post-normalize ==
+digraph "add_with_override" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := ite(eq(DUT.a, 2), 0, a)\n[1] DUT.b := ite(eq(DUT.a, 2), b, ite(not(eq(DUT.a, 2)), b, DUT.b))"];
+  node0 -> node6 [label="eq(DUT.a, 2) / step"];
+  node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
+  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
 }

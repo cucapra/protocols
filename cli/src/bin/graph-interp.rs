@@ -1,12 +1,13 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
+use protocols::PatronusSim;
 use protocols::frontend::ast::Protocol;
+use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::graph_interpreter;
 use protocols::ir::lowering::lower_ast_to_ir;
-use protocols::setup::create_sim_context;
 use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 
@@ -33,7 +34,7 @@ struct Cli {
     skip_static_step_fork_checks: bool,
 }
 
-fn load_protocols(cli: &Cli) -> Vec<(Protocol, SymbolTable)> {
+fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
     frontend(
         &cli.protocol,
@@ -43,9 +44,9 @@ fn load_protocols(cli: &Cli) -> Vec<(Protocol, SymbolTable)> {
     .unwrap()
 }
 
-fn load_traces(cli: &Cli, protos: &[(Protocol, SymbolTable)]) -> Vec<Vec<(String, Vec<Value>)>> {
+fn load_traces(cli: &Cli, st: &SymbolTable, protos: &[Protocol]) -> Vec<Vec<(String, Vec<Value>)>> {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
-    transaction_frontend(&cli.transactions, protos.iter(), &mut handler).unwrap()
+    transaction_frontend(&cli.transactions, st, protos, &mut handler).unwrap()
 }
 
 fn build_arg_map<'a>(
@@ -72,21 +73,20 @@ fn print_panic_payload(payload: Box<dyn std::any::Any + Send>) {
 
 fn main() {
     let cli = Cli::parse();
-    let protos = load_protocols(&cli);
-    let traces = load_traces(&cli, &protos);
-    let (ctx, sys) = create_sim_context(
-        cli.verilog.iter().map(|v| v.as_str()).collect(),
-        cli.module.clone(),
-    );
+    let (st, protos) = load_protocols(&cli);
+    let traces = load_traces(&cli, &st, &protos);
+    let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
+    let mut sim = PatronusSim::new(
+        &cli.verilog,
+        cli.module.as_deref(),
+        &design,
+        None,
+    )
+    .unwrap();
 
     let graphs: FxHashMap<String, _> = protos
         .iter()
-        .map(|(proto, symbols)| {
-            (
-                proto.name.clone(),
-                (lower_ast_to_ir(proto.clone(), symbols), symbols),
-            )
-        })
+        .map(|proto| (proto.name.clone(), (lower_ast_to_ir(proto.clone(), &st), &st)))
         .collect();
 
     let old_hook = std::panic::take_hook();
@@ -98,17 +98,7 @@ fn main() {
                     .get(&name)
                     .unwrap_or_else(|| panic!("unknown protocol {name}"));
                 let args = build_arg_map(&graph.args, symbols, values);
-                graph_interpreter::interpret(
-                    graph,
-                    symbols,
-                    args,
-                    &ctx,
-                    &sys,
-                    // note that this creates a new interpreter for every transaction (even within one trace)
-                    // this might not be correct, but we will figure this out once we start working with supporting forks/multi-trace/multi-protocol
-                    // transactions
-                    patronus::sim::Interpreter::new(&ctx, &sys),
-                );
+                graph_interpreter::interpret(graph, symbols, args, &mut sim);
             }
             println!("trace {} executed successfully", trace_index);
         }

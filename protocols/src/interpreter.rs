@@ -133,12 +133,12 @@ impl<'a> Evaluator<'a> {
         args: FxHashMap<&str, Value>,
         tr: &'a Protocol,
         st: &'a SymbolTable,
-        ctx: &'a patronus::expr::Context,
-        sys: &'a patronus::system::TransitionSystem,
+        ctx: &patronus::expr::Context,
+        sys: &patronus::system::TransitionSystem,
         mut sim: Interpreter,
     ) -> Self {
         // create mapping from each symbolId to corresponding BitVecValue based on input mapping
-        let args_mapping = Evaluator::generate_args_mapping(st, args);
+        let args_mapping = Evaluator::generate_args_mapping(st, tr, args);
 
         // create mapping for each of the DUT's children symbols to the input and output mappings
         let dut = tr.type_param.unwrap();
@@ -290,11 +290,12 @@ impl<'a> Evaluator<'a> {
     /// Creates a mapping from each symbolId to corresponding BitVecValue based on input mapping
     fn generate_args_mapping(
         st: &'a SymbolTable,
+        tr: &'a Protocol,
         args: FxHashMap<&str, Value>,
     ) -> FxHashMap<SymbolId, Value> {
         let mut args_mapping = FxHashMap::default();
         for (name, value) in &args {
-            if let Some(symbol_id) = st.symbol_id_from_name(name) {
+            if let Some(symbol_id) = st.symbol_id_from_name(tr.scope, name) {
                 args_mapping.insert(symbol_id, (*value).clone());
             } else {
                 panic!("Argument {} not found in DUT symbols.", name);
@@ -308,7 +309,8 @@ impl<'a> Evaluator<'a> {
     pub fn context_switch(&mut self, thread: Thread<'a>) {
         self.tr = thread.todo.tr;
         self.st = thread.todo.st;
-        self.args_mapping = Evaluator::generate_args_mapping(self.st, thread.todo.args.clone());
+        self.args_mapping =
+            Evaluator::generate_args_mapping(self.st, thread.todo.tr, thread.todo.args.clone());
         self.next_stmt_map = thread.todo.next_stmt_map.clone();
         self.current_todo_idx = thread.todo_idx;
         self.loop_info = thread.loop_info.clone();

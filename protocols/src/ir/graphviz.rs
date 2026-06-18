@@ -182,9 +182,9 @@ mod tests {
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file(filename, &mut handler).unwrap();
+        let (symbols, protocols) = parse_file(filename, &mut handler).unwrap();
         let mut content = String::new();
-        for (ast, symbols) in parsed.into_iter() {
+        for ast in protocols {
             let ir: ProtoGraph = lower_ast_to_ir(ast, &symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, &symbols);
@@ -192,7 +192,7 @@ mod tests {
 
             // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir);
+            contract_edges(&mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, &symbols);
             content += "\n";

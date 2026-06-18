@@ -194,6 +194,14 @@ impl PatronusSim {
         self.get_port_name(port).unwrap()
     }
 
+    pub fn ctx(&self) -> &patronus::expr::Context {
+        &self.ctx
+    }
+
+    pub fn sys(&self) -> &TransitionSystem {
+        &self.sys
+    }
+
     pub fn set<'b>(&mut self, port: PortId, value: impl Into<BitVecValueRef<'b>>) {
         assert!(
             self.get_input(port).is_some(),

@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
+assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -41,6 +42,21 @@ digraph "send_data" {
   node4 -> node1 [label="D.m_axis_tready / step"];
 }
 
+== post-normalize ==
+digraph "send_data" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] D.m_axis_tdata := ite(1, data, D.m_axis_tdata)\n[1] D.m_axis_tvalid := ite(1, 1, D.m_axis_tvalid)"];
+  node0 -> node1 [label="D.m_axis_tready / step"];
+  node0 -> node4 [label="not(D.m_axis_tready) / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node4 [label="[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node4 -> node4 [label="not(D.m_axis_tready) / step"];
+  node4 -> node1 [label="D.m_axis_tready / step"];
+}
+
 == pre-contract ==
 digraph "idle" {
   rankdir=LR;
@@ -65,4 +81,15 @@ digraph "idle" {
   node0 [label="[1] D.m_axis_tvalid := ite(1, 0, D.m_axis_tvalid)"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
+}
+
+== post-normalize ==
+digraph "idle" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] D.m_axis_tvalid := ite(1, 0, D.m_axis_tvalid)\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
 }

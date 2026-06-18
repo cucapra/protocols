@@ -1,19 +1,18 @@
 use std::convert::TryInto;
 
 use baa::{BitVecOps, BitVecValue, Value as BaaValue};
-use patronus::expr::{Context, ExprRef, SymbolValueStore, TypeCheck, eval_expr};
-use patronus::sim::{Interpreter, Simulator};
-use patronus::system::TransitionSystem;
+use patronus::expr::{ExprRef, SymbolValueStore, TypeCheck, eval_expr};
 use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::Value;
+use crate::dut::{PatronusSim, PortId};
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::proto_graph::{DONTCARE_PREFIX, Op, ProtoGraph};
 
 enum GraphBinding {
-    Sim(ExprRef),
+    Sim(PortId),
     Arg(Value),
     DontCare,
 }
@@ -35,7 +34,7 @@ fn build_bindings(
     protocol: &ProtoGraph,
     symbols: &SymbolTable,
     args: &FxHashMap<&str, Value>,
-    signal_names: &FxHashMap<String, ExprRef>,
+    sim: &PatronusSim,
 ) -> FxHashMap<ExprRef, GraphBinding> {
     let mut bindings = FxHashMap::default();
 
@@ -50,7 +49,7 @@ fn build_bindings(
             continue;
         }
 
-        let Some(symbol_id) = symbols.symbol_id_from_name(name) else {
+        let Some(symbol_id) = symbols.symbol_id_from_name(protocol.scope, name) else {
             unreachable!(
                 "IR symbol `{name}` has no corresponding AST-level symbol; the lowering and symbol table are out of sync"
             )
@@ -66,12 +65,7 @@ fn build_bindings(
         } else if symbols[symbol_id].is_loop_var() {
             panic!("loop vars unsupported in the graph interpreter")
         } else if symbols[symbol_id].is_port() {
-            let signal_name = symbols[symbol_id].name();
-            let system_expr = signal_names
-                .get(signal_name)
-                .copied()
-                .unwrap_or_else(|| panic!("missing simulator signal for {signal_name}"));
-            bindings.insert(expr_ref, GraphBinding::Sim(system_expr));
+            bindings.insert(expr_ref, GraphBinding::Sim(sim[symbol_id]));
         }
     }
 
@@ -81,17 +75,17 @@ fn build_bindings(
 fn build_value_store(
     protocol: &ProtoGraph,
     bindings: &FxHashMap<ExprRef, GraphBinding>,
-    sim: &Interpreter,
+    sim: &PatronusSim,
     rng: &mut impl rand::Rng,
 ) -> SymbolValueStore {
     let mut store = SymbolValueStore::default();
 
     for (expr_ref, binding) in bindings {
         match binding {
-            GraphBinding::Sim(signal) => match sim.get(*signal) {
-                BaaValue::BitVec(bv) => store.define_bv(*expr_ref, &bv),
-                BaaValue::Array(arr) => store.define_array(*expr_ref, arr),
-            },
+            GraphBinding::Sim(port) => {
+                let value = sim.get(*port);
+                store.define_bv(*expr_ref, &value);
+            }
             GraphBinding::Arg(value) => {
                 let bvv: BitVecValue = value
                     .clone()
@@ -124,13 +118,14 @@ fn update_value_store(
     store: &mut SymbolValueStore,
     protocol: &ProtoGraph,
     bindings: &FxHashMap<ExprRef, GraphBinding>,
-    sim: &Interpreter,
+    sim: &PatronusSim,
     rng: &mut impl rand::Rng,
 ) {
     // get the latest sim port values, randomize DontCares
     for (expr_ref, binding) in bindings {
-        if let GraphBinding::Sim(signal) = binding {
-            store.update(*expr_ref, sim.get(*signal));
+        if let GraphBinding::Sim(port) = binding {
+            let value = sim.get(*port);
+            store.update(*expr_ref, value.into());
         } else if matches!(binding, GraphBinding::DontCare) {
             let expr = &protocol.expr_ctx[*expr_ref];
             if let Some(width) = expr.get_bv_type(&protocol.expr_ctx) {
@@ -206,14 +201,10 @@ pub fn interpret(
     pg: &ProtoGraph,
     st: &SymbolTable,
     args: FxHashMap<&str, Value>,
-    sim_ctx: &Context,
-    sys: &TransitionSystem,
-    mut sim: Interpreter,
+    sim: &mut PatronusSim,
 ) {
-    let signal_names = sys.get_name_map(sim_ctx);
-    let bindings = build_bindings(pg, st, &args, &signal_names);
+    let bindings = build_bindings(pg, st, &args, sim);
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    sim.init(patronus::sim::InitKind::Zero);
     let mut store = build_value_store(pg, &bindings, &sim, &mut rng);
 
     let mut curr = pg.entry;
@@ -243,19 +234,16 @@ pub fn interpret(
         }
 
         for (symbol_id, value) in pending_inputs {
-            let signal_expr = signal_names
-                .get(st[symbol_id].name())
-                .copied()
-                .unwrap_or_else(|| panic!("missing simulator signal for {}", st[symbol_id].name()));
+            let port = sim[symbol_id];
             match value {
-                InputValue::Concrete(bvv) => sim.set(signal_expr, &bvv),
+                InputValue::Concrete(bvv) => sim.set(port, &bvv),
                 InputValue::DontCare => {
                     let width = match st[symbol_id].tpe() {
                         Type::BitVec(w) => w,
                         _ => panic!("expected BitVec type for input {symbol_id}"),
                     };
                     let random_val = BitVecValue::random(&mut rng, width);
-                    sim.set(signal_expr, &random_val);
+                    sim.set(port, &random_val);
                 }
             }
         }

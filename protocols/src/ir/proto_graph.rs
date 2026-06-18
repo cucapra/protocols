@@ -280,15 +280,15 @@ mod tests {
 
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
-        let parsed = parse_file(path, &mut handler).unwrap();
-        let (ast, symbol_table) = match protocol_name {
-            Some(protocol_name) => parsed
+        let (symbol_table, protocols) = parse_file(path, &mut handler).unwrap();
+        let ast = match protocol_name {
+            Some(protocol_name) => protocols
                 .into_iter()
-                .find(|(ast, _)| ast.name == protocol_name)
+                .find(|ast| ast.name == protocol_name)
                 .unwrap(),
             None => {
-                assert_eq!(parsed.len(), 1);
-                parsed.into_iter().next().unwrap()
+                assert_eq!(protocols.len(), 1);
+                protocols.into_iter().next().unwrap()
             }
         };
         lower_ast_to_ir(ast, &symbol_table)

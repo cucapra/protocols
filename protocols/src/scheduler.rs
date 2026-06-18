@@ -245,7 +245,9 @@ impl<'a> Scheduler<'a> {
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
-            &sim,
+            sim.ctx(),
+            sim.sys(),
+            patronus::sim::Interpreter::new(sim.ctx(), sim.sys()),
         );
 
         let results_size = todos.len();
@@ -320,7 +322,7 @@ impl<'a> Scheduler<'a> {
             }
 
             // No conflicts - finalize input values to sim before stepping
-            self.evaluator.finalize_inputs_for_cycle(&mut self.sim);
+            self.evaluator.finalize_inputs_for_cycle();
 
             // Collect threads that need implicit forking (can't call self.next_todo during drain)
             let mut threads_needing_implicit_fork: Vec<usize> = Vec::new();
@@ -452,7 +454,7 @@ impl<'a> Scheduler<'a> {
                     if !first_val.is_equal(*second_val) {
                         let first_transaction_name = self.todos[*first_idx].0.clone();
                         let second_transaction_name = self.todos[*second_idx].0.clone();
-                        let port_name = self.sim.port_name(*port_id);
+                        let port_name = self.sim.port_name(self.sim[*port_id]);
 
                         // Error for first thread
                         errors.push((
@@ -539,7 +541,7 @@ impl<'a> Scheduler<'a> {
         );
         if let Err(e) = self
             .evaluator
-            .init_thread_inputs(&mut self.sim, thread.todo_idx)
+            .init_thread_inputs(thread.todo_idx)
         {
             info!(
                 "ERROR during init_thread_inputs: {:?}, terminating thread",
@@ -565,7 +567,7 @@ impl<'a> Scheduler<'a> {
                 thread.format_stmt(&current_stmt_id)
             );
 
-            match self.evaluator.evaluate_stmt(&mut self.sim, current_stmt_id) {
+            match self.evaluator.evaluate_stmt(&current_stmt_id) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
                     info!(
