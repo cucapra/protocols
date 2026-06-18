@@ -1,4 +1,4 @@
 // trace 0
 trace {
-    slicing_ok(1, 1);
+    slicing_ok(1, 0);
 }
