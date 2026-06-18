@@ -22,6 +22,9 @@ use std::path::PathBuf;
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct PortId(u32);
 
+const EMPTY_PORT_VEC: Vec<PortId> = vec![];
+const EMPTY_PORT_VEC_REF: &Vec<PortId> = &EMPTY_PORT_VEC;
+
 pub struct PatronusSim {
     ctx: patronus::expr::Context,
     sys: TransitionSystem,
@@ -100,21 +103,25 @@ impl PatronusSim {
 
         // For each output, find all inputs in its combinational cone of influence
         for out in &sys.outputs {
-            let input_exprs =
-                patronus::system::analysis::cone_of_influence_comb(&ctx, &sys, out.expr);
-            let port_out = outputs[&out.expr];
-            for input_expr in input_exprs {
-                let port_in = inputs[&input_expr];
-                // inputs this output depends on
-                output_dependencies
-                    .entry(port_in)
-                    .or_insert_with(Vec::new)
-                    .push(port_out);
-                // outputs this input affects
-                input_dependencies
-                    .entry(port_out)
-                    .or_insert_with(Vec::new)
-                    .push(port_in);
+            // is this output part of the outputs declared in the struct?
+            if let Some(port_out) = outputs.get(&out.expr).cloned() {
+                let input_exprs =
+                    patronus::system::analysis::cone_of_influence_comb(&ctx, &sys, out.expr);
+                for input_expr in input_exprs {
+                    // is this an input that is also declared in the protocol struct?
+                    if let Some(port_in) = inputs.get(&input_expr).cloned() {
+                        // inputs this output depends on
+                        output_dependencies
+                            .entry(port_in)
+                            .or_insert_with(Vec::new)
+                            .push(port_out);
+                        // outputs this input affects
+                        input_dependencies
+                            .entry(port_out)
+                            .or_insert_with(Vec::new)
+                            .push(port_in);
+                    }
+                }
             }
         }
 
@@ -134,12 +141,20 @@ impl PatronusSim {
             self.get_input(port).is_some(),
             "only works for input ports!"
         );
-        self.input_dependencies[&port].iter().cloned()
+        self.input_dependencies
+            .get(&port)
+            .unwrap_or(EMPTY_PORT_VEC_REF)
+            .iter()
+            .cloned()
     }
 
     /// inputs that might influence the provided input or output port
     pub fn coi_inputs(&self, port: PortId) -> impl Iterator<Item = PortId> {
-        self.output_dependencies[&port].iter().cloned()
+        self.output_dependencies
+            .get(&port)
+            .unwrap_or(EMPTY_PORT_VEC_REF)
+            .iter()
+            .cloned()
     }
 
     pub fn ios(&self) -> impl Iterator<Item = PortId> {
