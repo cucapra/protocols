@@ -269,7 +269,6 @@ impl ParserContext<'_> {
 
                 let id = id_pair.as_str();
                 self.proto.name = id.to_string();
-                self.proto.ctx.scope = self.st.add_protocol_scope(&self.proto.name);
 
                 if let Some(inner_pair) = inner_rules.next() {
                     match inner_pair.as_rule() {
@@ -282,6 +281,10 @@ impl ParserContext<'_> {
                                 .struct_id_from_name(path_id_2)
                                 .ok_or_else(|| format!("Undefined struct: {}", path_id_2))?;
                             let dut_struct = self.st[struct_id].clone();
+                            // now that we know the DUT parameter name, we can construct the scope
+                            let scope_name = format!("{}::{}", dut_struct.name(), self.proto.name);
+                            self.proto.ctx.scope = self.st.add_protocol_scope(&scope_name);
+
                             let dut_symbol_id = self.st.add_without_parent(
                                 path_id_1.to_string(),
                                 Type::Struct(struct_id),
@@ -307,6 +310,9 @@ impl ParserContext<'_> {
                             return Err(msg);
                         }
                     }
+                } else {
+                    // create scope without DUT struct prefix
+                    self.proto.ctx.scope = self.st.add_protocol_scope(&self.proto.name);
                 }
 
                 if let Some(arglist_pair) = inner_rules.peek() {
