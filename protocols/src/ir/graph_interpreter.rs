@@ -64,7 +64,7 @@ pub fn interpret(
         let mut done_triggered = false;
         for action in &node.actions {
             if evaluate_guard(sim, &mut evaluator, action.guard) {
-                match &pg[action.op] {
+                match pg[action.op] {
                     Op::Assign(_, _) => {}
                     Op::AssertEq(lhs, rhs) => {
                         assert_eq_exprs(sim, &mut evaluator, lhs, rhs);
