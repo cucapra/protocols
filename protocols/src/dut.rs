@@ -11,7 +11,7 @@ use crate::frontend::symbol::{Dir, SymbolId};
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use anyhow::{Context, bail};
 use baa::{BitVecValue, BitVecValueRef};
-use patronus::expr::{ExprRef, SerializableIrNode, TypeCheck};
+use patronus::expr::{ExprRef, TypeCheck};
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::{Output, TransitionSystem};
 use rustc_hash::FxHashMap;

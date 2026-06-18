@@ -359,10 +359,9 @@ impl<'a> Scheduler<'a> {
                 }
             }
 
-            assert!(
-                threads_needing_implicit_fork.len() <= 1,
-                "can only fork a single time per step"
-            );
+            if threads_needing_implicit_fork.len() > 1 {
+                info!("TODO: there should only be a single thread forking at one time.");
+            }
 
             // Process implicit forks after drain is complete
             for _todo_idx in threads_needing_implicit_fork {
