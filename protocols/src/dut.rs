@@ -11,7 +11,7 @@ use crate::frontend::symbol::{Dir, SymbolId};
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use anyhow::{Context, bail};
 use baa::{BitVecValue, BitVecValueRef};
-use patronus::expr::{ExprRef, TypeCheck};
+use patronus::expr::{ExprRef, SerializableIrNode, TypeCheck};
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use patronus::system::{Output, TransitionSystem};
 use rustc_hash::FxHashMap;
@@ -35,6 +35,10 @@ pub struct PatronusSim {
     input_dependencies: FxHashMap<PortId, Vec<PortId>>,
     /// Maps each `output |-> Vec<input>` (inputs that this output is dependent on)
     output_dependencies: FxHashMap<PortId, Vec<PortId>>,
+    /// easy access to valid input ports
+    inputs: Vec<PortId>,
+    /// easy access to valid output ports
+    outputs: Vec<PortId>,
 }
 
 /// Prototype of our generic (non-patronus specific) dut simulator  interface
@@ -56,8 +60,10 @@ impl PatronusSim {
 
         // create port map
         let mut port_map = FxHashMap::default();
-        let mut outputs = FxHashMap::default();
-        let mut inputs = FxHashMap::default();
+        let mut out_expr_to_port = FxHashMap::default();
+        let mut outputs = vec![];
+        let mut in_expr_to_port = FxHashMap::default();
+        let mut inputs = vec![];
         for (pin_idx, pin) in design.pins.iter().enumerate() {
             let (expr, pos) = match pin.dir() {
                 Dir::In => {
@@ -79,9 +85,15 @@ impl PatronusSim {
             };
             let port_id = PortId(pos as u32);
             match pin.dir() {
-                Dir::In => inputs.insert(expr, port_id),
-                Dir::Out => outputs.insert(expr, port_id),
-            };
+                Dir::In => {
+                    inputs.push(port_id);
+                    in_expr_to_port.insert(expr, port_id);
+                }
+                Dir::Out => {
+                    outputs.push(port_id);
+                    out_expr_to_port.insert(expr, port_id);
+                }
+            }
             let width = expr
                 .get_bv_type(&ctx)
                 .context("ports must be of bit-vector and not of array type")?;
@@ -92,6 +104,7 @@ impl PatronusSim {
                     pin.bitwidth()
                 );
             }
+
             for (_, syms) in &design.protocols {
                 port_map.insert(syms[pin_idx], port_id);
             }
@@ -104,22 +117,22 @@ impl PatronusSim {
         // For each output, find all inputs in its combinational cone of influence
         for out in &sys.outputs {
             // is this output part of the outputs declared in the struct?
-            if let Some(port_out) = outputs.get(&out.expr).cloned() {
+            if let Some(port_out) = out_expr_to_port.get(&out.expr).cloned() {
                 let input_exprs =
                     patronus::system::analysis::cone_of_influence_comb(&ctx, &sys, out.expr);
                 for input_expr in input_exprs {
                     // is this an input that is also declared in the protocol struct?
-                    if let Some(port_in) = inputs.get(&input_expr).cloned() {
+                    if let Some(port_in) = in_expr_to_port.get(&input_expr).cloned() {
                         // inputs this output depends on
                         output_dependencies
-                            .entry(port_in)
-                            .or_insert_with(Vec::new)
-                            .push(port_out);
-                        // outputs this input affects
-                        input_dependencies
                             .entry(port_out)
                             .or_insert_with(Vec::new)
                             .push(port_in);
+                        // outputs this input affects
+                        input_dependencies
+                            .entry(port_in)
+                            .or_insert_with(Vec::new)
+                            .push(port_out);
                     }
                 }
             }
@@ -132,6 +145,8 @@ impl PatronusSim {
             port_map,
             input_dependencies,
             output_dependencies,
+            outputs,
+            inputs,
         })
     }
 
@@ -158,22 +173,20 @@ impl PatronusSim {
     }
 
     pub fn ios(&self) -> impl Iterator<Item = PortId> {
-        (0..self.sys.inputs.len() + self.sys.outputs.len()).map(|i| PortId(i as u32))
+        self.inputs().chain(self.outputs())
     }
 
     pub fn inputs(&self) -> impl Iterator<Item = PortId> {
-        (0..self.sys.inputs.len()).map(|i| PortId(i as u32))
+        self.inputs.iter().cloned()
     }
 
     pub fn outputs(&self) -> impl Iterator<Item = PortId> {
-        let offset = self.sys.inputs.len();
-        (offset..offset + self.sys.outputs.len()).map(|i| PortId(i as u32))
+        self.outputs.iter().cloned()
     }
 
     pub fn port_width(&self, port: PortId) -> u32 {
-        let maybe_w = self
-            .get_port_expr(port)
-            .and_then(|e| e.get_bv_type(&self.ctx));
+        let maybe_port = self.get_port_expr(port);
+        let maybe_w = maybe_port.and_then(|e| e.get_bv_type(&self.ctx));
         maybe_w.unwrap()
     }
 
@@ -254,7 +267,7 @@ fn create_sim_context<P: AsRef<std::path::Path>>(
         .iter()
         .map(|p| PathBuf::from(p.as_ref()))
         .collect();
-    let proj = ProjectConf::with_sources(sources, top_module.map(|s| s.into()));
+    let proj = ProjectConf::with_sources(sources, top_module.map(|s| s.trim().into()));
 
     let btor_file = yosys_to_btor(&env, &proj, None)
         .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
