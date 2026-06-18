@@ -25,7 +25,7 @@ pub fn interpret(
 ) {
     // create a shell AST so we can reuse the existing simulator setup and expr evaluation
     let shell = Protocol::from_context(pg.ctx.clone());
-    let mut evaluator = Evaluator::new(args, &shell, st, &sim);
+    let mut evaluator = Evaluator::new(args, &shell, st, sim);
     evaluator.init_thread_inputs(sim, 0).unwrap();
 
     let mut curr = pg.entry;

@@ -51,7 +51,7 @@ pub fn find_a_single_design(
     protos: &[Protocol],
     filename: &str,
 ) -> anyhow::Result<Design> {
-    let designs = find_designs(&st, &protos);
+    let designs = find_designs(st, protos);
     if designs.is_empty() {
         bail!("No protocols found in {}", filename);
     }
