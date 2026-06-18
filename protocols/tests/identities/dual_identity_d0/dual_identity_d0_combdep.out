@@ -1,7 +1,7 @@
-error: Cannot assign to forbidden input 'b' after observing a combinationally dependent output
+error: Cannot assign to forbidden input 'dut.b' after observing a combinationally dependent output
    ┌─ identities/dual_identity_d0/dual_identity_d0.prot:24:18
    │
 24 │         dut.b := b;
-   │                  ^ Cannot assign to forbidden input 'b' after observing a combinationally dependent output
+   │                  ^ Cannot assign to forbidden input 'dut.b' after observing a combinationally dependent output
 
 Trace 0 execution failed.

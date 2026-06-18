@@ -13,13 +13,14 @@ use crate::scheduler::TodoItem;
 // todo: add `interface` and `module` to protocol language and remove pin argument
 pub fn to_verilog(
     testbench_name: &str,
-    protos: &[(Protocol, SymbolTable)],
+    st: &SymbolTable,
+    protos: &[Protocol],
     pins: &[(String, PinAnnotation)],
     vcd_out: Option<&str>,
     transactions: &[TodoItem],
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let modules = find_designs(protos.iter());
+    let modules = find_designs(st, protos);
     assert_eq!(
         modules.len(),
         1,
@@ -28,11 +29,9 @@ pub fn to_verilog(
     let (_, module) = modules.into_iter().next().unwrap();
 
     // derive the instance name from the first protocol
-    let first_proto_id = *module.protocol_ids.first().unwrap();
-    // for the design we can use any symbol table
-    let instance_name_id = protos[first_proto_id].0.type_param.unwrap();
-    let design_sym_tb = protos[first_proto_id].1.clone();
-    let instance_name = design_sym_tb[instance_name_id].name().to_string();
+    let first_proto_id = module.protocols[0].0;
+    let instance_name_id = protos[first_proto_id].type_param.unwrap();
+    let instance_name = st[instance_name_id].name().to_string();
 
     // header
     writeln!(out, "// Testbench generated with protocols")?;
@@ -70,7 +69,7 @@ pub fn to_verilog(
         "  // variables for the pins of {} : {}",
         instance_name, module.name
     )?;
-    for (_, field) in module.pins.iter() {
+    for field in module.pins.iter() {
         match field.dir() {
             Dir::In => writeln!(
                 out,
@@ -121,7 +120,7 @@ pub fn to_verilog(
     let pin_names = module
         .pins
         .iter()
-        .map(|(_, f)| f.name())
+        .map(|f| f.name())
         .chain(pins.iter().map(|(n, _)| n.as_str()));
     for (ii, name) in pin_names.enumerate() {
         let is_first = ii == 0;
@@ -135,8 +134,8 @@ pub fn to_verilog(
     writeln!(out)?;
 
     // one task for each protocol
-    for &proto_id in module.protocol_ids.iter() {
-        let (proto, st) = &protos[proto_id];
+    for &(proto_id, _) in module.protocols.iter() {
+        let proto = &protos[proto_id];
         let sym_verilog = gen_sym_to_verilog_map(st, proto, &module, &instance_name);
         proto_to_verilog(st, proto, &sym_verilog, out)?;
     }
@@ -221,8 +220,12 @@ fn gen_sym_to_verilog_map(
     }
 
     // dut ports get a prefix
-    for (sym, field) in m.pins.iter() {
-        out.insert(*sym, format!("{instance_name}_{}", field.name()));
+    for (field_idx, field) in m.pins.iter().enumerate() {
+        // symbols in each protocol all map to the same signal
+        for (_, syms) in m.protocols.iter() {
+            let sym = syms[field_idx];
+            out.insert(sym, format!("{instance_name}_{}", field.name()));
+        }
     }
 
     out
@@ -383,8 +386,17 @@ fn sym_to_verilog(
 ) -> std::io::Result<()> {
     debug_assert!(
         sym_verilog.contains_key(s),
-        "Unknown symbol: {} ({s:?})",
-        st[s].full_name(st)
+        "Unknown symbol: {} ({s:?}).\nDid you mean: {:?}",
+        st[s].full_name(st),
+        sym_verilog
+            .iter()
+            .map(|(k, v)| format!(
+                "{k:?} ({:?}.{}) -> {v}",
+                st[k].scope_name(st),
+                st[k].full_name(st)
+            ))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     write!(out, "{}", sym_verilog[s])
 }
@@ -402,18 +414,28 @@ pub mod tests {
     use crate::frontend::diagnostic::DiagnosticHandler;
 
     fn backend(
-        protos: &[(Protocol, SymbolTable)],
+        st: &SymbolTable,
+        protos: &[Protocol],
         pins: &[(String, PinAnnotation)],
         transactions: &[TodoItem],
     ) -> String {
         let mut out = vec![];
-        to_verilog("tb", protos, pins, Some("dump.vcd"), transactions, &mut out).unwrap();
+        to_verilog(
+            "tb",
+            st,
+            protos,
+            pins,
+            Some("dump.vcd"),
+            transactions,
+            &mut out,
+        )
+        .unwrap();
         String::from_utf8(out).unwrap()
     }
 
     #[test]
     fn alu_d1_to_verilog() {
-        let protos = frontend(
+        let (st, protos) = frontend(
             "tests/alus/alu_d1.prot",
             &mut DiagnosticHandler::default(),
             false,
@@ -437,7 +459,12 @@ pub mod tests {
                 ],
             ),
         ];
-        let verilog = backend(&protos, &[("clk".to_string(), PinAnnotation::Clock)], &tx);
+        let verilog = backend(
+            &st,
+            &protos,
+            &[("clk".to_string(), PinAnnotation::Clock)],
+            &tx,
+        );
         println!("{verilog}");
         // note: this "test" just runs the Verilog backend, but it isn't really possible to
         //       assert meaningful properties about the output. That needs to be done by an

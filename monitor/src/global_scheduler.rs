@@ -65,7 +65,7 @@ fn process_group_cycles(
                 // When there is an explicit/implicit fork,
                 // we need to iterate over all possible candidate protocols
                 // and for each candidate protocol, spawn a scheduler that runs it
-                for (transaction, symbol_table) in &scheduler.possible_transactions {
+                for transaction in &scheduler.possible_transactions {
                     let mut cloned_scheduler = scheduler.clone();
 
                     // If there was an explicit fork, we have to add the
@@ -78,7 +78,7 @@ fn process_group_cycles(
                     let new_thread = Thread::new(
                         cloned_scheduler.struct_name.clone(),
                         transaction.clone(),
-                        symbol_table.clone(),
+                        scheduler.symbol_table.clone(),
                         transaction.next_stmt_mapping(),
                         cloned_scheduler.num_threads,
                         cloned_scheduler.cycle_count,

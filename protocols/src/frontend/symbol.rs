@@ -7,7 +7,7 @@
 
 use std::ops::Index;
 
-use cranelift_entity::{PrimaryMap, entity_impl};
+use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 
 use crate::frontend::serialize::serialize_type;
@@ -188,14 +188,23 @@ impl Type {
 pub struct SymbolId(u32);
 entity_impl!(SymbolId, "symbol");
 
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
-    by_name_sym: FxHashMap<String, SymbolId>,
+    by_name_sym: SecondaryMap<ScopeId, FxHashMap<String, SymbolId>>,
     structs: PrimaryMap<StructId, Struct>,
     seq: PrimaryMap<SeqId, Seq>,
     by_name_struct: FxHashMap<String, StructId>,
+    scopes: PrimaryMap<ScopeId, Scope>,
+    active_scope: ScopeId,
 }
+
+pub const ROOT_SCOPE: ScopeId = ScopeId(0);
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct Scope(String);
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct ScopeId(u32);
+entity_impl!(ScopeId, "scope");
 
 /// Pretty-printer for `SymbolTable`s
 impl std::fmt::Display for SymbolTable {
@@ -204,25 +213,36 @@ impl std::fmt::Display for SymbolTable {
 
         // Display symbol table entries
         writeln!(f, "  Symbols:")?;
-        for (symbol_id, entry) in self.entries.iter() {
-            let type_str = serialize_type(self, entry.tpe());
-
-            let parent_str = match entry.parent {
-                Some(parent_id) => format!(
-                    " [parent: symbol{} \"{}\"]",
-                    parent_id.0, self[parent_id].name
-                ),
-                None => "".to_string(),
+        for (scope_id, scope) in self.scopes.iter() {
+            let indent = if scope_id != ROOT_SCOPE {
+                writeln!(f, "  Scope \"{}\":", scope.0)?;
+                "      "
+            } else {
+                "    "
             };
+            for (symbol_id, entry) in self.entries.iter() {
+                if entry.scope != scope_id {
+                    continue;
+                }
+                let type_str = serialize_type(self, entry.tpe());
 
-            writeln!(
-                f,
-                "    symbol{} \"{}\": {}{}",
-                symbol_id.0,
-                entry.full_name(self),
-                type_str,
-                parent_str
-            )?;
+                let parent_str = match entry.parent {
+                    Some(parent_id) => format!(
+                        " [parent: symbol{} \"{}\"]",
+                        parent_id.0, self[parent_id].name
+                    ),
+                    None => "".to_string(),
+                };
+
+                writeln!(
+                    f,
+                    "{indent}symbol{} \"{}\": {}{}",
+                    symbol_id.0,
+                    entry.full_name(self),
+                    type_str,
+                    parent_str
+                )?;
+            }
         }
 
         // Display structs
@@ -243,7 +263,49 @@ impl std::fmt::Display for SymbolTable {
     }
 }
 
+impl Default for SymbolTable {
+    fn default() -> Self {
+        let mut scopes = PrimaryMap::default();
+        let local_root_id = scopes.push(Scope("ROOT".to_string()));
+        assert_eq!(local_root_id, ROOT_SCOPE);
+
+        Self {
+            entries: Default::default(),
+            by_name_sym: Default::default(),
+            structs: Default::default(),
+            seq: Default::default(),
+            by_name_struct: Default::default(),
+            scopes,
+            active_scope: ROOT_SCOPE,
+        }
+    }
+}
+
 impl SymbolTable {
+    pub fn add_protocol_scope(&mut self, name: &str) -> ScopeId {
+        assert_eq!(
+            self.active_scope, ROOT_SCOPE,
+            "nested scopes are not supported"
+        );
+        assert!(
+            !self.scopes.iter().any(|(_, existing)| existing.0 == name),
+            "A `{name}` scope already exists. Existing scopes: {}",
+            self.scopes
+                .iter()
+                .map(|(_, existing)| existing.0.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let scope_id = self.scopes.push(Scope(name.to_string()));
+        self.active_scope = scope_id;
+        scope_id
+    }
+
+    pub fn exit_scope(&mut self) {
+        assert_ne!(self.active_scope, ROOT_SCOPE, "cannot exit the root scope!");
+        self.active_scope = ROOT_SCOPE;
+    }
+
     pub fn add_without_parent(&mut self, name: String, tpe: Type, kind: SymbolKind) -> SymbolId {
         assert!(
             !name.contains('.'),
@@ -253,23 +315,28 @@ impl SymbolTable {
             name,
             tpe,
             kind,
+            scope: self.active_scope,
             parent: None,
         };
         let lookup_name = entry.full_name(self);
 
         assert!(
-            !self.by_name_sym.contains_key(&lookup_name),
+            !self.by_name_sym[self.active_scope].contains_key(&lookup_name),
             "we already have an entry for {lookup_name}!",
         );
 
         let id = self.entries.push(entry);
-        self.by_name_sym.insert(lookup_name, id);
+        self.by_name_sym[self.active_scope].insert(lookup_name, id);
         id
     }
 
     /// Takes a string and returns the corresponding `SymbolId` (if one exists)
-    pub fn symbol_id_from_name(&self, name: &str) -> Option<SymbolId> {
-        self.by_name_sym.get(name).copied()
+    pub fn symbol_id_from_name(&self, scope: ScopeId, name: &str) -> Option<SymbolId> {
+        self.by_name_sym[scope].get(name).copied()
+    }
+
+    pub fn symbol_id_from_name_in_active_scope(&self, name: &str) -> Option<SymbolId> {
+        self.by_name_sym[self.active_scope].get(name).copied()
     }
 
     /// Takes a `SymbolId` and returns the corresponding (qualified) full name
@@ -311,17 +378,18 @@ impl SymbolTable {
             name,
             tpe,
             kind,
+            scope: self.active_scope,
             parent: Some(parent),
         };
         let lookup_name = entry.full_name(self);
 
         assert!(
-            !self.by_name_sym.contains_key(&lookup_name),
+            !self.by_name_sym[self.active_scope].contains_key(&lookup_name),
             "we already have an entry for {lookup_name}!",
         );
 
         let id = self.entries.push(entry);
-        self.by_name_sym.insert(lookup_name, id);
+        self.by_name_sym[self.active_scope].insert(lookup_name, id);
         id
     }
 
@@ -363,7 +431,7 @@ impl Index<&str> for SymbolTable {
     type Output = SymbolTableEntry;
 
     fn index(&self, index: &str) -> &Self::Output {
-        let index = self.by_name_sym[index];
+        let index = self.by_name_sym[self.active_scope][index];
         &self.entries[index]
     }
 }
@@ -437,6 +505,7 @@ pub struct SymbolTableEntry {
     name: String,
     tpe: Type,
     kind: SymbolKind,
+    scope: ScopeId,
     /// Used to compute the fully qualified name.
     parent: Option<SymbolId>,
 }
@@ -469,6 +538,18 @@ impl SymbolTableEntry {
         name
     }
 
+    pub fn scope_name(&self, symbols: &SymbolTable) -> Option<String> {
+        if self.scope == ROOT_SCOPE {
+            None
+        } else {
+            Some(symbols.scopes[self.scope].0.clone())
+        }
+    }
+
+    pub fn kind(&self) -> SymbolKind {
+        self.kind
+    }
+
     pub fn is_port(&self) -> bool {
         matches!(self.kind, SymbolKind::InPort | SymbolKind::OutPort)
     }
@@ -476,7 +557,7 @@ impl SymbolTableEntry {
         matches!(self.kind, SymbolKind::InPort)
     }
     pub fn is_out_port(&self) -> bool {
-        matches!(self.kind, SymbolKind::InPort)
+        matches!(self.kind, SymbolKind::OutPort)
     }
     pub fn as_arg_index(&self) -> Option<usize> {
         if let SymbolKind::Arg(index) = self.kind {

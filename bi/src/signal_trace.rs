@@ -179,20 +179,16 @@ fn find_instances(
 
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
-            for (pin_id, pin) in design.pins.iter() {
+            for (field_idx, field) in design.pins.iter().enumerate() {
                 let pin_name = renames
-                    .get(pin.name())
+                    .get(field.name())
                     .cloned()
-                    .unwrap_or(pin.name().to_string());
+                    .unwrap_or(field.name().to_string());
                 // find a variable that has a matching name
                 if let Some(var) = instance_scope
                     .vars(hierachy)
                     .find(|v| hierachy[*v].name(hierachy) == pin_name)
                 {
-                    let key = PortKey {
-                        instance_id: inst_id as u32,
-                        pin_id: *pin_id,
-                    };
                     let waveform_bits = hierachy[var].length().expect("not a bit vector");
 
                     // Set up `sample_posedge` to
@@ -233,15 +229,22 @@ fn find_instances(
                     // Check that bit widths match
                     assert_eq!(
                         waveform_bits,
-                        pin.bitwidth(),
+                        field.bitwidth(),
                         "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
                         waveform_bits,
                         pin_name,
-                        pin.bitwidth()
+                        field.bitwidth()
                     );
 
-                    // Store the internal Wellen reference to the signal
-                    port_map.insert(key, hierachy[var].signal_ref());
+                    // store a mapping from any SymbolId that refers to this pin
+                    let value = hierachy[var].signal_ref();
+                    for (_, syms) in design.protocols.iter() {
+                        let key = PortKey {
+                            instance_id: inst_id as u32,
+                            pin_id: syms[field_idx],
+                        };
+                        port_map.insert(key, value);
+                    }
                 } else {
                     // unable to find a variable whose name matches a pin
                     let available_vars: Vec<&str> = instance_scope
@@ -250,7 +253,7 @@ fn find_instances(
                         .collect();
                     panic!(
                         "Failed to find pin {}. Available pins in waveform for instance {} are {}",
-                        pin.name(),
+                        field.name(),
                         inst.name,
                         available_vars.join(",\n")
                     );
@@ -413,24 +416,29 @@ impl AsciWaveTrace {
         // populate pin map
         for (inst_id, inst) in instances.iter().enumerate() {
             let design = &designs[&inst.design];
-            for (pin_id, pin) in design.pins.iter() {
+            for (field_idx, field) in design.pins.iter().enumerate() {
                 let pin_name = renames
-                    .get(pin.name())
+                    .get(field.name())
                     .cloned()
-                    .unwrap_or(pin.name().to_string());
+                    .unwrap_or(field.name().to_string());
                 let name = if inst.name.is_empty() {
                     pin_name
                 } else {
                     format!("{}.{}", inst.name, pin_name)
                 };
-                let key = (inst_id as u32, *pin_id);
+
                 if let Some(wave_id) = trace.pins.iter().position(|(n, _)| n == &name) {
                     assert_eq!(
                         trace.pins[wave_id].1,
-                        pin.bitwidth(),
+                        field.bitwidth(),
                         "Width missmatch for {name}"
                     );
-                    trace.symbol_map.insert(key, wave_id);
+
+                    // store a mapping from any SymbolId that refers to this pin
+                    for (_, syms) in design.protocols.iter() {
+                        let key = (inst_id as u32, syms[field_idx]);
+                        trace.symbol_map.insert(key, wave_id);
+                    }
                 } else {
                     panic!("Unable to find pin {name}");
                 }

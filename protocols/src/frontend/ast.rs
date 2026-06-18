@@ -12,7 +12,7 @@ use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use rustc_hash::FxHashMap;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
-use crate::frontend::symbol::{Arg, SymbolId, SymbolTable, Type};
+use crate::frontend::symbol::{Arg, ScopeId, SymbolId, SymbolTable, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolContext {
@@ -35,10 +35,13 @@ pub struct ProtocolContext {
     dont_care_id: ExprId,
 
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
+
+    /// The scope in the [[SymbolTable]] associated with this protocol.
+    pub scope: ScopeId,
 }
 
 impl ProtocolContext {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, scope: ScopeId) -> Self {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
         let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
@@ -50,6 +53,7 @@ impl ProtocolContext {
             exprs,
             dont_care_id,
             expr_loc,
+            scope,
         }
     }
 
@@ -99,12 +103,12 @@ pub struct Protocol {
 }
 
 impl Protocol {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, scope: ScopeId) -> Self {
         let mut stmts = PrimaryMap::new();
         let block_id: StmtId = stmts.push(Stmt::Block(vec![]));
         let stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
-            ctx: ProtocolContext::new(name),
+            ctx: ProtocolContext::new(name, scope),
             body: block_id,
             stmts,
             stmt_loc,
@@ -449,15 +453,8 @@ mod tests {
         // Manually create the expected result of parsing `add.prot`.
         // Note that the order in which things are created will be different in the parser.
 
-        // 1) declare symbols
+        // 0) declare struct
         let mut symbols = SymbolTable::default();
-        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
-        let b: SymbolId =
-            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
-        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg(2));
-        assert_eq!(symbols["s"], symbols[s]);
-
-        // declare Adder struct
         let add_struct = symbols.add_struct(
             "Adder".to_string(),
             vec![
@@ -466,6 +463,15 @@ mod tests {
                 Field::new("s".to_string(), Dir::Out, Type::BitVec(32)),
             ],
         );
+
+        // 1) declare symbols that are local to the add protocol
+        let add_scope = symbols.add_protocol_scope("add");
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
+        let b: SymbolId =
+            symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(32), SymbolKind::Arg(2));
+        assert_eq!(symbols["s"], symbols[s]);
+
         let dut = symbols.add_without_parent(
             "dut".to_string(),
             Type::Struct(add_struct),
@@ -481,7 +487,7 @@ mod tests {
         println!("\n{}", symbols);
 
         // 2) create transaction
-        let mut add = Protocol::new("add".to_string());
+        let mut add = Protocol::new("add".to_string(), add_scope);
         add.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
 
         // 3) create expressions
@@ -501,6 +507,7 @@ mod tests {
             add.s(Stmt::Assign(s, dut_s_expr)),
         ];
         add.body = add.s(Stmt::Block(body));
+        symbols.exit_scope();
     }
 
     #[test]
@@ -508,13 +515,8 @@ mod tests {
         // Manually create the expected result of parsing `calyx_go_done`.
         // Note that the order in which things are created will be different in the parser.
 
-        // 1) declare symbols
+        // 0) declare struct
         let mut symbols = SymbolTable::default();
-        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
-        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
-        assert_eq!(symbols["oo"], symbols[oo]);
-
-        // declare DUT struct
         let dut_struct = symbols.add_struct(
             "Calyx".to_string(),
             vec![
@@ -525,6 +527,11 @@ mod tests {
             ],
         );
 
+        // 1) declare symbols local to the calyx_go_done protocol
+        let scope = symbols.add_protocol_scope("calyx_go_done");
+        let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
+        let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
+        assert_eq!(symbols["oo"], symbols[oo]);
         let dut = symbols.add_without_parent(
             "dut".to_string(),
             Type::Struct(dut_struct),
@@ -538,7 +545,7 @@ mod tests {
         assert_eq!(symbols["oo"], symbols[oo]);
 
         // 2) create transaction
-        let mut calyx_go_done = Protocol::new("calyx_go_done".to_string());
+        let mut calyx_go_done = Protocol::new("calyx_go_done".to_string(), scope);
         calyx_go_done.args = vec![Arg::new(ii), Arg::new(oo)];
         calyx_go_done.type_param = Some(dut);
 
@@ -567,5 +574,6 @@ mod tests {
         ];
 
         calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+        symbols.exit_scope();
     }
 }

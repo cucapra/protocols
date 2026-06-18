@@ -8,11 +8,12 @@ use crate::frontend::symbol::SymbolTable;
 /// 3. protocols must end in a step
 /// 4. a loop must contain at least one step, otherwise the protocol can never terminate
 pub fn check_step_and_fork(
-    protocols: &Vec<(Protocol, SymbolTable)>,
+    _st: &SymbolTable,
+    protocols: &[Protocol],
     diag: &mut DiagnosticHandler,
 ) -> u32 {
     let mut error_count = 0;
-    for (proto, _) in protocols {
+    for proto in protocols {
         let final_stmts =
             analyze_stmt(diag, &mut error_count, proto, proto.body, State::default()).final_stmts;
         match final_stmts.as_slice() {

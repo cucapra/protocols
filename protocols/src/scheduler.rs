@@ -5,19 +5,16 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use baa::{BitVecOps, BitVecValue};
-use log::info;
-use patronus::expr::Context;
-use patronus::sim::Interpreter;
-use patronus::system::TransitionSystem;
-use rustc_hash::FxHashMap;
-
 use crate::Value;
+use crate::dut::PatronusSim;
 use crate::errors::{DiagnosticEmitter, ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
 use crate::frontend::diagnostic::DiagnosticHandler;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::interpreter::{Evaluator, ThreadInputValue};
+use baa::{BitVecOps, BitVecValue};
+use log::info;
+use rustc_hash::FxHashMap;
 
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just lookup what the next statement is using this map)
@@ -141,6 +138,7 @@ pub enum StepResult<'a> {
 
 /// The `Scheduler` struct contains metadata necessary for scheduling `Thread`s.
 pub struct Scheduler<'a> {
+    sim: PatronusSim,
     /// A `Vec` of `Transaction`s, along with their associated `SymbolTable`s
     /// and `NextStmtMap`s
     irs: Vec<TransactionInfo<'a>>,
@@ -220,18 +218,17 @@ impl<'a> Scheduler<'a> {
     /// - A Patronus simulator (`sim`)
     /// - and a `DiagnosticHandler` for emitting errors (`handler`)
     pub fn new(
-        transactions_and_symbols: Vec<(&'a Protocol, &'a SymbolTable)>,
+        st: &'a SymbolTable,
+        protos: &'a [Protocol],
         todos: Vec<TodoItem>,
-        ctx: &'a Context,
-        sys: &'a TransitionSystem,
-        sim: Interpreter,
+        sim: PatronusSim,
         handler: &'a mut DiagnosticHandler,
         max_steps: u32,
     ) -> Self {
         // Create irs with pre-computed next statement mappings
-        let irs: Vec<TransactionInfo<'a>> = transactions_and_symbols
-            .into_iter()
-            .map(|(tr, st)| (tr, st, tr.next_stmt_mapping()))
+        let irs: Vec<TransactionInfo<'a>> = protos
+            .iter()
+            .map(|proto| (proto, st, proto.next_stmt_mapping()))
             .collect();
 
         // setup the Evaluator and first Thread
@@ -248,9 +245,7 @@ impl<'a> Scheduler<'a> {
             initial_todo.args.clone(),
             initial_todo.tr,
             initial_todo.st,
-            ctx,
-            sys,
-            sim,
+            &sim,
         );
 
         let results_size = todos.len();
@@ -270,6 +265,7 @@ impl<'a> Scheduler<'a> {
             handler,
             max_steps,
             step_happened_this_cycle: false,
+            sim,
         }
     }
 
@@ -324,7 +320,7 @@ impl<'a> Scheduler<'a> {
             }
 
             // No conflicts - finalize input values to sim before stepping
-            self.evaluator.finalize_inputs_for_cycle();
+            self.evaluator.finalize_inputs_for_cycle(&mut self.sim);
 
             // Collect threads that need implicit forking (can't call self.next_todo during drain)
             let mut threads_needing_implicit_fork: Vec<usize> = Vec::new();
@@ -363,6 +359,10 @@ impl<'a> Scheduler<'a> {
                 }
             }
 
+            if threads_needing_implicit_fork.len() > 1 {
+                info!("TODO: there should only be a single thread forking at one time.");
+            }
+
             // Process implicit forks after drain is complete
             for _todo_idx in threads_needing_implicit_fork {
                 let next_todo_option = self.next_todo(self.next_todo_idx);
@@ -392,7 +392,7 @@ impl<'a> Scheduler<'a> {
             // 0 timesteps.)
             if self.step_happened_this_cycle {
                 info!("Stepping...");
-                self.evaluator.sim_step();
+                self.sim.step();
                 // Reset flag to ensure that simulator is stepped exactly
                 // once during each cycle
                 self.step_happened_this_cycle = false;
@@ -431,11 +431,8 @@ impl<'a> Scheduler<'a> {
     fn check_for_conflicts(&self) -> Vec<(usize, ExecutionError)> {
         let mut errors = Vec::new();
         let per_thread_input_vals = self.evaluator.per_thread_input_vals();
-        // Safe to use any transaction's symbol table since all transactions must share
-        // the same DUT struct symbols.
-        let st = self.irs[0].1;
 
-        for (symbol_id, per_thread_vals) in per_thread_input_vals {
+        for (port_id, per_thread_vals) in per_thread_input_vals {
             // Collect all concrete values with their thread indices and stmt_ids
             let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
                 .iter()
@@ -453,16 +450,15 @@ impl<'a> Scheduler<'a> {
                 let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
                 for (second_idx, second_val, second_stmt_id) in &concrete_vals[1..] {
                     if !first_val.is_equal(*second_val) {
-                        let symbol_name = st[*symbol_id].name().to_string();
                         let first_transaction_name = self.todos[*first_idx].0.clone();
                         let second_transaction_name = self.todos[*second_idx].0.clone();
+                        let port_name = self.sim.port_name(*port_id);
 
                         // Error for first thread
                         errors.push((
                             *first_idx,
                             ExecutionError::conflicting_assignment(
-                                *symbol_id,
-                                symbol_name.clone(),
+                                port_name.into(),
                                 (*second_val).clone(),
                                 (*first_val).clone(),
                                 *first_idx,
@@ -475,8 +471,7 @@ impl<'a> Scheduler<'a> {
                         errors.push((
                             *second_idx,
                             ExecutionError::conflicting_assignment(
-                                *symbol_id,
-                                symbol_name,
+                                port_name.into(),
                                 (*first_val).clone(),
                                 (*second_val).clone(),
                                 *second_idx,
@@ -542,7 +537,10 @@ impl<'a> Scheduler<'a> {
             "  About to call init_thread_inputs for todo_idx={} ({})",
             thread.todo_idx, thread.todo.tr.name
         );
-        if let Err(e) = self.evaluator.init_thread_inputs(thread.todo_idx) {
+        if let Err(e) = self
+            .evaluator
+            .init_thread_inputs(&mut self.sim, thread.todo_idx)
+        {
             info!(
                 "ERROR during init_thread_inputs: {:?}, terminating thread",
                 e
@@ -567,7 +565,7 @@ impl<'a> Scheduler<'a> {
                 thread.format_stmt(&current_stmt_id)
             );
 
-            match self.evaluator.evaluate_stmt(&current_stmt_id) {
+            match self.evaluator.evaluate_stmt(&mut self.sim, current_stmt_id) {
                 // happy path: got a next statement
                 Ok(Some(next_id)) => {
                     info!(

@@ -44,9 +44,6 @@ pub struct Interpreter {
     /// (This field is only used to make error messages more informative)
     pub trace_cycle_count: u32,
 
-    /// The SymbolId of the DUT (design under test)
-    pub dut_symbol_id: SymbolId,
-
     /// The `instance_id` of the DUT (which determines which `struct`
     /// in our DSL for which we are inferring transactions).
     /// This field is useful when we have a `.prot` file with multiple
@@ -147,7 +144,6 @@ impl Interpreter {
         symbol_table: SymbolTable,
         trace: &WaveSignalTrace,
         trace_cycle_count: u32,
-        dut_symbol_id: SymbolId,
         instance_id: u32,
     ) -> Self {
         let mut args_mapping = FxHashMap::default();
@@ -184,7 +180,6 @@ impl Interpreter {
             known_bits,
             constraints: FxHashMap::default(),
             trace_cycle_count,
-            dut_symbol_id,
             loop_args: FxHashMap::default(),
             instance_id,
         }
@@ -226,36 +221,38 @@ impl Interpreter {
                             serialize_bitvec(&value, ctx.display_hex)
                         );
                     }
-                    // Check if the symbol we're referring to
-                    // is the DUT pin corresponding to an output parameter
 
-                    // Concretely, we check if the identifier begins with
-                    // the name of the DUT (e.g. check if "DUT.s" begins with "DUT.")
-                    let dut_prefix = format!("{}.", self.symbol_table[self.dut_symbol_id].name());
-                    if name.starts_with(&dut_prefix) {
-                        let pin_name = &name[dut_prefix.len()..];
-
-                        // Find if there's an output parameter with this name
-                        // that hasn't been added to the `args_mapping` yet
-                        for arg in &self.transaction.args {
-                            let param_name = self.symbol_table[arg.symbol()].name();
-                            if param_name == pin_name
-                                && !self.args_mapping.contains_key(&arg.symbol())
-                            {
-                                // If yes, we read the value for the corresponding
-                                // DUT pin from the trace, and update the args_mapping
-                                // so that `<output_param> |-> <value_of_DUT_pin_from_trace>`
-                                info!(
-                                    "Capturing output parameter {} = {}",
-                                    param_name,
-                                    serialize_bitvec(&value, ctx.display_hex)
-                                );
-                                self.args_mapping.insert(arg.symbol(), value.clone());
-
-                                break;
-                            }
-                        }
-                    }
+                    // TODO: what is this code actually supposed to do?
+                    // // Check if the symbol we're referring to
+                    // // is the DUT pin corresponding to an output parameter
+                    //
+                    // // Concretely, we check if the identifier begins with
+                    // // the name of the DUT (e.g. check if "DUT.s" begins with "DUT.")
+                    // let dut_prefix = format!("{}.", self.symbol_table[self.dut_symbol_id].name());
+                    // if name.starts_with(&dut_prefix) {
+                    //     let pin_name = &name[dut_prefix.len()..];
+                    //
+                    //     // Find if there's an output parameter with this name
+                    //     // that hasn't been added to the `args_mapping` yet
+                    //     for arg in &self.transaction.args {
+                    //         let param_name = self.symbol_table[arg.symbol()].name();
+                    //         if param_name == pin_name
+                    //             && !self.args_mapping.contains_key(&arg.symbol())
+                    //         {
+                    //             // If yes, we read the value for the corresponding
+                    //             // DUT pin from the trace, and update the args_mapping
+                    //             // so that `<output_param> |-> <value_of_DUT_pin_from_trace>`
+                    //             info!(
+                    //                 "Capturing output parameter {} = {}",
+                    //                 param_name,
+                    //                 serialize_bitvec(&value, ctx.display_hex)
+                    //             );
+                    //             self.args_mapping.insert(arg.symbol(), value.clone());
+                    //
+                    //             break;
+                    //         }
+                    //     }
+                    // }
                     Ok(ExprValue::Concrete(value))
                 } else {
                     info!(

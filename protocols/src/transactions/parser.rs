@@ -12,7 +12,6 @@ use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::serialize_type;
 use crate::frontend::symbol::{SymbolTable, Type};
 use crate::scheduler::TodoItem;
-use crate::setup::bv;
 
 #[derive(Parser)]
 #[grammar = "transactions/transactions.pest"]
@@ -23,7 +22,8 @@ struct TransactionsParser;
 pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-    protos: &FxHashMap<String, (&Protocol, &SymbolTable)>,
+    st: &SymbolTable,
+    protos: &FxHashMap<String, &Protocol>,
 ) -> anyhow::Result<Vec<Vec<TodoItem>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
@@ -57,7 +57,7 @@ pub fn parse_transactions_file(
                     // First element should be the function name (ident)
                     let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-                    let (proto, st) = protos.get(&function_name).unwrap_or_else(|| {
+                    let proto = protos.get(&function_name).unwrap_or_else(|| {
                         panic!("Unable to fetch argument types for transaction {function_name}")
                     });
 
@@ -183,6 +183,11 @@ impl IntFormat {
                 .unwrap_or_else(|e| panic!("{} '{}': {}", error_msg, arg_str, e))
         }
     }
+}
+
+/// Creates an owned bit-vector with a particular `value` & `width`
+fn bv(value: u64, width: u32) -> BitVecValue {
+    BitVecValue::from_u64(value, width)
 }
 
 fn parse_arg(

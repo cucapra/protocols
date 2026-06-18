@@ -114,7 +114,6 @@ pub enum ThreadError {
     },
     /// Multiple threads trying to assign to same input
     ConflictingAssignment {
-        symbol_id: SymbolId,
         symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
@@ -509,7 +508,6 @@ impl ExecutionError {
     }
 
     pub fn conflicting_assignment(
-        symbol_id: SymbolId,
         symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
@@ -518,7 +516,6 @@ impl ExecutionError {
         stmt_id: StmtId,
     ) -> Self {
         ExecutionError::Thread(ThreadError::ConflictingAssignment {
-            symbol_id,
             symbol_name,
             current_value,
             new_value,

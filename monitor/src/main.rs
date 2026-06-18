@@ -25,7 +25,6 @@ use protocols::frontend;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::{Design, find_designs};
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::SymbolTable;
 
 use crate::designs::{Instance, collects_design_names, parse_instance};
 use crate::global_context::GlobalContext;
@@ -153,13 +152,13 @@ fn main() -> anyhow::Result<()> {
         DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
-    let transactions_symbol_tables: Vec<(Protocol, SymbolTable)> = frontend(
+    let (st, protos) = frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
     )?;
 
-    let designs = find_designs(transactions_symbol_tables.iter());
+    let designs = find_designs(&st, &protos);
 
     // Try to find instances that we care about
     if cli.instances.is_empty() {
@@ -204,10 +203,10 @@ fn main() -> anyhow::Result<()> {
     // We use the index of `design` in `dut_designs` as our `instance_id`
     for (instance_id, design) in dut_designs.into_iter().enumerate() {
         // Filter transactions that belong to this design
-        let design_transactions: Vec<(Protocol, SymbolTable)> = design
-            .protocol_ids
+        let design_transactions: Vec<Protocol> = design
+            .protocols
             .iter()
-            .map(|&idx| transactions_symbol_tables[idx].clone())
+            .map(|&(idx, _)| protos[idx].clone())
             .collect();
 
         if design_transactions.is_empty() {
@@ -216,10 +215,10 @@ fn main() -> anyhow::Result<()> {
 
         // Create a scheduler for this design, using the design name as the struct name
         let scheduler = Scheduler::initialize(
-            design_transactions,
+            &st,
+            &design_transactions,
             &trace,
             design.name.clone(),
-            design.symbol_id,
             instance_id as u32,
         );
 

@@ -561,10 +561,11 @@ mod tests {
     #[test]
     fn test_emit_diagnostic() {
         let mut symbols = SymbolTable::default();
+        let scope = symbols.add_protocol_scope("test_transaction");
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::InPort);
         let b = symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::InPort);
 
-        let mut tr = Protocol::new("test_transaction".to_string());
+        let mut tr = Protocol::new("test_transaction".to_string(), scope);
         let one_expr = tr.e(Expr::Const(BitVecValue::from_u64(1, 1)));
         let zero_expr = tr.e(Expr::Const(BitVecValue::from_u64(0, 1)));
         tr.s(Stmt::Assign(a, one_expr));
@@ -589,5 +590,6 @@ mod tests {
         settings.bind(|| {
             insta::assert_snapshot!(content);
         });
+        symbols.exit_scope();
     }
 }

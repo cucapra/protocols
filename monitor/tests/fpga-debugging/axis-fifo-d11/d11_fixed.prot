@@ -25,7 +25,7 @@ struct AxisFifo {
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
 // - `push_data` is the value being pushed,
 // - `pop_data` is the value being popped
-prot push_and_pop<DUT: AxisFifo>(
+prot push_and_pop_1<DUT: AxisFifo>(
     push_data: u8,
     pop_data: u8,
 ) {
@@ -123,7 +123,7 @@ prot reset<DUT: AxisFifo>() {
 // PUSH_AND_POP: Concurrent push and pop in the same cycle
 // - `push_data` is the value being pushed,
 // - `pop_data` is the value being popped
-prot push_and_pop<DUT: AxisFifo>(
+prot push_and_pop_2<DUT: AxisFifo>(
     push_data: u8,
     pop_data: u8,
 ) {

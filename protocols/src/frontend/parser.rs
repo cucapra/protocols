@@ -39,7 +39,7 @@ lazy_static::lazy_static! {
 pub struct ParserContext<'a> {
     pub st: &'a mut SymbolTable,
     pub fileid: usize,
-    pub tr: &'a mut Protocol,
+    pub proto: Protocol,
     pub handler: &'a mut DiagnosticHandler,
 }
 
@@ -66,12 +66,14 @@ impl ParserContext<'_> {
         context_pair: &pest::iterators::Pair<Rule>,
         message: &str,
     ) -> Result<SymbolId, String> {
-        self.st.symbol_id_from_name(name).ok_or_else(|| {
-            let msg = format!("{}: {}", message, name);
-            self.handler
-                .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
-            msg
-        })
+        self.st
+            .symbol_id_from_name_in_active_scope(name)
+            .ok_or_else(|| {
+                let msg = format!("{}: {}", message, name);
+                self.handler
+                    .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
+                msg
+            })
     }
 
     pub fn parse_boxed_expr(&mut self, pairs: Pairs<Rule>) -> Result<BoxedExpr, String> {
@@ -102,7 +104,7 @@ impl ParserContext<'_> {
                     }
                     Rule::path_id => {
                         let path_id = primary.as_str();
-                        let symbol_id = self.st.symbol_id_from_name(path_id);
+                        let symbol_id = self.st.symbol_id_from_name_in_active_scope(path_id);
                         match symbol_id {
                             Some(id) => Ok(BoxedExpr::Sym(id, start, end)),
                             None => {
@@ -184,47 +186,47 @@ impl ParserContext<'_> {
     fn boxed_expr_to_expr_id(&mut self, expr: BoxedExpr) -> Result<ExprId, String> {
         let expr_id = match expr {
             BoxedExpr::Const(value, start, end) => {
-                let expr_id = self.tr.e(Expr::Const(value));
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::Const(value));
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::Sym(symbol_id, start, end) => {
-                let expr_id = self.tr.e(Expr::Sym(symbol_id));
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::Sym(symbol_id));
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::DontCare(start, end) => {
-                let expr_id = self.tr.e(Expr::DontCare);
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::DontCare);
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::IsLastIteration(start, end) => {
-                let expr_id = self.tr.e(Expr::IsLastIteration);
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::IsLastIteration);
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::IterCount(width, start, end) => {
-                let expr_id = self.tr.e(Expr::IterCount(width));
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::IterCount(width));
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::Binary(op, lhs, rhs, start, end) => {
                 let lhs_id = self.boxed_expr_to_expr_id(*lhs)?;
                 let rhs_id = self.boxed_expr_to_expr_id(*rhs)?;
-                let expr_id = self.tr.e(Expr::Binary(op, lhs_id, rhs_id));
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::Binary(op, lhs_id, rhs_id));
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::Unary(op, arg, start, end) => {
                 let arg_id = self.boxed_expr_to_expr_id(*arg)?;
-                let expr_id = self.tr.e(Expr::Unary(op, arg_id));
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::Unary(op, arg_id));
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
             BoxedExpr::Slice(expr, idx1, idx2, start, end) => {
                 let sym_id = self.boxed_expr_to_expr_id(*expr)?;
-                let expr_id = self.tr.e(Expr::Slice(sym_id, idx1, idx2));
-                self.tr.add_expr_loc(expr_id, start, end, self.fileid);
+                let expr_id = self.proto.e(Expr::Slice(sym_id, idx1, idx2));
+                self.proto.add_expr_loc(expr_id, start, end, self.fileid);
                 expr_id
             }
         };
@@ -255,7 +257,7 @@ impl ParserContext<'_> {
                 )?;
                 let id_pair = if first_rule.as_rule() == Rule::annotation {
                     // Parse annotation - currently we only support #[idle]
-                    self.tr.is_idle = true;
+                    self.proto.is_idle = true;
                     self.expect_rule(
                         inner_rules.next(),
                         &pair,
@@ -266,7 +268,7 @@ impl ParserContext<'_> {
                 };
 
                 let id = id_pair.as_str();
-                self.tr.name = id.to_string();
+                self.proto.name = id.to_string();
 
                 if let Some(inner_pair) = inner_rules.next() {
                     match inner_pair.as_rule() {
@@ -279,12 +281,16 @@ impl ParserContext<'_> {
                                 .struct_id_from_name(path_id_2)
                                 .ok_or_else(|| format!("Undefined struct: {}", path_id_2))?;
                             let dut_struct = self.st[struct_id].clone();
+                            // now that we know the DUT parameter name, we can construct the scope
+                            let scope_name = format!("{}::{}", dut_struct.name(), self.proto.name);
+                            self.proto.ctx.scope = self.st.add_protocol_scope(&scope_name);
+
                             let dut_symbol_id = self.st.add_without_parent(
                                 path_id_1.to_string(),
                                 Type::Struct(struct_id),
                                 SymbolKind::Dut,
                             );
-                            self.tr.type_param = Some(dut_symbol_id);
+                            self.proto.type_param = Some(dut_symbol_id);
                             for pin in dut_struct.pins() {
                                 let pin_name = pin.name().to_string();
                                 self.st.add_with_parent(pin_name, dut_symbol_id);
@@ -304,6 +310,9 @@ impl ParserContext<'_> {
                             return Err(msg);
                         }
                     }
+                } else {
+                    // create scope without DUT struct prefix
+                    self.proto.ctx.scope = self.st.add_protocol_scope(&self.proto.name);
                 }
 
                 if let Some(arglist_pair) = inner_rules.peek() {
@@ -316,7 +325,7 @@ impl ParserContext<'_> {
                         let raw_args = self.parse_arglist(arg_rules)?;
 
                         // add raw arguments to symbol table
-                        self.tr.args = raw_args
+                        self.proto.args = raw_args
                             .into_iter()
                             .enumerate()
                             .map(|(index, (name, tpe))| {
@@ -329,13 +338,14 @@ impl ParserContext<'_> {
                             })
                             .collect();
                     } else {
-                        self.tr.args = Vec::new();
+                        self.proto.args = Vec::new();
                     }
                 } else {
-                    self.tr.args = Vec::new();
+                    self.proto.args = Vec::new();
                 }
 
-                self.tr.body = self.parse_stmt_block(inner_rules)?;
+                self.proto.body = self.parse_stmt_block(inner_rules)?;
+                self.st.exit_scope();
                 Ok(())
             }
             _ => {
@@ -368,8 +378,8 @@ impl ParserContext<'_> {
 
                 // push each step statement into the transaction
                 for step in step_stmt {
-                    let step_id = self.tr.s(step);
-                    self.tr.add_stmt_loc(step_id, start, end, self.fileid);
+                    let step_id = self.proto.s(step);
+                    self.proto.add_stmt_loc(step_id, start, end, self.fileid);
                     stmts.push(step_id);
                 }
 
@@ -400,11 +410,11 @@ impl ParserContext<'_> {
                 }
             };
 
-            let stmt_id = self.tr.s(stmt);
-            self.tr.add_stmt_loc(stmt_id, start, end, self.fileid);
+            let stmt_id = self.proto.s(stmt);
+            self.proto.add_stmt_loc(stmt_id, start, end, self.fileid);
             stmts.push(stmt_id);
         }
-        Ok(self.tr.s(Stmt::Block(stmts)))
+        Ok(self.proto.s(Stmt::Block(stmts)))
     }
 
     fn parse_assign(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
@@ -536,7 +546,7 @@ impl ParserContext<'_> {
             .next()
             .map(|else_rule| self.parse_stmt_block(else_rule.into_inner()))
             .transpose()?
-            .unwrap_or_else(|| self.tr.s(Stmt::Block(vec![])));
+            .unwrap_or_else(|| self.proto.s(Stmt::Block(vec![])));
 
         Ok(Stmt::IfElse(expr_id, if_block, else_block))
     }
@@ -712,7 +722,7 @@ impl ParserContext<'_> {
 pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
-) -> Result<Vec<(Protocol, SymbolTable)>, String> {
+) -> Result<(SymbolTable, Vec<Protocol>), String> {
     let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     let fileid = handler.add_file(name, input.clone());
@@ -733,16 +743,16 @@ pub fn parse_file(
 
     let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
     let inner = pairs.clone().next().unwrap().into_inner();
-    let base_st: &mut SymbolTable = &mut SymbolTable::default();
-    let mut trs = vec![];
+    let mut st = SymbolTable::default();
+    let mut protos = vec![];
 
     for pair in inner {
         if pair.as_rule() == Rule::struct_def {
             // dummy context to set up the symbol table with the struct; the transaction here is irrelevant
             let mut context = ParserContext {
-                st: base_st,
+                st: &mut st,
                 fileid,
-                tr: &mut Protocol::new("".to_string()),
+                proto: Protocol::new("".to_string(), ROOT_SCOPE),
                 handler,
             };
             if let Err(e) = context.parse_struct(pair) {
@@ -752,26 +762,26 @@ pub fn parse_file(
             }
         } else if pair.as_rule() == Rule::fun {
             // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
-            let st = &mut base_st.clone();
-            let mut tr = Protocol::new("".to_string());
             let mut context: ParserContext<'_> = ParserContext {
-                st,
+                st: &mut st,
                 fileid,
-                tr: &mut tr,
+                proto: Protocol::new("".to_string(), ROOT_SCOPE),
                 handler,
             };
             context.parse_transaction(pair)?;
-
-            trs.push((context.tr.clone(), context.st.clone()));
+            let proto = context.proto;
+            assert!(!proto.name.is_empty());
+            assert_ne!(proto.ctx.scope, ROOT_SCOPE);
+            protos.push(proto);
         }
     }
-    Ok(trs)
+    Ok((st, protos))
 }
 
 pub fn parsing_helper(
     transaction_filename: &str,
     handler: &mut DiagnosticHandler,
-) -> Vec<(Protocol, SymbolTable)> {
+) -> (SymbolTable, Vec<Protocol>) {
     let result = parse_file(transaction_filename, handler);
     match result {
         Ok(success_vec) => success_vec,
