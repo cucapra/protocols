@@ -35,9 +35,9 @@ pub struct PatronusSim {
 
 /// Prototype of our generic (non-patronus specific) dut simulator  interface
 impl PatronusSim {
-    pub fn new(
-        verilog_paths: &[&str],
-        top_module: Option<String>,
+    pub fn new<P: AsRef<std::path::Path>>(
+        verilog_paths: &[P],
+        top_module: Option<&str>,
         design: &Design,
         waveform_file: Option<&str>,
     ) -> Self {
@@ -228,13 +228,16 @@ impl PatronusSim {
 
 /// Takes a vec of paths to Verilog files and the name of a top-level module,
 /// and returns a (Patronus `Context`, Patronus `TransitionSystem` pair)
-fn create_sim_context(
-    verilog_paths: &[&str],
-    top_module: Option<String>,
+fn create_sim_context<P: AsRef<std::path::Path>>(
+    verilog_paths: &[P],
+    top_module: Option<&str>,
 ) -> (Context, TransitionSystem) {
     let env = YosysEnv::default();
-    let sources: Vec<PathBuf> = verilog_paths.iter().map(PathBuf::from).collect();
-    let proj = ProjectConf::with_sources(sources, top_module);
+    let sources: Vec<PathBuf> = verilog_paths
+        .iter()
+        .map(|p| PathBuf::from(p.as_ref()))
+        .collect();
+    let proj = ProjectConf::with_sources(sources, top_module.map(|s| s.into()));
 
     let btor_file = yosys_to_btor(&env, &proj, None)
         .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));

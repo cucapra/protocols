@@ -9,6 +9,7 @@
 use crate::frontend::ast::Protocol;
 use crate::frontend::serialize::serialize_field;
 use crate::frontend::symbol::{Field, SymbolId, SymbolTable, Type};
+use anyhow::bail;
 use rustc_hash::FxHashMap;
 
 /// Metadata associated with a design (i.e. a `struct` in the Protocols language)
@@ -42,6 +43,27 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
             .map(|(id, _)| *id)
             .collect::<Vec<_>>()
     )
+}
+
+/// Succeeds iff there is only a single `struct` with protocols in the file.
+pub fn find_a_single_design(
+    st: &SymbolTable,
+    protos: &[Protocol],
+    filename: &str,
+) -> anyhow::Result<Design> {
+    let designs = find_designs(&st, &protos);
+    if designs.is_empty() {
+        bail!("No protocols found in {}", filename);
+    }
+    if designs.len() > 1 {
+        let design_names = designs.keys().cloned().collect::<Vec<_>>();
+        bail!(
+            "There are multiple structs in {}: {}.\nWe need to add a way to select which one we want to use.",
+            filename,
+            design_names.join(", ")
+        );
+    }
+    Ok(designs.into_values().next().unwrap())
 }
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),

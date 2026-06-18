@@ -299,7 +299,8 @@ impl<'a> Evaluator<'a> {
         if is_first_run {
             // First run: initialize all inputs to DontCare
             log::info!("  Initializing all inputs to DontCare");
-            for port_id in sim.inputs() {
+            let inputs: Vec<_> = sim.inputs().collect();
+            for port_id in inputs {
                 log::info!(
                     "    Setting {} to DontCare (first run)",
                     sim.port_name(port_id)
@@ -626,11 +627,11 @@ impl<'a> Evaluator<'a> {
                     );
                 }
 
-                Ok(self.next_stmt_map[stmt_id])
+                Ok(self.next_stmt_map[&stmt_id])
             }
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    Ok(self.next_stmt_map[stmt_id])
+                    Ok(self.next_stmt_map[&stmt_id])
                 } else {
                     Ok(Some(stmt_ids[0]))
                 }
@@ -649,13 +650,13 @@ impl<'a> Evaluator<'a> {
         match res {
             ExprValue::DontCare => Err(ExecutionError::invalid_condition(
                 "if".to_string(),
-                *cond_expr_id,
+                cond_expr_id,
             )),
             ExprValue::Concrete(bvv) => {
                 if bvv.is_zero() {
-                    Ok(Some(*else_stmt_id))
+                    Ok(Some(else_stmt_id))
                 } else {
-                    Ok(Some(*then_stmt_id))
+                    Ok(Some(then_stmt_id))
                 }
             }
         }
@@ -670,53 +671,53 @@ impl<'a> Evaluator<'a> {
         symbol_id: SymbolId,
         expr_id: ExprId,
     ) -> ExecutionResult<()> {
-        // Check if this is an input pin
-        if !self.input_mapping.contains_key(symbol_id) {
-            let name = self.st[symbol_id].full_name(self.st);
-            if self.output_mapping.contains_key(symbol_id) {
-                return Err(ExecutionError::read_only_assignment(
-                    *symbol_id,
-                    name.to_string(),
-                    "outputs".to_string(),
-                    *stmt_id,
-                ));
-            } else if self.args_mapping.contains_key(symbol_id) {
-                return Err(ExecutionError::read_only_assignment(
-                    *symbol_id,
-                    name.to_string(),
-                    "arguments".to_string(),
-                    *stmt_id,
-                ));
-            } else {
-                return Err(ExecutionError::symbol_not_found(
-                    *symbol_id,
-                    name.to_string(),
-                    "symbol mappings".to_string(),
-                    *expr_id,
-                ));
-            }
-        }
-
-        let expr_val = self.evaluate_expr(expr_id)?;
+        let name = self.st[symbol_id].full_name(self.st);
+        let expr_val = self.evaluate_expr(sim, expr_id)?;
         let todo_idx = self.current_todo_idx;
 
-        // Check if assigning to this input port is forbidden (after observing a dependent output)
-        if self.forbidden_inputs.contains(symbol_id) {
-            let name = self.st[symbol_id].name();
-            return Err(ExecutionError::forbidden_input_assignment(
+        // check that we are assigning to an input port
+        // TODO: this should all be done statically and should not be possible to go wrong here!
+        match self.st[symbol_id].kind() {
+            SymbolKind::Dut => unreachable!(),
+            SymbolKind::InPort => {
+                let port_id = sim[symbol_id];
+
+                // Determine new value
+                let new_val = match expr_val {
+                    ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
+                    ExprValue::DontCare => ThreadInputValue::DontCare,
+                };
+
+                // Check if assigning to this input port is forbidden (after observing a dependent output)
+                if self.forbidden_inputs.contains(&port_id) {
+                    Err(ExecutionError::forbidden_input_assignment(
+                        name.to_string(),
+                        expr_id,
+                    ))
+                } else {
+                    // Use helper to check conflicts, update state, and apply to sim
+                    self.apply_input_value(sim, port_id, todo_idx, new_val, Some(stmt_id))
+                }
+            }
+            SymbolKind::OutPort => Err(ExecutionError::read_only_assignment(
+                symbol_id,
                 name.to_string(),
-                *expr_id,
-            ));
+                "outputs".to_string(),
+                stmt_id,
+            )),
+            SymbolKind::Arg(_) => Err(ExecutionError::read_only_assignment(
+                symbol_id,
+                name.to_string(),
+                "arguments".to_string(),
+                stmt_id,
+            )),
+            SymbolKind::LoopVar => Err(ExecutionError::read_only_assignment(
+                symbol_id,
+                name.to_string(),
+                "loop_var".to_string(),
+                stmt_id,
+            )),
         }
-
-        // Determine new value
-        let new_val = match expr_val {
-            ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
-            ExprValue::DontCare => ThreadInputValue::DontCare,
-        };
-
-        // Use helper to check conflicts, update state, and apply to sim
-        self.apply_input_value(symbol_id, todo_idx, new_val, Some(*stmt_id))
     }
 
     fn evaluate_while(
@@ -751,35 +752,36 @@ impl<'a> Evaluator<'a> {
     /// thread).
     fn evaluate_bounded_loop(
         &mut self,
-        num_iters_id: &ExprId,
-        bounded_loop_id: &StmtId,
-        loop_body_id: &StmtId,
+        sim: &PatronusSim,
+        num_iters_id: ExprId,
+        bounded_loop_id: StmtId,
+        loop_body_id: StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
         // check to see if there is an entry for this loop
         if let Some((info_stmt_id, max_iter, iter_count)) = self.loop_info.last().cloned()
-            && info_stmt_id == *bounded_loop_id
+            && info_stmt_id == bounded_loop_id
         {
             // we are already executing this loop
             self.loop_info.pop().unwrap();
             if iter_count + 1 == max_iter {
                 // done
-                Ok(self.next_stmt_map[bounded_loop_id])
+                Ok(self.next_stmt_map[&bounded_loop_id])
             } else {
                 self.loop_info
-                    .push((*bounded_loop_id, max_iter, iter_count + 1));
-                Ok(Some(*loop_body_id))
+                    .push((bounded_loop_id, max_iter, iter_count + 1));
+                Ok(Some(loop_body_id))
             }
         } else {
             // start loop execution
             // We've not encountered this bounded loop before,
             // so we have to evaluate the no. of iters that the user specified
-            let num_iters_result = self.evaluate_expr(num_iters_id)?;
+            let num_iters_result = self.evaluate_expr(sim, num_iters_id)?;
             match num_iters_result {
                 ExprValue::DontCare => {
                     // No. of loop iterations can't be `DontCare`
                     Err(ExecutionError::invalid_condition(
                         "bounded_loop".to_string(),
-                        *num_iters_id,
+                        num_iters_id,
                     ))
                 }
                 ExprValue::Concrete(bvv) => {
@@ -790,12 +792,12 @@ impl<'a> Evaluator<'a> {
                     // If the user wrote `repeat 0 iterations { ... }`,
                     // skip the loop and proceed to the next stmt
                     if num_iterations == 0 {
-                        Ok(self.next_stmt_map[bounded_loop_id])
+                        Ok(self.next_stmt_map[&bounded_loop_id])
                     } else {
                         // Keep track of the no. of loop iterations,
                         // and execute the loop body
-                        self.loop_info.push((*bounded_loop_id, num_iterations, 0));
-                        Ok(Some(*loop_body_id))
+                        self.loop_info.push((bounded_loop_id, num_iterations, 0));
+                        Ok(Some(loop_body_id))
                     }
                 }
             }
@@ -804,10 +806,11 @@ impl<'a> Evaluator<'a> {
 
     fn evaluate_for_in_loop(
         &mut self,
-        loop_var_sym: &SymbolId,
-        seq: &ExprId,
-        stmt_id: &StmtId,
-        loop_body_id: &StmtId,
+        _sim: &PatronusSim,
+        loop_var_sym: SymbolId,
+        seq: ExprId,
+        stmt_id: StmtId,
+        loop_body_id: StmtId,
     ) -> ExecutionResult<Option<StmtId>> {
         // figure out size of seq
         let seq_symbol_id = if let Expr::Sym(id) = &self.tr[seq] {
@@ -819,51 +822,52 @@ impl<'a> Evaluator<'a> {
 
         // check to see if there is an entry for this loop
         if let Some((info_stmt_id, max_iter, iter_count)) = self.loop_info.last().cloned()
-            && info_stmt_id == *stmt_id
+            && info_stmt_id == stmt_id
         {
             // we are already executing this loop
             self.loop_info.pop().unwrap();
             let (var_sym_id, _) = self.loop_vars.pop().unwrap();
-            assert_eq!(var_sym_id, *loop_var_sym);
+            assert_eq!(var_sym_id, loop_var_sym);
             if iter_count + 1 == max_iter {
-                Ok(self.next_stmt_map[stmt_id])
+                Ok(self.next_stmt_map[&stmt_id])
             } else {
                 self.loop_vars
                     .push((var_sym_id, seq_values[iter_count as usize + 1].clone()));
-                self.loop_info.push((*stmt_id, max_iter, iter_count + 1));
-                Ok(Some(*loop_body_id))
+                self.loop_info.push((stmt_id, max_iter, iter_count + 1));
+                Ok(Some(loop_body_id))
             }
         } else {
             // start loop execution
             if seq_values.is_empty() {
-                Ok(self.next_stmt_map[stmt_id])
+                Ok(self.next_stmt_map[&stmt_id])
             } else {
-                self.loop_vars.push((*loop_var_sym, seq_values[0].clone()));
-                self.loop_info.push((*stmt_id, seq_values.len() as u64, 0));
-                Ok(Some(*loop_body_id))
+                self.loop_vars.push((loop_var_sym, seq_values[0].clone()));
+                self.loop_info.push((stmt_id, seq_values.len() as u64, 0));
+                Ok(Some(loop_body_id))
             }
         }
     }
 
     fn evaluate_assert_eq(
         &mut self,
-        stmt_id: &StmtId,
-        expr1: &ExprId,
-        expr2: &ExprId,
+        sim: &PatronusSim,
+        stmt_id: StmtId,
+        expr1: ExprId,
+        expr2: ExprId,
     ) -> ExecutionResult<()> {
-        let res1 = self.evaluate_expr(expr1)?;
-        let res2 = self.evaluate_expr(expr2)?;
+        let res1 = self.evaluate_expr(sim, expr1)?;
+        let res2 = self.evaluate_expr(sim, expr2)?;
         let (bvv1, bvv2) = match (&res1, &res2) {
             (ExprValue::Concrete(bvv1), ExprValue::Concrete(bvv2)) => (bvv1, bvv2),
             _ => {
-                return Err(ExecutionError::assertion_dont_care(*stmt_id));
+                return Err(ExecutionError::assertion_dont_care(stmt_id));
             }
         };
         // short circuit guarantees width equality before is_equal call
         if bvv1.width() != bvv2.width() || !bvv1.is_equal(bvv2) {
             Err(ExecutionError::assertion_failed(
-                *expr1,
-                *expr2,
+                expr1,
+                expr2,
                 bvv1.clone(),
                 bvv2.clone(),
             ))

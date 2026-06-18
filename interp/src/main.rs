@@ -1,14 +1,14 @@
-// Copyright 2025 Cornell University
+// Copyright 2025-26 Cornell University
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::scheduler::Scheduler;
-use protocols::setup::setup_test_environment;
-use protocols::transaction_frontend;
+use protocols::{PatronusSim, frontend, transaction_frontend};
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]
@@ -109,21 +109,19 @@ fn main() -> anyhow::Result<()> {
     // Print warning messages only if `--verbose` is enabled
     // (the --verbose flag triggers `LevelFilter::Info`)
     let emit_warnings = cli.verbosity.log_level_filter() == LevelFilter::Info;
-    let protocols_handler = &mut DiagnosticHandler::new(
+    let mut protocols_handler = DiagnosticHandler::new(
         color_choice,
         cli.no_error_locations,
         emit_warnings,
         cli.display_hex,
     );
 
-    let (st, protos, sim) = setup_test_environment(
-        cli.verilog.iter().map(|v| v.as_str()).collect(),
+    let (st, protos) = frontend(
         &cli.protocol,
-        cli.module,
-        protocols_handler,
+        &mut protocols_handler,
         cli.skip_static_step_fork_checks,
-        cli.fst,
     )?;
+    let design = find_a_single_design(&st, &protos, &cli.protocol)?;
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let transactions_handler = &mut DiagnosticHandler::new(
@@ -141,14 +139,20 @@ fn main() -> anyhow::Result<()> {
         }
 
         // Run each trace in isolation with a fresh interpreter and scheduler.
-        let waveform_file = cli.fst.clone().map(|n| with_trace_suffix(n, trace_index));
+        let waveform_file = cli.fst.as_ref().map(|n| with_trace_suffix(n, trace_index));
+        let sim = PatronusSim::new(
+            &cli.verilog,
+            cli.module.as_deref(),
+            &design,
+            waveform_file.as_deref(),
+        );
 
         let mut scheduler = Scheduler::new(
             &st,
             &protos,
             todos,
             sim,
-            protocols_handler,
+            &mut protocols_handler,
             cli.max_steps.unwrap_or(u32::MAX),
         );
         let results = scheduler.execute_todos();

@@ -2,12 +2,12 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
 use protocols::frontend::ast::Protocol;
+use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::graph_interpreter;
 use protocols::ir::lowering::lower_ast_to_ir;
-use protocols::setup::create_sim_context;
-use protocols::{Value, frontend, transaction_frontend};
+use protocols::{PatronusSim, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 
 #[derive(Parser, Debug)]
@@ -74,10 +74,8 @@ fn main() {
     let cli = Cli::parse();
     let (st, protos) = load_protocols(&cli);
     let traces = load_traces(&cli, &st, &protos);
-    let (ctx, sys) = create_sim_context(
-        cli.verilog.iter().map(|v| v.as_str()).collect(),
-        cli.module.clone(),
-    );
+    let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
+    let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None);
 
     let graphs: FxHashMap<String, _> = protos
         .iter()
@@ -93,17 +91,7 @@ fn main() {
                     .get(&name)
                     .unwrap_or_else(|| panic!("unknown protocol {name}"));
                 let args = build_arg_map(&graph.args, symbols, values);
-                graph_interpreter::interpret(
-                    graph,
-                    symbols,
-                    args,
-                    &ctx,
-                    &sys,
-                    // note that this creates a new interpreter for every transaction (even within one trace)
-                    // this might not be correct, but we will figure this out once we start working with supporting forks/multi-trace/multi-protocol
-                    // transactions
-                    patronus::sim::Interpreter::new(&ctx, &sys),
-                );
+                graph_interpreter::interpret(graph, symbols, args, &mut sim);
             }
             println!("trace {} executed successfully", trace_index);
         }

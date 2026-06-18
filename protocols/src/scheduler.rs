@@ -432,11 +432,8 @@ impl<'a> Scheduler<'a> {
     fn check_for_conflicts(&self) -> Vec<(usize, ExecutionError)> {
         let mut errors = Vec::new();
         let per_thread_input_vals = self.evaluator.per_thread_input_vals();
-        // Safe to use any transaction's symbol table since all transactions must share
-        // the same DUT struct symbols.
-        let st = self.irs[0].1;
 
-        for (symbol_id, per_thread_vals) in per_thread_input_vals {
+        for (port_id, per_thread_vals) in per_thread_input_vals {
             // Collect all concrete values with their thread indices and stmt_ids
             let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
                 .iter()
@@ -454,16 +451,15 @@ impl<'a> Scheduler<'a> {
                 let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
                 for (second_idx, second_val, second_stmt_id) in &concrete_vals[1..] {
                     if !first_val.is_equal(*second_val) {
-                        let symbol_name = st[*symbol_id].name().to_string();
                         let first_transaction_name = self.todos[*first_idx].0.clone();
                         let second_transaction_name = self.todos[*second_idx].0.clone();
+                        let port_name = self.sim.port_name(*port_id);
 
                         // Error for first thread
                         errors.push((
                             *first_idx,
                             ExecutionError::conflicting_assignment(
-                                *symbol_id,
-                                symbol_name.clone(),
+                                port_name.into(),
                                 (*second_val).clone(),
                                 (*first_val).clone(),
                                 *first_idx,
@@ -476,8 +472,7 @@ impl<'a> Scheduler<'a> {
                         errors.push((
                             *second_idx,
                             ExecutionError::conflicting_assignment(
-                                *symbol_id,
-                                symbol_name,
+                                port_name.into(),
                                 (*first_val).clone(),
                                 (*second_val).clone(),
                                 *second_idx,

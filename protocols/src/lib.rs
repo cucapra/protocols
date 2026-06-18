@@ -12,11 +12,11 @@ pub mod frontend;
 pub mod interpreter;
 pub mod ir;
 pub mod scheduler;
-pub mod setup;
 pub mod transactions;
 mod value;
 mod yosys;
 
+pub use dut::{PatronusSim, PortId};
 pub use frontend::frontend;
 pub use transactions::transaction_frontend;
 pub use value::Value;
