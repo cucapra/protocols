@@ -2,9 +2,11 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use crate::frontend::serialize::serialize_expr;
+use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{DONTCARE_PREFIX, NodeId, Op, ProtoGraph};
+use baa::BitVecValue;
+use patronus::expr::{Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
@@ -34,7 +36,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         for action in &node.actions {
             label_parts.push(format!(
                 "[{}] {}",
-                serialize_expr(protocol, symbols, &action.guard),
+                format_expr(protocol, action.guard),
                 format_op(protocol, symbols, action.op)
             ));
         }
@@ -49,12 +51,9 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         // emit graph edges
         for transition in &node.transitions {
             let edge_label = if transition.consumes_step {
-                format!(
-                    "{} / step",
-                    serialize_expr(protocol, symbols, &transition.guard)
-                )
+                format!("{} / step", format_expr(protocol, transition.guard))
             } else {
-                serialize_expr(protocol, symbols, &transition.guard)
+                format_expr(protocol, transition.guard)
             };
             out.push_str(&format!(
                 "  {} -> {} [label=\"{}\"];\n",
@@ -82,15 +81,85 @@ fn format_op(
         Op::Assign(symbol_id, expr_id) => format!(
             "{} := {}",
             symbols.full_name_from_symbol_id(symbol_id),
-            serialize_expr(protocol, symbols, expr_id)
+            format_expr(protocol, *expr_id)
         ),
         Op::AssertEq(lhs, rhs) => format!(
             "assert_eq({}, {})",
-            serialize_expr(protocol, symbols, lhs),
-            serialize_expr(protocol, symbols, rhs)
+            format_expr(protocol, *lhs),
+            format_expr(protocol, *rhs)
         ),
         Op::Fork => "fork".to_string(),
+        Op::InternalAssertFalse => "internal_assert_false".to_string(),
         Op::Done => "done".to_string(),
+    }
+}
+
+fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+    match protocol.expr_ctx.get_symbol_name(expr_ref) {
+        Some(name) if name.starts_with(DONTCARE_PREFIX) => "X".to_string(),
+        _ => format_expr_node(protocol, expr_ref),
+    }
+}
+
+fn format_expr_node(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+    match &protocol.expr_ctx[expr_ref] {
+        Expr::BVSymbol { name, .. } => protocol.expr_ctx[*name].to_string(),
+        Expr::BVLiteral(value) => {
+            let value = BitVecValue::from(value.get(&protocol.expr_ctx));
+            serialize_bitvec(&value, false)
+        }
+        Expr::BVSlice { e, hi, lo, .. } => {
+            let inner = format_expr(protocol, *e);
+            if hi == lo {
+                format!("{inner}[{hi}]")
+            } else {
+                format!("{inner}[{hi}:{lo}]")
+            }
+        }
+        Expr::BVNot(e, _) => format!("not({})", format_expr(protocol, *e)),
+        Expr::BVEqual(a, b) => format!(
+            "eq({}, {})",
+            format_expr(protocol, *a),
+            format_expr(protocol, *b)
+        ),
+        Expr::BVConcat(a, b, _) => {
+            format!(
+                "concat({}, {})",
+                format_expr(protocol, *a),
+                format_expr(protocol, *b)
+            )
+        }
+        Expr::BVAnd(a, b, _) => {
+            format!(
+                "and({}, {})",
+                format_expr(protocol, *a),
+                format_expr(protocol, *b)
+            )
+        }
+        Expr::BVOr(a, b, _) => {
+            format!(
+                "or({}, {})",
+                format_expr(protocol, *a),
+                format_expr(protocol, *b)
+            )
+        }
+        Expr::BVAdd(a, b, _) => format!(
+            "add({}, {})",
+            format_expr(protocol, *a),
+            format_expr(protocol, *b)
+        ),
+        Expr::BVIte { cond, tru, fals } => {
+            format!(
+                "ite({}, {}, {})",
+                format_expr(protocol, *cond),
+                format_expr(protocol, *tru),
+                format_expr(protocol, *fals)
+            )
+        }
+        _ => panic!(
+            "unsupported expression in graphviz formatter: {:?}",
+            protocol.expr_ctx[expr_ref]
+        ),
     }
 }
 
@@ -105,7 +174,7 @@ mod tests {
 
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::parser::parse_file;
-    use crate::ir::edge_contract::contract_edges;
+    use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use insta::Settings;
 
@@ -113,19 +182,25 @@ mod tests {
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, protos) = parse_file(filename, &mut handler).unwrap();
+        let (symbols, protocols) = parse_file(filename, &mut handler).unwrap();
         let mut content = String::new();
-        for ast in protos {
-            let ir: ProtoGraph = lower_ast_to_ir(ast);
+        for ast in protocols {
+            let ir: ProtoGraph = lower_ast_to_ir(ast, &symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, &symbols);
             content += "\n";
 
             // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir);
+            contract_edges(&mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, &symbols);
+            content += "\n";
+
+            let mut assignment_normalized_ir = contracted_ir.clone();
+            normalize_assignments(&mut assignment_normalized_ir, &symbols);
+            content += "== post-normalize ==\n";
+            content += &to_dot_string(&assignment_normalized_ir, &symbols);
             content += "\n";
         }
 

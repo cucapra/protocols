@@ -1,13 +1,14 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
+use protocols::PatronusSim;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::graph_interpreter;
 use protocols::ir::lowering::lower_ast_to_ir;
-use protocols::{PatronusSim, Value, frontend, transaction_frontend};
+use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 
 #[derive(Parser, Debug)]
@@ -79,7 +80,12 @@ fn main() {
 
     let graphs: FxHashMap<String, _> = protos
         .iter()
-        .map(|proto| (proto.name.clone(), (lower_ast_to_ir(proto.clone()), &st)))
+        .map(|proto| {
+            (
+                proto.name.clone(),
+                (lower_ast_to_ir(proto.clone(), &st), &st),
+            )
+        })
         .collect();
 
     let old_hook = std::panic::take_hook();

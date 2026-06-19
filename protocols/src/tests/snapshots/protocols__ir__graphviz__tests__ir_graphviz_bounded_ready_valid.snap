@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
+assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -10,20 +11,20 @@ digraph "send_data" {
   entry_marker -> node0;
   node0 [label=""];
   node0 -> node13 [label="1"];
-  node13 [label="[1] D.data := data"];
+  node13 [label="[1] D.data := ite(1, data, D.data)"];
   node13 -> node12 [label="1"];
-  node12 [label="[1] D.valid := 1"];
+  node12 [label="[1] D.valid := ite(1, 1, D.valid)"];
   node12 -> node11 [label="1"];
   node11 [label=""];
-  node11 -> node9 [label="!(D.ready == 1)"];
-  node11 -> node10 [label="!(!(D.ready == 1))"];
+  node11 -> node9 [label="not(eq(D.ready, 1))"];
+  node11 -> node10 [label="not(not(eq(D.ready, 1)))"];
   node9 [label=""];
   node9 -> node8 [label="1 / step"];
   node10 [label=""];
   node10 -> node3 [label="1"];
   node8 [label=""];
-  node8 -> node6 [label="!(D.ready == 1)"];
-  node8 -> node7 [label="!(!(D.ready == 1))"];
+  node8 -> node6 [label="not(eq(D.ready, 1))"];
+  node8 -> node7 [label="not(not(eq(D.ready, 1)))"];
   node3 [label=""];
   node3 -> node2 [label="1"];
   node6 [label=""];
@@ -47,13 +48,30 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.data := data\n[1] D.valid := 1"];
-  node0 -> node1 [label="!(!(D.ready == 1)) / step"];
-  node0 -> node8 [label="!(D.ready == 1) / step"];
+  node0 [label="[1] D.data := ite(1, data, D.data)\n[1] D.valid := ite(1, 1, D.valid)"];
+  node0 -> node1 [label="D.ready / step"];
+  node0 -> node8 [label="not(D.ready) / step"];
   node1 [label="[1] done"];
   node8 [label=""];
-  node8 -> node1 [label="!(!(D.ready == 1)) / step"];
-  node8 -> node5 [label="!(D.ready == 1) / step"];
+  node8 -> node5 [label="not(D.ready) / step"];
+  node8 -> node1 [label="D.ready / step"];
   node5 [label="[1] assert_eq(D.ready, 1)"];
+  node5 -> node1 [label="1 / step"];
+}
+
+== post-normalize ==
+digraph "send_data" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] D.data := ite(1, data, D.data)\n[1] D.valid := ite(1, 1, D.valid)"];
+  node0 -> node1 [label="D.ready / step"];
+  node0 -> node8 [label="not(D.ready) / step"];
+  node1 [label="[1] done\n[1] D.valid := D.valid\n[1] D.data := D.data"];
+  node8 [label="[1] D.valid := D.valid\n[1] D.data := D.data"];
+  node8 -> node5 [label="not(D.ready) / step"];
+  node8 -> node1 [label="D.ready / step"];
+  node5 [label="[1] assert_eq(D.ready, 1)\n[1] D.valid := D.valid\n[1] D.data := D.data"];
   node5 -> node1 [label="1 / step"];
 }

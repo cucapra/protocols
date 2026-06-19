@@ -2,11 +2,14 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use crate::frontend::ast::*;
+use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
-use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use patronus::expr::{Context as ExprContext, ExprRef, Simplifier, SparseExprMap};
+use rustc_hash::FxHashMap;
 use std::ops::{Deref, DerefMut, Index};
+
+pub const DONTCARE_PREFIX: &str = "__dontcare__";
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
@@ -21,17 +24,17 @@ entity_impl!(OpId, "op");
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// an Action is a guard and an operation to perform when the guard is true
 pub struct Action {
-    pub guard: ExprId,
+    pub guard: ExprRef,
     pub op: OpId,
 }
 
 impl Action {
-    pub fn new(guard: ExprId, op: OpId) -> Self {
+    pub fn new(guard: ExprRef, op: OpId) -> Self {
         Self { guard, op }
     }
 
     /// use the new guard instead of the old one
-    pub fn with_guard(&self, guard: ExprId) -> Self {
+    pub fn with_guard(&self, guard: ExprRef) -> Self {
         Self { guard, op: self.op }
     }
 }
@@ -39,13 +42,13 @@ impl Action {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A Transition is a guard, a target node, and flag if this transition consumes step
 pub struct Transition {
-    pub guard: ExprId,
+    pub guard: ExprRef,
     pub target: NodeId,
     pub consumes_step: bool,
 }
 
 impl Transition {
-    pub fn new(guard: ExprId, target: NodeId, consumes_step: bool) -> Self {
+    pub fn new(guard: ExprRef, target: NodeId, consumes_step: bool) -> Self {
         Self {
             guard,
             target,
@@ -54,7 +57,7 @@ impl Transition {
     }
 
     /// use the new guard instead of the old one
-    pub fn with_guard(&self, guard: ExprId) -> Self {
+    pub fn with_guard(&self, guard: ExprRef) -> Self {
         Self {
             guard,
             target: self.target,
@@ -81,32 +84,104 @@ impl Node {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
-    Assign(SymbolId, ExprId),
-    AssertEq(ExprId, ExprId),
+    Assign(SymbolId, ExprRef),
+    AssertEq(ExprRef, ExprRef),
     Fork,
+    InternalAssertFalse,
     Done,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtoGraph {
-    pub ctx: ProtocolContext,
+    pub proto_ctx: ProtocolContext,
 
     /// The entrypoint of the `Protocol`
     pub entry: NodeId,
 
-    /// Other distinguished expressions convenient in lowering
-    true_id: ExprId,
+    /// Patronus expression context
+    pub expr_ctx: ExprContext,
 
-    /// Maps `NodeId`s to their corresponding `Node`s
+    /// Patronus simplifier
+    pub simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
+
+    /// Cached Patronus symbol expressions, keyed by frontend `SymbolId`.
+    symbol_expr: FxHashMap<SymbolId, ExprRef>,
+
     nodes: PrimaryMap<NodeId, Node>,
 
-    /// Maps `OpId`s to their corresponding `Op`s
     ops: PrimaryMap<OpId, Op>,
 
+    #[allow(dead_code)]
     op_loc: SecondaryMap<OpId, (usize, usize, usize)>,
 }
 
+impl Clone for ProtoGraph {
+    fn clone(&self) -> Self {
+        Self {
+            proto_ctx: self.proto_ctx.clone(),
+            entry: self.entry,
+            expr_ctx: self.expr_ctx.clone(),
+            // we can just make a fresh simplifier
+            simplifier: Simplifier::new(SparseExprMap::default()),
+            symbol_expr: self.symbol_expr.clone(),
+            nodes: self.nodes.clone(),
+            ops: self.ops.clone(),
+            op_loc: self.op_loc.clone(),
+        }
+    }
+}
+
 impl ProtoGraph {
+    pub fn new(proto_ctx: ProtocolContext) -> Self {
+        let expr_ctx = ExprContext::default();
+        let mut nodes = PrimaryMap::new();
+        let entry = Node::empty();
+        let entry_id: NodeId = nodes.push(entry);
+
+        let ops = PrimaryMap::new();
+        let op_loc: SecondaryMap<OpId, (usize, usize, usize)> = SecondaryMap::new();
+
+        Self {
+            proto_ctx,
+            entry: entry_id,
+            expr_ctx,
+            simplifier: Simplifier::new(SparseExprMap::default()),
+            symbol_expr: FxHashMap::default(),
+            nodes,
+            ops,
+            op_loc,
+        }
+    }
+
+    pub fn true_id(&self) -> ExprRef {
+        self.expr_ctx.get_true()
+    }
+
+    pub fn false_id(&self) -> ExprRef {
+        self.expr_ctx.get_false()
+    }
+
+    pub fn symbol_expr(&self, symbol_id: SymbolId) -> Option<ExprRef> {
+        self.symbol_expr.get(&symbol_id).copied()
+    }
+
+    pub fn cache_symbol_expr(&mut self, symbol_id: SymbolId, expr: ExprRef) {
+        self.symbol_expr.insert(symbol_id, expr);
+    }
+
+    /// convenience methods for construction simplified
+    /// (p AND q) or (p OR q) expressions
+    pub fn and_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = self.expr_ctx.and(lhs, rhs);
+        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    }
+
+    pub fn or_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = self.expr_ctx.or(lhs, rhs);
+        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    }
+
+    // TODO: add a verify simplifications helper
+
     /// add a new node to the IR
     pub fn n(&mut self, node: Node) -> NodeId {
         self.nodes.push(node)
@@ -120,11 +195,6 @@ impl ProtoGraph {
     /// add a new op to the IR
     pub fn o(&mut self, op: Op) -> OpId {
         self.ops.push(op)
-    }
-
-    /// get the convenience expressions
-    pub fn true_id(&self) -> ExprId {
-        self.true_id
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
@@ -144,70 +214,19 @@ impl ProtoGraph {
     pub fn push_transition(&mut self, node_id: NodeId, t: Transition) {
         self.nodes[node_id].transitions.push(t);
     }
-
-    // reuse stuff from the AST
-    pub fn new(mut ctx: ProtocolContext) -> Self {
-        // set the convenience values for lowering
-        // TODO: maybe some expressions are so common they need a canonical map from Expr -> ExprId
-        let true_id = ctx.e(Expr::Const(BitVecValue::from_u64(1, 1)));
-
-        // set up the empty entry node that always transitions to the next key
-        let mut nodes = PrimaryMap::new();
-        let entry = Node::empty();
-        let entry_id: NodeId = nodes.push(entry);
-
-        // set up empty ops map
-        let ops = PrimaryMap::new();
-
-        // set up op_loc with optionals (reuse existing expr_loc)
-        let op_loc: SecondaryMap<OpId, (usize, usize, usize)> = SecondaryMap::new();
-
-        Self {
-            ctx,
-            entry: entry_id,
-            true_id,
-            nodes: nodes.clone(),
-            ops,
-            op_loc,
-        }
-    }
 }
 
 impl Deref for ProtoGraph {
     type Target = ProtocolContext;
 
     fn deref(&self) -> &Self::Target {
-        &self.ctx
+        &self.proto_ctx
     }
 }
 
 impl DerefMut for ProtoGraph {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.ctx
-    }
-}
-
-impl Index<ExprId> for ProtoGraph {
-    type Output = Expr;
-
-    fn index(&self, index: ExprId) -> &Self::Output {
-        &self.ctx[index]
-    }
-}
-
-impl Index<usize> for Node {
-    type Output = Transition;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.transitions[index]
-    }
-}
-
-impl Index<&ExprId> for ProtoGraph {
-    type Output = Expr;
-
-    fn index(&self, index: &ExprId) -> &Self::Output {
-        &self.ctx[index]
+        &mut self.proto_ctx
     }
 }
 
@@ -261,18 +280,18 @@ mod tests {
 
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
-        let (_, protos) = parse_file(path, &mut handler).unwrap();
+        let (symbol_table, protocols) = parse_file(path, &mut handler).unwrap();
         let ast = match protocol_name {
-            Some(protocol_name) => protos
+            Some(protocol_name) => protocols
                 .into_iter()
                 .find(|ast| ast.name == protocol_name)
                 .unwrap(),
             None => {
-                assert_eq!(protos.len(), 1);
-                protos.into_iter().next().unwrap()
+                assert_eq!(protocols.len(), 1);
+                protocols.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(ast)
+        lower_ast_to_ir(ast, &symbol_table)
     }
 
     #[test]
