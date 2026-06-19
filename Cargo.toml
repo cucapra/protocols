@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["bi", "interp", "monitor", "protocols", "cli"]
+members = ["bi", "interp", "monitor", "protocols", "cli", "graph-interp"]
 
 
 [workspace.package]

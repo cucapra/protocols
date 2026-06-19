@@ -4,5 +4,5 @@ output.out = "-"
 
 [envs.graph_interp]
 default = false
-command = "cargo run -q -p protocols-cli --bin graph-interp -- --transactions {filename} {args} 2>&1"
+command = "cargo run -q -p graph-interp -- --transactions {filename} {args} 2>&1"
 output.graphout = "-"
