@@ -29,6 +29,9 @@ obj_dir/
 # Verilog backend
 run_dir/
 
+# Archived catalog-generation logic (kept locally, not checked in)
+scripts/_catalog_gen.py
+
 # Include images of  waveforms in Brave New World bug readme
 !tests/fpga-debugging/axis-async-fifo-c4/*.png
 

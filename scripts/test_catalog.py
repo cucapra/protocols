@@ -1,5 +1,5 @@
-# Checked-in test catalog.
-# Regenerate normalized formatting with scripts/testdb.py generate-catalog.
+# Checked-in test catalog. Hand-maintained source of truth.
+# Consumed by scripts/generate_runt_configs.py and scripts/benchmark_monitor.py.
 
 ANTMICRO_EXTRA_ARGS = [
     "--sample-posedge",

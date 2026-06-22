@@ -37,7 +37,6 @@ def main():
     rows = []
 
     for case in tqdm(cases, desc="Benchmarking", unit="case"):
-        case_id = case["id"]
         # By default, Hyperfine executes the monitor for at least 10
         # times on each test file
         cmd = [
@@ -55,8 +54,8 @@ def main():
             "none",
             # Ignore non-zero exit codes (some tests are expected to fail)
             "--ignore-failure",
-            # Run the monitor case through the generated test catalog.
-            f"python3 scripts/testdb.py exec monitor {case_id}",
+            # Run the monitor directly on the catalog case.
+            " ".join(monitor_command(case)),
         ]
 
         # Suppress monitor output to avoid measurement overhead
@@ -141,6 +140,16 @@ def main():
         writer.writerows(rows)
 
     print(f"\nWrote results to {OUTPUT_CSV}")
+
+
+def monitor_command(case):
+    cmd = ["cargo", "monitor", "--protocol", case["path"]]
+    if case["wave"]:
+        cmd += ["--wave", case["wave"]]
+    if case["instances"]:
+        cmd += ["--instances", *case["instances"]]
+    cmd += case["extra_args"]
+    return cmd
 
 
 def profile_path(case):
