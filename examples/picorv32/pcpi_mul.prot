@@ -25,7 +25,7 @@ prot pcpi_mul<p: picorv32_pcpi_mul>(
 
   p.pcpi_rs1 := rs1_data;
   p.pcpi_rs2 := rs2_data;
-  
+
   assert_eq(p.pcpi_wr, 1'b0);
   assert_eq(p.pcpi_ready, 1'b0);
 

@@ -64,9 +64,9 @@ struct Cli {
 
 /// Examples (enables all tracing logs):
 /// ```
-/// $ cargo run --package protocols-interp -- --verilog protocols/tests/adders/adder_d1/add_d1.v -p protocols/tests/adders/adder_d1/add_d1.prot -t protocols/tests/adders/adder_d1/both_threads_pass.tx
-/// $ cargo run --package protocols-interp -- --verilog protocols/tests/counters/counter.v -p protocols/tests/counters/counter.prot -t protocols/tests/counters/counter.tx -v
-/// $ cargo run --package protocols-interp -- --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v -p protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
+/// $ cargo run --package protocols-interp -- --verilog tests/adders/adder_d1/add_d1.v -p tests/adders/adder_d1/add_d1.prot -t tests/adders/adder_d1/both_threads_pass.tx
+/// $ cargo run --package protocols-interp -- --verilog tests/counters/counter.v -p tests/counters/counter.prot -t tests/counters/counter.tx -v
+/// $ cargo run --package protocols-interp -- --verilog tests/identities/dual_identity_d1/dual_identity_d1.v -p tests/identities/dual_identity_d1/dual_identity_d1.prot -t tests/identities/dual_identity_d1/dual_identity_d1.tx
 /// ```
 fn with_trace_suffix(path: &str, trace_index: usize) -> String {
     let path = std::path::Path::new(path);

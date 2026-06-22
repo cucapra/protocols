@@ -10,28 +10,34 @@ creates a CSV with the results.
 
 import csv
 import json
+import os
 import re
 import subprocess
-import glob
-import os
+import sys
+from pathlib import Path
+
 from tqdm import tqdm
 
-TEST_ROOT = "monitor/tests"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_catalog  # noqa: E402
+
 OUTPUT_CSV = "benchmark_results/benchmark_results.csv"
 
 
 def main():
-    # Find all .prot files recursively under monitor/tests/
-    search_pattern = os.path.join(TEST_ROOT, "**", "*.prot")
-    prot_files = sorted(glob.glob(search_pattern, recursive=True))
+    cases = sorted(
+        test_catalog.MONITOR_CASES.values(),
+        key=lambda case: (case["path"], case["id"]),
+    )
 
-    if not prot_files:
-        print(f"No .prot files found under {TEST_ROOT}/")
+    if not cases:
+        print("No monitor cases found in scripts/test_catalog.py")
         return
 
     rows = []
 
-    for pf in tqdm(prot_files, desc="Benchmarking", unit="file"):
+    for case in tqdm(cases, desc="Benchmarking", unit="case"):
+        case_id = case["id"]
         # By default, Hyperfine executes the monitor for at least 10
         # times on each test file
         cmd = [
@@ -49,12 +55,11 @@ def main():
             "none",
             # Ignore non-zero exit codes (some tests are expected to fail)
             "--ignore-failure",
-            # Run Turnt with `--print` to run the monitor executable directly
-            # without Turnt's comparison overhead
-            f"turnt --print --env monitor-bench {pf}",
+            # Run the monitor case through the generated test catalog.
+            f"python3 scripts/testdb.py exec monitor {case_id}",
         ]
 
-        # Suppress Turnt's output to avoid measurement overhead
+        # Suppress monitor output to avoid measurement overhead
         subprocess.run(
             cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
@@ -70,7 +75,7 @@ def main():
         max_time = result["max"]
 
         # Read the number of steps from the .prof file
-        prof_file = pf.replace(".prot", ".prof")
+        prof_file = profile_path(case)
         if not os.path.exists(prof_file):
             # Skip tests without .prof files (e.g., tests expected to fail)
             continue
@@ -100,13 +105,13 @@ def main():
         # Compute throughput (steps per second)
         steps_per_sec = 1.0 / mean_time_per_step
 
-        base = os.path.basename(pf)
+        base = os.path.basename(case["path"])
         if base.endswith(".prot"):
             base = base[:-5]  # strip .prot
 
         rows.append(
             [
-                pf,
+                case["path"],
                 base,
                 num_steps,
                 mean_time_per_step,
@@ -136,6 +141,17 @@ def main():
         writer.writerows(rows)
 
     print(f"\nWrote results to {OUTPUT_CSV}")
+
+
+def profile_path(case):
+    candidates = [Path(case["path"]).with_suffix(".prof")]
+    wave = case.get("wave")
+    if isinstance(wave, str):
+        candidates.append(Path(wave).with_suffix(".prof"))
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
 
 
 if __name__ == "__main__":

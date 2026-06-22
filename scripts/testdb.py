@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Derived test catalog for Protocols snapshot tests.
 
-This is a migration layer: it reads the current Turnt-style metadata from
+This is a migration layer: it reads the current test metadata from
 test files and snapshots, then exposes protocol- and case-oriented rows that
-future generated Turnt configs can use as their source of truth.
+generated Runt configs can use as their source of truth.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pprint
 import re
 import shlex
 import subprocess
@@ -21,8 +22,9 @@ from typing import Iterable, Optional
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TEST_ROOTS = (Path("protocols/tests"), Path("examples"))
-MONITOR_ROOT = Path("monitor/tests")
+TEST_ROOT = Path("tests")
+TEST_ROOTS = (TEST_ROOT, Path("examples"))
+MONITOR_ROOT = TEST_ROOT
 RUNT_VERSION = "0.4.1"
 
 
@@ -137,23 +139,19 @@ def path_id(path: Path) -> str:
 def path_family(path: Path) -> str:
     rel = Path(normalize_rel_path(path))
     parts = rel.parts
-    if len(parts) >= 3 and parts[0] == "protocols" and parts[1] == "tests":
-        return parts[2]
+    if len(parts) >= 2 and parts[0] == "tests":
+        return parts[1]
     if len(parts) >= 2 and parts[0] == "examples":
         return parts[1]
-    if len(parts) >= 3 and parts[0] == "monitor" and parts[1] == "tests":
-        return parts[2]
     return parts[0] if parts else "unknown"
 
 
 def path_root(path: Path) -> str:
     rel = Path(normalize_rel_path(path))
-    if len(rel.parts) >= 2 and rel.parts[:2] == ("protocols", "tests"):
-        return "protocols/tests"
+    if rel.parts and rel.parts[0] == "tests":
+        return "tests"
     if rel.parts and rel.parts[0] == "examples":
         return "examples"
-    if len(rel.parts) >= 2 and rel.parts[:2] == ("monitor", "tests"):
-        return "monitor/tests"
     return "."
 
 
@@ -266,6 +264,15 @@ def turnt_base_for_path(path: Path) -> Path:
     return path.parent
 
 
+def args_base_for_path(path: Path) -> Path:
+    rel = Path(normalize_rel_path(path))
+    if rel.parts and rel.parts[0] == "tests":
+        return REPO_ROOT / "tests"
+    if rel.parts and rel.parts[0] == "examples":
+        return REPO_ROOT / "examples"
+    return turnt_base_for_path(path)
+
+
 def infer_protocol_features(path: Path) -> tuple[str, ...]:
     try:
         text = path.read_text(errors="replace")
@@ -367,7 +374,7 @@ def infer_case_properties(path: Path, expected: str, trace_count: int) -> tuple[
 
 
 def discover_protocols(db: TestDatabase) -> None:
-    for root in (*TEST_ROOTS, MONITOR_ROOT):
+    for root in dict.fromkeys((*TEST_ROOTS, MONITOR_ROOT)):
         for path in sorted((REPO_ROOT / root).rglob("*.prot")):
             protocol = Protocol(
                 id=path_id(path),
@@ -385,7 +392,7 @@ def discover_tx_cases(db: TestDatabase) -> None:
         for path in sorted((REPO_ROOT / root).rglob("*.tx")):
             text = path.read_text(errors="replace")
             args = parse_cli_args(parse_comment_value(text, "ARGS"))
-            base = turnt_base_for_path(path)
+            base = args_base_for_path(path)
             protocol_path = resolve_arg_path(base, as_optional_str(args["protocol"]))
             protocol = db.protocol_for_path(protocol_path)
             expected_return = parse_expected_return(text)
@@ -416,7 +423,10 @@ def discover_monitor_cases(db: TestDatabase) -> None:
     for path in sorted((REPO_ROOT / MONITOR_ROOT).rglob("*.prot")):
         text = path.read_text(errors="replace")
         args = parse_cli_args(parse_comment_value(text, "ARGS"))
-        base = turnt_base_for_path(path)
+        base = args_base_for_path(path)
+        instances = tuple(cast_list(args["instances"]))
+        if not instances:
+            continue
         expected_return = parse_expected_return(text)
         expected = "pass" if expected_return == 0 else "fail"
         message = first_error_message(path.with_suffix(".out"))
@@ -426,7 +436,7 @@ def discover_monitor_cases(db: TestDatabase) -> None:
             path=normalize_rel_path(path),
             protocol_id=protocol_id,
             wave=resolve_arg_path(base, as_optional_str(args["wave"])),
-            instances=tuple(cast_list(args["instances"])),
+            instances=instances,
             max_steps=as_optional_int(args["max_steps"]),
             timeout_secs=parse_timeout_secs(text),
             extra_args=tuple(cast_list(args["flags"])),
@@ -471,6 +481,56 @@ def load_catalog_dict() -> dict[str, dict[str, dict[str, object]]]:
         return catalog_payload(db)
 
 
+def load_catalog_database() -> TestDatabase:
+    catalog = load_catalog_dict()
+    db = TestDatabase()
+    for key, row in sorted(catalog["protocols"].items()):
+        protocol = Protocol(
+            id=as_str(row["id"]),
+            path=as_str(row["path"]),
+            root=as_str(row["root"]),
+            family=as_str(row["family"]),
+            features=tuple(as_str_list(row["features"])),
+        )
+        db.protocols[key] = protocol
+        db.protocols_by_path[protocol.path] = key
+    for key, row in sorted(catalog["tx_cases"].items()):
+        db.tx_cases[key] = TxCase(
+            id=as_str(row["id"]),
+            path=as_str(row["path"]),
+            protocol_id=optional_str(row["protocol_id"]),
+            protocol_path=optional_str(row["protocol_path"]),
+            verilog=tuple(as_str_list(row["verilog"])),
+            module=optional_str(row["module"]),
+            max_steps=optional_int(row["max_steps"]),
+            extra_args=tuple(as_str_list(row["extra_args"])),
+            expected_return=required_int(row["expected_return"]),
+            expected=as_str(row["expected"]),
+            failure_class=optional_str(row["failure_class"]),
+            failure_message=optional_str(row["failure_message"]),
+            trace_count=required_int(row["trace_count"]),
+            transactions=tuple(as_str_list(row["transactions"])),
+            properties=tuple(as_str_list(row["properties"])),
+        )
+    for key, row in sorted(catalog["monitor_cases"].items()):
+        db.monitor_cases[key] = MonitorCase(
+            id=as_str(row["id"]),
+            path=as_str(row["path"]),
+            protocol_id=as_str(row["protocol_id"]),
+            wave=optional_str(row["wave"]),
+            instances=tuple(as_str_list(row["instances"])),
+            max_steps=optional_int(row["max_steps"]),
+            timeout_secs=optional_int(row["timeout_secs"]),
+            extra_args=tuple(as_str_list(row["extra_args"])),
+            expected_return=required_int(row["expected_return"]),
+            expected=as_str(row["expected"]),
+            failure_class=optional_str(row["failure_class"]),
+            failure_message=optional_str(row["failure_message"]),
+            properties=tuple(as_str_list(row["properties"])),
+        )
+    return db
+
+
 def json_default(value: object) -> object:
     if isinstance(value, TestDatabase):
         return {
@@ -497,21 +557,136 @@ def catalog_payload(db: TestDatabase) -> dict[str, object]:
     }
 
 
+def cast_catalog_table(value: object) -> dict[str, dict[str, object]]:
+    assert isinstance(value, dict)
+    return value
+
+
+def split_antmicro_monitor_cases(
+    cases: dict[str, dict[str, object]],
+) -> tuple[dict[str, dict[str, object]], list[str]]:
+    explicit = {}
+    antmicro_stems = []
+    common_extra_args = [
+        "--sample-posedge",
+        "tb.dut.clk",
+        "--show-waveform-time",
+        "--time-unit",
+        "ns",
+    ]
+    for key, case in sorted(cases.items()):
+        wave = optional_str(case["wave"])
+        match = re.fullmatch(r"tests/antmicro/(.+)\.fst", wave or "")
+        if (
+            match
+            and case["expected"] == "pass"
+            and case["expected_return"] == 0
+            and as_str_list(case["extra_args"]) == common_extra_args
+            and case["failure_class"] is None
+            and case["failure_message"] is None
+            and as_str_list(case["instances"]) == ["tb.dut:WBSubordinate"]
+            and case["max_steps"] is None
+            and case["timeout_secs"] is None
+            and as_str_list(case["properties"]) == ["pass"]
+            and case["id"] == key
+            and as_str(case["path"])
+            in {
+                f"tests/antmicro/{match.group(1)}.prot",
+                "tests/antmicro/wishbone_subordinate.prot",
+            }
+            and as_str(case["protocol_id"])
+            in {key, "tests.antmicro.wishbone_subordinate"}
+        ):
+            antmicro_stems.append(match.group(1))
+        else:
+            explicit[key] = case
+    return explicit, antmicro_stems
+
+
+def antmicro_stems_expr(stems: list[str]) -> str:
+    expected = (
+        [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
+        + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
+        + [
+            f"sram_classic/test_sram_classic_{width}_{offset}"
+            for width in (16, 1, 2, 4, 8)
+            for offset in (0, 12, 4, 8)
+        ]
+        + [
+            f"sram_incrementing/test_sram_incrementing_{width}_{offset}_{index}"
+            for width in (16, 1, 2, 4, 8)
+            for offset in (0, 12, 4, 8)
+            for index in range(4)
+        ]
+    )
+    if stems != expected:
+        return pprint.pformat(stems, width=88)
+    return (
+        "(\n"
+        '    [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]\n'
+        '    + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]\n'
+        "    + [\n"
+        '        f"sram_classic/test_sram_classic_{width}_{offset}"\n'
+        "        for width in (16, 1, 2, 4, 8)\n"
+        "        for offset in (0, 12, 4, 8)\n"
+        "    ]\n"
+        "    + [\n"
+        '        f"sram_incrementing/test_sram_incrementing_{width}_{offset}_{index}"\n'
+        "        for width in (16, 1, 2, 4, 8)\n"
+        "        for offset in (0, 12, 4, 8)\n"
+        "        for index in range(4)\n"
+        "    ]\n"
+        ")"
+    )
+
+
 def write_python_catalog(db: TestDatabase, output_path: Path) -> None:
     payload = catalog_payload(db)
-    json_payload = json.dumps(payload, indent=2, sort_keys=True)
+    monitor_cases, antmicro_stems = split_antmicro_monitor_cases(
+        cast_catalog_table(payload["monitor_cases"])
+    )
     text = (
-        "# Generated by scripts/testdb.py generate-catalog.\n"
-        "# Do not edit by hand while the catalog is still derived from tests.\n\n"
-        "import json\n\n"
-        "CATALOG = json.loads(\n"
-        "    r'''\n"
-        + json_payload
-        + "\n'''\n"
-        ")\n\n"
-        'PROTOCOLS = CATALOG["protocols"]\n'
-        'TX_CASES = CATALOG["tx_cases"]\n'
-        'MONITOR_CASES = CATALOG["monitor_cases"]\n'
+        "# Checked-in test catalog.\n"
+        "# Regenerate normalized formatting with scripts/testdb.py generate-catalog.\n\n"
+        "ANTMICRO_EXTRA_ARGS = [\n"
+        '    "--sample-posedge",\n'
+        '    "tb.dut.clk",\n'
+        '    "--show-waveform-time",\n'
+        '    "--time-unit",\n'
+        '    "ns",\n'
+        "]\n\n"
+        'ANTMICRO_PROTOCOL = "tests/antmicro/wishbone_subordinate.prot"\n'
+        'ANTMICRO_PROTOCOL_ID = "tests.antmicro.wishbone_subordinate"\n\n'
+        f"ANTMICRO_TRACE_STEMS = {antmicro_stems_expr(antmicro_stems)}\n\n"
+        "def _antmicro_monitor_case(stem):\n"
+        '    case_id = f"tests.antmicro.{stem.replace(\'/\', \'.\')}"\n'
+        "    return {\n"
+        '        "expected": "pass",\n'
+        '        "expected_return": 0,\n'
+        '        "extra_args": ANTMICRO_EXTRA_ARGS,\n'
+        '        "failure_class": None,\n'
+        '        "failure_message": None,\n'
+        '        "id": case_id,\n'
+        '        "instances": ["tb.dut:WBSubordinate"],\n'
+        '        "max_steps": None,\n'
+        '        "path": ANTMICRO_PROTOCOL,\n'
+        '        "properties": ["pass"],\n'
+        '        "protocol_id": ANTMICRO_PROTOCOL_ID,\n'
+        '        "timeout_secs": None,\n'
+        '        "wave": f"tests/antmicro/{stem}.fst",\n'
+        "    }\n\n"
+        f"PROTOCOLS = {pprint.pformat(payload['protocols'], width=88)}\n\n"
+        f"TX_CASES = {pprint.pformat(payload['tx_cases'], width=88)}\n\n"
+        f"MONITOR_CASES = {pprint.pformat(monitor_cases, width=88)}\n\n"
+        "for _stem in ANTMICRO_TRACE_STEMS:\n"
+        "    _case = _antmicro_monitor_case(_stem)\n"
+        '    MONITOR_CASES[_case["id"]] = _case\n'
+        "\n"
+        "CATALOG = {\n"
+        '    "protocols": PROTOCOLS,\n'
+        '    "tx_cases": TX_CASES,\n'
+        '    "monitor_cases": MONITOR_CASES,\n'
+        "}\n"
     )
     output_path.write_text(text)
 
@@ -576,7 +751,7 @@ def tx_profile(case: dict[str, object]) -> str:
 
 
 def monitor_profile(case: dict[str, object]) -> str:
-    test_stem = Path(as_str(case["path"])).stem
+    test_stem = case_stem(case)
     parts = []
     wave = optional_str(case["wave"])
     if wave and Path(wave).stem != test_stem:
@@ -592,13 +767,27 @@ def monitor_profile(case: dict[str, object]) -> str:
     return ".".join(slug(part) for part in parts) or "default"
 
 
-def expect_dir_for_case(case: dict[str, object], config_dir: Path) -> str:
-    test_dir = Path(as_str(case["path"])).parent / "expects"
+def case_stem(case: dict[str, object]) -> str:
+    wave = optional_str(case.get("wave"))
+    if wave and as_str(case["path"]).startswith("tests/antmicro/"):
+        return Path(wave).stem
+    stem = Path(as_str(case["path"])).stem
+    if stem.endswith(".monitor"):
+        return stem[: -len(".monitor")]
+    return stem
+
+
+def expect_dir_for_case(case: dict[str, object], runner: str, config_dir: Path) -> str:
+    if runner == "monitor":
+        wave = optional_str(case.get("wave"))
+        test_dir = Path(wave).parent / "expects" if wave else Path(as_str(case["path"])).parent / "expects"
+    else:
+        test_dir = Path(as_str(case["path"])).parent / "expects"
     return runt_rel_path(test_dir, config_dir)
 
 
 def expect_name_for_case(case: dict[str, object], runner: str) -> str:
-    stem = Path(as_str(case["path"])).stem
+    stem = case_stem(case)
     profile = monitor_profile(case) if runner == "monitor" else tx_profile(case)
     return ".".join([slug(stem), slug(runner), profile, "expect"])
 
@@ -738,7 +927,10 @@ def runt_case_suites(
     config_dir: Path,
 ) -> list[tuple[str, str, str, str, str]]:
     suites = []
-    for case in sorted(cases, key=lambda item: as_str(item["path"])):
+    for case in sorted(
+        cases,
+        key=lambda item: (as_str(item["path"]), expect_name_for_case(item, runner)),
+    ):
         if runner == "interp":
             cmd = interp_runt_command(case, config_dir)
         elif runner == "graph_interp":
@@ -748,12 +940,17 @@ def runt_case_suites(
         else:
             raise ValueError(f"unknown runner {runner}")
         path = as_str(case["path"])
-        name = f"{suite_name}.{slug(Path(path).with_suffix('').as_posix())}"
+        expect_name = expect_name_for_case(case, runner)
+        name = (
+            f"{suite_name}."
+            f"{slug(Path(path).with_suffix('').as_posix())}."
+            f"{slug(Path(expect_name).with_suffix('').as_posix())}"
+        )
         suites.append(
             (
                 name,
-                expect_dir_for_case(case, config_dir),
-                expect_name_for_case(case, runner),
+                expect_dir_for_case(case, runner, config_dir),
+                expect_name,
                 cmd,
                 path,
             )
@@ -797,7 +994,7 @@ def monitor_cases_where(
 
 
 def graph_interp_paths() -> set[str]:
-    allowlist = REPO_ROOT / "protocols/tests/graph_interp_allowlist.txt"
+    allowlist = REPO_ROOT / "tests/graph_interp_allowlist.txt"
     if not allowlist.exists():
         return set()
     return {
@@ -819,7 +1016,7 @@ def generate_runt_configs(catalog: dict[str, dict[str, dict[str, object]]]) -> N
             (
                 "bnw_monitor",
                 "monitor",
-                monitor_cases_where(monitor_cases, under="monitor/tests/fpga-debugging"),
+                monitor_cases_where(monitor_cases, under="tests/fpga-debugging"),
             )
         ],
         "francis_bnw_monitor": [
@@ -827,7 +1024,7 @@ def generate_runt_configs(catalog: dict[str, dict[str, dict[str, object]]]) -> N
                 "francis_bnw_monitor",
                 "monitor",
                 monitor_cases_where(
-                    monitor_cases, under="monitor/tests/brave_new_world_francis"
+                    monitor_cases, under="tests/brave_new_world_francis"
                 ),
             )
         ],
@@ -835,11 +1032,11 @@ def generate_runt_configs(catalog: dict[str, dict[str, dict[str, object]]]) -> N
             (
                 "axis",
                 "monitor",
-                monitor_cases_where(monitor_cases, under="monitor/tests/wal/advanced"),
+                monitor_cases_where(monitor_cases, under="tests/wal/advanced"),
             )
         ],
         "adders": [
-            ("adders", "interp", tx_cases_where(tx_cases, under="protocols/tests/adders"))
+            ("adders", "interp", tx_cases_where(tx_cases, under="tests/adders"))
         ],
         "graph_interp": [
             (
@@ -848,18 +1045,16 @@ def generate_runt_configs(catalog: dict[str, dict[str, dict[str, object]]]) -> N
                 tx_cases_where(tx_cases, paths=graph_interp_paths()),
             )
         ],
-        "alus": [
-            ("alus", "interp", tx_cases_where(tx_cases, under="protocols/tests/alus"))
-        ],
+        "alus": [("alus", "interp", tx_cases_where(tx_cases, under="tests/alus"))],
         "identities": [
             (
                 "identities",
                 "interp",
-                tx_cases_where(tx_cases, under="protocols/tests/identities"),
+                tx_cases_where(tx_cases, under="tests/identities"),
             )
         ],
         "multi": [
-            ("multi", "interp", tx_cases_where(tx_cases, under="protocols/tests/multi"))
+            ("multi", "interp", tx_cases_where(tx_cases, under="tests/multi"))
         ],
         "picorv": [
             ("picorv", "interp", tx_cases_where(tx_cases, under="examples/picorv32"))
@@ -990,9 +1185,16 @@ def optional_int(value: object) -> Optional[int]:
     return value if isinstance(value, int) else None
 
 
+def required_int(value: object) -> int:
+    assert isinstance(value, int)
+    return value
+
+
 def find_case_by_path(
     cases: dict[str, dict[str, object]], path: str
 ) -> dict[str, object]:
+    if path in cases:
+        return cases[path]
     normalized = normalize_case_path(path)
     matches = [case for case in cases.values() if case["path"] == normalized]
     if len(matches) != 1:
@@ -1104,7 +1306,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    stats = subparsers.add_parser("stats", help="Summarize inferred catalog rows")
+    stats = subparsers.add_parser("stats", help="Summarize catalog rows")
     stats.set_defaults(needs_db=True)
     stats.set_defaults(func=cmd_stats)
 
@@ -1119,7 +1321,7 @@ def build_parser() -> argparse.ArgumentParser:
     dump.set_defaults(needs_db=True)
 
     generate = subparsers.add_parser(
-        "generate-catalog", help="Write the inferred catalog as a Python module"
+        "generate-catalog", help="Rewrite the checked-in catalog Python module"
     )
     generate.add_argument("output", nargs="?", default="scripts/test_catalog.py")
     generate.set_defaults(needs_db=True)
@@ -1154,7 +1356,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    db = load_database() if args.needs_db else TestDatabase()
+    db = load_catalog_database() if args.needs_db else TestDatabase()
     return args.func(db, args)
 
 

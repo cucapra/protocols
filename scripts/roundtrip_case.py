@@ -8,15 +8,37 @@ Usage:
 import argparse
 import re
 import subprocess
+import sys
 import traceback
 from pathlib import Path
 from typing import Optional
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import test_catalog  # noqa: E402
 
-def parse_arg(args: str, flag: str) -> Optional[str]:
-    """Extract a CLI flag value from a // ARGS line."""
-    m = re.search(rf"--{flag}[= ](\S+)", args)
-    return m.group(1) if m else None
+
+def as_str(value: object) -> str:
+    assert isinstance(value, str)
+    return value
+
+
+def as_str_list(value: object) -> list[str]:
+    assert isinstance(value, (list, tuple))
+    return [as_str(item) for item in value]
+
+
+def optional_str(value: object) -> Optional[str]:
+    return value if isinstance(value, str) else None
+
+
+def optional_int(value: object) -> Optional[int]:
+    return value if isinstance(value, int) else None
+
+
+def required_int(value: object) -> int:
+    assert isinstance(value, int)
+    return value
 
 
 def relpath_str(path: Path, base_dir: Path) -> str:
@@ -25,6 +47,34 @@ def relpath_str(path: Path, base_dir: Path) -> str:
         return str(path.relative_to(base_dir))
     except ValueError:
         return str(path)
+
+
+def normalize_catalog_path(path: Path) -> str:
+    """Return a stable repo-relative path for catalog lookup."""
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def find_tx_case(tx_arg: str) -> Optional[dict[str, object]]:
+    """Find the catalog entry for a transaction path or catalog case ID."""
+    if tx_arg in test_catalog.TX_CASES:
+        return test_catalog.TX_CASES[tx_arg]
+
+    tx_path = Path(tx_arg)
+    tx_rel = normalize_catalog_path(tx_path)
+    if not tx_path.is_absolute():
+        tx_rel = normalize_catalog_path(REPO_ROOT / tx_path)
+
+    matches = [
+        case
+        for case in test_catalog.TX_CASES.values()
+        if optional_str(case["path"]) == tx_rel
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 def sanitize_error_output(text: str) -> str:
@@ -132,7 +182,7 @@ def cleanup_generated_fsts(base_fst: Path) -> None:
 
 
 def fail(msg: str) -> int:
-    """Print a failure message and return success for Turnt."""
+    """Print a failure message and return success for the snapshot harness."""
     print(msg)
     return 0
 
@@ -198,39 +248,32 @@ def main() -> int:
     )
     args_ns = parser.parse_args()
 
-    tx_file = Path(args_ns.tx_file).resolve()
+    case = find_tx_case(args_ns.tx_file)
+    if case is None:
+        return fail(f"No catalog tx case found for: {args_ns.tx_file}")
+
+    tx_file = (REPO_ROOT / as_str(case["path"])).resolve()
     if not tx_file.exists():
         return fail(f"Missing tx file: {tx_file}")
 
     tx_text = tx_file.read_text()
-    args_match = re.search(r"^// ARGS:\s*(.+)$", tx_text, re.MULTILINE)
-    if not args_match:
-        print("SKIP: missing // ARGS")
-        return 0
-    args = args_match.group(1)
 
-    # Check if --allow-round-trip-failure is present in the file's // ARGS line
-    if "--allow-round-trip-failure" in args:
+    extra_args = as_str_list(case["extra_args"])
+    if args_ns.allow_round_trip_failure or "--allow-round-trip-failure" in extra_args:
         print("SKIP: allowed to fail round trip")
         return 0
 
-    return_match = re.search(r"^// RETURN:\s*(\d+)", tx_text, re.MULTILINE)
-    if return_match and int(return_match.group(1)) != 0:
-        print("SKIP: non-zero // RETURN")
+    if required_int(case["expected_return"]) != 0:
+        print("SKIP: non-zero expected return")
         return 0
 
-    prot_rel = parse_arg(args, "protocol")
-    verilog_rel = parse_arg(args, "verilog")
+    prot_rel = optional_str(case["protocol_path"])
+    verilog_rel = as_str_list(case["verilog"])
     if not prot_rel or not verilog_rel:
-        print("SKIP: missing --protocol or --verilog in // ARGS")
+        print("SKIP: missing protocol or verilog in catalog")
         return 0
 
-    base_dir = tx_file.parent
-    while base_dir != base_dir.parent and not (base_dir / "turnt.toml").exists():
-        base_dir = base_dir.parent
-    if not (base_dir / "turnt.toml").exists():
-        return fail(f"No turnt.toml found for {tx_file}")
-
+    base_dir = REPO_ROOT
     prot_file = (base_dir / prot_rel).resolve()
     if not prot_file.exists():
         return fail(f"Missing protocol file: {prot_file}")
@@ -242,8 +285,8 @@ def main() -> int:
     tx_file_rel = relpath_str(tx_file, base_dir)
     prot_file_rel = relpath_str(prot_file, base_dir)
 
-    module_name = parse_arg(args, "module")
-    instance_name = module_name if module_name else Path(verilog_rel).stem
+    module_name = optional_str(case["module"])
+    instance_name = module_name if module_name else Path(verilog_rel[0]).stem
     expected_traces = parse_trace_blocks(tx_text)
     wave_stem = tx_path_to_wave_stem(tx_file, base_dir)
     roundtrip_tmp_dir = base_dir / ".roundtrip_tmp"
@@ -253,13 +296,32 @@ def main() -> int:
     cleanup_generated_fsts(fst_path)
 
     try:
-        interp_cmd = (
-            "cargo run --quiet --package protocols-interp -- "
-            f"--color never --transactions {tx_file_rel} {args} --fst {fst_path_rel}"
+        interp_cmd = [
+            "cargo",
+            "run",
+            "--quiet",
+            "--offline",
+            "--package",
+            "protocols-interp",
+            "--",
+            "--color",
+            "never",
+            "--transactions",
+            tx_file_rel,
+        ]
+        interp_cmd.extend(
+            arg for arg in extra_args if arg != "--allow-round-trip-failure"
         )
+        interp_cmd.extend(["--verilog", *verilog_rel])
+        interp_cmd.extend(["--protocol", prot_file_rel])
+        if module_name:
+            interp_cmd.extend(["--module", module_name])
+        max_steps = optional_int(case["max_steps"])
+        if max_steps is not None:
+            interp_cmd.extend(["--max-steps", str(max_steps)])
+        interp_cmd.extend(["--fst", fst_path_rel])
         interp = subprocess.run(
             interp_cmd,
-            shell=True,
             cwd=base_dir,
             capture_output=True,
             text=True,
@@ -295,15 +357,25 @@ def main() -> int:
                 print("")
                 continue
 
-            monitor_cmd = (
-                "cargo run --quiet --package protocols-monitor -- "
-                f"-p {prot_file_rel} --wave {relpath_str(generated_fst, base_dir)} "
-                f"--instances {instance_name}:{struct_name}"
-                + (" --include-idle" if args_ns.include_idle else "")
-            )
+            monitor_cmd = [
+                "cargo",
+                "run",
+                "--quiet",
+                "--offline",
+                "--package",
+                "protocols-monitor",
+                "--",
+                "-p",
+                prot_file_rel,
+                "--wave",
+                relpath_str(generated_fst, base_dir),
+                "--instances",
+                f"{instance_name}:{struct_name}",
+            ]
+            if args_ns.include_idle:
+                monitor_cmd.append("--include-idle")
             monitor = subprocess.run(
                 monitor_cmd,
-                shell=True,
                 cwd=base_dir,
                 capture_output=True,
                 text=True,

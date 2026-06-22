@@ -30,12 +30,12 @@ jobs:
       run: cargo build --verbose
     - name: Run unit tests (Debug)
       run: cargo test --verbose
-    - name: Run Turnt tests for interpreter
-      run: turnt --env interp $(find . -type f -name '*.tx')
-    - name: Run Turnt tests for graph-interpreter
-      run: turnt --env graph_interp $(cat protocols/tests/graph_interp_allowlist.txt)
-    - name: Run Turnt tests for monitor
-      run: turnt --env monitor $(find . -type f -name '*.prot')
+    - name: Run Runt tests for interpreter
+      run: runt --max-futures 1 -j 1 runt/interp
+    - name: Run Runt tests for graph-interpreter
+      run: runt runt/graph_interp
+    - name: Run Runt tests for monitor
+      run: runt runt/monitor
 
   msrv:
     name: Check Minimum Rust Version for protocols library

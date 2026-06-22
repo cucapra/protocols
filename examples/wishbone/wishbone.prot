@@ -160,7 +160,7 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
 
         // acknowledge is now true for one cycle
         step();
-    }    
+    }
 }
 
 prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {

@@ -214,32 +214,32 @@ mod tests {
 
     #[test]
     fn test_add_d1_dot_snapshot() {
-        snap("ir_graphviz_add_d1", "tests/adders/adder_d1/add_d1.prot");
+        snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");
     }
 
     #[test]
     fn test_add_comb_dot_snapshot() {
-        snap("ir_graphviz_add_d0", "tests/adders/adder_d0/add_d0.prot");
+        snap("ir_graphviz_add_d0", "../tests/adders/adder_d0/add_d0.prot");
     }
 
     #[test]
     fn test_axis_truncated_include_idle_send_data_dot_snapshot() {
         snap(
             "ir_graphviz_axis_truncated_include_idle_send_data",
-            "../monitor/tests/wal/advanced/axis_truncated_include_idle.prot",
+            "../tests/wal/advanced/axis_truncated_include_idle.prot",
         );
     }
 
     #[test]
     fn test_counter_snapshot() {
-        snap("ir_graphviz_counter", "tests/counters/counter.prot");
+        snap("ir_graphviz_counter", "../tests/counters/counter.prot");
     }
 
     #[test]
     fn test_bounded_ready_valid_snapshot() {
         snap(
             "ir_graphviz_bounded_ready_valid",
-            "tests/bounded_ready_valid/bounded_rv.prot",
+            "../tests/bounded_ready_valid/bounded_rv.prot",
         );
     }
 }

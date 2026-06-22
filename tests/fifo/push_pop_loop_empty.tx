@@ -1,0 +1,6 @@
+trace {
+    reset();
+    push_n_times(42, 4);   // Push 42 four times
+    pop_n_times(42, 4);    // Pop four times
+    check_empty();    // FIFO should be empty after pushing and popping the same no. of times
+}

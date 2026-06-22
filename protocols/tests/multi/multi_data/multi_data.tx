@@ -1,4 +1,0 @@
-// ARGS: --verilog multi/multi_data/multi_data.v --protocol multi/multi_data/multi_data.prot 
-trace {
-    multi(10, 10);
-}

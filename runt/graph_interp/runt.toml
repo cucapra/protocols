@@ -1,82 +1,82 @@
 ver = "0.4.1"
 
 [[tests]]
-name = "graph_interp.protocols_tests_adders_adder_d1_add_multitrace"
+name = "graph_interp.tests_adders_adder_d1_add_multitrace.add_multitrace_graph_interp_add_d1"
 paths = [
-  "../../protocols/tests/adders/adder_d1/add_multitrace.tx",
+  "../../tests/adders/adder_d1/add_multitrace.tx",
 ]
-expect_dir = "../../protocols/tests/adders/adder_d1/expects"
+expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_multitrace.graph_interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/adders/adder_d1/add_d1.v --protocol protocols/tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_adders_adder_d1_both_threads_fail"
+name = "graph_interp.tests_adders_adder_d1_both_threads_fail.both_threads_fail_graph_interp_add_d1"
 paths = [
-  "../../protocols/tests/adders/adder_d1/both_threads_fail.tx",
+  "../../tests/adders/adder_d1/both_threads_fail.tx",
 ]
-expect_dir = "../../protocols/tests/adders/adder_d1/expects"
+expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_fail.graph_interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/adders/adder_d1/add_d1.v --protocol protocols/tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_adders_adder_d1_both_threads_pass"
+name = "graph_interp.tests_adders_adder_d1_both_threads_pass.both_threads_pass_graph_interp_add_d1"
 paths = [
-  "../../protocols/tests/adders/adder_d1/both_threads_pass.tx",
+  "../../tests/adders/adder_d1/both_threads_pass.tx",
 ]
-expect_dir = "../../protocols/tests/adders/adder_d1/expects"
+expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_pass.graph_interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/adders/adder_d1/add_d1.v --protocol protocols/tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_adders_adder_d1_conditional_add"
+name = "graph_interp.tests_adders_adder_d1_conditional_add.conditional_add_graph_interp_add_d1"
 paths = [
-  "../../protocols/tests/adders/adder_d1/conditional_add.tx",
+  "../../tests/adders/adder_d1/conditional_add.tx",
 ]
-expect_dir = "../../protocols/tests/adders/adder_d1/expects"
+expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "conditional_add.graph_interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/adders/adder_d1/add_d1.v --protocol protocols/tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_bounded_ready_valid_toy_reciever_0"
+name = "graph_interp.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_graph_interp_bounded_rv"
 paths = [
-  "../../protocols/tests/bounded_ready_valid/toy_reciever_0.tx",
+  "../../tests/bounded_ready_valid/toy_reciever_0.tx",
 ]
-expect_dir = "../../protocols/tests/bounded_ready_valid/expects"
+expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_0.graph_interp.bounded_rv.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/bounded_ready_valid/toy_receiver_0.v --protocol protocols/tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/bounded_ready_valid/toy_receiver_0.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_bounded_ready_valid_toy_reciever_1"
+name = "graph_interp.tests_bounded_ready_valid_toy_reciever_1.toy_reciever_1_graph_interp_bounded_rv"
 paths = [
-  "../../protocols/tests/bounded_ready_valid/toy_reciever_1.tx",
+  "../../tests/bounded_ready_valid/toy_reciever_1.tx",
 ]
-expect_dir = "../../protocols/tests/bounded_ready_valid/expects"
+expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_1.graph_interp.bounded_rv.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/bounded_ready_valid/toy_receiver_1.v --protocol protocols/tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/bounded_ready_valid/toy_receiver_1.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_bounded_ready_valid_toy_reciever_2"
+name = "graph_interp.tests_bounded_ready_valid_toy_reciever_2.toy_reciever_2_graph_interp_bounded_rv"
 paths = [
-  "../../protocols/tests/bounded_ready_valid/toy_reciever_2.tx",
+  "../../tests/bounded_ready_valid/toy_reciever_2.tx",
 ]
-expect_dir = "../../protocols/tests/bounded_ready_valid/expects"
+expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_2.graph_interp.bounded_rv.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/bounded_ready_valid/toy_receiver_2.v --protocol protocols/tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/bounded_ready_valid/toy_receiver_2.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_bounded_ready_valid_toy_reciever_3"
+name = "graph_interp.tests_bounded_ready_valid_toy_reciever_3.toy_reciever_3_graph_interp_bounded_rv"
 paths = [
-  "../../protocols/tests/bounded_ready_valid/toy_reciever_3.tx",
+  "../../tests/bounded_ready_valid/toy_reciever_3.tx",
 ]
-expect_dir = "../../protocols/tests/bounded_ready_valid/expects"
+expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_3.graph_interp.bounded_rv.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/bounded_ready_valid/toy_receiver_3.v --protocol protocols/tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/bounded_ready_valid/toy_receiver_3.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.protocols_tests_counters_counter"
+name = "graph_interp.tests_counters_counter.counter_graph_interp_counter"
 paths = [
-  "../../protocols/tests/counters/counter.tx",
+  "../../tests/counters/counter.tx",
 ]
-expect_dir = "../../protocols/tests/counters/expects"
+expect_dir = "../../tests/counters/expects"
 expect_name = "counter.graph_interp.counter.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog protocols/tests/counters/counter.v --protocol protocols/tests/counters/counter.prot 2>/dev/null"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/counters/counter.v --protocol tests/counters/counter.prot 2>/dev/null"

@@ -1,0 +1,6 @@
+trace {
+    explicit_fork(1, 1);
+    explicit_fork(2, 2);
+    explicit_fork(3, 4);
+    explicit_fork(4, 4);
+}

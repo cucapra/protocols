@@ -1,0 +1,3 @@
+trace {
+    count_up(10);
+}

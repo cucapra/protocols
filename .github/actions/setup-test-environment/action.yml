@@ -1,5 +1,5 @@
 name: 'Setup Test Environment'
-description: 'Setup Python, YosysHQ, uv, and Turnt for testing'
+description: 'Setup Python, YosysHQ, uv, and Runt for testing'
 inputs:
   github_token:
     description: 'Your GITHUB_TOKEN'
@@ -12,6 +12,6 @@ runs:
         version: '2024-05-07'
         github-token: ${{ inputs.github_token }}
     - uses: ./.github/actions/setup-uv
-    - name: Install Turnt
+    - name: Install Runt
       shell: bash
-      run: uv tool install turnt
+      run: cargo install runt

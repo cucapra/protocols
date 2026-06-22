@@ -1,0 +1,4 @@
+trace {
+    wait_and_add(1, 2, 3);
+    add(4, 5, 9);
+}

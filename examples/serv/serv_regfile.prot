@@ -265,7 +265,7 @@ prot read_write<R: Regfile>(
 }
 
 // This transaction describes what happens when the register file is not in use
-// We mark this protocol as `idle` to avoid excessive `idle()` transcations 
+// We mark this protocol as `idle` to avoid excessive `idle()` transcations
 // showing up in the trace produced by the monitor
 #[idle]
 prot idle<R: Regfile>() {

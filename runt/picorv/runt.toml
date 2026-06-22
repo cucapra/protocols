@@ -1,7 +1,7 @@
 ver = "0.4.1"
 
 [[tests]]
-name = "picorv.examples_picorv32_unsigned_mul"
+name = "picorv.examples_picorv32_unsigned_mul.unsigned_mul_interp_pcpi_mul_picorv32_pcpi_mul"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",
 ]

@@ -1,9 +1,0 @@
-error: The two expressions did not evaluate to the same value (in transaction `pop(3)`)
-   ┌─ protocols/tests/fifo/fifo.prot:43:15
-   │
-43 │     assert_eq(DUT.data_o, output); 
-   │               ^^^^^^^^^^^^^^^^^^ LHS Value: 0, RHS Value: 3
-
-Trace 0 execution failed.
----CODE---
-101

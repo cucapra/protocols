@@ -1,0 +1,9 @@
+tests/adders/adder_d1/add_multitrace.tx
+tests/adders/adder_d1/conditional_add.tx
+tests/adders/adder_d1/both_threads_fail.tx
+tests/adders/adder_d1/both_threads_pass.tx
+tests/counters/counter.tx
+tests/bounded_ready_valid/toy_reciever_0.tx
+tests/bounded_ready_valid/toy_reciever_1.tx
+tests/bounded_ready_valid/toy_reciever_2.tx
+tests/bounded_ready_valid/toy_reciever_3.tx

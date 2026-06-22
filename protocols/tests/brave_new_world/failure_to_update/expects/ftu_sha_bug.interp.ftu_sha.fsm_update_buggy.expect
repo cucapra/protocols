@@ -1,9 +1,0 @@
-error: The two expressions did not evaluate to the same value (in transaction `failure_to_update_sha()`)
-   ┌─ protocols/tests/brave_new_world/failure_to_update/ftu_sha.prot:29:15
-   │
-29 │     assert_eq(dut.valid, 1'b0);
-   │               ^^^^^^^^^^^^^^^ LHS Value: 1, RHS Value: 0
-
-Trace 0 execution failed.
----CODE---
-101

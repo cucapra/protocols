@@ -1,0 +1,3 @@
+trace {
+    two_fork_ok(1, 1);
+}

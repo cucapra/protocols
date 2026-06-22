@@ -1,4 +1,3 @@
-// ARGS: --verilog serv/rtl/serv_regfile.v --protocol serv/serv_regfile.prot 
 trace {
     // Arguments to transaction are:
     // rs1_addr: u5

@@ -1,56 +1,56 @@
-# Run all Turnt tests for the interpreter
+# Run all Runt tests for the interpreter
 interp:
-  turnt --env interp $(find . -type f -name '*.tx') 
+  runt --max-futures 1 -j 1 runt/interp
 
-# Run all Turnt tests for the monitor
+# Run all Runt tests for the monitor
 monitor:
-  turnt --env monitor $(find . -type f -name '*.prot') 
+  runt runt/monitor
 
-# Run Turnt tests for the monitor based on the Brave New World artifacts
+# Run Runt tests for the monitor based on the Brave New World artifacts
 bnw_monitor:
-  turnt --env monitor $(find monitor/tests/fpga-debugging -type f -name '*.prot')   
+  runt runt/bnw_monitor
 
 # Only test Francis's Brave New World (synthetic) examples on the monitor
 francis_bnw_monitor:
-  turnt --env monitor $(find monitor/tests/brave_new_world_francis -type f -name '*.prot')    
+  runt runt/francis_bnw_monitor
 
 # Only test the monitor on the AXI streaming example (from WAL)
 axis:
-  turnt --env monitor $(find monitor/tests/wal/advanced -type f -name '*.prot')  
+  runt runt/axis
 
 # Only run interpreter tests for the adder examples
 adders:
-  turnt --env interp $(find protocols/tests/adders -type f -name '*.tx') 
+  runt --max-futures 1 -j 1 runt/adders
 
 # Only run graph-interpreter tests that are explicitly enabled
 graph_interp:
-  turnt --env graph_interp $(cat protocols/tests/graph_interp_allowlist.txt)
+  runt runt/graph_interp
 
 # Only run interpreter tests for the ALU examples
 alus:
-  turnt --env interp $(find protocols/tests/alus -type f -name '*.tx') 
+  runt --max-futures 1 -j 1 runt/alus
 
 # Only test the `identities` examples
 identities:
-  turnt --env interp $(find protocols/tests/identities -type f -name '*.tx')  
+  runt --max-futures 1 -j 1 runt/identities
 
 # Only test the `multi` examples
 multi:
-  turnt --env interp $(find protocols/tests/multi -type f -name '*.tx')  
+  runt --max-futures 1 -j 1 runt/multi
 
 # Only test the `picorv` examples
 picorv:
-  turnt --env interp $(find examples/picorv32 -type f -name '*.tx')  
+  runt --max-futures 1 -j 1 runt/picorv
 
-# Runs all Turnt tests for both the interpreter & monitor
-turnt:
+# Runs all Runt tests for both the interpreter & monitor
+runt:
   @just interp  
   @just monitor
 
-# Runs all unit tests (via Cargo) & snapshot tests (via Turnt)
+# Runs all unit tests (via Cargo) & snapshot tests (via Runt)
 test:
   cargo test 
-  @just turnt
+  @just runt
 
 # Builds HTML documentation by running `cargo doc`
 doc:

@@ -376,7 +376,7 @@ mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-    use crate::frontend::parser::parse_file;
+    use crate::frontend::parser::parse_file_with_name;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
@@ -388,7 +388,7 @@ mod tests {
 
     fn test_helper(test_name: &str, file_name: &str) {
         let mut handler = DiagnosticHandler::default();
-        let result = parse_file(file_name, &mut handler);
+        let result = parse_file_with_name(file_name, display_filename(file_name), &mut handler);
         let content = match result {
             Ok((mut st, protos)) => {
                 let _ = type_check(&mut st, &protos, &mut handler);
@@ -399,14 +399,18 @@ mod tests {
         snap(test_name, content);
     }
 
+    fn display_filename(filename: &str) -> &str {
+        filename.strip_prefix("../").unwrap_or(filename)
+    }
+
     #[test]
     fn test_add_transaction() {
-        test_helper("add_d1", "tests/adders/adder_d1/add_d1.prot")
+        test_helper("add_d1", "../tests/adders/adder_d1/add_d1.prot")
     }
 
     #[test]
     fn test_invalid_step_arg_transaction() {
-        test_helper("invalid_step_arg", "tests/misc/invalid_step_arg.prot");
+        test_helper("invalid_step_arg", "../tests/misc/invalid_step_arg.prot");
     }
 
     #[test]
@@ -429,42 +433,42 @@ mod tests {
 
     #[test]
     fn typecheck_mul_invalid_transaction() {
-        test_helper("mul_invalid", "tests/multipliers/mul_invalid.prot");
+        test_helper("mul_invalid", "../tests/multipliers/mul_invalid.prot");
     }
 
     #[test]
     fn test_mul_prot() {
-        test_helper("mul", "tests/multipliers/mul.prot");
+        test_helper("mul", "../tests/multipliers/mul.prot");
     }
 
     #[test]
     fn typecheck_cond_transaction() {
-        test_helper("cond", "tests/multipliers/mult_cond.prot");
+        test_helper("cond", "../tests/multipliers/mult_cond.prot");
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
         test_helper(
             "calyx_go_done_struct",
-            "tests/calyx_go_done/calyx_go_done_struct.prot",
+            "../tests/calyx_go_done/calyx_go_done_struct.prot",
         );
     }
 
     #[test]
     fn test_simple_if_transaction() {
-        test_helper("simple_if", "tests/counters/simple_if.prot");
+        test_helper("simple_if", "../tests/counters/simple_if.prot");
     }
 
     #[test]
     fn test_simple_while_transaction() {
-        test_helper("simple_while", "tests/counters/simple_while.prot");
+        test_helper("simple_while", "../tests/counters/simple_while.prot");
     }
 
     #[test]
     fn test_simple_bounded_loop_transaction() {
         test_helper(
             "simple_bounded_loop",
-            "tests/counters/simple_bounded_loop.prot",
+            "../tests/counters/simple_bounded_loop.prot",
         );
     }
 
@@ -482,7 +486,7 @@ mod tests {
         let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1), SymbolKind::Arg(2));
         assert_eq!(symbols["s"], symbols[s]);
         let input =
-            std::fs::read_to_string("tests/misc/func_arg_invalid.prot").expect("failed to load");
+            std::fs::read_to_string("../tests/misc/func_arg_invalid.prot").expect("failed to load");
         let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
         let mut prot = Protocol::new("func_arg_invalid".to_string(), scope);
         prot.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
