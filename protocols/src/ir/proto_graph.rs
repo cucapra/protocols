@@ -6,17 +6,15 @@ use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{Context as ExprContext, ExprRef, Simplifier, SparseExprMap};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::ops::{Deref, DerefMut, Index};
-
-pub const DONTCARE_PREFIX: &str = "__dontcare__";
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
 entity_impl!(NodeId, "node");
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
-// ops (so far) are non-recrusive, may not be necessary to have an ID, but useful for debug maps
+// ops (so far) are non-recursive, may not be necessary to have an ID, but useful for debug maps
 // if we want debug info on expressions and transitions, we'll need a way to do this with or without Ids
 pub struct OpId(u32);
 entity_impl!(OpId, "op");
@@ -67,7 +65,7 @@ impl Transition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-// A node is a (logically) unorded set of actions and transitions
+// A node is a (logically) unordered set of actions and transitions
 pub struct Node {
     pub actions: Vec<Action>,
     pub transitions: Vec<Transition>,
@@ -104,7 +102,10 @@ pub struct ProtoGraph {
     pub simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
 
     /// Cached Patronus symbol expressions, keyed by frontend `SymbolId`.
-    symbol_expr: FxHashMap<SymbolId, ExprRef>,
+    pub symbol_expr: FxHashMap<SymbolId, ExprRef>,
+
+    /// symbol expressions representing DontCare
+    pub dont_cares: FxHashSet<ExprRef>,
 
     nodes: PrimaryMap<NodeId, Node>,
 
@@ -123,6 +124,7 @@ impl Clone for ProtoGraph {
             // we can just make a fresh simplifier
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
+            dont_cares: self.dont_cares.clone(),
             nodes: self.nodes.clone(),
             ops: self.ops.clone(),
             op_loc: self.op_loc.clone(),
@@ -146,6 +148,7 @@ impl ProtoGraph {
             expr_ctx,
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
+            dont_cares: FxHashSet::default(),
             nodes,
             ops,
             op_loc,
