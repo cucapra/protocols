@@ -1,0 +1,55 @@
+ver = "0.4.1"
+
+[[tests]]
+name = "multi.protocols_tests_multi_multi0_multi0"
+paths = [
+  "../../protocols/tests/multi/multi0/multi0.tx",
+]
+expect_dir = "../../protocols/tests/multi/multi0/expects"
+expect_name = "multi0.interp.multi0.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/multi/multi0/multi0.v --protocol protocols/tests/multi/multi0/multi0.prot --module multi0 2>/dev/null"
+
+[[tests]]
+name = "multi.protocols_tests_multi_multi0keep_multi0keep"
+paths = [
+  "../../protocols/tests/multi/multi0keep/multi0keep.tx",
+]
+expect_dir = "../../protocols/tests/multi/multi0keep/expects"
+expect_name = "multi0keep.interp.multi0keep.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/multi/multi0keep/multi0keep.v --protocol protocols/tests/multi/multi0keep/multi0keep.prot --module multi0keep 2>/dev/null"
+
+[[tests]]
+name = "multi.protocols_tests_multi_multi0keep2const_multi0keep2const"
+paths = [
+  "../../protocols/tests/multi/multi0keep2const/multi0keep2const.tx",
+]
+expect_dir = "../../protocols/tests/multi/multi0keep2const/expects"
+expect_name = "multi0keep2const.interp.multi0keep2const.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/multi/multi0keep2const/multi0keep2const.v protocols/tests/multi/multi0keep/multi0keep.v --protocol protocols/tests/multi/multi0keep2const/multi0keep2const.prot --module multi0keep2const 2>/dev/null"
+
+[[tests]]
+name = "multi.protocols_tests_multi_multi2const_multi2const"
+paths = [
+  "../../protocols/tests/multi/multi2const/multi2const.tx",
+]
+expect_dir = "../../protocols/tests/multi/multi2const/expects"
+expect_name = "multi2const.interp.multi2const.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/multi/multi2const/multi2const.v protocols/tests/multi/multi0/multi0.v --protocol protocols/tests/multi/multi2const/multi2const.prot --module multi2const 2>/dev/null"
+
+[[tests]]
+name = "multi.protocols_tests_multi_multi2multi_multi2multi"
+paths = [
+  "../../protocols/tests/multi/multi2multi/multi2multi.tx",
+]
+expect_dir = "../../protocols/tests/multi/multi2multi/expects"
+expect_name = "multi2multi.interp.multi2multi.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/multi/multi2multi/multi2multi.v protocols/tests/multi/multi0/multi0.v --protocol protocols/tests/multi/multi2multi/multi2multi.prot --module multi2multi 2>/dev/null"
+
+[[tests]]
+name = "multi.protocols_tests_multi_multi_data_multi_data"
+paths = [
+  "../../protocols/tests/multi/multi_data/multi_data.tx",
+]
+expect_dir = "../../protocols/tests/multi/multi_data/expects"
+expect_name = "multi_data.interp.multi_data.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/multi/multi_data/multi_data.v --protocol protocols/tests/multi/multi_data/multi_data.prot 2>/dev/null"

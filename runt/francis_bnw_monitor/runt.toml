@@ -1,0 +1,46 @@
+ver = "0.4.1"
+
+[[tests]]
+name = "francis_bnw_monitor.monitor_tests_brave_new_world_francis_bit_truncation_fft"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/bit_truncation_fft.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "bit_truncation_fft.monitor.BitTruncationFFT.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/bit_truncation_fft.fst --instances round11_rne_unsigned_fixed:BitTruncationFFT 2>/dev/null"
+
+[[tests]]
+name = "francis_bnw_monitor.monitor_tests_brave_new_world_francis_bit_truncation_sha"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/bit_truncation_sha.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "bit_truncation_sha.monitor.bit_truncation_sha.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/bit_truncation_sha.fst --instances bit_truncation_sha_fixed:bit_truncation_sha 2>/dev/null"
+
+[[tests]]
+name = "francis_bnw_monitor.monitor_tests_brave_new_world_francis_ftu_sha"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/ftu_sha.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "ftu_sha.monitor.FailureToUpdateSHA.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA 2>/dev/null"
+
+[[tests]]
+name = "francis_bnw_monitor.monitor_tests_brave_new_world_francis_signal_async"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/signal_async.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "signal_async.monitor.SignalAsyncSpec.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/signal_async.fst --instances signal_async_fix:SignalAsyncSpec 2>/dev/null"
+
+[[tests]]
+name = "francis_bnw_monitor.monitor_tests_brave_new_world_francis_use_without_valid"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/use_without_valid.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "use_without_valid.monitor.UseWithoutValid.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid 2>/dev/null"

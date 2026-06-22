@@ -1,0 +1,9 @@
+error: The two expressions did not evaluate to the same value (in transaction `send_data(5)`)
+   ┌─ protocols/tests/bounded_ready_valid/bounded_rv.prot:27:23
+   │
+27 │             assert_eq(D.ready, 1'b1);
+   │                       ^^^^^^^^^^^^^ LHS Value: 0, RHS Value: 1
+
+Trace 0 execution failed.
+---CODE---
+101

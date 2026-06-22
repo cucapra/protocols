@@ -1,0 +1,12 @@
+error: Output 'DUT.s' depends on input(s) 'b' which do not have assigned values
+   ┌─ protocols/tests/adders/adder_d0/add_d0.prot:9:3
+   │
+ 9 │   DUT.b := X;
+   │   ^^^^^^^^^^^ 'b' assigned DontCare here
+   ·
+12 │   if (DUT.s == 32'b0) { // this should be illegal
+   │       ^^^^^ Output 'DUT.s' depends on input(s) 'b' which do not have assigned values
+
+Trace 0 execution failed.
+---CODE---
+101

@@ -1,0 +1,8 @@
+// trace 0
+trace {
+    WriteSubordinate::idle();  // [time: 0ns -> 25ns]
+    ReadSubordinate::idle();  // [time: 0ns -> 25ns]
+    WriteSubordinate::write(64, 2147483648, 0, 0);  // [time: 25ns -> 100ns]
+    ReadSubordinate::read_v2(68, 0, 1);  // [time: 50ns -> 125ns]
+    ReadSubordinate::idle();  // [time: 125ns -> 150ns]
+}

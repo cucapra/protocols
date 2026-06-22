@@ -1,0 +1,9 @@
+error: The two expressions did not evaluate to the same value (in transaction `bit_truncation_fft(8386560, 2047)`)
+   ┌─ protocols/tests/brave_new_world/bit_truncation/bit_truncation_fft.prot:10:15
+   │
+10 │     assert_eq(data_out, dut.output_data);
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^ LHS Value: 2047, RHS Value: 0
+
+Trace 0 execution failed.
+---CODE---
+101

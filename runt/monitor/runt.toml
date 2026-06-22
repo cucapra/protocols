@@ -1,0 +1,1549 @@
+ver = "0.4.1"
+
+[[tests]]
+name = "monitor.monitor_tests_adders_add_d1"
+paths = [
+  "../../monitor/tests/adders/add_d1.prot",
+]
+expect_dir = "../../monitor/tests/adders/expects"
+expect_name = "add_d1.monitor.Adder.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/adders/add_d1.fst --instances add_d1:Adder 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_adders_add_d2"
+paths = [
+  "../../monitor/tests/adders/add_d2.prot",
+]
+expect_dir = "../../monitor/tests/adders/expects"
+expect_name = "add_d2.monitor.Adder.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/adders/add_d2.fst --instances add_d2:Adder 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_adders_add_var_cyc"
+paths = [
+  "../../monitor/tests/adders/add_var_cyc.prot",
+]
+expect_dir = "../../monitor/tests/adders/expects"
+expect_name = "add_var_cyc.monitor.loop_with_assigns.Adder.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_adders_busy_wait"
+paths = [
+  "../../monitor/tests/adders/busy_wait.prot",
+]
+expect_dir = "../../monitor/tests/adders/expects"
+expect_name = "busy_wait.monitor.Adder.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/adders/busy_wait.fst --instances add_d1:Adder 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_adders_loop_with_assigns"
+paths = [
+  "../../monitor/tests/adders/loop_with_assigns.prot",
+]
+expect_dir = "../../monitor/tests/adders/expects"
+expect_name = "loop_with_assigns.monitor.Adder.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_adders_nested_busy_wait"
+paths = [
+  "../../monitor/tests/adders/nested_busy_wait.prot",
+]
+expect_dir = "../../monitor/tests/adders/expects"
+expect_name = "nested_busy_wait.monitor.Adder.timeout5s.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && python3 -c 'import os, signal, subprocess, sys; timeout=float(sys.argv[1]); proc=subprocess.Popen(sys.argv[2:], start_new_session=True); \ntry:\n    sys.exit(proc.wait(timeout=timeout))\nexcept subprocess.TimeoutExpired:\n    os.killpg(proc.pid, signal.SIGTERM)\n    try:\n        proc.wait(timeout=1)\n    except subprocess.TimeoutExpired:\n        os.killpg(proc.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/adders/nested_busy_wait.fst --instances add_d1:Adder 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_alus_alu_d1"
+paths = [
+  "../../monitor/tests/alus/alu_d1.prot",
+]
+expect_dir = "../../monitor/tests/alus/expects"
+expect_name = "alu_d1.monitor.ALU.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/alus/alu_d1.fst --instances alu_d1:ALU 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_alus_alu_d2"
+paths = [
+  "../../monitor/tests/alus/alu_d2.prot",
+]
+expect_dir = "../../monitor/tests/alus/expects"
+expect_name = "alu_d2.monitor.ALU.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/alus/alu_d2.fst --instances alu_d2:ALU 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_1"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_2"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_3"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_4"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_5"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_5.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_5.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_5.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_6"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_6.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_6.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_6.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_7"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_7.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_7.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_7.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_classic_test_fifo_classic_8"
+paths = [
+  "../../monitor/tests/antmicro/fifo_classic/test_fifo_classic_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_classic/expects"
+expect_name = "test_fifo_classic_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_classic/test_fifo_classic_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_1"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_2"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_3"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_4"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_5"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_5.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_5.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_5.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_6"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_6.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_6.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_6.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_7"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_7.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_7.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_7.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_fifo_constant_test_fifo_constant_8"
+paths = [
+  "../../monitor/tests/antmicro/fifo_constant/test_fifo_constant_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/fifo_constant/expects"
+expect_name = "test_fifo_constant_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/fifo_constant/test_fifo_constant_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_16_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_16_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_16_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_16_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_16_12"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_16_12.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_16_12.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_16_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_16_4"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_16_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_16_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_16_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_16_8"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_16_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_16_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_16_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_1_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_1_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_1_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_1_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_1_12"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_1_12.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_1_12.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_1_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_1_4"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_1_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_1_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_1_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_1_8"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_1_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_1_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_1_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_2_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_2_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_2_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_2_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_2_12"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_2_12.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_2_12.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_2_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_2_4"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_2_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_2_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_2_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_2_8"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_2_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_2_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_2_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_4_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_4_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_4_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_4_12"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_4_12.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_4_12.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_4_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_4_4"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_4_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_4_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_4_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_4_8"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_4_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_4_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_4_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_8_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_8_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_8_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_8_12"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_8_12.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_8_12.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_8_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_8_4"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_8_4.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_8_4.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_8_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_classic_test_sram_classic_8_8"
+paths = [
+  "../../monitor/tests/antmicro/sram_classic/test_sram_classic_8_8.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_classic/expects"
+expect_name = "test_sram_classic_8_8.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_classic/test_sram_classic_8_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_0_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_0_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_0_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_0_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_0_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_0_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_0_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_0_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_12_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_12_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_12_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_12_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_12_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_12_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_12_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_12_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_4_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_4_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_4_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_4_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_4_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_4_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_4_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_4_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_8_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_8_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_8_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_8_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_8_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_8_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_16_8_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_16_8_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_0_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_0_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_0_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_0_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_0_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_0_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_0_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_0_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_12_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_12_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_12_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_12_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_12_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_12_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_12_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_12_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_4_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_4_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_4_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_4_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_4_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_4_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_4_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_4_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_8_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_8_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_8_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_8_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_8_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_8_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_1_8_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_1_8_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_0_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_0_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_0_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_0_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_0_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_0_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_0_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_0_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_12_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_12_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_12_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_12_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_12_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_12_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_12_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_12_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_4_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_4_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_4_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_4_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_4_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_4_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_4_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_4_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_8_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_8_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_8_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_8_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_8_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_8_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_2_8_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_2_8_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_0_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_0_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_0_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_0_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_0_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_0_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_0_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_0_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_12_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_12_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_12_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_12_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_12_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_12_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_12_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_12_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_4_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_4_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_4_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_4_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_4_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_4_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_4_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_4_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_8_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_8_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_8_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_8_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_8_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_8_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_4_8_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_4_8_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_0_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_0_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_0_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_0_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_0_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_0_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_0_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_0_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_12_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_12_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_12_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_12_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_12_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_12_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_12_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_12_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_4_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_4_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_4_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_4_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_4_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_4_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_4_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_4_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_8_0"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_0.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_8_0.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_8_1"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_8_1.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_8_2"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_8_2.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_antmicro_sram_incrementing_test_sram_incrementing_8_8_3"
+paths = [
+  "../../monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_3.prot",
+]
+expect_dir = "../../monitor/tests/antmicro/sram_incrementing/expects"
+expect_name = "test_sram_incrementing_8_8_3.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_brave_new_world_francis_bit_truncation_fft"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/bit_truncation_fft.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "bit_truncation_fft.monitor.BitTruncationFFT.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/bit_truncation_fft.fst --instances round11_rne_unsigned_fixed:BitTruncationFFT 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_brave_new_world_francis_bit_truncation_sha"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/bit_truncation_sha.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "bit_truncation_sha.monitor.bit_truncation_sha.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/bit_truncation_sha.fst --instances bit_truncation_sha_fixed:bit_truncation_sha 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_brave_new_world_francis_ftu_sha"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/ftu_sha.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "ftu_sha.monitor.FailureToUpdateSHA.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_brave_new_world_francis_signal_async"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/signal_async.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "signal_async.monitor.SignalAsyncSpec.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/signal_async.fst --instances signal_async_fix:SignalAsyncSpec 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_brave_new_world_francis_use_without_valid"
+paths = [
+  "../../monitor/tests/brave_new_world_francis/use_without_valid.prot",
+]
+expect_dir = "../../monitor/tests/brave_new_world_francis/expects"
+expect_name = "use_without_valid.monitor.UseWithoutValid.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/brave_new_world_francis/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_ethmac_ethmac_wishbone_manager"
+paths = [
+  "../../monitor/tests/ethmac/ethmac_wishbone_manager.prot",
+]
+expect_dir = "../../monitor/tests/ethmac/expects"
+expect_name = "ethmac_wishbone_manager.monitor.WBManager.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --instances tb_ethernet:WBManager --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_ethmac_ethmac_wishbone_subordinate"
+paths = [
+  "../../monitor/tests/ethmac/ethmac_wishbone_subordinate.prot",
+]
+expect_dir = "../../monitor/tests/ethmac/expects"
+expect_name = "ethmac_wishbone_subordinate.monitor.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --instances tb_ethernet:WBSubordinate --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fifo_fifo"
+paths = [
+  "../../monitor/tests/fifo/fifo.prot",
+]
+expect_dir = "../../monitor/tests/fifo/expects"
+expect_name = "fifo.monitor.Fifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fifo/fifo.fst --instances fifo_wrapper:Fifo 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fifo_push_pop_identity"
+paths = [
+  "../../monitor/tests/fifo/push_pop_identity.prot",
+]
+expect_dir = "../../monitor/tests/fifo/expects"
+expect_name = "push_pop_identity.monitor.Fifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fifo/push_pop_identity.fst --instances fifo_wrapper:Fifo 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fifo_push_pop_loop_empty"
+paths = [
+  "../../monitor/tests/fifo/push_pop_loop_empty.prot",
+]
+expect_dir = "../../monitor/tests/fifo/expects"
+expect_name = "push_pop_loop_empty.monitor.Fifo.timeout5s.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && python3 -c 'import os, signal, subprocess, sys; timeout=float(sys.argv[1]); proc=subprocess.Popen(sys.argv[2:], start_new_session=True); \ntry:\n    sys.exit(proc.wait(timeout=timeout))\nexcept subprocess.TimeoutExpired:\n    os.killpg(proc.pid, signal.SIGTERM)\n    try:\n        proc.wait(timeout=1)\n    except subprocess.TimeoutExpired:\n        os.killpg(proc.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fifo_push_pop_loop_not_empty"
+paths = [
+  "../../monitor/tests/fifo/push_pop_loop_not_empty.prot",
+]
+expect_dir = "../../monitor/tests/fifo/expects"
+expect_name = "push_pop_loop_not_empty.monitor.Fifo.timeout5s.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && python3 -c 'import os, signal, subprocess, sys; timeout=float(sys.argv[1]); proc=subprocess.Popen(sys.argv[2:], start_new_session=True); \ntry:\n    sys.exit(proc.wait(timeout=timeout))\nexcept subprocess.TimeoutExpired:\n    os.killpg(proc.pid, signal.SIGTERM)\n    try:\n        proc.wait(timeout=1)\n    except subprocess.TimeoutExpired:\n        os.killpg(proc.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_burst_s4_s4_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-burst-s4/s4_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-burst-s4/expects"
+expect_name = "s4_buggy.monitor.WriteSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-burst-s4/s4_buggy.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_burst_s4_s4_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-burst-s4/s4_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-burst-s4/expects"
+expect_name = "s4_fixed.monitor.WriteSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-burst-s4/s4_fixed.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_lite_s1_s1_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-lite-s1/expects"
+expect_name = "s1_buggy.monitor.s1_buggy_workload2.WriteSubordinate.ReadSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_lite_s1_s1_buggy_workload_1"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-lite-s1/expects"
+expect_name = "s1_buggy_workload_1.monitor.s1_buggy_workload1.WriteSubordinate.ReadSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_lite_s1_s1_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-lite-s1/expects"
+expect_name = "s1_fixed.monitor.s1_fixed_workload2.WriteSubordinate.ReadSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_lite_s1_s1_fixed_workload_1"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-lite-s1/expects"
+expect_name = "s1_fixed_workload_1.monitor.s1_fixed_workload1.WriteSubordinate.ReadSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_stream_s2_s2_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-stream-s2/s2_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-stream-s2/expects"
+expect_name = "s2_buggy.monitor.AXISManager.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axi_stream_s2_s2_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axi-stream-s2/s2_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axi-stream-s2/expects"
+expect_name = "s2_fixed.monitor.AXISManager.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_adapter_s3_s3_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-adapter-s3/expects"
+expect_name = "s3_buggy.monitor.AXISManager.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_adapter_s3_s3_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-adapter-s3/expects"
+expect_name = "s3_fixed.monitor.AXISManager.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_async_fifo_c4_c4_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_buggy.monitor.Sender.Receiver.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_async_fifo_c4_c4_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_fixed.monitor.Sender.Receiver.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_fifo_d11_d11_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-fifo-d11/d11_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-fifo-d11/expects"
+expect_name = "d11_buggy.monitor.AxisFifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-fifo-d11/d11_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_fifo_d11_d11_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-fifo-d11/d11_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-fifo-d11/expects"
+expect_name = "d11_fixed.monitor.AxisFifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-fifo-d11/d11_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_fifo_d12_d12_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-fifo-d12/d12_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-fifo-d12/expects"
+expect_name = "d12_buggy.monitor.AxisFifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-fifo-d12/d12_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_fifo_d12_d12_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-fifo-d12/d12_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-fifo-d12/expects"
+expect_name = "d12_fixed.monitor.AxisFifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-fifo-d12/d12_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_fifo_d4_d4_buggy"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-fifo-d4/d4_buggy.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-fifo-d4/expects"
+expect_name = "d4_buggy.monitor.AxisFifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_fpga_debugging_axis_fifo_d4_d4_fixed"
+paths = [
+  "../../monitor/tests/fpga-debugging/axis-fifo-d4/d4_fixed.prot",
+]
+expect_dir = "../../monitor/tests/fpga-debugging/axis-fifo-d4/expects"
+expect_name = "d4_fixed.monitor.AxisFifo.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_identities_identity_d1"
+paths = [
+  "../../monitor/tests/identities/identity_d1.prot",
+]
+expect_dir = "../../monitor/tests/identities/expects"
+expect_name = "identity_d1.monitor.Identity.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/identities/identity_d1.fst --instances identity_d1:Identity 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multi_multi0"
+paths = [
+  "../../monitor/tests/multi/multi0.prot",
+]
+expect_dir = "../../monitor/tests/multi/expects"
+expect_name = "multi0.monitor.multi0.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multi/multi0.fst --instances multi0:multi0 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multi_multi0keep"
+paths = [
+  "../../monitor/tests/multi/multi0keep.prot",
+]
+expect_dir = "../../monitor/tests/multi/expects"
+expect_name = "multi0keep.monitor.multi0keep.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multi/multi0keep.fst --instances multi0keep:multi0keep 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multi_multi0keep2const"
+paths = [
+  "../../monitor/tests/multi/multi0keep2const.prot",
+]
+expect_dir = "../../monitor/tests/multi/expects"
+expect_name = "multi0keep2const.monitor.multi0keep2const.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multi/multi0keep2const.fst --instances multi0keep2const:multi0keep2const 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multi_multi2const"
+paths = [
+  "../../monitor/tests/multi/multi2const.prot",
+]
+expect_dir = "../../monitor/tests/multi/expects"
+expect_name = "multi2const.monitor.multi2const.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multi/multi2const.fst --instances multi2const:multi2const 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multi_multi2multi"
+paths = [
+  "../../monitor/tests/multi/multi2multi.prot",
+]
+expect_dir = "../../monitor/tests/multi/expects"
+expect_name = "multi2multi.monitor.multi2multi.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multi/multi2multi.fst --instances multi2multi:multi2multi 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multi_multi_data"
+paths = [
+  "../../monitor/tests/multi/multi_data.prot",
+]
+expect_dir = "../../monitor/tests/multi/expects"
+expect_name = "multi_data.monitor.multi_data.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multi/multi_data.fst --instances multi_data:multi_data 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_multipliers_mult_d2"
+paths = [
+  "../../monitor/tests/multipliers/mult_d2.prot",
+]
+expect_dir = "../../monitor/tests/multipliers/expects"
+expect_name = "mult_d2.monitor.Multiplier.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/multipliers/mult_d2.fst --instances mult_d2:Multiplier 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_picorv32_pcpi_mul_unsigned_mul"
+paths = [
+  "../../monitor/tests/picorv32/pcpi_mul_unsigned_mul.prot",
+]
+expect_dir = "../../monitor/tests/picorv32/expects"
+expect_name = "pcpi_mul_unsigned_mul.monitor.unsigned_mul.picorv32_pcpi_mul.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/picorv32/unsigned_mul.fst --instances picorv32_pcpi_mul:picorv32_pcpi_mul 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_serv_serv_regfile"
+paths = [
+  "../../monitor/tests/serv/serv_regfile.prot",
+]
+expect_dir = "../../monitor/tests/serv/expects"
+expect_name = "serv_regfile.monitor.Regfile.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/serv/serv_regfile.fst --instances serv_regfile:Regfile --display-hex 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_tinyaes128_aes128"
+paths = [
+  "../../monitor/tests/tinyaes128/aes128.prot",
+]
+expect_dir = "../../monitor/tests/tinyaes128/expects"
+expect_name = "aes128.monitor.TinyAES128.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/tinyaes128/aes128.fst --instances aes_128:TinyAES128 --display-hex 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wal_advanced_axis"
+paths = [
+  "../../monitor/tests/wal/advanced/axis.prot",
+]
+expect_dir = "../../monitor/tests/wal/advanced/expects"
+expect_name = "axis.monitor.uart_axi.AXIS.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wal_advanced_axis_failing"
+paths = [
+  "../../monitor/tests/wal/advanced/axis_failing.prot",
+]
+expect_dir = "../../monitor/tests/wal/advanced/expects"
+expect_name = "axis_failing.monitor.uart_axi_minimal.AXIS.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wal_advanced_axis_minimal"
+paths = [
+  "../../monitor/tests/wal/advanced/axis_minimal.prot",
+]
+expect_dir = "../../monitor/tests/wal/advanced/expects"
+expect_name = "axis_minimal.monitor.uart_axi_minimal.AXIS.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wal_advanced_axis_truncated"
+paths = [
+  "../../monitor/tests/wal/advanced/axis_truncated.prot",
+]
+expect_dir = "../../monitor/tests/wal/advanced/expects"
+expect_name = "axis_truncated.monitor.uart_axi_truncated.AXIS.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wal_advanced_axis_truncated_include_idle"
+paths = [
+  "../../monitor/tests/wal/advanced/axis_truncated_include_idle.prot",
+]
+expect_dir = "../../monitor/tests/wal/advanced/expects"
+expect_name = "axis_truncated_include_idle.monitor.uart_axi_truncated.AXIS.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wb_intercon_wb_arb"
+paths = [
+  "../../monitor/tests/wb_intercon/wb_arb.prot",
+]
+expect_dir = "../../monitor/tests/wb_intercon/expects"
+expect_name = "wb_arb.monitor.WBSubordinate.max1000.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --instances wb_intercon_tb.wb_arb_tb:WBSubordinate --max-steps 1000 --sample-posedge wb_intercon_tb.wb_arb_tb.wb_clk --show-waveform-time --time-unit s 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wb_intercon_wb_cdc"
+paths = [
+  "../../monitor/tests/wb_intercon/wb_cdc.prot",
+]
+expect_dir = "../../monitor/tests/wb_intercon/expects"
+expect_name = "wb_cdc.monitor.WBSubordinate.max1000.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wb_intercon/wb_cdc.fst --instances wb_intercon_tb.wb_cdc_tb.dut:WBSubordinate --max-steps 1000 --sample-posedge wb_intercon_tb.wb_cdc_tb.dut.wbm_clk --show-waveform-time --time-unit s 2>/dev/null"
+
+[[tests]]
+name = "monitor.monitor_tests_wishbone_wishbone"
+paths = [
+  "../../monitor/tests/wishbone/wishbone.prot",
+]
+expect_dir = "../../monitor/tests/wishbone/expects"
+expect_name = "wishbone.monitor.reqwalker.WBSubordinate.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave monitor/tests/wishbone/reqwalker.vcd --instances TOP.reqwalker:WBSubordinate --sample-posedge TOP.reqwalker.i_clk 2>/dev/null"

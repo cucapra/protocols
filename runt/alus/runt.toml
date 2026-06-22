@@ -1,0 +1,19 @@
+ver = "0.4.1"
+
+[[tests]]
+name = "alus.protocols_tests_alus_alu_d1"
+paths = [
+  "../../protocols/tests/alus/alu_d1.tx",
+]
+expect_dir = "../../protocols/tests/alus/expects"
+expect_name = "alu_d1.interp.alu_d1.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/alus/alu_d1.v --protocol protocols/tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
+name = "alus.protocols_tests_alus_alu_d2"
+paths = [
+  "../../protocols/tests/alus/alu_d2.tx",
+]
+expect_dir = "../../protocols/tests/alus/expects"
+expect_name = "alu_d2.interp.alu_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/alus/alu_d2.v --protocol protocols/tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"

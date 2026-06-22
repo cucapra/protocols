@@ -1,0 +1,15 @@
+error: Thread 0 (`add`) attempted conflicting assignment to 'b': current=5, new=2
+   ┌─ protocols/tests/adders/adder_d2/no_dontcare_conflict.prot:13:3
+   │
+13 │   DUT.b := b;
+   │   ^^^^^^^^^^^ Thread 0 (`add`) attempted conflicting assignment to 'b': current=5, new=2
+
+error: Thread 1 (`add`) attempted conflicting assignment to 'b': current=2, new=5
+   ┌─ protocols/tests/adders/adder_d2/no_dontcare_conflict.prot:13:3
+   │
+13 │   DUT.b := b;
+   │   ^^^^^^^^^^^ Thread 1 (`add`) attempted conflicting assignment to 'b': current=2, new=5
+
+Trace 0 execution failed.
+---CODE---
+101

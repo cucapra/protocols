@@ -1,0 +1,109 @@
+ver = "0.4.1"
+
+[[tests]]
+name = "identities.protocols_tests_identities_dual_identity_d0_dual_identity_d0_combdep"
+paths = [
+  "../../protocols/tests/identities/dual_identity_d0/dual_identity_d0_combdep.tx",
+]
+expect_dir = "../../protocols/tests/identities/dual_identity_d0/expects"
+expect_name = "dual_identity_d0_combdep.interp.dual_identity_d0.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/dual_identity_d0/dual_identity_d0.v --protocol protocols/tests/identities/dual_identity_d0/dual_identity_d0.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_dual_identity_d1_dual_identity_d1"
+paths = [
+  "../../protocols/tests/identities/dual_identity_d1/dual_identity_d1.tx",
+]
+expect_dir = "../../protocols/tests/identities/dual_identity_d1/expects"
+expect_name = "dual_identity_d1.interp.dual_identity_d1.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/dual_identity_d1/dual_identity_d1.v --protocol protocols/tests/identities/dual_identity_d1/dual_identity_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d0_passthrough_combdep"
+paths = [
+  "../../protocols/tests/identities/identity_d0/passthrough_combdep.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d0/expects"
+expect_name = "passthrough_combdep.interp.identity_d0.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d0/identity_d0.v --protocol protocols/tests/identities/identity_d0/identity_d0.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d1_explicit_fork"
+paths = [
+  "../../protocols/tests/identities/identity_d1/explicit_fork.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d1/expects"
+expect_name = "explicit_fork.interp.identity_d1.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d1/identity_d1.v --protocol protocols/tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d1_slicing_err"
+paths = [
+  "../../protocols/tests/identities/identity_d1/slicing_err.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d1/expects"
+expect_name = "slicing_err.interp.slicing_err.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d1/identity_d1.v --protocol protocols/tests/identities/identity_d1/slicing_err.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d1_slicing_invalid"
+paths = [
+  "../../protocols/tests/identities/identity_d1/slicing_invalid.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d1/expects"
+expect_name = "slicing_invalid.interp.slicing_invalid.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d1/identity_d1.v --protocol protocols/tests/identities/identity_d1/slicing_invalid.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d1_slicing_ok"
+paths = [
+  "../../protocols/tests/identities/identity_d1/slicing_ok.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d1/expects"
+expect_name = "slicing_ok.interp.identity_d1.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d1/identity_d1.v --protocol protocols/tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d2_single_thread_passes"
+paths = [
+  "../../protocols/tests/identities/identity_d2/single_thread_passes.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d2/expects"
+expect_name = "single_thread_passes.interp.identity_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d2/identity_d2.v --protocol protocols/tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d2_two_assignments_same_value"
+paths = [
+  "../../protocols/tests/identities/identity_d2/two_assignments_same_value.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d2/expects"
+expect_name = "two_assignments_same_value.interp.identity_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d2/identity_d2.v --protocol protocols/tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d2_two_different_assignments_error"
+paths = [
+  "../../protocols/tests/identities/identity_d2/two_different_assignments_error.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d2/expects"
+expect_name = "two_different_assignments_error.interp.identity_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d2/identity_d2.v --protocol protocols/tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d2_two_fork_err"
+paths = [
+  "../../protocols/tests/identities/identity_d2/two_fork_err.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d2/expects"
+expect_name = "two_fork_err.interp.two_fork_err.skip_static_step_fork_checks.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --skip-static-step-fork-checks --verilog protocols/tests/identities/identity_d2/identity_d2.v --protocol protocols/tests/identities/identity_d2/two_fork_err.prot 2>/dev/null"
+
+[[tests]]
+name = "identities.protocols_tests_identities_identity_d2_two_fork_ill_formed"
+paths = [
+  "../../protocols/tests/identities/identity_d2/two_fork_ill_formed.tx",
+]
+expect_dir = "../../protocols/tests/identities/identity_d2/expects"
+expect_name = "two_fork_ill_formed.interp.two_fork_ill_formed.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog protocols/tests/identities/identity_d2/identity_d2.v --protocol protocols/tests/identities/identity_d2/two_fork_ill_formed.prot 2>/dev/null"
