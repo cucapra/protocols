@@ -4,7 +4,7 @@
 
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{DONTCARE_PREFIX, NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
@@ -95,9 +95,10 @@ fn format_op(
 }
 
 fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
-    match protocol.expr_ctx.get_symbol_name(expr_ref) {
-        Some(name) if name.starts_with(DONTCARE_PREFIX) => "X".to_string(),
-        _ => format_expr_node(protocol, expr_ref),
+    if protocol.dont_cares.contains(&expr_ref) {
+        "X".to_string()
+    } else {
+        format_expr_node(protocol, expr_ref)
     }
 }
 

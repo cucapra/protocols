@@ -6,7 +6,7 @@ use patronus::expr::{ExprRef, Type as PatronusType};
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
-use crate::ir::proto_graph::{self, *};
+use crate::ir::proto_graph::*;
 
 fn lower_ast_expr_to_patronus(
     ast: &Protocol,
@@ -18,27 +18,18 @@ fn lower_ast_expr_to_patronus(
     match &ast[expr] {
         Expr::DontCare => {
             let tpe = expected.unwrap_or(PatronusType::BV(1));
-            match tpe {
-                PatronusType::BV(width) => {
-                    let name = format!(
-                        "{}bv_{width}_{}",
-                        proto_graph::DONTCARE_PREFIX,
-                        ir.expr_ctx.num_exprs()
-                    );
-                    ir.expr_ctx.bv_symbol(&name, width)
-                }
+            let next_dont_care = ir.dont_cares.len();
+            // the name here is not relevant for anything other than debugging
+            let name = format!("dont_care_{}", next_dont_care);
+            let dont_care_expr = match tpe {
+                PatronusType::BV(width) => ir.expr_ctx.bv_symbol(&name, width),
                 PatronusType::Array(array_tpe) => {
-                    let name = format!(
-                        "{}arr_{}_{}x{}",
-                        proto_graph::DONTCARE_PREFIX,
-                        ir.expr_ctx.num_exprs(),
-                        array_tpe.index_width,
-                        array_tpe.data_width
-                    );
                     ir.expr_ctx
                         .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
                 }
-            }
+            };
+            ir.dont_cares.insert(dont_care_expr);
+            dont_care_expr
         }
         Expr::Const(bvv) => ir.expr_ctx.bv_lit(bvv),
         Expr::Sym(sym) => lower_symbol_expr(ir, symbols, *sym),

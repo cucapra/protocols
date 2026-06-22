@@ -9,7 +9,7 @@ use crate::Value;
 use crate::dut::{PatronusSim, PortId};
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
-use crate::ir::proto_graph::{DONTCARE_PREFIX, Op, ProtoGraph};
+use crate::ir::proto_graph::{Op, ProtoGraph};
 
 enum GraphBinding {
     Sim(PortId),
@@ -23,13 +23,6 @@ enum InputValue {
     DontCare,
 }
 
-fn is_dontcare_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> bool {
-    protocol
-        .expr_ctx
-        .get_symbol_name(expr_ref)
-        .is_some_and(|name| name.starts_with(DONTCARE_PREFIX))
-}
-
 fn build_bindings(
     protocol: &ProtoGraph,
     symbols: &SymbolTable,
@@ -38,35 +31,24 @@ fn build_bindings(
 ) -> FxHashMap<ExprRef, GraphBinding> {
     let mut bindings = FxHashMap::default();
 
-    for idx in 0..protocol.expr_ctx.num_exprs() {
-        let expr_ref = ExprRef::from_index(idx);
-        let Some(name) = protocol.expr_ctx.get_symbol_name(expr_ref) else {
-            continue;
-        };
-
-        if name.starts_with(DONTCARE_PREFIX) {
-            bindings.insert(expr_ref, GraphBinding::DontCare);
-            continue;
-        }
-
-        let Some(symbol_id) = symbols.symbol_id_from_name(protocol.scope, name) else {
-            unreachable!(
-                "IR symbol `{name}` has no corresponding AST-level symbol; the lowering and symbol table are out of sync"
-            )
-        };
-
+    // `symbol_expr` contains all the Args and Ports we need to bind
+    for (symbol_id, expr_ref) in protocol.symbol_expr.iter() {
         if symbols[symbol_id].is_arg() {
             let arg_name = symbols[symbol_id].name();
             let value = args
                 .get(arg_name)
                 .unwrap_or_else(|| panic!("missing argument value for {arg_name}"))
                 .clone();
-            bindings.insert(expr_ref, GraphBinding::Arg(value));
+            bindings.insert(*expr_ref, GraphBinding::Arg(value));
         } else if symbols[symbol_id].is_loop_var() {
             panic!("loop vars unsupported in the graph interpreter")
         } else if symbols[symbol_id].is_port() {
-            bindings.insert(expr_ref, GraphBinding::Sim(sim[symbol_id]));
+            bindings.insert(*expr_ref, GraphBinding::Sim(sim[*symbol_id]));
         }
+    }
+
+    for dont_care in protocol.dont_cares.iter() {
+        bindings.insert(*dont_care, GraphBinding::DontCare);
     }
 
     bindings
@@ -145,7 +127,7 @@ fn update_value_store(
 }
 
 fn evaluate_guard(protocol: &ProtoGraph, store: &SymbolValueStore, expr_ref: ExprRef) -> bool {
-    if is_dontcare_expr(protocol, expr_ref) {
+    if protocol.dont_cares.contains(&expr_ref) {
         panic!("guard evaluated to DontCare");
     }
 
@@ -160,7 +142,7 @@ fn evaluate_input_value(
     store: &SymbolValueStore,
     expr_ref: ExprRef,
 ) -> InputValue {
-    if is_dontcare_expr(protocol, expr_ref) {
+    if protocol.dont_cares.contains(&expr_ref) {
         return InputValue::DontCare;
     }
 
@@ -176,7 +158,7 @@ fn evaluate_assert_equal(
     lhs: ExprRef,
     rhs: ExprRef,
 ) {
-    if is_dontcare_expr(protocol, lhs) || is_dontcare_expr(protocol, rhs) {
+    if protocol.dont_cares.contains(&lhs) || protocol.dont_cares.contains(&rhs) {
         panic!("assert_eq on DontCare");
     }
 
