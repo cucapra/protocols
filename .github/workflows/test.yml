@@ -28,6 +28,15 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: cargo build --verbose
+    # Regenerate the runt configs from the catalog to check freshness
+    - name: Check Runt configs are up to date
+      run: |
+        python3 scripts/generate_runt_configs.py
+        if [ -n "$(git status --porcelain -- runt)" ]; then
+          echo "::error::runt configs are out of date. Run 'python3 scripts/generate_runt_configs.py' and commit the result."
+          git --no-pager diff -- runt
+          exit 1
+        fi
     - name: Run unit tests (Debug)
       run: cargo test --verbose
     - name: Run Runt tests for interpreter

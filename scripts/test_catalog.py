@@ -1057,24 +1057,24 @@ ANTMICRO_EXTRA_ARGS = (
     "tb.dut.clk",
     "--show-waveform-time",
     "--time-unit",
-    "ns"
+    "ns",
 )
 ANTMICRO_PROTOCOL = "tests/antmicro/wishbone_subordinate.prot"
 
 ANTMICRO_TRACE_STEMS = (
-        [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
-        + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
-        + [
-            f"sram_classic/test_sram_classic_{width}_{offset}"
-            for width in (16, 1, 2, 4, 8)
-            for offset in (0, 12, 4, 8)
-        ]
-        + [
-            f"sram_incrementing/test_sram_incrementing_{width}_{offset}_{index}"
-            for width in (16, 1, 2, 4, 8)
-            for offset in (0, 12, 4, 8)
-            for index in range(4)
-        ]
+    [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
+    + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
+    + [
+        f"sram_classic/test_sram_classic_{width}_{offset}"
+        for width in (16, 1, 2, 4, 8)
+        for offset in (0, 12, 4, 8)
+    ]
+    + [
+        f"sram_incrementing/test_sram_incrementing_{width}_{offset}_{index}"
+        for width in (16, 1, 2, 4, 8)
+        for offset in (0, 12, 4, 8)
+        for index in range(4)
+    ]
 )
 
 

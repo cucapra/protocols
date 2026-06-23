@@ -44,8 +44,7 @@ def load_tx_cases() -> list[dict]:
 
 
 def load_monitor_cases() -> list[dict]:
-    """Same idea as load_tx_cases but for the monitor cases
-    """
+    """Same idea as load_tx_cases but for the monitor cases"""
     out = []
     for case_id, c in test_catalog.MONITOR_CASES.items():
         out.append(
@@ -62,14 +61,17 @@ def load_monitor_cases() -> list[dict]:
         )
     return out
 
+
 # helper function to escape globs in places
 def runt_glob_literal(path: str) -> str:
     return path.replace("[", "[[]").replace("*", "[*]").replace("?", "[?]")
+
 
 # kinda convoluted set of methods to find a good .expect file name
 def replace_non_alphanumerics(value: object) -> str:
     text = re.sub(r"^-+", "", str(value).strip())
     return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_") or "default"
+
 
 def flag_profile(args: list[str]) -> list[str]:
     profile = []
@@ -101,7 +103,9 @@ def tx_profile(case: dict) -> str:
     parts = []
     if case["protocol_path"]:
         parts.append(Path(case["protocol_path"]).stem)
-    if case["module"] and replace_non_alphanumerics(case["module"]) not in {replace_non_alphanumerics(p) for p in parts}:
+    if case["module"] and replace_non_alphanumerics(case["module"]) not in {
+        replace_non_alphanumerics(p) for p in parts
+    }:
         parts.append(case["module"])
     if case["max_steps"] is not None:
         parts.append(f"max{case['max_steps']}")
@@ -123,7 +127,14 @@ def monitor_profile(case: dict) -> str:
 
 def expect_name(case: dict, runner: str) -> str:
     profile = monitor_profile(case) if runner == "monitor" else tx_profile(case)
-    return ".".join([replace_non_alphanumerics(case_stem(case)), replace_non_alphanumerics(runner), profile, "expect"])
+    return ".".join(
+        [
+            replace_non_alphanumerics(case_stem(case)),
+            replace_non_alphanumerics(runner),
+            profile,
+            "expect",
+        ]
+    )
 
 
 def expect_dir(case: dict, runner: str) -> str:
@@ -133,6 +144,7 @@ def expect_dir(case: dict, runner: str) -> str:
 
 
 # command construction
+
 
 def cargo_prefix(package: str) -> list[str]:
     return [
@@ -219,11 +231,6 @@ RUNT_BUILDERS = {
 
 
 # config generation
-
-
-def cases_where(cases, under=None) -> list[dict]:
-    selected = [c for c in cases if under is None or c["path"].startswith(under + "/")]
-    return sorted(selected, key=lambda c: c["path"])
 
 
 # Loop constructs the graph interpreter cannot handle (AST construct names).
@@ -313,43 +320,18 @@ def write_runt_toml(output_dir: Path, suites) -> None:
 def generate_runt_configs() -> None:
     tx = load_tx_cases()
     mon = load_monitor_cases()
-    interp_dirs = {
-        "adders": "tests/adders",
-        "alus": "tests/alus",
-        "identities": "tests/identities",
-        "multi": "tests/multi",
-        "picorv": "examples/picorv32",
-    }
-    monitor_dirs = {
-        "bnw_monitor": "tests/fpga-debugging",
-        "francis_bnw_monitor": "tests/brave_new_world_francis",
-        "axis": "tests/wal/advanced",
-    }
+    # Each suite maps a name to (runner, cases). interp + monitor + graph_interp
+    # together cover every test.
     suite_specs = {
-        "interp": [("interp", "interp", cases_where(tx))],
-        "monitor": [("monitor", "monitor", cases_where(mon))],
-        **{
-            n: [(n, "monitor", cases_where(mon, under=d))]
-            for n, d in monitor_dirs.items()
-        },
-        "graph_interp": [
-            ("graph_interp", "graph_interp", graph_interp_cases(tx)),
-        ],
-        **{
-            n: [(n, "interp", cases_where(tx, under=d))] for n, d in interp_dirs.items()
-        },
-        "turnt": [
-            ("interp", "interp", cases_where(tx)),
-            ("monitor", "monitor", cases_where(mon)),
-        ],
+        "interp": ("interp", tx),
+        "monitor": ("monitor", mon),
+        "graph_interp": ("graph_interp", graph_interp_cases(tx)),
     }
 
     expect_commands: dict[str, str] = {}
-    for suite_name, suites in suite_specs.items():
+    for suite_name, (runner, cases) in suite_specs.items():
         config_dir = REPO_ROOT / "runt" / suite_name
-        runt_suites = []
-        for name, runner, cases in suites:
-            runt_suites += runt_case_suites(name, runner, cases)
+        runt_suites = runt_case_suites(suite_name, runner, cases)
         for _name, edir, ename, cmd, _path in runt_suites:
             expect_path = (config_dir / edir / ename).resolve().as_posix()
             if expect_commands.setdefault(expect_path, cmd) != cmd:
