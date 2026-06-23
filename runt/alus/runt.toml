@@ -7,7 +7,7 @@ paths = [
 ]
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d1.interp.alu_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/alus/alu_d1.tx --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
 
 [[tests]]
 name = "alus.tests_alus_alu_d2.alu_d2_interp_alu_d2"
@@ -16,4 +16,4 @@ paths = [
 ]
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d2.interp.alu_d2.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/alus/alu_d2.tx --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"

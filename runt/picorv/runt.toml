@@ -7,4 +7,4 @@ paths = [
 ]
 expect_dir = "../../examples/picorv32/expects"
 expect_name = "unsigned_mul.interp.pcpi_mul.picorv32_pcpi_mul.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions examples/picorv32/unsigned_mul.tx --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"

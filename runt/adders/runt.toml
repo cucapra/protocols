@@ -7,7 +7,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d0/expects"
 expect_name = "add_combinational.interp.add_d0.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d0/add_combinational.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d0_illegal_assignment.illegal_assignment_interp_add_d0"
@@ -16,7 +16,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d0/expects"
 expect_name = "illegal_assignment.interp.add_d0.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d0/illegal_assignment.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d0_illegal_observation_assertion.illegal_observation_assertion_interp_add_d0"
@@ -25,7 +25,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d0/expects"
 expect_name = "illegal_observation_assertion.interp.add_d0.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d0/illegal_observation_assertion.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d0_illegal_observation_conditional.illegal_observation_conditional_interp_add_d0"
@@ -34,7 +34,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d0/expects"
 expect_name = "illegal_observation_conditional.interp.add_d0.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d0/illegal_observation_conditional.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_add_incorrect.add_incorrect_interp_add_d1"
@@ -43,7 +43,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_incorrect.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/add_incorrect.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_add_incorrect_implicit.add_incorrect_implicit_interp_add_d1"
@@ -52,7 +52,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_incorrect_implicit.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/add_incorrect_implicit.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_add_multitrace.add_multitrace_interp_add_d1"
@@ -61,7 +61,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_multitrace.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/add_multitrace.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_both_threads_fail.both_threads_fail_interp_add_d1"
@@ -70,7 +70,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_fail.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/both_threads_fail.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_both_threads_pass.both_threads_pass_interp_add_d1"
@@ -79,7 +79,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_pass.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/both_threads_pass.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_busy_wait_fail.busy_wait_fail_interp_busy_wait"
@@ -88,7 +88,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "busy_wait_fail.interp.busy_wait.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/busy_wait.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/busy_wait_fail.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/busy_wait.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_busy_wait_pass.busy_wait_pass_interp_busy_wait"
@@ -97,7 +97,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "busy_wait_pass.interp.busy_wait.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/busy_wait.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/busy_wait_pass.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/busy_wait.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_conditional_add.conditional_add_interp_add_d1"
@@ -106,7 +106,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "conditional_add.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/conditional_add.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_didnt_end_in_step.didnt_end_in_step_interp_didnt_end_in_step_skip_static_step_fork_checks"
@@ -115,7 +115,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "didnt_end_in_step.interp.didnt_end_in_step.skip_static_step_fork_checks.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/didnt_end_in_step.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/didnt_end_in_step.tx --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/didnt_end_in_step.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_double_fork_error.double_fork_error_interp_double_fork_error_skip_static_step_fork_checks"
@@ -124,7 +124,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "double_fork_error.interp.double_fork_error.skip_static_step_fork_checks.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/double_fork_error.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/double_fork_error.tx --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/double_fork_error.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_first_fail_second_norun.first_fail_second_norun_interp_add_d1"
@@ -133,7 +133,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "first_fail_second_norun.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/first_fail_second_norun.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_first_thread_fails.first_thread_fails_interp_add_d1"
@@ -142,7 +142,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "first_thread_fails.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/first_thread_fails.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_fork_before_step_error.fork_before_step_error_interp_fork_before_step_error_skip_static_step_fork_checks"
@@ -151,7 +151,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "fork_before_step_error.interp.fork_before_step_error.skip_static_step_fork_checks.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/fork_before_step_error.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/fork_before_step_error.tx --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/fork_before_step_error.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_loop_with_assigns.loop_with_assigns_interp_loop_with_assigns"
@@ -160,7 +160,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "loop_with_assigns.interp.loop_with_assigns.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/loop_with_assigns.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/loop_with_assigns.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/loop_with_assigns.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_nested_busy_wait.nested_busy_wait_interp_nested_busy_wait"
@@ -169,7 +169,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "nested_busy_wait.interp.nested_busy_wait.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/nested_busy_wait.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/nested_busy_wait.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/nested_busy_wait.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_second_thread_fails.second_thread_fails_interp_add_d1"
@@ -178,7 +178,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "second_thread_fails.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/second_thread_fails.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_wait_and_add_correct.wait_and_add_correct_interp_add_d1"
@@ -187,7 +187,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "wait_and_add_correct.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/wait_and_add_correct.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d1_wait_and_add_incorrect_implicit.wait_and_add_incorrect_implicit_interp_add_d1"
@@ -196,7 +196,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "wait_and_add_incorrect_implicit.interp.add_d1.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d1/wait_and_add_incorrect_implicit.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d2_both_threads_pass.both_threads_pass_interp_add_d2_max4"
@@ -205,7 +205,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d2/expects"
 expect_name = "both_threads_pass.interp.add_d2.max4.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot --max-steps 4 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d2/both_threads_pass.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot --max-steps 4 2>/dev/null"
 
 [[tests]]
 name = "adders.tests_adders_adder_d2_no_dontcare_conflict.no_dontcare_conflict_interp_no_dontcare_conflict"
@@ -214,4 +214,4 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d2/expects"
 expect_name = "no_dontcare_conflict.interp.no_dontcare_conflict.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-interp -- --color never --transactions \"$TEST\" --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/no_dontcare_conflict.prot 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-interp -- --color never --transactions tests/adders/adder_d2/no_dontcare_conflict.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/no_dontcare_conflict.prot 2>/dev/null"

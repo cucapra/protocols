@@ -2,45 +2,6 @@
 # Consumed by scripts/generate_runt_configs.py and scripts/benchmark_monitor.py.
 #
 # TX_CASES are keyed by their .tx path. MONITOR_CASES are keyed by a unique id
-# (antmicro cases share one .prot file but differ by wave, so the path is not a
-# unique key for monitors). Protocol features are NOT stored here; they are
-# derived on the fly from the referenced .prot file in generate_runt_configs.py.
-
-ANTMICRO_EXTRA_ARGS = (
-    "--sample-posedge",
-    "tb.dut.clk",
-    "--show-waveform-time",
-    "--time-unit",
-    "ns",
-)
-ANTMICRO_PROTOCOL = "tests/antmicro/wishbone_subordinate.prot"
-
-ANTMICRO_TRACE_STEMS = (
-    [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
-    + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
-    + [
-        f"sram_classic/test_sram_classic_{width}_{offset}"
-        for width in (16, 1, 2, 4, 8)
-        for offset in (0, 12, 4, 8)
-    ]
-    + [
-        f"sram_incrementing/test_sram_incrementing_{width}_{offset}_{index}"
-        for width in (16, 1, 2, 4, 8)
-        for offset in (0, 12, 4, 8)
-        for index in range(4)
-    ]
-)
-
-
-def _antmicro_case(stem):
-    return {
-        "protocol": ANTMICRO_PROTOCOL,
-        "wave": f"tests/antmicro/{stem}.fst",
-        "instances": ("tb.dut:WBSubordinate",),
-        "expect": "pass",
-        "extra_args": ANTMICRO_EXTRA_ARGS,
-    }
-
 
 TX_CASES = {
     "examples/picorv32/unsigned_mul.tx": {
@@ -1090,6 +1051,42 @@ MONITOR_CASES = {
         "extra_args": ("--sample-posedge", "TOP.reqwalker.i_clk"),
     },
 }
+
+ANTMICRO_EXTRA_ARGS = (
+    "--sample-posedge",
+    "tb.dut.clk",
+    "--show-waveform-time",
+    "--time-unit",
+    "ns"
+)
+ANTMICRO_PROTOCOL = "tests/antmicro/wishbone_subordinate.prot"
+
+ANTMICRO_TRACE_STEMS = (
+        [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
+        + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
+        + [
+            f"sram_classic/test_sram_classic_{width}_{offset}"
+            for width in (16, 1, 2, 4, 8)
+            for offset in (0, 12, 4, 8)
+        ]
+        + [
+            f"sram_incrementing/test_sram_incrementing_{width}_{offset}_{index}"
+            for width in (16, 1, 2, 4, 8)
+            for offset in (0, 12, 4, 8)
+            for index in range(4)
+        ]
+)
+
+
+def _antmicro_case(stem):
+    return {
+        "protocol": ANTMICRO_PROTOCOL,
+        "wave": f"tests/antmicro/{stem}.fst",
+        "instances": ("tb.dut:WBSubordinate",),
+        "expect": "pass",
+        "extra_args": ANTMICRO_EXTRA_ARGS,
+    }
+
 
 MONITOR_CASES.update(
     {

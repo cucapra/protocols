@@ -7,7 +7,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis.monitor.uart_axi.AXIS.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/wal/advanced/axis.prot --wave tests/wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "axis.tests_wal_advanced_axis_failing.axis_failing_monitor_uart_axi_minimal_AXIS"
@@ -16,7 +16,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_failing.monitor.uart_axi_minimal.AXIS.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/wal/advanced/axis_failing.prot --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "axis.tests_wal_advanced_axis_minimal.axis_minimal_monitor_uart_axi_minimal_AXIS"
@@ -25,7 +25,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_minimal.monitor.uart_axi_minimal.AXIS.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/wal/advanced/axis_minimal.prot --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "axis.tests_wal_advanced_axis_truncated.axis_truncated_monitor_uart_axi_truncated_AXIS"
@@ -34,7 +34,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_truncated.monitor.uart_axi_truncated.AXIS.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/wal/advanced/axis_truncated.prot --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "axis.tests_wal_advanced_axis_truncated_include_idle.axis_truncated_include_idle_monitor_uart_axi_truncated_AXIS"
@@ -43,4 +43,4 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_truncated_include_idle.monitor.uart_axi_truncated.AXIS.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/wal/advanced/axis_truncated_include_idle.prot --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle 2>/dev/null"

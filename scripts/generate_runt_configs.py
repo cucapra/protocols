@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Generate the checked-in Runt configs from scripts/test_catalog.py.
 
-Run this script to (re)write runt/*/runt.toml from the hand-maintained catalog.
-
-The catalog is trusted Python data, so this script does no validation: paths are
+Maybe we can do some more fancy validation on the catalog later,
+not right now this script does no validation: paths are
 assumed to be clean repo-relative posix strings and every config dir is
 runt/<suite> (two levels below the repo root), which makes the relative path to
 any test file simply "../../" + path.
@@ -22,11 +21,12 @@ import test_catalog
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNT_VERSION = "0.4.1"
-PLACEHOLDER = "__RUNT_TEST_PATH__"
 
 
 def load_tx_cases() -> list[dict]:
-    """Expand the compact catalog rows into the internal field shape."""
+    """Expand the compact catalog rows into the internal field shape.
+    This handles default fields which are omitted in the catalog for
+    the user experience."""
     out = []
     for path, c in test_catalog.TX_CASES.items():
         out.append(
@@ -44,6 +44,8 @@ def load_tx_cases() -> list[dict]:
 
 
 def load_monitor_cases() -> list[dict]:
+    """Same idea as load_tx_cases but for the monitor cases
+    """
     out = []
     for case_id, c in test_catalog.MONITOR_CASES.items():
         out.append(
@@ -60,25 +62,14 @@ def load_monitor_cases() -> list[dict]:
         )
     return out
 
-
-# --- small string helpers ---------------------------------------------------
-
-
-def toml_string(value: str) -> str:
-    return json.dumps(value)
-
-
+# helper function to escape globs in places
 def runt_glob_literal(path: str) -> str:
     return path.replace("[", "[[]").replace("*", "[*]").replace("?", "[?]")
 
-
-def slug(value: object) -> str:
+# kinda convoluted set of methods to find a good .expect file name
+def replace_non_alphanumerics(value: object) -> str:
     text = re.sub(r"^-+", "", str(value).strip())
     return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_") or "default"
-
-
-# --- expectation file naming ------------------------------------------------
-
 
 def flag_profile(args: list[str]) -> list[str]:
     profile = []
@@ -95,7 +86,7 @@ def flag_profile(args: list[str]) -> list[str]:
         else:
             profile.append(token.removeprefix("--"))
             i += 1
-    return [slug(part) for part in profile]
+    return [replace_non_alphanumerics(part) for part in profile]
 
 
 def case_stem(case: dict) -> str:
@@ -110,12 +101,12 @@ def tx_profile(case: dict) -> str:
     parts = []
     if case["protocol_path"]:
         parts.append(Path(case["protocol_path"]).stem)
-    if case["module"] and slug(case["module"]) not in {slug(p) for p in parts}:
+    if case["module"] and replace_non_alphanumerics(case["module"]) not in {replace_non_alphanumerics(p) for p in parts}:
         parts.append(case["module"])
     if case["max_steps"] is not None:
         parts.append(f"max{case['max_steps']}")
     parts += flag_profile(list(case["extra_args"]))
-    return ".".join(slug(p) for p in parts) or "default"
+    return ".".join(replace_non_alphanumerics(p) for p in parts) or "default"
 
 
 def monitor_profile(case: dict) -> str:
@@ -127,12 +118,12 @@ def monitor_profile(case: dict) -> str:
         parts.append(f"max{case['max_steps']}")
     if case["timeout_secs"] is not None:
         parts.append(f"timeout{case['timeout_secs']}s")
-    return ".".join(slug(p) for p in parts) or "default"
+    return ".".join(replace_non_alphanumerics(p) for p in parts) or "default"
 
 
 def expect_name(case: dict, runner: str) -> str:
     profile = monitor_profile(case) if runner == "monitor" else tx_profile(case)
-    return ".".join([slug(case_stem(case)), slug(runner), profile, "expect"])
+    return ".".join([replace_non_alphanumerics(case_stem(case)), replace_non_alphanumerics(runner), profile, "expect"])
 
 
 def expect_dir(case: dict, runner: str) -> str:
@@ -141,16 +132,12 @@ def expect_dir(case: dict, runner: str) -> str:
     return f"../../{base.as_posix()}/expects"
 
 
-# --- command construction ---------------------------------------------------
-
+# command construction
 
 def cargo_prefix(package: str) -> list[str]:
     return [
         "cargo",
         "run",
-        "--manifest-path",
-        "Cargo.toml",
-        "--quiet",
         "--offline",
         "--package",
         package,
@@ -159,23 +146,22 @@ def cargo_prefix(package: str) -> list[str]:
 
 
 def repo_root_command(cmd: list[str]) -> str:
-    quoted = shlex.join(cmd).replace(shlex.quote(PLACEHOLDER), '"$TEST"')
-    return "TEST='{}'; TEST=${TEST#../../}; cd ../.. && " + quoted + " 2>/dev/null"
+    # Each runt test runs exactly one path, so we bake it straight into the
+    return "cd ../.. && " + shlex.join(cmd) + " 2>/dev/null"
 
 
 def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
+    # Runt doesn't support expected timeouts, so we have to have this wrapper
+    # on the interp/monitor commands
+    # Run in a new process group and kill the whole group (cargo's child binary
+    # included) on expiry, exiting 124 to match coreutils.
     script = (
-        "import os, signal, subprocess, sys; "
-        "timeout=float(sys.argv[1]); "
-        "proc=subprocess.Popen(sys.argv[2:], start_new_session=True); "
-        "\ntry:\n"
-        "    sys.exit(proc.wait(timeout=timeout))\n"
+        "import os, signal, subprocess, sys\n"
+        "p = subprocess.Popen(sys.argv[2:], start_new_session=True)\n"
+        "try:\n"
+        "    sys.exit(p.wait(timeout=float(sys.argv[1])))\n"
         "except subprocess.TimeoutExpired:\n"
-        "    os.killpg(proc.pid, signal.SIGTERM)\n"
-        "    try:\n"
-        "        proc.wait(timeout=1)\n"
-        "    except subprocess.TimeoutExpired:\n"
-        "        os.killpg(proc.pid, signal.SIGKILL)\n"
+        "    os.killpg(p.pid, signal.SIGKILL)\n"
         "    sys.exit(124)\n"
     )
     return ["python3", "-c", script, str(timeout_secs), *cmd]
@@ -199,20 +185,20 @@ def interp_runt_command(case: dict) -> str:
         "--color",
         "never",
         "--transactions",
-        PLACEHOLDER,
+        case["path"],
     ]
     _tx_tail(cmd, case, with_max_steps=True)
     return repo_root_command(cmd)
 
 
 def graph_interp_runt_command(case: dict) -> str:
-    cmd = [*cargo_prefix("graph-interp"), "--transactions", PLACEHOLDER]
+    cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
     return repo_root_command(cmd)
 
 
 def monitor_runt_command(case: dict) -> str:
-    cmd = [*cargo_prefix("protocols-monitor"), "--protocol", PLACEHOLDER]
+    cmd = [*cargo_prefix("protocols-monitor"), "--protocol", case["path"]]
     if case["wave"]:
         cmd += ["--wave", case["wave"]]
     if case["instances"]:
@@ -232,7 +218,7 @@ RUNT_BUILDERS = {
 }
 
 
-# --- config generation ------------------------------------------------------
+# config generation
 
 
 def cases_where(cases, under=None) -> list[dict]:
@@ -246,13 +232,21 @@ GRAPH_INTERP_UNSUPPORTED = {"for_in_loop", "repeat_loop"}
 
 @lru_cache(maxsize=None)
 def protocol_constructs(protocol_path: str) -> frozenset[str]:
-    """Constructs used anywhere in a .prot file, via `protocols-cli constructs`.
-
-    The CLI prints one `name: c1, c2, ...` line per protocol definition (on
-    stdout; type-inference warnings go to stderr). We union over all definitions.
+    """
+    Constructs used anywhere in a .prot file, via `protocols-cli constructs`.
     """
     result = subprocess.run(
-        ["cargo", "run", "-q", "--bin", "protocols-cli", "--", "-p", protocol_path, "constructs"],
+        [
+            "cargo",
+            "run",
+            "-q",
+            "--bin",
+            "protocols-cli",
+            "--",
+            "-p",
+            protocol_path,
+            "constructs",
+        ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -283,8 +277,8 @@ def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     for case in sorted(cases, key=lambda c: (c["path"], expect_name(c, runner))):
         path = case["path"]
         name = (
-            f"{suite_name}.{slug(Path(path).with_suffix('').as_posix())}"
-            f".{slug(expect_name(case, runner).removesuffix('.expect'))}"
+            f"{suite_name}.{replace_non_alphanumerics(Path(path).with_suffix('').as_posix())}"
+            f".{replace_non_alphanumerics(expect_name(case, runner).removesuffix('.expect'))}"
         )
         suites.append(
             (
@@ -300,17 +294,17 @@ def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
 
 def write_runt_toml(output_dir: Path, suites) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    chunks = [f"ver = {toml_string(RUNT_VERSION)}\n"]
+    chunks = [f"ver = {json.dumps(RUNT_VERSION)}\n"]
     for name, edir, ename, cmd, path in suites:
         chunks += [
             "[[tests]]",
-            f"name = {toml_string(name)}",
+            f"name = {json.dumps(name)}",
             "paths = [",
-            f"  {toml_string(runt_glob_literal('../../' + path))},",
+            f"  {json.dumps(runt_glob_literal('../../' + path))},",
             "]",
-            f"expect_dir = {toml_string(edir)}",
-            f"expect_name = {toml_string(ename)}",
-            f"cmd = {toml_string(cmd)}",
+            f"expect_dir = {json.dumps(edir)}",
+            f"expect_name = {json.dumps(ename)}",
+            f"cmd = {json.dumps(cmd)}",
             "",
         ]
     (output_dir / "runt.toml").write_text("\n".join(chunks))

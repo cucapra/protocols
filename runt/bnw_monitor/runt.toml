@@ -7,7 +7,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-burst-s4/expects"
 expect_name = "s4_buggy.monitor.WriteSubordinate.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-burst-s4/s4_buggy.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-burst-s4/s4_buggy.prot --wave tests/fpga-debugging/axi-burst-s4/s4_buggy.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_burst_s4_s4_fixed.s4_fixed_monitor_WriteSubordinate"
@@ -16,7 +16,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-burst-s4/expects"
 expect_name = "s4_fixed.monitor.WriteSubordinate.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-burst-s4/s4_fixed.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-burst-s4/s4_fixed.prot --wave tests/fpga-debugging/axi-burst-s4/s4_fixed.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_lite_s1_s1_buggy.s1_buggy_monitor_s1_buggy_workload2_WriteSubordinate_ReadSubordinate"
@@ -25,7 +25,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_buggy.monitor.s1_buggy_workload2.WriteSubordinate.ReadSubordinate.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_lite_s1_s1_buggy_workload_1.s1_buggy_workload_1_monitor_s1_buggy_workload1_WriteSubordinate_ReadSubordinate"
@@ -34,7 +34,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_buggy_workload_1.monitor.s1_buggy_workload1.WriteSubordinate.ReadSubordinate.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_lite_s1_s1_fixed.s1_fixed_monitor_s1_fixed_workload2_WriteSubordinate_ReadSubordinate"
@@ -43,7 +43,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_fixed.monitor.s1_fixed_workload2.WriteSubordinate.ReadSubordinate.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_lite_s1_s1_fixed_workload_1.s1_fixed_workload_1_monitor_s1_fixed_workload1_WriteSubordinate_ReadSubordinate"
@@ -52,7 +52,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_fixed_workload_1.monitor.s1_fixed_workload1.WriteSubordinate.ReadSubordinate.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_stream_s2_s2_buggy.s2_buggy_monitor_AXISManager"
@@ -61,7 +61,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_buggy.monitor.AXISManager.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-stream-s2/s2_buggy.prot --wave tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axi_stream_s2_s2_fixed.s2_fixed_monitor_AXISManager"
@@ -70,7 +70,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_fixed.monitor.AXISManager.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axi-stream-s2/s2_fixed.prot --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_adapter_s3_s3_buggy.s3_buggy_monitor_AXISManager"
@@ -79,7 +79,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_buggy.monitor.AXISManager.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_monitor_AXISManager"
@@ -88,7 +88,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.monitor.AXISManager.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_monitor_Sender_Receiver"
@@ -97,7 +97,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_buggy.monitor.Sender.Receiver.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_monitor_Sender_Receiver"
@@ -106,7 +106,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_fixed.monitor.Sender.Receiver.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_fifo_d11_d11_buggy.d11_buggy_monitor_AxisFifo"
@@ -115,7 +115,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d11/expects"
 expect_name = "d11_buggy.monitor.AxisFifo.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-fifo-d11/d11_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-fifo-d11/d11_buggy.prot --wave tests/fpga-debugging/axis-fifo-d11/d11_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_fifo_d11_d11_fixed.d11_fixed_monitor_AxisFifo"
@@ -124,7 +124,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d11/expects"
 expect_name = "d11_fixed.monitor.AxisFifo.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-fifo-d11/d11_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-fifo-d11/d11_fixed.prot --wave tests/fpga-debugging/axis-fifo-d11/d11_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_fifo_d12_d12_buggy.d12_buggy_monitor_AxisFifo"
@@ -133,7 +133,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d12/expects"
 expect_name = "d12_buggy.monitor.AxisFifo.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-fifo-d12/d12_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-fifo-d12/d12_buggy.prot --wave tests/fpga-debugging/axis-fifo-d12/d12_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_fifo_d12_d12_fixed.d12_fixed_monitor_AxisFifo"
@@ -142,7 +142,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d12/expects"
 expect_name = "d12_fixed.monitor.AxisFifo.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-fifo-d12/d12_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-fifo-d12/d12_fixed.prot --wave tests/fpga-debugging/axis-fifo-d12/d12_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_fifo_d4_d4_buggy.d4_buggy_monitor_AxisFifo"
@@ -151,7 +151,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d4/expects"
 expect_name = "d4_buggy.monitor.AxisFifo.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-fifo-d4/d4_buggy.prot --wave tests/fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
 
 [[tests]]
 name = "bnw_monitor.tests_fpga_debugging_axis_fifo_d4_d4_fixed.d4_fixed_monitor_AxisFifo"
@@ -160,4 +160,4 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d4/expects"
 expect_name = "d4_fixed.monitor.AxisFifo.expect"
-cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package protocols-monitor -- --protocol \"$TEST\" --wave tests/fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
+cmd = "cd ../.. && cargo run --offline --package protocols-monitor -- --protocol tests/fpga-debugging/axis-fifo-d4/d4_fixed.prot --wave tests/fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>/dev/null"
