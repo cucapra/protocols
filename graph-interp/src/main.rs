@@ -63,11 +63,11 @@ fn build_arg_map<'a>(
 
 fn print_panic_payload(payload: Box<dyn std::any::Any + Send>) {
     if let Some(message) = payload.downcast_ref::<&str>() {
-        eprintln!("{message}");
+        println!("{message}");
     } else if let Some(message) = payload.downcast_ref::<String>() {
-        eprintln!("{message}");
+        println!("{message}");
     } else {
-        eprintln!("graph interpreter panicked");
+        println!("graph interpreter panicked");
     }
 }
 

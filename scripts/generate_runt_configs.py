@@ -22,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNT_VERSION = "0.4.1"
 PLACEHOLDER = "__RUNT_TEST_PATH__"
 
+PROTOCOLS = test_catalog.PROTOCOLS
 TX_CASES = test_catalog.TX_CASES
 MONITOR_CASES = test_catalog.MONITOR_CASES
 
@@ -200,21 +201,24 @@ RUNT_BUILDERS = {
 # --- config generation ------------------------------------------------------
 
 
-def cases_where(cases, under=None, paths=None) -> list[dict]:
-    selected = [
-        c
-        for c in cases
-        if (under is None or c["path"].startswith(under + "/"))
-        and (paths is None or c["path"] in paths)
-    ]
+def cases_where(cases, under=None) -> list[dict]:
+    selected = [c for c in cases if under is None or c["path"].startswith(under + "/")]
     return sorted(selected, key=lambda c: c["path"])
 
 
-def graph_interp_paths() -> set[str]:
-    allowlist = REPO_ROOT / "tests/graph_interp_allowlist.txt"
-    if not allowlist.exists():
-        return set()
-    return {line.strip() for line in allowlist.read_text().splitlines() if line.strip()}
+GRAPH_INTERP_UNSUPPORTED = {"for_in", "repeat"}
+
+
+def graph_interp_cases(cases: list[dict]) -> list[dict]:
+    """Passing tx cases whose protocol has no for_in or repeat loop."""
+    selected = [
+        c
+        for c in cases
+        if c["expected"] == "pass"
+        and c["protocol_id"]
+        and not GRAPH_INTERP_UNSUPPORTED & set(PROTOCOLS[c["protocol_id"]]["features"])
+    ]
+    return sorted(selected, key=lambda c: c["path"])
 
 
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
@@ -279,11 +283,7 @@ def generate_runt_configs() -> None:
             for n, d in monitor_dirs.items()
         },
         "graph_interp": [
-            (
-                "graph_interp",
-                "graph_interp",
-                cases_where(tx, paths=graph_interp_paths()),
-            )
+            ("graph_interp", "graph_interp", graph_interp_cases(tx)),
         ],
         **{
             n: [(n, "interp", cases_where(tx, under=d))] for n, d in interp_dirs.items()

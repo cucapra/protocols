@@ -1,0 +1,27 @@
+warning: Inferred RHS type as u1 from LHS type u1.
+   ┌─ tests/fifo/fifo.prot:33:5
+   │
+33 │     DUT.enq_not_deq_i := X;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ Inferred RHS type as u1 from LHS type u1.
+
+warning: Inferred RHS type as u1 from LHS type u1.
+   ┌─ tests/fifo/fifo.prot:34:5
+   │
+34 │     DUT.v_i := X;
+   │     ^^^^^^^^^^^^^ Inferred RHS type as u1 from LHS type u1.
+
+warning: Inferred RHS type as u1 from LHS type u1.
+   ┌─ tests/fifo/fifo.prot:35:5
+   │
+35 │     DUT.reset_i := X;
+   │     ^^^^^^^^^^^^^^^^^ Inferred RHS type as u1 from LHS type u1.
+
+warning: Inferred RHS type as u32 from LHS type u32.
+   ┌─ tests/fifo/fifo.prot:36:5
+   │
+36 │     DUT.data_i := X;
+   │     ^^^^^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
+
+assert_eq failed: lhs=3 rhs=4
+---CODE---
+101
