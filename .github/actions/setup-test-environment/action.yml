@@ -14,4 +14,4 @@ runs:
     - uses: ./.github/actions/setup-uv
     - name: Install Runt
       shell: bash
-      run: cargo install runt
+      run: cargo install --git https://github.com/Nikil-Shyamsunder/runt.git
