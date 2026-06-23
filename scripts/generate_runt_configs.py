@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 import test_catalog
@@ -22,9 +24,41 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNT_VERSION = "0.4.1"
 PLACEHOLDER = "__RUNT_TEST_PATH__"
 
-PROTOCOLS = test_catalog.PROTOCOLS
-TX_CASES = test_catalog.TX_CASES
-MONITOR_CASES = test_catalog.MONITOR_CASES
+
+def load_tx_cases() -> list[dict]:
+    """Expand the compact catalog rows into the internal field shape."""
+    out = []
+    for path, c in test_catalog.TX_CASES.items():
+        out.append(
+            {
+                "path": path,
+                "protocol_path": c["protocol"],
+                "module": c.get("top"),
+                "verilog": c.get("verilog", ()),
+                "max_steps": c.get("max_steps"),
+                "extra_args": c.get("extra_args", ()),
+                "expected": c["expect"],
+            }
+        )
+    return out
+
+
+def load_monitor_cases() -> list[dict]:
+    out = []
+    for case_id, c in test_catalog.MONITOR_CASES.items():
+        out.append(
+            {
+                "id": case_id,
+                "path": c["protocol"],
+                "wave": c.get("wave"),
+                "instances": c.get("instances", ()),
+                "max_steps": c.get("max_steps"),
+                "timeout_secs": c.get("timeout_secs"),
+                "extra_args": c.get("extra_args", ()),
+                "expected": c["expect"],
+            }
+        )
+    return out
 
 
 # --- small string helpers ---------------------------------------------------
@@ -206,17 +240,39 @@ def cases_where(cases, under=None) -> list[dict]:
     return sorted(selected, key=lambda c: c["path"])
 
 
-GRAPH_INTERP_UNSUPPORTED = {"for_in", "repeat"}
+# Loop constructs the graph interpreter cannot handle (AST construct names).
+GRAPH_INTERP_UNSUPPORTED = {"for_in_loop", "repeat_loop"}
+
+
+@lru_cache(maxsize=None)
+def protocol_constructs(protocol_path: str) -> frozenset[str]:
+    """Constructs used anywhere in a .prot file, via `protocols-cli constructs`.
+
+    The CLI prints one `name: c1, c2, ...` line per protocol definition (on
+    stdout; type-inference warnings go to stderr). We union over all definitions.
+    """
+    result = subprocess.run(
+        ["cargo", "run", "-q", "--bin", "protocols-cli", "--", "-p", protocol_path, "constructs"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    used: set[str] = set()
+    for line in result.stdout.splitlines():
+        if ":" in line:
+            _, constructs = line.split(":", 1)
+            used.update(c.strip() for c in constructs.split(",") if c.strip())
+    return frozenset(used)
 
 
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
-    """Passing tx cases whose protocol has no for_in or repeat loop."""
+    """Passing tx cases whose protocol uses no for-in or repeat loop."""
     selected = [
         c
         for c in cases
         if c["expected"] == "pass"
-        and c["protocol_id"]
-        and not GRAPH_INTERP_UNSUPPORTED & set(PROTOCOLS[c["protocol_id"]]["features"])
+        and not GRAPH_INTERP_UNSUPPORTED & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
 
@@ -261,8 +317,8 @@ def write_runt_toml(output_dir: Path, suites) -> None:
 
 
 def generate_runt_configs() -> None:
-    tx = list(TX_CASES.values())
-    mon = list(MONITOR_CASES.values())
+    tx = load_tx_cases()
+    mon = load_monitor_cases()
     interp_dirs = {
         "adders": "tests/adders",
         "alus": "tests/alus",

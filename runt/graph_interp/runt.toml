@@ -10,6 +10,15 @@ expect_name = "unsigned_mul.graph_interp.pcpi_mul.picorv32_pcpi_mul.expect"
 cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.examples_serv_serv_regfile.serv_regfile_graph_interp_serv_regfile"
+paths = [
+  "../../examples/serv/serv_regfile.tx",
+]
+expect_dir = "../../examples/serv/expects"
+expect_name = "serv_regfile.graph_interp.serv_regfile.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog examples/serv/rtl/serv_regfile.v --protocol examples/serv/serv_regfile.prot 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.examples_tinyaes128_aes128.aes128_graph_interp_aes128_aes_128"
 paths = [
   "../../examples/tinyaes128/aes128.tx",
@@ -71,6 +80,15 @@ paths = [
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d1.graph_interp.alu_d1.expect"
 cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_alus_alu_d2.alu_d2_graph_interp_alu_d2"
+paths = [
+  "../../tests/alus/alu_d2.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "alu_d2.graph_interp.alu_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_graph_interp_bounded_rv"
@@ -172,6 +190,15 @@ expect_name = "push_pop_identity_ok.graph_interp.fifo.fifo_wrapper.expect"
 cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_identities_identity_d0_passthrough_combdep.passthrough_combdep_graph_interp_identity_d0"
+paths = [
+  "../../tests/identities/identity_d0/passthrough_combdep.tx",
+]
+expect_dir = "../../tests/identities/identity_d0/expects"
+expect_name = "passthrough_combdep.graph_interp.identity_d0.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/identities/identity_d0/identity_d0.v --protocol tests/identities/identity_d0/identity_d0.prot 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_identities_identity_d1_slicing_ok.slicing_ok_graph_interp_identity_d1"
 paths = [
   "../../tests/identities/identity_d1/slicing_ok.tx",
@@ -179,6 +206,24 @@ paths = [
 expect_dir = "../../tests/identities/identity_d1/expects"
 expect_name = "slicing_ok.graph_interp.identity_d1.expect"
 cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_identities_identity_d2_single_thread_passes.single_thread_passes_graph_interp_identity_d2"
+paths = [
+  "../../tests/identities/identity_d2/single_thread_passes.tx",
+]
+expect_dir = "../../tests/identities/identity_d2/expects"
+expect_name = "single_thread_passes.graph_interp.identity_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_identities_identity_d2_two_assignments_same_value.two_assignments_same_value_graph_interp_identity_d2"
+paths = [
+  "../../tests/identities/identity_d2/two_assignments_same_value.tx",
+]
+expect_dir = "../../tests/identities/identity_d2/expects"
+expect_name = "two_assignments_same_value.graph_interp.identity_d2.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_multi_multi0_multi0.multi0_graph_interp_multi0"
@@ -242,3 +287,12 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_pass.graph_interp.mult_d2.expect"
 cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp_wishbone_reqwalker"
+paths = [
+  "../../tests/wishbone/wishbone.tx",
+]
+expect_dir = "../../tests/wishbone/expects"
+expect_name = "wishbone.graph_interp.wishbone.reqwalker.expect"
+cmd = "TEST='{}'; TEST=${TEST#../../}; cd ../.. && cargo run --manifest-path Cargo.toml --quiet --offline --package graph-interp -- --transactions \"$TEST\" --verilog tests/wishbone/reqwalker.v --protocol tests/wishbone/wishbone.prot --module reqwalker 2>/dev/null"

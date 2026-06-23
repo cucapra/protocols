@@ -9,7 +9,8 @@ use std::ops::{Deref, DerefMut, Index};
 
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+use strum::IntoEnumIterator;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
 use crate::frontend::symbol::{Arg, ScopeId, SymbolId, SymbolTable, Type};
@@ -168,6 +169,24 @@ impl Protocol {
 
     pub fn next_stmt_mapping(&self) -> FxHashMap<StmtId, Option<StmtId>> {
         self.next_stmt_mapping_helper(self.body, None)
+    }
+
+    /// comma separated string of all constructs used
+    pub fn used_constructs(&self) -> String {
+        let used: FxHashSet<_> = self
+            .stmts
+            .iter()
+            .map(|(_, stmt)| StmtDiscriminants::from(stmt))
+            .collect();
+
+        // print out all the Stmt types used (except for block, because every protocol has a block
+        // and it's a purely internal-facing construct)
+        StmtDiscriminants::iter()
+            .filter(|construct| *construct != StmtDiscriminants::Block)
+            .filter(|construct| used.contains(construct))
+            .map(|construct| construct.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     fn next_stmt_mapping_helper(
@@ -335,7 +354,9 @@ impl Index<&StmtId> for Protocol {
 pub struct StmtId(u32);
 entity_impl!(StmtId, "stmt");
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, strum_macros::EnumDiscriminants)]
+#[strum_discriminants(derive(strum_macros::Display, strum_macros::EnumIter, Hash))]
+#[strum_discriminants(strum(serialize_all = "snake_case"))]
 pub enum Stmt {
     Block(Vec<StmtId>),
     Assign(SymbolId, ExprId),
@@ -507,6 +528,7 @@ mod tests {
             add.s(Stmt::Assign(s, dut_s_expr)),
         ];
         add.body = add.s(Stmt::Block(body));
+        assert_eq!(add.used_constructs(), "assign, step, fork");
         symbols.exit_scope();
     }
 
@@ -574,6 +596,7 @@ mod tests {
         ];
 
         calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
+        assert_eq!(calyx_go_done.used_constructs(), "assign, step, while");
         symbols.exit_scope();
     }
 }

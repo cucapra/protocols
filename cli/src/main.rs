@@ -22,6 +22,8 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Cmds {
+    /// Print out all the constructs used in each protocol
+    Constructs,
     Verilog {
         verilog_tb: String,
         #[arg(long)]
@@ -180,6 +182,11 @@ fn main() {
 
     match args.command {
         None => {}
+        Some(Cmds::Constructs) => {
+            for p in &protos {
+                println!("{}: {}", p.name, p.used_constructs());
+            }
+        }
         Some(Cmds::Verilog {
             verilog_tb,
             transactions,

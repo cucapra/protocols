@@ -26,7 +26,16 @@ OUTPUT_CSV = "benchmark_results/benchmark_results.csv"
 
 def main():
     cases = sorted(
-        test_catalog.MONITOR_CASES.values(),
+        (
+            {
+                "id": case_id,
+                "path": c["protocol"],
+                "wave": c.get("wave"),
+                "instances": c.get("instances", ()),
+                "extra_args": c.get("extra_args", ()),
+            }
+            for case_id, c in test_catalog.MONITOR_CASES.items()
+        ),
         key=lambda case: (case["path"], case["id"]),
     )
 
