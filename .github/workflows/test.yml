@@ -31,11 +31,11 @@ jobs:
     - name: Run unit tests (Debug)
       run: cargo test --verbose
     - name: Run Runt tests for interpreter
-      run: runt runt/interp
+      run: runt --max-futures 1 runt/interp
     - name: Run Runt tests for graph-interpreter
-      run: runt runt/graph_interp
+      run: runt --max-futures 1 runt/graph_interp
     - name: Run Runt tests for monitor
-      run: runt runt/monitor
+      run: runt --max-futures 1 runt/monitor
 
   msrv:
     name: Check Minimum Rust Version for protocols library
