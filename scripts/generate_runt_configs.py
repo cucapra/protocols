@@ -67,31 +67,14 @@ def runt_glob_literal(path: str) -> str:
     return path.replace("[", "[[]").replace("*", "[*]").replace("?", "[?]")
 
 
-# kinda convoluted set of methods to find a good .expect file name
 def replace_non_alphanumerics(value: object) -> str:
     text = re.sub(r"^-+", "", str(value).strip())
     return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_") or "default"
 
 
-def flag_profile(args: list[str]) -> list[str]:
-    profile = []
-    i = 0
-    while i < len(args):
-        token = args[i]
-        if (
-            token.startswith("--")
-            and i + 1 < len(args)
-            and not args[i + 1].startswith("--")
-        ):
-            profile.append(f"{token[2:]}_{args[i + 1]}")
-            i += 2
-        else:
-            profile.append(token.removeprefix("--"))
-            i += 1
-    return [replace_non_alphanumerics(part) for part in profile]
-
-
 def case_stem(case: dict) -> str:
+    # antmicro monitor cases share one .prot but differ by wave, so name them by
+    # the wave; otherwise use the test file's stem (dropping a .monitor suffix).
     wave = case.get("wave")
     if wave and case["path"].startswith("tests/antmicro/"):
         return Path(wave).stem
@@ -99,42 +82,11 @@ def case_stem(case: dict) -> str:
     return stem.removesuffix(".monitor")
 
 
-def tx_profile(case: dict) -> str:
-    parts = []
-    if case["protocol_path"]:
-        parts.append(Path(case["protocol_path"]).stem)
-    if case["module"] and replace_non_alphanumerics(case["module"]) not in {
-        replace_non_alphanumerics(p) for p in parts
-    }:
-        parts.append(case["module"])
-    if case["max_steps"] is not None:
-        parts.append(f"max{case['max_steps']}")
-    parts += flag_profile(list(case["extra_args"]))
-    return ".".join(replace_non_alphanumerics(p) for p in parts) or "default"
-
-
-def monitor_profile(case: dict) -> str:
-    parts = []
-    if case["wave"] and Path(case["wave"]).stem != case_stem(case):
-        parts.append(Path(case["wave"]).stem)
-    parts += [inst.rsplit(":", 1)[-1] for inst in case["instances"]]
-    if case["max_steps"] is not None:
-        parts.append(f"max{case['max_steps']}")
-    if case["timeout_secs"] is not None:
-        parts.append(f"timeout{case['timeout_secs']}s")
-    return ".".join(replace_non_alphanumerics(p) for p in parts) or "default"
-
-
 def expect_name(case: dict, runner: str) -> str:
-    profile = monitor_profile(case) if runner == "monitor" else tx_profile(case)
-    return ".".join(
-        [
-            replace_non_alphanumerics(case_stem(case)),
-            replace_non_alphanumerics(runner),
-            profile,
-            "expect",
-        ]
-    )
+    # Each (test, runner) pair is unique, so stem + runner fully identifies the
+    # expect file. The runner keeps interp/graph_interp goldens for the same .tx
+    # from colliding.
+    return f"{replace_non_alphanumerics(case_stem(case))}.{runner}.expect"
 
 
 def expect_dir(case: dict, runner: str) -> str:
