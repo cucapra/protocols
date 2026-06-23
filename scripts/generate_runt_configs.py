@@ -50,7 +50,11 @@ def flag_profile(args: list[str]) -> list[str]:
     i = 0
     while i < len(args):
         token = args[i]
-        if token.startswith("--") and i + 1 < len(args) and not args[i + 1].startswith("--"):
+        if (
+            token.startswith("--")
+            and i + 1 < len(args)
+            and not args[i + 1].startswith("--")
+        ):
             profile.append(f"{token[2:]}_{args[i + 1]}")
             i += 2
         else:
@@ -106,8 +110,17 @@ def expect_dir(case: dict, runner: str) -> str:
 
 
 def cargo_prefix(package: str) -> list[str]:
-    return ["cargo", "run", "--manifest-path", "Cargo.toml", "--quiet",
-            "--offline", "--package", package, "--"]
+    return [
+        "cargo",
+        "run",
+        "--manifest-path",
+        "Cargo.toml",
+        "--quiet",
+        "--offline",
+        "--package",
+        package,
+        "--",
+    ]
 
 
 def repo_root_command(cmd: list[str]) -> str:
@@ -146,7 +159,13 @@ def _tx_tail(cmd: list[str], case: dict, with_max_steps: bool) -> None:
 
 
 def interp_runt_command(case: dict) -> str:
-    cmd = [*cargo_prefix("protocols-interp"), "--color", "never", "--transactions", PLACEHOLDER]
+    cmd = [
+        *cargo_prefix("protocols-interp"),
+        "--color",
+        "never",
+        "--transactions",
+        PLACEHOLDER,
+    ]
     _tx_tail(cmd, case, with_max_steps=True)
     return repo_root_command(cmd)
 
@@ -207,7 +226,15 @@ def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
             f"{suite_name}.{slug(Path(path).with_suffix('').as_posix())}"
             f".{slug(expect_name(case, runner).removesuffix('.expect'))}"
         )
-        suites.append((name, expect_dir(case, runner), expect_name(case, runner), build(case), path))
+        suites.append(
+            (
+                name,
+                expect_dir(case, runner),
+                expect_name(case, runner),
+                build(case),
+                path,
+            )
+        )
     return suites
 
 
@@ -247,10 +274,24 @@ def generate_runt_configs() -> None:
     suite_specs = {
         "interp": [("interp", "interp", cases_where(tx))],
         "monitor": [("monitor", "monitor", cases_where(mon))],
-        **{n: [(n, "monitor", cases_where(mon, under=d))] for n, d in monitor_dirs.items()},
-        "graph_interp": [("graph_interp", "graph_interp", cases_where(tx, paths=graph_interp_paths()))],
-        **{n: [(n, "interp", cases_where(tx, under=d))] for n, d in interp_dirs.items()},
-        "turnt": [("interp", "interp", cases_where(tx)), ("monitor", "monitor", cases_where(mon))],
+        **{
+            n: [(n, "monitor", cases_where(mon, under=d))]
+            for n, d in monitor_dirs.items()
+        },
+        "graph_interp": [
+            (
+                "graph_interp",
+                "graph_interp",
+                cases_where(tx, paths=graph_interp_paths()),
+            )
+        ],
+        **{
+            n: [(n, "interp", cases_where(tx, under=d))] for n, d in interp_dirs.items()
+        },
+        "turnt": [
+            ("interp", "interp", cases_where(tx)),
+            ("monitor", "monitor", cases_where(mon)),
+        ],
     }
 
     expect_commands: dict[str, str] = {}
