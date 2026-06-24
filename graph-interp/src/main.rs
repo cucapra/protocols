@@ -6,10 +6,12 @@ use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
-use protocols::ir::graph_interpreter;
+use protocols::ir::{graph_interpreter};
+use protocols::ir::proto_graph::ProtoGraph;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
+use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -32,6 +34,14 @@ struct Cli {
     /// Skips the static checks for step/fork errors.
     #[arg(long)]
     skip_static_step_fork_checks: bool,
+
+    // Contract edges in the graphs such that each edge is a step
+    #[arg(long)]
+    contract_edges: bool,
+
+    /// Normalize assignments such that each node assigns every pin
+    #[arg(long)]
+    normalize_assignments: bool,
 }
 
 fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
@@ -78,26 +88,34 @@ fn main() {
     let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
     let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None).unwrap();
 
-    let graphs: FxHashMap<String, _> = protos
+    let mut graphs: Vec<(String, ProtoGraph)> = protos
         .iter()
-        .map(|proto| {
-            (
-                proto.name.clone(),
-                (lower_ast_to_ir(proto.clone(), &st), &st),
-            )
-        })
+        .map(|proto| (proto.name.clone(), lower_ast_to_ir(proto.clone(), &st)))
         .collect();
+
+    // edge contract the graphs
+    if cli.contract_edges {
+        for (_, graph) in &mut graphs {
+            contract_edges(graph, &st);
+        }
+    }
+
+    // normalize assignments - only if we also contract edges
+    if cli.contract_edges && cli.normalize_assignments {
+        for (_, graph) in &mut graphs {
+            normalize_assignments(graph, &st);
+        }
+    }
 
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         for (trace_index, trace) in traces.into_iter().enumerate() {
             for (name, values) in trace {
-                let (graph, symbols) = graphs
-                    .get(&name)
+                let (_, pg) = graphs.iter_mut().find(|(n, _)| n == &name)
                     .unwrap_or_else(|| panic!("unknown protocol {name}"));
-                let args = build_arg_map(&graph.args, symbols, values);
-                graph_interpreter::interpret(graph, symbols, args, &mut sim);
+                let args = build_arg_map(&pg.args, &st, values);
+                graph_interpreter::interpret(pg, &st, args, &mut sim);
             }
             println!("trace {} executed successfully", trace_index);
         }
