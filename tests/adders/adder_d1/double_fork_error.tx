@@ -1,0 +1,4 @@
+trace {
+    add_double_fork(1, 2, 3);
+    add_double_fork(4, 5, 9);
+}

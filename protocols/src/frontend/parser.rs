@@ -723,7 +723,15 @@ pub fn parse_file(
     filename: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
 ) -> Result<(SymbolTable, Vec<Protocol>), String> {
-    let name = filename.as_ref().to_str().unwrap().to_string();
+    parse_file_with_name(filename.as_ref(), filename.as_ref(), handler)
+}
+
+pub fn parse_file_with_name(
+    filename: impl AsRef<std::path::Path>,
+    display_name: impl AsRef<std::path::Path>,
+    handler: &mut DiagnosticHandler,
+) -> Result<(SymbolTable, Vec<Protocol>), String> {
+    let name = display_name.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     let fileid = handler.add_file(name, input.clone());
 

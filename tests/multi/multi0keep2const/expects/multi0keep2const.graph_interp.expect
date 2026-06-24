@@ -1,0 +1,7 @@
+warning: Inferred RHS type as u64 from LHS type u64.
+   ┌─ tests/multi/multi0keep2const/multi0keep2const.prot:14:5
+   │
+14 │     dut.inp := X;
+   │     ^^^^^^^^^^^^^ Inferred RHS type as u64 from LHS type u64.
+
+trace 0 executed successfully

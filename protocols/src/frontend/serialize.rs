@@ -418,7 +418,7 @@ pub mod tests {
 
     use super::*;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::parse_file;
+    use crate::frontend::parser::parse_file_with_name;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
@@ -430,7 +430,7 @@ pub mod tests {
 
     fn test_helper(filename: &str, snap_name: &str) {
         let mut handler = DiagnosticHandler::default();
-        let result = parse_file(filename, &mut handler);
+        let result = parse_file_with_name(filename, display_filename(filename), &mut handler);
 
         let content = match result {
             Ok((st, protos)) => serialize_to_string(&st, &protos).unwrap(),
@@ -440,22 +440,26 @@ pub mod tests {
         snap(snap_name, content);
     }
 
+    fn display_filename(filename: &str) -> &str {
+        filename.strip_prefix("../").unwrap_or(filename)
+    }
+
     #[test]
     fn test_add_transaction() {
-        test_helper("tests/adders/adder_d1/add_d1.prot", "add_d1");
+        test_helper("../tests/adders/adder_d1/add_d1.prot", "add_d1");
     }
 
     #[test]
     fn test_calyx_go_done_transaction() {
         test_helper(
-            "tests/calyx_go_done/calyx_go_done_struct.prot",
+            "../tests/calyx_go_done/calyx_go_done_struct.prot",
             "calyx_go_done_struct",
         );
     }
 
     #[test]
     fn test_invalid_lex_prot() {
-        test_helper("tests/misc/invalid_lex.prot", "invalid_lex");
+        test_helper("../tests/misc/invalid_lex.prot", "invalid_lex");
     }
 
     #[test]
@@ -478,22 +482,22 @@ pub mod tests {
 
     #[test]
     fn test_mul_invalid_prot() {
-        test_helper("tests/multipliers/mul_invalid.prot", "mul_invalid");
+        test_helper("../tests/multipliers/mul_invalid.prot", "mul_invalid");
     }
 
     #[test]
     fn test_mul_prot() {
-        test_helper("tests/multipliers/mul.prot", "mul");
+        test_helper("../tests/multipliers/mul.prot", "mul");
     }
 
     #[test]
     fn test_mul_ignore_prot() {
-        test_helper("tests/multipliers/mul_ignore.prot", "mul_ignore");
+        test_helper("../tests/multipliers/mul_ignore.prot", "mul_ignore");
     }
 
     #[test]
     fn test_cond_prot() {
-        test_helper("tests/multipliers/mult_cond.prot", "cond");
+        test_helper("../tests/multipliers/mult_cond.prot", "cond");
     }
 
     #[test]
@@ -506,27 +510,30 @@ pub mod tests {
 
     #[test]
     fn test_illegal_fork_prot() {
-        test_helper("tests/adders/illegal_fork.prot", "illegal_fork_prot");
+        test_helper("../tests/adders/illegal_fork.prot", "illegal_fork_prot");
     }
 
     #[test]
     fn test_invalid_step_arg() {
-        test_helper("tests/misc/invalid_step_arg.prot", "invalid_step_arg");
+        test_helper("../tests/misc/invalid_step_arg.prot", "invalid_step_arg");
     }
 
     #[test]
     fn test_func_arg_invalid_prot() {
-        test_helper("tests/misc/func_arg_invalid.prot", "func_arg_invalid_prot");
+        test_helper(
+            "../tests/misc/func_arg_invalid.prot",
+            "func_arg_invalid_prot",
+        );
     }
 
     #[test]
     fn test_simple_if_transaction() {
-        test_helper("tests/counters/simple_if.prot", "simple_if");
+        test_helper("../tests/counters/simple_if.prot", "simple_if");
     }
 
     #[test]
     fn test_simple_while_transaction() {
-        test_helper("tests/counters/simple_while.prot", "simple_while");
+        test_helper("../tests/counters/simple_while.prot", "simple_while");
     }
 
     // Simple test to make sure for-loop with a fixed no. of iterations
@@ -534,7 +541,7 @@ pub mod tests {
     #[test]
     fn test_simple_bounded_loop_transaction() {
         test_helper(
-            "tests/counters/simple_bounded_loop.prot",
+            "../tests/counters/simple_bounded_loop.prot",
             "simple_bounded_loop",
         );
     }
@@ -542,7 +549,7 @@ pub mod tests {
     #[test]
     fn test_nested_bounded_loop_transaction() {
         test_helper(
-            "tests/adders/adder_d1/nested_busy_wait.prot",
+            "../tests/adders/adder_d1/nested_busy_wait.prot",
             "nested_bounded_loop",
         );
     }
@@ -550,7 +557,7 @@ pub mod tests {
     #[test]
     fn test_loop_with_assigns_transaction() {
         test_helper(
-            "tests/adders/adder_d1/loop_with_assigns.prot",
+            "../tests/adders/adder_d1/loop_with_assigns.prot",
             "loop_with_assigns",
         );
     }
@@ -558,7 +565,7 @@ pub mod tests {
     #[test]
     fn test_simple_if_without_else_transaction() {
         test_helper(
-            "tests/identities/dual_identity_d1/if_without_else.prot",
+            "../tests/identities/dual_identity_d1/if_without_else.prot",
             "if_without_else",
         );
     }

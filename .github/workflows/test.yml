@@ -30,12 +30,41 @@ jobs:
       run: cargo build --verbose
     - name: Run unit tests (Debug)
       run: cargo test --verbose
-    - name: Run Turnt tests for interpreter
-      run: turnt --env interp $(find . -type f -name '*.tx')
-    - name: Run Turnt tests for graph-interpreter
-      run: turnt --env graph_interp $(cat protocols/tests/graph_interp_allowlist.txt)
-    - name: Run Turnt tests for monitor
-      run: turnt --env monitor $(find . -type f -name '*.prot')
+    - name: Run Runt tests for interpreter
+      run: runt --max-futures 1 runt/interp
+    - name: Run Runt tests for graph-interpreter
+      run: runt --max-futures 1 runt/graph_interp
+    - name: Run Runt tests for monitor
+      run: runt --max-futures 1 runt/monitor
+
+  test-freshness:
+    name: Unit Tests
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+
+    steps:
+      - name: Update Rust to ${{ matrix.toolchain }}
+        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-environment
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: cargo build --verbose
+      # Regenerate the runt configs from the catalog to check freshness
+      - name: Check Runt configs are up to date
+        run: |
+          python3 scripts/generate_runt_configs.py
+          if [ -n "$(git status --porcelain -- runt)" ]; then
+            echo "::error::runt configs are out of date. Run 'python3 scripts/generate_runt_configs.py' and commit the result."
+            git --no-pager diff -- runt
+            exit 1
+          fi
 
   msrv:
     name: Check Minimum Rust Version for protocols library

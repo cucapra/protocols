@@ -5,7 +5,7 @@ test_run/
 *.btor
 **/.DS_Store
 monitor/target
-monitor/tests/axi_output.txt
+tests/axi_output.txt
 *.json
 *.png
 *.csv
@@ -29,7 +29,10 @@ obj_dir/
 # Verilog backend
 run_dir/
 
+# Archived catalog-generation logic (kept locally, not checked in)
+scripts/_catalog_gen.py
+
 # Include images of  waveforms in Brave New World bug readme
-!monitor/tests/fpga-debugging/axis-async-fifo-c4/*.png
+!tests/fpga-debugging/axis-async-fifo-c4/*.png
 
 /*.fst

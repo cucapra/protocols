@@ -1,4 +1,3 @@
-// ARGS: --verilog tinyaes128/aes_128.v --protocol tinyaes128/aes128.prot --module aes_128
 trace {
     // Arguments are key, state, expected output
     aes128(0x000102030405060708090a0b0c0d0e0f, 0x00112233445566778899aabbccddeeff, 0x69c4e0d86a7b0430d8cdb78070b4c55a);

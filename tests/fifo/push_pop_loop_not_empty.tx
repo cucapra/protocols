@@ -1,0 +1,6 @@
+trace {
+    reset();
+    push_n_times(7, 3);
+    pop_n_times(7, 2);
+    check_not_empty();          // FIFO is non-empty (has one element remaining)
+}

@@ -1,0 +1,3 @@
+trace {
+    slicing_ok(1, 1);
+}

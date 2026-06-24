@@ -1,0 +1,15 @@
+error: Thread 0 (`add_incorrect_implicit`) attempted conflicting assignment to 'b': current=5, new=2
+   ┌─ tests/adders/adder_d1/add_d1.prot:43:3
+   │
+43 │   DUT.b := b;
+   │   ^^^^^^^^^^^ Thread 0 (`add_incorrect_implicit`) attempted conflicting assignment to 'b': current=5, new=2
+
+error: Thread 1 (`add_incorrect_implicit`) attempted conflicting assignment to 'b': current=2, new=5
+   ┌─ tests/adders/adder_d1/add_d1.prot:43:3
+   │
+43 │   DUT.b := b;
+   │   ^^^^^^^^^^^ Thread 1 (`add_incorrect_implicit`) attempted conflicting assignment to 'b': current=2, new=5
+
+Trace 0 execution failed.
+---CODE---
+101

@@ -24,7 +24,7 @@ Note: the installation instructions below assume a macOS environment.
   - If not, follow these instructions to install [Homebrew](https://brew.sh) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
-- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), a command-line tool we use for [snapshot tests](https://www.cs.cornell.edu/~asampson/blog/turnt.html), which compare the output of our tools to expected outputs stored in dedicated files 
+- Run `cargo install runt` to install [Runt](https://github.com/rachitnigam/runt), a command-line tool we use for snapshot tests, which compare the output of our tools to expected outputs stored in dedicated files 
 
 **Dependencies for benchmarking the monitor**:
 - Run `uv sync` to install the Python dependencies specified in `pyproject.toml` 
@@ -36,7 +36,7 @@ $ uv run scripts/plot_benchmark_results.py
 - This produces a CSV and a scatter plot measuring the performance of the monitor in 
   `benchmark_results/benchmark_results.csv` and `benchmark_results/benchmark_plot.png` respectively
 
-- Some of the benchmarks correspond to real-world bugs taken from the [artifact for *Debugging in the Brave New World of Reconfigurable Hardware* (Ma et al. ASPLOS '22)](https://github.com/efeslab/asplos22-hardware-debugging-artifact) -- these can be found in the `monitor/tests/fpga-debugging` sub-directory 
+- Some of the benchmarks correspond to real-world bugs taken from the [artifact for *Debugging in the Brave New World of Reconfigurable Hardware* (Ma et al. ASPLOS '22)](https://github.com/efeslab/asplos22-hardware-debugging-artifact) -- these can be found in the `tests/fpga-debugging` sub-directory 
   (more details in the `README` of the sub-directories corresponding to each bug)
 
 **Interpreter-specific dependencies**:
@@ -44,7 +44,7 @@ $ uv run scripts/plot_benchmark_results.py
 
 **Building the source code**:
 - Run `cargo build` to build the Rust code
-- Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Turnt)
+- Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Runt)
   - To only run the subset of tests for the monitor, run `just monitor` 
 - To generate HTML documentation, run `just doc` (this opens Cargo-generated docs in your browser)
 
@@ -88,7 +88,7 @@ Options:
 
 Example usage:
 ```bash
-$ cd monitor/tests
+$ cd tests
 $ cargo monitor -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
 ```
 
@@ -127,9 +127,9 @@ Options:
 Example usage:
 
 ```bash
-$ cargo interp --verilog protocols/tests/adders/adder_d1/add_d1.v \
-        --protocol protocols/tests/adders/adder_d1/add_d1.prot \
-        -t protocols/tests/adders/adder_d1/both_threads_pass.tx \
+$ cargo interp --verilog tests/adders/adder_d1/add_d1.v \
+        --protocol tests/adders/adder_d1/add_d1.prot \
+        -t tests/adders/adder_d1/both_threads_pass.tx \
         --verbose
 ```
 
@@ -153,4 +153,3 @@ Go to `Settings` -> `Editor` -> `TextMate Bundles`. Click the `+` and navigate t
 One confirmed, `protocols` should appear as an entry in the `TextMate Bundles` table.
 
 If the syntax highlighting does not immediately load, restart RustRover.
-

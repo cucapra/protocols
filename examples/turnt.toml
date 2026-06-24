@@ -1,2 +1,0 @@
-[envs.interp]
-command = "cargo interp --color never --transactions {filename} {args}"

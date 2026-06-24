@@ -1,0 +1,34 @@
+struct Receiver {
+    out ready: u1,
+    in valid: u1,
+    in data: u8,
+}
+
+// send_data, but the send fails if sender raises
+// valid in cycle N but receiver does not raise ready
+// by cycle N + 3
+// we'll test this against RTL that responds in 0 1 or 2 cycles
+prot send_data<D: Receiver>(data: u8) {
+    D.data := data;
+    D.valid := 1'b1;
+    // unroll a while loop: while (!(D.m_axis_tready == 1'b1))
+    // to get a bound of 3 cycles
+
+    // check if ready is raised this cycle
+    if (!(D.ready == 1'b1)) {
+        // ready isnt raised, try cycle N + 1
+        step();
+
+        if (!(D.ready == 1'b1)) {
+            // ready isn't raised, try cycle N + 2
+            step();
+
+            // ready needs to be raised by now
+            assert_eq(D.ready, 1'b1);
+        }
+    }
+    // receiver raises valid in cycle N + 2
+
+
+    step();
+}

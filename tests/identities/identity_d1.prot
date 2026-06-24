@@ -1,0 +1,15 @@
+struct Identity {
+  in a: u32,
+  out s: u32,
+}
+
+prot slicing_ok<DUT: Identity>(a: u32, s: u32) {
+  DUT.a := a;
+
+  step();
+
+  assert_eq(s[31:15], DUT.s[31:15]);
+
+  fork();
+  step();
+}

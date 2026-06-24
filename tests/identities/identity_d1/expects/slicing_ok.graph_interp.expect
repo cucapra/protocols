@@ -1,0 +1,7 @@
+warning: Inferred RHS type as u32 from LHS type u32.
+   ┌─ tests/identities/identity_d1/identity_d1.prot:11:3
+   │
+11 │   DUT.a := X;
+   │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
+
+trace 0 executed successfully

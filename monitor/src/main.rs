@@ -33,7 +33,7 @@ use crate::scheduler::Scheduler;
 use crate::signal_trace::WaveSignalTrace;
 
 // From the top-level directory, run:
-// $ cargo run --package protocols-monitor -- -p protocols/tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
+// $ cargo run --package protocols-monitor -- -p tests/adders/adder_d1/add_d1.prot -w trace.fst -i add_d1:Adder
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]

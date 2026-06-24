@@ -1,0 +1,21 @@
+error: Thread 0 (transaction 'add_double_fork') attempted to fork more than once
+   ┌─ tests/adders/adder_d1/double_fork_error.prot:12:3
+   │
+12 │   fork();
+   │   ^^^^^^^ first fork() called here
+   ·
+15 │   fork();
+   │   ^^^^^^^ second fork() called here
+
+error: Thread 1 (transaction 'add_double_fork') attempted to fork more than once
+   ┌─ tests/adders/adder_d1/double_fork_error.prot:12:3
+   │
+12 │   fork();
+   │   ^^^^^^^ first fork() called here
+   ·
+15 │   fork();
+   │   ^^^^^^^ second fork() called here
+
+Trace 0 execution failed.
+---CODE---
+101

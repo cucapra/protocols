@@ -1,0 +1,4 @@
+trace {
+    add_incorrect(1, 2, 3);
+    add_incorrect(4, 5, 9);
+}

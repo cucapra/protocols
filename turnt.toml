@@ -1,6 +1,0 @@
-command = "cargo interp --color never --transactions {filename} {args}"
-
-[envs.roundtrip]
-command = "uv run scripts/roundtrip_case.py {filename} {args} --include-idle"
-binary = true
-output.rt = "-"

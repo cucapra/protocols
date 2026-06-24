@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn lowers_add_d1_fixture_via_parser_and_lowering() {
-        let ir = parse_and_lower_file("tests/adders/adder_d1/add_d1.prot", Some("add"));
+        let ir = parse_and_lower_file("../tests/adders/adder_d1/add_d1.prot", Some("add"));
 
         assert_eq!(ir.name, "add");
         assert_eq!(ir.args.len(), 3);
