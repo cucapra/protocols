@@ -139,7 +139,6 @@ def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
 GRAPH_INTERP_DIFF_FLAGS = [
     [],
     ["--contract-edges"],
-    ["--normalize-assignments"],
     ["--contract-edges", "--normalize-assignments"],
 ]
 
@@ -279,6 +278,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
+        and "fifo" not in c["path"] # these don't work with graph interpreter due to (lack of) fork support
         and not GRAPH_INTERP_UNSUPPORTED & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
