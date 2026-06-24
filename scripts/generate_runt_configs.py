@@ -109,9 +109,10 @@ def cargo_prefix(package: str) -> list[str]:
     ]
 
 
-def repo_root_command(cmd: list[str]) -> str:
+def repo_root_command(cmd: list[str], suppress_stderr: bool = True) -> str:
     # Each runt test runs exactly one path, so we bake it straight into the
-    return "cd ../.. && " + shlex.join(cmd) + " 2>/dev/null"
+    tail = " 2>/dev/null" if suppress_stderr else ""
+    return "cd ../.. && " + shlex.join(cmd) + tail
 
 
 def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
@@ -129,6 +130,56 @@ def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
         "    sys.exit(124)\n"
     )
     return ["python3", "-c", script, str(timeout_secs), *cmd]
+
+
+# graph-interp's edge-contraction / assignment-normalization passes must not
+# change observable behaviour, so we run each case under every flag combination
+# and require identical output. (--normalize-assignments only takes effect
+# alongside --contract-edges, so that combo is currently a no-op vs baseline.)
+GRAPH_INTERP_DIFF_FLAGS = [
+    [],
+    ["--contract-edges"],
+    ["--normalize-assignments"],
+    ["--contract-edges", "--normalize-assignments"],
+]
+
+
+def differential_cmd(cmd: list[str], flag_sets: list[list[str]]) -> list[str]:
+    # Run `cmd` once per flag set, require identical stdout + exit code, and emit
+    # the baseline (first) run's output so the existing golden still matches. A
+    # mismatch prints a labelled diff on stderr and exits 99.
+    script = (
+        "import difflib, json, subprocess, sys\n"
+        "base = json.loads(sys.argv[1])\n"
+        "flag_sets = json.loads(sys.argv[2])\n"
+        "runs = [\n"
+        "    (flags, subprocess.run(base + flags, capture_output=True, text=True))\n"
+        "    for flags in flag_sets\n"
+        "]\n"
+        "base_flags, base_run = runs[0]\n"
+        "baseline = (base_run.stdout, base_run.returncode)\n"
+        "base_label = ' '.join(base_flags) or '<none>'\n"
+        "for flags, r in runs[1:]:\n"
+        "    if (r.stdout, r.returncode) == baseline:\n"
+        "        continue\n"
+        "    label = ' '.join(flags) or '<none>'\n"
+        "    sys.stderr.write('differential mismatch: [%s] vs baseline [%s]\\n'\n"
+        "                     % (label, base_label))\n"
+        "    if r.returncode != base_run.returncode:\n"
+        "        sys.stderr.write('  exit: %s vs %s (baseline)\\n'\n"
+        "                         % (r.returncode, base_run.returncode))\n"
+        "    diff = difflib.unified_diff(\n"
+        "        base_run.stdout.splitlines(keepends=True),\n"
+        "        r.stdout.splitlines(keepends=True),\n"
+        "        fromfile='baseline [%s]' % base_label,\n"
+        "        tofile='[%s]' % label,\n"
+        "    )\n"
+        "    sys.stderr.writelines(diff)\n"
+        "    sys.exit(99)\n"
+        "sys.stdout.write(baseline[0])\n"
+        "sys.exit(baseline[1])\n"
+    )
+    return ["python3", "-c", script, json.dumps(cmd), json.dumps(flag_sets)]
 
 
 def _tx_tail(cmd: list[str], case: dict, with_max_steps: bool) -> None:
@@ -158,7 +209,10 @@ def interp_runt_command(case: dict) -> str:
 def graph_interp_runt_command(case: dict) -> str:
     cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
-    return repo_root_command(cmd)
+    # Differentially test the edge-contraction / normalization passes; keep
+    # stderr visible so a mismatch report is readable on failure.
+    cmd = differential_cmd(cmd, GRAPH_INTERP_DIFF_FLAGS)
+    return repo_root_command(cmd, suppress_stderr=False)
 
 
 def monitor_runt_command(case: dict) -> str:

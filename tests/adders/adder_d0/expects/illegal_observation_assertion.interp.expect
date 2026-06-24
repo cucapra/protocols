@@ -1,11 +1,11 @@
-error: Output 'DUT.s' depends on input(s) 'b' which do not have assigned values
+error: Port 'DUT.s' depends on input(s) 'b' which do not have assigned values
    ┌─ tests/adders/adder_d0/add_d0.prot:22:3
    │
 22 │   DUT.b := X;
    │   ^^^^^^^^^^^ 'b' assigned DontCare here
    ·
 25 │   assert_eq(DUT.s, s); // this should be illegal
-   │             ^^^^^ Output 'DUT.s' depends on input(s) 'b' which do not have assigned values
+   │             ^^^^^ Port 'DUT.s' depends on input(s) 'b' which do not have assigned values
 
 Trace 0 execution failed.
 ---CODE---

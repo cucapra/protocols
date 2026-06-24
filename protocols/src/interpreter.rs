@@ -218,10 +218,6 @@ impl<'a> Evaluator<'a> {
         // Update forbidden_read_counts when transitioning to/from DontCare
         if is_dontcare && !was_dontcare {
             // Transitioning TO DontCare (from None or Concrete): increment counts
-            // Increment this input's own forbidden count (can't read a DontCare input)
-            if let Some(count) = self.forbidden_read_counts.get_mut(&port_id) {
-                *count += 1;
-            }
             // Increment forbidden counts for all outputs dependent on this input
             for dep in sim.dependent_outputs(port_id) {
                 if let Some(count) = self.forbidden_read_counts.get_mut(&dep) {
@@ -230,10 +226,6 @@ impl<'a> Evaluator<'a> {
             }
         } else if !is_dontcare && was_dontcare {
             // Transitioning FROM DontCare (to Concrete): decrement counts
-            // Decrement this input's own forbidden count
-            if let Some(count) = self.forbidden_read_counts.get_mut(&port_id) {
-                *count = count.saturating_sub(1);
-            }
             // Decrement forbidden counts for all outputs dependent on this input
             for dep in sim.dependent_outputs(port_id) {
                 if let Some(count) = self.forbidden_read_counts.get_mut(&dep) {
@@ -479,10 +471,9 @@ impl<'a> Evaluator<'a> {
 
                 match self.st[sym_id].kind() {
                     SymbolKind::Dut => unreachable!("Cannot evaluate a struct expression!"),
-                    SymbolKind::InPort => Ok(ExprValue::Concrete(sim.get(sim[sym_id]))),
-                    SymbolKind::OutPort => {
+                    SymbolKind::InPort | SymbolKind::OutPort => {
                         let port_id = sim[sym_id];
-                        // Observing an output port forbids assignments to its dependent inputs
+                        // Observing a port forbids assignments to its dependent inputs
                         self.forbidden_inputs.extend(sim.coi_inputs(port_id));
                         Ok(ExprValue::Concrete(sim.get(port_id)))
                     }
