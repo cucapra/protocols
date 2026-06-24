@@ -21,13 +21,13 @@ warning: Inferred RHS type as u32 from LHS type u32.
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
 warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ tests/adders/adder_d1/add_d1.prot:83:3
+   ┌─ tests/adders/adder_d1/add_d1.prot:84:3
    │
-83 │   DUT.a := X;
+84 │   DUT.a := X;
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
 
 warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ tests/adders/adder_d1/add_d1.prot:84:3
+   ┌─ tests/adders/adder_d1/add_d1.prot:85:3
    │
-84 │   DUT.b := X;
+85 │   DUT.b := X;
    │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.

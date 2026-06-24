@@ -116,7 +116,6 @@ impl PatronusSim {
 
         // every input is combinationally dependent on itself
 
-
         // For each output, find all inputs in its combinational cone of influence
         for out in &sys.outputs {
             // is this output part of the outputs declared in the struct?

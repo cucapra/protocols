@@ -96,7 +96,7 @@ fn build_value_store(
     store
 }
 
-/// Refresh the store with the simulator's current port values 
+/// Refresh the store with the simulator's current port values
 fn read_sim_values(
     store: &mut SymbolValueStore,
     bindings: &FxHashMap<ExprRef, GraphBinding>,
