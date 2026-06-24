@@ -38,7 +38,7 @@ jobs:
       run: runt --max-futures 1 runt/monitor
 
   test-freshness:
-    name: Unit Tests
+    name: Check Generated Runt Configs are Fresh
     runs-on: ubuntu-24.04
     strategy:
       matrix:
