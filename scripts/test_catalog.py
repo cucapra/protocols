@@ -64,6 +64,11 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "assignment_conflict",
     },
+    "tests/adders/adder_d1/foo.tx": {
+        "protocol": "tests/adders/adder_d1/add_d1.prot",
+        "verilog": ("tests/adders/adder_d1/add_d1.v",),
+        "expect": "pass",
+    },
     "tests/adders/adder_d1/add_incorrect_implicit.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
