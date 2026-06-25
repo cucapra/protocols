@@ -1,9 +1,0 @@
-trace {
-    // a=3. expect no override
-    add_with_override(3, 4, 7);
-}
-
-trace {
-    // a=2. expect override
-    add_with_override(2, 4, 4);
-}

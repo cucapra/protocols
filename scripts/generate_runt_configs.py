@@ -109,9 +109,10 @@ def cargo_prefix(package: str) -> list[str]:
     ]
 
 
-def repo_root_command(cmd: list[str]) -> str:
+def repo_root_command(cmd: list[str], suppress_stderr: bool = True) -> str:
     # Each runt test runs exactly one path, so we bake it straight into the
-    return "cd ../.. && " + shlex.join(cmd) + " 2>/dev/null"
+    tail = " 2>/dev/null" if suppress_stderr else ""
+    return "cd ../.. && " + shlex.join(cmd) + tail
 
 
 def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
@@ -143,7 +144,11 @@ def _tx_tail(cmd: list[str], case: dict, with_max_steps: bool) -> None:
         cmd += ["--max-steps", str(case["max_steps"])]
 
 
-def interp_runt_command(case: dict) -> str:
+# Each builder returns one or more (name_suffix, command) variants
+# the suffix allows us to have differently named test cases with the same expect file
+
+
+def interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [
         *cargo_prefix("protocols-interp"),
         "--color",
@@ -152,16 +157,18 @@ def interp_runt_command(case: dict) -> str:
         case["path"],
     ]
     _tx_tail(cmd, case, with_max_steps=True)
-    return repo_root_command(cmd)
+    return [("", repo_root_command(cmd))]
 
 
-def graph_interp_runt_command(case: dict) -> str:
+def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
-    return repo_root_command(cmd)
+    # baseline and --contract-edges runs share one golden
+    flag_sets = [("", []), ("contract_edges", ["--contract-edges"])]
+    return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
 
 
-def monitor_runt_command(case: dict) -> str:
+def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*cargo_prefix("protocols-monitor"), "--protocol", case["path"]]
     if case["wave"]:
         cmd += ["--wave", case["wave"]]
@@ -172,7 +179,7 @@ def monitor_runt_command(case: dict) -> str:
     cmd += case["extra_args"]
     if case["timeout_secs"] is not None:
         cmd = timeout_cmd(case["timeout_secs"], cmd)
-    return repo_root_command(cmd)
+    return [("", repo_root_command(cmd))]
 
 
 RUNT_BUILDERS = {
@@ -183,10 +190,6 @@ RUNT_BUILDERS = {
 
 
 # config generation
-
-
-# Loop constructs the graph interpreter cannot handle (AST construct names).
-GRAPH_INTERP_UNSUPPORTED = {"for_in_loop", "repeat_loop"}
 
 
 @lru_cache(maxsize=None)
@@ -221,11 +224,18 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
 
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
+    # Loop constructs the graph interpreter cannot handle (AST construct names).
+    graph_interp_unsupported = {"for_in_loop", "repeat_loop"}
+
     selected = [
         c
         for c in cases
         if c["expected"] == "pass"
-        and not GRAPH_INTERP_UNSUPPORTED & protocol_constructs(c["protocol_path"])
+        and "fifo"
+        not in c[
+            "path"
+        ]  # these don't work with graph interpreter due to (lack of) fork support
+        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
 
@@ -235,19 +245,15 @@ def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     suites = []
     for case in sorted(cases, key=lambda c: (c["path"], expect_name(c, runner))):
         path = case["path"]
-        name = (
+        edir = expect_dir(case, runner)
+        ename = expect_name(case, runner)
+        base_name = (
             f"{suite_name}.{replace_non_alphanumerics(Path(path).with_suffix('').as_posix())}"
-            f".{replace_non_alphanumerics(expect_name(case, runner).removesuffix('.expect'))}"
+            f".{replace_non_alphanumerics(ename.removesuffix('.expect'))}"
         )
-        suites.append(
-            (
-                name,
-                expect_dir(case, runner),
-                expect_name(case, runner),
-                build(case),
-                path,
-            )
-        )
+        for suffix, cmd in build(case):
+            name = f"{base_name}.{suffix}" if suffix else base_name
+            suites.append((name, edir, ename, cmd, path))
     return suites
 
 
@@ -280,14 +286,20 @@ def generate_runt_configs() -> None:
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
     }
 
-    expect_commands: dict[str, str] = {}
+    # A golden may be shared by several variants of the same test (e.g. the
+    # graph_interp baseline and --contract-edges runs), but two *different* tests
+    # sharing one golden is an accidental name collision.
+    expect_owner: dict[str, str] = {}
     for suite_name, (runner, cases) in suite_specs.items():
         config_dir = REPO_ROOT / "runt" / suite_name
         runt_suites = runt_case_suites(suite_name, runner, cases)
-        for _name, edir, ename, cmd, _path in runt_suites:
+        for _name, edir, ename, _cmd, path in runt_suites:
             expect_path = (config_dir / edir / ename).resolve().as_posix()
-            if expect_commands.setdefault(expect_path, cmd) != cmd:
-                raise SystemExit(f"expectation name collision for {expect_path}")
+            owner = expect_owner.setdefault(expect_path, path)
+            if owner != path:
+                raise SystemExit(
+                    f"expectation name collision: {owner} and {path} -> {expect_path}"
+                )
         write_runt_toml(config_dir, runt_suites)
 
 

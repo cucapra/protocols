@@ -150,7 +150,7 @@ impl PatronusSim {
         })
     }
 
-    /// outputs that depend on the provided input port
+    /// outputs that depend on the provided input port, including itself
     pub fn dependent_outputs(&self, port: PortId) -> impl Iterator<Item = PortId> {
         assert!(
             self.get_input(port).is_some(),
@@ -161,15 +161,17 @@ impl PatronusSim {
             .unwrap_or(EMPTY_PORT_VEC_REF)
             .iter()
             .cloned()
+            .chain(std::iter::once(port))
     }
 
-    /// inputs that might influence the provided input or output port
+    /// inputs that might influence the provided input or output port, including itself
     pub fn coi_inputs(&self, port: PortId) -> impl Iterator<Item = PortId> {
         self.output_dependencies
             .get(&port)
             .unwrap_or(EMPTY_PORT_VEC_REF)
             .iter()
             .cloned()
+            .chain(std::iter::once(port))
     }
 
     pub fn ios(&self) -> impl Iterator<Item = PortId> {

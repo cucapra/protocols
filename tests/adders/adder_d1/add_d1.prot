@@ -69,11 +69,12 @@ prot wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
 
 // (in a bit of a roundabout way), check that a == 2, and if so reset DUT.a to 0
 // applying a first and then observing DUT.a allows us to stay well-formed
-prot add_with_override<DUT : Adder>(a: u32, b: u32, s: u32) {
+prot assign_after_observation<DUT : Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
 
   // set DUT.a to 0 if DUT.a == a == 2
   if (DUT.a == 32'b10) {
+    // this branch will fail
     DUT.a := 32'b0;
   }
   DUT.b := b;

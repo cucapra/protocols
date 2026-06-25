@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -273,7 +272,7 @@ digraph "wait_and_add" {
 }
 
 == pre-contract ==
-digraph "add_with_override" {
+digraph "assign_after_observation" {
   rankdir=LR;
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
@@ -326,7 +325,7 @@ digraph "add_with_override" {
 }
 
 == post-contract ==
-digraph "add_with_override" {
+digraph "assign_after_observation" {
   rankdir=LR;
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
@@ -343,7 +342,7 @@ digraph "add_with_override" {
 }
 
 == post-normalize ==
-digraph "add_with_override" {
+digraph "assign_after_observation" {
   rankdir=LR;
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];

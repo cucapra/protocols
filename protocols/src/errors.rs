@@ -263,7 +263,7 @@ impl fmt::Display for EvaluationError {
                 };
                 write!(
                     f,
-                    "Output '{}' depends on input(s) {} which do not have assigned values{}",
+                    "Port '{}' depends on input(s) {} which do not have assigned values{}",
                     port_name,
                     input_names.join(", "),
                     implicit_note
@@ -759,7 +759,7 @@ impl DiagnosticEmitter {
                     )
                 };
                 let main_message = format!(
-                    "Output '{}' depends on input(s) {} which do not have assigned values{}",
+                    "Port '{}' depends on input(s) {} which do not have assigned values{}",
                     port_name,
                     input_names.join(", "),
                     implicit_note

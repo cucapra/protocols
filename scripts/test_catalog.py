@@ -94,10 +94,10 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
     },
-    "tests/adders/adder_d1/conditional_add.tx": {
+    "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
+        "expect": "comb_dependency",
     },
     "tests/adders/adder_d1/didnt_end_in_step.tx": {
         "protocol": "tests/adders/adder_d1/didnt_end_in_step.prot",

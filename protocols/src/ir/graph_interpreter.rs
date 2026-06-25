@@ -96,6 +96,19 @@ fn build_value_store(
     store
 }
 
+/// Refresh the store with the simulator's current port values
+fn read_sim_values(
+    store: &mut SymbolValueStore,
+    bindings: &FxHashMap<ExprRef, GraphBinding>,
+    sim: &PatronusSim,
+) {
+    for (expr_ref, binding) in bindings {
+        if let GraphBinding::Sim(port) = binding {
+            store.update(*expr_ref, sim.get(*port).into());
+        }
+    }
+}
+
 fn update_value_store(
     store: &mut SymbolValueStore,
     protocol: &ProtoGraph,
@@ -104,11 +117,9 @@ fn update_value_store(
     rng: &mut impl rand::Rng,
 ) {
     // get the latest sim port values, randomize DontCares
+    read_sim_values(store, bindings, sim);
     for (expr_ref, binding) in bindings {
-        if let GraphBinding::Sim(port) = binding {
-            let value = sim.get(*port);
-            store.update(*expr_ref, value.into());
-        } else if matches!(binding, GraphBinding::DontCare) {
+        if matches!(binding, GraphBinding::DontCare) {
             let expr = &protocol.expr_ctx[*expr_ref];
             if let Some(width) = expr.get_bv_type(&protocol.expr_ctx) {
                 let value = BitVecValue::random(rng, width);
@@ -191,9 +202,13 @@ pub fn interpret(
 
     let mut curr = pg.entry;
     loop {
+        read_sim_values(&mut store, &bindings, sim);
+
         let node = &pg[curr];
         let mut pending_inputs: FxHashMap<SymbolId, InputValue> = FxHashMap::default();
         let mut assigned_inputs: FxHashSet<SymbolId> = FxHashSet::default();
+
+        // TODO: assignments should be evaluated in a topo order
 
         for action in &node.actions {
             if let Op::Assign(symbol_id, _) = &pg[action.op]

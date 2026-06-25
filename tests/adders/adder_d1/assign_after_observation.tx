@@ -1,0 +1,9 @@
+trace {
+    // a=3. expect no override, no error
+    assign_after_observation(3, 4, 7);
+}
+
+trace {
+    // a=2. expect override with combinational dependency violation
+    assign_after_observation(2, 4, 4);
+}
