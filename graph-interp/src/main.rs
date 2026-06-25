@@ -1,7 +1,6 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
-use patronus::btor2::serialize_to_str;
 use protocols::PatronusSim;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::find_a_single_design;

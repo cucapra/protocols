@@ -25,6 +25,26 @@ fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: Symb
     expr
 }
 
+/// `true` if `rhs` is (after simplification) one of the protocol's don't-care
+/// symbols, i.e. an `X` assignment that places no constraint on the pin.
+fn is_dont_care(protocol: &mut ProtoGraph, rhs: ExprRef) -> bool {
+    let simplified = {
+        let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
+        simplifier.simplify(expr_ctx, rhs)
+    };
+    protocol.dont_cares.contains(&simplified)
+}
+
+/// Constrain `rhs` to `guard`, falling back to `fallback` outside it. An
+/// unconditional (`true`) guard needs no `ite`.
+fn lift(protocol: &mut ProtoGraph, guard: ExprRef, rhs: ExprRef, fallback: ExprRef) -> ExprRef {
+    if guard == protocol.true_id() {
+        rhs
+    } else {
+        protocol.expr_ctx.ite(guard, rhs, fallback)
+    }
+}
+
 fn append_action(
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
@@ -37,29 +57,71 @@ fn append_action(
             let default_value = symbol_expr(protocol, symbols, symbol_id);
 
             // By invariant, there can be at most one existing assignment for this symbol.
-            if let Some(existing_action) = actions.iter_mut().find(|prior_action| {
+            let Some(idx) = actions.iter().position(|prior_action| {
                 matches!(protocol[prior_action.op], Op::Assign(prior_symbol_id, _) if prior_symbol_id == symbol_id)
-            }) {
-                let existing_rhs = match protocol[existing_action.op].clone() {
-                    Op::Assign(_, existing_rhs) => existing_rhs,
-                    _ => unreachable!(),
-                };
-                let existing_rhs = if existing_action.guard == protocol.true_id() {
-                    existing_rhs
-                } else {
-                    protocol
-                        .expr_ctx
-                        .ite(existing_action.guard, existing_rhs, default_value)
-                };
-                let merged_rhs = protocol.expr_ctx.ite(action.guard, rhs, existing_rhs);
-                let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
-                let merged_rhs = simplifier.simplify(expr_ctx, merged_rhs);
-                let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
-                existing_action.guard = protocol.true_id();
-                existing_action.op = new_op;
-            } else {
+            }) else {
                 actions.push(action);
+                return;
+            };
+
+            let existing_guard = actions[idx].guard;
+            let existing_rhs = match protocol[actions[idx].op].clone() {
+                Op::Assign(_, existing_rhs) => existing_rhs,
+                _ => unreachable!(),
+            };
+            let (new_guard, new_rhs) = (action.guard, rhs);
+
+            let existing_dc = is_dont_care(protocol, existing_rhs);
+            let new_dc = is_dont_care(protocol, new_rhs);
+
+            // A concrete drive is a constraint; a don't-care places none. So
+            // whichever side is concrete becomes the outer `ite` selector (it
+            // wins wherever it is active, including any guard overlap), and the
+            // don't-care only fills the region its own guard covers but the
+            // concrete does not. This is independent of which action was
+            // appended first.
+            let merged_rhs = match (existing_dc, new_dc) {
+                // existing concrete wins; new don't-care fills its own region
+                (false, true) => {
+                    let dc_else = lift(protocol, new_guard, new_rhs, default_value);
+                    lift(protocol, existing_guard, existing_rhs, dc_else)
+                }
+                // new concrete wins; existing don't-care fills its own region
+                (true, false) => {
+                    let dc_else = lift(protocol, existing_guard, existing_rhs, default_value);
+                    lift(protocol, new_guard, new_rhs, dc_else)
+                }
+                // both don't-care or both concrete: keep the straightforward
+                // nesting with the just-appended action outermost
+                _ => {
+                    let existing_else =
+                        lift(protocol, existing_guard, existing_rhs, default_value);
+                    lift(protocol, new_guard, new_rhs, existing_else)
+                }
+            };
+
+            // Two concrete drives that can be simultaneously active with
+            // differing values is assert-ed unreachable
+            if !existing_dc && !new_dc {
+                let overlap = protocol.and_guard(existing_guard, new_guard);
+                let equal = protocol.expr_ctx.equal(existing_rhs, new_rhs);
+                let disagree = protocol.expr_ctx.not(equal);
+                let conflict = protocol.and_guard(overlap, disagree);
+                if conflict != protocol.false_id() {
+                    *internal_assert_guard = Some(match internal_assert_guard.take() {
+                        Some(existing_conflict) => protocol.or_guard(existing_conflict, conflict),
+                        None => conflict,
+                    });
+                }
             }
+
+            let merged_rhs = {
+                let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
+                simplifier.simplify(expr_ctx, merged_rhs)
+            };
+            let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
+            actions[idx].guard = protocol.true_id();
+            actions[idx].op = new_op;
         }
         Op::Fork => {
             if let Some(existing_action) = actions
