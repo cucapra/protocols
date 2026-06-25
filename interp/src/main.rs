@@ -155,7 +155,7 @@ fn main() -> anyhow::Result<()> {
             &mut protocols_handler,
             cli.max_steps.unwrap_or(u32::MAX),
         );
-        let results = scheduler.execute_todos();
+        let results = scheduler.execute_transactions();
         let trace_failed = results.iter().any(|res| res.is_err());
 
         if trace_failed {
