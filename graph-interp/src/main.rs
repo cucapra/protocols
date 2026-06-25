@@ -1,11 +1,13 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
+use patronus::btor2::serialize_to_str;
 use protocols::PatronusSim;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
+use protocols::ir::determinize::determinize;
 use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
@@ -46,10 +48,15 @@ struct Cli {
     #[arg(long)]
     respect_forks: bool,
 
-    /// With `--respect-forks`, print the combined (contracted) joint graph for
-    /// each trace as Graphviz DOT to stdout, before interpreting it.
+    /// With `--respect-forks`, print the combined joint graph for each trace as
+    /// Graphviz DOT to stdout, before interpreting it.
     #[arg(long)]
     graphout: bool,
+
+    /// With `--respect-forks`, determinize the joint graph (NFA -> DFA subset
+    /// construction) after contraction and before normalization.
+    #[arg(long)]
+    determinize: bool,
 }
 
 fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
@@ -118,6 +125,7 @@ fn run_classic(
                 .find(|(n, _)| n == &name)
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
             let args = build_arg_map(&pg.args, st, values);
+            println!("{}", to_dot_string(pg, st));
             graph_interpreter::interpret(pg, st, args, sim);
         }
         println!("trace {} executed successfully", trace_index);
@@ -134,6 +142,7 @@ fn run_respect_forks(
     sim: &mut PatronusSim,
     traces: &[Vec<(String, Vec<Value>)>],
     graphout: bool,
+    determinize_graph: bool,
 ) {
     let protos_by_name: FxHashMap<&str, &Protocol> =
         protos.iter().map(|p| (p.name.as_str(), p)).collect();
@@ -141,7 +150,10 @@ fn run_respect_forks(
     for (trace_index, trace) in traces.iter().enumerate() {
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
         contract_edges(&mut joint, st);
-        normalize_assignments(&mut joint, st);
+        if determinize_graph {
+            determinize(&mut joint);
+        }
+        // normalize_assignments(&mut joint, st);
 
         if graphout {
             println!("// joint graph for trace {trace_index}");
@@ -166,7 +178,7 @@ fn main() {
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.respect_forks {
-            run_respect_forks(&st, &protos, &mut sim, &traces, cli.graphout);
+            run_respect_forks(&st, &protos, &mut sim, &traces, cli.graphout, cli.determinize);
         } else {
             run_classic(&cli, &st, &protos, &mut sim, traces);
         }

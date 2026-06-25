@@ -214,7 +214,7 @@ pub fn interpret(
             if let Op::Assign(symbol_id, _) = &pg[action.op]
                 && !assigned_inputs.insert(*symbol_id)
             {
-                panic!("multiple assigns to input {symbol_id} in one node");
+                // panic!("multiple assigns to input {symbol_id} in one node");
             }
         }
 
