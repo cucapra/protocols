@@ -275,14 +275,20 @@ impl<'a> Lowerer<'a> {
     /// fresh `Done` node plus the body's nodes; reports the body entry and the
     /// fork nodes belonging to this copy. Shared symbols (ports) are interned in
     /// the `symbol_expr` cache and therefore unified across copies.
-    fn lower_protocol_body(&mut self, ast: &Protocol) -> LoweredProtocol {
+    fn lower_protocol_body(&mut self, ast: &Protocol, keep_done: bool) -> LoweredProtocol {
         // mark the start of this copy's node range so we can find its fork nodes
         let first_new = self.ir.next_node_id();
 
+        // Every copy terminates its body at an exit node, but only the final
+        // transaction in the trace emits `Done`. Earlier (pipelined) transactions'
+        // threads simply end at an empty exit node, so a predecessor finishing
+        // does not mark the joint protocol complete.
         let done = self.ir.n(Node::empty());
-        let done_op = self.ir.o(Op::Done);
-        let true_id = self.ir.true_id();
-        self.ir.push_action(done, Action::new(true_id, done_op));
+        if keep_done {
+            let done_op = self.ir.o(Op::Done);
+            let true_id = self.ir.true_id();
+            self.ir.push_action(done, Action::new(true_id, done_op));
+        }
 
         let entry = self.lower_stmt(ast, ast.body, done);
 
@@ -299,7 +305,12 @@ impl<'a> Lowerer<'a> {
 
     /// Build the per-copy argument substitution (argument symbol -> constant)
     /// and lower one transaction's body into the graph.
-    fn lower_transaction(&mut self, ast: &Protocol, values: &[Value]) -> LoweredProtocol {
+    fn lower_transaction(
+        &mut self,
+        ast: &Protocol,
+        values: &[Value],
+        keep_done: bool,
+    ) -> LoweredProtocol {
         assert_eq!(
             ast.args.len(),
             values.len(),
@@ -316,7 +327,7 @@ impl<'a> Lowerer<'a> {
             subst.insert(arg.symbol(), lit);
         }
         self.subst = subst;
-        self.lower_protocol_body(ast)
+        self.lower_protocol_body(ast, keep_done)
     }
 
     /// For the next trace element, hang a fresh copy of its protocol off each
@@ -336,8 +347,11 @@ impl<'a> Lowerer<'a> {
             .get(name.as_str())
             .unwrap_or_else(|| panic!("unknown protocol {name}"));
 
+        // this transaction is the last in its chain iff nothing follows it
+        let keep_done = rest.is_empty();
+
         for fork in frontier {
-            let copy = self.lower_transaction(ast, values);
+            let copy = self.lower_transaction(ast, values, keep_done);
             // additive: keep the fork's existing continuation, add the start of
             // the next transaction. The later `contract_edges` merges the forks.
             let true_id = self.ir.true_id();
@@ -352,7 +366,7 @@ impl<'a> Lowerer<'a> {
 /// trace-agnostic path). Arguments remain symbolic.
 pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
-    let lowered = lowerer.lower_protocol_body(&ast);
+    let lowered = lowerer.lower_protocol_body(&ast, true);
     let entry_node = lowerer.ir.entry;
     let true_id = lowerer.ir.true_id();
     lowerer
@@ -381,7 +395,8 @@ pub fn lower_trace_to_ir(
         .unwrap_or_else(|| panic!("unknown protocol {first_name}"));
 
     let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
-    let first = lowerer.lower_transaction(first_ast, first_values);
+    // the first transaction is the last one only when the trace has length 1
+    let first = lowerer.lower_transaction(first_ast, first_values, trace.len() == 1);
     let entry_node = lowerer.ir.entry;
     let true_id = lowerer.ir.true_id();
     lowerer
