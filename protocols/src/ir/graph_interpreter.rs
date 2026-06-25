@@ -208,6 +208,8 @@ pub fn interpret(
         let mut pending_inputs: FxHashMap<SymbolId, InputValue> = FxHashMap::default();
         let mut assigned_inputs: FxHashSet<SymbolId> = FxHashSet::default();
 
+        // TODO: assignments should be evaluated in a topo order
+
         for action in &node.actions {
             if let Op::Assign(symbol_id, _) = &pg[action.op]
                 && !assigned_inputs.insert(*symbol_id)

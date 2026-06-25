@@ -132,44 +132,6 @@ def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
     return ["python3", "-c", script, str(timeout_secs), *cmd]
 
 
-def differential_cmd(cmd: list[str], flag_sets: list[list[str]]) -> list[str]:
-    # Run `cmd` once per flag set, require identical stdout + exit code, and emit
-    # the baseline (first) run's output so the existing golden still matches. A
-    # mismatch prints a labelled diff on stderr and exits 99.
-    script = (
-        "import difflib, json, subprocess, sys\n"
-        "base = json.loads(sys.argv[1])\n"
-        "flag_sets = json.loads(sys.argv[2])\n"
-        "runs = [\n"
-        "    (flags, subprocess.run(base + flags, capture_output=True, text=True))\n"
-        "    for flags in flag_sets\n"
-        "]\n"
-        "base_flags, base_run = runs[0]\n"
-        "baseline = (base_run.stdout, base_run.returncode)\n"
-        "base_label = ' '.join(base_flags) or '<none>'\n"
-        "for flags, r in runs[1:]:\n"
-        "    if (r.stdout, r.returncode) == baseline:\n"
-        "        continue\n"
-        "    label = ' '.join(flags) or '<none>'\n"
-        "    sys.stderr.write('differential mismatch: [%s] vs baseline [%s]\\n'\n"
-        "                     % (label, base_label))\n"
-        "    if r.returncode != base_run.returncode:\n"
-        "        sys.stderr.write('  exit: %s vs %s (baseline)\\n'\n"
-        "                         % (r.returncode, base_run.returncode))\n"
-        "    diff = difflib.unified_diff(\n"
-        "        base_run.stdout.splitlines(keepends=True),\n"
-        "        r.stdout.splitlines(keepends=True),\n"
-        "        fromfile='baseline [%s]' % base_label,\n"
-        "        tofile='[%s]' % label,\n"
-        "    )\n"
-        "    sys.stderr.writelines(diff)\n"
-        "    sys.exit(99)\n"
-        "sys.stdout.write(baseline[0])\n"
-        "sys.exit(baseline[1])\n"
-    )
-    return ["python3", "-c", script, json.dumps(cmd), json.dumps(flag_sets)]
-
-
 def _tx_tail(cmd: list[str], case: dict, with_max_steps: bool) -> None:
     cmd += case["extra_args"]
     if case["verilog"]:
@@ -182,7 +144,11 @@ def _tx_tail(cmd: list[str], case: dict, with_max_steps: bool) -> None:
         cmd += ["--max-steps", str(case["max_steps"])]
 
 
-def interp_runt_command(case: dict) -> str:
+# Each builder returns one or more (name_suffix, command) variants
+# the suffix allows us to have differently named test cases with the same expect file
+
+
+def interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [
         *cargo_prefix("protocols-interp"),
         "--color",
@@ -191,26 +157,18 @@ def interp_runt_command(case: dict) -> str:
         case["path"],
     ]
     _tx_tail(cmd, case, with_max_steps=True)
-    return repo_root_command(cmd)
+    return [("", repo_root_command(cmd))]
 
 
-def graph_interp_runt_command(case: dict) -> str:
+def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
-    # Differentially test the edge-contraction / normalization passes; keep
-    # stderr visible so a mismatch report is readable on failure.
-    # cmd = differential_cmd(
-    #     cmd,
-    #     [
-    #         [],
-    #         ["--contract-edges"],
-    #     ],
-    # )
-    cmd = cmd + ["--contract-edges"]
-    return repo_root_command(cmd, suppress_stderr=False)
+    # baseline and --contract-edges runs share one golden
+    flag_sets = [("", []), ("contract_edges", ["--contract-edges"])]
+    return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
 
 
-def monitor_runt_command(case: dict) -> str:
+def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*cargo_prefix("protocols-monitor"), "--protocol", case["path"]]
     if case["wave"]:
         cmd += ["--wave", case["wave"]]
@@ -221,7 +179,7 @@ def monitor_runt_command(case: dict) -> str:
     cmd += case["extra_args"]
     if case["timeout_secs"] is not None:
         cmd = timeout_cmd(case["timeout_secs"], cmd)
-    return repo_root_command(cmd)
+    return [("", repo_root_command(cmd))]
 
 
 RUNT_BUILDERS = {
@@ -232,6 +190,7 @@ RUNT_BUILDERS = {
 
 
 # config generation
+
 
 @lru_cache(maxsize=None)
 def protocol_constructs(protocol_path: str) -> frozenset[str]:
@@ -286,19 +245,15 @@ def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     suites = []
     for case in sorted(cases, key=lambda c: (c["path"], expect_name(c, runner))):
         path = case["path"]
-        name = (
+        edir = expect_dir(case, runner)
+        ename = expect_name(case, runner)
+        base_name = (
             f"{suite_name}.{replace_non_alphanumerics(Path(path).with_suffix('').as_posix())}"
-            f".{replace_non_alphanumerics(expect_name(case, runner).removesuffix('.expect'))}"
+            f".{replace_non_alphanumerics(ename.removesuffix('.expect'))}"
         )
-        suites.append(
-            (
-                name,
-                expect_dir(case, runner),
-                expect_name(case, runner),
-                build(case),
-                path,
-            )
-        )
+        for suffix, cmd in build(case):
+            name = f"{base_name}.{suffix}" if suffix else base_name
+            suites.append((name, edir, ename, cmd, path))
     return suites
 
 
@@ -331,14 +286,20 @@ def generate_runt_configs() -> None:
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
     }
 
-    expect_commands: dict[str, str] = {}
+    # A golden may be shared by several variants of the same test (e.g. the
+    # graph_interp baseline and --contract-edges runs), but two *different* tests
+    # sharing one golden is an accidental name collision.
+    expect_owner: dict[str, str] = {}
     for suite_name, (runner, cases) in suite_specs.items():
         config_dir = REPO_ROOT / "runt" / suite_name
         runt_suites = runt_case_suites(suite_name, runner, cases)
-        for _name, edir, ename, cmd, _path in runt_suites:
+        for _name, edir, ename, _cmd, path in runt_suites:
             expect_path = (config_dir / edir / ename).resolve().as_posix()
-            if expect_commands.setdefault(expect_path, cmd) != cmd:
-                raise SystemExit(f"expectation name collision for {expect_path}")
+            owner = expect_owner.setdefault(expect_path, path)
+            if owner != path:
+                raise SystemExit(
+                    f"expectation name collision: {owner} and {path} -> {expect_path}"
+                )
         write_runt_toml(config_dir, runt_suites)
 
 
