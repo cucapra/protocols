@@ -8,7 +8,8 @@ use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graph_interpreter;
-use protocols::ir::lowering::lower_ast_to_ir;
+use protocols::ir::graphviz::to_dot_string;
+use protocols::ir::lowering::{lower_ast_to_ir, lower_trace_to_ir};
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
@@ -38,6 +39,17 @@ struct Cli {
     // Contract edges in the graphs such that each edge is a step
     #[arg(long)]
     contract_edges: bool,
+
+    /// Build one joint IR per trace by grafting the trace's known transactions
+    /// onto fork nodes, then interpret that single graph (instead of
+    /// interpreting each transaction against its own per-protocol graph).
+    #[arg(long)]
+    respect_forks: bool,
+
+    /// With `--respect-forks`, print the combined (contracted) joint graph for
+    /// each trace as Graphviz DOT to stdout, before interpreting it.
+    #[arg(long)]
+    graphout: bool,
 }
 
 fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
@@ -77,6 +89,72 @@ fn print_panic_payload(payload: Box<dyn std::any::Any + Send>) {
     }
 }
 
+/// Classic flow: lower each protocol once (trace-agnostic) and interpret every
+/// transaction against its own per-protocol graph.
+fn run_classic(
+    cli: &Cli,
+    st: &SymbolTable,
+    protos: &[Protocol],
+    sim: &mut PatronusSim,
+    traces: Vec<Vec<(String, Vec<Value>)>>,
+) {
+    let mut graphs: Vec<(String, ProtoGraph)> = protos
+        .iter()
+        .map(|proto| (proto.name.clone(), lower_ast_to_ir(proto.clone(), st)))
+        .collect();
+
+    // edge contract the graphs and normalize assignments
+    if cli.contract_edges {
+        for (_, graph) in &mut graphs {
+            contract_edges(graph, st);
+            normalize_assignments(graph, st);
+        }
+    }
+
+    for (trace_index, trace) in traces.into_iter().enumerate() {
+        for (name, values) in trace {
+            let (_, pg) = graphs
+                .iter_mut()
+                .find(|(n, _)| n == &name)
+                .unwrap_or_else(|| panic!("unknown protocol {name}"));
+            let args = build_arg_map(&pg.args, st, values);
+            graph_interpreter::interpret(pg, st, args, sim);
+        }
+        println!("trace {} executed successfully", trace_index);
+    }
+}
+
+/// Trace-aware flow: per trace, build one joint IR by grafting the known
+/// transactions onto fork nodes, contract + normalize it once, then interpret
+/// the single graph. Arguments are baked in as constants during lowering, so no
+/// argument values are looked up at interpretation time.
+fn run_respect_forks(
+    st: &SymbolTable,
+    protos: &[Protocol],
+    sim: &mut PatronusSim,
+    traces: &[Vec<(String, Vec<Value>)>],
+    graphout: bool,
+) {
+    let protos_by_name: FxHashMap<&str, &Protocol> =
+        protos.iter().map(|p| (p.name.as_str(), p)).collect();
+
+    for (trace_index, trace) in traces.iter().enumerate() {
+        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
+        contract_edges(&mut joint, st);
+        normalize_assignments(&mut joint, st);
+
+        if graphout {
+            println!("// joint graph for trace {trace_index}");
+            println!("{}", to_dot_string(&joint, st));
+        }
+
+        // args are baked into the graph as constants, so none appear in
+        // `symbol_expr`; the interpreter never looks one up -> empty map is safe.
+        graph_interpreter::interpret(&joint, st, FxHashMap::default(), sim);
+        println!("trace {} executed successfully", trace_index);
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     let (st, protos) = load_protocols(&cli);
@@ -84,32 +162,13 @@ fn main() {
     let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
     let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None).unwrap();
 
-    let mut graphs: Vec<(String, ProtoGraph)> = protos
-        .iter()
-        .map(|proto| (proto.name.clone(), lower_ast_to_ir(proto.clone(), &st)))
-        .collect();
-
-    // edge contract the graphs and normalize assignments
-    if cli.contract_edges {
-        for (_, graph) in &mut graphs {
-            contract_edges(graph, &st);
-            normalize_assignments(graph, &st);
-        }
-    }
-
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
-        for (trace_index, trace) in traces.into_iter().enumerate() {
-            for (name, values) in trace {
-                let (_, pg) = graphs
-                    .iter_mut()
-                    .find(|(n, _)| n == &name)
-                    .unwrap_or_else(|| panic!("unknown protocol {name}"));
-                let args = build_arg_map(&pg.args, &st, values);
-                graph_interpreter::interpret(pg, &st, args, &mut sim);
-            }
-            println!("trace {} executed successfully", trace_index);
+        if cli.respect_forks {
+            run_respect_forks(&st, &protos, &mut sim, &traces, cli.graphout);
+        } else {
+            run_classic(&cli, &st, &protos, &mut sim, traces);
         }
     }));
     std::panic::set_hook(old_hook);
