@@ -17,33 +17,30 @@ use log::info;
 use rustc_hash::FxHashMap;
 
 /// `NextStmtMap` allows us to interpret without using recursion
-/// (the interpreter can just lookup what the next statement is using this map)
+/// (the interpreter can just look up what the next statement is using this map)
 pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
 type ArgMap<'a> = FxHashMap<&'a str, Value>;
 
-/// A `TodoItem` corresponds to a function call in a transaction `.tx` file
-pub type TodoItem = (String, Vec<Value>);
+/// An `Invocation` is a pair consisting of the `String` of the `Protocol` to instantiate and a `Vec<Value>` of arguments to the protocol
+pub type Invocation = (String, Vec<Value>);
 
-/// A `TransactionInfo` is a triple of the form
-/// `(Transaction, SymbolTable, NextStmtMap)`.
+/// A `ProtocolInfo` is a triple of the form
+/// `(Protocol, SymbolTable, NextStmtMap)`.
 /// This is passed to the interpreter when we want to execute
-/// a single transaction.
-type TransactionInfo<'a> = (&'a Protocol, &'a SymbolTable, NextStmtMap);
+/// a single protocol.
+type ProtocolInfo<'a> = (&'a Protocol, &'a SymbolTable, NextStmtMap);
 
-/// A `Todo` is a function call to be executed (i.e. a line in the `.tx` file)
+/// A `Transaction` is a protocol instantiation
 #[derive(Debug, Clone)]
-pub struct Todo<'a> {
-    /// The associated `Transaction`
-    pub tr: &'a Protocol,
-    /// The associated `SymbolTable`
+pub struct Transaction<'a> {
+    pub proto: &'a Protocol,
     pub st: &'a SymbolTable,
     /// The associated argument values (a map from variable names to their values)
     pub args: ArgMap<'a>,
-    /// Maps each `StmtId` to an optional `StmtId` of the next statement
     pub next_stmt_map: NextStmtMap,
 }
 
-impl<'a> Todo<'a> {
+impl<'a> Transaction<'a> {
     pub fn new(
         tr: &'a Protocol,
         st: &'a SymbolTable,
@@ -51,7 +48,7 @@ impl<'a> Todo<'a> {
         next_stmt_map: NextStmtMap,
     ) -> Self {
         Self {
-            tr,
+            proto: tr,
             st,
             args,
             next_stmt_map,
@@ -59,17 +56,16 @@ impl<'a> Todo<'a> {
     }
 
     /// Pretty-prints a `Statement` based on its `StmtId`
-    /// and the `SymbolTable` associated with this `Todo`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
-        self.tr.format_stmt(stmt_id, self.st)
+        self.proto.format_stmt(stmt_id, self.st)
     }
 }
 
 /// Struct containing metadata associated with a `Thread`
 #[derive(Debug, Clone)]
 pub struct Thread<'a> {
-    /// The corresponding `Todo` (function call to be executed)
-    pub todo: Todo<'a>,
+    /// The corresponding `Transaction`
+    pub transaction: Transaction<'a>,
     /// The `StmtId` of the current step
     pub current_step: StmtId,
     /// The `StmtId` of the next step (if one exists)
@@ -81,8 +77,8 @@ pub struct Thread<'a> {
     /// The `StmtId` of the previous fork (if one exists)
     /// (This is used to allow more precise error messages for `DoubleFork` errors)
     pub prev_fork_stmt_id: Option<StmtId>,
-    /// Index into the original `todos` and parallel `results` vector (used to store this thread's result)
-    pub todo_idx: usize,
+    /// Index into the original `invocs` and parallel `results` vector (used to store this thread's result)
+    pub tx_idx: usize,
     /// copy of the loop_vars in the Evaluator for context switching
     pub loop_vars: Vec<(SymbolId, BitVecValue)>,
     /// copy of the loop_info in the Evaluator for context switching
@@ -90,17 +86,17 @@ pub struct Thread<'a> {
 }
 
 impl<'a> Thread<'a> {
-    pub fn initialize_thread(todo: Todo<'a>, todo_idx: usize) -> Self {
+    pub fn initialize_thread(tx: Transaction<'a>, tx_idx: usize) -> Self {
         info!(
             "Thread initialized with transaction: {:?}, thread_id={}",
-            todo.tr.name, todo_idx
+            tx.proto.name, tx_idx
         );
         Self {
-            current_step: todo.tr.body,
+            current_step: tx.proto.body,
             next_step: None,
-            todo_idx,
+            tx_idx,
             loop_vars: vec![],
-            todo,
+            transaction: tx,
             prev_fork_stmt_id: None,
             has_stepped: false,
             has_forked: false,
@@ -110,7 +106,7 @@ impl<'a> Thread<'a> {
 
     /// Pretty-prints a `Statement` identified by its `StmtId`
     pub fn format_stmt(&self, stmt_id: &StmtId) -> String {
-        self.todo.format_stmt(stmt_id)
+        self.transaction.format_stmt(stmt_id)
     }
 
     /// Sets the next step and writes back bounded loop state from the evaluator.
@@ -139,14 +135,11 @@ pub enum StepResult<'a> {
 /// The `Scheduler` struct contains metadata necessary for scheduling `Thread`s.
 pub struct Scheduler<'a> {
     sim: PatronusSim,
-    /// A `Vec` of `Transaction`s, along with their associated `SymbolTable`s
-    /// and `NextStmtMap`s
-    irs: Vec<TransactionInfo<'a>>,
-    /// A list of `TodoItem`s to be executed (each element corresponds to
-    /// a function call in a `.tx` file)
-    todos: Vec<TodoItem>,
-    /// The index of the next element in `todo`s to be executed when we `fork`
-    next_todo_idx: usize,
+    proto_infos: Vec<ProtocolInfo<'a>>,
+    /// A list of `Invocation`s to be executed (each element corresponds to a function call in a `.tx` file)
+    invocs: Vec<Invocation>,
+    /// The index of the next element in `invocs` to be executed when we `fork`
+    next_tx_idx: usize,
     /// A list of currently active threads
     active_threads: Vec<Thread<'a>>,
     /// The scheduler's ready queue, storing all threads to be executed next
@@ -173,25 +166,25 @@ pub struct Scheduler<'a> {
 }
 
 impl<'a> Scheduler<'a> {
-    // Helper method that creates a Todo struct
-    fn next_todo_helper(
-        todos: &[TodoItem],
+    // Helper method that creates a `Transaction` struct
+    fn next_transaction_helper(
+        invocs: &[Invocation],
         idx: usize,
-        irs: &[TransactionInfo<'a>],
-    ) -> Option<Todo<'a>> {
-        if idx < todos.len() {
+        proto_infos: &[ProtocolInfo<'a>],
+    ) -> Option<Transaction<'a>> {
+        if idx < invocs.len() {
             // get the corresponding transaction, symbol table, and next_stmt_map
-            let tr_name = todos[idx].0.clone();
+            let tr_name = invocs[idx].0.clone();
 
             // find the ir corresponding to the transaction name
-            let ir_idx = irs
+            let proto_idx = proto_infos
                 .iter()
                 .position(|(tr, _, _)| tr.name == tr_name)
-                .expect("Transaction not found in IRs");
-            let (tr, st, next_stmt_map) = &irs[ir_idx];
+                .expect("Transaction not found amongst declared protocols.");
+            let (tr, st, next_stmt_map) = &proto_infos[proto_idx];
 
-            // setup the arguments for the transaction
-            let args = todos[idx].1.clone();
+            // set up the arguments for the transaction
+            let args = invocs[idx].1.clone();
             let mut args_map = FxHashMap::default();
 
             for (i, arg) in args.iter().enumerate() {
@@ -199,63 +192,55 @@ impl<'a> Scheduler<'a> {
                 args_map.insert(identifier, arg.clone());
             }
 
-            Some(Todo::new(tr, st, args_map, next_stmt_map.clone()))
+            Some(Transaction::new(tr, st, args_map, next_stmt_map.clone()))
         } else {
             None
         }
     }
 
-    // Instance method that uses self fields and returns a Todo
-    fn next_todo(&self, idx: usize) -> Option<Todo<'a>> {
-        Self::next_todo_helper(&self.todos, idx, &self.irs)
+    fn next_transaction(&self, idx: usize) -> Option<Transaction<'a>> {
+        Self::next_transaction_helper(&self.invocs, idx, &self.proto_infos)
     }
 
-    /// Creates a new `Scheduler` struct and takes the following arguments:
-    /// - A list of transactions and their associated symbol tables (`transactions_and_symbols`)
-    /// - A list of function calls to execute (`todos`)
-    /// - A Patronus context (`ctx`)
-    /// - A Patronus transition system (`sys`)
-    /// - A Patronus simulator (`sim`)
-    /// - and a `DiagnosticHandler` for emitting errors (`handler`)
     pub fn new(
         st: &'a SymbolTable,
         protos: &'a [Protocol],
-        todos: Vec<TodoItem>,
+        invocs: Vec<Invocation>,
         sim: PatronusSim,
         handler: &'a mut DiagnosticHandler,
         max_steps: u32,
     ) -> Self {
-        // Create irs with pre-computed next statement mappings
-        let irs: Vec<TransactionInfo<'a>> = protos
+        // Create `ProtocolInfo`s with pre-computed next statement mappings
+        let proto_infos: Vec<ProtocolInfo<'a>> = protos
             .iter()
             .map(|proto| (proto, st, proto.next_stmt_mapping()))
             .collect();
 
-        // setup the Evaluator and first Thread
-        let initial_todo =
-            Self::next_todo_helper(&todos, 0, &irs).expect("No transactions passed.");
+        // set up the Evaluator and first Thread
+        let initial_tx = Self::next_transaction_helper(&invocs, 0, &proto_infos)
+            .expect("No transactions passed.");
 
         info!(
             "Starting with initial transaction: {:?}",
-            initial_todo.tr.name
+            initial_tx.proto.name
         );
 
         // Initialize evaluator with first transaction
         let evaluator = Evaluator::new(
-            initial_todo.args.clone(),
-            initial_todo.tr,
-            initial_todo.st,
+            initial_tx.args.clone(),
+            initial_tx.proto,
+            initial_tx.st,
             &sim,
         );
 
-        let results_size = todos.len();
-        let first = Thread::initialize_thread(initial_todo, 0);
+        let results_size = invocs.len();
+        let first = Thread::initialize_thread(initial_tx, 0);
 
         info!("Added first thread to active_threads");
         Self {
-            irs,
-            todos,
-            next_todo_idx: 1,
+            proto_infos,
+            invocs,
+            next_tx_idx: 1,
             active_threads: vec![first],
             next_threads: vec![],
             inactive_threads: vec![],
@@ -269,8 +254,8 @@ impl<'a> Scheduler<'a> {
         }
     }
 
-    /// Runs the scheduler on a list of `todo`s, returning a list of `ExecutionResult`s
-    pub fn execute_todos(&mut self) -> Vec<ExecutionResult<()>> {
+    /// Runs the scheduler on a list of transaction, returning a list of `ExecutionResult`s
+    pub fn execute_transactions(&mut self) -> Vec<ExecutionResult<()>> {
         info!(
             "==== Starting scheduling cycle {}, active threads: {} ====",
             self.step_count + 1,
@@ -322,7 +307,7 @@ impl<'a> Scheduler<'a> {
             // No conflicts - finalize input values to sim before stepping
             self.evaluator.finalize_inputs_for_cycle(&mut self.sim);
 
-            // Collect threads that need implicit forking (can't call self.next_todo during drain)
+            // Collect threads that need implicit forking (can't call self.next_transaction during drain)
             let mut threads_needing_implicit_fork: Vec<usize> = Vec::new();
 
             // Move each active thread into inactive or next (drain preserves order)
@@ -332,7 +317,7 @@ impl<'a> Scheduler<'a> {
                     Some(next_step_id) => {
                         info!(
                             "Thread with transaction {:?} reached `Step()`, moving to next_threads with `Step()`: {:?}",
-                            active_thread.todo.tr.name, next_step_id
+                            active_thread.transaction.proto.name, next_step_id
                         );
 
                         // if the thread is moving to next_threads, its current_step becomes its next_step and next_step becomes None
@@ -343,15 +328,14 @@ impl<'a> Scheduler<'a> {
                     None => {
                         info!(
                             "Thread with transaction {:?} finished execution, moving to inactive_threads",
-                            active_thread.todo.tr.name
+                            active_thread.transaction.proto.name
                         );
                         // Clear thread inputs
-                        self.evaluator.clear_thread_inputs(active_thread.todo_idx);
+                        self.evaluator.clear_thread_inputs(active_thread.tx_idx);
 
                         // Track if this thread needs implicit fork
-                        if !active_thread.has_forked && self.results[active_thread.todo_idx].is_ok()
-                        {
-                            threads_needing_implicit_fork.push(active_thread.todo_idx);
+                        if !active_thread.has_forked && self.results[active_thread.tx_idx].is_ok() {
+                            threads_needing_implicit_fork.push(active_thread.tx_idx);
                         }
 
                         self.inactive_threads.push(active_thread)
@@ -364,11 +348,11 @@ impl<'a> Scheduler<'a> {
             }
 
             // Process implicit forks after drain is complete
-            for _todo_idx in threads_needing_implicit_fork {
-                let next_todo_option = self.next_todo(self.next_todo_idx);
-                match next_todo_option {
-                    Some(todo) => {
-                        let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+            for _tx_idx in threads_needing_implicit_fork {
+                let next_transaction_option = self.next_transaction(self.next_tx_idx);
+                match next_transaction_option {
+                    Some(tx) => {
+                        let new_thread = Thread::initialize_thread(tx, self.next_tx_idx);
                         self.next_threads.push(new_thread);
                         info!(
                             "    enqueued implicitly forked thread; queue size = {}",
@@ -376,10 +360,10 @@ impl<'a> Scheduler<'a> {
                         );
                     }
                     None => {
-                        info!("    no more todos to fork, skipping implicit fork.");
+                        info!("    no more transactions to fork, skipping implicit fork.");
                     }
                 }
-                self.next_todo_idx += 1;
+                self.next_tx_idx += 1;
             }
 
             // Advance the simulator whenever a `step()` statement was
@@ -398,7 +382,7 @@ impl<'a> Scheduler<'a> {
                 self.step_happened_this_cycle = false;
             }
 
-            // setup the threads for the next cycle
+            // set up the threads for the next cycle
             if !self.next_threads.is_empty() {
                 info!(
                     "Moving {} threads from next_threads to active_threads for next cycle",
@@ -410,14 +394,14 @@ impl<'a> Scheduler<'a> {
                 if self.step_count >= self.max_steps {
                     // Emit error for all active threads
                     for thread in &self.active_threads {
-                        self.results[thread.todo_idx] =
+                        self.results[thread.tx_idx] =
                             Err(ExecutionError::MaxStepsReached(self.max_steps));
                     }
                     // shut down execution by clearing all active threads
                     self.active_threads.clear();
                 }
             } else {
-                info!("No more threads to schedule. Protocol execution complete.");
+                info!("No more threads to schedule. Execution complete.");
             }
         }
 
@@ -436,9 +420,9 @@ impl<'a> Scheduler<'a> {
             // Collect all concrete values with their thread indices and stmt_ids
             let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
                 .iter()
-                .filter_map(|(&todo_idx, (val, stmt_id))| {
+                .filter_map(|(&tx_idx, (val, stmt_id))| {
                     if let ThreadInputValue::Concrete(bvv) = val {
-                        Some((todo_idx, bvv, *stmt_id))
+                        Some((tx_idx, bvv, *stmt_id))
                     } else {
                         None
                     }
@@ -450,8 +434,8 @@ impl<'a> Scheduler<'a> {
                 let (first_idx, first_val, first_stmt_id) = &concrete_vals[0];
                 for (second_idx, second_val, second_stmt_id) in &concrete_vals[1..] {
                     if !first_val.is_equal(*second_val) {
-                        let first_transaction_name = self.todos[*first_idx].0.clone();
-                        let second_transaction_name = self.todos[*second_idx].0.clone();
+                        let first_transaction_name = self.invocs[*first_idx].0.clone();
+                        let second_transaction_name = self.invocs[*second_idx].0.clone();
                         let port_name = self.sim.port_name(*port_id);
 
                         // Error for first thread
@@ -489,22 +473,22 @@ impl<'a> Scheduler<'a> {
     }
 
     fn emit_all_diagnostics(&mut self) {
-        // results and todos are parallel arrays, so we can use the same idx
+        // results and txs are parallel arrays, so we can use the same idx
         for (idx, result) in self.results.iter().enumerate() {
             if let Err(error) = result {
                 let ir_idx = self
-                    .irs
+                    .proto_infos
                     .iter()
-                    .position(|(tr, _, _)| tr.name == self.todos[idx].0.clone())
-                    .expect("Transaction not found in IRs");
-                let (tr, st, _) = self.irs[ir_idx];
+                    .position(|(tr, _, _)| tr.name == self.invocs[idx].0.clone())
+                    .expect("Transaction not found in declared protocols.");
+                let (tr, st, _) = self.proto_infos[ir_idx];
 
                 DiagnosticEmitter::emit_execution_error(
                     self.handler,
                     error,
                     tr,
                     st,
-                    &self.todos[idx].1,
+                    &self.invocs[idx].1,
                 );
             }
         }
@@ -519,13 +503,13 @@ impl<'a> Scheduler<'a> {
 
     /// Runs a single thread (indicated by its `thread_idx`) until the next step to synchronize on
     pub fn run_thread_until_next_step(&mut self, thread_idx: usize, forks_enabled: bool) {
-        let next_todo_option = self.next_todo(self.next_todo_idx);
+        let next_transaction_option = self.next_transaction(self.next_tx_idx);
         let thread = &mut self.active_threads[thread_idx];
         let mut current_stmt_id = thread.current_step;
 
         info!(
             "Running thread {} from `step()` ({})",
-            thread.todo.tr.name, current_stmt_id
+            thread.transaction.proto.name, current_stmt_id
         );
 
         info!("  BEFORE context_switch");
@@ -534,18 +518,18 @@ impl<'a> Scheduler<'a> {
 
         // Initialize thread inputs at cycle START (implicit reapplication)
         info!(
-            "  About to call init_thread_inputs for todo_idx={} ({})",
-            thread.todo_idx, thread.todo.tr.name
+            "  About to call init_thread_inputs for tx_idx={} ({})",
+            thread.tx_idx, thread.transaction.proto.name
         );
         if let Err(e) = self
             .evaluator
-            .init_thread_inputs(&mut self.sim, thread.todo_idx)
+            .init_thread_inputs(&mut self.sim, thread.tx_idx)
         {
             info!(
                 "ERROR during init_thread_inputs: {:?}, terminating thread",
                 e
             );
-            self.results[thread.todo_idx] = Err(e);
+            self.results[thread.tx_idx] = Err(e);
             thread.save_state(
                 None,
                 self.evaluator.loop_vars.clone(),
@@ -574,7 +558,7 @@ impl<'a> Scheduler<'a> {
                         thread.format_stmt(&next_id)
                     );
 
-                    match thread.todo.tr[next_id] {
+                    match thread.transaction.proto[next_id] {
                         Stmt::Step => {
                             // We've encountered a step, so set `has_stepped` to true
                             if !thread.has_stepped {
@@ -586,7 +570,7 @@ impl<'a> Scheduler<'a> {
                             // Check if this is the final step (no statement after it)
                             // If so, thread completes at this cycle rather than running another useless cycle
                             let next_step =
-                                if thread.todo.next_stmt_map.get(&next_id) == Some(&None) {
+                                if thread.transaction.next_stmt_map.get(&next_id) == Some(&None) {
                                     info!("  This is the final step, thread completes.");
                                     None
                                 } else {
@@ -606,12 +590,12 @@ impl<'a> Scheduler<'a> {
                                     "  ERROR: Thread has already forked at this point, terminating thread"
                                 );
                                 let error = ExecutionError::double_fork(
-                                    thread.todo_idx,
-                                    thread.todo.tr.name.clone(),
+                                    thread.tx_idx,
+                                    thread.transaction.proto.name.clone(),
                                     thread.prev_fork_stmt_id.expect("Forked multiple times but `prev_fork_stmt_id` field is `None`"),
                                     next_id,
                                 );
-                                self.results[thread.todo_idx] = Err(error);
+                                self.results[thread.tx_idx] = Err(error);
                                 thread.save_state(
                                     None,
                                     self.evaluator.loop_vars.clone(),
@@ -624,11 +608,11 @@ impl<'a> Scheduler<'a> {
                                 );
                                 thread.has_forked = true;
                                 let error = ExecutionError::fork_before_step(
-                                    thread.todo_idx,
-                                    thread.todo.tr.name.clone(),
+                                    thread.tx_idx,
+                                    thread.transaction.proto.name.clone(),
                                     next_id,
                                 );
-                                self.results[thread.todo_idx] = Err(error);
+                                self.results[thread.tx_idx] = Err(error);
                                 thread.save_state(
                                     None,
                                     self.evaluator.loop_vars.clone(),
@@ -638,10 +622,10 @@ impl<'a> Scheduler<'a> {
                             }
 
                             info!("  `Fork` at stmt_id {}, spawning new thread…", next_id);
-                            match next_todo_option.clone() {
-                                Some(todo) => {
+                            match next_transaction_option.clone() {
+                                Some(tx) => {
                                     let new_thread =
-                                        Thread::initialize_thread(todo, self.next_todo_idx);
+                                        Thread::initialize_thread(tx, self.next_tx_idx);
 
                                     self.next_threads.push(new_thread);
                                     info!(
@@ -650,14 +634,14 @@ impl<'a> Scheduler<'a> {
                                     );
                                 }
                                 None => {
-                                    info!("    no more todos to fork, skipping fork.");
+                                    info!("    no more transactions to fork, skipping fork.");
                                 }
                             }
-                            self.next_todo_idx += 1;
+                            self.next_tx_idx += 1;
                             // Mark this thread as having forked
                             info!(
-                                "  Marking thread {} (todo_idx {}) as having forked.",
-                                thread.todo.tr.name, thread.todo_idx
+                                "  Marking thread {} (tx_idx {}) as having forked.",
+                                thread.transaction.proto.name, thread.tx_idx
                             );
                             // continue from the fork point
                             current_stmt_id = next_id;
@@ -679,11 +663,11 @@ impl<'a> Scheduler<'a> {
 
                 // no more statements -> done
                 Ok(None) => {
-                    let thread_id = thread.todo_idx;
-                    let transaction_name = thread.todo.tr.name.clone();
+                    let thread_id = thread.tx_idx;
+                    let transaction_name = thread.transaction.proto.name.clone();
 
                     // Check if the last executed statement was `step()`
-                    if let Stmt::Step = thread.todo.tr[current_stmt_id] {
+                    if let Stmt::Step = thread.transaction.proto[current_stmt_id] {
                         // Thread completed execution successfully
                         // If the thread hasn't forked yet, implicit fork will happen below
                         info!("  Execution complete, no more statements.");
@@ -705,7 +689,7 @@ impl<'a> Scheduler<'a> {
                 // error -> record and stop
                 Err(e) => {
                     info!("ERROR: {:?}, terminating thread", e);
-                    self.results[thread.todo_idx] = Err(e);
+                    self.results[thread.tx_idx] = Err(e);
                     break;
                 }
             }
@@ -719,15 +703,15 @@ impl<'a> Scheduler<'a> {
 
         // Clear this thread's inputs if it completed (before implicit fork so new thread starts fresh)
         if thread.next_step.is_none() {
-            self.evaluator.clear_thread_inputs(thread.todo_idx);
+            self.evaluator.clear_thread_inputs(thread.tx_idx);
         }
 
         // fork if a thread has completed successfully
         // more specifically, if forks are enabled, and this thread has None for next_step, and the thread didn't fail
-        if !thread.has_forked && forks_enabled && self.results[thread.todo_idx].is_ok() {
-            match next_todo_option.clone() {
-                Some(todo) => {
-                    let new_thread = Thread::initialize_thread(todo, self.next_todo_idx);
+        if !thread.has_forked && forks_enabled && self.results[thread.tx_idx].is_ok() {
+            match next_transaction_option.clone() {
+                Some(tx) => {
+                    let new_thread = Thread::initialize_thread(tx, self.next_tx_idx);
 
                     self.next_threads.push(new_thread);
                     info!(
@@ -736,10 +720,10 @@ impl<'a> Scheduler<'a> {
                     );
                 }
                 None => {
-                    info!("    no more todos to fork, skipping implicit fork.");
+                    info!("    no more transactionss to fork, skipping implicit fork.");
                 }
             }
-            self.next_todo_idx += 1;
+            self.next_tx_idx += 1;
         }
     }
 }

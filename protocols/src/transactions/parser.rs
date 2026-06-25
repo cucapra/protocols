@@ -11,7 +11,7 @@ use crate::frontend::ast::Protocol;
 use crate::frontend::diagnostic::*;
 use crate::frontend::serialize::serialize_type;
 use crate::frontend::symbol::{SymbolTable, Type};
-use crate::scheduler::TodoItem;
+use crate::scheduler::Invocation;
 
 #[derive(Parser)]
 #[grammar = "transactions/transactions.pest"]
@@ -24,7 +24,7 @@ pub fn parse_transactions_file(
     handler: &mut DiagnosticHandler,
     st: &SymbolTable,
     protos: &FxHashMap<String, &Protocol>,
-) -> anyhow::Result<Vec<Vec<TodoItem>>> {
+) -> anyhow::Result<Vec<Vec<Invocation>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
     let fileid = handler.add_file(filename, input.clone());
@@ -44,12 +44,12 @@ pub fn parse_transactions_file(
 
     // Access the `Rule`s contained within the parsed result
     let inner_rules = parse_result.unwrap().next().unwrap().into_inner();
-    let mut traces: Vec<Vec<TodoItem>> = vec![];
+    let mut traces: Vec<Vec<Invocation>> = vec![];
 
-    // Parse each trace block and each transaction within each block.
+    // Parse each trace block and each invocation within each block.
     for trace_pair in inner_rules {
         if trace_pair.as_rule() == Rule::trace {
-            let mut trace_todos: Vec<TodoItem> = vec![];
+            let mut trace_invocations: Vec<Invocation> = vec![];
             for transaction_pair in trace_pair.into_inner() {
                 if transaction_pair.as_rule() == Rule::transaction {
                     let mut transaction_inner = transaction_pair.into_inner();
@@ -69,10 +69,10 @@ pub fn parse_transactions_file(
                         args = parse_arglist(st, arglist_pair, handler, fileid, proto)?;
                     }
 
-                    trace_todos.push((function_name, args));
+                    trace_invocations.push((function_name, args));
                 }
             }
-            traces.push(trace_todos);
+            traces.push(trace_invocations);
         }
     }
 

@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 use crate::frontend::ast::*;
 use crate::frontend::design::{Design, find_designs};
 use crate::frontend::symbol::{Dir, SymbolId, SymbolTable};
-use crate::scheduler::TodoItem;
+use crate::scheduler::Invocation;
 
 // todo: add `interface` and `module` to protocol language and remove pin argument
 pub fn to_verilog(
@@ -17,7 +17,7 @@ pub fn to_verilog(
     protos: &[Protocol],
     pins: &[(String, PinAnnotation)],
     vcd_out: Option<&str>,
-    transactions: &[TodoItem],
+    invocs: &[Invocation],
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let modules = find_designs(st, protos);
@@ -142,10 +142,10 @@ pub fn to_verilog(
 
     // the test program
     writeln!(out, "  initial begin")?;
-    if transactions.is_empty() {
+    if invocs.is_empty() {
         writeln!(out, "  // TODO: call transaction tasks from here")?;
     } else {
-        for (ii, (name, args)) in transactions.iter().enumerate() {
+        for (ii, (name, args)) in invocs.iter().enumerate() {
             let has_prev = ii > 0;
             if has_prev {
                 writeln!(
@@ -417,19 +417,10 @@ pub mod tests {
         st: &SymbolTable,
         protos: &[Protocol],
         pins: &[(String, PinAnnotation)],
-        transactions: &[TodoItem],
+        invocs: &[Invocation],
     ) -> String {
         let mut out = vec![];
-        to_verilog(
-            "tb",
-            st,
-            protos,
-            pins,
-            Some("dump.vcd"),
-            transactions,
-            &mut out,
-        )
-        .unwrap();
+        to_verilog("tb", st, protos, pins, Some("dump.vcd"), invocs, &mut out).unwrap();
         String::from_utf8(out).unwrap()
     }
 

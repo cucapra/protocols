@@ -172,12 +172,12 @@ impl<'a> Evaluator<'a> {
     /// Performs a context switch in the `Evaluator` by setting the `Evaluator`'s
     /// `Transaction` and `SymbolTable` to that of the specified `todo`
     pub fn context_switch(&mut self, thread: Thread<'a>) {
-        self.tr = thread.todo.tr;
-        self.st = thread.todo.st;
+        self.tr = thread.transaction.proto;
+        self.st = thread.transaction.st;
         self.args_mapping =
-            Evaluator::generate_args_mapping(self.st, self.tr, thread.todo.args.clone());
-        self.next_stmt_map = thread.todo.next_stmt_map.clone();
-        self.current_todo_idx = thread.todo_idx;
+            Evaluator::generate_args_mapping(self.st, self.tr, thread.transaction.args.clone());
+        self.next_stmt_map = thread.transaction.next_stmt_map.clone();
+        self.current_todo_idx = thread.tx_idx;
         self.loop_info = thread.loop_info.clone();
         self.loop_vars = thread.loop_vars.clone();
 
