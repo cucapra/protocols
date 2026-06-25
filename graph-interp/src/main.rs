@@ -149,6 +149,10 @@ fn run_respect_forks(
     for (trace_index, trace) in traces.iter().enumerate() {
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
         contract_edges(&mut joint, st);
+        // if graphout {
+        //     println!("{}", to_dot_string(&joint, st));
+        // }
+        
         if determinize_graph {
             determinize(&mut joint);
         }

@@ -24,8 +24,20 @@ type ArgSubst = FxHashMap<SymbolId, ExprRef>;
 struct LoweredProtocol {
     /// Entry node of the lowered body.
     entry: NodeId,
-    /// Every node in this copy that performs a `Fork`.
+    /// The body's exit node (carries `Done` only for the final transaction).
+    done: NodeId,
+    /// Every node in this ProtoGraph that performs an explicit `Fork`.
     forks: Vec<NodeId>,
+}
+
+/// TODO: we can get rid of this function
+/// TODO: maybe done should always be grafted?
+fn next_frontier(lowered: &LoweredProtocol) -> (Vec<NodeId>, bool) {
+    if lowered.forks.is_empty() {
+        (vec![lowered.done], false)
+    } else {
+        (lowered.forks.clone(), false)
+    }
 }
 
 /// Stateful driver that lowers AST protocols into a `ProtoGraph`.
@@ -279,10 +291,6 @@ impl<'a> Lowerer<'a> {
         // mark the start of this copy's node range so we can find its fork nodes
         let first_new = self.ir.next_node_id();
 
-        // Every copy terminates its body at an exit node, but only the final
-        // transaction in the trace emits `Done`. Earlier (pipelined) transactions'
-        // threads simply end at an empty exit node, so a predecessor finishing
-        // does not mark the joint protocol complete.
         let done = self.ir.n(Node::empty());
         if keep_done {
             let done_op = self.ir.o(Op::Done);
@@ -300,7 +308,7 @@ impl<'a> Lowerer<'a> {
             .map(|(id, _)| id)
             .collect();
 
-        LoweredProtocol { entry, forks }
+        LoweredProtocol { entry, done, forks }
     }
 
     /// Build the per-copy argument substitution (argument symbol -> constant)
@@ -331,18 +339,33 @@ impl<'a> Lowerer<'a> {
     }
 
     /// For the next trace element, hang a fresh copy of its protocol off each
-    /// fork node in `frontier`, then recurse on that copy's own forks. Each fork
-    /// gets its own copy (and downstream chain); with at most one fork per
-    /// protocol this is a linear chain with no blowup.
+    /// node in `frontier`, then recurse on that copy's own frontier. `frontier`
+    /// and `consumes_step` come from [`next_frontier`] applied to the previous
+    /// copy: explicit forks graft via epsilon edges, an implicit fork (the exit
+    /// node) grafts via a step edge. Each frontier node gets its own copy (and
+    /// downstream chain); with at most one fork per protocol this is a linear
+    /// chain with no blowup.
     fn graft_frontier(
         &mut self,
         frontier: Vec<NodeId>,
+        consumes_step: bool,
         remaining: &[(String, Vec<Value>)],
         protos_by_name: &FxHashMap<&str, &Protocol>,
     ) {
         let Some(((name, values), rest)) = remaining.split_first() else {
             return;
         };
+
+        // there are transactions left to graft, so we must have somewhere to
+        // graft them onto
+        if frontier.is_empty() {
+            panic!(
+                "{} transaction(s) remain in the trace but the previous transaction \
+                 exposed no fork points to graft onto",
+                remaining.len()
+            );
+        }
+
         let ast = *protos_by_name
             .get(name.as_str())
             .unwrap_or_else(|| panic!("unknown protocol {name}"));
@@ -350,14 +373,16 @@ impl<'a> Lowerer<'a> {
         // this transaction is the last in its chain iff nothing follows it
         let keep_done = rest.is_empty();
 
-        for fork in frontier {
+        for node in frontier {
             let copy = self.lower_transaction(ast, values, keep_done);
-            // additive: keep the fork's existing continuation, add the start of
-            // the next transaction. The later `contract_edges` merges the forks.
+            // graft the next transaction's entry onto this frontier node. A
+            // real fork uses an epsilon edge (concurrent start); an implicit
+            // fork at the exit node uses a step edge (sequential start).
             let true_id = self.ir.true_id();
             self.ir
-                .push_transition(fork, Transition::new(true_id, copy.entry, false));
-            self.graft_frontier(copy.forks, rest, protos_by_name);
+                .push_transition(node, Transition::new(true_id, copy.entry, consumes_step));
+            let (next, next_step) = next_frontier(&copy);
+            self.graft_frontier(next, next_step, rest, protos_by_name);
         }
     }
 }
@@ -402,6 +427,7 @@ pub fn lower_trace_to_ir(
     lowerer
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
-    lowerer.graft_frontier(first.forks, &trace[1..], protos_by_name);
+    let (frontier, consumes_step) = next_frontier(&first);
+    lowerer.graft_frontier(frontier, consumes_step, &trace[1..], protos_by_name);
     lowerer.ir
 }
