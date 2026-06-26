@@ -503,7 +503,6 @@ mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-    use crate::frontend::parser::parse_file_with_name;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
