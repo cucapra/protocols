@@ -47,7 +47,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
 
         // emit graph edges
         for transition in &node.transitions {
-            // pruning heuristic: skip dead (false-guarded) transitions 
+            // pruning heuristic: skip dead (false-guarded) transitions
             if transition.guard == protocol.false_id() {
                 continue;
             }

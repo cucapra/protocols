@@ -22,31 +22,22 @@ use crate::ir::proto_graph::*;
 type ArgSubst = FxHashMap<SymbolId, ExprRef>;
 
 /// The result of lowering one protocol body into a (possibly shared) graph.
-struct LoweredProtocol {
+/// TODO: this struct needs a better name? Result means something special in Rust.
+struct LoweringResult {
     /// First node allocated for this copy.
     first_node: NodeId,
     /// Entry node of the lowered body.
     entry: NodeId,
     /// The body's exit node (carries `Done` only for the final transaction).
     done: NodeId,
-    /// Every node in this ProtoGraph that performs an explicit `Fork`.
-    forks: Vec<NodeId>,
 }
 
-/// TODO: we can get rid of this function
-/// TODO: maybe done should always be grafted?
-fn next_frontier(lowered: &LoweredProtocol) -> (Vec<NodeId>, bool) {
-    if lowered.forks.is_empty() {
-        (vec![lowered.done], false)
-    } else {
-        (lowered.forks.clone(), false)
-    }
-}
-
-fn contracted_next_frontier(ir: &ProtoGraph, lowered: &LoweredProtocol) -> Vec<(NodeId, ExprRef)> {
+fn contracted_next_frontier(ir: &ProtoGraph, lowered: &LoweringResult) -> Vec<(NodeId, ExprRef)> {
     let forks: Vec<(NodeId, ExprRef)> = ir
         .nodes()
         // TODO: ir >= lowered.first_node is kinda a janky way to check that we're in the latest trace
+        // TODO: is there a better way? let's punt this one for now, because I think it is at least correct
+        // IDK if you're allowed to take this for granted about cranelift entities.
         .filter(|(id, _)| *id >= lowered.first_node)
         .flat_map(|(id, node)| {
             node.actions
@@ -306,13 +297,9 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// Lower `ast`'s body into the graph using the current `subst`. Appends a
-    /// fresh `Done` node plus the body's nodes; reports the body entry and the
-    /// fork nodes belonging to this copy. Shared symbols (ports) are interned in
-    /// the `symbol_expr` cache and therefore unified across copies.
-    fn lower_protocol_body(&mut self, ast: &Protocol, keep_done: bool) -> LoweredProtocol {
+    fn lower_protocol_body(&mut self, ast: &Protocol, keep_done: bool) -> LoweringResult {
         // mark the start of this copy's node range so we can find its fork nodes
-        let first_new = self.ir.next_node_id();
+        let first_node = self.ir.next_node_id();
 
         let done = self.ir.n(Node::empty());
         if keep_done {
@@ -323,23 +310,10 @@ impl<'a> Lowerer<'a> {
 
         let entry = self.lower_stmt(ast, ast.body, done);
 
-        let forks: Vec<NodeId> = self
-            .ir
-            .nodes()
-            .filter(|(id, _)| *id >= first_new)
-            .filter(|(_, node)| {
-                node.actions
-                    .iter()
-                    .any(|a| matches!(self.ir[a.op], Op::Fork))
-            })
-            .map(|(id, _)| id)
-            .collect();
-
-        LoweredProtocol {
-            first_node: first_new,
+        LoweringResult {
+            first_node,
             entry,
             done,
-            forks,
         }
     }
 
@@ -350,7 +324,7 @@ impl<'a> Lowerer<'a> {
         ast: &Protocol,
         values: &[Value],
         keep_done: bool,
-    ) -> LoweredProtocol {
+    ) -> LoweringResult {
         assert_eq!(
             ast.args.len(),
             values.len(),
@@ -368,54 +342,6 @@ impl<'a> Lowerer<'a> {
         }
         self.subst = subst;
         self.lower_protocol_body(ast, keep_done)
-    }
-
-    /// For the next trace element, hang a fresh copy of its protocol off each
-    /// node in `frontier`, then recurse on that copy's own frontier. `frontier`
-    /// and `consumes_step` come from [`next_frontier`] applied to the previous
-    /// copy: explicit forks graft via epsilon edges, an implicit fork (the exit
-    /// node) grafts via a step edge. Each frontier node gets its own copy (and
-    /// downstream chain); with at most one fork per protocol this is a linear
-    /// chain with no blowup.
-    fn graft_frontier(
-        &mut self,
-        frontier: Vec<NodeId>,
-        consumes_step: bool,
-        remaining: &[(String, Vec<Value>)],
-        protos_by_name: &FxHashMap<&str, &Protocol>,
-    ) {
-        let Some(((name, values), rest)) = remaining.split_first() else {
-            return;
-        };
-
-        // there are transactions left to graft, so we must have somewhere to
-        // graft them onto
-        if frontier.is_empty() {
-            panic!(
-                "{} transaction(s) remain in the trace but the previous transaction \
-                 exposed no fork points to graft onto",
-                remaining.len()
-            );
-        }
-
-        let ast = *protos_by_name
-            .get(name.as_str())
-            .unwrap_or_else(|| panic!("unknown protocol {name}"));
-
-        // this transaction is the last in its chain iff nothing follows it
-        let keep_done = rest.is_empty();
-
-        for node in frontier {
-            let copy = self.lower_transaction(ast, values, keep_done);
-            // graft the next transaction's entry onto this frontier node. A
-            // real fork uses an epsilon edge (concurrent start); an implicit
-            // fork at the exit node uses a step edge (sequential start).
-            let true_id = self.ir.true_id();
-            self.ir
-                .push_transition(node, Transition::new(true_id, copy.entry, consumes_step));
-            let (next, next_step) = next_frontier(&copy);
-            self.graft_frontier(next, next_step, rest, protos_by_name);
-        }
     }
 
     /// Like [`Self::graft_frontier`], but each transaction copy is contracted
@@ -457,8 +383,7 @@ impl<'a> Lowerer<'a> {
     }
 }
 
-/// Lower a single AST `Protocol` into a fresh `ProtoGraph` (the classic,
-/// trace-agnostic path). Arguments remain symbolic.
+/// Lower a single AST `Protocol` into a fresh symbolic `ProtoGraph`
 pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
     let lowered = lowerer.lower_protocol_body(&ast, true);
@@ -471,43 +396,10 @@ pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
 }
 
 /// Lower a whole trace of known transactions into a single joint `ProtoGraph`.
-///
-/// The first transaction becomes the graph entry; each subsequent transaction
+/// first transaction becomes the graph entry and each subsequent transaction
 /// is grafted onto the fork nodes of the previous one. Arguments are
-/// substituted with the concrete values from the trace, while ports are shared
-/// across all copies. The caller is expected to run `contract_edges` /
-/// `normalize_assignments` on the result.
+/// substituted with the concrete values from the trace.
 pub fn lower_trace_to_ir(
-    trace: &[(String, Vec<Value>)],
-    protos_by_name: &FxHashMap<&str, &Protocol>,
-    symbols: &SymbolTable,
-) -> ProtoGraph {
-    assert!(!trace.is_empty(), "cannot lower an empty trace");
-
-    let (first_name, first_values) = &trace[0];
-    let first_ast = *protos_by_name
-        .get(first_name.as_str())
-        .unwrap_or_else(|| panic!("unknown protocol {first_name}"));
-
-    let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
-    // the first transaction is the last one only when the trace has length 1
-    let first = lowerer.lower_transaction(first_ast, first_values, trace.len() == 1);
-    let entry_node = lowerer.ir.entry;
-    let true_id = lowerer.ir.true_id();
-    lowerer
-        .ir
-        .push_transition(entry_node, Transition::new(true_id, first.entry, false));
-    let (frontier, consumes_step) = next_frontier(&first);
-    lowerer.graft_frontier(frontier, consumes_step, &trace[1..], protos_by_name);
-    lowerer.ir
-}
-
-/// Lower a whole trace to one graph while contracting each transaction copy
-/// before grafting it into the prior copy's frontier.
-///
-/// The final graph has no epsilon graft edges; after all grafting, callers may
-/// run one determinization pass over the already-contracted joint graph.
-pub fn lower_trace_to_contracted_ir(
     trace: &[(String, Vec<Value>)],
     protos_by_name: &FxHashMap<&str, &Protocol>,
     symbols: &SymbolTable,

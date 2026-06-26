@@ -9,7 +9,7 @@ use patronus::expr::ExprRef;
 use rustc_hash::FxHashMap;
 
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::edge_contract::append_action_with_unordered_assignment_merge;
+use crate::ir::edge_contract::append_action;
 use crate::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
 
 /// A DFA state: set of nodes from the NFA
@@ -88,12 +88,13 @@ pub fn determinize(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
         let mut transitions = Vec::new();
         for &node_id in &set {
             for action in protocol[node_id].actions.clone() {
-                append_action_with_unordered_assignment_merge(
+                append_action(
                     protocol,
                     symbols,
                     &mut actions,
                     &mut internal_assert_guard,
                     action,
+                    true,
                 );
             }
             transitions.extend(protocol[node_id].transitions.iter().cloned());

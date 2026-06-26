@@ -10,7 +10,7 @@ use protocols::ir::determinize::determinize;
 use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
-use protocols::ir::lowering::{lower_ast_to_ir, lower_trace_to_contracted_ir};
+use protocols::ir::lowering::{lower_ast_to_ir, lower_trace_to_ir};
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
@@ -148,7 +148,7 @@ fn run_respect_forks(
         protos.iter().map(|p| (p.name.as_str(), p)).collect();
 
     for (trace_index, trace) in traces.iter().enumerate() {
-        let mut joint = lower_trace_to_contracted_ir(trace, &protos_by_name, st);
+        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
 
         if determinize_graph {
             determinize(&mut joint, st);

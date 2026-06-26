@@ -25,7 +25,7 @@ fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: Symb
     expr
 }
 
-/// `true` if `rhs` is (after simplification) one of the protocol's don't-care
+/// `true` if `rhs` is (after simplification) one of the protocol's dont-care
 /// symbols, i.e. an `X` assignment that places no constraint on the pin.
 fn is_dont_care(protocol: &mut ProtoGraph, rhs: ExprRef) -> bool {
     let simplified = {
@@ -49,12 +49,49 @@ fn same_assignment_target(symbols: &SymbolTable, lhs: SymbolId, rhs: SymbolId) -
     lhs == rhs || symbols[lhs].full_name(symbols) == symbols[rhs].full_name(symbols)
 }
 
-fn append_action_with_ordered_assignment_merge(
+fn merge_assignment_rhs(
+    protocol: &mut ProtoGraph,
+    ordered: bool,
+    default_value: ExprRef,
+    existing_guard: ExprRef,
+    existing_rhs: ExprRef,
+    new_guard: ExprRef,
+    new_rhs: ExprRef,
+) -> ExprRef {
+    if ordered {
+        let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
+        lift(protocol, new_guard, new_rhs, existing_else)
+    } else {
+        let existing_dc = is_dont_care(protocol, existing_rhs);
+        let new_dc = is_dont_care(protocol, new_rhs);
+
+        // we assume the assignments we're combining are all from unique traces
+        // so we don't care about ordering. Concretes also win over dont cares
+        // TODO: we should InternalAssertFalse the the conjunction of assignment guards is true
+        match (existing_dc, new_dc) {
+            (false, true) => {
+                let dc_else = lift(protocol, new_guard, new_rhs, default_value);
+                lift(protocol, existing_guard, existing_rhs, dc_else)
+            }
+            (true, false) => {
+                let dc_else = lift(protocol, existing_guard, existing_rhs, default_value);
+                lift(protocol, new_guard, new_rhs, dc_else)
+            }
+            _ => {
+                let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
+                lift(protocol, new_guard, new_rhs, existing_else)
+            }
+        }
+    }
+}
+
+pub fn append_action(
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
     actions: &mut Vec<Action>,
     internal_assert_guard: &mut Option<ExprRef>,
     action: Action,
+    ordered: bool,
 ) {
     match protocol[action.op].clone() {
         Op::Assign(symbol_id, rhs) => {
@@ -78,125 +115,15 @@ fn append_action_with_ordered_assignment_merge(
                 _ => unreachable!(),
             };
             let (new_guard, new_rhs) = (action.guard, rhs);
-
-            let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
-            let merged_rhs = lift(protocol, new_guard, new_rhs, existing_else);
-
-            let merged_rhs = {
-                let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
-                simplifier.simplify(expr_ctx, merged_rhs)
-            };
-            let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
-            actions[idx].guard = protocol.true_id();
-            actions[idx].op = new_op;
-        }
-        Op::Fork => {
-            if let Some(existing_action) = actions
-                .iter_mut()
-                .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
-            {
-                let overlap = protocol.and_guard(existing_action.guard, action.guard);
-                *internal_assert_guard = Some(match internal_assert_guard.take() {
-                    Some(existing_overlap) => protocol.or_guard(existing_overlap, overlap),
-                    None => overlap,
-                });
-                existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
-            } else {
-                actions.push(action);
-            }
-        }
-        Op::Done => {
-            if let Some(existing_action) = actions
-                .iter_mut()
-                .find(|prior_action| matches!(protocol[prior_action.op], Op::Done))
-            {
-                existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
-            } else {
-                actions.push(action);
-            }
-        }
-        Op::AssertEq(_, _) => {
-            actions.push(action);
-        }
-        Op::InternalAssertFalse => {
-            actions.push(action);
-        }
-    }
-}
-
-pub(crate) fn append_action_with_unordered_assignment_merge(
-    protocol: &mut ProtoGraph,
-    symbols: &SymbolTable,
-    actions: &mut Vec<Action>,
-    internal_assert_guard: &mut Option<ExprRef>,
-    action: Action,
-) {
-    match protocol[action.op].clone() {
-        Op::Assign(symbol_id, rhs) => {
-            let default_value = symbol_expr(protocol, symbols, symbol_id);
-
-            let Some(idx) = actions.iter().position(|prior_action| {
-                matches!(
-                    protocol[prior_action.op],
-                    Op::Assign(prior_symbol_id, _)
-                        if same_assignment_target(symbols, prior_symbol_id, symbol_id)
-                )
-            }) else {
-                actions.push(action);
-                return;
-            };
-
-            let existing_guard = actions[idx].guard;
-            let existing_rhs = match protocol[actions[idx].op].clone() {
-                Op::Assign(_, existing_rhs) => existing_rhs,
-                _ => unreachable!(),
-            };
-            let (new_guard, new_rhs) = (action.guard, rhs);
-
-            let existing_dc = is_dont_care(protocol, existing_rhs);
-            let new_dc = is_dont_care(protocol, new_rhs);
-
-            // A concrete drive is a constraint; a don't-care places none. So
-            // whichever side is concrete becomes the outer `ite` selector (it
-            // wins wherever it is active, including any guard overlap), and the
-            // don't-care only fills the region its own guard covers but the
-            // concrete does not. This is independent of which action was
-            // appended first.
-            let merged_rhs = match (existing_dc, new_dc) {
-                // existing concrete wins; new don't-care fills its own region
-                (false, true) => {
-                    let dc_else = lift(protocol, new_guard, new_rhs, default_value);
-                    lift(protocol, existing_guard, existing_rhs, dc_else)
-                }
-                // new concrete wins; existing don't-care fills its own region
-                (true, false) => {
-                    let dc_else = lift(protocol, existing_guard, existing_rhs, default_value);
-                    lift(protocol, new_guard, new_rhs, dc_else)
-                }
-                // both don't-care or both concrete: keep the straightforward
-                // nesting with the just-appended action outermost
-                _ => {
-                    let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
-                    lift(protocol, new_guard, new_rhs, existing_else)
-                }
-            };
-
-            // Two concrete drives that can be simultaneously active with
-            // TODO: deleted this because it's actually legal in the *same protocol*, just not across protocols. this needs case analysis depending on same vs diff protocl
-            // differing values is assert-ed unreachable
-            // if !existing_dc && !new_dc {
-            //     let overlap = protocol.and_guard(existing_guard, new_guard);
-            //     let equal = protocol.expr_ctx.equal(existing_rhs, new_rhs);
-            //     let disagree = protocol.expr_ctx.not(equal);
-            //     let conflict = protocol.and_guard(overlap, disagree);
-            //     if conflict != protocol.false_id() {
-            //         *internal_assert_guard = Some(match internal_assert_guard.take() {
-            //             Some(existing_conflict) => protocol.or_guard(existing_conflict, conflict),
-            //             None => conflict,
-            //         });
-            //     }
-            // }
-            //
+            let merged_rhs = merge_assignment_rhs(
+                protocol,
+                ordered,
+                default_value,
+                existing_guard,
+                existing_rhs,
+                new_guard,
+                new_rhs,
+            );
 
             let merged_rhs = {
                 let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
@@ -251,12 +178,13 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
         let mut internal_assert_guard = None;
         for action in protocol[source_node_id].actions.clone() {
-            append_action_with_ordered_assignment_merge(
+            append_action(
                 protocol,
                 symbols,
                 &mut contracted_actions,
                 &mut internal_assert_guard,
                 action,
+                true,
             );
         }
 
@@ -300,12 +228,13 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
             for action in target_actions {
                 let merged_action =
                     Action::with_guard(&action, protocol.and_guard(incoming_guard, action.guard));
-                append_action_with_ordered_assignment_merge(
+                append_action(
                     protocol,
                     symbols,
                     &mut contracted_actions,
                     &mut internal_assert_guard,
                     merged_action,
+                    true,
                 );
             }
 
@@ -360,12 +289,13 @@ pub fn graft_contracted_entry(
     for action in entry_actions {
         let guarded_action =
             Action::with_guard(&action, protocol.and_guard(graft_guard, action.guard));
-        append_action_with_unordered_assignment_merge(
+        append_action(
             protocol,
             symbols,
             &mut actions,
             &mut internal_assert_guard,
             guarded_action,
+            false,
         );
     }
 
