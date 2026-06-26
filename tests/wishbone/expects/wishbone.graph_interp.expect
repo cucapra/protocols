@@ -46,6 +46,4 @@ warning: Inferred RHS type as u1 from LHS type u1.
 70 │     DUT.i_stb  := X;
    │     ^^^^^^^^^^^^^^^^ Inferred RHS type as u1 from LHS type u1.
 
-assert_eq failed: lhs=3 rhs=2
----CODE---
-101
+trace 0 executed successfully

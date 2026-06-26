@@ -8,7 +8,9 @@ use cranelift_entity::EntityRef;
 use patronus::expr::ExprRef;
 use rustc_hash::FxHashMap;
 
-use crate::ir::proto_graph::{Node, NodeId, ProtoGraph, Transition};
+use crate::frontend::symbol::SymbolTable;
+use crate::ir::edge_contract::append_action_with_unordered_assignment_merge;
+use crate::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
 
 /// A DFA state: set of nodes from the NFA
 type State = BTreeSet<NodeId>;
@@ -57,9 +59,15 @@ fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> Satisfiability {
     }
 }
 
+fn has_done_action(protocol: &ProtoGraph, actions: &[Action]) -> bool {
+    actions
+        .iter()
+        .any(|action| matches!(protocol[action.op], Op::Done))
+}
+
 /// Determinize `protocol` in place via subset construction. Requires that every
 /// transition consumes a step (i.e. `contract_edges` has already run).
-pub fn determinize(protocol: &mut ProtoGraph) {
+pub fn determinize(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     let mut ids: FxHashMap<State, NodeId> = FxHashMap::default();
     let mut order: Vec<State> = Vec::new();
     let mut worklist: VecDeque<State> = VecDeque::new();
@@ -73,39 +81,59 @@ pub fn determinize(protocol: &mut ProtoGraph) {
     while let Some(set) = worklist.pop_front() {
         let this_id = ids[&set];
         // println!("worklist length: {}", worklist.len());
-        // Actions and transitions of the DFA state are the union of its members' actions
+        // Take the union of transitions
+        // Take the union of actions, except assignments are merged.
         let mut actions = Vec::new();
+        let mut internal_assert_guard = None;
         let mut transitions = Vec::new();
         for &node_id in &set {
-            actions.extend(protocol[node_id].actions.iter().cloned());
+            for action in protocol[node_id].actions.clone() {
+                append_action_with_unordered_assignment_merge(
+                    protocol,
+                    symbols,
+                    &mut actions,
+                    &mut internal_assert_guard,
+                    action,
+                );
+            }
             transitions.extend(protocol[node_id].transitions.iter().cloned());
         }
+        if let Some(internal_assert_guard) = internal_assert_guard {
+            let internal_assert_op = protocol.o(crate::ir::proto_graph::Op::InternalAssertFalse);
+            actions.push(crate::ir::proto_graph::Action::new(
+                internal_assert_guard,
+                internal_assert_op,
+            ));
+        }
 
-        // Enumerate the non-empty minterms over the member guards.
         let mut new_trans: Vec<Transition> = Vec::new();
-        let n = transitions.len();
 
-        // mask gives us every permutation of 0s and 1s for `n` outgoing transitions
-        // 0 means NOT(transition), 1 means transition
-        for mask in 1u32..(1u32 << n) {
-            let mut guard = protocol.true_id();
-            let mut targets: State = BTreeSet::new();
-            for (i, t) in transitions.iter().enumerate() {
-                let (lit, target) = (t.guard, t.target);
-                let lit = if (mask >> i) & 1 == 1 {
-                    targets.insert(target);
-                    lit
-                } else {
-                    not_guard(protocol, lit)
-                };
-                guard = protocol.and_guard(guard, lit);
-            }
+        if !has_done_action(protocol, &actions) {
+            // Enumerate the non-empty minterms over the member guards.
+            let n = transitions.len();
 
-            match check_sat(protocol, guard) {
-                Satisfiability::DefinitelyUnsat => continue,
-                Satisfiability::MaybeSat => {
-                    let target_id = intern(targets, &mut ids, &mut order, &mut worklist);
-                    new_trans.push(Transition::new(guard, target_id, true));
+            // mask gives us every permutation of 0s and 1s for `n` outgoing transitions
+            // 0 means NOT(transition), 1 means transition
+            for mask in 1u32..(1u32 << n) {
+                let mut guard = protocol.true_id();
+                let mut targets: State = BTreeSet::new();
+                for (i, t) in transitions.iter().enumerate() {
+                    let (lit, target) = (t.guard, t.target);
+                    let lit = if (mask >> i) & 1 == 1 {
+                        targets.insert(target);
+                        lit
+                    } else {
+                        not_guard(protocol, lit)
+                    };
+                    guard = protocol.and_guard(guard, lit);
+                }
+
+                match check_sat(protocol, guard) {
+                    Satisfiability::DefinitelyUnsat => continue,
+                    Satisfiability::MaybeSat => {
+                        let target_id = intern(targets, &mut ids, &mut order, &mut worklist);
+                        new_trans.push(Transition::new(guard, target_id, true));
+                    }
                 }
             }
         }

@@ -45,7 +45,11 @@ fn lift(protocol: &mut ProtoGraph, guard: ExprRef, rhs: ExprRef, fallback: ExprR
     }
 }
 
-fn append_action(
+fn same_assignment_target(symbols: &SymbolTable, lhs: SymbolId, rhs: SymbolId) -> bool {
+    lhs == rhs || symbols[lhs].full_name(symbols) == symbols[rhs].full_name(symbols)
+}
+
+fn append_action_with_ordered_assignment_merge(
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
     actions: &mut Vec<Action>,
@@ -58,7 +62,85 @@ fn append_action(
 
             // By invariant, there can be at most one existing assignment for this symbol.
             let Some(idx) = actions.iter().position(|prior_action| {
-                matches!(protocol[prior_action.op], Op::Assign(prior_symbol_id, _) if prior_symbol_id == symbol_id)
+                matches!(
+                    protocol[prior_action.op],
+                    Op::Assign(prior_symbol_id, _)
+                        if same_assignment_target(symbols, prior_symbol_id, symbol_id)
+                )
+            }) else {
+                actions.push(action);
+                return;
+            };
+
+            let existing_guard = actions[idx].guard;
+            let existing_rhs = match protocol[actions[idx].op].clone() {
+                Op::Assign(_, existing_rhs) => existing_rhs,
+                _ => unreachable!(),
+            };
+            let (new_guard, new_rhs) = (action.guard, rhs);
+
+            let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
+            let merged_rhs = lift(protocol, new_guard, new_rhs, existing_else);
+
+            let merged_rhs = {
+                let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
+                simplifier.simplify(expr_ctx, merged_rhs)
+            };
+            let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
+            actions[idx].guard = protocol.true_id();
+            actions[idx].op = new_op;
+        }
+        Op::Fork => {
+            if let Some(existing_action) = actions
+                .iter_mut()
+                .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
+            {
+                let overlap = protocol.and_guard(existing_action.guard, action.guard);
+                *internal_assert_guard = Some(match internal_assert_guard.take() {
+                    Some(existing_overlap) => protocol.or_guard(existing_overlap, overlap),
+                    None => overlap,
+                });
+                existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
+            } else {
+                actions.push(action);
+            }
+        }
+        Op::Done => {
+            if let Some(existing_action) = actions
+                .iter_mut()
+                .find(|prior_action| matches!(protocol[prior_action.op], Op::Done))
+            {
+                existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
+            } else {
+                actions.push(action);
+            }
+        }
+        Op::AssertEq(_, _) => {
+            actions.push(action);
+        }
+        Op::InternalAssertFalse => {
+            actions.push(action);
+        }
+    }
+}
+
+pub(crate) fn append_action_with_unordered_assignment_merge(
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    actions: &mut Vec<Action>,
+    internal_assert_guard: &mut Option<ExprRef>,
+    action: Action,
+) {
+    match protocol[action.op].clone() {
+        Op::Assign(symbol_id, rhs) => {
+            let default_value = symbol_expr(protocol, symbols, symbol_id);
+
+            let Some(idx) = actions.iter().position(|prior_action| {
+                matches!(
+                    protocol[prior_action.op],
+                    Op::Assign(prior_symbol_id, _)
+                        if same_assignment_target(symbols, prior_symbol_id, symbol_id)
+                )
             }) else {
                 actions.push(action);
                 return;
@@ -94,8 +176,7 @@ fn append_action(
                 // both don't-care or both concrete: keep the straightforward
                 // nesting with the just-appended action outermost
                 _ => {
-                    let existing_else =
-                        lift(protocol, existing_guard, existing_rhs, default_value);
+                    let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
                     lift(protocol, new_guard, new_rhs, existing_else)
                 }
             };
@@ -170,7 +251,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
         let mut internal_assert_guard = None;
         for action in protocol[source_node_id].actions.clone() {
-            append_action(
+            append_action_with_ordered_assignment_merge(
                 protocol,
                 symbols,
                 &mut contracted_actions,
@@ -219,7 +300,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
             for action in target_actions {
                 let merged_action =
                     Action::with_guard(&action, protocol.and_guard(incoming_guard, action.guard));
-                append_action(
+                append_action_with_ordered_assignment_merge(
                     protocol,
                     symbols,
                     &mut contracted_actions,
@@ -256,6 +337,54 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     }
 
     // TODO: check all simplifications here
+}
+
+/// Merge a contracted entry node directly into `frontier_node_id`.
+///
+/// This is equivalent to adding a `true` epsilon transition from
+/// `frontier_node_id` to `entry_node_id` and contracting that one edge, but it
+/// avoids re-running whole-graph contraction after grafting. Actions from the
+/// entry are appended after the frontier actions, preserving the assignment
+/// combination order used by edge contraction.
+pub fn graft_contracted_entry(
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    frontier_node_id: NodeId,
+    entry_node_id: NodeId,
+    graft_guard: ExprRef,
+) {
+    let mut actions = protocol[frontier_node_id].actions.clone();
+    let entry_actions = protocol[entry_node_id].actions.clone();
+    let mut internal_assert_guard = None;
+
+    for action in entry_actions {
+        let guarded_action =
+            Action::with_guard(&action, protocol.and_guard(graft_guard, action.guard));
+        append_action_with_unordered_assignment_merge(
+            protocol,
+            symbols,
+            &mut actions,
+            &mut internal_assert_guard,
+            guarded_action,
+        );
+    }
+
+    if let Some(internal_assert_guard) = internal_assert_guard {
+        let internal_assert_op = protocol.o(Op::InternalAssertFalse);
+        actions.push(Action::new(internal_assert_guard, internal_assert_op));
+    }
+
+    let mut transitions = protocol[frontier_node_id].transitions.clone();
+    for transition in protocol[entry_node_id].transitions.clone() {
+        transitions.push(Transition::with_guard(
+            &transition,
+            protocol.and_guard(graft_guard, transition.guard),
+        ));
+    }
+
+    let frontier_node = protocol.node_mut(frontier_node_id);
+    frontier_node.actions = actions;
+    frontier_node.transitions = transitions;
 }
 
 /// returns `protocol` with explicit assignments to every port

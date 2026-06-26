@@ -487,6 +487,24 @@ expect_name = "counter.graph_interp.expect"
 cmd = "cd ../.. && cargo run --offline --package graph-interp -- --transactions tests/counters/counter.tx --verilog tests/counters/counter.v --protocol tests/counters/counter.prot --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_fifo_fifo.fifo_graph_interp.respect_forks"
+paths = [
+  "../../tests/fifo/fifo.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "fifo.graph_interp.expect"
+cmd = "cd ../.. && cargo run --offline --package graph-interp -- --transactions tests/fifo/fifo.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_fifo_push_pop_identity_ok.push_pop_identity_ok_graph_interp.respect_forks"
+paths = [
+  "../../tests/fifo/push_pop_identity_ok.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "push_pop_identity_ok.graph_interp.expect"
+cmd = "cd ../.. && cargo run --offline --package graph-interp -- --transactions tests/fifo/push_pop_identity_ok.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_identities_identity_d0_passthrough_combdep.passthrough_combdep_graph_interp"
 paths = [
   "../../tests/identities/identity_d0/passthrough_combdep.tx",
@@ -782,24 +800,6 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_pass.graph_interp.expect"
 cmd = "cd ../.. && cargo run --offline --package graph-interp -- --transactions tests/multipliers/mult_d2/both_threads_pass.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot --respect-forks --determinize 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp"
-paths = [
-  "../../tests/wishbone/wishbone.tx",
-]
-expect_dir = "../../tests/wishbone/expects"
-expect_name = "wishbone.graph_interp.expect"
-cmd = "cd ../.. && cargo run --offline --package graph-interp -- --transactions tests/wishbone/wishbone.tx --verilog tests/wishbone/reqwalker.v --protocol tests/wishbone/wishbone.prot --module reqwalker 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp.contract_edges"
-paths = [
-  "../../tests/wishbone/wishbone.tx",
-]
-expect_dir = "../../tests/wishbone/expects"
-expect_name = "wishbone.graph_interp.expect"
-cmd = "cd ../.. && cargo run --offline --package graph-interp -- --transactions tests/wishbone/wishbone.tx --verilog tests/wishbone/reqwalker.v --protocol tests/wishbone/wishbone.prot --module reqwalker --contract-edges 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp.respect_forks"

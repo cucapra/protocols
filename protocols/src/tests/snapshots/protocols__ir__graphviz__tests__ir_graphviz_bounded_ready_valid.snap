@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -38,8 +37,6 @@ digraph "send_data" {
   node4 [label=""];
   node4 -> node3 [label="1"];
   node1 [label="[1] done"];
-  node4 [label=""];
-  node4 -> node3 [label="1"];
 }
 
 == post-contract ==

@@ -9,6 +9,7 @@ use rustc_hash::FxHashMap;
 use crate::Value;
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
+use crate::ir::edge_contract::{contract_edges, graft_contracted_entry};
 use crate::ir::proto_graph::*;
 
 /// Per-transaction substitution of argument symbols to concrete expressions.
@@ -22,6 +23,8 @@ type ArgSubst = FxHashMap<SymbolId, ExprRef>;
 
 /// The result of lowering one protocol body into a (possibly shared) graph.
 struct LoweredProtocol {
+    /// First node allocated for this copy.
+    first_node: NodeId,
     /// Entry node of the lowered body.
     entry: NodeId,
     /// The body's exit node (carries `Done` only for the final transaction).
@@ -37,6 +40,26 @@ fn next_frontier(lowered: &LoweredProtocol) -> (Vec<NodeId>, bool) {
         (vec![lowered.done], false)
     } else {
         (lowered.forks.clone(), false)
+    }
+}
+
+fn contracted_next_frontier(ir: &ProtoGraph, lowered: &LoweredProtocol) -> Vec<(NodeId, ExprRef)> {
+    let forks: Vec<(NodeId, ExprRef)> = ir
+        .nodes()
+        // TODO: ir >= lowered.first_node is kinda a janky way to check that we're in the latest trace
+        .filter(|(id, _)| *id >= lowered.first_node)
+        .flat_map(|(id, node)| {
+            node.actions
+                .iter()
+                .filter(|action| matches!(ir[action.op], Op::Fork))
+                .map(move |action| (id, action.guard))
+        })
+        .collect();
+
+    if forks.is_empty() {
+        vec![(lowered.done, ir.true_id())]
+    } else {
+        forks
     }
 }
 
@@ -304,11 +327,20 @@ impl<'a> Lowerer<'a> {
             .ir
             .nodes()
             .filter(|(id, _)| *id >= first_new)
-            .filter(|(_, node)| node.actions.iter().any(|a| matches!(self.ir[a.op], Op::Fork)))
+            .filter(|(_, node)| {
+                node.actions
+                    .iter()
+                    .any(|a| matches!(self.ir[a.op], Op::Fork))
+            })
             .map(|(id, _)| id)
             .collect();
 
-        LoweredProtocol { entry, done, forks }
+        LoweredProtocol {
+            first_node: first_new,
+            entry,
+            done,
+            forks,
+        }
     }
 
     /// Build the per-copy argument substitution (argument symbol -> constant)
@@ -385,6 +417,44 @@ impl<'a> Lowerer<'a> {
             self.graft_frontier(next, next_step, rest, protos_by_name);
         }
     }
+
+    /// Like [`Self::graft_frontier`], but each transaction copy is contracted
+    /// before it is attached, and the copy entry is merged directly into each
+    /// frontier node. That preserves edge-contraction assignment ordering at
+    /// the graft point without introducing another epsilon edge.
+    fn graft_contracted_frontier(
+        &mut self,
+        frontier: Vec<(NodeId, ExprRef)>,
+        remaining: &[(String, Vec<Value>)],
+        protos_by_name: &FxHashMap<&str, &Protocol>,
+    ) {
+        let Some(((name, values), rest)) = remaining.split_first() else {
+            return;
+        };
+
+        if frontier.is_empty() {
+            panic!(
+                "{} transaction(s) remain in the trace but the previous transaction \
+                 exposed no fork points to graft onto",
+                remaining.len()
+            );
+        }
+
+        let ast = *protos_by_name
+            .get(name.as_str())
+            .unwrap_or_else(|| panic!("unknown protocol {name}"));
+        let keep_done = rest.is_empty();
+
+        let copy = self.lower_transaction(ast, values, keep_done);
+        contract_edges(&mut self.ir, self.symbols);
+        let next = contracted_next_frontier(&self.ir, &copy);
+
+        for (node, guard) in frontier {
+            graft_contracted_entry(&mut self.ir, self.symbols, node, copy.entry, guard);
+        }
+
+        self.graft_contracted_frontier(next, rest, protos_by_name);
+    }
 }
 
 /// Lower a single AST `Protocol` into a fresh `ProtoGraph` (the classic,
@@ -429,5 +499,36 @@ pub fn lower_trace_to_ir(
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     let (frontier, consumes_step) = next_frontier(&first);
     lowerer.graft_frontier(frontier, consumes_step, &trace[1..], protos_by_name);
+    lowerer.ir
+}
+
+/// Lower a whole trace to one graph while contracting each transaction copy
+/// before grafting it into the prior copy's frontier.
+///
+/// The final graph has no epsilon graft edges; after all grafting, callers may
+/// run one determinization pass over the already-contracted joint graph.
+pub fn lower_trace_to_contracted_ir(
+    trace: &[(String, Vec<Value>)],
+    protos_by_name: &FxHashMap<&str, &Protocol>,
+    symbols: &SymbolTable,
+) -> ProtoGraph {
+    assert!(!trace.is_empty(), "cannot lower an empty trace");
+
+    let (first_name, first_values) = &trace[0];
+    let first_ast = *protos_by_name
+        .get(first_name.as_str())
+        .unwrap_or_else(|| panic!("unknown protocol {first_name}"));
+
+    let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
+    let first = lowerer.lower_transaction(first_ast, first_values, trace.len() == 1);
+    let entry_node = lowerer.ir.entry;
+    let true_id = lowerer.ir.true_id();
+    lowerer
+        .ir
+        .push_transition(entry_node, Transition::new(true_id, first.entry, false));
+    contract_edges(&mut lowerer.ir, symbols);
+
+    let frontier = contracted_next_frontier(&lowerer.ir, &first);
+    lowerer.graft_contracted_frontier(frontier, &trace[1..], protos_by_name);
     lowerer.ir
 }

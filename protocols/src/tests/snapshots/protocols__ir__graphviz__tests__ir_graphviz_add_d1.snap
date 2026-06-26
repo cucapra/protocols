@@ -290,37 +290,20 @@ digraph "assign_after_observation" {
   node11 -> node9 [label="1"];
   node9 [label=""];
   node9 -> node8 [label="1"];
-  node9 [label=""];
-  node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := ite(1, b, DUT.b)"];
-  node8 -> node7 [label="1"];
   node8 [label="[1] DUT.b := ite(1, b, DUT.b)"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := ite(1, X, DUT.a)"];
-  node6 -> node5 [label="1"];
   node6 [label="[1] DUT.a := ite(1, X, DUT.a)"];
   node6 -> node5 [label="1"];
   node5 [label="[1] DUT.b := ite(1, X, DUT.b)"];
   node5 -> node4 [label="1"];
-  node5 [label="[1] DUT.b := ite(1, X, DUT.b)"];
-  node5 -> node4 [label="1"];
-  node4 [label="[1] assert_eq(s, DUT.s)"];
-  node4 -> node3 [label="1"];
   node4 [label="[1] assert_eq(s, DUT.s)"];
   node4 -> node3 [label="1"];
   node3 [label="[1] fork"];
   node3 -> node2 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node2 [label=""];
-  node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
   node1 [label="[1] done"];
 }
 
@@ -335,9 +318,6 @@ digraph "assign_after_observation" {
   node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
   node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
   node6 -> node1 [label="1 / step"];
-  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
   node1 [label="[1] done"];
 }
 
@@ -352,8 +332,65 @@ digraph "assign_after_observation" {
   node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
   node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
   node6 -> node1 [label="1 / step"];
-  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
-  node6 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+}
+
+== pre-contract ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node12 [label="1"];
+  node12 [label=""];
+  node12 -> node10 [label="1"];
+  node12 -> node11 [label="not(1)"];
+  node10 [label="[1] DUT.a := ite(1, a1, DUT.a)"];
+  node10 -> node9 [label="1"];
+  node11 [label="[1] DUT.a := ite(1, a2, DUT.a)"];
+  node11 -> node9 [label="1"];
+  node9 [label=""];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := ite(1, 0, DUT.b)"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, X, DUT.a)"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.b := ite(1, X, DUT.b)"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(a1, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done"];
+}
+
+== post-contract ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done"];
+}
+
+== post-normalize ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := ite(1, X, DUT.a)\n[1] DUT.b := ite(1, X, DUT.b)\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
 }
