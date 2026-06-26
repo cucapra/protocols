@@ -264,15 +264,20 @@ fn create_sim_context<P: AsRef<std::path::Path>>(
     verilog_paths: &[P],
     top_module: Option<&str>,
 ) -> (patronus::expr::Context, TransitionSystem) {
-    let env = YosysEnv::default();
+    let env = YosysEnv::with_temp_dir().unwrap();
     let sources: Vec<PathBuf> = verilog_paths
         .iter()
         .map(|p| PathBuf::from(p.as_ref()))
         .collect();
     let proj = ProjectConf::with_sources(sources, top_module.map(|s| s.trim().into()));
 
-    let btor_file = yosys_to_btor(&env, &proj, None)
-        .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
+    // the btor will always be under /{tmp_dir_path}/dut.btor
+    let btor_file = yosys_to_btor(
+        &env,
+        &proj,
+        &env.working_dir().join("dut.btor").to_path_buf(),
+    )
+    .unwrap_or_else(|e| panic!("Failed to convert Verilog to BTOR: {}", e));
 
     // Check if btor file was actually created and has content
     if !btor_file.exists() {
