@@ -164,7 +164,11 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
     # baseline and --contract-edges runs share one golden
-    flag_sets = [("", []), ("contract_edges", ["--contract-edges"])]
+    flag_sets = [
+        ("", []),
+        ("contract_edges", ["--contract-edges"]),
+        ("respect_forks", ["--respect-forks", "--determinize"]),
+    ]
     return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
 
 

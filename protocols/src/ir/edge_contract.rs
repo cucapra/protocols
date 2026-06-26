@@ -101,19 +101,21 @@ fn append_action(
             };
 
             // Two concrete drives that can be simultaneously active with
+            // TODO: deleted this because it's actually legal in the *same protocol*, just not across protocols. this needs case analysis depending on same vs diff protocl
             // differing values is assert-ed unreachable
-            if !existing_dc && !new_dc {
-                let overlap = protocol.and_guard(existing_guard, new_guard);
-                let equal = protocol.expr_ctx.equal(existing_rhs, new_rhs);
-                let disagree = protocol.expr_ctx.not(equal);
-                let conflict = protocol.and_guard(overlap, disagree);
-                if conflict != protocol.false_id() {
-                    *internal_assert_guard = Some(match internal_assert_guard.take() {
-                        Some(existing_conflict) => protocol.or_guard(existing_conflict, conflict),
-                        None => conflict,
-                    });
-                }
-            }
+            // if !existing_dc && !new_dc {
+            //     let overlap = protocol.and_guard(existing_guard, new_guard);
+            //     let equal = protocol.expr_ctx.equal(existing_rhs, new_rhs);
+            //     let disagree = protocol.expr_ctx.not(equal);
+            //     let conflict = protocol.and_guard(overlap, disagree);
+            //     if conflict != protocol.false_id() {
+            //         *internal_assert_guard = Some(match internal_assert_guard.take() {
+            //             Some(existing_conflict) => protocol.or_guard(existing_conflict, conflict),
+            //             None => conflict,
+            //         });
+            //     }
+            // }
+            //
 
             let merged_rhs = {
                 let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);

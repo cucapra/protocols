@@ -124,7 +124,7 @@ fn run_classic(
                 .find(|(n, _)| n == &name)
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
             let args = build_arg_map(&pg.args, st, values);
-            println!("{}", to_dot_string(pg, st));
+            // println!("{}", to_dot_string(pg, st));
             graph_interpreter::interpret(pg, st, args, sim);
         }
         println!("trace {} executed successfully", trace_index);
