@@ -31,11 +31,11 @@ jobs:
     - name: Run unit tests (Debug)
       run: cargo test --verbose
     - name: Run Runt tests for interpreter
-      run: runt --max-futures 1 runt/interp
+      run: runt runt/interp
     - name: Run Runt tests for graph-interpreter
-      run: runt --max-futures 1 runt/graph_interp
+      run: runt runt/graph_interp
     - name: Run Runt tests for monitor
-      run: runt --max-futures 1 runt/monitor
+      run: runt runt/monitor
 
   test-freshness:
     name: Check Generated Runt Configs are Fresh
