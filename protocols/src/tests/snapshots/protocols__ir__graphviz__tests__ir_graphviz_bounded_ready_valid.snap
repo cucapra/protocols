@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
+assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -15,15 +16,15 @@ digraph "send_data" {
   node12 [label="[1] D.valid := 1"];
   node12 -> node11 [label="1"];
   node11 [label=""];
-  node11 -> node9 [label="not(eq(D.ready, 1))"];
-  node11 -> node10 [label="not(not(eq(D.ready, 1)))"];
+  node11 -> node9 [label="not(D.ready)"];
+  node11 -> node10 [label="D.ready"];
   node9 [label=""];
   node9 -> node8 [label="1 / step"];
   node10 [label=""];
   node10 -> node3 [label="1"];
   node8 [label=""];
-  node8 -> node6 [label="not(eq(D.ready, 1))"];
-  node8 -> node7 [label="not(not(eq(D.ready, 1)))"];
+  node8 -> node6 [label="not(D.ready)"];
+  node8 -> node7 [label="D.ready"];
   node3 [label=""];
   node3 -> node2 [label="1"];
   node6 [label=""];

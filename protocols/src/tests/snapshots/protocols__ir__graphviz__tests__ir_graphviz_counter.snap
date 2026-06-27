@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
+assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -14,7 +15,7 @@ digraph "count_up" {
   node9 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node8 [label="not(eq(dut.s, dut.a))"];
-  node7 -> node6 [label="not(not(eq(dut.s, dut.a)))"];
+  node7 -> node6 [label="eq(dut.s, dut.a)"];
   node8 [label=""];
   node8 -> node7 [label="1 / step"];
   node6 [label=""];
@@ -76,7 +77,7 @@ digraph "count_up_extra_assertion" {
   node10 -> node8 [label="1"];
   node8 [label=""];
   node8 -> node9 [label="not(eq(dut.s, dut.a))"];
-  node8 -> node7 [label="not(not(eq(dut.s, dut.a)))"];
+  node8 -> node7 [label="eq(dut.s, dut.a)"];
   node9 [label=""];
   node9 -> node8 [label="1 / step"];
   node7 [label=""];

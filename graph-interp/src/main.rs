@@ -111,6 +111,7 @@ fn run_classic(
         for (_, graph) in &mut graphs {
             contract_edges(graph, st);
             normalize_assignments(graph, st);
+            graph.simplify_all_exprs();
         }
     }
 

@@ -12,21 +12,23 @@ use crate::ir::proto_graph::*;
 /// substitution of argument symbols to concrete expressions for trace lowering
 pub type TraceArgSubst = FxHashMap<SymbolId, ExprRef>;
 
-/// Information about a lowered graph fragment.
+/// Information about the result of lowering an AST to a graph fragment.
 pub struct LoweredFragmentInfo {
     /// Nodes allocated for this fragment.
     pub nodes: Vec<NodeId>,
     /// Entry node of the fragment.
     pub entry: NodeId,
     /// Exit node of the fragment.
-    pub done: NodeId,
+    pub exit: NodeId,
 }
 
 /// The stateful driver of lowering an AST to an IR
 pub struct Lowerer<'a> {
     pub ir: ProtoGraph,
     pub symbols: &'a SymbolTable,
+    /// Optional substitution of args for concrete values
     pub trace_arg_subst: TraceArgSubst,
+    /// The nodes from the most recent lowered fragment.
     current_fragment_nodes: Vec<NodeId>,
 }
 
@@ -40,7 +42,8 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn new_node(&mut self, node: Node) -> NodeId {
+    /// Add a new node to the IR and track it in current fragment
+    fn n(&mut self, node: Node) -> NodeId {
         let node_id = self.ir.n(node);
         self.current_fragment_nodes.push(node_id);
         node_id
@@ -146,7 +149,7 @@ impl<'a> Lowerer<'a> {
         match &ast[stmt_id] {
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
-                    let node_id = self.new_node(Node::empty());
+                    let node_id = self.n(Node::empty());
                     let true_id = self.ir.true_id();
                     self.ir
                         .push_transition(node_id, Transition::new(true_id, exit, false));
@@ -161,7 +164,7 @@ impl<'a> Lowerer<'a> {
             }
             Stmt::Assign(symbol_id, expr_id) => {
                 let (symbol_id, expr_id) = (*symbol_id, *expr_id);
-                let node_id = self.new_node(Node::empty());
+                let node_id = self.n(Node::empty());
                 let expected = match self.symbols[symbol_id].tpe() {
                     FrontType::BitVec(width) => PatronusType::BV(width),
                     other => panic!(
@@ -178,14 +181,14 @@ impl<'a> Lowerer<'a> {
                 node_id
             }
             Stmt::Step => {
-                let node_id = self.new_node(Node::empty());
+                let node_id = self.n(Node::empty());
                 let true_id = self.ir.true_id();
                 self.ir
                     .push_transition(node_id, Transition::new(true_id, exit, true));
                 node_id
             }
             Stmt::Fork => {
-                let node_id = self.new_node(Node::empty());
+                let node_id = self.n(Node::empty());
                 let op_id = self.ir.o(Op::Fork);
                 let true_id = self.ir.true_id();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
@@ -195,7 +198,7 @@ impl<'a> Lowerer<'a> {
             }
             Stmt::AssertEq(lhs, rhs) => {
                 let (lhs, rhs) = (*lhs, *rhs);
-                let node_id = self.new_node(Node::empty());
+                let node_id = self.n(Node::empty());
                 let lhs_ref = self.lower_expr(ast, lhs, None);
                 let rhs_ref = self.lower_expr(ast, rhs, None);
                 let op_id = self.ir.o(Op::AssertEq(lhs_ref, rhs_ref));
@@ -209,7 +212,7 @@ impl<'a> Lowerer<'a> {
                 let (cond, true_branch, false_branch) = (*cond, *true_branch, *false_branch);
                 // create a join node that will be the final node in the IfElse subgraph, pointing to exit
                 // this will also be the target exit node for the sub-branches
-                let join_node_id = self.new_node(Node::empty());
+                let join_node_id = self.n(Node::empty());
                 let true_id = self.ir.true_id();
                 self.ir
                     .push_transition(join_node_id, Transition::new(true_id, exit, false));
@@ -218,7 +221,7 @@ impl<'a> Lowerer<'a> {
                 let false_entry = self.lower_stmt(ast, false_branch, join_node_id);
 
                 // create the branch node from which we transition into the true or false entry nodes
-                let branch_node_id = self.new_node(Node::empty());
+                let branch_node_id = self.n(Node::empty());
                 let cond_ref = self.lower_expr(ast, cond, Some(PatronusType::BV(1)));
                 let negated_cond = self.ir.expr_ctx.not(cond_ref);
 
@@ -235,13 +238,13 @@ impl<'a> Lowerer<'a> {
             // maybe just "cond"?
             Stmt::While(loop_guard, loop_body) => {
                 let (loop_guard, loop_body) = (*loop_guard, *loop_body);
-                let loop_exit_node_id = self.new_node(Node::empty());
+                let loop_exit_node_id = self.n(Node::empty());
                 let true_id = self.ir.true_id();
                 self.ir
                     .push_transition(loop_exit_node_id, Transition::new(true_id, exit, false));
 
                 // create the loop guard.node from which we transition into the loop body or loop exit nodes
-                let loop_guard_node_id = self.new_node(Node::empty());
+                let loop_guard_node_id = self.n(Node::empty());
 
                 // lower the loop body, which exits into the loop guard (the cycle-forming edge)
                 let loop_body_node_id = self.lower_stmt(ast, loop_body, loop_guard_node_id);
@@ -265,34 +268,51 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// lowers an AST into fresh IR nodes which are unconnected to any existing IR nodes
+    /// If `keep_done`, then the exit node has the Done action.
+    /// Returns the nodes, entry, and exit of the lowered fragment
     pub fn lower_protocol_fragment(
         &mut self,
         ast: &Protocol,
         keep_done: bool,
     ) -> LoweredFragmentInfo {
-        let previous_nodes = std::mem::take(&mut self.current_fragment_nodes);
-        let done = self.new_node(Node::empty());
+        debug_assert!(
+            self.current_fragment_nodes.is_empty(),
+            "fragment node accumulator should be empty before
+          lowering a fragment"
+        );
+
+        let done = self.n(Node::empty());
         if keep_done {
             let done_op = self.ir.o(Op::Done);
             let true_id = self.ir.true_id();
             self.ir.push_action(done, Action::new(true_id, done_op));
         }
 
+        // lower the protocol, which will add the new nodes to self.current_fragment_nodes
         let entry = self.lower_stmt(ast, ast.body, done);
-        let nodes = std::mem::replace(&mut self.current_fragment_nodes, previous_nodes);
-
-        LoweredFragmentInfo { nodes, entry, done }
+        let nodes = std::mem::take(&mut self.current_fragment_nodes);
+        LoweredFragmentInfo {
+            nodes,
+            entry,
+            exit: done,
+        }
     }
 }
 
 /// Lower a single AST `Protocol` into a fresh symbolic `ProtoGraph`
 pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
+    // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
     let fragment = lowerer.lower_protocol_fragment(&ast, true);
+
+    // link up the default entry node of the ir with the entry node of the lowered AST
     let entry_node = lowerer.ir.entry;
     let true_id = lowerer.ir.true_id();
     lowerer
         .ir
         .push_transition(entry_node, Transition::new(true_id, fragment.entry, false));
+
+    lowerer.ir.simplify_all_exprs();
     lowerer.ir
 }

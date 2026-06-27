@@ -44,6 +44,8 @@ impl<'a> Lowerer<'a> {
 
     fn next_trace_graft_points(&self, fragment: &LoweredFragmentInfo) -> Vec<(NodeId, ExprRef)> {
         let ir = &self.ir;
+
+        // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
         let forks: Vec<(NodeId, ExprRef)> = fragment
             .nodes
             .iter()
@@ -59,13 +61,13 @@ impl<'a> Lowerer<'a> {
         // TODO: we should also graft onto done, but guarded by if the fork is never raised
         // (some sort of internal state)?
         if forks.is_empty() {
-            vec![(fragment.done, self.ir.true_id())]
+            vec![(fragment.exit, self.ir.true_id())]
         } else {
             forks
         }
     }
 
-    /// Merge a contracted entry node directly into a graft_points node.
+    /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.
     fn graft_contracted_entry(
         &mut self,
         graft_points_node_id: NodeId,
@@ -105,6 +107,7 @@ impl<'a> Lowerer<'a> {
         graft_points_node.transitions = transitions;
     }
 
+    /// Take the first trace of the remaining transactions, lower it, contract it, and then merge it into the IR by merging the entry node with each graft point of the previous transaction. Recurse with the remaining traces.
     fn append_trace_transactions(
         &mut self,
         graft_points: Vec<(NodeId, ExprRef)>,
@@ -129,6 +132,8 @@ impl<'a> Lowerer<'a> {
         let keep_done = rest.is_empty();
 
         let fragment = self.lower_transaction(ast, values, keep_done);
+
+        // TODO: we're applying contract_edges to the entire IR, but technically this is a bit wasteful since it's going to iterate over all the nodes even though we only want to contract this component of the graph
         contract_edges(&mut self.ir, self.symbols);
         let next = self.next_trace_graft_points(&fragment);
 
@@ -155,6 +160,7 @@ pub fn lower_trace_to_ir(
         .get(first_name.as_str())
         .unwrap_or_else(|| panic!("unknown protocol {first_name}"));
 
+    // set up the lowerer and lower the initial transaction
     let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
     let first = lowerer.lower_transaction(first_ast, first_values, trace.len() == 1);
     let entry_node = lowerer.ir.entry;
@@ -164,7 +170,9 @@ pub fn lower_trace_to_ir(
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     contract_edges(&mut lowerer.ir, symbols);
 
+    // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.next_trace_graft_points(&first);
     lowerer.append_trace_transactions(graft_points, &trace[1..], protos_by_name);
+    lowerer.ir.simplify_all_exprs();
     lowerer.ir
 }

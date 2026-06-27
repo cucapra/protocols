@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
+assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -15,8 +16,8 @@ digraph "send_data" {
   node6 [label="[1] D.m_axis_tvalid := 1"];
   node6 -> node4 [label="1"];
   node4 [label=""];
-  node4 -> node5 [label="not(eq(D.m_axis_tready, 1))"];
-  node4 -> node3 [label="not(not(eq(D.m_axis_tready, 1)))"];
+  node4 -> node5 [label="not(D.m_axis_tready)"];
+  node4 -> node3 [label="D.m_axis_tready"];
   node5 [label=""];
   node5 -> node4 [label="1 / step"];
   node3 [label=""];

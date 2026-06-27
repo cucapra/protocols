@@ -128,5 +128,7 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
     // TODO: this function requires cloning twice. the benefit is that we don't add a weird
     // method to ProtoGraph that swaps a set of nodes (seems very contrived)? Ask Kevin what the
     // best idiom for this is.
-    protocol.with_nodes(new_nodes, start_id)
+    let mut protocol = protocol.with_nodes(new_nodes, start_id);
+    protocol.simplify_all_exprs();
+    protocol
 }
