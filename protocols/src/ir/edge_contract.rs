@@ -268,55 +268,6 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     // TODO: check all simplifications here
 }
 
-/// Merge a contracted entry node directly into `frontier_node_id`.
-///
-/// This is equivalent to adding a `true` epsilon transition from
-/// `frontier_node_id` to `entry_node_id` and contracting that one edge, but it
-/// avoids re-running whole-graph contraction after grafting. Actions from the
-/// entry are appended after the frontier actions, preserving the assignment
-/// combination order used by edge contraction.
-pub fn graft_contracted_entry(
-    protocol: &mut ProtoGraph,
-    symbols: &SymbolTable,
-    frontier_node_id: NodeId,
-    entry_node_id: NodeId,
-    graft_guard: ExprRef,
-) {
-    let mut actions = protocol[frontier_node_id].actions.clone();
-    let entry_actions = protocol[entry_node_id].actions.clone();
-    let mut internal_assert_guard = None;
-
-    for action in entry_actions {
-        let guarded_action =
-            Action::with_guard(&action, protocol.and_guard(graft_guard, action.guard));
-        append_action(
-            protocol,
-            symbols,
-            &mut actions,
-            &mut internal_assert_guard,
-            guarded_action,
-            false,
-        );
-    }
-
-    if let Some(internal_assert_guard) = internal_assert_guard {
-        let internal_assert_op = protocol.o(Op::InternalAssertFalse);
-        actions.push(Action::new(internal_assert_guard, internal_assert_op));
-    }
-
-    let mut transitions = protocol[frontier_node_id].transitions.clone();
-    for transition in protocol[entry_node_id].transitions.clone() {
-        transitions.push(Transition::with_guard(
-            &transition,
-            protocol.and_guard(graft_guard, transition.guard),
-        ));
-    }
-
-    let frontier_node = protocol.node_mut(frontier_node_id);
-    frontier_node.actions = actions;
-    frontier_node.transitions = transitions;
-}
-
 /// returns `protocol` with explicit assignments to every port
 /// if a port `DUT.in` is not already assigned, we simply generate `[1] DUT.in := DUT.in;`
 pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {

@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 use crate::Value;
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
-use crate::ir::edge_contract::{contract_edges, graft_contracted_entry};
+use crate::ir::edge_contract::{append_action, contract_edges};
 use crate::ir::proto_graph::*;
 
 /// Per-transaction substitution of argument symbols to concrete expressions.
@@ -22,36 +22,13 @@ use crate::ir::proto_graph::*;
 type ArgSubst = FxHashMap<SymbolId, ExprRef>;
 
 /// The result of lowering one protocol body into a (possibly shared) graph.
-/// TODO: this struct needs a better name? Result means something special in Rust.
-struct LoweringResult {
+struct LoweredBody {
     /// First node allocated for this copy.
     first_node: NodeId,
     /// Entry node of the lowered body.
     entry: NodeId,
     /// The body's exit node (carries `Done` only for the final transaction).
     done: NodeId,
-}
-
-fn contracted_next_frontier(ir: &ProtoGraph, lowered: &LoweringResult) -> Vec<(NodeId, ExprRef)> {
-    let forks: Vec<(NodeId, ExprRef)> = ir
-        .nodes()
-        // TODO: ir >= lowered.first_node is kinda a janky way to check that we're in the latest trace
-        // TODO: is there a better way? let's punt this one for now, because I think it is at least correct
-        // IDK if you're allowed to take this for granted about cranelift entities.
-        .filter(|(id, _)| *id >= lowered.first_node)
-        .flat_map(|(id, node)| {
-            node.actions
-                .iter()
-                .filter(|action| matches!(ir[action.op], Op::Fork))
-                .map(move |action| (id, action.guard))
-        })
-        .collect();
-
-    if forks.is_empty() {
-        vec![(lowered.done, ir.true_id())]
-    } else {
-        forks
-    }
 }
 
 /// Stateful driver that lowers AST protocols into a `ProtoGraph`.
@@ -297,7 +274,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_protocol_body(&mut self, ast: &Protocol, keep_done: bool) -> LoweringResult {
+    fn lower_protocol_body(&mut self, ast: &Protocol, keep_done: bool) -> LoweredBody {
         // mark the start of this copy's node range so we can find its fork nodes
         let first_node = self.ir.next_node_id();
 
@@ -310,7 +287,7 @@ impl<'a> Lowerer<'a> {
 
         let entry = self.lower_stmt(ast, ast.body, done);
 
-        LoweringResult {
+        LoweredBody {
             first_node,
             entry,
             done,
@@ -324,7 +301,7 @@ impl<'a> Lowerer<'a> {
         ast: &Protocol,
         values: &[Value],
         keep_done: bool,
-    ) -> LoweringResult {
+    ) -> LoweredBody {
         assert_eq!(
             ast.args.len(),
             values.len(),
@@ -344,11 +321,71 @@ impl<'a> Lowerer<'a> {
         self.lower_protocol_body(ast, keep_done)
     }
 
-    /// Like [`Self::graft_frontier`], but each transaction copy is contracted
-    /// before it is attached, and the copy entry is merged directly into each
-    /// frontier node. That preserves edge-contraction assignment ordering at
-    /// the graft point without introducing another epsilon edge.
-    fn graft_contracted_frontier(
+    fn next_trace_frontier(&self, lowered: &LoweredBody) -> Vec<(NodeId, ExprRef)> {
+        let forks: Vec<(NodeId, ExprRef)> = self
+            .ir
+            .nodes()
+            // TODO: ir >= lowered.first_node is kinda a janky way to check that we're in the latest trace
+            // TODO: is there a better way? let's punt this one for now, because I think it is at least correct
+            // IDK if you're allowed to take this for granted about cranelift entities.
+            .filter(|(id, _)| *id >= lowered.first_node)
+            .flat_map(|(id, node)| {
+                node.actions
+                    .iter()
+                    .filter(|action| matches!(self.ir[action.op], Op::Fork))
+                    .map(move |action| (id, action.guard))
+            })
+            .collect();
+
+        if forks.is_empty() {
+            vec![(lowered.done, self.ir.true_id())]
+        } else {
+            forks
+        }
+    }
+
+    /// Merge a contracted entry node directly into a frontier node.
+    fn graft_contracted_entry(
+        &mut self,
+        frontier_node_id: NodeId,
+        entry_node_id: NodeId,
+        graft_guard: ExprRef,
+    ) {
+        let mut actions = self.ir[frontier_node_id].actions.clone();
+        let entry_actions = self.ir[entry_node_id].actions.clone();
+        let mut internal_assert_guard = None;
+
+        for action in entry_actions {
+            let guard = self.ir.and_guard(graft_guard, action.guard);
+            let guarded_action = action.with_guard(guard);
+            append_action(
+                &mut self.ir,
+                self.symbols,
+                &mut actions,
+                &mut internal_assert_guard,
+                guarded_action,
+                false,
+            );
+        }
+
+        if let Some(internal_assert_guard) = internal_assert_guard {
+            let internal_assert_op = self.ir.o(Op::InternalAssertFalse);
+            actions.push(Action::new(internal_assert_guard, internal_assert_op));
+        }
+
+        let mut transitions = self.ir[frontier_node_id].transitions.clone();
+        for transition in self.ir[entry_node_id].transitions.clone() {
+            let guard = self.ir.and_guard(graft_guard, transition.guard);
+            transitions.push(transition.with_guard(guard));
+        }
+
+        let frontier_node = self.ir.node_mut(frontier_node_id);
+        frontier_node.actions = actions;
+        frontier_node.transitions = transitions;
+    }
+
+    /// Contract each transaction before appending it to the previous frontier.
+    fn append_trace_transactions(
         &mut self,
         frontier: Vec<(NodeId, ExprRef)>,
         remaining: &[(String, Vec<Value>)],
@@ -373,13 +410,13 @@ impl<'a> Lowerer<'a> {
 
         let copy = self.lower_transaction(ast, values, keep_done);
         contract_edges(&mut self.ir, self.symbols);
-        let next = contracted_next_frontier(&self.ir, &copy);
+        let next = self.next_trace_frontier(&copy);
 
         for (node, guard) in frontier {
-            graft_contracted_entry(&mut self.ir, self.symbols, node, copy.entry, guard);
+            self.graft_contracted_entry(node, copy.entry, guard);
         }
 
-        self.graft_contracted_frontier(next, rest, protos_by_name);
+        self.append_trace_transactions(next, rest, protos_by_name);
     }
 }
 
@@ -420,7 +457,7 @@ pub fn lower_trace_to_ir(
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     contract_edges(&mut lowerer.ir, symbols);
 
-    let frontier = contracted_next_frontier(&lowerer.ir, &first);
-    lowerer.graft_contracted_frontier(frontier, &trace[1..], protos_by_name);
+    let frontier = lowerer.next_trace_frontier(&first);
+    lowerer.append_trace_transactions(frontier, &trace[1..], protos_by_name);
     lowerer.ir
 }

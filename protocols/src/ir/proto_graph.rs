@@ -183,6 +183,11 @@ impl ProtoGraph {
         self.simplifier.simplify(&mut self.expr_ctx, expr)
     }
 
+    pub fn not_guard(&mut self, guard: ExprRef) -> ExprRef {
+        let expr = self.expr_ctx.not(guard);
+        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    }
+
     // TODO: add a verify simplifications helper
 
     /// add a new node to the IR
