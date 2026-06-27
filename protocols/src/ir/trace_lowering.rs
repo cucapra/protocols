@@ -1,0 +1,170 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+
+use baa::BitVecValue;
+use patronus::expr::ExprRef;
+use rustc_hash::FxHashMap;
+
+use crate::Value;
+use crate::frontend::ast::Protocol;
+use crate::frontend::symbol::SymbolTable;
+use crate::ir::edge_contract::{append_action, contract_edges};
+use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
+use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
+
+impl<'a> Lowerer<'a> {
+    /// Build the per-copy argument substitution and lower one transaction body.
+    fn lower_transaction(
+        &mut self,
+        ast: &Protocol,
+        values: &[Value],
+        keep_done: bool,
+    ) -> LoweredFragmentInfo {
+        assert_eq!(
+            ast.args.len(),
+            values.len(),
+            "argument count mismatch for protocol {}",
+            ast.name
+        );
+        let mut subst = TraceArgSubst::default();
+        for (arg, value) in ast.args.iter().zip(values) {
+            let bvv: BitVecValue = value
+                .clone()
+                .try_into()
+                .unwrap_or_else(|_| panic!("unsupported argument type for {}", ast.name));
+            let lit = self.ir.expr_ctx.bv_lit(&bvv);
+            subst.insert(arg.symbol(), lit);
+        }
+
+        // set the arg substitution to the current transaction's args
+        self.trace_arg_subst = subst;
+        self.lower_protocol_fragment(ast, keep_done)
+    }
+
+    fn next_trace_graft_points(&self, fragment: &LoweredFragmentInfo) -> Vec<(NodeId, ExprRef)> {
+        let ir = &self.ir;
+        let forks: Vec<(NodeId, ExprRef)> = fragment
+            .nodes
+            .iter()
+            .flat_map(|id| {
+                let node = &ir[*id];
+                node.actions
+                    .iter()
+                    .filter(|action| matches!(ir[action.op], Op::Fork))
+                    .map(move |action| (*id, action.guard))
+            })
+            .collect();
+
+        // TODO: we should also graft onto done, but guarded by if the fork is never raised
+        // (some sort of internal state)?
+        if forks.is_empty() {
+            vec![(fragment.done, self.ir.true_id())]
+        } else {
+            forks
+        }
+    }
+
+    /// Merge a contracted entry node directly into a graft_points node.
+    fn graft_contracted_entry(
+        &mut self,
+        graft_points_node_id: NodeId,
+        entry_node_id: NodeId,
+        graft_guard: ExprRef,
+    ) {
+        let mut actions = self.ir[graft_points_node_id].actions.clone();
+        let entry_actions = self.ir[entry_node_id].actions.clone();
+        let mut internal_assert_guard = None;
+
+        for action in entry_actions {
+            let guard = self.ir.and_guard(graft_guard, action.guard);
+            let guarded_action = action.with_guard(guard);
+            append_action(
+                &mut self.ir,
+                self.symbols,
+                &mut actions,
+                &mut internal_assert_guard,
+                guarded_action,
+                false,
+            );
+        }
+
+        if let Some(internal_assert_guard) = internal_assert_guard {
+            let internal_assert_op = self.ir.o(Op::InternalAssertFalse);
+            actions.push(Action::new(internal_assert_guard, internal_assert_op));
+        }
+
+        let mut transitions = self.ir[graft_points_node_id].transitions.clone();
+        for transition in self.ir[entry_node_id].transitions.clone() {
+            let guard = self.ir.and_guard(graft_guard, transition.guard);
+            transitions.push(transition.with_guard(guard));
+        }
+
+        let graft_points_node = self.ir.node_mut(graft_points_node_id);
+        graft_points_node.actions = actions;
+        graft_points_node.transitions = transitions;
+    }
+
+    fn append_trace_transactions(
+        &mut self,
+        graft_points: Vec<(NodeId, ExprRef)>,
+        remaining: &[(String, Vec<Value>)],
+        protos_by_name: &FxHashMap<&str, &Protocol>,
+    ) {
+        let Some(((name, values), rest)) = remaining.split_first() else {
+            return;
+        };
+
+        if graft_points.is_empty() {
+            panic!(
+                "{} transaction(s) remain in the trace but the previous transaction \
+                 exposed no fork points to graft onto",
+                remaining.len()
+            );
+        }
+
+        let ast = *protos_by_name
+            .get(name.as_str())
+            .unwrap_or_else(|| panic!("unknown protocol {name}"));
+        let keep_done = rest.is_empty();
+
+        let fragment = self.lower_transaction(ast, values, keep_done);
+        contract_edges(&mut self.ir, self.symbols);
+        let next = self.next_trace_graft_points(&fragment);
+
+        for (node, guard) in graft_points {
+            self.graft_contracted_entry(node, fragment.entry, guard);
+        }
+
+        self.append_trace_transactions(next, rest, protos_by_name);
+    }
+}
+
+/// Lower a whole trace of known transactions into a single joint `ProtoGraph`.
+/// The first transaction becomes the graph entry and each later transaction is
+/// grafted onto the previous transaction's fork graft_points.
+pub fn lower_trace_to_ir(
+    trace: &[(String, Vec<Value>)],
+    protos_by_name: &FxHashMap<&str, &Protocol>,
+    symbols: &SymbolTable,
+) -> ProtoGraph {
+    assert!(!trace.is_empty(), "cannot lower an empty trace");
+
+    let (first_name, first_values) = &trace[0];
+    let first_ast = *protos_by_name
+        .get(first_name.as_str())
+        .unwrap_or_else(|| panic!("unknown protocol {first_name}"));
+
+    let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
+    let first = lowerer.lower_transaction(first_ast, first_values, trace.len() == 1);
+    let entry_node = lowerer.ir.entry;
+    let true_id = lowerer.ir.true_id();
+    lowerer
+        .ir
+        .push_transition(entry_node, Transition::new(true_id, first.entry, false));
+    contract_edges(&mut lowerer.ir, symbols);
+
+    let graft_points = lowerer.next_trace_graft_points(&first);
+    lowerer.append_trace_transactions(graft_points, &trace[1..], protos_by_name);
+    lowerer.ir
+}

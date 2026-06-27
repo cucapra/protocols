@@ -10,8 +10,9 @@ use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
-use protocols::ir::lowering::{lower_ast_to_ir, lower_trace_to_ir};
+use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::proto_graph::ProtoGraph;
+use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 
@@ -41,19 +42,15 @@ struct Cli {
     #[arg(long)]
     contract_edges: bool,
 
-    /// Build one joint IR per trace by grafting the trace's known transactions
-    /// onto fork nodes, then interpret that single graph (instead of
-    /// interpreting each transaction against its own per-protocol graph).
+    /// Build a big joint ProtoGraph for the input trace
     #[arg(long)]
     respect_forks: bool,
 
-    /// With `--respect-forks`, print the combined joint graph for each trace as
     /// Graphviz DOT to stdout, before interpreting it.
     #[arg(long)]
     graphout: bool,
 
-    /// With `--respect-forks`, determinize the joint graph (NFA -> DFA subset
-    /// construction) after contraction and before normalization.
+    /// If passed with --respect-forks, construct a DFA
     #[arg(long)]
     determinize: bool,
 }
@@ -95,8 +92,8 @@ fn print_panic_payload(payload: Box<dyn std::any::Any + Send>) {
     }
 }
 
-/// Classic flow: lower each protocol once (trace-agnostic) and interpret every
-/// transaction against its own per-protocol graph.
+/// lower each protocol once and interpret every
+/// transaction against its own symbolic protocol graph.
 fn run_classic(
     cli: &Cli,
     st: &SymbolTable,
@@ -131,11 +128,7 @@ fn run_classic(
     }
 }
 
-/// Trace-aware flow: per trace, lower and contract each transaction before
-/// grafting it directly into the previous transaction's frontier, then
-/// optionally determinize the single joint graph. Arguments are baked in as
-/// constants during lowering, so no argument values are looked up at
-/// interpretation time.
+/// interpret the entire concrete trace as one big ProtoGraph
 fn run_respect_forks(
     st: &SymbolTable,
     protos: &[Protocol],
@@ -160,8 +153,7 @@ fn run_respect_forks(
             println!("{}", to_dot_string(&joint, st));
         }
 
-        // args are baked into the graph as constants, so none appear in
-        // `symbol_expr`; the interpreter never looks one up -> empty map is safe.
+        // args are baked into the graph as constants, so we just pass in an empty map here
         graph_interpreter::interpret(&joint, st, FxHashMap::default(), sim);
         println!("trace {} executed successfully", trace_index);
     }
