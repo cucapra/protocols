@@ -6,7 +6,7 @@ use protocols::frontend::ast::Protocol;
 use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
-use protocols::ir::determinize::determinize;
+use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
@@ -151,7 +151,7 @@ fn run_respect_forks(
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
 
         if determinize_graph {
-            determinize(&mut joint, st);
+            joint = determinized(joint, st);
         }
         // normalize_assignments(&mut joint, st);
 

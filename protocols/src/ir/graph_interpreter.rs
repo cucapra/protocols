@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use baa::{BitVecOps, BitVecValue, Value as BaaValue};
-use patronus::expr::{ExprRef, SymbolValueStore, TypeCheck, eval_expr};
+use patronus::expr::{ExprRef, SerializableIrNode, SymbolValueStore, TypeCheck, eval_expr};
 use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -256,7 +256,10 @@ pub fn interpret(
                         evaluate_assert_equal(pg, &store, *lhs, *rhs);
                     }
                     Op::Fork => {}
-                    Op::InternalAssertFalse => panic!("internal assert failed"),
+                    Op::InternalAssertFalse => panic!(
+                        "internal assertion failed at graph node {curr}: guard {} evaluated true",
+                        pg.expr_ctx[action.guard].serialize_to_str(&pg.expr_ctx)
+                    ),
                     Op::Done => done_triggered = true,
                 }
             }
@@ -268,14 +271,17 @@ pub fn interpret(
             .filter(|transition| evaluate_guard(pg, &store, transition.guard))
             .collect();
 
-        // FIXME: we don't handle done properly for concrete trace lowering.
-        // this assertion is also guaranteed not to fire for the symbolic lowering
-        // so it's not useful for now.
-        // assert!(
-        //     done_triggered && satisfied_transitions.is_empty()
-        //         || !done_triggered && !satisfied_transitions.is_empty(),
-        //     "done triggered alongside a satisfied transition out of {curr}"
-        // );
+        if done_triggered {
+            // FIXME: we don't handle done properly for concrete trace lowering.
+            // this assertion is also guaranteed not to fire for the symbolic lowering
+            // so it's not useful for now.
+            // assert!(
+            //     satisfied_transitions.is_empty()
+            //         || !done_triggered && !satisfied_transitions.is_empty(),
+            //     "done triggered alongside a satisfied transition out of {curr}"
+            // );
+        }
+
         assert!(
             satisfied_transitions.len() <= 1,
             "non-determinism found: multiple transitions simultaneously satisfied out of {curr}"

@@ -200,16 +200,11 @@ impl ProtoGraph {
         self.nodes.next_key()
     }
 
-    /// Replace the entire node set (e.g. after determinization) and reset the
-    /// entry. Nodes are assigned fresh ids in iteration order, so `entry` and
-    /// any `Transition` targets must already refer to indices into `nodes`.
-    pub fn replace_nodes(&mut self, nodes: Vec<Node>, entry: NodeId) {
-        let mut map = PrimaryMap::new();
-        for node in nodes {
-            map.push(node);
-        }
-        self.nodes = map;
+    /// Return this graph with a different node map and entry point.
+    pub fn with_nodes(mut self, nodes: PrimaryMap<NodeId, Node>, entry: NodeId) -> Self {
+        self.nodes = nodes;
         self.entry = entry;
+        self
     }
 
     /// add a new op to the IR

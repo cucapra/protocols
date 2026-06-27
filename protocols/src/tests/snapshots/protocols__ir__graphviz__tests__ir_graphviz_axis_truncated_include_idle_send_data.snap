@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -11,9 +10,9 @@ digraph "send_data" {
   entry_marker -> node0;
   node0 [label=""];
   node0 -> node7 [label="1"];
-  node7 [label="[1] D.m_axis_tdata := ite(1, data, D.m_axis_tdata)"];
+  node7 [label="[1] D.m_axis_tdata := data"];
   node7 -> node6 [label="1"];
-  node6 [label="[1] D.m_axis_tvalid := ite(1, 1, D.m_axis_tvalid)"];
+  node6 [label="[1] D.m_axis_tvalid := 1"];
   node6 -> node4 [label="1"];
   node4 [label=""];
   node4 -> node5 [label="not(eq(D.m_axis_tready, 1))"];
@@ -33,7 +32,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tdata := ite(1, data, D.m_axis_tdata)\n[1] D.m_axis_tvalid := ite(1, 1, D.m_axis_tvalid)"];
+  node0 [label="[1] D.m_axis_tdata := data\n[1] D.m_axis_tvalid := 1"];
   node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
   node1 [label="[1] done"];
@@ -48,7 +47,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tdata := ite(1, data, D.m_axis_tdata)\n[1] D.m_axis_tvalid := ite(1, 1, D.m_axis_tvalid)"];
+  node0 [label="[1] D.m_axis_tdata := data\n[1] D.m_axis_tvalid := 1"];
   node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
@@ -65,7 +64,7 @@ digraph "idle" {
   entry_marker -> node0;
   node0 [label=""];
   node0 -> node3 [label="1"];
-  node3 [label="[1] D.m_axis_tvalid := ite(1, 0, D.m_axis_tvalid)"];
+  node3 [label="[1] D.m_axis_tvalid := 0"];
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
@@ -78,7 +77,7 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := ite(1, 0, D.m_axis_tvalid)"];
+  node0 [label="[1] D.m_axis_tvalid := 0"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
 }
@@ -89,7 +88,7 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := ite(1, 0, D.m_axis_tvalid)\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node0 [label="[1] D.m_axis_tvalid := 0\n[1] D.m_axis_tdata := D.m_axis_tdata"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
 }

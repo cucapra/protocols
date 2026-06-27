@@ -73,7 +73,6 @@ fn push_assignment_branch(
         return;
     }
 
-    let rhs = simplify_expr(protocol, rhs);
     branches.push(AssignmentBranch {
         guard,
         rhs,
@@ -87,9 +86,10 @@ fn flatten_assignment_rhs(
     default_value: ExprRef,
     action_guard: ExprRef,
 ) -> Vec<AssignmentBranch> {
+    // Assignment RHSs are either bare values or ITE chains whose true branches are bare values.
     let mut branches = Vec::new();
     let mut path_guard = simplify_expr(protocol, action_guard);
-    let mut cursor = simplify_expr(protocol, rhs);
+    let mut cursor = rhs;
 
     while path_guard != protocol.false_id() && cursor != default_value {
         match protocol.expr_ctx[cursor].clone() {
@@ -99,7 +99,7 @@ fn flatten_assignment_rhs(
 
                 let not_cond = protocol.not_guard(cond);
                 path_guard = protocol.and_guard(path_guard, not_cond);
-                cursor = simplify_expr(protocol, fals);
+                cursor = fals;
             }
             _ => {
                 push_assignment_branch(protocol, &mut branches, path_guard, cursor);
@@ -175,32 +175,6 @@ fn merge_unordered_assignment_rhs(
     rebuild_assignment_rhs(protocol, &merged_branches, default_value)
 }
 
-fn merge_assignment_rhs(
-    protocol: &mut ProtoGraph,
-    ordered: bool,
-    internal_assert_guard: &mut Option<ExprRef>,
-    default_value: ExprRef,
-    existing_guard: ExprRef,
-    existing_rhs: ExprRef,
-    new_guard: ExprRef,
-    new_rhs: ExprRef,
-) -> ExprRef {
-    if ordered {
-        let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
-        lift(protocol, new_guard, new_rhs, existing_else)
-    } else {
-        merge_unordered_assignment_rhs(
-            protocol,
-            internal_assert_guard,
-            default_value,
-            existing_guard,
-            existing_rhs,
-            new_guard,
-            new_rhs,
-        )
-    }
-}
-
 pub fn append_action(
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
@@ -232,21 +206,21 @@ pub fn append_action(
             };
             let (new_guard, new_rhs) = (action.guard, rhs);
 
-            let merged_rhs = merge_assignment_rhs(
-                protocol,
-                ordered,
-                internal_assert_guard,
-                default_value,
-                existing_guard,
-                existing_rhs,
-                new_guard,
-                new_rhs,
-            );
-
-            let merged_rhs = {
-                let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
-                simplifier.simplify(expr_ctx, merged_rhs)
+            let merged_rhs = if ordered {
+                let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
+                lift(protocol, new_guard, new_rhs, existing_else)
+            } else {
+                merge_unordered_assignment_rhs(
+                    protocol,
+                    internal_assert_guard,
+                    default_value,
+                    existing_guard,
+                    existing_rhs,
+                    new_guard,
+                    new_rhs,
+                )
             };
+
             let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
             actions[idx].guard = protocol.true_id();
             actions[idx].op = new_op;

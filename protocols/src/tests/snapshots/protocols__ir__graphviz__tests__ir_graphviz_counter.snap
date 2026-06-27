@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 210
 expression: content
 ---
 == pre-contract ==
@@ -11,7 +10,7 @@ digraph "count_up" {
   entry_marker -> node0;
   node0 [label=""];
   node0 -> node9 [label="1"];
-  node9 [label="[1] dut.a := ite(1, a, dut.a)"];
+  node9 [label="[1] dut.a := a"];
   node9 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node8 [label="not(eq(dut.s, dut.a))"];
@@ -37,7 +36,7 @@ digraph "count_up" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := ite(1, a, dut.a)"];
+  node0 [label="[1] dut.a := a"];
   node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
@@ -54,7 +53,7 @@ digraph "count_up" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := ite(1, a, dut.a)"];
+  node0 [label="[1] dut.a := a"];
   node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := dut.a"];
@@ -73,7 +72,7 @@ digraph "count_up_extra_assertion" {
   entry_marker -> node0;
   node0 [label=""];
   node0 -> node10 [label="1"];
-  node10 [label="[1] dut.a := ite(1, a, dut.a)"];
+  node10 [label="[1] dut.a := a"];
   node10 -> node8 [label="1"];
   node8 [label=""];
   node8 -> node9 [label="not(eq(dut.s, dut.a))"];
@@ -101,7 +100,7 @@ digraph "count_up_extra_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := ite(1, a, dut.a)\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
+  node0 [label="[1] dut.a := a\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
   node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
@@ -118,7 +117,7 @@ digraph "count_up_extra_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] dut.a := ite(1, a, dut.a)\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
+  node0 [label="[1] dut.a := a\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
   node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := dut.a"];

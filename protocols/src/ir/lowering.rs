@@ -168,7 +168,6 @@ impl<'a> Lowerer<'a> {
             Stmt::Assign(symbol_id, expr_id) => {
                 let (symbol_id, expr_id) = (*symbol_id, *expr_id);
                 let node_id = self.ir.n(Node::empty());
-                let default_value = self.lower_symbol(symbol_id);
                 let expected = match self.symbols[symbol_id].tpe() {
                     FrontType::BitVec(width) => PatronusType::BV(width),
                     other => panic!(
@@ -177,8 +176,6 @@ impl<'a> Lowerer<'a> {
                     ),
                 };
                 let rhs_ref = self.lower_expr(ast, expr_id, Some(expected));
-                let guard = self.ir.true_id();
-                let rhs_ref = self.ir.expr_ctx.ite(guard, rhs_ref, default_value);
                 let op_id = self.ir.o(Op::Assign(symbol_id, rhs_ref));
                 let true_id = self.ir.true_id();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
