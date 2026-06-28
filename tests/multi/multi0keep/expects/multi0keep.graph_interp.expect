@@ -1,7 +1,1 @@
-warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ tests/multi/multi0keep/multi0keep.prot:16:5
-   │
-16 │     dut.inp := X;
-   │     ^^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
-
 trace 0 executed successfully

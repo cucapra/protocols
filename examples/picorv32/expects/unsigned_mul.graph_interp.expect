@@ -1,19 +1,1 @@
-warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ examples/picorv32/pcpi_mul.prot:37:3
-   │
-37 │   p.pcpi_insn := X;
-   │   ^^^^^^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
-
-warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ examples/picorv32/pcpi_mul.prot:38:3
-   │
-38 │   p.pcpi_rs1 := X;
-   │   ^^^^^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
-
-warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ examples/picorv32/pcpi_mul.prot:39:3
-   │
-39 │   p.pcpi_rs2 := X;
-   │   ^^^^^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
-
 trace 0 executed successfully

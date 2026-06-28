@@ -1,13 +1,1 @@
-warning: Inferred RHS type as u128 from LHS type u128.
-   ┌─ examples/tinyaes128/aes128.prot:14:3
-   │
-14 │   dut.state := X;
-   │   ^^^^^^^^^^^^^^^ Inferred RHS type as u128 from LHS type u128.
-
-warning: Inferred RHS type as u128 from LHS type u128.
-   ┌─ examples/tinyaes128/aes128.prot:15:3
-   │
-15 │   dut.key := X;
-   │   ^^^^^^^^^^^^^ Inferred RHS type as u128 from LHS type u128.
-
 trace 0 executed successfully

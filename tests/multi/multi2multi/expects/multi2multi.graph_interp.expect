@@ -1,7 +1,1 @@
-warning: Inferred RHS type as u64 from LHS type u64.
-   ┌─ tests/multi/multi2multi/multi2multi.prot:16:5
-   │
-16 │     dut.inp := X;
-   │     ^^^^^^^^^^^^^ Inferred RHS type as u64 from LHS type u64.
-
 trace 0 executed successfully
