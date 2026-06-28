@@ -380,7 +380,7 @@ impl<'a> Evaluator<'a> {
 
                     self.waveform
                         .entry(port_id)
-                        .or_insert(vec![])
+                        .or_default()
                         .push(Value::Concrete(bvv));
                 }
                 None => {
@@ -391,7 +391,7 @@ impl<'a> Evaluator<'a> {
 
                     self.waveform
                         .entry(port_id)
-                        .or_insert(vec![])
+                        .or_default()
                         .push(Value::DontCare);
 
                     dont_care_ports.insert(port_id);

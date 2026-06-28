@@ -5,13 +5,11 @@
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::serialize::serialize_bitvec;
-use protocols::interpreter::Value as WaveValue;
 use protocols::scheduler::Scheduler;
-use protocols::{PatronusSim, PortId, frontend, transaction_frontend};
-use rustc_hash::FxHashMap;
+use protocols::{PatronusSim, frontend, transaction_frontend};
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]
@@ -190,7 +188,12 @@ fn main() -> anyhow::Result<()> {
 
         if cli.ascii_waveform {
             let wave = scheduler.waveform();
-            print_waveform(wave, &scheduler, cli.display_hex);
+            print_ascii_waveform(
+                wave,
+                |port| scheduler.port_name(port).to_string(),
+                |port| scheduler.port_width(port),
+                cli.display_hex,
+            );
         }
     }
 
@@ -198,56 +201,4 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(101);
     }
     Ok(())
-}
-
-fn format_wave_value(value: &WaveValue, display_hex: bool) -> String {
-    match value {
-        WaveValue::Concrete(bv) => serialize_bitvec(bv, display_hex),
-        WaveValue::DontCare => "x".to_string(),
-    }
-}
-
-fn print_waveform(
-    waveform: FxHashMap<PortId, Vec<WaveValue>>,
-    scheduler: &Scheduler<'_>,
-    display_hex: bool,
-) {
-    let mut rows: Vec<_> = waveform.into_iter().collect();
-    rows.sort_by_key(|(port, _)| *port);
-
-    let formatted_rows: Vec<_> = rows
-        .into_iter()
-        .map(|(port, values)| {
-            let width = scheduler.port_width(port);
-            let label = if width == 1 {
-                scheduler.port_name(port).to_string()
-            } else {
-                format!("{}[{}:0]", scheduler.port_name(port), width - 1)
-            };
-            let values: Vec<_> = values
-                .iter()
-                .map(|value| format_wave_value(value, display_hex))
-                .collect();
-            (label, values)
-        })
-        .collect();
-
-    let label_width = formatted_rows
-        .iter()
-        .map(|(label, _)| label.len())
-        .max()
-        .unwrap_or(0);
-    let value_width = formatted_rows
-        .iter()
-        .flat_map(|(_, values)| values.iter().map(|value| value.len()))
-        .max()
-        .unwrap_or(1);
-
-    for (label, values) in formatted_rows {
-        print!("{label:<label_width$}");
-        for value in values {
-            print!(" {value:>value_width$}");
-        }
-        println!();
-    }
 }

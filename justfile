@@ -4,6 +4,7 @@ runt:
   runt --max-futures 1 runt/interp
   runt --max-futures 1 runt/monitor
   runt --max-futures 1 runt/graph_interp
+  runt --max-futures 1 runt/waveform
 
 # Runs all unit tests (via Cargo) & snapshot tests (via Runt)
 test:

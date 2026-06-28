@@ -195,10 +195,38 @@ def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
     return [("", repo_root_command(cmd))]
 
 
+def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
+    ast_cmd = [
+        *binary_prefix("protocols-interp"),
+        "--color",
+        "never",
+        "--transactions",
+        case["path"],
+        "--ascii-waveform",
+    ]
+    _tx_tail(ast_cmd, case, with_max_steps=True)
+
+    graph_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["path"],
+        "--respect-forks",
+        "--determinize",
+        "--ascii-waveform",
+    ]
+    _tx_tail(graph_cmd, case, with_max_steps=False)
+
+    return [
+        ("ast", repo_root_command(ast_cmd, stderr="discard")),
+        ("graph", repo_root_command(graph_cmd, stderr="discard")),
+    ]
+
+
 RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "monitor": monitor_runt_command,
+    "waveform": waveform_runt_command,
 }
 
 
@@ -249,6 +277,21 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
     return sorted(selected, key=lambda c: c["path"])
 
 
+def waveform_cases(cases: list[dict]) -> list[dict]:
+    """All the graph_interp_cases, except with some extra exclusions"""
+    # these cases are correct, but our ASCII diffing isn't good enough
+    # for us to know they are the same
+    xfailed = [
+        "examples/serv/serv_regfile.tx",
+        "tests/adders/adder_d1/wait_and_add_correct.tx",
+        "tests/fifo/fifo.tx",
+        "tests/fifo/push_pop_identity_ok.tx",
+        "tests/wishbone/wishbone.tx",
+    ]
+
+    return list(filter(lambda c: c["path"] not in xfailed, graph_interp_cases(cases)))
+
+
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     build = RUNT_BUILDERS[runner]
     suites = []
@@ -293,6 +336,7 @@ def generate_runt_configs() -> None:
         "interp": ("interp", tx),
         "monitor": ("monitor", mon),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
+        "waveform": ("waveform", waveform_cases(tx)),
     }
 
     # A golden may be shared by several variants of the same test (e.g. the
