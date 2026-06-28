@@ -98,20 +98,22 @@ def expect_dir(case: dict, runner: str) -> str:
 # command construction
 
 
-def cargo_prefix(package: str) -> list[str]:
-    return [
-        "cargo",
-        "run",
-        "--offline",
-        "--package",
-        package,
-        "--",
-    ]
+def binary_prefix(binary: str) -> list[str]:
+    return [f"target/debug/{binary}"]
 
 
-def repo_root_command(cmd: list[str], suppress_stderr: bool = True) -> str:
+def repo_root_command(cmd: list[str], stderr: str = "discard") -> str:
     # Each runt test runs exactly one path, so we bake it straight into the
-    tail = " 2>/dev/null" if suppress_stderr else ""
+    # command. Runt captures stdout; interp snapshots intentionally include
+    # diagnostics, while monitor/graph snapshots historically discard stderr.
+    if stderr == "stdout":
+        tail = " 2>&1"
+    elif stderr == "discard":
+        tail = " 2>/dev/null"
+    elif stderr == "inherit":
+        tail = ""
+    else:
+        raise ValueError(f"unknown stderr mode: {stderr}")
     return "cd ../.. && " + shlex.join(cmd) + tail
 
 
@@ -150,18 +152,18 @@ def _tx_tail(cmd: list[str], case: dict, with_max_steps: bool) -> None:
 
 def interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [
-        *cargo_prefix("protocols-interp"),
+        *binary_prefix("protocols-interp"),
         "--color",
         "never",
         "--transactions",
         case["path"],
     ]
     _tx_tail(cmd, case, with_max_steps=True)
-    return [("", repo_root_command(cmd))]
+    return [("", repo_root_command(cmd, stderr="stdout"))]
 
 
 def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
-    cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
+    cmd = [*binary_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
 
     # wishbone and fifo only work with --respect-forks
@@ -180,7 +182,7 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
 
 
 def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
-    cmd = [*cargo_prefix("protocols-monitor"), "--protocol", case["path"]]
+    cmd = [*binary_prefix("protocols-monitor"), "--protocol", case["path"]]
     if case["wave"]:
         cmd += ["--wave", case["wave"]]
     if case["instances"]:

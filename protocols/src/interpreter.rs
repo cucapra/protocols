@@ -5,7 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::Value;
+use crate::Value as ArgValue;
 use crate::dut::{PatronusSim, PortId};
 use crate::errors::{ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
@@ -16,31 +16,31 @@ use baa::{BitVecOps, BitVecValue, WidthInt};
 use log::info;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
-/// Per-thread input value: either a concrete assignment or DontCare
+/// Either a concrete value or DontCare
 #[derive(Debug, Clone)]
-pub enum ThreadInputValue {
+pub enum Value {
     Concrete(BitVecValue),
     DontCare,
 }
 
-impl std::fmt::Display for ThreadInputValue {
+impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ThreadInputValue::Concrete(bv) => write!(f, "{}", serialize_bitvec(bv, false)),
-            ThreadInputValue::DontCare => write!(f, "DontCare"),
+            Value::Concrete(bv) => write!(f, "{}", serialize_bitvec(bv, false)),
+            Value::DontCare => write!(f, "DontCare"),
         }
     }
 }
 
-impl ThreadInputValue {
+impl Value {
     pub fn is_concrete(&self) -> bool {
-        matches!(self, ThreadInputValue::Concrete(_))
+        matches!(self, Value::Concrete(_))
     }
 
     pub fn is_dont_care(&self) -> bool {
-        matches!(self, ThreadInputValue::DontCare)
+        matches!(self, Value::DontCare)
     }
 }
 
@@ -54,7 +54,7 @@ impl ThreadInputValue {
 ///   reporting to show the source location of conflicting assignments.
 ///
 /// TODO: should this data be stored in the scheduler instead?
-pub type PerThreadValues = FxHashMap<usize, (ThreadInputValue, Option<StmtId>)>;
+pub type PerThreadValues = FxHashMap<usize, (Value, Option<StmtId>)>;
 
 /// An `ExprValue` is either a `Concrete` bit-vector value, or `DontCare`
 #[derive(PartialEq, Debug, Clone)]
@@ -76,7 +76,7 @@ pub struct Evaluator<'a> {
     next_stmt_map: FxHashMap<StmtId, Option<StmtId>>,
     st: &'a SymbolTable,
 
-    args_mapping: FxHashMap<SymbolId, Value>,
+    args_mapping: FxHashMap<SymbolId, ArgValue>,
 
     /// _Dynamic:_ stack of loop variables, need to be searched right to left
     pub loop_vars: Vec<(SymbolId, BitVecValue)>,
@@ -106,6 +106,9 @@ pub struct Evaluator<'a> {
 
     /// Random number generator used for generating random values for `DontCare`
     rng: StdRng,
+
+    /// The values of each port in each cycle
+    pub waveform: FxHashMap<PortId, Vec<Value>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -117,7 +120,7 @@ impl<'a> Evaluator<'a> {
 
     /// Creates a new `Evaluator`
     pub fn new(
-        args: FxHashMap<&str, Value>,
+        args: FxHashMap<&str, ArgValue>,
         tr: &'a Protocol,
         st: &'a SymbolTable,
         sim: &PatronusSim,
@@ -149,6 +152,7 @@ impl<'a> Evaluator<'a> {
             rng,
             loop_vars: vec![],
             loop_info: vec![],
+            waveform: FxHashMap::default(),
         }
     }
 
@@ -156,8 +160,8 @@ impl<'a> Evaluator<'a> {
     fn generate_args_mapping(
         st: &SymbolTable,
         proto: &Protocol,
-        args: FxHashMap<&str, Value>,
-    ) -> FxHashMap<SymbolId, Value> {
+        args: FxHashMap<&str, ArgValue>,
+    ) -> FxHashMap<SymbolId, ArgValue> {
         let mut args_mapping = FxHashMap::default();
         for (name, value) in &args {
             if let Some(symbol_id) = st.symbol_id_from_name(proto.scope, name) {
@@ -201,7 +205,7 @@ impl<'a> Evaluator<'a> {
         sim: &mut PatronusSim,
         port_id: PortId,
         todo_idx: usize,
-        new_val: ThreadInputValue,
+        new_val: Value,
         stmt_id: Option<StmtId>,
     ) -> ExecutionResult<()> {
         // Get old value for this todo_idx (if any)
@@ -212,8 +216,8 @@ impl<'a> Evaluator<'a> {
             .map(|(val, _)| val.clone());
 
         // Handle forbidden_output reference counting
-        let was_dontcare = matches!(old_val, Some(ThreadInputValue::DontCare));
-        let is_dontcare = matches!(new_val, ThreadInputValue::DontCare);
+        let was_dontcare = matches!(old_val, Some(Value::DontCare));
+        let is_dontcare = matches!(new_val, Value::DontCare);
 
         // Update forbidden_read_counts when transitioning to/from DontCare
         if is_dontcare && !was_dontcare {
@@ -251,7 +255,7 @@ impl<'a> Evaluator<'a> {
         let any_other_concrete =
             if let Some(per_thread_vals) = self.per_thread_input_vals.get(&port_id) {
                 per_thread_vals.iter().any(|(&other_idx, (other_val, _))| {
-                    other_idx != todo_idx && matches!(other_val, ThreadInputValue::Concrete(_))
+                    other_idx != todo_idx && matches!(other_val, Value::Concrete(_))
                 })
             } else {
                 false
@@ -301,7 +305,7 @@ impl<'a> Evaluator<'a> {
                     sim,
                     port_id,
                     todo_idx,
-                    ThreadInputValue::DontCare,
+                    Value::DontCare,
                     None, // DontCare initialization has no associated statement
                 )?;
             }
@@ -345,6 +349,7 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Called at end of cycle to finalize input values after conflict checking.
+    /// Also updates the waveform with the final simulator values.
     /// For each input pin:
     /// - If any thread has a concrete value, apply it to sim (all concrete values must agree if no conflict)
     /// - If all threads have DontCare, randomize the pin
@@ -355,30 +360,58 @@ impl<'a> Evaluator<'a> {
         for (port_id, per_thread_vals) in &self.per_thread_input_vals {
             // Find any concrete value (if conflicts were checked, all concrete values must agree)
             let concrete_val = per_thread_vals.values().find_map(|(val, _)| {
-                if let ThreadInputValue::Concrete(bvv) = val {
+                if let Value::Concrete(bvv) = val {
                     Some(bvv.clone())
                 } else {
                     None
                 }
             });
 
-            values_to_apply.push((*port_id, concrete_val));
+            values_to_apply.push((*port_id, concrete_val.clone()));
         }
 
+        let mut dont_care_ports = FxHashSet::default();
         // Now apply the values
         for (port_id, concrete_val) in values_to_apply {
             match concrete_val {
                 Some(bvv) => {
                     // Apply the concrete value
                     sim.set(port_id, &bvv);
+
+                    self.waveform
+                        .entry(port_id)
+                        .or_insert(vec![])
+                        .push(Value::Concrete(bvv));
                 }
                 None => {
                     // All threads have DontCare, randomize
                     let width = sim.port_width(port_id);
                     let random_val = BitVecValue::random(&mut self.rng, width);
                     sim.set(port_id, &random_val);
+
+                    self.waveform
+                        .entry(port_id)
+                        .or_insert(vec![])
+                        .push(Value::DontCare);
+
+                    dont_care_ports.insert(port_id);
                 }
             }
+        }
+
+        // Update the waveform with the latest output port values.
+        // If an output depends on any DontCare input, record it as DontCare.
+        for output in sim.outputs() {
+            let value = if sim
+                .coi_inputs(output)
+                .any(|input| dont_care_ports.contains(&input))
+            {
+                Value::DontCare
+            } else {
+                Value::Concrete(sim.get(output))
+            };
+
+            self.waveform.entry(output).or_default().push(value);
         }
     }
 
@@ -394,14 +427,14 @@ impl<'a> Evaluator<'a> {
         &mut self,
         sim: &mut PatronusSim,
         port_id: PortId,
-        value: &ThreadInputValue,
+        value: &Value,
         randomize_dont_care: bool,
     ) {
         match value {
-            ThreadInputValue::Concrete(bvv) => {
+            Value::Concrete(bvv) => {
                 sim.set(port_id, bvv);
             }
-            ThreadInputValue::DontCare => {
+            Value::DontCare => {
                 if randomize_dont_care {
                     let width = sim.port_width(port_id);
                     let random_val = BitVecValue::random(&mut self.rng, width);
@@ -675,8 +708,8 @@ impl<'a> Evaluator<'a> {
 
                 // Determine new value
                 let new_val = match expr_val {
-                    ExprValue::Concrete(bvv) => ThreadInputValue::Concrete(bvv),
-                    ExprValue::DontCare => ThreadInputValue::DontCare,
+                    ExprValue::Concrete(bvv) => Value::Concrete(bvv),
+                    ExprValue::DontCare => Value::DontCare,
                 };
 
                 // Check if assigning to this input port is forbidden (after observing a dependent output)

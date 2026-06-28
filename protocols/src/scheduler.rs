@@ -5,13 +5,13 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::Value;
 use crate::dut::PatronusSim;
 use crate::errors::{DiagnosticEmitter, ExecutionError, ExecutionResult};
 use crate::frontend::ast::*;
 use crate::frontend::diagnostic::DiagnosticHandler;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
-use crate::interpreter::{Evaluator, ThreadInputValue};
+use crate::interpreter::{Evaluator, Value};
+use crate::{PortId, Value as ArgValue};
 use baa::{BitVecOps, BitVecValue};
 use log::info;
 use rustc_hash::FxHashMap;
@@ -19,10 +19,10 @@ use rustc_hash::FxHashMap;
 /// `NextStmtMap` allows us to interpret without using recursion
 /// (the interpreter can just look up what the next statement is using this map)
 pub type NextStmtMap = FxHashMap<StmtId, Option<StmtId>>;
-type ArgMap<'a> = FxHashMap<&'a str, Value>;
+type ArgMap<'a> = FxHashMap<&'a str, ArgValue>;
 
 /// An `Invocation` is a pair consisting of the `String` of the `Protocol` to instantiate and a `Vec<Value>` of arguments to the protocol
-pub type Invocation = (String, Vec<Value>);
+pub type Invocation = (String, Vec<ArgValue>);
 
 /// A `ProtocolInfo` is a triple of the form
 /// `(Protocol, SymbolTable, NextStmtMap)`.
@@ -421,7 +421,7 @@ impl<'a> Scheduler<'a> {
             let concrete_vals: Vec<(usize, &BitVecValue, Option<StmtId>)> = per_thread_vals
                 .iter()
                 .filter_map(|(&tx_idx, (val, stmt_id))| {
-                    if let ThreadInputValue::Concrete(bvv) = val {
+                    if let Value::Concrete(bvv) = val {
                         Some((tx_idx, bvv, *stmt_id))
                     } else {
                         None
@@ -499,6 +499,18 @@ impl<'a> Scheduler<'a> {
         for i in 0..self.active_threads.len() {
             self.run_thread_until_next_step(i, forks_enabled);
         }
+    }
+
+    pub fn waveform(&self) -> FxHashMap<PortId, Vec<Value>> {
+        self.evaluator.waveform.clone()
+    }
+
+    pub fn port_name(&self, port: PortId) -> &str {
+        self.sim.port_name(port)
+    }
+
+    pub fn port_width(&self, port: PortId) -> u32 {
+        self.sim.port_width(port)
     }
 
     /// Runs a single thread (indicated by its `thread_idx`) until the next step to synchronize on
