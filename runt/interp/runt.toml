@@ -118,6 +118,15 @@ expect_name = "add_multitrace.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/add_multitrace.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>&1"
 
 [[tests]]
+name = "interp.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_interp"
+paths = [
+  "../../tests/adders/adder_d1/add_multitrace_successful.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "add_multitrace_successful.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/add_multitrace_successful.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>&1"
+
+[[tests]]
 name = "interp.tests_adders_adder_d1_assign_after_observation.assign_after_observation_interp"
 paths = [
   "../../tests/adders/adder_d1/assign_after_observation.tx",

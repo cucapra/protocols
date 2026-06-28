@@ -109,6 +109,33 @@ expect_name = "add_combinational.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d0/add_combinational.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_graph_interp"
+paths = [
+  "../../tests/adders/adder_d1/add_multitrace_successful.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "add_multitrace_successful.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace_successful.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_graph_interp.contract_edges"
+paths = [
+  "../../tests/adders/adder_d1/add_multitrace_successful.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "add_multitrace_successful.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace_successful.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot --contract-edges 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_graph_interp.respect_forks"
+paths = [
+  "../../tests/adders/adder_d1/add_multitrace_successful.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "add_multitrace_successful.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace_successful.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_adders_adder_d1_both_threads_pass.both_threads_pass_graph_interp"
 paths = [
   "../../tests/adders/adder_d1/both_threads_pass.tx",
