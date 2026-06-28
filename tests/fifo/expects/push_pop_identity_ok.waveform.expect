@@ -1,0 +1,8 @@
+Trace 0 executed successfully!
+enq_not_deq_i x 1 0 x 1 0 x
+v_i           0 1 1 0 1 1 x
+data_i[31:0]  x 2 x x 3 x x
+reset_i       1 0 0 0 0 0 x
+data_o[31:0]  0 0 2 2 2 2 3
+empty_o       0 1 0 1 1 0 1
+full_o        1 0 0 0 0 0 0

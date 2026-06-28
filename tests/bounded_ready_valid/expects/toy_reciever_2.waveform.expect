@@ -1,0 +1,4 @@
+Trace 0 executed successfully!
+valid     1 1 1
+data[7:0] 5 5 5
+ready     0 0 1

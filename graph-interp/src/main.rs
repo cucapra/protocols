@@ -2,7 +2,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
 use protocols::frontend::ast::Protocol;
-use protocols::frontend::design::find_a_single_design;
+use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::serialize::serialize_bitvec;
 use protocols::frontend::symbol::SymbolTable;
@@ -158,7 +158,7 @@ fn run_classic(
     cli: &Cli,
     st: &SymbolTable,
     protos: &[Protocol],
-    sim: &mut PatronusSim,
+    design: &Design,
     traces: Vec<Vec<(String, Vec<Value>)>>,
 ) {
     let mut graphs: Vec<(String, ProtoGraph)> = protos
@@ -177,6 +177,7 @@ fn run_classic(
 
     for (trace_index, trace) in traces.into_iter().enumerate() {
         print_trace_separator(trace_index);
+        let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
 
         for (name, values) in trace {
             let (_, pg) = graphs
@@ -185,7 +186,7 @@ fn run_classic(
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
             let args = build_arg_map(&pg.args, st, values);
             // println!("{}", to_dot_string(pg, st));
-            graph_interpreter::interpret(pg, st, args, sim);
+            graph_interpreter::interpret(pg, st, args, &mut sim);
         }
         print_trace_success(trace_index);
     }
@@ -193,37 +194,36 @@ fn run_classic(
 
 /// interpret the entire concrete trace as one big ProtoGraph
 fn run_respect_forks(
+    cli: &Cli,
     st: &SymbolTable,
     protos: &[Protocol],
-    sim: &mut PatronusSim,
+    design: &Design,
     traces: &[Vec<(String, Vec<Value>)>],
-    graphout: bool,
-    determinize_graph: bool,
-    ascii_waveform: bool,
 ) {
     let protos_by_name: FxHashMap<&str, &Protocol> =
         protos.iter().map(|p| (p.name.as_str(), p)).collect();
 
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
+        let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
 
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
 
-        if determinize_graph {
+        if cli.determinize {
             joint = determinized(joint, st);
         }
         // normalize_assignments(&mut joint, st);
 
-        if graphout {
+        if cli.graphout {
             println!("// joint graph for trace {trace_index}");
             println!("{}", to_dot_string(&joint, st));
         }
 
         // args are baked into the graph as constants, so we just pass in an empty map here
-        let waveform = graph_interpreter::interpret(&joint, st, FxHashMap::default(), sim);
-        if ascii_waveform {
+        let waveform = graph_interpreter::interpret(&joint, st, FxHashMap::default(), &mut sim);
+        if cli.ascii_waveform {
             print_trace_success(trace_index);
-            print_waveform(waveform, sim);
+            print_waveform(waveform, &sim);
         } else {
             print_trace_success(trace_index);
         }
@@ -235,23 +235,14 @@ fn main() {
     let (st, protos) = load_protocols(&cli);
     let traces = load_traces(&cli, &st, &protos);
     let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
-    let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), &design, None).unwrap();
 
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.respect_forks {
-            run_respect_forks(
-                &st,
-                &protos,
-                &mut sim,
-                &traces,
-                cli.graphout,
-                cli.determinize,
-                cli.ascii_waveform,
-            );
+            run_respect_forks(&cli, &st, &protos, &design, &traces);
         } else {
-            run_classic(&cli, &st, &protos, &mut sim, traces);
+            run_classic(&cli, &st, &protos, &design, traces);
         }
     }));
     std::panic::set_hook(old_hook);
