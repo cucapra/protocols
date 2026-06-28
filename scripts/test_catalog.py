@@ -74,6 +74,11 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "assertion_mismatch",
     },
+    "tests/adders/adder_d1/add_multitrace_successful.tx": {
+        "protocol": "tests/adders/adder_d1/add_d1.prot",
+        "verilog": ("tests/adders/adder_d1/add_d1.v",),
+        "expect": "pass",
+    },
     "tests/adders/adder_d1/both_threads_fail.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
