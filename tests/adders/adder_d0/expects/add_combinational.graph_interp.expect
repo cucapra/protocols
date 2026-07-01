@@ -1,13 +1,1 @@
-warning: Inferred RHS type as u32 from LHS type u32.
-  ┌─ tests/adders/adder_d0/add_d0.prot:8:3
-  │
-8 │   DUT.a := X;
-  │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
-
-warning: Inferred RHS type as u32 from LHS type u32.
-  ┌─ tests/adders/adder_d0/add_d0.prot:9:3
-  │
-9 │   DUT.b := X;
-  │   ^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
-
-trace 0 executed successfully
+Trace 0 executed successfully!

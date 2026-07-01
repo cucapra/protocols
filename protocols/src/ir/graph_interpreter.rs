@@ -5,15 +5,16 @@ use patronus::expr::{ExprRef, SerializableIrNode, SymbolValueStore, TypeCheck, e
 use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::Value;
+use crate::Value as ArgValue;
 use crate::dut::{PatronusSim, PortId};
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
+use crate::interpreter::Value as WaveValue;
 use crate::ir::proto_graph::{Op, ProtoGraph};
 
 enum GraphBinding {
     Sim(PortId),
-    Arg(Value),
+    Arg(ArgValue),
     DontCare,
 }
 
@@ -26,7 +27,7 @@ enum InputValue {
 fn build_bindings(
     protocol: &ProtoGraph,
     symbols: &SymbolTable,
-    args: &FxHashMap<&str, Value>,
+    args: &FxHashMap<&str, ArgValue>,
     sim: &PatronusSim,
 ) -> FxHashMap<ExprRef, GraphBinding> {
     let mut bindings = FxHashMap::default();
@@ -189,13 +190,60 @@ fn evaluate_assert_equal(
     }
 }
 
+fn record_waveform(
+    waveform: &mut FxHashMap<PortId, Vec<WaveValue>>,
+    sim: &mut PatronusSim,
+    current_inputs: &FxHashMap<PortId, WaveValue>,
+    rng: &mut impl rand::Rng,
+) {
+    let mut dont_care_ports = FxHashSet::default();
+
+    for input in sim.inputs().collect::<Vec<_>>() {
+        let value = current_inputs
+            .get(&input)
+            .unwrap_or(&WaveValue::DontCare)
+            .clone();
+        match value {
+            WaveValue::Concrete(bvv) => {
+                sim.set(input, &bvv);
+                waveform
+                    .entry(input)
+                    .or_default()
+                    .push(WaveValue::Concrete(bvv));
+            }
+            WaveValue::DontCare => {
+                let random_val = BitVecValue::random(rng, sim.port_width(input));
+                sim.set(input, &random_val);
+                waveform.entry(input).or_default().push(WaveValue::DontCare);
+                dont_care_ports.insert(input);
+            }
+        }
+    }
+
+    for output in sim.outputs() {
+        let value = if sim
+            .coi_inputs(output)
+            .any(|input| dont_care_ports.contains(&input))
+        {
+            WaveValue::DontCare
+        } else {
+            WaveValue::Concrete(sim.get(output))
+        };
+        waveform.entry(output).or_default().push(value);
+    }
+}
+
 /// interpret a `ProtoGraph` using Patronus expressions directly.
 pub fn interpret(
     pg: &ProtoGraph,
     st: &SymbolTable,
-    args: FxHashMap<&str, Value>,
+    args: FxHashMap<&str, ArgValue>,
     sim: &mut PatronusSim,
-) {
+) -> FxHashMap<PortId, Vec<WaveValue>> {
+    let mut waveform = FxHashMap::default();
+    let mut current_inputs =
+        FxHashMap::from_iter(sim.inputs().map(|port| (port, WaveValue::DontCare)));
+
     let bindings = build_bindings(pg, st, &args, sim);
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let mut store = build_value_store(pg, &bindings, sim, &mut rng);
@@ -233,7 +281,10 @@ pub fn interpret(
         for (symbol_id, value) in pending_inputs {
             let port = sim[symbol_id];
             match value {
-                InputValue::Concrete(bvv) => sim.set(port, &bvv),
+                InputValue::Concrete(bvv) => {
+                    sim.set(port, &bvv);
+                    current_inputs.insert(port, WaveValue::Concrete(bvv));
+                }
                 InputValue::DontCare => {
                     let width = match st[symbol_id].tpe() {
                         Type::BitVec(w) => w,
@@ -241,6 +292,7 @@ pub fn interpret(
                     };
                     let random_val = BitVecValue::random(&mut rng, width);
                     sim.set(port, &random_val);
+                    current_inputs.insert(port, WaveValue::DontCare);
                 }
             }
         }
@@ -290,6 +342,8 @@ pub fn interpret(
         match satisfied_transitions.into_iter().next() {
             Some(t) => {
                 if t.consumes_step {
+                    record_waveform(&mut waveform, sim, &current_inputs, &mut rng);
+                    update_value_store(&mut store, pg, &bindings, sim, &mut rng);
                     sim.step();
                 }
                 curr = t.target;
@@ -297,4 +351,6 @@ pub fn interpret(
             None => break,
         }
     }
+
+    waveform
 }

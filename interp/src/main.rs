@@ -5,6 +5,7 @@
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::scheduler::Scheduler;
@@ -60,6 +61,10 @@ struct Cli {
     /// Skips the static checks for step/fork errors.
     #[arg(long)]
     skip_static_step_fork_checks: bool,
+
+    /// Prints only trace status lines and ASCII waveforms
+    #[arg(long)]
+    ascii_waveform: bool,
 }
 
 /// Examples (enables all tracing logs):
@@ -93,6 +98,13 @@ fn with_trace_suffix(path: &str, trace_index: usize) -> String {
     }
 }
 
+fn exit_after_setup_error(error: anyhow::Error, diagnostic_was_emitted: bool) -> ! {
+    if !diagnostic_was_emitted {
+        eprintln!("Error: {error:#}");
+    }
+    std::process::exit(1)
+}
+
 fn main() -> anyhow::Result<()> {
     // Parse CLI args
     let cli = Cli::parse();
@@ -116,21 +128,30 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
     );
 
-    let (st, protos) = frontend(
+    let (st, protos) = match frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
-    )?;
+    ) {
+        Ok(result) => result,
+        Err(error) => exit_after_setup_error(error, !protocols_handler.error_string().is_empty()),
+    };
     let design = find_a_single_design(&st, &protos, &cli.protocol)?;
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let transactions_handler = &mut DiagnosticHandler::new(
+    let mut transactions_handler = DiagnosticHandler::new(
         color_choice,
         cli.no_error_locations,
         emit_warnings,
         cli.display_hex,
     );
-    let traces = transaction_frontend(cli.transactions, &st, &protos, transactions_handler)?;
+    let traces =
+        match transaction_frontend(cli.transactions, &st, &protos, &mut transactions_handler) {
+            Ok(result) => result,
+            Err(error) => {
+                exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
+            }
+        };
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {
@@ -164,10 +185,20 @@ fn main() -> anyhow::Result<()> {
         } else {
             println!("Trace {} executed successfully!", trace_index);
         }
+
+        if cli.ascii_waveform {
+            let wave = scheduler.waveform();
+            print_ascii_waveform(
+                wave,
+                |port| scheduler.port_name(port).to_string(),
+                |port| scheduler.port_width(port),
+                cli.display_hex,
+            );
+        }
     }
 
     if any_failed {
-        panic!("One or more traces failed.");
+        std::process::exit(101);
     }
     Ok(())
 }

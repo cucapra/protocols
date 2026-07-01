@@ -5,6 +5,7 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+pub mod ascii_waveform;
 pub mod backends;
 mod dut;
 pub mod errors;
