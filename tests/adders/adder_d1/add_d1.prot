@@ -88,3 +88,23 @@ prot assign_after_observation<DUT : Adder>(a: u32, b: u32, s: u32) {
   fork();
   step();
 }
+
+// conditional assignment
+prot if_else<DUT : Adder>(a1: u32, a2: u32) {
+    if (1'b1) {
+        DUT.a := a1;
+    } else { // always taken
+        DUT.a := a2;
+    }
+
+    DUT.b := 32'b0;
+
+    step();
+
+      DUT.a := X;
+      DUT.b := X;
+      assert_eq(a1, DUT.s);
+
+      fork();
+      step();
+}

@@ -1,3 +1,4 @@
 trace {
     add_combinational(100, 200, 300);
+    add_combinational(200, 300, 500);
 }

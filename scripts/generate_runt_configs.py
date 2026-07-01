@@ -163,8 +163,19 @@ def interp_runt_command(case: dict) -> list[tuple[str, str]]:
 def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*cargo_prefix("graph-interp"), "--transactions", case["path"]]
     _tx_tail(cmd, case, with_max_steps=False)
-    # baseline and --contract-edges runs share one golden
-    flag_sets = [("", []), ("contract_edges", ["--contract-edges"])]
+
+    # wishbone and fifo only work with --respect-forks
+    if case["path"].startswith("tests/fifo/") or case["path"].startswith(
+        "tests/wishbone/"
+    ):
+        flag_sets = [("respect_forks", ["--respect-forks", "--determinize"])]
+    else:
+        # baseline and --contract-edges runs share one golden
+        flag_sets = [
+            ("", []),
+            ("contract_edges", ["--contract-edges"]),
+            ("respect_forks", ["--respect-forks", "--determinize"]),
+        ]
     return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
 
 
@@ -231,10 +242,6 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
-        and "fifo"
-        not in c[
-            "path"
-        ]  # these don't work with graph interpreter due to (lack of) fork support
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])

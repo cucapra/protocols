@@ -90,6 +90,7 @@ pub enum Op {
 }
 
 pub struct ProtoGraph {
+    // TODO: the ProtocolContext of a ProtoGraph is not really meaningful for a full concrete trace or a symbolic multi-protocol graph, so we may need to change this at some point
     pub proto_ctx: ProtocolContext,
 
     /// The entrypoint of the `Protocol`
@@ -183,7 +184,36 @@ impl ProtoGraph {
         self.simplifier.simplify(&mut self.expr_ctx, expr)
     }
 
-    // TODO: add a verify simplifications helper
+    pub fn not_guard(&mut self, guard: ExprRef) -> ExprRef {
+        let expr = self.expr_ctx.not(guard);
+        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    }
+
+    pub fn simplify_all_exprs(&mut self) {
+        let (expr_ctx, simplifier) = (&mut self.expr_ctx, &mut self.simplifier);
+
+        for (_, node) in self.nodes.iter_mut() {
+            for action in &mut node.actions {
+                action.guard = simplifier.simplify(expr_ctx, action.guard);
+            }
+            for transition in &mut node.transitions {
+                transition.guard = simplifier.simplify(expr_ctx, transition.guard);
+            }
+        }
+
+        for (_, op) in self.ops.iter_mut() {
+            match op {
+                Op::Assign(_, rhs) => {
+                    *rhs = simplifier.simplify(expr_ctx, *rhs);
+                }
+                Op::AssertEq(lhs, rhs) => {
+                    *lhs = simplifier.simplify(expr_ctx, *lhs);
+                    *rhs = simplifier.simplify(expr_ctx, *rhs);
+                }
+                Op::Fork | Op::InternalAssertFalse | Op::Done => {}
+            }
+        }
+    }
 
     /// add a new node to the IR
     pub fn n(&mut self, node: Node) -> NodeId {
@@ -193,6 +223,13 @@ impl ProtoGraph {
     /// get the next node id (so we can build transitions to it)
     pub fn next_node_id(&self) -> NodeId {
         self.nodes.next_key()
+    }
+
+    /// Return this graph with a different node map and entry point.
+    pub fn with_nodes(mut self, nodes: PrimaryMap<NodeId, Node>, entry: NodeId) -> Self {
+        self.nodes = nodes;
+        self.entry = entry;
+        self
     }
 
     /// add a new op to the IR

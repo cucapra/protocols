@@ -21,14 +21,11 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
     out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
     out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
 
-    // emit one graphviz node per ir node
     let mut seen: BTreeSet<NodeId> = BTreeSet::new();
+    seen.insert(protocol.entry);
     let mut q = VecDeque::from([protocol.entry]);
-    // for (node_id, node) in protocol.nodes() {
-    while !q.is_empty() {
-        let node_id = q.pop_front().unwrap();
+    while let Some(node_id) = q.pop_front() {
         let node = protocol[node_id].clone();
-        seen.insert(node_id);
 
         let mut label_parts = vec![];
 
@@ -50,6 +47,10 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
 
         // emit graph edges
         for transition in &node.transitions {
+            // pruning heuristic: skip dead (false-guarded) transitions
+            if transition.guard == protocol.false_id() {
+                continue;
+            }
             let edge_label = if transition.consumes_step {
                 format!("{} / step", format_expr(protocol, transition.guard))
             } else {
@@ -61,7 +62,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
                 transition.target,
                 escape_label(&edge_label)
             ));
-            if !seen.contains(&transition.target) {
+            if seen.insert(transition.target) {
                 q.push_back(transition.target);
             }
         }

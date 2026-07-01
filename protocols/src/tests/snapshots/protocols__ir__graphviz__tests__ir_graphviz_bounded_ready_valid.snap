@@ -1,6 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 210
+assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -11,20 +11,20 @@ digraph "send_data" {
   entry_marker -> node0;
   node0 [label=""];
   node0 -> node13 [label="1"];
-  node13 [label="[1] D.data := ite(1, data, D.data)"];
+  node13 [label="[1] D.data := data"];
   node13 -> node12 [label="1"];
-  node12 [label="[1] D.valid := ite(1, 1, D.valid)"];
+  node12 [label="[1] D.valid := 1"];
   node12 -> node11 [label="1"];
   node11 [label=""];
-  node11 -> node9 [label="not(eq(D.ready, 1))"];
-  node11 -> node10 [label="not(not(eq(D.ready, 1)))"];
+  node11 -> node9 [label="not(D.ready)"];
+  node11 -> node10 [label="D.ready"];
   node9 [label=""];
   node9 -> node8 [label="1 / step"];
   node10 [label=""];
   node10 -> node3 [label="1"];
   node8 [label=""];
-  node8 -> node6 [label="not(eq(D.ready, 1))"];
-  node8 -> node7 [label="not(not(eq(D.ready, 1)))"];
+  node8 -> node6 [label="not(D.ready)"];
+  node8 -> node7 [label="D.ready"];
   node3 [label=""];
   node3 -> node2 [label="1"];
   node6 [label=""];
@@ -38,8 +38,6 @@ digraph "send_data" {
   node4 [label=""];
   node4 -> node3 [label="1"];
   node1 [label="[1] done"];
-  node4 [label=""];
-  node4 -> node3 [label="1"];
 }
 
 == post-contract ==
@@ -48,7 +46,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.data := ite(1, data, D.data)\n[1] D.valid := ite(1, 1, D.valid)"];
+  node0 [label="[1] D.data := data\n[1] D.valid := 1"];
   node0 -> node1 [label="D.ready / step"];
   node0 -> node8 [label="not(D.ready) / step"];
   node1 [label="[1] done"];
@@ -65,7 +63,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.data := ite(1, data, D.data)\n[1] D.valid := ite(1, 1, D.valid)"];
+  node0 [label="[1] D.data := data\n[1] D.valid := 1"];
   node0 -> node1 [label="D.ready / step"];
   node0 -> node8 [label="not(D.ready) / step"];
   node1 [label="[1] done\n[1] D.valid := D.valid\n[1] D.data := D.data"];

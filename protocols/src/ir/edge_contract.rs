@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, VecDeque};
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
-use patronus::expr::ExprRef;
+use patronus::expr::{Expr, ExprRef};
 
 fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: SymbolId) -> ExprRef {
     if let Some(expr) = protocol.symbol_expr(symbol_id) {
@@ -25,41 +25,216 @@ fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: Symb
     expr
 }
 
-fn append_action(
+/// Constrain `rhs` to `guard`, falling back to `fallback` outside it. An
+/// unconditional (`true`) guard needs no `ite`.
+fn lift(protocol: &mut ProtoGraph, guard: ExprRef, rhs: ExprRef, fallback: ExprRef) -> ExprRef {
+    if guard == protocol.true_id() {
+        rhs
+    } else {
+        protocol.expr_ctx.ite(guard, rhs, fallback)
+    }
+}
+
+fn same_assignment_target(symbols: &SymbolTable, lhs: SymbolId, rhs: SymbolId) -> bool {
+    lhs == rhs || symbols[lhs].full_name(symbols) == symbols[rhs].full_name(symbols)
+}
+
+fn record_internal_assert(
+    protocol: &mut ProtoGraph,
+    internal_assert_guard: &mut Option<ExprRef>,
+    guard: ExprRef,
+) {
+    *internal_assert_guard = Some(match internal_assert_guard.take() {
+        Some(existing_guard) => protocol.or_guard(existing_guard, guard),
+        None => guard,
+    });
+}
+
+#[derive(Clone, Copy)]
+struct AssignmentBranch {
+    guard: ExprRef,
+    rhs: ExprRef,
+    is_dont_care: bool,
+}
+
+fn simplify_expr(protocol: &mut ProtoGraph, expr: ExprRef) -> ExprRef {
+    let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
+    simplifier.simplify(expr_ctx, expr)
+}
+
+fn push_assignment_branch(
+    protocol: &mut ProtoGraph,
+    branches: &mut Vec<AssignmentBranch>,
+    guard: ExprRef,
+    rhs: ExprRef,
+) {
+    let guard = simplify_expr(protocol, guard);
+    if guard == protocol.false_id() {
+        return;
+    }
+
+    branches.push(AssignmentBranch {
+        guard,
+        rhs,
+        is_dont_care: protocol.dont_cares.contains(&rhs),
+    });
+}
+
+// turns an ITE into a list of predicated assignments
+fn flatten_assignment_rhs(
+    protocol: &mut ProtoGraph,
+    rhs: ExprRef,
+    default_value: ExprRef,
+    action_guard: ExprRef,
+) -> Vec<AssignmentBranch> {
+    // Assignment RHSs are either bare values or ITE chains whose true branches are bare values.
+    let mut branches = Vec::new();
+    let mut path_guard = simplify_expr(protocol, action_guard);
+    let mut cursor = rhs;
+
+    while path_guard != protocol.false_id() && cursor != default_value {
+        match protocol.expr_ctx[cursor].clone() {
+            Expr::BVIte { cond, tru, fals } => {
+                let branch_guard = protocol.and_guard(path_guard, cond);
+                push_assignment_branch(protocol, &mut branches, branch_guard, tru);
+
+                let not_cond = protocol.not_guard(cond);
+                path_guard = protocol.and_guard(path_guard, not_cond);
+                cursor = fals;
+            }
+            _ => {
+                push_assignment_branch(protocol, &mut branches, path_guard, cursor);
+                break;
+            }
+        }
+    }
+
+    branches
+}
+
+/// Turn branches back into an ITE
+fn rebuild_assignment_rhs(
+    protocol: &mut ProtoGraph,
+    branches: &[AssignmentBranch],
+    default_value: ExprRef,
+) -> ExprRef {
+    branches
+        .iter()
+        .rev()
+        .fold(default_value, |fallback, branch| {
+            lift(protocol, branch.guard, branch.rhs, fallback)
+        })
+}
+
+/// Append the new `branches` to `output`
+/// Iff DontCare is true, add `DontCare` branches
+fn append_assignment_branches(
+    output: &mut Vec<AssignmentBranch>,
+    branches: &[AssignmentBranch],
+    dont_care: bool,
+) {
+    output.extend(
+        branches
+            .iter()
+            .copied()
+            .filter(|branch| branch.is_dont_care == dont_care),
+    );
+}
+
+fn merge_unordered_assignment_rhs(
+    protocol: &mut ProtoGraph,
+    internal_assert_guard: &mut Option<ExprRef>,
+    default_value: ExprRef,
+    existing_guard: ExprRef,
+    existing_rhs: ExprRef,
+    new_guard: ExprRef,
+    new_rhs: ExprRef,
+) -> ExprRef {
+    // flatten the existing assignment in the node we're merging into
+    let existing_branches =
+        flatten_assignment_rhs(protocol, existing_rhs, default_value, existing_guard);
+    // flatten the new assignment we're merging in
+    let new_branches = flatten_assignment_rhs(protocol, new_rhs, default_value, new_guard);
+
+    for existing_branch in existing_branches
+        .iter()
+        .filter(|branch| !branch.is_dont_care)
+    {
+        // find all the different concrete values and add internal assertions for their conjunction
+        for new_branch in new_branches.iter().filter(|branch| !branch.is_dont_care) {
+            // assignments to the same value are totally legal
+            if existing_branch.rhs == new_branch.rhs {
+                continue;
+            }
+
+            // assignments to different concrete values are illegal
+            let overlap = protocol.and_guard(existing_branch.guard, new_branch.guard);
+            if overlap != protocol.false_id() {
+                record_internal_assert(protocol, internal_assert_guard, overlap);
+            }
+        }
+    }
+
+    // add the existing concrete branches, new concrete branches, existing DontCare branches, new dontcare branches. Guarantees our Concrete assignments will be preferred to DontCares across nodes.
+    let mut merged_branches = Vec::with_capacity(existing_branches.len() + new_branches.len());
+    append_assignment_branches(&mut merged_branches, &existing_branches, false);
+    append_assignment_branches(&mut merged_branches, &new_branches, false);
+    append_assignment_branches(&mut merged_branches, &existing_branches, true);
+    append_assignment_branches(&mut merged_branches, &new_branches, true);
+
+    // turn it back into an ITE from branches
+    rebuild_assignment_rhs(protocol, &merged_branches, default_value)
+}
+
+pub fn append_action(
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
     actions: &mut Vec<Action>,
     internal_assert_guard: &mut Option<ExprRef>,
     action: Action,
+    ordered: bool,
 ) {
     match protocol[action.op].clone() {
         Op::Assign(symbol_id, rhs) => {
             let default_value = symbol_expr(protocol, symbols, symbol_id);
 
             // By invariant, there can be at most one existing assignment for this symbol.
-            if let Some(existing_action) = actions.iter_mut().find(|prior_action| {
-                matches!(protocol[prior_action.op], Op::Assign(prior_symbol_id, _) if prior_symbol_id == symbol_id)
-            }) {
-                let existing_rhs = match protocol[existing_action.op].clone() {
-                    Op::Assign(_, existing_rhs) => existing_rhs,
-                    _ => unreachable!(),
-                };
-                let existing_rhs = if existing_action.guard == protocol.true_id() {
-                    existing_rhs
-                } else {
-                    protocol
-                        .expr_ctx
-                        .ite(existing_action.guard, existing_rhs, default_value)
-                };
-                let merged_rhs = protocol.expr_ctx.ite(action.guard, rhs, existing_rhs);
-                let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
-                let merged_rhs = simplifier.simplify(expr_ctx, merged_rhs);
-                let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
-                existing_action.guard = protocol.true_id();
-                existing_action.op = new_op;
-            } else {
+            let Some(idx) = actions.iter().position(|prior_action| {
+                matches!(
+                    protocol[prior_action.op],
+                    Op::Assign(prior_symbol_id, _)
+                        if same_assignment_target(symbols, prior_symbol_id, symbol_id)
+                )
+            }) else {
                 actions.push(action);
-            }
+                return;
+            };
+
+            let existing_guard = actions[idx].guard;
+            let existing_rhs = match protocol[actions[idx].op].clone() {
+                Op::Assign(_, existing_rhs) => existing_rhs,
+                _ => unreachable!(),
+            };
+            let (new_guard, new_rhs) = (action.guard, rhs);
+
+            let merged_rhs = if ordered {
+                let existing_else = lift(protocol, existing_guard, existing_rhs, default_value);
+                lift(protocol, new_guard, new_rhs, existing_else)
+            } else {
+                merge_unordered_assignment_rhs(
+                    protocol,
+                    internal_assert_guard,
+                    default_value,
+                    existing_guard,
+                    existing_rhs,
+                    new_guard,
+                    new_rhs,
+                )
+            };
+
+            let new_op = protocol.o(Op::Assign(symbol_id, merged_rhs));
+            actions[idx].guard = protocol.true_id();
+            actions[idx].op = new_op;
         }
         Op::Fork => {
             if let Some(existing_action) = actions
@@ -67,10 +242,7 @@ fn append_action(
                 .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
             {
                 let overlap = protocol.and_guard(existing_action.guard, action.guard);
-                *internal_assert_guard = Some(match internal_assert_guard.take() {
-                    Some(existing_overlap) => protocol.or_guard(existing_overlap, overlap),
-                    None => overlap,
-                });
+                record_internal_assert(protocol, internal_assert_guard, overlap);
                 existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
             } else {
                 actions.push(action);
@@ -112,6 +284,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
                 &mut contracted_actions,
                 &mut internal_assert_guard,
                 action,
+                true,
             );
         }
 
@@ -161,6 +334,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
                     &mut contracted_actions,
                     &mut internal_assert_guard,
                     merged_action,
+                    true,
                 );
             }
 
@@ -238,7 +412,194 @@ mod tests {
     use super::*;
     use crate::frontend::ast::ProtocolContext;
     use crate::frontend::symbol::ROOT_SCOPE;
+    use cranelift_entity::EntityRef;
     use patronus::expr::SerializableIrNode;
+
+    #[test]
+    fn allows_overlapping_dont_care_and_concrete_assignments() {
+        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let symbol_id = SymbolId::new(0);
+        let symbol = protocol.expr_ctx.bv_symbol("signal", 1);
+        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
+        let concrete = protocol.expr_ctx.bv_symbol("concrete", 1);
+        protocol.cache_symbol_expr(symbol_id, symbol);
+        protocol.dont_cares.insert(dont_care);
+
+        let concrete_op = protocol.o(Op::Assign(symbol_id, concrete));
+        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care));
+        let mut actions = vec![Action::new(protocol.true_id(), concrete_op)];
+        let mut internal_assert_guard = None;
+        let true_id = protocol.true_id();
+        append_action(
+            &mut protocol,
+            &SymbolTable::default(),
+            &mut actions,
+            &mut internal_assert_guard,
+            Action::new(true_id, dont_care_op),
+            true,
+        );
+
+        // it is perfectly valid to have multiple assignments in an ordered merge
+        // i.e. within a single transaction (transactions can change their mind)
+        assert!(internal_assert_guard.is_none());
+
+        // the order in which the assigns are given is preserved (Concrete should not subsume DontCare)
+        assert_eq!(actions.len(), 1);
+        let Op::Assign(_, rhs) = protocol[actions[0].op] else {
+            panic!("expected assignment");
+        };
+        assert_eq!(
+            protocol.expr_ctx[rhs].serialize_to_str(&protocol.expr_ctx),
+            "dont_care"
+        );
+    }
+
+    #[test]
+    fn synthesizes_internal_assert_for_overlapping_unordered_assignments() {
+        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let symbol_id = SymbolId::new(0);
+        let symbol = protocol.expr_ctx.bv_symbol("signal", 1);
+        protocol.cache_symbol_expr(symbol_id, symbol);
+
+        // Node A: [p] DUT.a := 1
+        // Node B: [q] DUT.a := 2
+        // Node C: [r] DUT.a := 3
+        let p = protocol.expr_ctx.bv_symbol("p", 1);
+        let q = protocol.expr_ctx.bv_symbol("q", 1);
+        let r = protocol.expr_ctx.bv_symbol("r", 1);
+        let one = protocol.expr_ctx.bv_symbol("one", 1);
+        let two = protocol.expr_ctx.bv_symbol("two", 1);
+        let three = protocol.expr_ctx.bv_symbol("three", 1);
+
+        let mut actions = Vec::new();
+        let mut internal_assert_guard = None;
+        for (guard, rhs) in [(p, one), (q, two), (r, three)] {
+            let op = protocol.o(Op::Assign(symbol_id, rhs));
+            append_action(
+                &mut protocol,
+                &SymbolTable::default(),
+                &mut actions,
+                &mut internal_assert_guard,
+                Action::new(guard, op),
+                false,
+            );
+        }
+
+        assert_eq!(actions.len(), 1);
+        // we should now have an ITE form with [1] always as the guard
+        assert_eq!(
+            protocol.expr_ctx[actions[0].guard].serialize_to_str(&protocol.expr_ctx),
+            "1'b1"
+        );
+
+        // assert any two guards being run together. (p and q) or (p and r)
+        assert_eq!(
+            protocol.expr_ctx[internal_assert_guard.unwrap()].serialize_to_str(&protocol.expr_ctx),
+            "or(or(and(p, q), and(p, r)), and(and(not(p), q), r))"
+        );
+    }
+
+    #[test]
+    fn unordered_assignment_merge_preserves_ordered_ite_precedence() {
+        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let symbol_id = SymbolId::new(0);
+        let symbol = protocol.expr_ctx.bv_symbol("DUT.a", 1);
+        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
+        let three = protocol.expr_ctx.bv_symbol("three", 1);
+        let four = protocol.expr_ctx.bv_symbol("four", 1);
+        protocol.cache_symbol_expr(symbol_id, symbol);
+        protocol.dont_cares.insert(dont_care);
+
+        let q = protocol.expr_ctx.bv_symbol("q", 1);
+        let r = protocol.expr_ctx.bv_symbol("r", 1);
+        let s = protocol.expr_ctx.bv_symbol("s", 1);
+
+        // Node A: [1] DUT.a := ite(s, X, ite(q, 3, DUT.a))
+        // Node B: [1] DUT.a := ite(r, 4, DUT.a)
+
+        let q_three = protocol.expr_ctx.ite(q, three, symbol);
+        let node_a_rhs = protocol.expr_ctx.ite(s, dont_care, q_three);
+        let node_b_rhs = protocol.expr_ctx.ite(r, four, symbol);
+        let true_id = protocol.true_id();
+        let node_a_op = protocol.o(Op::Assign(symbol_id, node_a_rhs));
+        let node_b_op = protocol.o(Op::Assign(symbol_id, node_b_rhs));
+
+        let mut actions = vec![Action::new(true_id, node_a_op)];
+        let mut internal_assert_guard = None;
+
+        append_action(
+            &mut protocol,
+            &SymbolTable::default(),
+            &mut actions,
+            &mut internal_assert_guard,
+            Action::new(true_id, node_b_op),
+            false,
+        );
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            protocol.expr_ctx[actions[0].guard].serialize_to_str(&protocol.expr_ctx),
+            "1'b1"
+        );
+
+        // q and r are our concrete assignments to 3 and 4. assignment to 3 only triggers if
+        // not s , so there is only a conflicting assignment under ((not s) and q and r)
+        assert_eq!(
+            protocol.expr_ctx[internal_assert_guard.unwrap()].serialize_to_str(&protocol.expr_ctx),
+            "and(and(not(s), q), r)"
+        );
+
+        protocol.simplify_all_exprs();
+
+        let Op::Assign(_, rhs) = protocol[actions[0].op] else {
+            panic!("expected assignment");
+        };
+
+        // the ordering of the concrete assignments is arbitrary, but should come before the
+        // DontCare. however, the assignment to 3 should only happen if the DontCare
+        // assignment is not triggered, since those are ordered within a node
+        // Thus: if q and not s => 3, if r => 4, if s => X, otherwise DUT.a
+        assert_eq!(
+            protocol.expr_ctx[rhs].serialize_to_str(&protocol.expr_ctx),
+            "ite(and(not(s), q), three, ite(r, four, ite(s, dont_care, DUT.a)))"
+        );
+    }
+
+    #[test]
+    fn unordered_assignment_merge_allows_overlapping_equal_concretes() {
+        let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let symbol_id = SymbolId::new(0);
+        let symbol = protocol.expr_ctx.bv_symbol("DUT.a", 1);
+        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
+        let three = protocol.expr_ctx.bv_symbol("three", 1);
+        protocol.cache_symbol_expr(symbol_id, symbol);
+        protocol.dont_cares.insert(dont_care);
+
+        let p = protocol.expr_ctx.bv_symbol("p", 1);
+        let q = protocol.expr_ctx.bv_symbol("q", 1);
+        let r = protocol.expr_ctx.bv_symbol("r", 1);
+
+        let q_three = protocol.expr_ctx.ite(q, three, symbol);
+        let node_a_rhs = protocol.expr_ctx.ite(p, dont_care, q_three);
+        let node_b_rhs = protocol.expr_ctx.ite(r, three, symbol);
+        let true_id = protocol.true_id();
+        let node_a_op = protocol.o(Op::Assign(symbol_id, node_a_rhs));
+        let node_b_op = protocol.o(Op::Assign(symbol_id, node_b_rhs));
+
+        let mut actions = vec![Action::new(true_id, node_a_op)];
+        let mut internal_assert_guard = None;
+
+        append_action(
+            &mut protocol,
+            &SymbolTable::default(),
+            &mut actions,
+            &mut internal_assert_guard,
+            Action::new(true_id, node_b_op),
+            false,
+        );
+
+        assert!(internal_assert_guard.is_none());
+    }
 
     #[test]
     fn synthesizes_internal_assert_for_overlapping_forks() {
@@ -267,11 +628,11 @@ mod tests {
         let internal_guard =
             protocol.expr_ctx[actions[1].guard].serialize_to_str(&protocol.expr_ctx);
 
-        // any of the forks can trigger: (p \/ q \/ r)
+        // any of the forks can trigger: (p or q or r)
         assert_eq!(fork_guard, "or(or(p, q), r)");
 
         // any two of the forks should not trigger at once
-        // below expression is equivalent to (p \/ q) /\ (p \/ r) /\ (q \/ r)
+        // below expression is equivalent to (p or q) and (p or r) and (q or r)
         assert_eq!(internal_guard, "or(and(p, q), and(or(p, q), r))");
     }
 }
