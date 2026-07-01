@@ -282,10 +282,11 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
     # these cases are correct, but our ASCII diffing isn't good enough
     # for us to know they are the same
     xfailed = [
-        "examples/serv/serv_regfile.tx",
+        #"examples/serv/serv_regfile.tx",
         "tests/adders/adder_d1/wait_and_add_correct.tx",
-        "tests/fifo/fifo.tx",
-        "tests/fifo/push_pop_identity_ok.tx",
+        "tests/identities/identity_d2/two_assignments_same_value.tx",
+        #"tests/fifo/fifo.tx",
+        #"tests/fifo/push_pop_identity_ok.tx",
         "tests/wishbone/wishbone.tx",
     ]
 

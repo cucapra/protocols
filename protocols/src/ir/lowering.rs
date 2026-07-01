@@ -49,6 +49,21 @@ impl<'a> Lowerer<'a> {
         node_id
     }
 
+    fn dont_care_expr(&mut self, tpe: PatronusType) -> ExprRef {
+        let next_dont_care = self.ir.dont_cares.len();
+        let name = format!("dont_care_{}", next_dont_care);
+        let dont_care_expr = match tpe {
+            PatronusType::BV(width) => self.ir.expr_ctx.bv_symbol(&name, width),
+            PatronusType::Array(array_tpe) => {
+                self.ir
+                    .expr_ctx
+                    .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
+            }
+        };
+        self.ir.dont_cares.insert(dont_care_expr);
+        dont_care_expr
+    }
+
     fn lower_expr(
         &mut self,
         ast: &Protocol,
@@ -58,19 +73,7 @@ impl<'a> Lowerer<'a> {
         match &ast[expr] {
             Expr::DontCare => {
                 let tpe = expected.unwrap_or(PatronusType::BV(1));
-                let next_dont_care = self.ir.dont_cares.len();
-                // the name here is not relevant for anything other than debugging
-                let name = format!("dont_care_{}", next_dont_care);
-                let dont_care_expr = match tpe {
-                    PatronusType::BV(width) => self.ir.expr_ctx.bv_symbol(&name, width),
-                    PatronusType::Array(array_tpe) => self.ir.expr_ctx.array_symbol(
-                        &name,
-                        array_tpe.index_width,
-                        array_tpe.data_width,
-                    ),
-                };
-                self.ir.dont_cares.insert(dont_care_expr);
-                dont_care_expr
+                self.dont_care_expr(tpe)
             }
             Expr::Const(bvv) => self.ir.expr_ctx.bv_lit(bvv),
             Expr::Sym(sym) => self.lower_symbol(*sym),
@@ -287,6 +290,28 @@ impl<'a> Lowerer<'a> {
             let done_op = self.ir.o(Op::Done);
             let true_id = self.ir.true_id();
             self.ir.push_action(done, Action::new(true_id, done_op));
+        }
+
+        // relinquish all ports in the exit node
+        let dut = ast
+            .ctx
+            .type_param
+            .expect("protocol should have a DUT type parameter");
+
+        for input in self
+            .symbols
+            .get_children(&dut)
+            .into_iter()
+            .filter(|sym| self.symbols[*sym].is_in_port())
+        {
+            let width = match self.symbols[input].tpe() {
+                FrontType::BitVec(width) => width,
+                other => panic!("input port type must be a BitVec: {other:?}"),
+            };
+            let rhs = self.dont_care_expr(PatronusType::BV(width));
+            let assign = self.ir.o(Op::Assign(input, rhs));
+            self.ir
+                .push_action(done, Action::new(self.ir.true_id(), assign));
         }
 
         // lower the protocol, which will add the new nodes to self.current_fragment_nodes

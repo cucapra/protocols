@@ -169,6 +169,7 @@ pub fn lower_trace_to_ir(
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     contract_edges(&mut lowerer.ir, symbols);
+    // normalize_assignments(&mut lowerer.ir, symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.next_trace_graft_points(&first);
