@@ -10,7 +10,7 @@ use crate::dut::{PatronusSim, PortId};
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::interpreter::Value as WaveValue;
-use crate::ir::proto_graph::{Op, ProtoGraph};
+use crate::ir::proto_graph::{Assignment, Op, ProtoGraph};
 
 enum GraphBinding {
     Sim(PortId),
@@ -164,6 +164,26 @@ fn evaluate_input_value(
     }
 }
 
+fn evaluate_assignment(
+    protocol: &ProtoGraph,
+    store: &SymbolValueStore,
+    assignment: &Assignment,
+) -> InputValue {
+    if evaluate_guard(protocol, store, assignment.dont_care) {
+        return InputValue::DontCare;
+    }
+
+    for (guard, rhs) in &assignment.concretes {
+        if evaluate_guard(protocol, store, *guard) {
+            return evaluate_input_value(protocol, store, *rhs);
+        }
+    }
+
+    // TODO: make the an internal assert false
+    // TODO: these should all pass after our analysis pass
+    panic!("assignment did not match DontCare or any concrete branch")
+}
+
 fn evaluate_assert_equal(
     protocol: &ProtoGraph,
     store: &SymbolValueStore,
@@ -259,19 +279,27 @@ pub fn interpret(
         // TODO: assignments should be evaluated in a topo order
 
         for action in &node.actions {
-            if let Op::Assign(symbol_id, _) = &pg[action.op]
-                && !assigned_inputs.insert(*symbol_id)
-            {
-                // panic!("multiple assigns to input {symbol_id} in one node");
+            if let Op::Assign(symbol_id, _) = &pg[action.op] {
+                assert_eq!(
+                    action.guard,
+                    pg.true_id(),
+                    "assignment action guards must be 1; path conditions belong in Assignment"
+                );
+                if !assigned_inputs.insert(*symbol_id) {
+                    // panic!("multiple assigns to input {symbol_id} in one node");
+                }
             }
         }
 
         {
             for action in &node.actions {
-                if let Op::Assign(symbol_id, expr_ref) = &pg[action.op]
-                    && evaluate_guard(pg, &store, action.guard)
-                {
-                    let value = evaluate_input_value(pg, &store, *expr_ref);
+                if let Op::Assign(symbol_id, assignment) = &pg[action.op] {
+                    assert_eq!(
+                        action.guard,
+                        pg.true_id(),
+                        "assignment action guards must be 1; path conditions belong in Assignment"
+                    );
+                    let value = evaluate_assignment(pg, &store, assignment);
 
                     pending_inputs.insert(*symbol_id, value);
                 }

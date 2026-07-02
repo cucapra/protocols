@@ -4,7 +4,7 @@
 
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
@@ -79,10 +79,10 @@ fn format_op(
     op_id: crate::ir::proto_graph::OpId,
 ) -> String {
     match &protocol[op_id] {
-        Op::Assign(symbol_id, expr_id) => format!(
+        Op::Assign(symbol_id, assignment) => format!(
             "{} := {}",
             symbols.full_name_from_symbol_id(symbol_id),
-            format_expr(protocol, *expr_id)
+            format_assignment(protocol, assignment)
         ),
         Op::AssertEq(lhs, rhs) => format!(
             "assert_eq({}, {})",
@@ -92,6 +92,28 @@ fn format_op(
         Op::Fork => "fork".to_string(),
         Op::InternalAssertFalse => "internal_assert_false".to_string(),
         Op::Done => "done".to_string(),
+    }
+}
+
+fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
+    let mut parts = Vec::new();
+    if assignment.dont_care != protocol.false_id() {
+        parts.push(format!(
+            "X if {}",
+            format_expr(protocol, assignment.dont_care)
+        ));
+    }
+    for (guard, rhs) in &assignment.concretes {
+        parts.push(format!(
+            "{} if {}",
+            format_expr(protocol, *rhs),
+            format_expr(protocol, *guard)
+        ));
+    }
+    if parts.is_empty() {
+        "internal_assert_false".to_string()
+    } else {
+        parts.join("; ")
     }
 }
 

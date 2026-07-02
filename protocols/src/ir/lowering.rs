@@ -176,7 +176,13 @@ impl<'a> Lowerer<'a> {
                     ),
                 };
                 let rhs_ref = self.lower_expr(ast, expr_id, Some(expected));
-                let op_id = self.ir.o(Op::Assign(symbol_id, rhs_ref));
+                let assignment = Assignment::from_rhs(
+                    self.ir.false_id(),
+                    self.ir.true_id(),
+                    rhs_ref,
+                    self.ir.dont_cares.contains(&rhs_ref),
+                );
+                let op_id = self.ir.o(Op::Assign(symbol_id, assignment));
                 let true_id = self.ir.true_id();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
                 self.ir
@@ -309,7 +315,13 @@ impl<'a> Lowerer<'a> {
                 other => panic!("input port type must be a BitVec: {other:?}"),
             };
             let rhs = self.dont_care_expr(PatronusType::BV(width));
-            let assign = self.ir.o(Op::Assign(input, rhs));
+            let assignment = Assignment::from_rhs(
+                self.ir.false_id(),
+                self.ir.true_id(),
+                rhs,
+                self.ir.dont_cares.contains(&rhs),
+            );
+            let assign = self.ir.o(Op::Assign(input, assignment));
             self.ir
                 .push_action(done, Action::new(self.ir.true_id(), assign));
         }

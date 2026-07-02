@@ -81,8 +81,44 @@ impl Node {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Assignment {
+    pub dont_care: ExprRef,
+    pub concretes: Vec<(ExprRef, ExprRef)>,
+}
+
+impl Assignment {
+    pub fn concrete(false_id: ExprRef, guard: ExprRef, rhs: ExprRef) -> Self {
+        Self {
+            dont_care: false_id,
+            concretes: vec![(guard, rhs)],
+        }
+    }
+
+    pub fn dont_care(guard: ExprRef) -> Self {
+        Self {
+            dont_care: guard,
+            concretes: vec![],
+        }
+    }
+
+    pub fn from_rhs(false_id: ExprRef, guard: ExprRef, rhs: ExprRef, is_dont_care: bool) -> Self {
+        if is_dont_care {
+            Self {
+                dont_care: guard,
+                concretes: vec![],
+            }
+        } else {
+            Self {
+                dont_care: false_id,
+                concretes: vec![(guard, rhs)],
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
-    Assign(SymbolId, ExprRef),
+    Assign(SymbolId, Assignment),
     AssertEq(ExprRef, ExprRef),
     Fork,
     InternalAssertFalse,
@@ -203,8 +239,12 @@ impl ProtoGraph {
 
         for (_, op) in self.ops.iter_mut() {
             match op {
-                Op::Assign(_, rhs) => {
-                    *rhs = simplifier.simplify(expr_ctx, *rhs);
+                Op::Assign(_, assignment) => {
+                    assignment.dont_care = simplifier.simplify(expr_ctx, assignment.dont_care);
+                    for (guard, rhs) in &mut assignment.concretes {
+                        *guard = simplifier.simplify(expr_ctx, *guard);
+                        *rhs = simplifier.simplify(expr_ctx, *rhs);
+                    }
                 }
                 Op::AssertEq(lhs, rhs) => {
                     *lhs = simplifier.simplify(expr_ctx, *lhs);
