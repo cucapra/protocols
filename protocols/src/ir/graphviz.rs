@@ -117,7 +117,7 @@ fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
     }
 }
 
-fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+pub(crate) fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
     if protocol.dont_cares.contains(&expr_ref) {
         "X".to_string()
     } else {
@@ -198,10 +198,16 @@ mod tests {
 
     use super::*;
     use crate::frontend;
+    use super::*;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
+    use crate::ir::reaching_defs::{
+        AssignmentValue, ReachingDefs, exists_conflicts, format_reaching_defs, reaching_definitions,
+    };
     use insta::Settings;
+
+    use rustc_hash::FxHashMap;
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
@@ -209,7 +215,7 @@ mod tests {
         let mut content = String::new();
         let st = &ast.st;
         for proto_ast in ast.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
+            let mut ir: ProtoGraph = lower_ast_to_ir(proto_ast, &st);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, st);
             content += "\n";
@@ -219,6 +225,16 @@ mod tests {
             contract_edges(&mut contracted_ir, st);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, st);
+            content += "\n";
+
+            // run the reaching definitions analysis
+            let reaching_defs = reaching_definitions(&mut ir, &st);
+
+            // pretty print the reaching definitions
+            content += "== reaching-defs ==\n";
+            // content += &format_reaching_defs(&ir, &symbols, &reaching_defs);
+            // content += "\n";
+            content += exists_conflicts(&reaching_defs).to_string().as_str();
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();
@@ -234,7 +250,6 @@ mod tests {
             insta::assert_snapshot!(name, content);
         });
     }
-
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");

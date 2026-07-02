@@ -1,6 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 234
+assertion_line: 247
 expression: content
 ---
 == pre-contract ==
@@ -43,6 +43,8 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
+== reaching-defs ==
+false
 == post-normalize ==
 digraph "add_combinational_illegal_observation_in_conditional" {
   rankdir=LR;
@@ -87,6 +89,8 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
+== reaching-defs ==
+false
 == post-normalize ==
 digraph "add_combinational_illegal_observation_in_assertion" {
   rankdir=LR;
@@ -132,6 +136,8 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
+== reaching-defs ==
+true
 == post-normalize ==
 digraph "add_combinational_legal_observation_illegal_assignment" {
   rankdir=LR;
@@ -174,6 +180,8 @@ digraph "add_combinational" {
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
+== reaching-defs ==
+false
 == post-normalize ==
 digraph "add_combinational" {
   rankdir=LR;

@@ -1,6 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 234
+assertion_line: 247
 expression: content
 ---
 == pre-contract ==
@@ -57,6 +57,8 @@ digraph "send_data" {
   node5 -> node1 [label="1 / step"];
 }
 
+== reaching-defs ==
+false
 == post-normalize ==
 digraph "send_data" {
   rankdir=LR;

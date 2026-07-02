@@ -33,19 +33,23 @@ fn get_or_create_state(
 }
 
 /// Result of a (conservative) satisfiability check on a guard.
-enum SatResult {
+pub enum SatResult {
     DefinitelyUnsat,
     MaybeSat,
+    DefinitelySat,
 }
 
 // TODO: Strengthen this with a real SAT/SMT query to prune more aggressively.
-fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
+pub fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
     let simplified = {
         let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
         simplifier.simplify(expr_ctx, guard)
     };
+
     if simplified == protocol.false_id() {
         SatResult::DefinitelyUnsat
+    } else if simplified == protocol.true_id() {
+        SatResult::DefinitelySat
     } else {
         SatResult::MaybeSat
     }
@@ -110,7 +114,7 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
             }
 
             match check_sat(&mut protocol, guard) {
-                SatResult::DefinitelyUnsat => continue,
+                SatResult::DefinitelyUnsat | SatResult::DefinitelySat => continue,
                 SatResult::MaybeSat => {
                     let target_id =
                         get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);

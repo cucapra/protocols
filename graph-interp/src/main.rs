@@ -12,6 +12,7 @@ use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::proto_graph::ProtoGraph;
+use protocols::ir::reaching_defs::{all_ports_present, exists_conflicts, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
@@ -61,6 +62,10 @@ struct Cli {
     /// Prints trace status lines and ASCII waveforms
     #[arg(long)]
     ascii_waveform: bool,
+
+    /// Print reaching definition analysis results
+    #[arg(long)]
+    reaching_definitions: bool,
 }
 
 fn load_protocols(cli: &Cli) -> Ast {
@@ -175,6 +180,15 @@ fn run_respect_forks(
         if cli.graphout {
             println!("// joint graph for trace {trace_index}");
             println!("{}", to_dot_string(&joint, st));
+        }
+
+        let rd = reaching_definitions(&mut joint, &st);
+        if exists_conflicts(&rd) {
+            println!("bleh")
+        }
+
+        if !all_ports_present(&rd, &joint, &st) {
+            println!("bleh bleh")
         }
 
         // args are baked into the graph as constants, so we just pass in an empty map here

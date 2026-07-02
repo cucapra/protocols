@@ -3,6 +3,7 @@ pub mod edge_contract;
 pub mod graph_interpreter;
 pub mod graphviz;
 pub mod lowering;
+mod propagate_assigns;
 pub mod proto_graph;
 pub mod reaching_defs;
 pub mod trace_lowering;
