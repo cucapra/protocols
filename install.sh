@@ -39,7 +39,7 @@ else
     echo "Cargo already installed: $(cargo --version)"
 fi
 
-# Check that Rust version matches current version requirement is cargo.toml (1.88)
+# Check that Rust version matches current version requirement in cargo.toml (1.88)
 REQUIRED_RUST="1.88"
 CURRENT_RUST=$(rustc --version | awk '{print $2}')
 if [[ "$(printf '%s\n' "$REQUIRED_RUST" "$CURRENT_RUST" | sort -V | head -1)" != "$REQUIRED_RUST" ]]; then
@@ -86,7 +86,7 @@ fi
 
 # Install Nikil's fork of Runt
 if ! command -v runt &>/dev/null; then
-    echo "Installing our fork runt..."
+    echo "Installing our fork of runt..."
     cargo install --git https://github.com/Nikil-Shyamsunder/runt.git
 else
     echo "runt already installed: $(runt --version 2>&1 | head -1)"
