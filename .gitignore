@@ -31,6 +31,7 @@ run_dir/
 
 # Archived catalog-generation logic (kept locally, not checked in)
 scripts/_catalog_gen.py
+scripts/__pycache__/
 
 # Include images of  waveforms in Brave New World bug readme
 !tests/fpga-debugging/axis-async-fifo-c4/*.png
