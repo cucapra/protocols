@@ -25,20 +25,33 @@ pub type ReachingDefs = FxHashMap<SymbolId, FxHashSet<AssignmentDef>>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and returns
 /// the in-neighbors for each node that is reachable from the entry.
-fn predecessors(pg: &ProtoGraph) -> FxHashMap<NodeId, Vec<NodeId>> {
-    let mut predecessors: FxHashMap<NodeId, Vec<NodeId>> = FxHashMap::default();
+pub(crate) fn reachable_nodes(pg: &ProtoGraph) -> FxHashSet<NodeId> {
+    let mut reachable = FxHashSet::default();
     let mut q = vec![pg.entry];
 
-    let mut visited: FxHashSet<NodeId> = FxHashSet::default();
     while let Some(n) = q.pop() {
-        visited.insert(n);
+        if !reachable.insert(n) {
+            continue;
+        }
 
-        // n is a predecessor of t
         for t in pg[n].clone().transitions {
-            predecessors.entry(t.target).or_default().push(n);
+            q.push(t.target);
+        }
+    }
 
-            if !visited.contains(&t.target) {
-                q.push(t.target);
+    reachable
+}
+
+fn predecessors(
+    pg: &ProtoGraph,
+    reachable: &FxHashSet<NodeId>,
+) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
+    let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
+
+    for n in reachable {
+        for t in pg[n].clone().transitions {
+            if reachable.contains(&t.target) {
+                predecessors.entry(t.target).or_default().push((*n, t.guard));
             }
         }
     }
@@ -52,7 +65,8 @@ pub fn reaching_definitions(
     pg: &mut ProtoGraph,
     st: &SymbolTable,
 ) -> FxHashMap<NodeId, ReachingDefs> {
-    let preds = predecessors(pg);
+    let reachable = reachable_nodes(pg);
+    let preds = predecessors(pg, &reachable);
 
     let dut = pg.type_param.expect("protocol has no DUT");
     let input_ports: Vec<SymbolId> = st
@@ -81,19 +95,35 @@ pub fn reaching_definitions(
 
     let mut out_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
 
-    let mut worklist: Vec<NodeId> = pg.nodes().map(|(id, _)| id).collect();
+    let mut worklist: Vec<NodeId> = reachable.iter().copied().collect();
 
     while let Some(id) = worklist.pop() {
         // run the merge function with its predecessors to get in_defs[n]
         // merge function is just the union
         let mut merged = ReachingDefs::default();
-        for pred_id in preds.get(&id).into_iter().flatten() {
+        for (pred_id, transition_guard) in preds.get(&id).into_iter().flatten() {
             if let Some(pred_defs) = out_defs.get(pred_id) {
                 for (symbol_id, values) in pred_defs {
-                    merged
-                        .entry(*symbol_id)
-                        .or_default()
-                        .extend(values.iter().copied());
+                    for def in values {
+                        let and_guard = pg.and_guard(def.guard, *transition_guard);
+                        let guard = match check_sat(pg, and_guard) {
+                            SatResult::DefinitelyUnsat => continue,
+                            SatResult::DefinitelySat => pg.true_id(),
+                            SatResult::MaybeSat => {
+                                let not_def_guard = pg.not_guard(def.guard);
+                                let transition_without_def =
+                                    pg.and_guard(*transition_guard, not_def_guard);
+                                match check_sat(pg, transition_without_def) {
+                                    SatResult::DefinitelyUnsat => pg.true_id(),
+                                    SatResult::DefinitelySat | SatResult::MaybeSat => def.guard,
+                                }
+                            }
+                        };
+                        merged.entry(*symbol_id).or_default().insert(AssignmentDef {
+                            guard,
+                            value: def.value,
+                        });
+                    }
                 }
             }
         }
@@ -116,7 +146,10 @@ pub fn reaching_definitions(
         let mut out = in_defs.get(&id).cloned().unwrap_or_default();
 
         for (symbol_id, assignment) in assignments {
-            // if an assignment is definitely satisfiable, then remove all the other assignments
+            let old_defs = out.remove(&symbol_id).unwrap_or_default();
+            let mut new_defs = FxHashSet::default();
+            let mut coverage = assignment.dont_care;
+
             match check_sat(pg, assignment.dont_care) {
                 SatResult::DefinitelySat => {
                     out.insert(
@@ -129,7 +162,7 @@ pub fn reaching_definitions(
                     continue;
                 }
                 SatResult::MaybeSat => {
-                    out.entry(symbol_id).or_default().insert(AssignmentDef {
+                    new_defs.insert(AssignmentDef {
                         guard: assignment.dont_care,
                         value: AssignmentValue::DontCare,
                     });
@@ -137,27 +170,50 @@ pub fn reaching_definitions(
                 SatResult::DefinitelyUnsat => (),
             }
 
+            let mut prior = assignment.dont_care;
             for (guard, val) in assignment.concretes {
-                match check_sat(pg, guard) {
+                let effective_guard = {
+                    let not_prior = pg.not_guard(prior);
+                    pg.and_guard(not_prior, guard)
+                };
+
+                match check_sat(pg, effective_guard) {
                     SatResult::DefinitelySat => {
-                        out.insert(
-                            symbol_id,
-                            FxHashSet::from_iter([AssignmentDef {
-                                guard: pg.true_id(),
-                                value: AssignmentValue::Concrete(val),
-                            }]),
-                        );
+                        new_defs = FxHashSet::from_iter([AssignmentDef {
+                            guard: pg.true_id(),
+                            value: AssignmentValue::Concrete(val),
+                        }]);
+                        coverage = pg.true_id();
                         break;
                     }
                     SatResult::MaybeSat => {
-                        out.entry(symbol_id).or_default().insert(AssignmentDef {
-                            guard,
+                        new_defs.insert(AssignmentDef {
+                            guard: effective_guard,
                             value: AssignmentValue::Concrete(val),
                         });
                     }
                     SatResult::DefinitelyUnsat => (),
                 }
+
+                prior = pg.or_guard(prior, guard);
+                coverage = pg.or_guard(coverage, guard);
             }
+
+            let not_covered = pg.not_guard(coverage);
+            for old_def in old_defs {
+                let fallback_guard = pg.and_guard(old_def.guard, not_covered);
+                let fallback_guard = match check_sat(pg, fallback_guard) {
+                    SatResult::DefinitelyUnsat => continue,
+                    SatResult::DefinitelySat => pg.true_id(),
+                    SatResult::MaybeSat => fallback_guard,
+                };
+                new_defs.insert(AssignmentDef {
+                    guard: fallback_guard,
+                    value: old_def.value,
+                });
+            }
+
+            out.insert(symbol_id, new_defs);
         }
 
         if out_defs.get(&id) != Some(&out) {
@@ -208,7 +264,9 @@ pub fn all_ports_present(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    // all ports present
+    let reachable = reachable_nodes(pg);
+
+    // all reachable nodes have all ports present
     for rd in reaching_defs.values() {
         for input in input_ports {
             if !rd.contains_key(&input) {
@@ -217,8 +275,8 @@ pub fn all_ports_present(
         }
     }
 
-    // all nodes present
-    for (id, _) in pg.nodes() {
+    // all reachable nodes present
+    for id in reachable {
         if !reaching_defs.contains_key(&id) {
             return false;
         }
