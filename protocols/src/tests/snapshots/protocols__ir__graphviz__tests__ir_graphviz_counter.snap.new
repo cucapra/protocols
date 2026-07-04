@@ -1,6 +1,6 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 247
+assertion_line: 255
 expression: content
 ---
 == pre-contract ==
@@ -48,8 +48,34 @@ digraph "count_up" {
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
-== reaching-defs ==
-false
+== post-propagation ==
+digraph "count_up" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node9 [label="[1] dut.a := a if 1"];
+  node9 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node8 [label="not(eq(dut.s, dut.a))"];
+  node7 -> node6 [label="eq(dut.s, dut.a)"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node6 [label=""];
+  node6 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(dut.s, 0)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] dut.a := X if 1"];
+}
+
 == post-normalize ==
 digraph "count_up" {
   rankdir=LR;
@@ -59,9 +85,9 @@ digraph "count_up" {
   node0 [label="[1] dut.a := a if 1"];
   node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
-  node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := dut.a if 1"];
+  node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := a if 1"];
   node4 -> node1 [label="1 / step"];
-  node7 [label="[1] dut.a := dut.a if 1"];
+  node7 [label="[1] dut.a := a if 1"];
   node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
   node7 -> node4 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[1] done\n[1] dut.a := X if 1"];
@@ -114,8 +140,36 @@ digraph "count_up_extra_assertion" {
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
-== reaching-defs ==
-false
+== post-propagation ==
+digraph "count_up_extra_assertion" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] dut.a := a if 1"];
+  node10 -> node8 [label="1"];
+  node8 [label=""];
+  node8 -> node9 [label="not(eq(dut.s, dut.a))"];
+  node8 -> node7 [label="eq(dut.s, dut.a)"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node7 [label=""];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] assert_eq(dut.s, a)"];
+  node6 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(dut.s, 0)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] dut.a := X if 1"];
+}
+
 == post-normalize ==
 digraph "count_up_extra_assertion" {
   rankdir=LR;
@@ -125,9 +179,9 @@ digraph "count_up_extra_assertion" {
   node0 [label="[1] dut.a := a if 1\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
   node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
-  node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := dut.a if 1"];
+  node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := a if 1"];
   node4 -> node1 [label="1 / step"];
-  node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)\n[1] dut.a := dut.a if 1"];
+  node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)\n[1] dut.a := a if 1"];
   node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
   node8 -> node4 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[1] done\n[1] dut.a := X if 1"];

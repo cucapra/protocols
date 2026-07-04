@@ -208,6 +208,7 @@ mod tests {
     use insta::Settings;
 
     use rustc_hash::FxHashMap;
+    use crate::ir::propagate_assigns::propagate_assignments;
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
@@ -231,11 +232,18 @@ mod tests {
             let reaching_defs = reaching_definitions(&mut ir, &st);
 
             // pretty print the reaching definitions
-            content += "== reaching-defs ==\n";
-            // content += &format_reaching_defs(&ir, &symbols, &reaching_defs);
+            // content += "== reaching-defs ==\n";
+            // // content += &format_reaching_defs(&ir, &symbols, &reaching_defs);
+            // // content += "\n";
+            // content += exists_conflicts(&reaching_defs, &ir).to_string().as_str();
             // content += "\n";
-            content += exists_conflicts(&reaching_defs).to_string().as_str();
+
+            // print post-propagation of assignments
+            propagate_assignments(&mut contracted_ir, &symbols, &reaching_defs);
+            content += "== post-propagation ==\n";
+            content += &to_dot_string(&ir, &symbols);
             content += "\n";
+            
 
             let mut assignment_normalized_ir = contracted_ir.clone();
             normalize_assignments(&mut assignment_normalized_ir, st);

@@ -15,7 +15,13 @@ pub enum AssignmentValue {
     Concrete(ExprRef),
 }
 
-pub type ReachingDefs = FxHashMap<SymbolId, FxHashSet<AssignmentValue>>;
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AssignmentDef {
+    pub guard: ExprRef,
+    pub value: AssignmentValue,
+}
+
+pub type ReachingDefs = FxHashMap<SymbolId, FxHashSet<AssignmentDef>>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and returns
 /// the in-neighbors for each node that is reachable from the entry.
@@ -61,7 +67,15 @@ pub fn reaching_definitions(
         pg.entry,
         input_ports
             .iter()
-            .map(|sym_id| (*sym_id, FxHashSet::from_iter([AssignmentValue::DontCare])))
+            .map(|sym_id| {
+                (
+                    *sym_id,
+                    FxHashSet::from_iter([AssignmentDef {
+                        guard: pg.true_id(),
+                        value: AssignmentValue::DontCare,
+                    }]),
+                )
+            })
             .collect(),
     );
 
@@ -105,13 +119,20 @@ pub fn reaching_definitions(
             // if an assignment is definitely satisfiable, then remove all the other assignments
             match check_sat(pg, assignment.dont_care) {
                 SatResult::DefinitelySat => {
-                    out.insert(symbol_id, FxHashSet::from_iter([AssignmentValue::DontCare]));
+                    out.insert(
+                        symbol_id,
+                        FxHashSet::from_iter([AssignmentDef {
+                            guard: pg.true_id(),
+                            value: AssignmentValue::DontCare,
+                        }]),
+                    );
                     continue;
                 }
                 SatResult::MaybeSat => {
-                    out.entry(symbol_id)
-                        .or_default()
-                        .insert(AssignmentValue::DontCare);
+                    out.entry(symbol_id).or_default().insert(AssignmentDef {
+                        guard: assignment.dont_care,
+                        value: AssignmentValue::DontCare,
+                    });
                 }
                 SatResult::DefinitelyUnsat => (),
             }
@@ -121,14 +142,18 @@ pub fn reaching_definitions(
                     SatResult::DefinitelySat => {
                         out.insert(
                             symbol_id,
-                            FxHashSet::from_iter([AssignmentValue::Concrete(val)]),
+                            FxHashSet::from_iter([AssignmentDef {
+                                guard: pg.true_id(),
+                                value: AssignmentValue::Concrete(val),
+                            }]),
                         );
                         break;
                     }
                     SatResult::MaybeSat => {
-                        out.entry(symbol_id)
-                            .or_default()
-                            .insert(AssignmentValue::Concrete(val));
+                        out.entry(symbol_id).or_default().insert(AssignmentDef {
+                            guard,
+                            value: AssignmentValue::Concrete(val),
+                        });
                     }
                     SatResult::DefinitelyUnsat => (),
                 }
@@ -152,12 +177,18 @@ pub fn reaching_definitions(
     in_defs
 }
 
-/// Returns `true` if there are multiple reachable assignments for any port for any node
-pub fn exists_conflicts(reaching_defs: &FxHashMap<NodeId, ReachingDefs>) -> bool {
+/// Returns `true` if any port at any node has more than one reaching assignment,
+/// or if the unique reaching assignment is not unconditional.
+pub fn exists_conflicts(reaching_defs: &FxHashMap<NodeId, ReachingDefs>, pg: &ProtoGraph) -> bool {
     for rd in reaching_defs.values() {
         for set in rd.values() {
             if set.len() > 1 {
                 return true;
+            }
+            if let Some(def) = set.iter().next() {
+                if def.guard != pg.true_id() {
+                    return true;
+                }
             }
         }
     }
@@ -217,7 +248,7 @@ pub fn format_reaching_defs(
         for (symbol_id, values) in symbol_defs {
             let mut values = values
                 .iter()
-                .map(|value| format_assignment_value(protocol, *value))
+                .map(|def| format_assignment_def(protocol, *def))
                 .collect::<Vec<_>>();
             values.sort();
             out.push_str(&format!(
@@ -231,9 +262,15 @@ pub fn format_reaching_defs(
     out
 }
 
-fn format_assignment_value(protocol: &ProtoGraph, value: AssignmentValue) -> String {
-    match value {
+fn format_assignment_def(protocol: &ProtoGraph, def: AssignmentDef) -> String {
+    let value = match def.value {
         AssignmentValue::DontCare => "X".to_string(),
         AssignmentValue::Concrete(expr) => crate::ir::graphviz::format_expr(protocol, expr),
+    };
+
+    if def.guard == protocol.true_id() {
+        value
+    } else {
+        format!("{value} if {}", crate::ir::graphviz::format_expr(protocol, def.guard))
     }
 }

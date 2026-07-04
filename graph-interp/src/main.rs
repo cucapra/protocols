@@ -12,10 +12,11 @@ use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::proto_graph::ProtoGraph;
-use protocols::ir::reaching_defs::{all_ports_present, exists_conflicts, reaching_definitions};
+use protocols::ir::reaching_defs::{all_ports_present, exists_conflicts, format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
+use protocols::ir::propagate_assigns::propagate_assignments;
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -133,8 +134,16 @@ fn run_classic(
     if cli.contract_edges {
         for (_, graph) in &mut graphs {
             contract_edges(graph, st);
-            normalize_assignments(graph, st);
-            graph.simplify_all_exprs();
+            // normalize_assignments(graph, st);
+            let rd = reaching_definitions(graph, st);
+
+            if cli.graphout {
+                propagate_assignments(graph, &st, &rd);
+                println!("{}", to_dot_string(graph, st).as_str());
+                // let rd = reaching_definitions(graph, st);
+                // println!("{}", format_reaching_defs(graph, &st, &rd).as_str());
+            }
+            // propagate_assignments(graph, &st, &rd);
         }
     }
 
@@ -183,13 +192,16 @@ fn run_respect_forks(
         }
 
         let rd = reaching_definitions(&mut joint, &st);
-        if exists_conflicts(&rd) {
+        if exists_conflicts(&rd, &joint) {
             println!("bleh")
         }
 
         if !all_ports_present(&rd, &joint, &st) {
             println!("bleh bleh")
         }
+
+        propagate_assignments(&mut joint, &st, &rd);
+        // println!("blah");
 
         // args are baked into the graph as constants, so we just pass in an empty map here
         let waveform = graph_interpreter::interpret(&joint, st, FxHashMap::default(), &mut sim);
