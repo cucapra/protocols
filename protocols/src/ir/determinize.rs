@@ -113,13 +113,16 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
                 guard = protocol.and_guard(guard, lit);
             }
 
-            match check_sat(&mut protocol, guard) {
-                SatResult::DefinitelyUnsat | SatResult::DefinitelySat => continue,
-                SatResult::MaybeSat => {
+            let guard = match check_sat(&mut protocol, guard) {
+                SatResult::DefinitelyUnsat => continue,
+                SatResult::DefinitelySat => protocol.true_id(),
+                SatResult::MaybeSat => guard,
+            };
+
+            {
                     let target_id =
                         get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
                     new_trans.push(Transition::new(guard, target_id, true));
-                }
             }
         }
 

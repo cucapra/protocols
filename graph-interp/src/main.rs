@@ -134,7 +134,7 @@ fn run_classic(
     if cli.contract_edges {
         for (_, graph) in &mut graphs {
             contract_edges(graph, st);
-           
+
             // if !exists_conflicts(&rd, graph) && all_ports_present(&rd, graph, st) {
             // propagate_assignments(graph, st, &rd);
             // } else {
@@ -158,8 +158,8 @@ fn run_classic(
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
 
             let rd = reaching_definitions(pg, st);
-            propagate_assignments(pg, st, &rd); 
-            
+            propagate_assignments(pg, st, &rd);
+
             let args = build_arg_map(&pg.args, st, values);
             graph_interpreter::interpret(pg, st, args, &mut sim);
         }
@@ -184,6 +184,11 @@ fn run_respect_forks(
 
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
 
+        if cli.graphout {
+            println!("// joint graph for trace {trace_index}");
+            println!("{}", to_dot_string(&joint, st));
+        }
+
         if cli.determinize {
             joint = determinized(joint, st);
         }
@@ -206,10 +211,16 @@ fn run_respect_forks(
         propagate_assignments(&mut joint, &st, &rd);
         // println!("blah");
 
+        if cli.graphout {
+            println!("// joint graph for trace {trace_index}");
+            println!("{}", to_dot_string(&joint, st));
+        }
+
         // args are baked into the graph as constants, so we just pass in an empty map here
         let waveform = graph_interpreter::interpret(&joint, st, FxHashMap::default(), &mut sim);
         if cli.ascii_waveform {
             print_trace_success(trace_index);
+            // println!("ascii");
             print_ascii_waveform(
                 waveform,
                 |port| sim.port_name(port).to_string(),
