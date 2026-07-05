@@ -1,0 +1,43 @@
+// trace 0
+trace {
+    reset(); [0]
+    write(4, 42, 0, 4); [1 .. 12]
+    write(8, 7, 0, 0); [7 .. 14]
+}
+
+// trace 1
+trace {
+    reset(); [0]
+    write(4, 42, 0, 4); [1 .. 12]
+    write(8, 7, 0, 0); [7 .. 14]
+}
+
+// trace 2
+trace {
+    reset(); [0]
+    write(4, 42, 0, 4); [1 .. 12]
+    write(8, 7, 0, 0); [7 .. 14]
+}
+
+// trace 3
+trace {
+    reset(); [0]
+    write(4, 42, 0, 4); [1 .. 12]
+    write(8, 7, 0, 0); [7 .. 14]
+}
+
+// trace 4
+trace {
+    reset(); [0]
+    write(4, 42, 0, 4); [1 .. 12]
+    write(8, 7, 0, 0); [7 .. 14]
+}
+
+// trace 5
+trace {
+    reset(); [0]
+    write(4, 42, 0, 4); [1 .. 12]
+    write(8, 7, 0, 0); [7 .. 14]
+}
+---CODE---
+1
