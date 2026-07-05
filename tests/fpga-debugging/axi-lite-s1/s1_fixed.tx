@@ -1,0 +1,9 @@
+// This is the same transaction trace as s1_buggy.tx,
+// but the DUT is fixed, so it doesn't accept the second
+// write transaction until the first one is acknowledged.
+// Our interpreter executes this list of transcations successfully.
+trace {
+    reset();
+    write(4, 42, 0, 4);
+    write(8, 7, 0, 0);
+}

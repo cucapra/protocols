@@ -1,0 +1,13 @@
+// In the first write transaction, the manager waits 4 cycles before issuing a response
+// (last argument to the `write` transaction).
+// The second write transaction is pipelined and begins 
+// when the first `write` transaction calls `fork`. 
+// The buggy DUT only acknowledges the first write request 
+// and ignores the second one.
+// Our interpreter emits an error message saying 
+// there are conflicting assignments to `BREADY`.
+trace {
+    reset();
+    write(4, 42, 0, 4);
+    write(8, 7, 0, 0);
+}
