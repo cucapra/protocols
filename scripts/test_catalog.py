@@ -706,8 +706,8 @@ MONITOR_CASES = {
         "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
         "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd",
         "instances": ("TOP.testbench.UUT:WriteSubordinate",),
-        # The monitor doesn't work for this protocol due to a known bug 
-        # (inability to handle multiple assignments to the same port within the same cycle). 
+        # The monitor doesn't work for this protocol due to a known bug
+        # (inability to handle multiple assignments to the same port within the same cycle).
         # See https://github.com/cucapra/protocols/issues/214
         "expect": None,
         "extra_args": (
