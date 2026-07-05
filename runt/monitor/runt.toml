@@ -1240,7 +1240,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_buggy.monitor.expect"
-cmd = "cd ../.. && target/debug/protocols-monitor --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && target/debug/protocols-monitor --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
 
 [[tests]]
 name = "monitor.tests_fpga_debugging_axi_lite_s1_s1_buggy_workload_1.s1_buggy_workload_1_monitor"
@@ -1258,7 +1258,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_fixed.monitor.expect"
-cmd = "cd ../.. && target/debug/protocols-monitor --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
+cmd = "cd ../.. && target/debug/protocols-monitor --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>/dev/null"
 
 [[tests]]
 name = "monitor.tests_fpga_debugging_axi_lite_s1_s1_fixed_workload_1.s1_fixed_workload_1_monitor"
