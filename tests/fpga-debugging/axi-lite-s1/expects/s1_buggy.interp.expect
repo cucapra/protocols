@@ -1,14 +1,14 @@
 error: Thread 1 (`write`) attempted conflicting assignment to 'S_AXI_BREADY': current=1, new=0
-   ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:88:5
+   ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:83:5
    │
-88 │     DUT.S_AXI_BREADY := 1'b0;
+83 │     DUT.S_AXI_BREADY := 1'b0;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Thread 1 (`write`) attempted conflicting assignment to 'S_AXI_BREADY': current=1, new=0
 
 error: Thread 2 (`write`) attempted conflicting assignment to 'S_AXI_BREADY': current=0, new=1
-    ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:100:5
-    │
-100 │     DUT.S_AXI_BREADY := 1'b1;
-    │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Thread 2 (`write`) attempted conflicting assignment to 'S_AXI_BREADY': current=0, new=1
+   ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:95:5
+   │
+95 │     DUT.S_AXI_BREADY := 1'b1;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Thread 2 (`write`) attempted conflicting assignment to 'S_AXI_BREADY': current=0, new=1
 
 Trace 0 execution failed.
 ---CODE---

@@ -32,8 +32,9 @@ prot reset<DUT: WriteSubordinate>() {
     step();
 }
 
-// Write transaction where the manager waits `n` cycles before setting AWVALID = 1
-// and stalls the response channel for `n` cycles before setting BREADY = 1.
+// Write transaction where the manager waits `n` cycles before setting AWVALID = 1.
+// After the subordinate indicates `BVALID = 1`, the manager stalls the response channel 
+// for `n` cycles before setting BREADY = 1.
 // The `resp` argument is a 2-bit pattern containing the subordinate's response
 // to the write request (indicating whether the transaction succeeded).
 prot write<DUT: WriteSubordinate>(addr: u7, data: u32, resp: u2, n: uint) {
