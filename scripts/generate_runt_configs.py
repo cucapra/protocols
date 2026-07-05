@@ -62,6 +62,25 @@ def load_monitor_cases() -> list[dict]:
     return out
 
 
+def load_bi_cases() -> list[dict]:
+    """Same as load_monitor_cases but for the bi cases"""
+    out = []
+    for case_id, c in test_catalog.BI_CASES.items():
+        out.append(
+            {
+                "id": case_id,
+                "path": c["protocol"],
+                "wave": c.get("wave"),
+                "instances": c.get("instances", ()),
+                "max_steps": c.get("max_steps"),
+                "timeout_secs": c.get("timeout_secs"),
+                "extra_args": c.get("extra_args", ()),
+                "expected": c["expect"],
+            }
+        )
+    return out
+
+
 # helper function to escape globs in places
 def runt_glob_literal(path: str) -> str:
     return path.replace("[", "[[]").replace("*", "[*]").replace("?", "[?]")
@@ -195,6 +214,19 @@ def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
     return [("", repo_root_command(cmd))]
 
 
+# Same as `monitor_runt_command` above but for BI test cases
+def bi_runt_command(case: dict) -> list[tuple[str, str]]:
+    cmd = [*binary_prefix("bi"), "--protocol", case["path"]]
+    if case["wave"]:
+        cmd += ["--wave", case["wave"]]
+    if case["instances"]:
+        cmd += ["--instances", *case["instances"]]
+    cmd += case["extra_args"]
+    if case["timeout_secs"] is not None:
+        cmd = timeout_cmd(case["timeout_secs"], cmd)
+    return [("", repo_root_command(cmd))]
+
+
 def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ast_cmd = [
         *binary_prefix("protocols-interp"),
@@ -226,6 +258,7 @@ RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "monitor": monitor_runt_command,
+    "bi": bi_runt_command,
     "waveform": waveform_runt_command,
 }
 
@@ -330,11 +363,13 @@ def write_runt_toml(output_dir: Path, suites) -> None:
 def generate_runt_configs() -> None:
     tx = load_tx_cases()
     mon = load_monitor_cases()
+    bi = load_bi_cases()
     # Each suite maps a name to (runner, cases). interp + monitor + graph_interp
     # together cover every test.
     suite_specs = {
         "interp": ("interp", tx),
         "monitor": ("monitor", mon),
+        "bi": ("bi", bi),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
     }

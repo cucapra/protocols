@@ -1,7 +1,7 @@
 # Checked-in test catalog. Hand-maintained source of truth.
 # Consumed by scripts/generate_runt_configs.py and scripts/benchmark_monitor.py.
 #
-# TX_CASES are keyed by their .tx path. MONITOR_CASES are keyed by a unique id
+# TX_CASES are keyed by their .tx path. MONITOR_CASES & BI_CASES are both keyed by a unique id
 
 TX_CASES = {
     "examples/picorv32/unsigned_mul.tx": {
@@ -1110,3 +1110,24 @@ MONITOR_CASES.update(
         for stem in ANTMICRO_TRACE_STEMS
     }
 )
+
+# The filepath supplied to the `wave` field are .fst files produced by the interpreter.
+BI_CASES = {
+    "tests.fpga-debugging.axi-lite-s1.s1_buggy.bi": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_interp.fst",
+        "instances": ("dut:WriteSubordinate",),
+        # `--include-in-progress` makes `bi` report the two writes that
+        # started but whose responses never completed, surfacing the
+        # lost-write-response bug on the monitoring side.
+        "expect": None,
+        "extra_args": ("--show-steps", "--include-in-progress"),
+    },
+    "tests.fpga-debugging.axi-lite-s1.s1_fixed.bi": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_interp.fst",
+        "instances": ("dut:WriteSubordinate",),
+        "expect": None,
+        "extra_args": ("--show-steps",),
+    },
+}
