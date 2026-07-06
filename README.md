@@ -18,13 +18,17 @@ These tools are all implemented in Rust, with some auxiliary benchmarking script
 
 ## Installation + Build Instructions
 
-**General dependencies**:
-Note: the installation instructions below assume a macOS environment.
+**Installation script:**
+Run `./install.sh` to install all dependencies required for macOS / Linux.
+If you want, you can also manually install dependencies, as described below.
+
+**Manually installing dependencies**:
+Note: the instructions below assume a macOS environment.
 - Ensure you have Homebrew and `uv` installed
   - If not, follow these instructions to install [Homebrew](https://brew.sh) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
+- (Optional) Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
-- Run `cargo install runt` to install [Runt](https://github.com/rachitnigam/runt), a command-line tool we use for snapshot tests, which compare the output of our tools to expected outputs stored in dedicated files 
+- Run `cargo install --git https://github.com/Nikil-Shyamsunder/runt.git` to install our fork of [Runt](https://github.com/rachitnigam/runt), a command-line tool we use for snapshot tests. Runt compares the output of our tools to expected outputs stored in dedicated files. 
 
 **Dependencies for benchmarking the monitor**:
 - Run `uv sync` to install the Python dependencies specified in `pyproject.toml` 
