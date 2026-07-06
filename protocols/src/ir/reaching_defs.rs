@@ -10,48 +10,17 @@ use itertools::Itertools;
 use patronus::expr::ExprRef;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-#[derive(Clone, PartialEq, Eq)]
-pub struct ReachingFact {
-    pub assignment: Assignment,
-    pub conflict: bool,
-}
-
-pub type ReachingDefs = FxHashMap<String, ReachingFact>;
-
-// TODO: let's write a pruner before running the analysis?
-pub fn reachable_nodes(pg: &ProtoGraph) -> FxHashSet<NodeId> {
-    let mut reachable = FxHashSet::default();
-    let mut q = vec![pg.entry];
-
-    while let Some(n) = q.pop() {
-        if !reachable.insert(n) {
-            continue;
-        }
-
-        for t in pg[n].clone().transitions {
-            q.push(t.target);
-        }
-    }
-
-    reachable
-}
+// Maps ports (by their `String` name`), to the existing Assignment for that port
+pub type ReachingDefs = FxHashMap<String, Assignment>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and returns
 /// the in-neighbors for each node that is reachable from the entry.
-fn predecessors(
-    pg: &ProtoGraph,
-    reachable: &FxHashSet<NodeId>,
-) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
+fn predecessors(pg: &ProtoGraph) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
     let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
 
-    for n in reachable {
+    for (n, _) in pg.nodes() {
         for t in pg[n].clone().transitions {
-            if reachable.contains(&t.target) {
-                predecessors
-                    .entry(t.target)
-                    .or_default()
-                    .push((*n, t.guard));
-            }
+            predecessors.entry(t.target).or_default().push((n, t.guard));
         }
     }
 
@@ -63,6 +32,8 @@ fn simplify_guard(pg: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
     simplifier.simplify(expr_ctx, guard)
 }
 
+// TODO: I feel like this can be done at *merge-time* in edge-contract.rs instead
+// TODO: of as a post-processing step
 pub fn canonicalize_assignment(pg: &mut ProtoGraph, assignment: Assignment) -> Assignment {
     let dont_care = simplify_guard(pg, assignment.dont_care);
     if dont_care == pg.true_id() {
@@ -105,6 +76,9 @@ pub fn canonicalize_assignment(pg: &mut ProtoGraph, assignment: Assignment) -> A
     }
 }
 
+/// if the `rhs` already exists in `concretes` with guard `old_guard`
+/// `guard` should be an *effective* guard, so that performing
+/// `old_guard || guard` does not violate merge semantics
 fn merge_concrete_guard(
     pg: &mut ProtoGraph,
     concretes: &mut Vec<(ExprRef, ExprRef)>,
@@ -122,24 +96,25 @@ fn merge_concrete_guard(
     }
 }
 
-fn assignment_coverage(pg: &mut ProtoGraph, assignment: &Assignment) -> ExprRef {
+/// An assignment is *total* when at least one of it's guards must trigger.
+/// That is, `NOT(dc_guard OR concrete_g1 OR ... OR concrete_gn)` is not satisfiable.
+pub fn assignment_is_total(pg: &mut ProtoGraph, assignment: &Assignment) -> bool {
     let coverage = assignment
         .concretes
         .iter()
         .fold(assignment.dont_care, |coverage, (guard, _)| {
             pg.or_guard(coverage, *guard)
         });
-    simplify_guard(pg, coverage)
-}
 
-pub fn assignment_is_total(pg: &mut ProtoGraph, assignment: &Assignment) -> bool {
-    let coverage = assignment_coverage(pg, assignment);
     match check_sat(pg, coverage) {
         SatResult::DefinitelySat => true,
         SatResult::DefinitelyUnsat | SatResult::MaybeSat => false,
     }
 }
 
+/// Take `branch_guard`, i.e. a guard on an assignment and simplify it to `Some(g)`
+/// under the assumption that `transition_guard` is true. If returns `None`
+/// then the branch can be removed.
 fn restrict_branch_to_edge(
     pg: &mut ProtoGraph,
     branch_guard: ExprRef,
@@ -147,19 +122,29 @@ fn restrict_branch_to_edge(
 ) -> Option<ExprRef> {
     let overlap = pg.and_guard(branch_guard, transition_guard);
     let overlap = simplify_guard(pg, overlap);
-    match check_sat(pg, overlap) {
-        SatResult::DefinitelyUnsat => return None,
-        SatResult::DefinitelySat | SatResult::MaybeSat => {}
+
+    // are `transition_guard` and `branch_guard` mutually exclusive?
+    if matches!(check_sat(pg, overlap), SatResult::DefinitelyUnsat) {
+        return None;
     }
 
+    // does `transition_guard` imply `branch_guard`?
+    // t => b == NOT t OR b == NOT(t AND not B). so check t AND not B is unsat.
     let not_branch = pg.not_guard(branch_guard);
     let transition_without_branch = pg.and_guard(transition_guard, not_branch);
-    match check_sat(pg, transition_without_branch) {
-        SatResult::DefinitelyUnsat => Some(pg.true_id()),
-        SatResult::DefinitelySat | SatResult::MaybeSat => Some(overlap),
+    if matches!(
+        check_sat(pg, transition_without_branch),
+        SatResult::DefinitelyUnsat
+    ) {
+        return Some(pg.true_id());
     }
+
+    // can't simplify, so we have to return the overlap
+    Some(overlap)
 }
 
+/// For each branch of `assignment`, rewrite it under the assumption that
+/// `transition_guard` is true.
 fn restrict_assignment_to_edge(
     pg: &mut ProtoGraph,
     assignment: Assignment,
@@ -185,53 +170,45 @@ fn restrict_assignment_to_edge(
     )
 }
 
-fn merge_fact(pg: &mut ProtoGraph, existing: ReachingFact, new: ReachingFact) -> ReachingFact {
-    let mut internal_assert_guard = None;
-    let assignment = merge_unordered_assignment(
-        pg,
-        &mut internal_assert_guard,
-        existing.assignment,
-        new.assignment,
-    );
-    let has_conflict = internal_assert_guard
-        .map(|guard| !matches!(check_sat(pg, guard), SatResult::DefinitelyUnsat))
-        .unwrap_or(false);
-
-    ReachingFact {
-        assignment: canonicalize_assignment(pg, assignment),
-        conflict: existing.conflict || new.conflict || has_conflict,
-    }
+/// Returns `true` if this assignment might produce multiple different values
+fn has_multiple_outcomes(pg: &mut ProtoGraph, assignment: &Assignment) -> bool {
+    let canonicalized = canonicalize_assignment(pg, assignment.clone());
+    canonicalized.concretes.len() + usize::from(canonicalized.dont_care != pg.false_id()) > 1
 }
 
-fn transfer_fact(
+// the binary merge function for reaching definitions analysis is just `merge_unordered_assignment`
+fn merge_assignment(pg: &mut ProtoGraph, existing: Assignment, new: Assignment) -> Assignment {
+    let assignment = merge_unordered_assignment(pg, &mut None, existing, new);
+    canonicalize_assignment(pg, assignment)
+}
+
+// the binary transfer function for reaching definitions analysis is just `merge_ordered_assignment`
+fn transfer_assignment(
     pg: &mut ProtoGraph,
-    existing: ReachingFact,
+    existing: Assignment,
     assignment: Assignment,
-) -> ReachingFact {
-    let assignment_is_total = assignment_is_total(pg, &assignment);
-    let assignment = merge_ordered_assignment(pg, existing.assignment, assignment);
-    ReachingFact {
-        assignment: canonicalize_assignment(pg, assignment),
-        conflict: existing.conflict && !assignment_is_total,
-    }
+) -> Assignment {
+    let assignment = merge_ordered_assignment(pg, existing, assignment);
+    canonicalize_assignment(pg, assignment)
 }
 
 pub fn reaching_definitions(
-    // it's a bit of a shame that we have to pass a mutable graph for an analysis, but the
-    // sat checker mutates expressions by simplifying them
+    // TODO: it's a bit of a shame that we have to pass a mutable graph for an analysis,
+    // but the SAT checker mutates expressions by simplifying them
     pg: &mut ProtoGraph,
     st: &SymbolTable,
 ) -> FxHashMap<NodeId, ReachingDefs> {
-    let reachable = reachable_nodes(pg);
-    let preds = predecessors(pg, &reachable);
+    let preds = predecessors(pg);
 
     let dut = pg.type_param.expect("protocol has no DUT");
+    // TODO: maybe this should be a helper in the SymbolTable
     let input_ports: Vec<SymbolId> = st
         .get_children(&dut)
         .into_iter()
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
+    // Initially, all port are DontCare. So in_defs[entry] is {sym -> X} for all sym
     let mut in_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
     in_defs.insert(
         pg.entry,
@@ -240,42 +217,41 @@ pub fn reaching_definitions(
             .map(|sym_id| {
                 (
                     st.full_name_from_symbol_id(sym_id).to_string(),
-                    ReachingFact {
-                        assignment: Assignment::dont_care(pg.true_id()),
-                        conflict: false,
-                    },
+                    Assignment::dont_care(pg.true_id()),
                 )
             })
             .collect(),
     );
 
     let mut out_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
-    let mut worklist: Vec<NodeId> = reachable.iter().copied().collect();
+
+    // worklist by default is all reachable nodes.
+    // let mut worklist: Vec<NodeId> = reachable.iter().copied().collect();
+    let mut worklist: Vec<NodeId> = pg.nodes().map(|(id, _)| id).collect();
 
     while let Some(id) = worklist.pop() {
         let mut merged = ReachingDefs::default();
+        let mut incoming_conflicts = FxHashSet::default();
         for (pred_id, transition_guard) in preds.get(&id).into_iter().flatten() {
             if let Some(pred_defs) = out_defs.get(pred_id) {
-                for (symbol_name, fact) in pred_defs {
+                for (symbol_name, pred_assignment) in pred_defs {
                     let assignment =
-                        restrict_assignment_to_edge(pg, fact.assignment.clone(), *transition_guard);
+                        restrict_assignment_to_edge(pg, pred_assignment.clone(), *transition_guard);
 
-                    // don't insert a ReachingFact for a fully empty assignment
+                    // don't insert a reaching definition for a fully empty assignment
                     if assignment.dont_care == pg.false_id() && assignment.concretes.is_empty() {
                         continue;
                     }
 
-                    let edge_fact = ReachingFact {
-                        assignment,
-                        conflict: fact.conflict,
-                    };
-
                     merged
                         .entry(symbol_name.clone())
                         .and_modify(|existing| {
-                            *existing = merge_fact(pg, existing.clone(), edge_fact.clone());
+                            *existing = merge_assignment(pg, existing.clone(), assignment.clone());
+                            if has_multiple_outcomes(pg, existing) {
+                                incoming_conflicts.insert(symbol_name.clone());
+                            }
                         })
-                        .or_insert(edge_fact);
+                        .or_insert(assignment);
                 }
             }
         }
@@ -297,15 +273,18 @@ pub fn reaching_definitions(
 
         for (symbol_id, assignment) in assignments {
             let key = st.full_name_from_symbol_id(&symbol_id).to_string();
-            let existing = out.remove(&key).unwrap_or_else(|| ReachingFact {
-                assignment: Assignment {
-                    dont_care: pg.false_id(),
-                    concretes: Vec::new(),
-                },
-                conflict: false,
+            let existing = out.remove(&key).unwrap_or_else(|| Assignment {
+                dont_care: pg.false_id(),
+                concretes: Vec::new(),
             });
-            out.insert(key, transfer_fact(pg, existing, assignment));
+            incoming_conflicts.remove(&key);
+            out.insert(key, transfer_assignment(pg, existing, assignment));
         }
+
+        assert!(
+            incoming_conflicts.is_empty(),
+            "reaching definition conflict remains after transfer at {id}"
+        );
 
         if out_defs.get(&id) != Some(&out) {
             out_defs.insert(id, out);
@@ -342,13 +321,11 @@ pub fn format_reaching_defs(
         let mut symbol_defs = defs.iter().collect::<Vec<_>>();
         symbol_defs.sort_by_key(|(symbol_name, _)| *symbol_name);
 
-        for (symbol_name, fact) in symbol_defs {
-            let conflict = if fact.conflict { " conflict" } else { "" };
+        for (symbol_name, assignment) in symbol_defs {
             out.push_str(&format!(
-                "  {}: {}{}\n",
+                "  {}: {}\n",
                 symbol_name,
-                format_assignment(protocol, &fact.assignment),
-                conflict
+                format_assignment(protocol, assignment),
             ));
         }
     }
@@ -375,5 +352,76 @@ fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
         "internal_assert_false".to_string()
     } else {
         parts.join("; ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::ast::ProtocolContext;
+    use crate::frontend::symbol::ROOT_SCOPE;
+
+    fn test_graph() -> ProtoGraph {
+        ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE))
+    }
+
+    fn concrete_assignment(pg: &ProtoGraph, guard: ExprRef, rhs: ExprRef) -> Assignment {
+        Assignment::concrete(pg.false_id(), guard, rhs)
+    }
+
+    #[test]
+    fn merge_flags_multiple_reaching_concretes_even_when_guards_are_exclusive() {
+        let mut pg = test_graph();
+        let p = pg.expr_ctx.bv_symbol("p", 1);
+        let not_p = pg.not_guard(p);
+        let one = pg.expr_ctx.bv_symbol("one", 1);
+        let zero = pg.expr_ctx.bv_symbol("zero", 1);
+
+        let from_a = concrete_assignment(&pg, p, one);
+        let from_b = concrete_assignment(&pg, not_p, zero);
+
+        let merged = merge_assignment(&mut pg, from_a, from_b);
+
+        assert!(has_multiple_outcomes(&mut pg, &merged));
+        assert_eq!(merged.dont_care, pg.false_id());
+        assert_eq!(merged.concretes.len(), 2);
+    }
+
+    #[test]
+    fn merge_flags_maybe_overlapping_reaching_definitions() {
+        let mut pg = test_graph();
+        let p = pg.expr_ctx.bv_symbol("p", 1);
+        let q = pg.expr_ctx.bv_symbol("q", 1);
+        let one = pg.expr_ctx.bv_symbol("one", 1);
+        let zero = pg.expr_ctx.bv_symbol("zero", 1);
+
+        let from_a = concrete_assignment(&pg, p, one);
+        let from_b = concrete_assignment(&pg, q, zero);
+
+        let merged = merge_assignment(&mut pg, from_a, from_b);
+
+        assert!(has_multiple_outcomes(&mut pg, &merged));
+        assert_eq!(merged.dont_care, pg.false_id());
+        assert_eq!(merged.concretes.len(), 2);
+    }
+
+    #[test]
+    fn total_assignment_kills_incoming_reaching_definition_conflict() {
+        let mut pg = test_graph();
+        let p = pg.expr_ctx.bv_symbol("p", 1);
+        let q = pg.expr_ctx.bv_symbol("q", 1);
+        let one = pg.expr_ctx.bv_symbol("one", 1);
+        let zero = pg.expr_ctx.bv_symbol("zero", 1);
+        let two = pg.expr_ctx.bv_symbol("two", 1);
+
+        let from_a = concrete_assignment(&pg, p, one);
+        let from_b = concrete_assignment(&pg, q, zero);
+        let conflicted = merge_assignment(&mut pg, from_a, from_b);
+        assert!(has_multiple_outcomes(&mut pg, &conflicted));
+
+        let reassignment = concrete_assignment(&pg, pg.true_id(), two);
+        let transferred = transfer_assignment(&mut pg, conflicted, reassignment);
+
+        assert!(assignment_is_total(&mut pg, &transferred));
     }
 }

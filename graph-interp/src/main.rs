@@ -195,19 +195,20 @@ fn run_respect_forks(
         // normalize_assignments(&mut joint, st);
 
         if cli.graphout {
-            println!("// joint graph for trace {trace_index}");
+            println!("// post-determinization joint graph for trace {trace_index}");
             println!("{}", to_dot_string(&joint, st));
         }
 
         let rd = reaching_definitions(&mut joint, st);
         if cli.reaching_definitions {
+            println!("// reaching definitions for trace {trace_index}");
             println!("{}", format_reaching_defs(&joint, st, &rd));
         }
 
         propagate_assignments(&mut joint, st, &rd);
 
         if cli.graphout {
-            println!("// joint graph for trace {trace_index}");
+            println!("// post-propagation joint graph for trace {trace_index}");
             println!("{}", to_dot_string(&joint, st));
         }
 

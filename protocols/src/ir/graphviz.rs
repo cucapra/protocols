@@ -228,17 +228,10 @@ mod tests {
             // run the reaching definitions analysis
             let reaching_defs = reaching_definitions(&mut ir, &st);
 
-            // pretty print the reaching definitions
-            // content += "== reaching-defs ==\n";
-            // // content += &format_reaching_defs(&ir, &symbols, &reaching_defs);
-            // // content += "\n";
-            // content += exists_conflicts(&reaching_defs, &ir).to_string().as_str();
-            // content += "\n";
-
             // print post-propagation of assignments
-            propagate_assignments(&mut contracted_ir, &symbols, &reaching_defs);
+            propagate_assignments(&mut contracted_ir, &st, &reaching_defs);
             content += "== post-propagation ==\n";
-            content += &to_dot_string(&ir, &symbols);
+            content += &to_dot_string(&ir, &st);
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();
