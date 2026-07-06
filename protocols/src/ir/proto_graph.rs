@@ -281,7 +281,7 @@ impl ProtoGraph {
         self.nodes.iter()
     }
 
-    pub(crate) fn node_mut(&mut self, node_id: NodeId) -> &mut Node {
+    pub fn node_mut(&mut self, node_id: NodeId) -> &mut Node {
         &mut self.nodes[node_id]
     }
 

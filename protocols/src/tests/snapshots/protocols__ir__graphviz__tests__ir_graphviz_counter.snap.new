@@ -90,7 +90,7 @@ digraph "count_up" {
   node7 [label="[1] dut.a := a if 1"];
   node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
   node7 -> node4 [label="eq(dut.s, dut.a) / step"];
-  node1 [label="[1] done\n[1] dut.a := X if 1; a if 1"];
+  node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
 == pre-contract ==
@@ -184,5 +184,5 @@ digraph "count_up_extra_assertion" {
   node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)\n[1] dut.a := a if 1"];
   node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
   node8 -> node4 [label="eq(dut.s, dut.a) / step"];
-  node1 [label="[1] done\n[1] dut.a := X if 1; a if 1"];
+  node1 [label="[1] done\n[1] dut.a := X if 1"];
 }

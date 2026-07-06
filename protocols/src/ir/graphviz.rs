@@ -117,7 +117,7 @@ fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
     }
 }
 
-pub(crate) fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+pub fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
     if protocol.dont_cares.contains(&expr_ref) {
         "X".to_string()
     } else {
@@ -202,13 +202,13 @@ mod tests {
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
+    use crate::ir::propagate_assigns::propagate_assignments;
     use crate::ir::reaching_defs::{
-        AssignmentValue, ReachingDefs, exists_conflicts, format_reaching_defs, reaching_definitions,
+        ReachingDefs, exists_conflicts, format_reaching_defs, reaching_definitions,
     };
     use insta::Settings;
 
     use rustc_hash::FxHashMap;
-    use crate::ir::propagate_assigns::propagate_assignments;
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
@@ -243,7 +243,6 @@ mod tests {
             content += "== post-propagation ==\n";
             content += &to_dot_string(&ir, &symbols);
             content += "\n";
-            
 
             let mut assignment_normalized_ir = contracted_ir.clone();
             normalize_assignments(&mut assignment_normalized_ir, st);

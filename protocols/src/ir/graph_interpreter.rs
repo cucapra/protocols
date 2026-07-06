@@ -372,6 +372,7 @@ pub fn interpret(
                 if t.consumes_step {
                     record_waveform(&mut waveform, sim, &current_inputs, &mut rng);
                     update_value_store(&mut store, pg, &bindings, sim, &mut rng);
+                    // println!("stepping");
                     sim.step();
                 }
                 curr = t.target;

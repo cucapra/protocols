@@ -25,7 +25,8 @@ fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: Symb
     expr
 }
 
-fn same_assignment_target(symbols: &SymbolTable, lhs: SymbolId, rhs: SymbolId) -> bool {
+/// TODO: Better way to deal with this?
+pub fn same_assignment_target(symbols: &SymbolTable, lhs: SymbolId, rhs: SymbolId) -> bool {
     lhs == rhs || symbols[lhs].full_name(symbols) == symbols[rhs].full_name(symbols)
 }
 
@@ -40,7 +41,7 @@ fn record_internal_assert(
     });
 }
 
-pub(crate) fn guard_assignment(
+pub fn guard_assignment(
     protocol: &mut ProtoGraph,
     assignment: Assignment,
     guard: ExprRef,
@@ -61,7 +62,7 @@ pub(crate) fn guard_assignment(
     }
 }
 
-fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> ExprRef {
+pub fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> ExprRef {
     let raw_coverage = assignment
         .concretes
         .iter()
@@ -72,7 +73,7 @@ fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> Expr
     protocol.and_guard(not_dont_care, raw_coverage)
 }
 
-fn effective_concretes(
+pub fn effective_concretes(
     protocol: &mut ProtoGraph,
     assignment: &Assignment,
 ) -> Vec<(ExprRef, ExprRef)> {
@@ -91,7 +92,7 @@ fn effective_concretes(
     effective
 }
 
-fn merge_ordered_assignment(
+pub fn merge_ordered_assignment(
     protocol: &mut ProtoGraph,
     existing: Assignment,
     new: Assignment,
@@ -112,7 +113,7 @@ fn merge_ordered_assignment(
     }
 }
 
-fn merge_unordered_assignment(
+pub fn merge_unordered_assignment(
     protocol: &mut ProtoGraph,
     internal_assert_guard: &mut Option<ExprRef>,
     existing: Assignment,
@@ -145,8 +146,8 @@ fn merge_unordered_assignment(
     let new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
     let dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
 
-    let mut concretes = existing.concretes;
-    concretes.extend(new.concretes);
+    let mut concretes = existing_effective;
+    concretes.extend(new_effective);
 
     Assignment {
         dont_care,

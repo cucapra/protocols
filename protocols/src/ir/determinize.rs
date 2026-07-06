@@ -120,9 +120,9 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
             };
 
             {
-                    let target_id =
-                        get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
-                    new_trans.push(Transition::new(guard, target_id, true));
+                let target_id =
+                    get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
+                new_trans.push(Transition::new(guard, target_id, true));
             }
         }
 

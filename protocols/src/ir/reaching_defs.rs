@@ -4,29 +4,26 @@
 
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::determinize::{SatResult, check_sat};
-use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use crate::ir::edge_contract::{
+    merge_ordered_assignment, merge_unordered_assignment, same_assignment_target,
+};
+use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use itertools::Itertools;
 use patronus::expr::ExprRef;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AssignmentValue {
-    DontCare,
-    Concrete(ExprRef),
+#[derive(Clone, PartialEq, Eq)]
+pub struct ReachingFact {
+    pub assignment: Assignment,
+    pub conflict: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AssignmentDef {
-    pub guard: ExprRef,
-    pub value: AssignmentValue,
-}
-
-pub type ReachingDefs = FxHashMap<SymbolId, FxHashSet<AssignmentDef>>;
+pub type ReachingDefs = FxHashMap<SymbolId, ReachingFact>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and returns
 /// the in-neighbors for each node that is reachable from the entry.
-pub(crate) fn reachable_nodes(pg: &ProtoGraph) -> FxHashSet<NodeId> {
-    let mut reachable = FxHashSet::default();
+pub fn reachable_nodes(pg: &ProtoGraph) -> rustc_hash::FxHashSet<NodeId> {
+    let mut reachable = rustc_hash::FxHashSet::default();
     let mut q = vec![pg.entry];
 
     while let Some(n) = q.pop() {
@@ -44,19 +41,197 @@ pub(crate) fn reachable_nodes(pg: &ProtoGraph) -> FxHashSet<NodeId> {
 
 fn predecessors(
     pg: &ProtoGraph,
-    reachable: &FxHashSet<NodeId>,
+    reachable: &rustc_hash::FxHashSet<NodeId>,
 ) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
     let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
 
     for n in reachable {
         for t in pg[n].clone().transitions {
             if reachable.contains(&t.target) {
-                predecessors.entry(t.target).or_default().push((*n, t.guard));
+                predecessors
+                    .entry(t.target)
+                    .or_default()
+                    .push((*n, t.guard));
             }
         }
     }
 
     predecessors
+}
+
+fn simplify_guard(pg: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
+    let (expr_ctx, simplifier) = (&mut pg.expr_ctx, &mut pg.simplifier);
+    simplifier.simplify(expr_ctx, guard)
+}
+
+fn empty_assignment(pg: &ProtoGraph) -> Assignment {
+    Assignment {
+        dont_care: pg.false_id(),
+        concretes: Vec::new(),
+    }
+}
+
+fn is_empty_assignment(pg: &ProtoGraph, assignment: &Assignment) -> bool {
+    assignment.dont_care == pg.false_id() && assignment.concretes.is_empty()
+}
+
+pub fn canonicalize_assignment(pg: &mut ProtoGraph, assignment: Assignment) -> Assignment {
+    let dont_care = simplify_guard(pg, assignment.dont_care);
+    if dont_care == pg.true_id() {
+        return Assignment {
+            dont_care,
+            concretes: Vec::new(),
+        };
+    }
+
+    let mut prior = dont_care;
+    let mut concretes: Vec<(ExprRef, ExprRef)> = Vec::new();
+
+    for (guard, rhs) in assignment.concretes {
+        let guard = simplify_guard(pg, guard);
+        let not_prior = pg.not_guard(prior);
+        let effective_guard = pg.and_guard(not_prior, guard);
+        let effective_guard = simplify_guard(pg, effective_guard);
+
+        match check_sat(pg, effective_guard) {
+            SatResult::DefinitelyUnsat => {}
+            SatResult::DefinitelySat => {
+                merge_concrete_guard(pg, &mut concretes, pg.true_id(), rhs);
+                break;
+            }
+            SatResult::MaybeSat => {
+                merge_concrete_guard(pg, &mut concretes, effective_guard, rhs);
+                let next_prior = pg.or_guard(prior, effective_guard);
+                prior = simplify_guard(pg, next_prior);
+            }
+        }
+
+        if prior == pg.true_id() {
+            break;
+        }
+    }
+
+    Assignment {
+        dont_care,
+        concretes,
+    }
+}
+
+fn merge_concrete_guard(
+    pg: &mut ProtoGraph,
+    concretes: &mut Vec<(ExprRef, ExprRef)>,
+    guard: ExprRef,
+    rhs: ExprRef,
+) {
+    if let Some((existing_guard, _)) = concretes
+        .iter_mut()
+        .find(|(_, existing_rhs)| *existing_rhs == rhs)
+    {
+        let merged_guard = pg.or_guard(*existing_guard, guard);
+        *existing_guard = simplify_guard(pg, merged_guard);
+    } else {
+        concretes.push((guard, rhs));
+    }
+}
+
+fn assignment_coverage(pg: &mut ProtoGraph, assignment: &Assignment) -> ExprRef {
+    let coverage = assignment
+        .concretes
+        .iter()
+        .fold(assignment.dont_care, |coverage, (guard, _)| {
+            pg.or_guard(coverage, *guard)
+        });
+    simplify_guard(pg, coverage)
+}
+
+pub fn assignment_is_total(pg: &mut ProtoGraph, assignment: &Assignment) -> bool {
+    let coverage = assignment_coverage(pg, assignment);
+    match check_sat(pg, coverage) {
+        SatResult::DefinitelySat => true,
+        SatResult::DefinitelyUnsat | SatResult::MaybeSat => false,
+    }
+}
+
+fn restrict_branch_to_edge(
+    pg: &mut ProtoGraph,
+    branch_guard: ExprRef,
+    transition_guard: ExprRef,
+) -> Option<ExprRef> {
+    let overlap = pg.and_guard(branch_guard, transition_guard);
+    let overlap = simplify_guard(pg, overlap);
+    match check_sat(pg, overlap) {
+        SatResult::DefinitelyUnsat => return None,
+        SatResult::DefinitelySat | SatResult::MaybeSat => {}
+    }
+
+    let not_branch = pg.not_guard(branch_guard);
+    let transition_without_branch = pg.and_guard(transition_guard, not_branch);
+    match check_sat(pg, transition_without_branch) {
+        SatResult::DefinitelyUnsat => Some(pg.true_id()),
+        SatResult::DefinitelySat | SatResult::MaybeSat => Some(overlap),
+    }
+}
+
+fn restrict_assignment_to_edge(
+    pg: &mut ProtoGraph,
+    assignment: Assignment,
+    transition_guard: ExprRef,
+) -> Assignment {
+    let assignment = canonicalize_assignment(pg, assignment);
+    let dont_care = restrict_branch_to_edge(pg, assignment.dont_care, transition_guard)
+        .unwrap_or(pg.false_id());
+    let concretes = assignment
+        .concretes
+        .into_iter()
+        .filter_map(|(guard, rhs)| {
+            restrict_branch_to_edge(pg, guard, transition_guard).map(|guard| (guard, rhs))
+        })
+        .collect();
+
+    canonicalize_assignment(
+        pg,
+        Assignment {
+            dont_care,
+            concretes,
+        },
+    )
+}
+
+fn merge_fact(pg: &mut ProtoGraph, existing: ReachingFact, new: ReachingFact) -> ReachingFact {
+    let mut internal_assert_guard = None;
+    let assignment = merge_unordered_assignment(
+        pg,
+        &mut internal_assert_guard,
+        existing.assignment,
+        new.assignment,
+    );
+    let has_conflict = internal_assert_guard
+        .map(|guard| !matches!(check_sat(pg, guard), SatResult::DefinitelyUnsat))
+        .unwrap_or(false);
+
+    ReachingFact {
+        assignment: canonicalize_assignment(pg, assignment),
+        conflict: existing.conflict || new.conflict || has_conflict,
+    }
+}
+
+fn transfer_fact(
+    pg: &mut ProtoGraph,
+    existing: ReachingFact,
+    assignment: Assignment,
+) -> ReachingFact {
+    let assignment_is_total = assignment_is_total(pg, &assignment);
+    let assignment = merge_ordered_assignment(pg, existing.assignment, assignment);
+    ReachingFact {
+        assignment: canonicalize_assignment(pg, assignment),
+        conflict: existing.conflict && !assignment_is_total,
+    }
+}
+
+fn matching_key(defs: &ReachingDefs, st: &SymbolTable, symbol_id: SymbolId) -> Option<SymbolId> {
+    defs.keys()
+        .copied()
+        .find(|key| same_assignment_target(st, *key, symbol_id))
 }
 
 pub fn reaching_definitions(
@@ -75,7 +250,6 @@ pub fn reaching_definitions(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    // by default, the entry node begins with
     let mut in_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
     in_defs.insert(
         pg.entry,
@@ -84,56 +258,49 @@ pub fn reaching_definitions(
             .map(|sym_id| {
                 (
                     *sym_id,
-                    FxHashSet::from_iter([AssignmentDef {
-                        guard: pg.true_id(),
-                        value: AssignmentValue::DontCare,
-                    }]),
+                    ReachingFact {
+                        assignment: Assignment::dont_care(pg.true_id()),
+                        conflict: false,
+                    },
                 )
             })
             .collect(),
     );
 
     let mut out_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
-
     let mut worklist: Vec<NodeId> = reachable.iter().copied().collect();
 
     while let Some(id) = worklist.pop() {
-        // run the merge function with its predecessors to get in_defs[n]
-        // merge function is just the union
         let mut merged = ReachingDefs::default();
         for (pred_id, transition_guard) in preds.get(&id).into_iter().flatten() {
             if let Some(pred_defs) = out_defs.get(pred_id) {
-                for (symbol_id, values) in pred_defs {
-                    for def in values {
-                        let and_guard = pg.and_guard(def.guard, *transition_guard);
-                        let guard = match check_sat(pg, and_guard) {
-                            SatResult::DefinitelyUnsat => continue,
-                            SatResult::DefinitelySat => pg.true_id(),
-                            SatResult::MaybeSat => {
-                                let not_def_guard = pg.not_guard(def.guard);
-                                let transition_without_def =
-                                    pg.and_guard(*transition_guard, not_def_guard);
-                                match check_sat(pg, transition_without_def) {
-                                    SatResult::DefinitelyUnsat => pg.true_id(),
-                                    SatResult::DefinitelySat | SatResult::MaybeSat => def.guard,
-                                }
-                            }
-                        };
-                        merged.entry(*symbol_id).or_default().insert(AssignmentDef {
-                            guard,
-                            value: def.value,
-                        });
+                for (symbol_id, fact) in pred_defs {
+                    let assignment =
+                        restrict_assignment_to_edge(pg, fact.assignment.clone(), *transition_guard);
+                    if is_empty_assignment(pg, &assignment) {
+                        continue;
                     }
+
+                    let edge_fact = ReachingFact {
+                        assignment,
+                        conflict: fact.conflict,
+                    };
+
+                    let key = matching_key(&merged, st, *symbol_id).unwrap_or(*symbol_id);
+                    merged
+                        .entry(key)
+                        .and_modify(|existing| {
+                            *existing = merge_fact(pg, existing.clone(), edge_fact.clone());
+                        })
+                        .or_insert(edge_fact);
                 }
             }
         }
-        // in defs for the entry is predefined
+
         if id != pg.entry {
             in_defs.insert(id, merged);
         }
 
-        // run the transfer function on it to get out_defs[n]
-        // TODO: I wonder if this is more confusing than just having a regular loop
         let assignments = pg[id]
             .actions
             .iter()
@@ -146,74 +313,12 @@ pub fn reaching_definitions(
         let mut out = in_defs.get(&id).cloned().unwrap_or_default();
 
         for (symbol_id, assignment) in assignments {
-            let old_defs = out.remove(&symbol_id).unwrap_or_default();
-            let mut new_defs = FxHashSet::default();
-            let mut coverage = assignment.dont_care;
-
-            match check_sat(pg, assignment.dont_care) {
-                SatResult::DefinitelySat => {
-                    out.insert(
-                        symbol_id,
-                        FxHashSet::from_iter([AssignmentDef {
-                            guard: pg.true_id(),
-                            value: AssignmentValue::DontCare,
-                        }]),
-                    );
-                    continue;
-                }
-                SatResult::MaybeSat => {
-                    new_defs.insert(AssignmentDef {
-                        guard: assignment.dont_care,
-                        value: AssignmentValue::DontCare,
-                    });
-                }
-                SatResult::DefinitelyUnsat => (),
-            }
-
-            let mut prior = assignment.dont_care;
-            for (guard, val) in assignment.concretes {
-                let effective_guard = {
-                    let not_prior = pg.not_guard(prior);
-                    pg.and_guard(not_prior, guard)
-                };
-
-                match check_sat(pg, effective_guard) {
-                    SatResult::DefinitelySat => {
-                        new_defs = FxHashSet::from_iter([AssignmentDef {
-                            guard: pg.true_id(),
-                            value: AssignmentValue::Concrete(val),
-                        }]);
-                        coverage = pg.true_id();
-                        break;
-                    }
-                    SatResult::MaybeSat => {
-                        new_defs.insert(AssignmentDef {
-                            guard: effective_guard,
-                            value: AssignmentValue::Concrete(val),
-                        });
-                    }
-                    SatResult::DefinitelyUnsat => (),
-                }
-
-                prior = pg.or_guard(prior, guard);
-                coverage = pg.or_guard(coverage, guard);
-            }
-
-            let not_covered = pg.not_guard(coverage);
-            for old_def in old_defs {
-                let fallback_guard = pg.and_guard(old_def.guard, not_covered);
-                let fallback_guard = match check_sat(pg, fallback_guard) {
-                    SatResult::DefinitelyUnsat => continue,
-                    SatResult::DefinitelySat => pg.true_id(),
-                    SatResult::MaybeSat => fallback_guard,
-                };
-                new_defs.insert(AssignmentDef {
-                    guard: fallback_guard,
-                    value: old_def.value,
-                });
-            }
-
-            out.insert(symbol_id, new_defs);
+            let key = matching_key(&out, st, symbol_id).unwrap_or(symbol_id);
+            let existing = out.remove(&key).unwrap_or_else(|| ReachingFact {
+                assignment: empty_assignment(pg),
+                conflict: false,
+            });
+            out.insert(key, transfer_fact(pg, existing, assignment));
         }
 
         if out_defs.get(&id) != Some(&out) {
@@ -233,18 +338,15 @@ pub fn reaching_definitions(
     in_defs
 }
 
-/// Returns `true` if any port at any node has more than one reaching assignment,
-/// or if the unique reaching assignment is not unconditional.
-pub fn exists_conflicts(reaching_defs: &FxHashMap<NodeId, ReachingDefs>, pg: &ProtoGraph) -> bool {
+/// Returns `true` if any port at any node has conflicting reaching assignments.
+pub fn exists_conflicts(
+    reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
+    _pg: &mut ProtoGraph,
+) -> bool {
     for rd in reaching_defs.values() {
-        for set in rd.values() {
-            if set.len() > 1 {
+        for fact in rd.values() {
+            if fact.conflict {
                 return true;
-            }
-            if let Some(def) = set.iter().next() {
-                if def.guard != pg.true_id() {
-                    return true;
-                }
             }
         }
     }
@@ -257,8 +359,7 @@ pub fn all_ports_present(
     pg: &ProtoGraph,
     st: &SymbolTable,
 ) -> bool {
-    // TODO: maybe make this a helper in pg context or something
-    let input_ports: &Vec<SymbolId> = &st
+    let input_ports: Vec<SymbolId> = st
         .get_children(&pg.proto_ctx.type_param.unwrap())
         .into_iter()
         .filter(|sym_id| st[*sym_id].is_in_port())
@@ -266,16 +367,17 @@ pub fn all_ports_present(
 
     let reachable = reachable_nodes(pg);
 
-    // all reachable nodes have all ports present
     for rd in reaching_defs.values() {
-        for input in input_ports {
-            if !rd.contains_key(&input) {
+        for input in &input_ports {
+            if !rd
+                .keys()
+                .any(|symbol_id| same_assignment_target(st, *symbol_id, *input))
+            {
                 return false;
             }
         }
     }
 
-    // all reachable nodes present
     for id in reachable {
         if !reaching_defs.contains_key(&id) {
             return false;
@@ -303,16 +405,13 @@ pub fn format_reaching_defs(
         let mut symbol_defs = defs.iter().collect::<Vec<_>>();
         symbol_defs.sort_by_key(|(symbol_id, _)| symbols.full_name_from_symbol_id(symbol_id));
 
-        for (symbol_id, values) in symbol_defs {
-            let mut values = values
-                .iter()
-                .map(|def| format_assignment_def(protocol, *def))
-                .collect::<Vec<_>>();
-            values.sort();
+        for (symbol_id, fact) in symbol_defs {
+            let conflict = if fact.conflict { " conflict" } else { "" };
             out.push_str(&format!(
-                "  {}: {}\n",
+                "  {}: {}{}\n",
                 symbols.full_name_from_symbol_id(symbol_id),
-                values.join(", ")
+                format_assignment(protocol, &fact.assignment),
+                conflict
             ));
         }
     }
@@ -320,15 +419,24 @@ pub fn format_reaching_defs(
     out
 }
 
-fn format_assignment_def(protocol: &ProtoGraph, def: AssignmentDef) -> String {
-    let value = match def.value {
-        AssignmentValue::DontCare => "X".to_string(),
-        AssignmentValue::Concrete(expr) => crate::ir::graphviz::format_expr(protocol, expr),
-    };
-
-    if def.guard == protocol.true_id() {
-        value
+fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
+    let mut parts = Vec::new();
+    if assignment.dont_care != protocol.false_id() {
+        parts.push(format!(
+            "X if {}",
+            crate::ir::graphviz::format_expr(protocol, assignment.dont_care)
+        ));
+    }
+    for (guard, rhs) in &assignment.concretes {
+        parts.push(format!(
+            "{} if {}",
+            crate::ir::graphviz::format_expr(protocol, *rhs),
+            crate::ir::graphviz::format_expr(protocol, *guard)
+        ));
+    }
+    if parts.is_empty() {
+        "internal_assert_false".to_string()
     } else {
-        format!("{value} if {}", crate::ir::graphviz::format_expr(protocol, def.guard))
+        parts.join("; ")
     }
 }
