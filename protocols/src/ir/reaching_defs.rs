@@ -4,9 +4,7 @@
 
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::determinize::{SatResult, check_sat};
-use crate::ir::edge_contract::{
-    merge_ordered_assignment, merge_unordered_assignment, same_assignment_target,
-};
+use crate::ir::edge_contract::{merge_ordered_assignment, merge_unordered_assignment};
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use itertools::Itertools;
 use patronus::expr::ExprRef;
@@ -18,8 +16,7 @@ pub struct ReachingFact {
     pub conflict: bool,
 }
 
-pub type ReachingDefs = FxHashMap<SymbolId, ReachingFact>;
-
+pub type ReachingDefs = FxHashMap<String, ReachingFact>;
 
 // TODO: let's write a pruner before running the analysis?
 pub fn reachable_nodes(pg: &ProtoGraph) -> FxHashSet<NodeId> {
@@ -65,7 +62,6 @@ fn simplify_guard(pg: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
     let (expr_ctx, simplifier) = (&mut pg.expr_ctx, &mut pg.simplifier);
     simplifier.simplify(expr_ctx, guard)
 }
-
 
 pub fn canonicalize_assignment(pg: &mut ProtoGraph, assignment: Assignment) -> Assignment {
     let dont_care = simplify_guard(pg, assignment.dont_care);
@@ -220,12 +216,6 @@ fn transfer_fact(
     }
 }
 
-fn matching_key(defs: &ReachingDefs, st: &SymbolTable, symbol_id: SymbolId) -> Option<SymbolId> {
-    defs.keys()
-        .copied()
-        .find(|key| same_assignment_target(st, *key, symbol_id))
-}
-
 pub fn reaching_definitions(
     // it's a bit of a shame that we have to pass a mutable graph for an analysis, but the
     // sat checker mutates expressions by simplifying them
@@ -249,7 +239,7 @@ pub fn reaching_definitions(
             .iter()
             .map(|sym_id| {
                 (
-                    *sym_id,
+                    st.full_name_from_symbol_id(sym_id).to_string(),
                     ReachingFact {
                         assignment: Assignment::dont_care(pg.true_id()),
                         conflict: false,
@@ -266,7 +256,7 @@ pub fn reaching_definitions(
         let mut merged = ReachingDefs::default();
         for (pred_id, transition_guard) in preds.get(&id).into_iter().flatten() {
             if let Some(pred_defs) = out_defs.get(pred_id) {
-                for (symbol_id, fact) in pred_defs {
+                for (symbol_name, fact) in pred_defs {
                     let assignment =
                         restrict_assignment_to_edge(pg, fact.assignment.clone(), *transition_guard);
 
@@ -280,9 +270,8 @@ pub fn reaching_definitions(
                         conflict: fact.conflict,
                     };
 
-                    let key = matching_key(&merged, st, *symbol_id).unwrap_or(*symbol_id);
                     merged
-                        .entry(key)
+                        .entry(symbol_name.clone())
                         .and_modify(|existing| {
                             *existing = merge_fact(pg, existing.clone(), edge_fact.clone());
                         })
@@ -307,7 +296,7 @@ pub fn reaching_definitions(
         let mut out = in_defs.get(&id).cloned().unwrap_or_default();
 
         for (symbol_id, assignment) in assignments {
-            let key = matching_key(&out, st, symbol_id).unwrap_or(symbol_id);
+            let key = st.full_name_from_symbol_id(&symbol_id).to_string();
             let existing = out.remove(&key).unwrap_or_else(|| ReachingFact {
                 assignment: Assignment {
                     dont_care: pg.false_id(),
@@ -335,42 +324,9 @@ pub fn reaching_definitions(
     out_defs
 }
 
-pub fn all_ports_present(
-    reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
-    pg: &ProtoGraph,
-    st: &SymbolTable,
-) -> bool {
-    let input_ports: Vec<SymbolId> = st
-        .get_children(&pg.proto_ctx.type_param.unwrap())
-        .into_iter()
-        .filter(|sym_id| st[*sym_id].is_in_port())
-        .collect();
-
-    let reachable = reachable_nodes(pg);
-
-    for rd in reaching_defs.values() {
-        for input in &input_ports {
-            if !rd
-                .keys()
-                .any(|symbol_id| same_assignment_target(st, *symbol_id, *input))
-            {
-                return false;
-            }
-        }
-    }
-
-    for id in reachable {
-        if !reaching_defs.contains_key(&id) {
-            return false;
-        }
-    }
-
-    true
-}
-
 pub fn format_reaching_defs(
     protocol: &ProtoGraph,
-    symbols: &SymbolTable,
+    _symbols: &SymbolTable,
     reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
 ) -> String {
     let mut out = String::new();
@@ -384,13 +340,13 @@ pub fn format_reaching_defs(
         };
 
         let mut symbol_defs = defs.iter().collect::<Vec<_>>();
-        symbol_defs.sort_by_key(|(symbol_id, _)| symbols.full_name_from_symbol_id(symbol_id));
+        symbol_defs.sort_by_key(|(symbol_name, _)| *symbol_name);
 
-        for (symbol_id, fact) in symbol_defs {
+        for (symbol_name, fact) in symbol_defs {
             let conflict = if fact.conflict { " conflict" } else { "" };
             out.push_str(&format!(
                 "  {}: {}{}\n",
-                symbols.full_name_from_symbol_id(symbol_id),
+                symbol_name,
                 format_assignment(protocol, &fact.assignment),
                 conflict
             ));

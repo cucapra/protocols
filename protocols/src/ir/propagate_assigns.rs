@@ -1,10 +1,38 @@
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::edge_contract::same_assignment_target;
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
-use crate::ir::reaching_defs::{
-    ReachingDefs, all_ports_present, assignment_is_total, reachable_nodes,
-};
+use crate::ir::reaching_defs::{ReachingDefs, assignment_is_total, reachable_nodes};
 use rustc_hash::FxHashMap;
+
+fn all_ports_present(
+    reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
+    pg: &ProtoGraph,
+    st: &SymbolTable,
+) -> bool {
+    let input_ports: Vec<SymbolId> = st
+        .get_children(&pg.proto_ctx.type_param.unwrap())
+        .into_iter()
+        .filter(|sym_id| st[*sym_id].is_in_port())
+        .collect();
+
+    let reachable = reachable_nodes(pg);
+
+    for rd in reaching_defs.values() {
+        for input in &input_ports {
+            if !rd.contains_key(&st.full_name_from_symbol_id(input).to_string()) {
+                return false;
+            }
+        }
+    }
+
+    for id in reachable {
+        if !reaching_defs.contains_key(&id) {
+            return false;
+        }
+    }
+
+    true
+}
 
 pub fn propagate_assignments(
     pg: &mut ProtoGraph,
@@ -32,7 +60,8 @@ pub fn propagate_assignments(
         retain_non_input_assignments(pg, st, id, &input_ports);
 
         for input in &input_ports {
-            let fact = lookup_fact(node_defs, st, *input)
+            let fact = node_defs
+                .get(&st.full_name_from_symbol_id(input))
                 .unwrap_or_else(|| panic!("missing reaching definition for {input} at {id}"));
             assert!(
                 !fact.conflict,
@@ -50,16 +79,6 @@ pub fn propagate_assignments(
     }
 }
 
-fn lookup_fact<'a>(
-    defs: &'a ReachingDefs,
-    st: &SymbolTable,
-    input: SymbolId,
-) -> Option<&'a crate::ir::reaching_defs::ReachingFact> {
-    defs.iter()
-        .find(|(symbol_id, _)| same_assignment_target(st, **symbol_id, input))
-        .map(|(_, fact)| fact)
-}
-
 fn retain_non_input_assignments(
     pg: &mut ProtoGraph,
     st: &SymbolTable,
@@ -68,14 +87,12 @@ fn retain_non_input_assignments(
 ) {
     let actions = pg[id]
         .actions
-        .iter()
-        .cloned()
-        .filter(|action| match pg[action.op] {
+        .iter().filter(|&action| match pg[action.op] {
             Op::Assign(symbol_id, _) => !input_ports
                 .iter()
                 .any(|input| same_assignment_target(st, symbol_id, *input)),
             _ => true,
-        })
+        }).cloned()
         .collect();
 
     pg.node_mut(id).actions = actions;

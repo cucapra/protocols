@@ -7,7 +7,7 @@ use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::determinize::determinized;
-use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
+use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::lowering::lower_ast_to_ir;
@@ -199,12 +199,12 @@ fn run_respect_forks(
             println!("{}", to_dot_string(&joint, st));
         }
 
-        let rd = reaching_definitions(&mut joint, &st);
+        let rd = reaching_definitions(&mut joint, st);
         if cli.reaching_definitions {
             println!("{}", format_reaching_defs(&joint, st, &rd));
         }
 
-        propagate_assignments(&mut joint, &st, &rd);
+        propagate_assignments(&mut joint, st, &rd);
 
         if cli.graphout {
             println!("// joint graph for trace {trace_index}");
