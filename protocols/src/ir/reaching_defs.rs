@@ -10,7 +10,7 @@ use crate::ir::edge_contract::{
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use itertools::Itertools;
 use patronus::expr::ExprRef;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct ReachingFact {
@@ -20,10 +20,10 @@ pub struct ReachingFact {
 
 pub type ReachingDefs = FxHashMap<SymbolId, ReachingFact>;
 
-/// Nodes only store their outgoing transitions. This function precomputes and returns
-/// the in-neighbors for each node that is reachable from the entry.
-pub fn reachable_nodes(pg: &ProtoGraph) -> rustc_hash::FxHashSet<NodeId> {
-    let mut reachable = rustc_hash::FxHashSet::default();
+
+// TODO: let's write a pruner before running the analysis?
+pub fn reachable_nodes(pg: &ProtoGraph) -> FxHashSet<NodeId> {
+    let mut reachable = FxHashSet::default();
     let mut q = vec![pg.entry];
 
     while let Some(n) = q.pop() {
@@ -39,9 +39,11 @@ pub fn reachable_nodes(pg: &ProtoGraph) -> rustc_hash::FxHashSet<NodeId> {
     reachable
 }
 
+/// Nodes only store their outgoing transitions. This function precomputes and returns
+/// the in-neighbors for each node that is reachable from the entry.
 fn predecessors(
     pg: &ProtoGraph,
-    reachable: &rustc_hash::FxHashSet<NodeId>,
+    reachable: &FxHashSet<NodeId>,
 ) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
     let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
 
@@ -64,16 +66,6 @@ fn simplify_guard(pg: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
     simplifier.simplify(expr_ctx, guard)
 }
 
-fn empty_assignment(pg: &ProtoGraph) -> Assignment {
-    Assignment {
-        dont_care: pg.false_id(),
-        concretes: Vec::new(),
-    }
-}
-
-fn is_empty_assignment(pg: &ProtoGraph, assignment: &Assignment) -> bool {
-    assignment.dont_care == pg.false_id() && assignment.concretes.is_empty()
-}
 
 pub fn canonicalize_assignment(pg: &mut ProtoGraph, assignment: Assignment) -> Assignment {
     let dont_care = simplify_guard(pg, assignment.dont_care);
@@ -277,7 +269,9 @@ pub fn reaching_definitions(
                 for (symbol_id, fact) in pred_defs {
                     let assignment =
                         restrict_assignment_to_edge(pg, fact.assignment.clone(), *transition_guard);
-                    if is_empty_assignment(pg, &assignment) {
+
+                    // don't insert a ReachingFact for a fully empty assignment
+                    if assignment.dont_care == pg.false_id() && assignment.concretes.is_empty() {
                         continue;
                     }
 
@@ -315,7 +309,10 @@ pub fn reaching_definitions(
         for (symbol_id, assignment) in assignments {
             let key = matching_key(&out, st, symbol_id).unwrap_or(symbol_id);
             let existing = out.remove(&key).unwrap_or_else(|| ReachingFact {
-                assignment: empty_assignment(pg),
+                assignment: Assignment {
+                    dont_care: pg.false_id(),
+                    concretes: Vec::new(),
+                },
                 conflict: false,
             });
             out.insert(key, transfer_fact(pg, existing, assignment));
@@ -335,23 +332,7 @@ pub fn reaching_definitions(
         }
     }
 
-    in_defs
-}
-
-/// Returns `true` if any port at any node has conflicting reaching assignments.
-pub fn exists_conflicts(
-    reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
-    _pg: &mut ProtoGraph,
-) -> bool {
-    for rd in reaching_defs.values() {
-        for fact in rd.values() {
-            if fact.conflict {
-                return true;
-            }
-        }
-    }
-
-    false
+    out_defs
 }
 
 pub fn all_ports_present(

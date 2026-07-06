@@ -13,7 +13,7 @@ use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
-use protocols::ir::reaching_defs::{all_ports_present, format_reaching_defs, reaching_definitions};
+use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
@@ -203,12 +203,8 @@ fn run_respect_forks(
         if cli.reaching_definitions {
             println!("{}", format_reaching_defs(&joint, st, &rd));
         }
-        if !all_ports_present(&rd, &joint, &st) {
-            println!("bleh bleh")
-        }
 
         propagate_assignments(&mut joint, &st, &rd);
-        // println!("blah");
 
         if cli.graphout {
             println!("// joint graph for trace {trace_index}");

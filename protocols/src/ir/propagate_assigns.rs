@@ -1,8 +1,8 @@
 use crate::frontend::symbol::{SymbolId, SymbolTable};
-use crate::ir::edge_contract::{merge_ordered_assignment, same_assignment_target};
+use crate::ir::edge_contract::same_assignment_target;
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use crate::ir::reaching_defs::{
-    ReachingDefs, all_ports_present, assignment_is_total, canonicalize_assignment, reachable_nodes,
+    ReachingDefs, all_ports_present, assignment_is_total, reachable_nodes,
 };
 use rustc_hash::FxHashMap;
 
@@ -29,58 +29,54 @@ pub fn propagate_assignments(
             continue;
         };
 
-        let assigned: Vec<(SymbolId, usize)> = pg[id]
-            .actions
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, action)| match pg[action.op] {
-                Op::Assign(sid, _) => Some((sid, idx)),
-                _ => None,
-            })
-            .collect();
+        retain_non_input_assignments(pg, st, id, &input_ports);
 
         for input in &input_ports {
-            let fact = node_defs
-                .iter()
-                .find(|(symbol_id, _)| same_assignment_target(st, **symbol_id, *input))
-                .map(|(_, fact)| fact)
+            let fact = lookup_fact(node_defs, st, *input)
                 .unwrap_or_else(|| panic!("missing reaching definition for {input} at {id}"));
+            assert!(
+                !fact.conflict,
+                "cannot propagate assignments in {} with conflicting reaching definitions",
+                pg.proto_ctx.name
+            );
+            assert!(
+                assignment_is_total(pg, &fact.assignment),
+                "cannot propagate partial assignment for {input} at {id}"
+            );
 
-            if let Some((assigned_symbol, action_idx)) = assigned
-                .iter()
-                .find(|(assigned_symbol, _)| same_assignment_target(st, *assigned_symbol, *input))
-            {
-                let action = pg[id].actions[*action_idx].clone();
-                let Op::Assign(_, assignment) = pg[action.op].clone() else {
-                    unreachable!();
-                };
-                let assignment_total = assignment_is_total(pg, &assignment);
-                assert!(
-                    !fact.conflict || assignment_total,
-                    "cannot propagate assignments in {} with conflicting reaching definitions",
-                    pg.proto_ctx.name
-                );
-                let assignment = merge_ordered_assignment(pg, fact.assignment.clone(), assignment);
-                let assignment = canonicalize_assignment(pg, assignment);
-                assert!(
-                    assignment_is_total(pg, &assignment),
-                    "cannot propagate partial assignment for {input} at {id}"
-                );
-                let op = pg.o(Op::Assign(*assigned_symbol, assignment));
-                pg.node_mut(id).actions[*action_idx].op = op;
-            } else {
-                assert!(
-                    !fact.conflict,
-                    "cannot propagate assignments in {} with conflicting reaching definitions",
-                    pg.proto_ctx.name
-                );
-                assert!(
-                    assignment_is_total(pg, &fact.assignment),
-                    "cannot propagate partial assignment for {input} at {id}"
-                );
-                let op = pg.o(Op::Assign(*input, fact.assignment.clone()));
-                pg.push_action(id, Action::new(pg.true_id(), op));
-            }
+            let op = pg.o(Op::Assign(*input, fact.assignment.clone()));
+            pg.push_action(id, Action::new(pg.true_id(), op));
         }
     }
+}
+
+fn lookup_fact<'a>(
+    defs: &'a ReachingDefs,
+    st: &SymbolTable,
+    input: SymbolId,
+) -> Option<&'a crate::ir::reaching_defs::ReachingFact> {
+    defs.iter()
+        .find(|(symbol_id, _)| same_assignment_target(st, **symbol_id, input))
+        .map(|(_, fact)| fact)
+}
+
+fn retain_non_input_assignments(
+    pg: &mut ProtoGraph,
+    st: &SymbolTable,
+    id: NodeId,
+    input_ports: &[SymbolId],
+) {
+    let actions = pg[id]
+        .actions
+        .iter()
+        .cloned()
+        .filter(|action| match pg[action.op] {
+            Op::Assign(symbol_id, _) => !input_ports
+                .iter()
+                .any(|input| same_assignment_target(st, symbol_id, *input)),
+            _ => true,
+        })
+        .collect();
+
+    pg.node_mut(id).actions = actions;
 }

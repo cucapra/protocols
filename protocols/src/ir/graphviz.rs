@@ -203,11 +203,8 @@ mod tests {
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
-    use crate::ir::reaching_defs::{
-        ReachingDefs, exists_conflicts, format_reaching_defs, reaching_definitions,
-    };
+    use crate::ir::reaching_defs::reaching_definitions;
     use insta::Settings;
-
     use rustc_hash::FxHashMap;
 
     fn snap(name: &str, filename: &str) {
