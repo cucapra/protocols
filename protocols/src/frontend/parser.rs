@@ -937,34 +937,29 @@ pub(crate) fn parse_files(
     let mut protos = vec![];
     let mut remaps = vec![];
     for filename in filenames {
-        parse_file_internal(filename, &mut st, &mut protos, &mut remaps, handler)?;
+        let display_name = filename.as_ref().to_str().unwrap();
+        parse_file_internal(
+            filename,
+            display_name,
+            &mut st,
+            &mut protos,
+            &mut remaps,
+            handler,
+        )?;
     }
     Ok((st, protos, remaps))
 }
 
-pub(crate) fn parse_file(
-    filename: impl AsRef<std::path::Path>,
-    handler: &mut DiagnosticHandler,
-) -> Result<ParserOut, String> {
-    let mut st = SymbolTable::default();
-    let mut protos = vec![];
-    let mut remaps = vec![];
-    parse_file_internal(filename, &mut st, &mut protos, &mut remaps, handler)?;
-    Ok((st, protos, remaps))
-}
-
-
 fn parse_file_internal(
     filename: impl AsRef<std::path::Path>,
-    display_name: impl AsRef<std::path::Path>,
+    display_name: &str,
     st: &mut SymbolTable,
     protos: &mut Vec<Protocol>,
     remaps: &mut Vec<RemapModule>,
     diag: &mut DiagnosticHandler,
 ) -> Result<(), String> {
-    let name = filename.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
-    let fileid = diag.add_file(name, input.clone());
+    let fileid = diag.add_file(display_name.into(), input.clone());
 
     let res = ProtocolParser::parse(Rule::file, &input);
     match res {
