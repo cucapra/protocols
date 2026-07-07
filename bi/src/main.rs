@@ -24,9 +24,13 @@ use crate::signal_trace::*;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Protocol (.prot) file
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     /// Path to a waveform trace (.fst, .vcd, .ghw) file
     #[arg(short, long, value_name = "WAVE_FILE")]
@@ -94,9 +98,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
-    let (st, protos) = frontend(cli.protocol, &mut d, skip_static_step_fork_checks)?;
+    let ast = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks)?;
 
-    let designs = find_designs(&st, &protos);
+    let designs = find_designs(&ast);
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -124,7 +128,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let exclude_from_trace = if cli.include_idle {
         FxHashSet::default()
     } else {
-        FxHashSet::from_iter(protos.iter().filter(|p| p.is_idle).map(|p| p.name.clone()))
+        FxHashSet::from_iter(
+            ast.protos
+                .iter()
+                .filter(|p| p.is_idle)
+                .map(|p| p.name.clone()),
+        )
     };
 
     let bi_protos: Vec<Vec<_>> = instances
@@ -133,7 +142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             designs[&inst.design]
                 .protocols
                 .iter()
-                .map(|(id, _)| protos[*id].clone())
+                .map(|(id, _)| ast.protos[*id].clone())
                 .collect()
         })
         .collect();
@@ -143,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .enumerate()
         .zip(bi_protos.iter())
         .map(|((inst_id, inst), protos)| {
-            BackwardsInterpreter::new(&st, protos, inst_id as u32, cli.include_in_progress)
+            BackwardsInterpreter::new(&ast.st, protos, inst_id as u32, cli.include_in_progress)
         })
         .collect();
 

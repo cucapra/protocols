@@ -19,9 +19,13 @@ struct Cli {
     #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
     verilog: Vec<String>,
 
-    /// Path to a Protocol (.prot) file
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     /// Path to a Transactions (.tx) file
     #[arg(short, long, value_name = "TRANSACTIONS_FILE")]
@@ -128,7 +132,7 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
     );
 
-    let (st, protos) = match frontend(
+    let ast = match frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
@@ -136,7 +140,7 @@ fn main() -> anyhow::Result<()> {
         Ok(result) => result,
         Err(error) => exit_after_setup_error(error, !protocols_handler.error_string().is_empty()),
     };
-    let design = find_a_single_design(&st, &protos, &cli.protocol)?;
+    let design = find_a_single_design(&ast, &cli.protocol)?;
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let mut transactions_handler = DiagnosticHandler::new(
@@ -145,13 +149,12 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces =
-        match transaction_frontend(cli.transactions, &st, &protos, &mut transactions_handler) {
-            Ok(result) => result,
-            Err(error) => {
-                exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
-            }
-        };
+    let traces = match transaction_frontend(cli.transactions, &ast, &mut transactions_handler) {
+        Ok(result) => result,
+        Err(error) => {
+            exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
+        }
+    };
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {
@@ -169,8 +172,8 @@ fn main() -> anyhow::Result<()> {
         )?;
 
         let mut scheduler = Scheduler::new(
-            &st,
-            &protos,
+            &ast.st,
+            &ast.protos,
             todos,
             sim,
             &mut protocols_handler,

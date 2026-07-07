@@ -39,9 +39,13 @@ use crate::signal_trace::WaveSignalTrace;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 struct Cli {
-    /// Path to a Protocol (.prot) file
-    #[arg(short, long, value_name = "PROTOCOLS_FILE")]
-    protocol: String,
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
 
     /// Path to a waveform trace (.fst, .vcd, .ghw) file
     #[arg(short, long, value_name = "WAVE_FILE")]
@@ -152,13 +156,13 @@ fn main() -> anyhow::Result<()> {
         DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
-    let (st, protos) = frontend(
+    let ast = frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
     )?;
 
-    let designs = find_designs(&st, &protos);
+    let designs = find_designs(&ast);
 
     // Try to find instances that we care about
     if cli.instances.is_empty() {
@@ -206,7 +210,7 @@ fn main() -> anyhow::Result<()> {
         let design_transactions: Vec<Protocol> = design
             .protocols
             .iter()
-            .map(|&(idx, _)| protos[idx].clone())
+            .map(|&(idx, _)| ast.protos[idx].clone())
             .collect();
 
         if design_transactions.is_empty() {
@@ -215,7 +219,7 @@ fn main() -> anyhow::Result<()> {
 
         // Create a scheduler for this design, using the design name as the struct name
         let scheduler = Scheduler::initialize(
-            &st,
+            &ast.st,
             &design_transactions,
             &trace,
             design.name.clone(),

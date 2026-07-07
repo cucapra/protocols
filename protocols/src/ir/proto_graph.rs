@@ -305,8 +305,8 @@ impl Index<&OpId> for ProtoGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::parse_file;
     use crate::ir::lowering::lower_ast_to_ir;
     use std::path::Path;
     use tempfile::NamedTempFile;
@@ -320,18 +320,20 @@ mod tests {
 
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
-        let (symbol_table, protocols) = parse_file(path, &mut handler).unwrap();
-        let ast = match protocol_name {
-            Some(protocol_name) => protocols
+        let skip_static_step_fork_checks = true;
+        let ast = frontend(&[path], &mut handler, skip_static_step_fork_checks).unwrap();
+        let proto = match protocol_name {
+            Some(protocol_name) => ast
+                .protos
                 .into_iter()
                 .find(|ast| ast.name == protocol_name)
                 .unwrap(),
             None => {
-                assert_eq!(protocols.len(), 1);
-                protocols.into_iter().next().unwrap()
+                assert_eq!(ast.protos.len(), 1);
+                ast.protos.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(ast, &symbol_table)
+        lower_ast_to_ir(proto, &ast.st)
     }
 
     #[test]

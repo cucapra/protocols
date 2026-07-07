@@ -282,7 +282,7 @@ impl Default for SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn add_protocol_scope(&mut self, name: &str) -> ScopeId {
+    pub fn enter_scope(&mut self, name: &str) -> ScopeId {
         assert_eq!(
             self.active_scope, ROOT_SCOPE,
             "nested scopes are not supported"
@@ -408,7 +408,7 @@ impl SymbolTable {
         id
     }
 
-    pub fn struct_id_from_name(&mut self, name: &str) -> Option<StructId> {
+    pub fn struct_id_from_name(&self, name: &str) -> Option<StructId> {
         self.by_name_struct.get(name).copied()
     }
 

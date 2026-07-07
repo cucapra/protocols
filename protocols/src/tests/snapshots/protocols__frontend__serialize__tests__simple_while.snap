@@ -9,10 +9,11 @@ struct Counter {
 
 fn simple_while<dut: Counter>(a: u64, b: u64, s: u64) {
   dut.a := a;
-  while !(dut.s == b) {
+  while !(dut.s == 1) {
     step();
   }
   step();
   step();
   assert_eq(dut.s, s);
+  step();
 }

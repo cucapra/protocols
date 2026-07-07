@@ -1,4 +1,4 @@
-// Copyright 2024 Cornell University
+// Copyright 2024-26 Cornell University
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
@@ -13,7 +13,15 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use strum::IntoEnumIterator;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
-use crate::frontend::symbol::{Arg, ScopeId, SymbolId, SymbolTable, Type};
+use crate::frontend::symbol::{Arg, Dir, ScopeId, StructId, SymbolId, SymbolTable, Type};
+
+/// Frontend representation of parsed protocol files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ast {
+    pub st: SymbolTable,
+    pub protos: Vec<Protocol>,
+    pub remaps: Vec<RemapModule>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolContext {
@@ -35,6 +43,8 @@ pub struct ProtocolContext {
     /// The distinguished `ExprId` corresponding to `DontCare`
     dont_care_id: ExprId,
 
+    true_expr_id: ExprId,
+
     expr_loc: SecondaryMap<ExprId, (usize, usize, usize)>,
 
     /// The scope in the [[SymbolTable]] associated with this protocol.
@@ -45,6 +55,7 @@ impl ProtocolContext {
     pub fn new(name: String, scope: ScopeId) -> Self {
         let mut exprs = PrimaryMap::new();
         let dont_care_id = exprs.push(Expr::DontCare);
+        let true_expr_id = exprs.push(Expr::Const(BitVecValue::new_true()));
         let expr_loc: SecondaryMap<ExprId, (usize, usize, usize)> = SecondaryMap::new();
         Self {
             name,
@@ -53,6 +64,7 @@ impl ProtocolContext {
             is_idle: false,
             exprs,
             dont_care_id,
+            true_expr_id,
             expr_loc,
             scope,
         }
@@ -64,6 +76,10 @@ impl ProtocolContext {
 
     pub fn expr_dont_care(&self) -> ExprId {
         self.dont_care_id
+    }
+
+    pub fn expr_true(&self) -> ExprId {
+        self.true_expr_id
     }
 
     pub fn expr_ids(&self) -> Vec<ExprId> {
@@ -89,6 +105,39 @@ impl ProtocolContext {
     pub fn expr_loc_clone(&self) -> SecondaryMap<ExprId, (usize, usize, usize)> {
         self.expr_loc.clone()
     }
+}
+
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct Module {
+//     clock: Clock,
+//     protocols: Vec<Protocol>,
+//     ports: Vec<Field>,
+// }
+//
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Clock {
+    #[default]
+    None,
+    Posedge(String),
+}
+
+/// Represents an unresolved `module`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemapModule {
+    pub ctx: ProtocolContext,
+    pub name: String,
+    pub clock: Clock,
+    pub implements: Vec<StructId>,
+    pub mappings: Vec<Mapping>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mapping {
+    pub name: String,
+    pub dir: Dir,
+    pub tpe: Type,
+    pub rhs: ExprId,
+    pub cond: ExprId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -486,7 +535,7 @@ mod tests {
         );
 
         // 1) declare symbols that are local to the add protocol
-        let add_scope = symbols.add_protocol_scope("add");
+        let add_scope = symbols.enter_scope("add");
         let a = symbols.add_without_parent("a".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
         let b: SymbolId =
             symbols.add_without_parent("b".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
@@ -550,7 +599,7 @@ mod tests {
         );
 
         // 1) declare symbols local to the calyx_go_done protocol
-        let scope = symbols.add_protocol_scope("calyx_go_done");
+        let scope = symbols.enter_scope("calyx_go_done");
         let ii = symbols.add_without_parent("ii".to_string(), Type::BitVec(32), SymbolKind::Arg(0));
         let oo = symbols.add_without_parent("oo".to_string(), Type::BitVec(32), SymbolKind::Arg(1));
         assert_eq!(symbols["oo"], symbols[oo]);

@@ -13,4 +13,5 @@ fn simple_bounded_loop<dut: Counter>(a: u64, num_iterations: uint, s: u64) {
     step();
   }
   assert_eq(dut.s, s);
+  step();
 }

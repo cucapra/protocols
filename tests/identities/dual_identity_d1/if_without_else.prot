@@ -4,7 +4,9 @@ struct DualIdentity {
 }
 
 prot if_without_else<dut: DualIdentity>(a: u64, b: u64) {
-    if (dut.b == b) {
+    if (dut.b == 64'd1) {
         dut.a := a;
     }
+    step();
 }
+

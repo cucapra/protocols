@@ -174,35 +174,35 @@ fn escape_label(label: &str) -> String {
 mod tests {
     use std::path::Path;
 
+    use super::*;
+    use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::parse_file;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use insta::Settings;
 
-    use super::*;
-
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, protocols) = parse_file(filename, &mut handler).unwrap();
+        let ast = frontend(&[filename], &mut handler, false).unwrap();
         let mut content = String::new();
-        for ast in protocols {
-            let ir: ProtoGraph = lower_ast_to_ir(ast, &symbols);
+        let st = &ast.st;
+        for proto_ast in ast.protos {
+            let ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
             content += "== pre-contract ==\n";
-            content += &to_dot_string(&ir, &symbols);
+            content += &to_dot_string(&ir, st);
             content += "\n";
 
             // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir, &symbols);
+            contract_edges(&mut contracted_ir, st);
             content += "== post-contract ==\n";
-            content += &to_dot_string(&contracted_ir, &symbols);
+            content += &to_dot_string(&contracted_ir, st);
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();
-            normalize_assignments(&mut assignment_normalized_ir, &symbols);
+            normalize_assignments(&mut assignment_normalized_ir, st);
             content += "== post-normalize ==\n";
-            content += &to_dot_string(&assignment_normalized_ir, &symbols);
+            content += &to_dot_string(&assignment_normalized_ir, st);
             content += "\n";
         }
 

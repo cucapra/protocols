@@ -19,7 +19,8 @@ prot mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.a := X;
   dut.b := X;
   step();
-  s := dut.s;
+  assert_eq(s, dut.s);
+  step();
 }
 
 prot ignore<dut: Multiplier>(a: u32, b: u32, s: u32) {
@@ -34,5 +35,7 @@ prot ignore<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.a := X;
   dut.b := X;
   step();
-  s := dut.s;
+  assert_eq(s, dut.s);
+  step();
 }
+
