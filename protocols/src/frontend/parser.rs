@@ -767,11 +767,11 @@ impl ModuleCtx<'_> {
         expect_rule(self.diag, self.fileid, option, context_pair, message)
     }
 
-    fn on_module_impl_list(&mut self, pair: Pair, out: &mut Vec<String>) -> Result<(), String> {
+    fn on_module_impl_list(pair: Pair, out: &mut Vec<String>) -> Result<(), String> {
         for inner_pair in pair.into_inner() {
             match inner_pair.as_rule() {
                 Rule::non_path_id => out.push(inner_pair.as_str().to_string()),
-                Rule::module_impl_list => self.on_module_impl_list(inner_pair, out)?,
+                Rule::module_impl_list => Self::on_module_impl_list(inner_pair, out)?,
                 other => unreachable!("Unexpected rule: {:?}", other),
             }
         }
@@ -903,7 +903,7 @@ impl ModuleCtx<'_> {
             "Expected list of implemented interfaces/structs",
         )?;
         let mut impl_struct_names = vec![];
-        self.on_module_impl_list(impl_lst, &mut impl_struct_names)?;
+        Self::on_module_impl_list(impl_lst, &mut impl_struct_names)?;
         self.m.implements = impl_struct_names
             .iter()
             .map(|name| {
