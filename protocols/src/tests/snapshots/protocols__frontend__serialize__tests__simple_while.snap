@@ -7,9 +7,9 @@ struct Counter {
   out s: u64,
 }
 
-fn simple_while<dut: Counter>(a: u64, b: u64, s: u64) {
+prot simple_while<dut: Counter>(a: u64, b: u64, s: u64) {
   dut.a := a;
-  while !(dut.s == 1) {
+  while !(dut.s == 64'd1) {
     step();
   }
   step();

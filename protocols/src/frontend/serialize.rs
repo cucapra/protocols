@@ -150,7 +150,11 @@ where
     E: Index<ExprId, Output = Expr>,
 {
     match &exprs[*expr_id] {
-        Expr::Const(val) => val.to_u64().unwrap().to_string(),
+        Expr::Const(val) => {
+            // note: do not use serialize_bitvec since that does not actually result in
+            //       a parsable string!
+            format!("{}'d{}", val.width(), val.to_dec_str())
+        }
         Expr::Sym(symid) => st[symid].full_name(st),
         Expr::DontCare => "X".to_string(),
         Expr::IsLastIteration => "is_last()".to_string(),
@@ -360,7 +364,7 @@ pub fn serialize(out: &mut impl Write, ast: &Ast) -> std::io::Result<()> {
     }
 
     for proto in &ast.protos {
-        write!(out, "fn {}", proto.name)?;
+        write!(out, "prot {}", proto.name)?;
 
         if let Some(type_param) = proto.type_param {
             write!(
@@ -411,7 +415,7 @@ pub mod tests {
 
     use super::*;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::parse_file_with_name;
+    use crate::frontend::parser::{parse_file_with_name, parse_string};
     use baa::BitVecValue;
     use clap::ColorChoice;
     use insta::Settings;
@@ -428,13 +432,45 @@ pub mod tests {
     fn test_helper(filename: &str, snap_name: &str) {
         let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
         let result = parse_file_with_name(filename, display_filename(filename), &mut handler);
+        let maybe_ast = result.ok();
 
-        let content = match result {
-            Ok(ast) => serialize_to_string(&ast).unwrap(),
-            Err(_) => strip_str(handler.error_string()),
+        let content = match &maybe_ast {
+            Some(ast) => serialize_to_string(ast).unwrap(),
+            None => strip_str(handler.error_string()),
         };
         println!("{}", content);
-        snap(snap_name, content);
+        snap(snap_name, content.clone());
+
+        // round trip
+        if let Some(ast) = maybe_ast {
+            let ast2 = parse_string(&content, &mut handler).expect("failed to parse serialized");
+            assert_ast_eq(&ast, &ast2);
+        }
+    }
+
+    fn assert_ast_eq(a: &Ast, b: &Ast) {
+        assert_eq!(a.st, b.st);
+        // for the protos and remaps, we need to make sure we do not include the expression locations
+        assert_eq!(
+            a.protos.len(),
+            b.protos.len(),
+            "{:?}\n{:?}",
+            a.protos,
+            b.protos
+        );
+        for (pa, pb) in a.protos.iter().zip(b.protos.iter()) {
+            assert_proto_eq(pa, pb);
+        }
+        assert_eq!(
+            a.remaps.len(),
+            b.remaps.len(),
+            "{:?}\n{:?}",
+            a.remaps,
+            b.remaps
+        );
+        for (ra, rb) in a.remaps.iter().zip(b.remaps.iter()) {
+            assert_remap_eq(ra, rb);
+        }
     }
 
     fn display_filename(filename: &str) -> &str {

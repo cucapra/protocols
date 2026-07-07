@@ -9,13 +9,13 @@ struct Calyx {
   out oo: u32,
 }
 
-fn calyx_go_done<dut: Calyx>(ii: u32, oo: u32) {
+prot calyx_go_done<dut: Calyx>(ii: u32, oo: u32) {
   dut.ii := ii;
-  dut.go := 1;
-  while !(dut.done == 1) {
+  dut.go := 32'd1;
+  while !(dut.done == 1'd1) {
     step();
   }
-  dut.go := 0;
+  dut.go := 32'd0;
   dut.ii := X;
   assert_eq(dut.oo, oo);
   step();
