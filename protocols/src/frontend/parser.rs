@@ -869,7 +869,7 @@ impl ModuleCtx<'_> {
 
     fn err(&mut self, msg: String, pair: &Pair) -> Result<(), String> {
         self.diag
-            .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+            .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
         Err(msg)
     }
 

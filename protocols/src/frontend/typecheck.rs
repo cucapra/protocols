@@ -397,12 +397,12 @@ fn is_input_map_rhs_ok(
             let msg = format!(
                 "The condition for the mapping of input pin `{name}` can only depend on the same pin as the mapping."
             );
-            diag.emit_diagnostic_expr(&ctx, &cond, &msg, Level::Error);
+            diag.emit_diagnostic_expr(ctx, &cond, &msg, Level::Error);
             false
         }
     } else {
         let msg = format!("Input pin `{name}` must be mapped to a single other pin.");
-        diag.emit_diagnostic_expr(&ctx, &rhs, &msg, Level::Error);
+        diag.emit_diagnostic_expr(ctx, &rhs, &msg, Level::Error);
         false
     }
 }
@@ -423,12 +423,12 @@ fn is_output_map_rhs_ok(
             true
         } else {
             let msg = format!("Output pins are not allowed to have a `with` condition ({name}).");
-            diag.emit_diagnostic_expr(&ctx, &cond, &msg, Level::Error);
+            diag.emit_diagnostic_expr(ctx, &cond, &msg, Level::Error);
             false
         }
     } else {
         let msg = format!("Output pin `{name}` can only be mapped directly to another output pin.");
-        diag.emit_diagnostic_expr(&ctx, &rhs, &msg, Level::Error);
+        diag.emit_diagnostic_expr(ctx, &rhs, &msg, Level::Error);
         false
     }
 }
@@ -455,35 +455,35 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
         let ctx = &remap.ctx;
         for m in &remap.mappings {
             // check that the rhs is of the correct type
-            let rhs_tpe = type_check_expr(ctx, &mut ast.st, diag, &m.rhs)?;
+            let rhs_tpe = type_check_expr(ctx, &ast.st, diag, &m.rhs)?;
             if !rhs_tpe.is_equivalent(&m.tpe) {
                 let error_msg = format!(
                     "Pin remapping has incompatible type: {} : {} vs. {} : {}",
                     m.name,
-                    serialize_type(&mut ast.st, m.tpe),
-                    serialize_expr(ctx, &mut ast.st, &m.rhs),
-                    serialize_type(&mut ast.st, rhs_tpe)
+                    serialize_type(&ast.st, m.tpe),
+                    serialize_expr(ctx, &ast.st, &m.rhs),
+                    serialize_type(&ast.st, rhs_tpe)
                 );
                 diag.emit_diagnostic_expr(&remap.ctx, &m.rhs, &error_msg, Level::Error);
                 found_err = true;
             }
 
             // the condition must be boolean
-            let cond_type = type_check_expr(ctx, &mut ast.st, diag, &m.cond)?;
+            let cond_type = type_check_expr(ctx, &ast.st, diag, &m.cond)?;
             if !cond_type.is_equivalent(&Type::BitVec(1)) {
                 let error_msg = format!(
                     "Pin remapping condition for {} does not have bv<1> type: {} : {}",
                     m.name,
-                    serialize_expr(ctx, &mut ast.st, &m.cond),
-                    serialize_type(&mut ast.st, cond_type)
+                    serialize_expr(ctx, &ast.st, &m.cond),
+                    serialize_type(&ast.st, cond_type)
                 );
                 diag.emit_diagnostic_expr(&remap.ctx, &m.cond, &error_msg, Level::Error);
                 found_err = true;
             }
 
             let rhs_ok = match m.dir {
-                Dir::In => is_input_map_rhs_ok(ctx, &mut ast.st, diag, &m.name, m.rhs, m.cond),
-                Dir::Out => is_output_map_rhs_ok(ctx, &mut ast.st, diag, &m.name, m.rhs, m.cond),
+                Dir::In => is_input_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
+                Dir::Out => is_output_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
             };
             found_err |= !rhs_ok;
         }
