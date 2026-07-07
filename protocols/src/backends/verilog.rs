@@ -13,14 +13,14 @@ use crate::scheduler::Invocation;
 // todo: add `interface` and `module` to protocol language and remove pin argument
 pub fn to_verilog(
     testbench_name: &str,
-    st: &SymbolTable,
-    protos: &[Protocol],
+    ast: &Ast,
     pins: &[(String, PinAnnotation)],
     vcd_out: Option<&str>,
     invocs: &[Invocation],
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let modules = find_designs(st, protos);
+    let modules = find_designs(ast);
+    let st = &ast.st;
     assert_eq!(
         modules.len(),
         1,
@@ -30,7 +30,7 @@ pub fn to_verilog(
 
     // derive the instance name from the first protocol
     let first_proto_id = module.protocols[0].0;
-    let instance_name_id = protos[first_proto_id].type_param.unwrap();
+    let instance_name_id = ast.protos[first_proto_id].type_param.unwrap();
     let instance_name = st[instance_name_id].name().to_string();
 
     // header
@@ -135,7 +135,7 @@ pub fn to_verilog(
 
     // one task for each protocol
     for &(proto_id, _) in module.protocols.iter() {
-        let proto = &protos[proto_id];
+        let proto = &ast.protos[proto_id];
         let sym_verilog = gen_sym_to_verilog_map(st, proto, &module, &instance_name);
         proto_to_verilog(st, proto, &sym_verilog, out)?;
     }

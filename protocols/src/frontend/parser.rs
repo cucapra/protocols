@@ -927,12 +927,10 @@ impl ModuleCtx<'_> {
     }
 }
 
-pub(crate) type ParserOut = (SymbolTable, Vec<Protocol>, Vec<RemapModule>);
-
 pub(crate) fn parse_files(
     filenames: &[impl AsRef<std::path::Path>],
     handler: &mut DiagnosticHandler,
-) -> Result<ParserOut, String> {
+) -> Result<Ast, String> {
     let mut st = SymbolTable::default();
     let mut protos = vec![];
     let mut remaps = vec![];
@@ -947,7 +945,7 @@ pub(crate) fn parse_files(
             handler,
         )?;
     }
-    Ok((st, protos, remaps))
+    Ok(Ast { st, protos, remaps })
 }
 
 fn parse_file_internal(

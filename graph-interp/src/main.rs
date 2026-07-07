@@ -2,7 +2,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use clap::Parser;
 use protocols::ascii_waveform::print_ascii_waveform;
-use protocols::frontend::ast::Protocol;
+use protocols::frontend::ast::{Ast, Protocol};
 use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
@@ -63,7 +63,7 @@ struct Cli {
     ascii_waveform: bool,
 }
 
-fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
+fn load_protocols(cli: &Cli) -> Ast {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
     frontend(
         &cli.protocol,
@@ -73,9 +73,9 @@ fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Protocol>) {
     .unwrap()
 }
 
-fn load_traces(cli: &Cli, st: &SymbolTable, protos: &[Protocol]) -> Vec<Vec<(String, Vec<Value>)>> {
+fn load_traces(cli: &Cli, ast: &Ast) -> Vec<Vec<(String, Vec<Value>)>> {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
-    transaction_frontend(&cli.transactions, st, protos, &mut handler).unwrap()
+    transaction_frontend(&cli.transactions, ast, &mut handler).unwrap()
 }
 
 fn build_arg_map<'a>(
@@ -195,17 +195,18 @@ fn run_respect_forks(
 
 fn main() {
     let cli = Cli::parse();
-    let (st, protos) = load_protocols(&cli);
-    let traces = load_traces(&cli, &st, &protos);
-    let design = find_a_single_design(&st, &protos, &cli.protocol).unwrap();
+    let ast = load_protocols(&cli);
+    let st = &ast.st;
+    let traces = load_traces(&cli, &ast);
+    let design = find_a_single_design(&ast, &cli.protocol).unwrap();
 
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.respect_forks {
-            run_respect_forks(&cli, &st, &protos, &design, &traces);
+            run_respect_forks(&cli, st, &ast.protos, &design, &traces);
         } else {
-            run_classic(&cli, &st, &protos, &design, traces);
+            run_classic(&cli, st, &ast.protos, &design, traces);
         }
     }));
     std::panic::set_hook(old_hook);

@@ -17,9 +17,9 @@ pub fn frontend(
     filenames: &[impl AsRef<std::path::Path>],
     diag: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
-) -> anyhow::Result<(symbol::SymbolTable, Vec<ast::Protocol>)> {
+) -> anyhow::Result<ast::Ast> {
     // Parse protocols file
-    let (mut st, protos, remaps) = parser::parse_files(filenames, diag).map_err(|e| {
+    let err = |e: String| {
         anyhow!(
             "{}: {}",
             e,
@@ -29,20 +29,21 @@ pub fn frontend(
                 .collect::<Vec<_>>()
                 .join(", ")
         )
-    })?;
+    };
+    let mut ast = parser::parse_files(filenames, diag).map_err(err)?;
 
     // Type-check the parsed transactions
-    typecheck::type_check(&mut st, &protos, &remaps, diag)?;
+    typecheck::type_check(&mut ast, diag)?;
 
     // check for fork and step errors
     let error_count = if skip_static_step_fork_checks {
         0
     } else {
-        static_fork_step_check::check_step_and_fork(&st, &protos, diag)
+        static_fork_step_check::check_step_and_fork(&ast, diag)
     };
     if error_count > 0 {
         Err(anyhow!("step or fork errors"))
     } else {
-        Ok((st, protos))
+        Ok(ast)
     }
 }

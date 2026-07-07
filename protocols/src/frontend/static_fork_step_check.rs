@@ -1,19 +1,14 @@
 use crate::frontend::ast::*;
 use crate::frontend::diagnostic::{DiagnosticHandler, Level};
-use crate::frontend::symbol::SymbolTable;
 
 /// Conservative static analysis for our step and fork rules:
 /// 1. fork must come after a step
 /// 2. any execution of a protocol must fork exactly 0 or 1 time
 /// 3. protocols must end in a step
 /// 4. a loop must contain at least one step, otherwise the protocol can never terminate
-pub fn check_step_and_fork(
-    _st: &SymbolTable,
-    protocols: &[Protocol],
-    diag: &mut DiagnosticHandler,
-) -> u32 {
+pub fn check_step_and_fork(ast: &Ast, diag: &mut DiagnosticHandler) -> u32 {
     let mut error_count = 0;
-    for proto in protocols {
+    for proto in &ast.protos {
         let final_stmts = analyze_stmt(
             diag,
             &mut error_count,

@@ -1,4 +1,4 @@
-// Copyright 2024 Cornell University
+// Copyright 2024-26 Cornell University
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 // author: Kevin Laeufer <laeufer@cornell.edu>
@@ -14,6 +14,14 @@ use strum::IntoEnumIterator;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
 use crate::frontend::symbol::{Arg, Dir, ScopeId, StructId, SymbolId, SymbolTable, Type};
+
+/// Frontend representation of parsed protocol files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ast {
+    pub st: SymbolTable,
+    pub protos: Vec<Protocol>,
+    pub remaps: Vec<RemapModule>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolContext {
@@ -113,10 +121,9 @@ pub enum Clock {
     Posedge(String),
 }
 
-/// Represents an unresolved `module`. We use this representation for type checking.
-/// It should stay internal to the frontend crate.
+/// Represents an unresolved `module`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RemapModule {
+pub struct RemapModule {
     pub ctx: ProtocolContext,
     pub name: String,
     pub clock: Clock,
@@ -125,7 +132,7 @@ pub(crate) struct RemapModule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Mapping {
+pub struct Mapping {
     pub name: String,
     pub dir: Dir,
     pub tpe: Type,

@@ -6,7 +6,7 @@
 //! # Design extraction
 //! This module contains code to extract/infer Verilog designs from `struct` and protocol declarations.
 
-use crate::frontend::ast::Protocol;
+use crate::frontend::ast::Ast;
 use crate::frontend::serialize::serialize_field;
 use crate::frontend::symbol::{Field, SymbolId, SymbolTable, Type};
 use anyhow::bail;
@@ -47,11 +47,10 @@ pub fn serialize_design(symbol_table: &SymbolTable, design: &Design) -> String {
 
 /// Succeeds iff there is only a single `struct` with protocols in the file.
 pub fn find_a_single_design(
-    st: &SymbolTable,
-    protos: &[Protocol],
+    ast: &Ast,
     filenames: &[impl AsRef<std::path::Path>],
 ) -> anyhow::Result<Design> {
-    let designs = find_designs(st, protos);
+    let designs = find_designs(ast);
     if designs.is_empty() {
         bail!(
             "No protocols found in {}",
@@ -79,11 +78,12 @@ pub fn find_a_single_design(
 
 /// Finds all the protocols associated with a given `struct` (called a "design" since its a DUT),
 /// returning a `HashMap` from struct names to the actual `Design`
-pub fn find_designs(st: &SymbolTable, protos: &[Protocol]) -> FxHashMap<String, Design> {
+pub fn find_designs(ast: &Ast) -> FxHashMap<String, Design> {
     // Maps the name of the protocol to metadata about the struct (design)
     // We use `FxHashMap` because its a bit faster than the usual `HashMap`
     let mut designs: FxHashMap<String, Design> = FxHashMap::default();
-    for (proto_id, proto) in protos.iter().enumerate() {
+    let st = &ast.st;
+    for (proto_id, proto) in ast.protos.iter().enumerate() {
         if let Some(dut_symbol_id) = proto.type_param {
             // We assume type parameters have to be structs
             let struct_id = match st[dut_symbol_id].tpe() {

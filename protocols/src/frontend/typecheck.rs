@@ -435,55 +435,55 @@ fn is_output_map_rhs_ok(
 
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
-pub(crate) fn type_check(
-    st: &mut SymbolTable,
-    protos: &[Protocol],
-    remaps: &[RemapModule],
-    diag: &mut DiagnosticHandler,
-) -> anyhow::Result<()> {
-    for proto in protos {
+pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow::Result<()> {
+    for proto in &ast.protos {
         // debug sanity check to make sure the symbol table and the argument list are in sync
         for (index, arg) in proto.args.iter().enumerate() {
-            debug_assert_eq!(st[arg].as_arg_index(), Some(index), "{}", st[arg].name());
+            debug_assert_eq!(
+                ast.st[arg].as_arg_index(),
+                Some(index),
+                "{}",
+                ast.st[arg].name()
+            );
         }
 
-        type_check_stmt(proto, st, diag, &proto.body)?;
+        type_check_stmt(proto, &mut ast.st, diag, &proto.body)?;
     }
 
-    for remap in remaps {
+    for remap in &ast.remaps {
         let mut found_err = false;
         let ctx = &remap.ctx;
         for m in &remap.mappings {
             // check that the rhs is of the correct type
-            let rhs_tpe = type_check_expr(ctx, st, diag, &m.rhs)?;
+            let rhs_tpe = type_check_expr(ctx, &mut ast.st, diag, &m.rhs)?;
             if !rhs_tpe.is_equivalent(&m.tpe) {
                 let error_msg = format!(
                     "Pin remapping has incompatible type: {} : {} vs. {} : {}",
                     m.name,
-                    serialize_type(st, m.tpe),
-                    serialize_expr(ctx, st, &m.rhs),
-                    serialize_type(st, rhs_tpe)
+                    serialize_type(&mut ast.st, m.tpe),
+                    serialize_expr(ctx, &mut ast.st, &m.rhs),
+                    serialize_type(&mut ast.st, rhs_tpe)
                 );
                 diag.emit_diagnostic_expr(&remap.ctx, &m.rhs, &error_msg, Level::Error);
                 found_err = true;
             }
 
             // the condition must be boolean
-            let cond_type = type_check_expr(ctx, st, diag, &m.cond)?;
+            let cond_type = type_check_expr(ctx, &mut ast.st, diag, &m.cond)?;
             if !cond_type.is_equivalent(&Type::BitVec(1)) {
                 let error_msg = format!(
                     "Pin remapping condition for {} does not have bv<1> type: {} : {}",
                     m.name,
-                    serialize_expr(ctx, st, &m.cond),
-                    serialize_type(st, cond_type)
+                    serialize_expr(ctx, &mut ast.st, &m.cond),
+                    serialize_type(&mut ast.st, cond_type)
                 );
                 diag.emit_diagnostic_expr(&remap.ctx, &m.cond, &error_msg, Level::Error);
                 found_err = true;
             }
 
             let rhs_ok = match m.dir {
-                Dir::In => is_input_map_rhs_ok(ctx, st, diag, &m.name, m.rhs, m.cond),
-                Dir::Out => is_output_map_rhs_ok(ctx, st, diag, &m.name, m.rhs, m.cond),
+                Dir::In => is_input_map_rhs_ok(ctx, &mut ast.st, diag, &m.name, m.rhs, m.cond),
+                Dir::Out => is_output_map_rhs_ok(ctx, &mut ast.st, diag, &m.name, m.rhs, m.cond),
             };
             found_err |= !rhs_ok;
         }
