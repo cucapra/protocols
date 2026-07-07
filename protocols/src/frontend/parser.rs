@@ -997,7 +997,7 @@ fn parse_file_internal(
 ) -> Result<(), String> {
     let fileid = diag.add_file(display_name.into(), input.to_string());
 
-    let res = ProtocolParser::parse(Rule::file, &input);
+    let res = ProtocolParser::parse(Rule::file, input);
     match res {
         Ok(_parsed) => (),
         Err(err) => {
@@ -1011,7 +1011,7 @@ fn parse_file_internal(
         }
     }
 
-    let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
+    let pairs = ProtocolParser::parse(Rule::file, input).unwrap();
     let inner = pairs.clone().next().unwrap().into_inner();
 
     for pair in inner {
