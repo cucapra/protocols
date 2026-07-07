@@ -413,20 +413,15 @@ pub mod tests {
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
 
-    fn backend(
-        st: &SymbolTable,
-        protos: &[Protocol],
-        pins: &[(String, PinAnnotation)],
-        invocs: &[Invocation],
-    ) -> String {
+    fn backend(ast: &Ast, pins: &[(String, PinAnnotation)], invocs: &[Invocation]) -> String {
         let mut out = vec![];
-        to_verilog("tb", st, protos, pins, Some("dump.vcd"), invocs, &mut out).unwrap();
+        to_verilog("tb", ast, pins, Some("dump.vcd"), invocs, &mut out).unwrap();
         String::from_utf8(out).unwrap()
     }
 
     #[test]
     fn alu_d1_to_verilog() {
-        let (st, protos) = frontend(
+        let ast = frontend(
             &["../tests/alus/alu_d1.prot"],
             &mut DiagnosticHandler::default(),
             false,
@@ -450,12 +445,7 @@ pub mod tests {
                 ],
             ),
         ];
-        let verilog = backend(
-            &st,
-            &protos,
-            &[("clk".to_string(), PinAnnotation::Clock)],
-            &tx,
-        );
+        let verilog = backend(&ast, &[("clk".to_string(), PinAnnotation::Clock)], &tx);
         println!("{verilog}");
         // note: this "test" just runs the Verilog backend, but it isn't really possible to
         //       assert meaningful properties about the output. That needs to be done by an

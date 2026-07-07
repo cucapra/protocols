@@ -498,11 +498,11 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
 mod tests {
     use std::path::Path;
 
+    use super::*;
+    use crate::frontend::parser::parse_file_with_name;
     use baa::BitVecValue;
     use insta::Settings;
     use strip_ansi_escapes::strip_str;
-
-    use super::*;
 
     fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
@@ -516,8 +516,8 @@ mod tests {
         let mut handler = DiagnosticHandler::default();
         let result = parse_file_with_name(file_name, display_filename(file_name), &mut handler);
         let content = match result {
-            Ok((mut st, protos, remaps)) => {
-                let _ = type_check(&mut st, &protos, &remaps, &mut handler);
+            Ok(mut ast) => {
+                let _ = type_check(&mut ast, &mut handler);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -638,6 +638,11 @@ mod tests {
         let body = vec![a_assign, fork, c_assign, step, s_assign];
         prot.body = prot.s(Stmt::Block(body));
         symbols.exit_scope();
-        let _ = type_check(&mut symbols, &[prot], &[], &mut handler);
+        let mut ast = Ast {
+            st: symbols,
+            protos: vec![prot],
+            remaps: vec![],
+        };
+        let _ = type_check(&mut ast, &mut handler);
     }
 }

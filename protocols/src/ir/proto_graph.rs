@@ -321,19 +321,19 @@ mod tests {
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
-        let (symbol_table, protocols) =
-            frontend(&[path], &mut handler, skip_static_step_fork_checks).unwrap();
-        let ast = match protocol_name {
-            Some(protocol_name) => protocols
+        let ast = frontend(&[path], &mut handler, skip_static_step_fork_checks).unwrap();
+        let proto = match protocol_name {
+            Some(protocol_name) => ast
+                .protos
                 .into_iter()
                 .find(|ast| ast.name == protocol_name)
                 .unwrap(),
             None => {
-                assert_eq!(protocols.len(), 1);
-                protocols.into_iter().next().unwrap()
+                assert_eq!(ast.protos.len(), 1);
+                ast.protos.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(ast, &symbol_table)
+        lower_ast_to_ir(proto, &ast.st)
     }
 
     #[test]

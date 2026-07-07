@@ -948,6 +948,26 @@ pub(crate) fn parse_files(
     Ok(Ast { st, protos, remaps })
 }
 
+#[cfg(test)]
+pub(crate) fn parse_file_with_name(
+    filename: impl AsRef<std::path::Path>,
+    display_name: impl AsRef<std::path::Path>,
+    handler: &mut DiagnosticHandler,
+) -> Result<Ast, String> {
+    let mut st = SymbolTable::default();
+    let mut protos = vec![];
+    let mut remaps = vec![];
+    parse_file_internal(
+        filename,
+        display_name.as_ref().to_str().unwrap(),
+        &mut st,
+        &mut protos,
+        &mut remaps,
+        handler,
+    )?;
+    Ok(Ast { st, protos, remaps })
+}
+
 fn parse_file_internal(
     filename: impl AsRef<std::path::Path>,
     display_name: &str,

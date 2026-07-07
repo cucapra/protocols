@@ -17,9 +17,9 @@ use crate::frontend::symbol::*;
 use crate::interpreter::ExprValue;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
-pub fn serialize_to_string(st: &SymbolTable, protos: &[Protocol]) -> std::io::Result<String> {
+pub fn serialize_to_string(ast: &Ast) -> std::io::Result<String> {
     let mut out = Vec::new();
-    serialize(&mut out, st, protos)?;
+    serialize(&mut out, ast)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
@@ -353,16 +353,13 @@ pub fn serialize_structs(
 
 /// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to the provided
 /// output buffer `out`
-pub fn serialize(
-    out: &mut impl Write,
-    st: &SymbolTable,
-    protos: &[Protocol],
-) -> std::io::Result<()> {
+pub fn serialize(out: &mut impl Write, ast: &Ast) -> std::io::Result<()> {
+    let st = &ast.st;
     if !st.struct_ids().is_empty() {
         serialize_structs(out, st, st.struct_ids())?;
     }
 
-    for proto in protos {
+    for proto in &ast.protos {
         write!(out, "fn {}", proto.name)?;
 
         if let Some(type_param) = proto.type_param {
@@ -413,8 +410,8 @@ pub mod tests {
     use std::path::Path;
 
     use super::*;
-    use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::frontend::parser::parse_file_with_name;
     use baa::BitVecValue;
     use clap::ColorChoice;
     use insta::Settings;
@@ -430,10 +427,10 @@ pub mod tests {
 
     fn test_helper(filename: &str, snap_name: &str) {
         let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
-        let result = frontend(&[filename], &mut handler, false);
+        let result = parse_file_with_name(filename, display_filename(filename), &mut handler);
 
         let content = match result {
-            Ok((st, protos)) => serialize_to_string(&st, &protos).unwrap(),
+            Ok(ast) => serialize_to_string(&ast).unwrap(),
             Err(_) => strip_str(handler.error_string()),
         };
         println!("{}", content);
@@ -625,7 +622,12 @@ pub mod tests {
             easycond.s(Stmt::Assign(b, one_expr)),
         ];
         easycond.body = easycond.s(Stmt::Block(body));
-        println!("{}", serialize_to_string(&symbols, &[easycond]).unwrap());
         symbols.exit_scope();
+        let ast = Ast {
+            st: symbols,
+            protos: vec![easycond],
+            remaps: vec![],
+        };
+        println!("{}", serialize_to_string(&ast).unwrap());
     }
 }
