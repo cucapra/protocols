@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -10,10 +9,12 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node13 [label="1"];
-  node13 [label="[1] D.data := data"];
+  node0 -> node14 [label="1"];
+  node14 [label="[1] D.valid := X if 1\n[1] D.data := X if 1"];
+  node14 -> node13 [label="1"];
+  node13 [label="[1] D.data := data if 1"];
   node13 -> node12 [label="1"];
-  node12 [label="[1] D.valid := 1"];
+  node12 [label="[1] D.valid := 1 if 1"];
   node12 -> node11 [label="1"];
   node11 [label=""];
   node11 -> node9 [label="not(D.ready)"];
@@ -37,7 +38,7 @@ digraph "send_data" {
   node5 -> node4 [label="1"];
   node4 [label=""];
   node4 -> node3 [label="1"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] D.valid := X if 1\n[1] D.data := X if 1"];
 }
 
 == post-contract ==
@@ -46,15 +47,54 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.data := data\n[1] D.valid := 1"];
+  node0 [label="[1] D.valid := 1 if 1\n[1] D.data := data if 1"];
   node0 -> node1 [label="D.ready / step"];
   node0 -> node8 [label="not(D.ready) / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] D.valid := X if 1\n[1] D.data := X if 1"];
   node8 [label=""];
   node8 -> node5 [label="not(D.ready) / step"];
   node8 -> node1 [label="D.ready / step"];
   node5 [label="[1] assert_eq(D.ready, 1)"];
   node5 -> node1 [label="1 / step"];
+}
+
+== post-propagation ==
+digraph "send_data" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node14 [label="1"];
+  node14 [label="[1] D.valid := X if 1\n[1] D.data := X if 1"];
+  node14 -> node13 [label="1"];
+  node13 [label="[1] D.data := data if 1"];
+  node13 -> node12 [label="1"];
+  node12 [label="[1] D.valid := 1 if 1"];
+  node12 -> node11 [label="1"];
+  node11 [label=""];
+  node11 -> node9 [label="not(D.ready)"];
+  node11 -> node10 [label="D.ready"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node10 [label=""];
+  node10 -> node3 [label="1"];
+  node8 [label=""];
+  node8 -> node6 [label="not(D.ready)"];
+  node8 -> node7 [label="D.ready"];
+  node3 [label=""];
+  node3 -> node2 [label="1"];
+  node6 [label=""];
+  node6 -> node5 [label="1 / step"];
+  node7 [label=""];
+  node7 -> node4 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node5 [label="[1] assert_eq(D.ready, 1)"];
+  node5 -> node4 [label="1"];
+  node4 [label=""];
+  node4 -> node3 [label="1"];
+  node1 [label="[1] done\n[1] D.valid := X if 1\n[1] D.data := X if 1"];
 }
 
 == post-normalize ==
@@ -63,13 +103,13 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.data := data\n[1] D.valid := 1"];
+  node0 [label="[1] D.valid := 1 if 1\n[1] D.data := data if 1"];
   node0 -> node1 [label="D.ready / step"];
   node0 -> node8 [label="not(D.ready) / step"];
-  node1 [label="[1] done\n[1] D.valid := D.valid\n[1] D.data := D.data"];
-  node8 [label="[1] D.valid := D.valid\n[1] D.data := D.data"];
+  node1 [label="[1] done\n[1] D.valid := X if 1\n[1] D.data := X if 1"];
+  node8 [label="[1] D.valid := 1 if 1\n[1] D.data := data if 1"];
   node8 -> node5 [label="not(D.ready) / step"];
   node8 -> node1 [label="D.ready / step"];
-  node5 [label="[1] assert_eq(D.ready, 1)\n[1] D.valid := D.valid\n[1] D.data := D.data"];
+  node5 [label="[1] assert_eq(D.ready, 1)\n[1] D.valid := 1 if 1\n[1] D.data := data if 1"];
   node5 -> node1 [label="1 / step"];
 }

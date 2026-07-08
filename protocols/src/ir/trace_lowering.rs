@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::edge_contract::{append_action, contract_edges};
+use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
 
@@ -79,8 +79,23 @@ impl<'a> Lowerer<'a> {
         let mut internal_assert_guard = None;
 
         for action in entry_actions {
-            let guard = self.ir.and_guard(graft_guard, action.guard);
-            let guarded_action = action.with_guard(guard);
+            let guarded_action = match self.ir[action.op].clone() {
+                Op::Assign(symbol_id, assignment) => {
+                    assert_eq!(
+                        action.guard,
+                        self.ir.true_id(),
+                        "assignment action guards must be 1; path conditions belong in Assignment"
+                    );
+                    let guarded_assignment =
+                        guard_assignment(&mut self.ir, assignment, graft_guard);
+                    let guarded_op = self.ir.o(Op::Assign(symbol_id, guarded_assignment));
+                    Action::new(self.ir.true_id(), guarded_op)
+                }
+                _ => {
+                    let guard = self.ir.and_guard(graft_guard, action.guard);
+                    action.with_guard(guard)
+                }
+            };
             append_action(
                 &mut self.ir,
                 self.symbols,
@@ -169,6 +184,7 @@ pub fn lower_trace_to_ir(
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     contract_edges(&mut lowerer.ir, symbols);
+    // normalize_assignments(&mut lowerer.ir, symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.next_trace_graft_points(&first);

@@ -76,6 +76,19 @@ prot assign_after_observation<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
+prot better_if_else<DUT: Adder>(a: u32, b: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  if DUT.s == 32'd0 {
+    DUT.a := X;
+  } else {
+    DUT.a := 32'd5;
+  }
+  fork();
+  step();
+}
+
 prot if_else<DUT: Adder>(a1: u32, a2: u32) {
   if 1'd1 {
     DUT.a := a1;

@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -10,10 +9,12 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
-  node7 [label="[1] D.m_axis_tdata := data"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] D.m_axis_tdata := data if 1"];
   node7 -> node6 [label="1"];
-  node6 [label="[1] D.m_axis_tvalid := 1"];
+  node6 [label="[1] D.m_axis_tvalid := 1 if 1"];
   node6 -> node4 [label="1"];
   node4 [label=""];
   node4 -> node5 [label="not(D.m_axis_tready)"];
@@ -24,7 +25,7 @@ digraph "send_data" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
 
 == post-contract ==
@@ -33,13 +34,39 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tdata := data\n[1] D.m_axis_tvalid := 1"];
+  node0 [label="[1] D.m_axis_tvalid := 1 if 1\n[1] D.m_axis_tdata := data if 1"];
   node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
   node4 [label=""];
   node4 -> node4 [label="not(D.m_axis_tready) / step"];
   node4 -> node1 [label="D.m_axis_tready / step"];
+}
+
+== post-propagation ==
+digraph "send_data" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] D.m_axis_tdata := data if 1"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] D.m_axis_tvalid := 1 if 1"];
+  node6 -> node4 [label="1"];
+  node4 [label=""];
+  node4 -> node5 [label="not(D.m_axis_tready)"];
+  node4 -> node3 [label="D.m_axis_tready"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node3 [label=""];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
 
 == post-normalize ==
@@ -48,11 +75,11 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tdata := data\n[1] D.m_axis_tvalid := 1"];
+  node0 [label="[1] D.m_axis_tvalid := 1 if 1\n[1] D.m_axis_tdata := data if 1"];
   node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
-  node4 [label="[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node4 [label="[1] D.m_axis_tvalid := 1 if 1\n[1] D.m_axis_tdata := data if 1"];
   node4 -> node4 [label="not(D.m_axis_tready) / step"];
   node4 -> node1 [label="D.m_axis_tready / step"];
 }
@@ -64,12 +91,14 @@ digraph "idle" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node3 [label="1"];
-  node3 [label="[1] D.m_axis_tvalid := 0"];
+  node0 -> node4 [label="1"];
+  node4 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] D.m_axis_tvalid := 0 if 1"];
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
 
 == post-contract ==
@@ -78,9 +107,26 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0"];
+  node0 [label="[1] D.m_axis_tvalid := 0 if 1\n[1] D.m_axis_tdata := X if 1"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+}
+
+== post-propagation ==
+digraph "idle" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node4 [label="1"];
+  node4 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] D.m_axis_tvalid := 0 if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
 
 == post-normalize ==
@@ -89,7 +135,7 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node0 [label="[1] D.m_axis_tvalid := 0 if 1\n[1] D.m_axis_tdata := X if 1"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := D.m_axis_tvalid\n[1] D.m_axis_tdata := D.m_axis_tdata"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }

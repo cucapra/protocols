@@ -7,11 +7,13 @@ use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::determinize::determinized;
-use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
+use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::lowering::lower_ast_to_ir;
+use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
+use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
@@ -61,6 +63,10 @@ struct Cli {
     /// Prints trace status lines and ASCII waveforms
     #[arg(long)]
     ascii_waveform: bool,
+
+    /// Print reaching definition analysis results
+    #[arg(long)]
+    reaching_definitions: bool,
 }
 
 fn load_protocols(cli: &Cli) -> Ast {
@@ -128,8 +134,16 @@ fn run_classic(
     if cli.contract_edges {
         for (_, graph) in &mut graphs {
             contract_edges(graph, st);
-            normalize_assignments(graph, st);
-            graph.simplify_all_exprs();
+
+            // if !exists_conflicts(&rd, graph) && all_ports_present(&rd, graph, st) {
+            // propagate_assignments(graph, st, &rd);
+            // } else {
+            //     normalize_assignments(graph, st);
+            // }
+
+            if cli.graphout {
+                println!("{}", to_dot_string(graph, st).as_str());
+            }
         }
     }
 
@@ -142,8 +156,11 @@ fn run_classic(
                 .iter_mut()
                 .find(|(n, _)| n == &name)
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
+
+            let rd = reaching_definitions(pg, st);
+            propagate_assignments(pg, st, &rd);
+
             let args = build_arg_map(&pg.args, st, values);
-            // println!("{}", to_dot_string(pg, st));
             graph_interpreter::interpret(pg, st, args, &mut sim);
         }
         print_trace_success(trace_index);
@@ -167,13 +184,31 @@ fn run_respect_forks(
 
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
 
+        if cli.graphout {
+            println!("// joint graph for trace {trace_index}");
+            println!("{}", to_dot_string(&joint, st));
+        }
+
         if cli.determinize {
             joint = determinized(joint, st);
         }
         // normalize_assignments(&mut joint, st);
 
         if cli.graphout {
-            println!("// joint graph for trace {trace_index}");
+            println!("// post-determinization joint graph for trace {trace_index}");
+            println!("{}", to_dot_string(&joint, st));
+        }
+
+        let rd = reaching_definitions(&mut joint, st);
+        if cli.reaching_definitions {
+            println!("// reaching definitions for trace {trace_index}");
+            println!("{}", format_reaching_defs(&joint, st, &rd));
+        }
+
+        propagate_assignments(&mut joint, st, &rd);
+
+        if cli.graphout {
+            println!("// post-propagation joint graph for trace {trace_index}");
             println!("{}", to_dot_string(&joint, st));
         }
 
@@ -181,6 +216,7 @@ fn run_respect_forks(
         let waveform = graph_interpreter::interpret(&joint, st, FxHashMap::default(), &mut sim);
         if cli.ascii_waveform {
             print_trace_success(trace_index);
+            // println!("ascii");
             print_ascii_waveform(
                 waveform,
                 |port| sim.port_name(port).to_string(),

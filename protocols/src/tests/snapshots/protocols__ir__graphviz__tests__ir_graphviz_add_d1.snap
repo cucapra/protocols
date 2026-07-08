@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/graphviz.rs
-assertion_line: 212
 expression: content
 ---
 == pre-contract ==
@@ -10,16 +9,18 @@ digraph "add" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := a"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1"];
   node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node8 [label="[1] DUT.b := b if 1"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X"];
+  node6 [label="[1] DUT.a := X if 1"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] DUT.b := X if 1"];
   node5 -> node4 [label="1"];
   node4 [label="[1] assert_eq(s, DUT.s)"];
   node4 -> node3 [label="1"];
@@ -27,7 +28,7 @@ digraph "add" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -36,11 +37,40 @@ digraph "add" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1\n[1] assert_eq(s, DUT.s)\n[1] fork"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := b if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.b := X if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -49,11 +79,11 @@ digraph "add" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := b if 1"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == pre-contract ==
@@ -63,24 +93,26 @@ digraph "add_fork_early" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := a"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1"];
   node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node8 [label="[1] DUT.b := b if 1"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
   node6 [label="[1] fork"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.a := X"];
+  node5 [label="[1] DUT.a := X if 1"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] DUT.b := X"];
+  node4 [label="[1] DUT.b := X if 1"];
   node4 -> node3 [label="1"];
   node3 [label="[1] assert_eq(s, DUT.s)"];
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -89,11 +121,40 @@ digraph "add_fork_early" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] fork\n[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)"];
+  node6 [label="[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1\n[1] assert_eq(s, DUT.s)"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := b if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] fork"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] DUT.b := X if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -102,11 +163,11 @@ digraph "add_fork_early" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] fork\n[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)"];
+  node6 [label="[1] fork\n[1] assert_eq(s, DUT.s)\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == pre-contract ==
@@ -116,16 +177,18 @@ digraph "add_incorrect" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := a"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1"];
   node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node8 [label="[1] DUT.b := b if 1"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a"];
+  node6 [label="[1] DUT.a := a if 1"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := b"];
+  node5 [label="[1] DUT.b := b if 1"];
   node5 -> node4 [label="1"];
   node4 [label="[1] assert_eq(s, DUT.s)"];
   node4 -> node3 [label="1"];
@@ -133,7 +196,7 @@ digraph "add_incorrect" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -142,11 +205,40 @@ digraph "add_incorrect" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1\n[1] assert_eq(s, DUT.s)\n[1] fork"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := b if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.b := b if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -155,11 +247,11 @@ digraph "add_incorrect" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == pre-contract ==
@@ -169,10 +261,12 @@ digraph "add_incorrect_implicit" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
-  node7 [label="[1] DUT.a := a"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := a if 1"];
   node7 -> node6 [label="1"];
-  node6 [label="[1] DUT.b := b"];
+  node6 [label="[1] DUT.b := b if 1"];
   node6 -> node5 [label="1"];
   node5 [label=""];
   node5 -> node4 [label="1 / step"];
@@ -182,7 +276,7 @@ digraph "add_incorrect_implicit" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -191,11 +285,36 @@ digraph "add_incorrect_implicit" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node4 [label="1 / step"];
   node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork"];
   node4 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := a if 1"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.b := b if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -204,11 +323,11 @@ digraph "add_incorrect_implicit" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node0 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node4 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == pre-contract ==
@@ -218,16 +337,18 @@ digraph "wait_and_add" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
   node9 [label=""];
   node9 -> node8 [label="1 / step"];
   node8 [label="[1] fork"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a"];
+  node6 [label="[1] DUT.a := a if 1"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := b"];
+  node5 [label="[1] DUT.b := b if 1"];
   node5 -> node4 [label="1"];
   node4 [label=""];
   node4 -> node3 [label="1 / step"];
@@ -235,7 +356,7 @@ digraph "wait_and_add" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -244,15 +365,44 @@ digraph "wait_and_add" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label=""];
+  node0 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
   node0 -> node8 [label="1 / step"];
   node8 [label="[1] fork"];
   node8 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node6 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node6 -> node3 [label="1 / step"];
   node3 [label="[1] assert_eq(s, DUT.s)"];
   node3 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node8 [label="[1] fork"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.b := b if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label=""];
+  node4 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -261,15 +411,15 @@ digraph "wait_and_add" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node0 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
   node0 -> node8 [label="1 / step"];
-  node8 [label="[1] fork\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node8 [label="[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
   node8 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node6 [label="[1] DUT.a := a if 1\n[1] DUT.b := X if 1"];
   node6 -> node3 [label="1 / step"];
-  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
   node3 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == pre-contract ==
@@ -279,25 +429,27 @@ digraph "assign_after_observation" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node13 [label="1"];
-  node13 [label="[1] DUT.a := a"];
+  node0 -> node14 [label="1"];
+  node14 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node14 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := a if 1"];
   node13 -> node12 [label="1"];
   node12 [label=""];
   node12 -> node10 [label="eq(DUT.a, 2)"];
   node12 -> node11 [label="not(eq(DUT.a, 2))"];
-  node10 [label="[1] DUT.a := 0"];
+  node10 [label="[1] DUT.a := 0 if 1"];
   node10 -> node9 [label="1"];
   node11 [label=""];
   node11 -> node9 [label="1"];
   node9 [label=""];
   node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node8 [label="[1] DUT.b := b if 1"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X"];
+  node6 [label="[1] DUT.a := X if 1"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] DUT.b := X if 1"];
   node5 -> node4 [label="1"];
   node4 [label="[1] assert_eq(s, DUT.s)"];
   node4 -> node3 [label="1"];
@@ -305,7 +457,7 @@ digraph "assign_after_observation" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -314,12 +466,50 @@ digraph "assign_after_observation" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := ite(eq(DUT.a, 2), 0, a)\n[1] DUT.b := ite(eq(DUT.a, 2), b, ite(not(eq(DUT.a, 2)), b, DUT.b))"];
+  node0 [label="[1] DUT.a := 0 if eq(DUT.a, 2); a if 1\n[1] DUT.b := b if eq(DUT.a, 2); b if not(eq(DUT.a, 2))"];
   node0 -> node6 [label="eq(DUT.a, 2) / step"];
   node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1\n[1] assert_eq(s, DUT.s)\n[1] fork"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node14 [label="1"];
+  node14 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node14 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := a if 1"];
+  node13 -> node12 [label="1"];
+  node12 [label=""];
+  node12 -> node10 [label="eq(DUT.a, 2)"];
+  node12 -> node11 [label="not(eq(DUT.a, 2))"];
+  node10 [label="[1] DUT.a := 0 if 1"];
+  node10 -> node9 [label="1"];
+  node11 [label=""];
+  node11 -> node9 [label="1"];
+  node9 [label=""];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := b if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.b := X if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -328,12 +518,104 @@ digraph "assign_after_observation" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := ite(eq(DUT.a, 2), 0, a)\n[1] DUT.b := ite(eq(DUT.a, 2), b, ite(not(eq(DUT.a, 2)), b, DUT.b))"];
+  node0 [label="[1] DUT.a := 0 if eq(DUT.a, 2); a if 1\n[1] DUT.b := b if eq(DUT.a, 2); b if not(eq(DUT.a, 2))"];
   node0 -> node6 [label="eq(DUT.a, 2) / step"];
   node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := b if 1"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== pre-contract ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := a if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.b := b if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node7 [label=""];
+  node7 -> node5 [label="eq(DUT.s, 0)"];
+  node7 -> node6 [label="not(eq(DUT.s, 0))"];
+  node5 [label="[1] DUT.a := X if 1"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] DUT.a := 5 if 1"];
+  node6 -> node4 [label="1"];
+  node4 [label=""];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-contract ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node7 [label="1 / step"];
+  node7 [label="[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0))\n[1] fork\n[0] internal_assert_false"];
+  node7 -> node1 [label="not(eq(DUT.s, 0)) / step"];
+  node7 -> node1 [label="eq(DUT.s, 0) / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := a if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.b := b if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node7 [label=""];
+  node7 -> node5 [label="eq(DUT.s, 0)"];
+  node7 -> node6 [label="not(eq(DUT.s, 0))"];
+  node5 [label="[1] DUT.a := X if 1"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] DUT.a := 5 if 1"];
+  node6 -> node4 [label="1"];
+  node4 [label=""];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node7 [label="1 / step"];
+  node7 [label="[1] fork\n[0] internal_assert_false\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node7 -> node1 [label="not(eq(DUT.s, 0)) / step"];
+  node7 -> node1 [label="eq(DUT.s, 0) / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == pre-contract ==
@@ -343,20 +625,22 @@ digraph "if_else" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node12 [label="1"];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node13 -> node12 [label="1"];
   node12 [label=""];
   node12 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := a1"];
+  node10 [label="[1] DUT.a := a1 if 1"];
   node10 -> node9 [label="1"];
   node9 [label=""];
   node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := 0"];
+  node8 [label="[1] DUT.b := 0 if 1"];
   node8 -> node7 [label="1"];
   node7 [label=""];
   node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X"];
+  node6 [label="[1] DUT.a := X if 1"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] DUT.b := X if 1"];
   node5 -> node4 [label="1"];
   node4 [label="[1] assert_eq(a1, DUT.s)"];
   node4 -> node3 [label="1"];
@@ -364,7 +648,7 @@ digraph "if_else" {
   node3 -> node2 [label="1"];
   node2 [label=""];
   node2 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-contract ==
@@ -373,11 +657,44 @@ digraph "if_else" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
+  node0 [label="[1] DUT.a := a1 if 1\n[1] DUT.b := 0 if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node6 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-propagation ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node13 -> node12 [label="1"];
+  node12 [label=""];
+  node12 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := a1 if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label=""];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := 0 if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.b := X if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(a1, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
 
 == post-normalize ==
@@ -386,9 +703,9 @@ digraph "if_else" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
+  node0 [label="[1] DUT.a := a1 if 1\n[1] DUT.b := 0 if 1"];
   node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node6 [label="[1] assert_eq(a1, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := 0 if 1"];
   node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := DUT.a\n[1] DUT.b := DUT.b"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }

@@ -49,6 +49,21 @@ impl<'a> Lowerer<'a> {
         node_id
     }
 
+    fn dont_care_expr(&mut self, tpe: PatronusType) -> ExprRef {
+        let next_dont_care = self.ir.dont_cares.len();
+        let name = format!("dont_care_{}", next_dont_care);
+        let dont_care_expr = match tpe {
+            PatronusType::BV(width) => self.ir.expr_ctx.bv_symbol(&name, width),
+            PatronusType::Array(array_tpe) => {
+                self.ir
+                    .expr_ctx
+                    .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
+            }
+        };
+        self.ir.dont_cares.insert(dont_care_expr);
+        dont_care_expr
+    }
+
     fn lower_expr(
         &mut self,
         ast: &Protocol,
@@ -58,19 +73,7 @@ impl<'a> Lowerer<'a> {
         match &ast[expr] {
             Expr::DontCare => {
                 let tpe = expected.unwrap_or(PatronusType::BV(1));
-                let next_dont_care = self.ir.dont_cares.len();
-                // the name here is not relevant for anything other than debugging
-                let name = format!("dont_care_{}", next_dont_care);
-                let dont_care_expr = match tpe {
-                    PatronusType::BV(width) => self.ir.expr_ctx.bv_symbol(&name, width),
-                    PatronusType::Array(array_tpe) => self.ir.expr_ctx.array_symbol(
-                        &name,
-                        array_tpe.index_width,
-                        array_tpe.data_width,
-                    ),
-                };
-                self.ir.dont_cares.insert(dont_care_expr);
-                dont_care_expr
+                self.dont_care_expr(tpe)
             }
             Expr::Const(bvv) => self.ir.expr_ctx.bv_lit(bvv),
             Expr::Sym(sym) => self.lower_symbol(*sym),
@@ -173,7 +176,13 @@ impl<'a> Lowerer<'a> {
                     ),
                 };
                 let rhs_ref = self.lower_expr(ast, expr_id, Some(expected));
-                let op_id = self.ir.o(Op::Assign(symbol_id, rhs_ref));
+                let assignment = Assignment::from_rhs(
+                    self.ir.false_id(),
+                    self.ir.true_id(),
+                    rhs_ref,
+                    self.ir.dont_cares.contains(&rhs_ref),
+                );
+                let op_id = self.ir.o(Op::Assign(symbol_id, assignment));
                 let true_id = self.ir.true_id();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
                 self.ir
@@ -268,6 +277,25 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    fn add_input_dont_care_assignments(&mut self, ast: &Protocol, node_id: NodeId) {
+        let dut = ast
+            .ctx
+            .type_param
+            .expect("protocol should have a DUT type parameter");
+
+        for input in self
+            .symbols
+            .get_children(&dut)
+            .into_iter()
+            .filter(|sym| self.symbols[*sym].is_in_port())
+        {
+            let assignment = Assignment::dont_care(self.ir.true_id());
+            let assign = self.ir.o(Op::Assign(input, assignment));
+            self.ir
+                .push_action(node_id, Action::new(self.ir.true_id(), assign));
+        }
+    }
+
     /// lowers an AST into fresh IR nodes which are unconnected to any existing IR nodes
     /// If `keep_done`, then the exit node has the Done action.
     /// Returns the nodes, entry, and exit of the lowered fragment
@@ -289,8 +317,16 @@ impl<'a> Lowerer<'a> {
             self.ir.push_action(done, Action::new(true_id, done_op));
         }
 
+        // relinquish all ports in the exit node
+        self.add_input_dont_care_assignments(ast, done);
+
         // lower the protocol, which will add the new nodes to self.current_fragment_nodes
-        let entry = self.lower_stmt(ast, ast.body, done);
+        let body_entry = self.lower_stmt(ast, ast.body, done);
+        let entry = self.n(Node::empty());
+        self.add_input_dont_care_assignments(ast, entry);
+        let true_id = self.ir.true_id();
+        self.ir
+            .push_transition(entry, Transition::new(true_id, body_entry, false));
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
         LoweredFragmentInfo {
             nodes,

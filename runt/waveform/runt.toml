@@ -19,6 +19,24 @@ expect_name = "unsigned_mul.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/picorv32/unsigned_mul.tx --respect-forks --determinize --ascii-waveform --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
 
 [[tests]]
+name = "waveform.examples_serv_serv_regfile.serv_regfile_waveform.ast"
+paths = [
+  "../../examples/serv/serv_regfile.tx",
+]
+expect_dir = "../../examples/serv/expects"
+expect_name = "serv_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/serv/serv_regfile.tx --ascii-waveform --verilog examples/serv/rtl/serv_regfile.v --protocol examples/serv/serv_regfile.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_serv_serv_regfile.serv_regfile_waveform.graph"
+paths = [
+  "../../examples/serv/serv_regfile.tx",
+]
+expect_dir = "../../examples/serv/expects"
+expect_name = "serv_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/serv/serv_regfile.tx --respect-forks --determinize --ascii-waveform --verilog examples/serv/rtl/serv_regfile.v --protocol examples/serv/serv_regfile.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_tinyaes128_aes128.aes128_waveform.ast"
 paths = [
   "../../examples/tinyaes128/aes128.tx",
@@ -235,24 +253,6 @@ expect_name = "bit_truncation_sha_fix.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.tx --respect-forks --determinize --ascii-waveform --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_fixed 2>/dev/null"
 
 [[tests]]
-name = "waveform.tests_brave_new_world_failure_to_update_ftu_sha_fix.ftu_sha_fix_waveform.ast"
-paths = [
-  "../../tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
-]
-expect_dir = "../../tests/brave_new_world/failure_to_update/expects"
-expect_name = "ftu_sha_fix.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/brave_new_world/failure_to_update/ftu_sha_fix.tx --ascii-waveform --verilog tests/brave_new_world/failure_to_update/ftu_sha_fix.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_fixed_gated 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_brave_new_world_failure_to_update_ftu_sha_fix.ftu_sha_fix_waveform.graph"
-paths = [
-  "../../tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
-]
-expect_dir = "../../tests/brave_new_world/failure_to_update/expects"
-expect_name = "ftu_sha_fix.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/failure_to_update/ftu_sha_fix.tx --respect-forks --determinize --ascii-waveform --verilog tests/brave_new_world/failure_to_update/ftu_sha_fix.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_fixed_gated 2>/dev/null"
-
-[[tests]]
 name = "waveform.tests_brave_new_world_signal_asynchrony_signal_async_fix.signal_async_fix_waveform.ast"
 paths = [
   "../../tests/brave_new_world/signal_asynchrony/signal_async_fix.tx",
@@ -307,6 +307,42 @@ expect_name = "counter.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/counters/counter.tx --respect-forks --determinize --ascii-waveform --verilog tests/counters/counter.v --protocol tests/counters/counter.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_fifo_fifo.fifo_waveform.ast"
+paths = [
+  "../../tests/fifo/fifo.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "fifo.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/fifo.tx --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_fifo_fifo.fifo_waveform.graph"
+paths = [
+  "../../tests/fifo/fifo.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "fifo.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/fifo.tx --respect-forks --determinize --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_fifo_push_pop_identity_ok.push_pop_identity_ok_waveform.ast"
+paths = [
+  "../../tests/fifo/push_pop_identity_ok.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "push_pop_identity_ok.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/push_pop_identity_ok.tx --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_fifo_push_pop_identity_ok.push_pop_identity_ok_waveform.graph"
+paths = [
+  "../../tests/fifo/push_pop_identity_ok.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "push_pop_identity_ok.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_identity_ok.tx --respect-forks --determinize --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_identities_identity_d0_passthrough_combdep.passthrough_combdep_waveform.ast"
 paths = [
   "../../tests/identities/identity_d0/passthrough_combdep.tx",
@@ -359,24 +395,6 @@ paths = [
 expect_dir = "../../tests/identities/identity_d2/expects"
 expect_name = "single_thread_passes.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d2/single_thread_passes.tx --respect-forks --determinize --ascii-waveform --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_identities_identity_d2_two_assignments_same_value.two_assignments_same_value_waveform.ast"
-paths = [
-  "../../tests/identities/identity_d2/two_assignments_same_value.tx",
-]
-expect_dir = "../../tests/identities/identity_d2/expects"
-expect_name = "two_assignments_same_value.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/identities/identity_d2/two_assignments_same_value.tx --ascii-waveform --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_identities_identity_d2_two_assignments_same_value.two_assignments_same_value_waveform.graph"
-paths = [
-  "../../tests/identities/identity_d2/two_assignments_same_value.tx",
-]
-expect_dir = "../../tests/identities/identity_d2/expects"
-expect_name = "two_assignments_same_value.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d2/two_assignments_same_value.tx --respect-forks --determinize --ascii-waveform --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_multi_multi0_multi0.multi0_waveform.ast"

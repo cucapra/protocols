@@ -4,7 +4,7 @@
 
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
@@ -79,10 +79,10 @@ fn format_op(
     op_id: crate::ir::proto_graph::OpId,
 ) -> String {
     match &protocol[op_id] {
-        Op::Assign(symbol_id, expr_id) => format!(
+        Op::Assign(symbol_id, assignment) => format!(
             "{} := {}",
             symbols.full_name_from_symbol_id(symbol_id),
-            format_expr(protocol, *expr_id)
+            format_assignment(protocol, assignment)
         ),
         Op::AssertEq(lhs, rhs) => format!(
             "assert_eq({}, {})",
@@ -95,7 +95,29 @@ fn format_op(
     }
 }
 
-fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
+    let mut parts = Vec::new();
+    if assignment.dont_care != protocol.false_id() {
+        parts.push(format!(
+            "X if {}",
+            format_expr(protocol, assignment.dont_care)
+        ));
+    }
+    for (guard, rhs) in &assignment.concretes {
+        parts.push(format!(
+            "{} if {}",
+            format_expr(protocol, *rhs),
+            format_expr(protocol, *guard)
+        ));
+    }
+    if parts.is_empty() {
+        "internal_assert_false".to_string()
+    } else {
+        parts.join("; ")
+    }
+}
+
+pub fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
     if protocol.dont_cares.contains(&expr_ref) {
         "X".to_string()
     } else {
@@ -179,6 +201,8 @@ mod tests {
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
+    use crate::ir::propagate_assigns::propagate_assignments;
+    use crate::ir::reaching_defs::reaching_definitions;
     use insta::Settings;
 
     fn snap(name: &str, filename: &str) {
@@ -187,7 +211,7 @@ mod tests {
         let mut content = String::new();
         let st = &ast.st;
         for proto_ast in ast.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
+            let mut ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, st);
             content += "\n";
@@ -197,6 +221,15 @@ mod tests {
             contract_edges(&mut contracted_ir, st);
             content += "== post-contract ==\n";
             content += &to_dot_string(&contracted_ir, st);
+            content += "\n";
+
+            // run the reaching definitions analysis
+            let reaching_defs = reaching_definitions(&mut ir, st);
+
+            // print post-propagation of assignments
+            propagate_assignments(&mut contracted_ir, st, &reaching_defs);
+            content += "== post-propagation ==\n";
+            content += &to_dot_string(&ir, st);
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();
@@ -212,7 +245,6 @@ mod tests {
             insta::assert_snapshot!(name, content);
         });
     }
-
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");
