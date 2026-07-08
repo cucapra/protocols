@@ -931,11 +931,19 @@ pub(crate) fn parse_files(
     filenames: &[impl AsRef<std::path::Path>],
     handler: &mut DiagnosticHandler,
 ) -> Result<Ast, String> {
+    parse_files_with_names(filenames, filenames, handler)
+}
+
+pub(crate) fn parse_files_with_names(
+    filenames: &[impl AsRef<std::path::Path>],
+    display_names: &[impl AsRef<std::path::Path>],
+    handler: &mut DiagnosticHandler,
+) -> Result<Ast, String> {
     let mut st = SymbolTable::default();
     let mut protos = vec![];
     let mut remaps = vec![];
-    for filename in filenames {
-        let display_name = filename.as_ref().to_str().unwrap();
+    for (filename, display_name) in filenames.iter().zip(display_names.iter()) {
+        let display_name = display_name.as_ref().to_str().unwrap();
         let input =
             std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
         parse_file_internal(
@@ -956,19 +964,7 @@ pub(crate) fn parse_file_with_name(
     display_name: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
 ) -> Result<Ast, String> {
-    let mut st = SymbolTable::default();
-    let mut protos = vec![];
-    let mut remaps = vec![];
-    let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
-    parse_file_internal(
-        &input,
-        display_name.as_ref().to_str().unwrap(),
-        &mut st,
-        &mut protos,
-        &mut remaps,
-        handler,
-    )?;
-    Ok(Ast { st, protos, remaps })
+    parse_files_with_names(&[filename], &[display_name], handler)
 }
 
 #[cfg(test)]
