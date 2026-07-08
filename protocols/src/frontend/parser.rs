@@ -936,8 +936,10 @@ pub(crate) fn parse_files(
     let mut remaps = vec![];
     for filename in filenames {
         let display_name = filename.as_ref().to_str().unwrap();
+        let input =
+            std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
         parse_file_internal(
-            filename,
+            &input,
             display_name,
             &mut st,
             &mut protos,
@@ -957,8 +959,9 @@ pub(crate) fn parse_file_with_name(
     let mut st = SymbolTable::default();
     let mut protos = vec![];
     let mut remaps = vec![];
+    let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
     parse_file_internal(
-        filename,
+        &input,
         display_name.as_ref().to_str().unwrap(),
         &mut st,
         &mut protos,
@@ -968,18 +971,33 @@ pub(crate) fn parse_file_with_name(
     Ok(Ast { st, protos, remaps })
 }
 
+#[cfg(test)]
+pub(crate) fn parse_string(content: &str, handler: &mut DiagnosticHandler) -> Result<Ast, String> {
+    let mut st = SymbolTable::default();
+    let mut protos = vec![];
+    let mut remaps = vec![];
+    parse_file_internal(
+        content,
+        "<string>",
+        &mut st,
+        &mut protos,
+        &mut remaps,
+        handler,
+    )?;
+    Ok(Ast { st, protos, remaps })
+}
+
 fn parse_file_internal(
-    filename: impl AsRef<std::path::Path>,
+    input: &str,
     display_name: &str,
     st: &mut SymbolTable,
     protos: &mut Vec<Protocol>,
     remaps: &mut Vec<RemapModule>,
     diag: &mut DiagnosticHandler,
 ) -> Result<(), String> {
-    let input = std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
-    let fileid = diag.add_file(display_name.into(), input.clone());
+    let fileid = diag.add_file(display_name.into(), input.to_string());
 
-    let res = ProtocolParser::parse(Rule::file, &input);
+    let res = ProtocolParser::parse(Rule::file, input);
     match res {
         Ok(_parsed) => (),
         Err(err) => {
@@ -993,7 +1011,7 @@ fn parse_file_internal(
         }
     }
 
-    let pairs = ProtocolParser::parse(Rule::file, &input).unwrap();
+    let pairs = ProtocolParser::parse(Rule::file, input).unwrap();
     let inner = pairs.clone().next().unwrap().into_inner();
 
     for pair in inner {

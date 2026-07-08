@@ -8,7 +8,7 @@ struct Adder {
   out s: u32,
 }
 
-fn nested_busy_wait<DUT: Adder>(a: u32, b: u32, outer_iters: uint, inner_iters: uint, s: u32) {
+prot nested_busy_wait<DUT: Adder>(a: u32, b: u32, outer_iters: uint, inner_iters: uint, s: u32) {
   DUT.a := a;
   DUT.b := b;
   repeat outer_iters iterations {

@@ -7,8 +7,8 @@ struct DualIdentity {
   in b: u64,
 }
 
-fn if_without_else<dut: DualIdentity>(a: u64, b: u64) {
-  if dut.b == 1 {
+prot if_without_else<dut: DualIdentity>(a: u64, b: u64) {
+  if dut.b == 64'd1 {
     dut.a := a;
   } else {
   }

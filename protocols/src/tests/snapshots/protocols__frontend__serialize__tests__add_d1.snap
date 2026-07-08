@@ -8,7 +8,7 @@ struct Adder {
   out s: u32,
 }
 
-fn add<DUT: Adder>(a: u32, b: u32, s: u32) {
+prot add<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -19,7 +19,7 @@ fn add<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
+prot add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -30,7 +30,7 @@ fn add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
+prot add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -41,7 +41,7 @@ fn add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn add_incorrect_implicit<DUT: Adder>(a: u32, b: u32, s: u32) {
+prot add_incorrect_implicit<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
   DUT.b := b;
   step();
@@ -50,7 +50,7 @@ fn add_incorrect_implicit<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
+prot wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
   fork();
   step();
@@ -61,10 +61,10 @@ fn wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn assign_after_observation<DUT: Adder>(a: u32, b: u32, s: u32) {
+prot assign_after_observation<DUT: Adder>(a: u32, b: u32, s: u32) {
   DUT.a := a;
-  if DUT.a == 2 {
-    DUT.a := 0;
+  if DUT.a == 32'd2 {
+    DUT.a := 32'd0;
   } else {
   }
   DUT.b := b;
@@ -76,13 +76,13 @@ fn assign_after_observation<DUT: Adder>(a: u32, b: u32, s: u32) {
   step();
 }
 
-fn if_else<DUT: Adder>(a1: u32, a2: u32) {
-  if 1 {
+prot if_else<DUT: Adder>(a1: u32, a2: u32) {
+  if 1'd1 {
     DUT.a := a1;
   } else {
     DUT.a := a2;
   }
-  DUT.b := 0;
+  DUT.b := 32'd0;
   step();
   DUT.a := X;
   DUT.b := X;

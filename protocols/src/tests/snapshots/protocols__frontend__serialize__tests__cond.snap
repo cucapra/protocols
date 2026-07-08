@@ -9,7 +9,7 @@ struct Multiplier {
   out s: u32,
 }
 
-fn mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
+prot mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.a := a;
   dut.b := b;
   step();
@@ -18,12 +18,12 @@ fn mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
   dut.a := X;
   dut.b := X;
   step();
-  if 8 == 0 {
+  if 4'd8 == 4'd0 {
     step();
   } else {
     fork();
   }
-  assert_eq(dut.c, 1);
+  assert_eq(dut.c, 1'd1);
   assert_eq(s, dut.s);
   step();
 }

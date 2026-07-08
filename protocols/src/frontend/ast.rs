@@ -16,14 +16,14 @@ use crate::frontend::serialize::{build_statements, serialize_expr};
 use crate::frontend::symbol::{Arg, Dir, ScopeId, StructId, SymbolId, SymbolTable, Type};
 
 /// Frontend representation of parsed protocol files.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Ast {
     pub st: SymbolTable,
     pub protos: Vec<Protocol>,
     pub remaps: Vec<RemapModule>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ProtocolContext {
     /// The name of the `Protocol`
     pub name: String,
@@ -49,6 +49,19 @@ pub struct ProtocolContext {
 
     /// The scope in the [[SymbolTable]] associated with this protocol.
     pub scope: ScopeId,
+}
+
+#[cfg(test)]
+fn assert_proto_ctx_eq(a: &ProtocolContext, b: &ProtocolContext) {
+    assert_eq!(a.name, b.name);
+    assert_eq!(a.args, b.args);
+    assert_eq!(a.type_param, b.type_param);
+    assert_eq!(a.is_idle, b.is_idle);
+    assert_eq!(a.exprs, b.exprs);
+    assert_eq!(a.dont_care_id, b.dont_care_id);
+    assert_eq!(a.true_expr_id, b.true_expr_id);
+    assert_eq!(a.scope, b.scope);
+    // we intentionally do not compare the expression locations
 }
 
 impl ProtocolContext {
@@ -122,13 +135,22 @@ pub enum Clock {
 }
 
 /// Represents an unresolved `module`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RemapModule {
     pub ctx: ProtocolContext,
     pub name: String,
     pub clock: Clock,
     pub implements: Vec<StructId>,
     pub mappings: Vec<Mapping>,
+}
+
+#[cfg(test)]
+pub(crate) fn assert_remap_eq(a: &RemapModule, b: &RemapModule) {
+    assert_proto_ctx_eq(&a.ctx, &b.ctx);
+    assert_eq!(a.name, b.name);
+    assert_eq!(a.clock, b.clock);
+    assert_eq!(a.implements, b.implements);
+    assert_eq!(a.mappings, b.mappings);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +162,7 @@ pub struct Mapping {
     pub cond: ExprId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Protocol {
     pub ctx: ProtocolContext,
 
@@ -150,6 +172,14 @@ pub struct Protocol {
     /// Maps `StmtId`s to their corresponding `Stmt`s
     stmts: PrimaryMap<StmtId, Stmt>,
     stmt_loc: SecondaryMap<StmtId, (usize, usize, usize)>,
+}
+
+#[cfg(test)]
+pub(crate) fn assert_proto_eq(a: &Protocol, b: &Protocol) {
+    assert_eq!(a.body, b.body);
+    assert_eq!(a.stmts, b.stmts);
+    // we do not compare the statement locations
+    assert_proto_ctx_eq(&a.ctx, &b.ctx);
 }
 
 impl Protocol {
