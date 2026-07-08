@@ -36,7 +36,7 @@ fn get_or_create_state(
 pub enum SatResult {
     DefinitelyUnsat,
     MaybeSat,
-    DefinitelySat,
+    AlwaysSat,
 }
 
 // TODO: Strengthen this with a real SAT/SMT query to prune more aggressively.
@@ -49,7 +49,7 @@ pub fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
     if simplified == protocol.false_id() {
         SatResult::DefinitelyUnsat
     } else if simplified == protocol.true_id() {
-        SatResult::DefinitelySat
+        SatResult::AlwaysSat
     } else {
         SatResult::MaybeSat
     }
@@ -115,7 +115,7 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
 
             let guard = match check_sat(&mut protocol, guard) {
                 SatResult::DefinitelyUnsat => continue,
-                SatResult::DefinitelySat => protocol.true_id(),
+                SatResult::AlwaysSat => protocol.true_id(),
                 SatResult::MaybeSat => guard,
             };
 

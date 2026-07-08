@@ -1,5 +1,6 @@
 pub mod determinize;
 pub mod edge_contract;
+pub mod fork_reach;
 pub mod graph_interpreter;
 pub mod graphviz;
 pub mod lowering;
