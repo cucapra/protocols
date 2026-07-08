@@ -355,15 +355,59 @@ pub fn serialize_structs(
     Ok(())
 }
 
+fn serialize_remap_module(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    m: &RemapModule,
+) -> std::io::Result<()> {
+    write!(out, "module {}", m.name)?;
+    if !m.implements.is_empty() {
+        for (idx, s) in m.implements.iter().enumerate() {
+            if idx == 0 {
+                write!(out, " : {}", st[s].name())?;
+            } else {
+                write!(out, " + {}", st[s].name())?;
+            }
+        }
+    }
+    writeln!(out, " {{")?;
+
+    match &m.clock {
+        Clock::None => {}
+        Clock::Posedge(name) => {
+            writeln!(out, "  in {name} : clock @posedge,")?;
+        }
+    }
+
+    for map in &m.mappings {
+        write!(
+            out,
+            "  {} {} : {} = {}",
+            map.dir,
+            map.name,
+            serialize_type(st, map.tpe),
+            serialize_expr(&m.ctx, st, &map.rhs)
+        )?;
+        if m.ctx.expr_true() == map.cond {
+            writeln!(out, ",")?;
+        } else {
+            writeln!(out, " with {},", serialize_expr(&m.ctx, st, &map.cond))?;
+        }
+    }
+
+    writeln!(out, "}}\n")?;
+    Ok(())
+}
+
 /// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to the provided
 /// output buffer `out`
 pub fn serialize(out: &mut impl Write, ast: &Ast) -> std::io::Result<()> {
     let st = &ast.st;
-    if !st.struct_ids().is_empty() {
-        serialize_structs(out, st, st.struct_ids())?;
-    }
-
+    serialize_structs(out, st, st.struct_ids())?;
     for proto in &ast.protos {
+        if proto.is_idle {
+            writeln!(out, "#[idle]")?;
+        }
         write!(out, "prot {}", proto.name)?;
 
         if let Some(type_param) = proto.type_param {
@@ -406,6 +450,11 @@ pub fn serialize(out: &mut impl Write, ast: &Ast) -> std::io::Result<()> {
         writeln!(out, "}}\n")?;
     }
 
+    for remap in &ast.remaps {
+        writeln!(out)?;
+        serialize_remap_module(out, st, remap)?;
+    }
+
     Ok(())
 }
 
@@ -415,10 +464,11 @@ pub mod tests {
 
     use super::*;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::{parse_file_with_name, parse_string};
+    use crate::frontend::parser::{parse_file_with_name, parse_files_with_names, parse_string};
     use baa::BitVecValue;
     use clap::ColorChoice;
     use insta::Settings;
+    use patronus::btor2::serialize_to_str;
     use strip_ansi_escapes::strip_str;
 
     fn snap(name: &str, content: String) {
@@ -430,8 +480,13 @@ pub mod tests {
     }
 
     fn test_helper(filename: &str, snap_name: &str) {
+        test_helper_files(&[filename], snap_name)
+    }
+
+    fn test_helper_files(filenames: &[&str], snap_name: &str) {
         let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
-        let result = parse_file_with_name(filename, display_filename(filename), &mut handler);
+        let dns: Vec<_> = filenames.iter().map(|f| display_filename(f)).collect();
+        let result = parse_files_with_names(filenames, &dns, &mut handler);
         let maybe_ast = result.ok();
 
         let content = match &maybe_ast {
@@ -445,6 +500,9 @@ pub mod tests {
         if let Some(ast) = maybe_ast {
             let ast2 = parse_string(&content, &mut handler).expect("failed to parse serialized");
             assert_ast_eq(&ast, &ast2);
+            // round trip 2
+            let content2 = serialize_to_string(&ast2).unwrap();
+            assert_eq!(content, content2);
         }
     }
 
@@ -602,6 +660,17 @@ pub mod tests {
             "../tests/identities/dual_identity_d1/if_without_else.prot",
             "if_without_else",
         );
+    }
+
+    #[test]
+    fn test_remap_module() {
+        test_helper_files(
+            &[
+                "../examples/wishbone/wishbone.prot",
+                "../examples/wishbone/antmicro_litex.prot",
+            ],
+            "remap_module",
+        )
     }
 
     #[test]
