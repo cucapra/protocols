@@ -9,7 +9,9 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
   node9 [label="[1] DUT.a := X if 1"];
   node9 -> node8 [label="1"];
   node8 [label="[1] DUT.b := X if 1"];
@@ -49,7 +51,9 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node9 [label="1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node10 -> node9 [label="1"];
   node9 [label="[1] DUT.a := X if 1"];
   node9 -> node8 [label="1"];
   node8 [label="[1] DUT.b := X if 1"];
@@ -76,7 +80,7 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := X if 1"];
   node0 -> node1 [label="eq(DUT.s, 0) / step"];
   node0 -> node1 [label="not(eq(DUT.s, 0)) / step"];
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
@@ -89,7 +93,9 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node6 [label="1"];
+  node0 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node7 -> node6 [label="1"];
   node6 [label="[1] DUT.a := X if 1"];
   node6 -> node5 [label="1"];
   node5 [label="[1] DUT.b := X if 1"];
@@ -121,7 +127,9 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node6 [label="1"];
+  node0 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node7 -> node6 [label="1"];
   node6 [label="[1] DUT.a := X if 1"];
   node6 -> node5 [label="1"];
   node5 [label="[1] DUT.b := X if 1"];
@@ -141,7 +149,7 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] assert_eq(DUT.s, s)\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := X if 1\n[1] assert_eq(DUT.s, s)"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }
@@ -153,7 +161,9 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node6 [label="1"];
+  node0 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node7 -> node6 [label="1"];
   node6 [label=""];
   node6 -> node4 [label="eq(DUT.s, 0)"];
   node6 -> node5 [label="not(eq(DUT.s, 0))"];
@@ -174,7 +184,7 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a if eq(DUT.s, 0)"];
+  node0 [label="[1] DUT.a := X if not(eq(DUT.s, 0)); a if eq(DUT.s, 0)\n[1] DUT.b := X if 1"];
   node0 -> node1 [label="eq(DUT.s, 0) / step"];
   node0 -> node1 [label="not(eq(DUT.s, 0)) / step"];
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
@@ -187,7 +197,9 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node6 [label="1"];
+  node0 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node7 -> node6 [label="1"];
   node6 [label=""];
   node6 -> node4 [label="eq(DUT.s, 0)"];
   node6 -> node5 [label="not(eq(DUT.s, 0))"];
@@ -208,7 +220,7 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node0 [label="[1] DUT.a := X if not(eq(DUT.s, 0)); a if eq(DUT.s, 0)\n[1] DUT.b := X if 1"];
   node0 -> node1 [label="eq(DUT.s, 0) / step"];
   node0 -> node1 [label="not(eq(DUT.s, 0)) / step"];
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
@@ -221,7 +233,9 @@ digraph "add_combinational" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node5 [label="1"];
+  node0 -> node6 [label="1"];
+  node6 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node5 [label="1"];
   node5 [label="[1] DUT.a := a if 1"];
   node5 -> node4 [label="1"];
   node4 [label="[1] DUT.b := b if 1"];
@@ -251,7 +265,9 @@ digraph "add_combinational" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node5 [label="1"];
+  node0 -> node6 [label="1"];
+  node6 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node5 [label="1"];
   node5 [label="[1] DUT.a := a if 1"];
   node5 -> node4 [label="1"];
   node4 [label="[1] DUT.b := b if 1"];
@@ -269,7 +285,7 @@ digraph "add_combinational" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1\n[1] assert_eq(s, DUT.s)"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
 }

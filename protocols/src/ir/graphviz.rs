@@ -198,14 +198,12 @@ mod tests {
 
     use super::*;
     use crate::frontend;
-    use super::*;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
     use crate::ir::reaching_defs::reaching_definitions;
     use insta::Settings;
-    use rustc_hash::FxHashMap;
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
@@ -213,7 +211,7 @@ mod tests {
         let mut content = String::new();
         let st = &ast.st;
         for proto_ast in ast.protos {
-            let mut ir: ProtoGraph = lower_ast_to_ir(proto_ast, &st);
+            let mut ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, st);
             content += "\n";
@@ -226,12 +224,12 @@ mod tests {
             content += "\n";
 
             // run the reaching definitions analysis
-            let reaching_defs = reaching_definitions(&mut ir, &st);
+            let reaching_defs = reaching_definitions(&mut ir, st);
 
             // print post-propagation of assignments
-            propagate_assignments(&mut contracted_ir, &st, &reaching_defs);
+            propagate_assignments(&mut contracted_ir, st, &reaching_defs);
             content += "== post-propagation ==\n";
-            content += &to_dot_string(&ir, &st);
+            content += &to_dot_string(&ir, st);
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();

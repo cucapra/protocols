@@ -395,8 +395,8 @@ mod tests {
 
         assert_eq!(ir.name, "pipe");
         assert_eq!(ir.args.len(), 2);
-        assert_eq!(ir.nodes.len(), 5);
-        assert_eq!(ir.ops.len(), 3);
+        assert_eq!(ir.nodes.len(), 6);
+        assert_eq!(ir.ops.len(), 5);
 
         let entry = &ir.nodes[ir.entry];
         assert!(entry.actions.is_empty());
@@ -405,9 +405,22 @@ mod tests {
             entry.transitions[0],
             Transition {
                 guard: ir.true_id(),
-                target: NodeId(4),
+                target: NodeId(5),
                 consumes_step: false,
             }
+        );
+
+        let init = &ir.nodes[NodeId(5)];
+        assert_eq!(init.actions.len(), 1);
+        assert_eq!(init.actions[0].guard, ir.true_id());
+        assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
+        assert_eq!(
+            init.transitions,
+            vec![Transition {
+                guard: ir.true_id(),
+                target: NodeId(4),
+                consumes_step: false,
+            }]
         );
 
         let assign = &ir.nodes[NodeId(4)];
@@ -451,9 +464,10 @@ mod tests {
         );
 
         let exit = &ir.nodes[NodeId(1)];
-        assert_eq!(exit.actions.len(), 1);
+        assert_eq!(exit.actions.len(), 2);
         assert_eq!(exit.actions[0].guard, ir.true_id());
         assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
+        assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
         assert!(exit.transitions.is_empty());
     }
 
@@ -472,8 +486,20 @@ mod tests {
             "#,
         );
 
-        assert_eq!(ir.nodes.len(), 3);
-        assert_eq!(ir.ops.len(), 2);
+        assert_eq!(ir.nodes.len(), 4);
+        assert_eq!(ir.ops.len(), 4);
+
+        let init = &ir.nodes[NodeId(3)];
+        assert_eq!(init.actions.len(), 1);
+        assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
+        assert_eq!(
+            init.transitions,
+            vec![Transition {
+                guard: ir.true_id(),
+                target: NodeId(2),
+                consumes_step: false,
+            }]
+        );
 
         let fork = &ir.nodes[NodeId(2)];
         assert_eq!(fork.actions.len(), 1);
@@ -488,8 +514,9 @@ mod tests {
         );
 
         let exit = &ir.nodes[NodeId(1)];
-        assert_eq!(exit.actions.len(), 1);
+        assert_eq!(exit.actions.len(), 2);
         assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
+        assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
         assert!(exit.transitions.is_empty());
     }
 
@@ -499,13 +526,26 @@ mod tests {
 
         assert_eq!(ir.name, "add");
         assert_eq!(ir.args.len(), 3);
-        assert_eq!(ir.nodes.len(), 10);
-        assert_eq!(ir.ops.len(), 7);
+        assert_eq!(ir.nodes.len(), 11);
+        assert_eq!(ir.ops.len(), 11);
 
         let entry = &ir.nodes[ir.entry];
         assert!(entry.actions.is_empty());
         assert_eq!(
             entry.transitions,
+            vec![Transition {
+                guard: ir.true_id(),
+                target: NodeId(10),
+                consumes_step: false,
+            }]
+        );
+
+        let init = &ir.nodes[NodeId(10)];
+        assert_eq!(init.actions.len(), 2);
+        assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
+        assert!(matches!(ir.ops[init.actions[1].op], Op::Assign(_, _)));
+        assert_eq!(
+            init.transitions,
             vec![Transition {
                 guard: ir.true_id(),
                 target: NodeId(9),
@@ -548,8 +588,10 @@ mod tests {
         );
 
         let exit = &ir.nodes[NodeId(1)];
-        assert_eq!(exit.actions.len(), 1);
+        assert_eq!(exit.actions.len(), 3);
         assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
+        assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
+        assert!(matches!(ir.ops[exit.actions[2].op], Op::Assign(_, _)));
         assert!(exit.transitions.is_empty());
     }
 }

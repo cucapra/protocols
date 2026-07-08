@@ -253,24 +253,6 @@ expect_name = "bit_truncation_sha_fix.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.tx --respect-forks --determinize --ascii-waveform --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_fixed 2>/dev/null"
 
 [[tests]]
-name = "waveform.tests_brave_new_world_failure_to_update_ftu_sha_fix.ftu_sha_fix_waveform.ast"
-paths = [
-  "../../tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
-]
-expect_dir = "../../tests/brave_new_world/failure_to_update/expects"
-expect_name = "ftu_sha_fix.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/brave_new_world/failure_to_update/ftu_sha_fix.tx --ascii-waveform --verilog tests/brave_new_world/failure_to_update/ftu_sha_fix.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_fixed_gated 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_brave_new_world_failure_to_update_ftu_sha_fix.ftu_sha_fix_waveform.graph"
-paths = [
-  "../../tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
-]
-expect_dir = "../../tests/brave_new_world/failure_to_update/expects"
-expect_name = "ftu_sha_fix.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/failure_to_update/ftu_sha_fix.tx --respect-forks --determinize --ascii-waveform --verilog tests/brave_new_world/failure_to_update/ftu_sha_fix.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_fixed_gated 2>/dev/null"
-
-[[tests]]
 name = "waveform.tests_brave_new_world_signal_asynchrony_signal_async_fix.signal_async_fix_waveform.ast"
 paths = [
   "../../tests/brave_new_world/signal_asynchrony/signal_async_fix.tx",

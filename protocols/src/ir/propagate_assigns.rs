@@ -46,6 +46,10 @@ fn all_ports_present(
             return false;
         };
 
+        if nid == pg.entry && rd.is_empty() {
+            continue;
+        }
+
         for input in &input_ports {
             if !rd.contains_key(&st.full_name_from_symbol_id(input).to_string()) {
                 return false;
@@ -78,6 +82,9 @@ pub fn propagate_assignments(
         let Some(node_defs) = rd.get(&id) else {
             continue;
         };
+        if id == pg.entry && node_defs.is_empty() {
+            continue;
+        }
 
         let actions = pg[id]
             .actions

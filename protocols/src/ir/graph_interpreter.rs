@@ -314,12 +314,14 @@ pub fn interpret(
                     current_inputs.insert(port, WaveValue::Concrete(bvv));
                 }
                 InputValue::DontCare => {
-                    let width = match st[symbol_id].tpe() {
-                        Type::BitVec(w) => w,
-                        _ => panic!("expected BitVec type for input {symbol_id}"),
-                    };
-                    let random_val = BitVecValue::random(&mut rng, width);
-                    sim.set(port, &random_val);
+                    if !matches!(current_inputs.get(&port), Some(WaveValue::DontCare)) {
+                        let width = match st[symbol_id].tpe() {
+                            Type::BitVec(w) => w,
+                            _ => panic!("expected BitVec type for input {symbol_id}"),
+                        };
+                        let random_val = BitVecValue::random(&mut rng, width);
+                        sim.set(port, &random_val);
+                    }
                     current_inputs.insert(port, WaveValue::DontCare);
                 }
             }

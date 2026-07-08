@@ -277,6 +277,25 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    fn add_input_dont_care_assignments(&mut self, ast: &Protocol, node_id: NodeId) {
+        let dut = ast
+            .ctx
+            .type_param
+            .expect("protocol should have a DUT type parameter");
+
+        for input in self
+            .symbols
+            .get_children(&dut)
+            .into_iter()
+            .filter(|sym| self.symbols[*sym].is_in_port())
+        {
+            let assignment = Assignment::dont_care(self.ir.true_id());
+            let assign = self.ir.o(Op::Assign(input, assignment));
+            self.ir
+                .push_action(node_id, Action::new(self.ir.true_id(), assign));
+        }
+    }
+
     /// lowers an AST into fresh IR nodes which are unconnected to any existing IR nodes
     /// If `keep_done`, then the exit node has the Done action.
     /// Returns the nodes, entry, and exit of the lowered fragment
@@ -299,35 +318,15 @@ impl<'a> Lowerer<'a> {
         }
 
         // relinquish all ports in the exit node
-        let dut = ast
-            .ctx
-            .type_param
-            .expect("protocol should have a DUT type parameter");
-
-        for input in self
-            .symbols
-            .get_children(&dut)
-            .into_iter()
-            .filter(|sym| self.symbols[*sym].is_in_port())
-        {
-            let width = match self.symbols[input].tpe() {
-                FrontType::BitVec(width) => width,
-                other => panic!("input port type must be a BitVec: {other:?}"),
-            };
-            let rhs = self.dont_care_expr(PatronusType::BV(width));
-            let assignment = Assignment::from_rhs(
-                self.ir.false_id(),
-                self.ir.true_id(),
-                rhs,
-                self.ir.dont_cares.contains(&rhs),
-            );
-            let assign = self.ir.o(Op::Assign(input, assignment));
-            self.ir
-                .push_action(done, Action::new(self.ir.true_id(), assign));
-        }
+        self.add_input_dont_care_assignments(ast, done);
 
         // lower the protocol, which will add the new nodes to self.current_fragment_nodes
-        let entry = self.lower_stmt(ast, ast.body, done);
+        let body_entry = self.lower_stmt(ast, ast.body, done);
+        let entry = self.n(Node::empty());
+        self.add_input_dont_care_assignments(ast, entry);
+        let true_id = self.ir.true_id();
+        self.ir
+            .push_transition(entry, Transition::new(true_id, body_entry, false));
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
         LoweredFragmentInfo {
             nodes,

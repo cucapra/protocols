@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::frontend::symbol::SymbolTable;
 use crate::ir::determinize::{SatResult, check_sat};
 use crate::ir::edge_contract::{merge_ordered_assignment, merge_unordered_assignment};
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
@@ -199,30 +199,7 @@ pub fn reaching_definitions(
     st: &SymbolTable,
 ) -> FxHashMap<NodeId, ReachingDefs> {
     let preds = predecessors(pg);
-
-    let dut = pg.type_param.expect("protocol has no DUT");
-    // TODO: maybe this should be a helper in the SymbolTable
-    let input_ports: Vec<SymbolId> = st
-        .get_children(&dut)
-        .into_iter()
-        .filter(|sym_id| st[*sym_id].is_in_port())
-        .collect();
-
-    // Initially, all port are DontCare. So in_defs[entry] is {sym -> X} for all sym
     let mut in_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
-    in_defs.insert(
-        pg.entry,
-        input_ports
-            .iter()
-            .map(|sym_id| {
-                (
-                    st.full_name_from_symbol_id(sym_id).to_string(),
-                    Assignment::dont_care(pg.true_id()),
-                )
-            })
-            .collect(),
-    );
-
     let mut out_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
 
     // worklist by default is all reachable nodes.

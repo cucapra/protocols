@@ -476,13 +476,15 @@ mod tests {
         let mut actions = Vec::new();
         let mut internal_assert_guard = None;
         for (guard, rhs) in [(p, one), (q, two), (r, three)] {
-            let op = protocol.o(Op::Assign(symbol_id, concrete_assignment(&protocol, rhs)));
+            let assignment = Assignment::concrete(protocol.false_id(), guard, rhs);
+            let op = protocol.o(Op::Assign(symbol_id, assignment));
+            let true_id = protocol.true_id();
             append_action(
                 &mut protocol,
                 &SymbolTable::default(),
                 &mut actions,
                 &mut internal_assert_guard,
-                Action::new(guard, op),
+                Action::new(true_id, op),
                 false,
             );
         }
@@ -562,7 +564,9 @@ mod tests {
         // Concrete branches from both unordered sides are preferred over DontCare, but the
         // original node-local DontCare still suppresses node A's own concrete branch.
         assert_eq!(expr_str(&protocol, assignment.dont_care), "and(not(r), s)");
-        assert_eq!(assignment.concretes, vec![(q, three), (r, four)]);
+        let not_s = protocol.not_guard(s);
+        let effective_q = protocol.and_guard(not_s, q);
+        assert_eq!(assignment.concretes, vec![(effective_q, three), (r, four)]);
     }
 
     #[test]

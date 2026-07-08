@@ -9,7 +9,9 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node8 -> node7 [label="1"];
   node7 [label="[1] D.m_axis_tdata := data if 1"];
   node7 -> node6 [label="1"];
   node6 [label="[1] D.m_axis_tvalid := 1 if 1"];
@@ -32,7 +34,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tdata := data if 1\n[1] D.m_axis_tvalid := 1 if 1"];
+  node0 [label="[1] D.m_axis_tvalid := 1 if 1\n[1] D.m_axis_tdata := data if 1"];
   node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
@@ -48,7 +50,9 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node8 -> node7 [label="1"];
   node7 [label="[1] D.m_axis_tdata := data if 1"];
   node7 -> node6 [label="1"];
   node6 [label="[1] D.m_axis_tvalid := 1 if 1"];
@@ -71,7 +75,7 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node0 [label="[1] D.m_axis_tvalid := 1 if 1\n[1] D.m_axis_tdata := data if 1"];
   node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
@@ -87,7 +91,9 @@ digraph "idle" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node3 [label="1"];
+  node0 -> node4 [label="1"];
+  node4 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node4 -> node3 [label="1"];
   node3 [label="[1] D.m_axis_tvalid := 0 if 1"];
   node3 -> node2 [label="1"];
   node2 [label=""];
@@ -101,7 +107,7 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0 if 1"];
+  node0 [label="[1] D.m_axis_tvalid := 0 if 1\n[1] D.m_axis_tdata := X if 1"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
@@ -113,7 +119,9 @@ digraph "idle" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node3 [label="1"];
+  node0 -> node4 [label="1"];
+  node4 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node4 -> node3 [label="1"];
   node3 [label="[1] D.m_axis_tvalid := 0 if 1"];
   node3 -> node2 [label="1"];
   node2 [label=""];
@@ -127,7 +135,7 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
+  node0 [label="[1] D.m_axis_tvalid := 0 if 1\n[1] D.m_axis_tdata := X if 1"];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
