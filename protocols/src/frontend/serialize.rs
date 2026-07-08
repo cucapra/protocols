@@ -464,11 +464,11 @@ pub mod tests {
 
     use super::*;
     use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::parser::{parse_file_with_name, parse_files_with_names, parse_string};
+    use crate::frontend::parser::{parse_files_with_names, parse_string};
     use baa::BitVecValue;
     use clap::ColorChoice;
     use insta::Settings;
-    use patronus::btor2::serialize_to_str;
+
     use strip_ansi_escapes::strip_str;
 
     fn snap(name: &str, content: String) {
