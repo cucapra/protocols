@@ -55,17 +55,11 @@ fn assignment_to_ite(
     ite
 }
 
-/// return an expression which is `true` iff the `Assignment` `a` evals to DontCare
-fn assignment_to_dont_care_ite(a: &Assignment, ctx: &mut Context, default: ExprRef) -> ExprRef {
-    let mut ite = default;
-    let false_id = ctx.get_false();
-    let true_id = ctx.get_true();
-
-    for (guard, _) in &a.concretes {
-        ite = ctx.ite(*guard, false_id, ite);
-    }
-
-    ctx.ite(a.dont_care, true_id, ite)
+/// return an expression which is `true` iff some branch of `Assignment` `a` triggers
+fn assignment_is_triggered(a: &Assignment, ctx: &mut Context) -> ExprRef {
+    a.concretes
+        .iter()
+        .fold(a.dont_care, |acc, (guard, _)| ctx.or(acc, *guard))
 }
 
 fn replace_expr(ctx: &mut Context, expr: ExprRef, old_expr: ExprRef, new_expr: ExprRef) -> ExprRef {
@@ -344,11 +338,18 @@ pub fn into_transition_system(
                 .next()
                 .unwrap();
 
-            let default_is_dont_care = ctx.get_true();
-            let assignment_is_dont_care =
-                assignment_to_dont_care_ite(&assignment, &mut ctx, default_is_dont_care);
-            // TODO: setting the default to the input itself (just stays its current value)
-            // TODO: but we should transition to the internal bad state if no assignment triggers
+            let assignment_is_dont_care = assignment.dont_care;
+            let assignment_is_triggered = assignment_is_triggered(&assignment, &mut ctx);
+            let assignment_not_triggered = ctx.not(assignment_is_triggered);
+
+            // if an assignment isn't triggered, go to the bad state
+            let input_assignment_failed = ctx.and(node_equals, assignment_not_triggered);
+            transition_ite = ctx.ite(
+                input_assignment_failed,
+                internal_bad_state_id,
+                transition_ite,
+            );
+
             let assignment_ite = assignment_to_ite(
                 assignment,
                 &mut ctx,
