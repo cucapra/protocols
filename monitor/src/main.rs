@@ -22,11 +22,9 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::LevelFilter;
 use protocols::frontend;
-use protocols::frontend::ast::Protocol;
-use protocols::frontend::design::{Design, find_designs};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 
-use crate::designs::{Instance, collects_design_names, parse_instance};
+use crate::designs::*;
 use crate::global_context::GlobalContext;
 use crate::global_scheduler::GlobalScheduler;
 use crate::scheduler::Scheduler;
@@ -156,17 +154,15 @@ fn main() -> anyhow::Result<()> {
         DiagnosticHandler::new(cli.color, false, emit_warnings, cli.display_hex);
 
     // Parse protocols file
-    let ast = frontend(
+    let (st, modules) = frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
     )?;
 
-    let designs = find_designs(&ast);
-
     // Try to find instances that we care about
     if cli.instances.is_empty() {
-        println!("Available DUTs are: {}", collects_design_names(&designs));
+        println!("Available DUTs are: {}", collects_module_names(&modules));
         println!("No instances specified. Nothing to monitor. Exiting...");
         return Ok(());
     }
@@ -174,55 +170,40 @@ fn main() -> anyhow::Result<()> {
     let instances: Vec<Instance> = cli
         .instances
         .iter()
-        .map(|arg| parse_instance(&designs, arg))
+        .map(|arg| parse_instance(&modules, arg))
         .collect();
 
     // parse waveform
     let trace = WaveSignalTrace::open(
         &cli.wave,
-        &designs,
+        &modules,
         &instances,
         cli.sample_posedge.clone(),
         cli.time_unit.clone(),
     )
     .with_context(|| format!("failed to read waveform file {}", cli.wave))?;
 
-    // Support multiple structs & designs
-    let dut_designs: Vec<&Design> = instances
-        .iter()
-        .map(|inst| {
-            let struct_name = &inst.design_name;
-            designs
-                .get(struct_name)
-                .unwrap_or_else(|| panic!("Missing Design for {}", struct_name))
-        })
-        .collect();
-
     // Check if we have multiple structs/designs
-    let multiple_structs = dut_designs.len() > 1;
+    let multiple_structs = instances.len() > 1;
 
     // Multi-struct mode: create a GlobalScheduler with one scheduler per design
     let mut schedulers = vec![];
 
     // We use the index of `design` in `dut_designs` as our `instance_id`
-    for (instance_id, design) in dut_designs.into_iter().enumerate() {
+    for (instance_id, inst) in instances.iter().enumerate() {
         // Filter transactions that belong to this design
-        let design_transactions: Vec<Protocol> = design
-            .protocols
-            .iter()
-            .map(|&(idx, _)| ast.protos[idx].clone())
-            .collect();
+        let module = &modules[inst.module_id];
 
-        if design_transactions.is_empty() {
+        if module.protos.is_empty() {
             continue; // Skip designs with no transactions
         }
 
         // Create a scheduler for this design, using the design name as the struct name
         let scheduler = Scheduler::initialize(
-            &ast.st,
-            &design_transactions,
+            &st,
+            &module.protos,
             &trace,
-            design.name.clone(),
+            module.name.clone(),
             instance_id as u32,
         );
 

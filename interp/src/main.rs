@@ -6,8 +6,8 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::ascii_waveform::print_ascii_waveform;
-use protocols::frontend::design::find_a_single_design;
 use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::require_single_module;
 use protocols::scheduler::Scheduler;
 use protocols::{PatronusSim, frontend, transaction_frontend};
 
@@ -132,7 +132,7 @@ fn main() -> anyhow::Result<()> {
         cli.display_hex,
     );
 
-    let ast = match frontend(
+    let (st, modules) = match frontend(
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
@@ -140,7 +140,8 @@ fn main() -> anyhow::Result<()> {
         Ok(result) => result,
         Err(error) => exit_after_setup_error(error, !protocols_handler.error_string().is_empty()),
     };
-    let design = find_a_single_design(&ast, &cli.protocol)?;
+
+    let module = require_single_module(modules, &cli.protocol)?;
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
     let mut transactions_handler = DiagnosticHandler::new(
@@ -149,7 +150,12 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces = match transaction_frontend(cli.transactions, &ast, &mut transactions_handler) {
+    let traces = match transaction_frontend(
+        cli.transactions,
+        &st,
+        &module.protos,
+        &mut transactions_handler,
+    ) {
         Ok(result) => result,
         Err(error) => {
             exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
@@ -167,13 +173,13 @@ fn main() -> anyhow::Result<()> {
         let sim = PatronusSim::new(
             &cli.verilog,
             cli.module.as_deref(),
-            &design,
+            &module,
             waveform_file.as_deref(),
         )?;
 
         let mut scheduler = Scheduler::new(
-            &ast.st,
-            &ast.protos,
+            &st,
+            &module.protos,
             todos,
             sim,
             &mut protocols_handler,

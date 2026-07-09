@@ -6,7 +6,7 @@
 
 // TODO: add a trait to allow for an alternative backend that uses Verilator to execute things
 
-use crate::frontend::design::Design;
+use crate::frontend::Module;
 use crate::frontend::symbol::{Dir, SymbolId};
 use crate::yosys::{ProjectConf, YosysEnv, yosys_to_btor};
 use anyhow::{Context, bail};
@@ -46,7 +46,7 @@ impl PatronusSim {
     pub fn new<P: AsRef<std::path::Path>>(
         verilog_paths: &[P],
         top_module: Option<&str>,
-        design: &Design,
+        design: &Module,
         waveform_file: Option<&str>,
     ) -> anyhow::Result<Self> {
         let (ctx, sys) = create_sim_context(verilog_paths, top_module);
@@ -105,7 +105,7 @@ impl PatronusSim {
                 );
             }
 
-            for (_, syms) in &design.protocols {
+            for syms in &design.proto_pin_map {
                 port_map.insert(syms[pin_idx], port_id);
             }
         }

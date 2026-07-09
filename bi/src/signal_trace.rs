@@ -3,14 +3,13 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::Instance;
 use baa::{BitVecOps, BitVecValue, WidthInt};
-use protocols::frontend::design::Design;
+use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};
-
-use crate::Instance;
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug, PartialEq)]
@@ -90,7 +89,7 @@ impl WaveSignalTrace {
     /// `Direct` or `RisingEdge`).
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
-        designs: &FxHashMap<String, Design>,
+        modules: &[Module],
         instances: &[Instance],
         renames: &FxHashMap<String, String>,
         sample_posedge: Option<String>,
@@ -100,7 +99,7 @@ impl WaveSignalTrace {
         // find instances in the waveform hierarchy
         let (port_map, clock_signal) = find_instances(
             wave.hierarchy(),
-            designs,
+            modules,
             instances,
             renames,
             sample_posedge,
@@ -160,7 +159,7 @@ impl WaveSignalTrace {
 /// (the latter is only `Some` if `sample_posedge` corresponds to a valid signal)
 fn find_instances(
     hierachy: &Hierarchy,
-    designs: &FxHashMap<String, Design>,
+    modules: &[Module],
     instances: &[Instance],
     renames: &FxHashMap<String, String>,
     sample_posedge: Option<String>,
@@ -170,8 +169,7 @@ fn find_instances(
     let mut clock_signal: Option<SignalRef> = None;
 
     for (inst_id, inst) in instances.iter().enumerate() {
-        // fetch the design from the hashmap (the design tells us what pins to expect)
-        let design = &designs[&inst.design];
+        let module = &modules[inst.module_id];
 
         let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
         if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
@@ -179,7 +177,7 @@ fn find_instances(
 
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
-            for (field_idx, field) in design.pins.iter().enumerate() {
+            for (field_idx, field) in module.pins.iter().enumerate() {
                 let pin_name = renames
                     .get(field.name())
                     .cloned()
@@ -238,7 +236,7 @@ fn find_instances(
 
                     // store a mapping from any SymbolId that refers to this pin
                     let value = hierachy[var].signal_ref();
-                    for (_, syms) in design.protocols.iter() {
+                    for syms in &module.proto_pin_map {
                         let key = PortKey {
                             instance_id: inst_id as u32,
                             pin_id: syms[field_idx],
@@ -405,7 +403,7 @@ pub struct AsciWaveTrace {
 impl AsciWaveTrace {
     pub fn open(
         filename: impl AsRef<std::path::Path>,
-        designs: &FxHashMap<String, Design>,
+        modules: &[Module],
         instances: &[Instance],
         renames: &FxHashMap<String, String>,
     ) -> std::io::Result<Self> {
@@ -415,8 +413,8 @@ impl AsciWaveTrace {
 
         // populate pin map
         for (inst_id, inst) in instances.iter().enumerate() {
-            let design = &designs[&inst.design];
-            for (field_idx, field) in design.pins.iter().enumerate() {
+            let module = &modules[inst.module_id];
+            for (field_idx, field) in module.pins.iter().enumerate() {
                 let pin_name = renames
                     .get(field.name())
                     .cloned()
@@ -435,7 +433,7 @@ impl AsciWaveTrace {
                     );
 
                     // store a mapping from any SymbolId that refers to this pin
-                    for (_, syms) in design.protocols.iter() {
+                    for syms in &module.proto_pin_map {
                         let key = (inst_id as u32, syms[field_idx]);
                         trace.symbol_map.insert(key, wave_id);
                     }

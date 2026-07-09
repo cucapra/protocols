@@ -8,17 +8,16 @@ mod constraints;
 mod proto_trace;
 mod signal_trace;
 
+use crate::bi::*;
+use crate::proto_trace::*;
+use crate::signal_trace::*;
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
-use protocols::frontend::design::{Design, find_designs};
+use protocols::frontend::Module;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use rustc_hash::{FxHashMap, FxHashSet};
-
-use crate::bi::*;
-use crate::proto_trace::*;
-use crate::signal_trace::*;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -98,13 +97,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
-    let ast = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks)?;
-
-    let designs = find_designs(&ast);
+    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks)?;
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
-        println!("Available DUTs are: {}", collects_design_names(&designs));
+        println!("Available DUTs are: {}", collects_module_names(&modules));
         println!("No instances specified. Nothing to monitor. Exiting...");
         return Ok(());
     }
@@ -112,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let instances: Vec<Instance> = cli
         .instances
         .iter()
-        .map(|arg| parse_instance(&designs, arg))
+        .map(|arg| parse_instance(&modules, arg))
         .collect();
 
     let renames: FxHashMap<_, _> = cli
@@ -125,26 +122,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    let exclude_from_trace = if cli.include_idle {
-        FxHashSet::default()
-    } else {
-        FxHashSet::from_iter(
-            ast.protos
-                .iter()
-                .filter(|p| p.is_idle)
-                .map(|p| p.name.clone()),
-        )
-    };
-
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
-        .map(|inst| {
-            designs[&inst.design]
-                .protocols
-                .iter()
-                .map(|(id, _)| ast.protos[*id].clone())
-                .collect()
-        })
+        .map(|inst| modules[inst.module_id].protos.clone())
         .collect();
 
     let mut bis: Vec<_> = instances
@@ -152,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .enumerate()
         .zip(bi_protos.iter())
         .map(|((inst_id, inst), protos)| {
-            BackwardsInterpreter::new(&ast.st, protos, inst_id as u32, cli.include_in_progress)
+            BackwardsInterpreter::new(&st, protos, inst_id as u32, cli.include_in_progress)
         })
         .collect();
 
@@ -160,7 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // try to parse FST, VCD or GHW file
         if let Ok(mut trace) = WaveSignalTrace::open(
             &cli.wave,
-            &designs,
+            &modules,
             &instances,
             &renames,
             cli.sample_posedge.clone(),
@@ -168,14 +148,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace = AsciWaveTrace::open(&cli.wave, &designs, &instances, &renames)?;
+            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances, &renames)?;
             run_bis(bis.as_mut_slice(), &mut trace)
         }
     };
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
-    for (bi, parsed_ir) in bis.into_iter().zip(bi_protos) {
+    for (bi, protos) in bis.into_iter().zip(bi_protos) {
+        let exclude_from_trace = if cli.include_idle {
+            FxHashSet::default()
+        } else {
+            protos
+                .iter()
+                .filter(|p| p.is_idle)
+                .map(|p| p.name.clone())
+                .collect()
+        };
+
         if let Some(failures) = bi.failures() {
             for (ii, (trace_id, fails)) in failures.iter().enumerate() {
                 if ii > 0 {
@@ -193,7 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
                 for fail in fails {
-                    let proto = &parsed_ir[fail.proto_id];
+                    let proto = &protos[fail.proto_id];
                     let msg = format!(
                         "[{}] executing step {} of the transaction: {} != {}",
                         fail.thread_name,
@@ -317,35 +307,38 @@ fn print_trace(
 }
 
 /// Concatenates all the names of `struct`s (`Design`s) into one single string
-fn collects_design_names(duts: &FxHashMap<String, Design>) -> String {
-    let mut dut_names: Vec<String> = duts.keys().cloned().collect();
+fn collects_module_names(duts: &[Module]) -> String {
+    let mut dut_names: Vec<String> = duts.iter().map(|d| d.name.clone()).collect();
     dut_names.sort();
     dut_names.join(", ")
 }
 
 struct Instance {
     name: String,
-    design: String,
+    #[allow(dead_code)]
+    module: String,
+    module_id: usize,
 }
 
 /// Takes the contents of the `-i` CLI flag and tries to find
-fn parse_instance(duts: &FxHashMap<String, Design>, arg: &str) -> Instance {
+fn parse_instance(duts: &[Module], arg: &str) -> Instance {
     let parts: Vec<&str> = arg.split(':').collect();
     match parts.as_slice() {
         // `module` is the name of the design
         // (In Verilog, "modules" are like interfaces and you have "instances"
         // (concrete instantiations, aka implementations) of the module)
         [inst, module] => {
-            if !duts.contains_key(*module) {
-                panic!(
-                    "Unknown design {module} for instance {inst}. Did you mean {}?",
-                    collects_design_names(duts)
-                );
-            } else {
+            if let Some(module_id) = duts.iter().position(|d| &d.name == module) {
                 Instance {
                     name: inst.to_string(),
-                    design: module.to_string(),
+                    module: module.to_string(),
+                    module_id,
                 }
+            } else {
+                panic!(
+                    "Unknown design {module} for instance {inst}. Did you mean {}?",
+                    collects_module_names(duts)
+                );
             }
         }
         _ => panic!("unexpected instance argument: {arg}"),

@@ -4,7 +4,6 @@ use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::Pair;
 use pest_derive::Parser;
-use rustc_hash::FxHashMap;
 
 use crate::Value;
 use crate::frontend::ast::Protocol;
@@ -23,7 +22,7 @@ pub fn parse_transactions_file(
     filepath: impl AsRef<std::path::Path>,
     handler: &mut DiagnosticHandler,
     st: &SymbolTable,
-    protos: &FxHashMap<String, &Protocol>,
+    protos: &[Protocol],
 ) -> anyhow::Result<Vec<Vec<Invocation>>> {
     let filename = filepath.as_ref().to_str().unwrap().to_string();
     let input = std::fs::read_to_string(filepath).map_err(|e| anyhow!("failed to load: {}", e))?;
@@ -57,9 +56,12 @@ pub fn parse_transactions_file(
                     // First element should be the function name (ident)
                     let function_name = transaction_inner.next().unwrap().as_str().to_string();
 
-                    let proto = protos.get(&function_name).unwrap_or_else(|| {
-                        panic!("Unable to fetch argument types for transaction {function_name}")
-                    });
+                    let proto = protos
+                        .iter()
+                        .find(|p| p.name == function_name)
+                        .unwrap_or_else(|| {
+                            panic!("Unable to fetch argument types for transaction {function_name}")
+                        });
 
                     // Parse arguments if they exist
                     let mut args: Vec<Value> = vec![];
