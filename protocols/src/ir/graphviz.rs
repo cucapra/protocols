@@ -199,6 +199,7 @@ mod tests {
     use super::*;
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::frontend::require_single_module;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
@@ -207,10 +208,11 @@ mod tests {
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let ast = frontend(&[filename], &mut handler, false).unwrap();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false).unwrap();
         let mut content = String::new();
-        let st = &ast.st;
-        for proto_ast in ast.protos {
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let st = &symbols;
+        for proto_ast in module.protos {
             let mut ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ir, st);
