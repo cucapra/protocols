@@ -1,7 +1,8 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
-
 use clap::Parser;
+use patronus::expr::ExprRef;
 use protocols::ascii_waveform::print_ascii_waveform;
+use protocols::backends::into_transition_system;
 use protocols::frontend::ast::{Ast, Protocol};
 use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
@@ -15,7 +16,7 @@ use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
-use protocols::{PatronusSim, Value, frontend, transaction_frontend};
+use protocols::{PatronusSim, Value, frontend, transaction_frontend, PortId};
 use rustc_hash::FxHashMap;
 
 #[derive(Parser, Debug)]
@@ -67,6 +68,9 @@ struct Cli {
     /// Print reaching definition analysis results
     #[arg(long)]
     reaching_definitions: bool,
+
+    #[arg(long)]
+    transition_system: bool,
 }
 
 fn load_protocols(cli: &Cli) -> Ast {
@@ -182,7 +186,7 @@ fn run_respect_forks(
         print_trace_separator(trace_index);
         let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
 
-        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
+        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st, sim.ctx.clone());
 
         if cli.graphout {
             println!("// joint graph for trace {trace_index}");
@@ -229,6 +233,39 @@ fn run_respect_forks(
     }
 }
 
+fn run_transition_system(
+    cli: &Cli,
+    st: &SymbolTable,
+    protos: &[Protocol],
+    design: &Design,
+    traces: &[Vec<(String, Vec<Value>)>],
+) {
+    // TODO: Duplicate lowering process as respect forks
+    let protos_by_name: FxHashMap<&str, &Protocol> =
+        protos.iter().map(|p| (p.name.as_str(), p)).collect();
+
+    for (trace_index, trace) in traces.iter().enumerate() {
+        print_trace_separator(trace_index);
+        // jankily reuse the sim to get all the stuff we need
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
+        let sys = sim.sys.clone();
+        let port_map = sim.port_map.clone();
+        let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
+            sim.inputs()
+                .filter_map(|input| sim.get_port_expr(input).map(|expr| (input, expr))),
+        );
+
+        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st, sim.ctx.clone());
+        joint = determinized(joint, st);
+        let rd = reaching_definitions(&mut joint, st);
+        propagate_assignments(&mut joint, st, &rd);
+
+        // put the trace directly into the sim
+        let (_ctx, _sys) = into_transition_system(joint, sys, port_map, port_expr_refs, st);
+
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     let ast = load_protocols(&cli);
@@ -239,7 +276,9 @@ fn main() {
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
-        if cli.respect_forks {
+        if cli.transition_system {
+            run_transition_system(&cli, st, &ast.protos, &design, &traces);
+        } else if cli.respect_forks {
             run_respect_forks(&cli, st, &ast.protos, &design, &traces);
         } else {
             run_classic(&cli, st, &ast.protos, &design, traces);

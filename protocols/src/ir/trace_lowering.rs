@@ -13,6 +13,7 @@ use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
 use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
+use patronus::expr::Context as ExprContext;
 
 impl<'a> Lowerer<'a> {
     /// Build the per-copy argument substitution and lower one transaction body.
@@ -197,6 +198,7 @@ pub fn lower_trace_to_ir(
     trace: &[(String, Vec<Value>)],
     protos_by_name: &FxHashMap<&str, &Protocol>,
     symbols: &SymbolTable,
+    expr_ctx: ExprContext,
 ) -> ProtoGraph {
     assert!(!trace.is_empty(), "cannot lower an empty trace");
 
@@ -206,7 +208,7 @@ pub fn lower_trace_to_ir(
         .unwrap_or_else(|| panic!("unknown protocol {first_name}"));
 
     // set up the lowerer and lower the initial transaction
-    let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
+    let mut lowerer = Lowerer::with_expr_ctx(first_ast.ctx.clone(), symbols, expr_ctx);
     let first = lowerer.lower_transaction(first_ast, first_values, trace.len() == 1);
     let entry_node = lowerer.ir.entry;
     let true_id = lowerer.ir.true_id();

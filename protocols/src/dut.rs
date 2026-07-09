@@ -26,19 +26,19 @@ const EMPTY_PORT_VEC: Vec<PortId> = vec![];
 const EMPTY_PORT_VEC_REF: &Vec<PortId> = &EMPTY_PORT_VEC;
 
 pub struct PatronusSim {
-    ctx: patronus::expr::Context,
-    sys: TransitionSystem,
-    sim: Interpreter,
-    port_map: FxHashMap<SymbolId, PortId>,
+    pub ctx: patronus::expr::Context,
+    pub sys: TransitionSystem,
+    pub sim: Interpreter,
+    pub port_map: FxHashMap<SymbolId, PortId>,
     // Combinational dependency tracking
     /// Maps `input |-> Vec<output>` (outputs that are affected by this input)
     input_dependencies: FxHashMap<PortId, Vec<PortId>>,
     /// Maps each `output |-> Vec<input>` (inputs that this output is dependent on)
     output_dependencies: FxHashMap<PortId, Vec<PortId>>,
     /// easy access to valid input ports
-    inputs: Vec<PortId>,
+    pub inputs: Vec<PortId>,
     /// easy access to valid output ports
-    outputs: Vec<PortId>,
+    pub outputs: Vec<PortId>,
 }
 
 /// Prototype of our generic (non-patronus specific) dut simulator  interface
@@ -242,7 +242,7 @@ impl PatronusSim {
         }
     }
 
-    fn get_port_expr(&self, port: PortId) -> Option<ExprRef> {
+    pub fn get_port_expr(&self, port: PortId) -> Option<ExprRef> {
         self.get_input(port)
             .or_else(|| self.get_output(port).map(|o| o.expr))
     }
