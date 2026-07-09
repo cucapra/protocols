@@ -9,16 +9,30 @@ use patronus::system::{State, TransitionSystem};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 
-struct GuardedExpr {
-    pub guard: ExprRef,
-    pub expr: ExprRef,
+/// the first part of an ITE: the if condition, and the then expression
+struct IfThenExpr {
+    pub if_cond: ExprRef,
+    pub then: ExprRef,
 }
 
-fn guard_exprs_to_ite(v: Vec<GuardedExpr>, ctx: &mut Context, default: ExprRef) -> ExprRef {
+struct InputDriver {
+    port: PortId,
+    input_expr_ref: ExprRef,
+    /// the port's value expression
+    input_ite: ExprRef,
+    /// the condition under which the input resolved to DontCare
+    /// this is used for pretty printing the ASCII waveform
+    input_is_dont_care: ExprRef,
+    /// The corresponding input to the transition system, invoked on a DontCare assignment
+    input_dont_care: ExprRef,
+}
+
+/// Turn a vector of `IfThenExpr`s, with *Right-to-Left* priority, into an ITE with default `default`
+fn if_thens_to_ite(v: Vec<IfThenExpr>, ctx: &mut Context, default: ExprRef) -> ExprRef {
     let mut ite = default;
 
     for ge in v {
-        ite = ctx.ite(ge.guard, ge.expr, ite);
+        ite = ctx.ite(ge.if_cond, ge.then, ite);
     }
 
     ite
@@ -41,6 +55,7 @@ fn assignment_to_ite(
     ite
 }
 
+/// return an expression which is `true` iff the `Assignment` `a` evals to DontCare
 fn assignment_to_dont_care_ite(a: &Assignment, ctx: &mut Context, default: ExprRef) -> ExprRef {
     let mut ite = default;
     let false_id = ctx.get_false();
@@ -129,6 +144,8 @@ fn replace_proto_graph_exprs(
         .collect();
 }
 
+/// swap out all the ports in the ProtoGraph with their equivalents
+/// in the DUT
 fn bind_proto_graph_ports_to_dut(
     pg: &mut ProtoGraph,
     ctx: &mut Context,
@@ -188,12 +205,15 @@ pub fn into_transition_system(
     let internal_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 1, node_id_width);
     let done_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 2, node_id_width);
 
-    let mut transitions: Vec<GuardedExpr> = vec![];
+    // Generate a big vector of all the transitions
+    let mut transitions: Vec<IfThenExpr> = vec![];
     // create the transition function - only use the reachable nodes for efficiency
     let mut q = vec![pg.entry];
     let mut visited: FxHashSet<NodeId> = FxHashSet::default();
     visited.insert(pg.entry);
+    let mut reachable_nodes = Vec::new();
     while let Some(id) = q.pop() {
+        reachable_nodes.push(id);
         let src = ctx.bit_vec_val(id.as_u32(), node_id_width);
         let node_guard = ctx.equal(node_sym, src);
 
@@ -202,9 +222,9 @@ pub fn into_transition_system(
         for action in &pg[id].actions {
             if matches!(pg[action.op], Op::Done) {
                 let done_guard = ctx.and(node_guard, action.guard);
-                transitions.push(GuardedExpr {
-                    guard: done_guard,
-                    expr: done_state_id,
+                transitions.push(IfThenExpr {
+                    if_cond: done_guard,
+                    then: done_state_id,
                 });
             }
         }
@@ -215,9 +235,9 @@ pub fn into_transition_system(
             // node_sym == src && guard
             let and_guard = ctx.and(node_guard, guard);
 
-            let t = GuardedExpr {
-                guard: and_guard,
-                expr: dst,
+            let t = IfThenExpr {
+                if_cond: and_guard,
+                then: dst,
             };
             transitions.push(t);
 
@@ -236,16 +256,16 @@ pub fn into_transition_system(
                     let assertion_failed = ctx.not(eq);
                     let action_guard = ctx.and(action.guard, assertion_failed);
                     let bad_guard = ctx.and(node_guard, action_guard);
-                    transitions.push(GuardedExpr {
-                        guard: bad_guard,
-                        expr: external_bad_state_id,
+                    transitions.push(IfThenExpr {
+                        if_cond: bad_guard,
+                        then: external_bad_state_id,
                     });
                 }
                 Op::InternalAssertFalse => {
                     let bad_guard = ctx.and(node_guard, action.guard);
-                    transitions.push(GuardedExpr {
-                        guard: bad_guard,
-                        expr: internal_bad_state_id,
+                    transitions.push(IfThenExpr {
+                        if_cond: bad_guard,
+                        then: internal_bad_state_id,
                     });
                 }
                 Op::Assign(_, _) | Op::Fork | Op::Done => {}
@@ -254,34 +274,36 @@ pub fn into_transition_system(
     }
 
     let done_state_guard = ctx.equal(node_sym, done_state_id);
-    transitions.push(GuardedExpr {
-        guard: done_state_guard,
-        expr: done_state_id,
+    transitions.push(IfThenExpr {
+        if_cond: done_state_guard,
+        then: done_state_id,
     });
     let external_bad_state_guard = ctx.equal(node_sym, external_bad_state_id);
-    transitions.push(GuardedExpr {
-        guard: external_bad_state_guard,
-        expr: external_bad_state_id,
+    transitions.push(IfThenExpr {
+        if_cond: external_bad_state_guard,
+        then: external_bad_state_id,
     });
     let internal_bad_state_guard = ctx.equal(node_sym, internal_bad_state_id);
-    transitions.push(GuardedExpr {
-        guard: internal_bad_state_guard,
-        expr: internal_bad_state_id,
+    transitions.push(IfThenExpr {
+        if_cond: internal_bad_state_guard,
+        then: internal_bad_state_id,
     });
 
-    let mut transition_ite = guard_exprs_to_ite(transitions, &mut ctx, external_bad_state_id);
+    // if no transition is satisfied, we go to the internal bad state
+    // the final done state self-loops, so it won't trigger this
+    let mut transition_ite = if_thens_to_ite(transitions, &mut ctx, internal_bad_state_id);
 
     // set up ITE expressions based on what node state we're in for each port,
     // and replace the inputs with the ITEs everywhere
-    // TODO: is this the correct way to get ports here?
     let input_symbols: Vec<SymbolId> = st
         .get_children(&pg.proto_ctx.type_param.unwrap())
         .into_iter()
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    // TODO: this can be done as a single pass over nodes, instead of two loops
-    for input in input_symbols.clone() {
+    // set up default input drivers per input
+    let mut input_drivers = Vec::with_capacity(input_symbols.len());
+    for input in input_symbols {
         let tpe = st[input].tpe();
         let input_width = match tpe {
             symbol::Type::BitVec(width) => width,
@@ -292,16 +314,31 @@ pub fn into_transition_system(
         let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
         ts.add_input(&ctx, input_dont_care);
 
-        // TODO: idk what to make the default. right now just the dont care?
-        let mut input_ite = input_dont_care;
-        let mut input_is_dont_care = ctx.get_true();
-        // TODO: This iteration is unwieldy
-        for id in visited.clone().drain() {
+        let input_port = *symbol_to_port.get(&input).unwrap();
+        let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
+        input_drivers.push((
+            input,
+            InputDriver {
+                port: input_port,
+                input_expr_ref,
+                input_ite: input_dont_care,
+                input_is_dont_care: ctx.get_true(),
+                input_dont_care,
+            },
+        ));
+    }
+
+    // populate the input drivers with assignments in the reachable nodes
+    for id in reachable_nodes {
+        let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
+        let node_equals = ctx.equal(node_sym, node_id_expr);
+
+        for (input, driver) in &mut input_drivers {
             let assignment: Assignment = pg[id]
                 .actions
                 .iter()
                 .filter_map(|action| match pg[action.op].clone() {
-                    Op::Assign(assigned_input, expr) if assigned_input == input => Some(expr),
+                    Op::Assign(assigned_input, expr) if assigned_input == *input => Some(expr),
                     _ => None,
                 })
                 .next()
@@ -310,25 +347,37 @@ pub fn into_transition_system(
             let default_is_dont_care = ctx.get_true();
             let assignment_is_dont_care =
                 assignment_to_dont_care_ite(&assignment, &mut ctx, default_is_dont_care);
-            let assignment_ite =
-                assignment_to_ite(assignment, &mut ctx, input_dont_care, input_dont_care);
+            // TODO: setting the default to the input itself (just stays its current value)
+            // TODO: but we should transition to the internal bad state if no assignment triggers
+            let assignment_ite = assignment_to_ite(
+                assignment,
+                &mut ctx,
+                driver.input_dont_care,
+                driver.input_expr_ref,
+            );
 
-            let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
-            let node_equals = ctx.equal(node_sym, node_id_expr);
-
-            input_ite = ctx.ite(node_equals, assignment_ite, input_ite);
-            input_is_dont_care = ctx.ite(node_equals, assignment_is_dont_care, input_is_dont_care);
+            driver.input_ite = ctx.ite(node_equals, assignment_ite, driver.input_ite);
+            driver.input_is_dont_care = ctx.ite(
+                node_equals,
+                assignment_is_dont_care,
+                driver.input_is_dont_care,
+            );
         }
+    }
 
-        // replace the input ExprRef with the input_ite everywhere
-        let input_port = *symbol_to_port.get(&input).unwrap();
-        let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
-        replace_expr_uses(&mut ts, &mut ctx, input_expr_ref, input_ite);
-        transition_ite = replace_expr(&mut ctx, transition_ite, input_expr_ref, input_ite);
+    // replace the input ExprRef with the input_ite everywhere
+    for (_, driver) in input_drivers {
+        replace_expr_uses(&mut ts, &mut ctx, driver.input_expr_ref, driver.input_ite);
+        transition_ite = replace_expr(
+            &mut ctx,
+            transition_ite,
+            driver.input_expr_ref,
+            driver.input_ite,
+        );
         for expr in port_to_expr.values_mut() {
-            *expr = replace_expr(&mut ctx, *expr, input_expr_ref, input_ite);
+            *expr = replace_expr(&mut ctx, *expr, driver.input_expr_ref, driver.input_ite);
         }
-        is_dont_care.insert(input_port, input_is_dont_care);
+        is_dont_care.insert(driver.port, driver.input_is_dont_care);
     }
 
     let node_state = State {
