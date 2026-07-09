@@ -10,6 +10,7 @@ use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
+use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
 
@@ -42,11 +43,15 @@ impl<'a> Lowerer<'a> {
         self.lower_protocol_fragment(ast, keep_done)
     }
 
-    fn next_trace_graft_points(&self, fragment: &LoweredFragmentInfo) -> Vec<(NodeId, ExprRef)> {
+    fn next_trace_graft_points(
+        &mut self,
+        fragment: &LoweredFragmentInfo,
+    ) -> Vec<(NodeId, ExprRef)> {
+        let fork_reach = reaching_forks_from(&mut self.ir, fragment.entry);
         let ir = &self.ir;
 
         // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
-        let forks: Vec<(NodeId, ExprRef)> = fragment
+        let mut graft_points: Vec<(NodeId, ExprRef)> = fragment
             .nodes
             .iter()
             .flat_map(|id| {
@@ -58,13 +63,38 @@ impl<'a> Lowerer<'a> {
             })
             .collect();
 
-        // TODO: we should also graft onto done, but guarded by if the fork is never raised
-        // (some sort of internal state)?
-        if forks.is_empty() {
-            vec![(fragment.exit, self.ir.true_id())]
-        } else {
-            forks
+        // at every fork point, we want to have it proven that we haven't forked before
+        for (fork_node, _) in &graft_points {
+            let reachability = fork_reach.in_reach.get(fork_node).copied().unwrap();
+            assert!(
+                matches!(
+                    reachability,
+                    // nodes never get cleaned up, so there are old (pre-contraction) fork nodes that are Unreachable we need to account for
+                    ForkReachability::Unreachable | ForkReachability::DefinitelyNotForked
+                ),
+                "fork node {fork_node} can be reached after a prior fork"
+            );
         }
+
+        // if we can prove we haven't forked up to know, we'll also graft onto the exit
+        // if we can prove we have forked up to know, we won't graft onto the exit node
+        // otherwise, panic! - we're gonna have an exponential blowup
+        let exit_reachability = fork_reach
+            .in_reach
+            .get(&fragment.exit)
+            .copied()
+            .unwrap_or(ForkReachability::Unreachable);
+        match exit_reachability {
+            ForkReachability::DefinitelyNotForked => {
+                graft_points.push((fragment.exit, self.ir.true_id()));
+            }
+            ForkReachability::DefinitelyForked | ForkReachability::Unreachable => {}
+            ForkReachability::MaybeForked => {
+                panic!("done node {} may or may not have forked", fragment.exit);
+            }
+        }
+
+        graft_points
     }
 
     /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.

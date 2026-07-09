@@ -13,9 +13,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 // Maps ports (by their `String` name`), to the existing Assignment for that port
 pub type ReachingDefs = FxHashMap<String, Assignment>;
 
-/// Nodes only store their outgoing transitions. This function precomputes and returns
-/// the in-neighbors for each node that is reachable from the entry.
-fn predecessors(pg: &ProtoGraph) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
+/// Nodes only store their outgoing transitions. This function precomputes and
+/// returns the in-neighbors for each node.
+pub fn predecessors(pg: &ProtoGraph) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
     let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
 
     for (n, _) in pg.nodes() {
@@ -27,7 +27,7 @@ fn predecessors(pg: &ProtoGraph) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
     predecessors
 }
 
-fn simplify_guard(pg: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
+pub fn simplify_guard(pg: &mut ProtoGraph, guard: ExprRef) -> ExprRef {
     let (expr_ctx, simplifier) = (&mut pg.expr_ctx, &mut pg.simplifier);
     simplifier.simplify(expr_ctx, guard)
 }
@@ -54,7 +54,7 @@ pub fn canonicalize_assignment(pg: &mut ProtoGraph, assignment: Assignment) -> A
 
         match check_sat(pg, effective_guard) {
             SatResult::DefinitelyUnsat => {}
-            SatResult::DefinitelySat => {
+            SatResult::AlwaysSat => {
                 merge_concrete_guard(pg, &mut concretes, pg.true_id(), rhs);
                 break;
             }
@@ -107,7 +107,7 @@ pub fn assignment_is_total(pg: &mut ProtoGraph, assignment: &Assignment) -> bool
         });
 
     match check_sat(pg, coverage) {
-        SatResult::DefinitelySat => true,
+        SatResult::AlwaysSat => true,
         SatResult::DefinitelyUnsat | SatResult::MaybeSat => false,
     }
 }
@@ -115,7 +115,7 @@ pub fn assignment_is_total(pg: &mut ProtoGraph, assignment: &Assignment) -> bool
 /// Take `branch_guard`, i.e. a guard on an assignment and simplify it to `Some(g)`
 /// under the assumption that `transition_guard` is true. If returns `None`
 /// then the branch can be removed.
-fn restrict_branch_to_edge(
+pub fn restrict_branch_to_edge(
     pg: &mut ProtoGraph,
     branch_guard: ExprRef,
     transition_guard: ExprRef,

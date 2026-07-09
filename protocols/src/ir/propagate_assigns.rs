@@ -5,10 +5,10 @@ use cranelift_entity::EntitySet;
 use rustc_hash::FxHashMap;
 
 // BFS from the entry
-fn reachable_node_ids(pg: &ProtoGraph) -> Vec<NodeId> {
+pub fn reachable_node_ids(pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
     let mut visited: EntitySet<NodeId> = EntitySet::default();
     let mut nodes = Vec::new();
-    let mut q = vec![pg.entry];
+    let mut q = vec![start];
 
     while let Some(nid) = q.pop() {
         if !visited.insert(nid) {
@@ -41,7 +41,7 @@ fn all_ports_present(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    for nid in reachable_node_ids(pg) {
+    for nid in reachable_node_ids(pg, pg.entry) {
         let Some(rd) = reaching_defs.get(&nid) else {
             return false;
         };
@@ -76,7 +76,7 @@ pub fn propagate_assignments(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    let node_ids = reachable_node_ids(pg);
+    let node_ids = reachable_node_ids(pg, pg.entry);
 
     for id in node_ids {
         let Some(node_defs) = rd.get(&id) else {
