@@ -42,6 +42,18 @@ fn assignment_to_ite(
     ite
 }
 
+fn assignment_to_dont_care_ite(a: &Assignment, ctx: &mut Context, default: ExprRef) -> ExprRef {
+    let mut ite = default;
+    let false_id = ctx.get_false();
+    let true_id = ctx.get_true();
+
+    for (guard, _) in &a.concretes {
+        ite = ctx.ite(*guard, false_id, ite);
+    }
+
+    ctx.ite(a.dont_care, true_id, ite)
+}
+
 fn replace_expr(ctx: &mut Context, expr: ExprRef, old_expr: ExprRef, new_expr: ExprRef) -> ExprRef {
     simple_transform_expr(ctx, expr, |_ctx, candidate, _children| {
         (candidate == old_expr).then_some(new_expr)
@@ -148,6 +160,7 @@ pub struct LoweredSystemResult {
     pub done_state: Option<ExprRef>,
     pub external_assert_state: ExprRef,
     pub internal_assert_state: ExprRef,
+    pub is_dont_care: FxHashMap<PortId, ExprRef>,
 }
 
 pub fn into_transition_system(
@@ -159,9 +172,10 @@ pub fn into_transition_system(
 ) -> LoweredSystemResult {
     let mut ctx = std::mem::take(&mut pg.expr_ctx);
     let mut port_to_expr = port_to_expr;
+    let mut is_dont_care = FxHashMap::default();
     bind_proto_graph_ports_to_dut(&mut pg, &mut ctx, &symbol_to_port, &port_to_expr);
 
-    let node_count = pg.nodes().try_len().unwrap() as u64 + 2;
+    let node_count = pg.nodes().try_len().unwrap() as u64 + 3;
     let node_id_width = u64::from(u64::BITS - node_count.leading_zeros());
 
     let s = ctx.string(Cow::from("node"));
@@ -173,16 +187,28 @@ pub fn into_transition_system(
     // println!("External bad state: {:?}", pg.next_node_id().as_u32());
     // TODO: is it safe to assume node ids are monotone?
     let internal_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 1, node_id_width);
+    let done_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 2, node_id_width);
 
     let mut transitions: Vec<GuardedExpr> = vec![];
     // create the transition function - only use the reachable nodes for efficiency
     let mut q = vec![pg.entry];
     let mut visited: FxHashSet<NodeId> = FxHashSet::default();
     visited.insert(pg.entry);
-    let mut done_node_id = None;
     while let Some(id) = q.pop() {
         let src = ctx.bit_vec_val(id.as_u32(), node_id_width);
         let node_guard = ctx.equal(node_sym, src);
+
+        // Done has lower priority than graph transitions. Since later ITE arms
+        // win, emit done transitions before normal transitions.
+        for action in &pg[id].actions {
+            if matches!(pg[action.op], Op::Done) {
+                let done_guard = ctx.and(node_guard, action.guard);
+                transitions.push(GuardedExpr {
+                    guard: done_guard,
+                    expr: done_state_id,
+                });
+            }
+        }
 
         for (guard, dst_node) in pg[id].transitions.iter().map(|t| (t.guard, t.target)) {
             let dst = ctx.bit_vec_val(dst_node.as_u32(), node_id_width);
@@ -223,17 +249,25 @@ pub fn into_transition_system(
                         expr: internal_bad_state_id,
                     });
                 }
-                Op::Assign(_, _) | Op::Fork | Op::Done => {
-                    done_node_id = Some(src);
-                }
+                Op::Assign(_, _) | Op::Fork | Op::Done => {}
             }
         }
     }
 
-    let bad_state_guard = ctx.equal(node_sym, external_bad_state_id);
+    let done_state_guard = ctx.equal(node_sym, done_state_id);
     transitions.push(GuardedExpr {
-        guard: bad_state_guard,
+        guard: done_state_guard,
+        expr: done_state_id,
+    });
+    let external_bad_state_guard = ctx.equal(node_sym, external_bad_state_id);
+    transitions.push(GuardedExpr {
+        guard: external_bad_state_guard,
         expr: external_bad_state_id,
+    });
+    let internal_bad_state_guard = ctx.equal(node_sym, internal_bad_state_id);
+    transitions.push(GuardedExpr {
+        guard: internal_bad_state_guard,
+        expr: internal_bad_state_id,
     });
 
     // TODO: ITE form is only equivalent if transition guards out of a node are mutually exclusive
@@ -268,6 +302,7 @@ pub fn into_transition_system(
 
         // TODO: idk what to make the default. right now just the dont care?
         let mut input_ite = input_dont_care;
+        let mut input_is_dont_care = ctx.get_true();
         // TODO: This iteration is unwieldy
         for id in visited.clone().drain() {
             let assignment: Assignment = pg[id]
@@ -280,6 +315,9 @@ pub fn into_transition_system(
                 .next()
                 .unwrap();
 
+            let default_is_dont_care = ctx.get_true();
+            let assignment_is_dont_care =
+                assignment_to_dont_care_ite(&assignment, &mut ctx, default_is_dont_care);
             let assignment_ite =
                 assignment_to_ite(assignment, &mut ctx, input_dont_care, input_dont_care);
 
@@ -287,16 +325,18 @@ pub fn into_transition_system(
             let node_equals = ctx.equal(node_sym, node_id_expr);
 
             input_ite = ctx.ite(node_equals, assignment_ite, input_ite);
+            input_is_dont_care =
+                ctx.ite(node_equals, assignment_is_dont_care, input_is_dont_care);
         }
 
         // replace the input ExprRef with the input_ite everywhere
-        let input_expr_ref = *port_to_expr
-            .get(symbol_to_port.get(&input).unwrap())
-            .unwrap();
+        let input_port = *symbol_to_port.get(&input).unwrap();
+        let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
         replace_expr_uses(&mut ts, &mut ctx, input_expr_ref, input_ite);
         for expr in port_to_expr.values_mut() {
             *expr = replace_expr(&mut ctx, *expr, input_expr_ref, input_ite);
         }
+        is_dont_care.insert(input_port, input_is_dont_care);
     }
 
     ts.add_state(&ctx, node_state);
@@ -305,8 +345,9 @@ pub fn into_transition_system(
         ts,
         port_to_expr,
         node_symbol: node_sym,
-        done_state: done_node_id,
+        done_state: Some(done_state_id),
         external_assert_state: external_bad_state_id,
         internal_assert_state: internal_bad_state_id,
+        is_dont_care,
     }
 }

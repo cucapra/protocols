@@ -1,4 +1,4 @@
-use baa::Value as BaaValue;
+use baa::{BitVecOps, Value as BaaValue};
 use clap::Parser;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
@@ -127,13 +127,26 @@ fn record_transition_waveform(
     waveform: &mut FxHashMap<PortId, Vec<WaveValue>>,
     sim: &Interpreter,
     port_expr_refs: &FxHashMap<PortId, ExprRef>,
+    is_dont_care: &FxHashMap<PortId, ExprRef>,
 ) {
     for (port, expr) in port_expr_refs {
-        let value = match sim.get(*expr) {
-            BaaValue::BitVec(value) => WaveValue::Concrete(value),
-            BaaValue::Array(_) => panic!("DUT ports should be bit-vectors"),
+        let value = if let Some(is_dont_care) = is_dont_care.get(port)
+            && matches!(sim.get(*is_dont_care), BaaValue::BitVec(value) if value.is_one())
+        {
+            WaveValue::DontCare
+        } else {
+            match sim.get(*expr) {
+                BaaValue::BitVec(value) => WaveValue::Concrete(value),
+                BaaValue::Array(_) => panic!("DUT ports should be bit-vectors"),
+            }
         };
         waveform.entry(*port).or_default().push(value);
+    }
+}
+
+fn pop_transition_waveform(waveform: &mut FxHashMap<PortId, Vec<WaveValue>>) {
+    for values in waveform.values_mut() {
+        values.pop();
     }
 }
 
@@ -281,15 +294,21 @@ fn run_transition_system(
         let res = into_transition_system(joint, sys, port_map, port_expr_refs, st);
 
         let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
-        transition_sim.init(InitKind::Random(0));
+        transition_sim.init(InitKind::Zero);
         let mut waveform = FxHashMap::default();
         loop {
-            record_transition_waveform(&mut waveform, &transition_sim, &res.port_to_expr);
+            record_transition_waveform(
+                &mut waveform,
+                &transition_sim,
+                &res.port_to_expr,
+                &res.is_dont_care,
+            );
             transition_sim.step();
 
             let state = transition_sim.get(res.node_symbol);
             // println!("{:?}", state);
             if state == transition_sim.get(res.done_state.unwrap()) {
+                pop_transition_waveform(&mut waveform);
                 print_trace_success(trace_index);
                 break;
             } else if state == transition_sim.get(res.external_assert_state) {
