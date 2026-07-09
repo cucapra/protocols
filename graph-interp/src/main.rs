@@ -1,5 +1,5 @@
-use clap::Parser;
 use baa::Value as BaaValue;
+use clap::Parser;
 use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
@@ -8,6 +8,7 @@ use protocols::frontend::ast::{Ast, Protocol};
 use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
+use protocols::interpreter::Value as WaveValue;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
@@ -17,7 +18,6 @@ use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
-use protocols::interpreter::Value as WaveValue;
 use protocols::{PatronusSim, PortId, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -278,28 +278,36 @@ fn run_transition_system(
         propagate_assignments(&mut joint, st, &rd);
 
         // TODO: This is totally stupid
-        let step_bound = joint.nodes().count() + 1;
-        let (ctx, sys, port_expr_refs) =
-            into_transition_system(joint, sys, port_map, port_expr_refs, st);
+        let res = into_transition_system(joint, sys, port_map, port_expr_refs, st);
 
-        let mut transition_sim = Interpreter::new(&ctx, &sys);
+        let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
         transition_sim.init(InitKind::Zero);
         let mut waveform = FxHashMap::default();
-        for _ in 0..step_bound {
-            record_transition_waveform(&mut waveform, &transition_sim, &port_expr_refs);
+        loop {
+            record_transition_waveform(&mut waveform, &transition_sim, &res.port_to_expr);
             transition_sim.step();
+
+            let state = transition_sim.get(res.node_symbol);
+            println!("{:?}", state);
+            if state == transition_sim.get(res.done_state.unwrap()) {
+                print_trace_success(trace_index);
+                break;
+            } else if state == transition_sim.get(res.external_assert_state) {
+                println!("Assertion failure.");
+                break;
+            } else if state == transition_sim.get(res.internal_assert_state) {
+                println!("Internal assertion failure.");
+                break;
+            }
         }
 
         if cli.ascii_waveform {
-            print_trace_success(trace_index);
             print_ascii_waveform(
                 waveform,
                 |port| sim.port_name(port).to_string(),
                 |port| sim.port_width(port),
                 false,
             );
-        } else {
-            print_trace_success(trace_index);
         }
     }
 }

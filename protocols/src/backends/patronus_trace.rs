@@ -4,7 +4,7 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
-use patronus::expr::{Context, ExprRef, Type, simple_transform_expr};
+use patronus::expr::{Context, ExprRef, SerializableIrNode, Type, simple_transform_expr};
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
@@ -21,6 +21,7 @@ fn guard_exprs_to_ite(v: Vec<GuardedExpr>, ctx: &mut Context, default: ExprRef) 
         ite = ctx.ite(ge.guard, ge.expr, ite);
     }
 
+    println!("{}", ite.serialize_to_str(ctx));
     ite
 }
 
@@ -139,22 +140,28 @@ fn bind_proto_graph_ports_to_dut(
     }
 }
 
+pub struct LoweredSystemResult {
+    pub ctx: Context,
+    pub ts: TransitionSystem,
+    pub port_to_expr: FxHashMap<PortId, ExprRef>,
+    pub node_symbol: ExprRef,
+    pub done_state: Option<ExprRef>,
+    pub external_assert_state: ExprRef,
+    pub internal_assert_state: ExprRef,
+}
+
 pub fn into_transition_system(
     mut pg: ProtoGraph,
     mut ts: TransitionSystem,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
     port_to_expr: FxHashMap<PortId, ExprRef>,
     st: &SymbolTable,
-) -> (
-    patronus::expr::Context,
-    TransitionSystem,
-    FxHashMap<PortId, ExprRef>,
-) {
+) -> LoweredSystemResult {
     let mut ctx = std::mem::take(&mut pg.expr_ctx);
     let mut port_to_expr = port_to_expr;
     bind_proto_graph_ports_to_dut(&mut pg, &mut ctx, &symbol_to_port, &port_to_expr);
 
-    let node_count = pg.nodes().try_len().unwrap() as u64;
+    let node_count = pg.nodes().try_len().unwrap() as u64 + 2;
     let node_id_width = u64::from(u64::BITS - node_count.leading_zeros());
 
     let s = ctx.string(Cow::from("node"));
@@ -162,20 +169,25 @@ pub fn into_transition_system(
 
     // the initial node state is the entry
     let entry_id = ctx.bit_vec_val(pg.entry.as_u32(), node_id_width);
-    let bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32(), node_id_width);
+    let external_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32(), node_id_width);
+    println!("External bad state: {:?}", pg.next_node_id().as_u32());
+    // TODO: is it safe to assume node ids are monotone?
+    let internal_bad_state_id =
+        ctx.bit_vec_val(u32::from(pg.next_node_id().as_u32() + 1), node_id_width);
 
     let mut transitions: Vec<GuardedExpr> = vec![];
     // create the transition function - only use the reachable nodes for efficiency
     let mut q = vec![pg.entry];
     let mut visited: FxHashSet<NodeId> = FxHashSet::default();
     visited.insert(pg.entry);
+    let mut done_node_id = None;
     while let Some(id) = q.pop() {
         let src = ctx.bit_vec_val(id.as_u32(), node_id_width);
+        let node_guard = ctx.equal(node_sym, src);
+
         for (guard, dst_node) in pg[id].transitions.iter().map(|t| (t.guard, t.target)) {
             let dst = ctx.bit_vec_val(dst_node.as_u32(), node_id_width);
 
-            // node_sym == src
-            let node_guard = ctx.equal(node_sym, src);
             // node_sym == src && guard
             let and_guard = ctx.and(node_guard, guard);
 
@@ -190,10 +202,41 @@ pub fn into_transition_system(
                 q.push(dst_node);
             }
         }
+
+        for action in &pg[id].actions {
+            match pg[action.op].clone() {
+                Op::AssertEq(lhs, rhs) => {
+                    let eq = ctx.equal(lhs, rhs);
+                    let assertion_failed = ctx.not(eq);
+                    let action_guard = ctx.and(action.guard, assertion_failed);
+                    let bad_guard = ctx.and(node_guard, action_guard);
+                    transitions.push(GuardedExpr {
+                        guard: bad_guard,
+                        expr: external_bad_state_id,
+                    });
+                }
+                Op::InternalAssertFalse => {
+                    let bad_guard = ctx.and(node_guard, action.guard);
+                    transitions.push(GuardedExpr {
+                        guard: bad_guard,
+                        expr: internal_bad_state_id,
+                    });
+                }
+                Op::Assign(_, _) | Op::Fork | Op::Done => {
+                    done_node_id = Some(src);
+                }
+            }
+        }
     }
 
+    let bad_state_guard = ctx.equal(node_sym, external_bad_state_id);
+    transitions.push(GuardedExpr {
+        guard: bad_state_guard,
+        expr: external_bad_state_id,
+    });
+
     // TODO: ITE form is only equivalent if transition guards out of a node are mutually exclusive
-    let transition_ite = guard_exprs_to_ite(transitions, &mut ctx, bad_state_id);
+    let transition_ite = guard_exprs_to_ite(transitions, &mut ctx, external_bad_state_id);
     // add the "node" state and the transition function for it
     let node_state = State {
         symbol: node_sym,
@@ -236,7 +279,7 @@ pub fn into_transition_system(
                 .next()
                 .unwrap();
 
-            let assignment_ite= assignment_to_ite(
+            let assignment_ite = assignment_to_ite(
                 assignment,
                 &mut ctx,
                 input_dont_care.clone(),
@@ -250,7 +293,9 @@ pub fn into_transition_system(
         }
 
         // replace the input ExprRef with the input_ite everywhere
-        let input_expr_ref = *port_to_expr.get(symbol_to_port.get(&input).unwrap()).unwrap();
+        let input_expr_ref = *port_to_expr
+            .get(symbol_to_port.get(&input).unwrap())
+            .unwrap();
         replace_expr_uses(&mut ts, &mut ctx, input_expr_ref, input_ite);
         for expr in port_to_expr.values_mut() {
             *expr = replace_expr(&mut ctx, *expr, input_expr_ref, input_ite);
@@ -258,5 +303,13 @@ pub fn into_transition_system(
     }
 
     ts.add_state(&ctx, node_state);
-    (ctx, ts, port_to_expr)
+    LoweredSystemResult {
+        ctx,
+        ts,
+        port_to_expr,
+        node_symbol: node_sym,
+        done_state: done_node_id,
+        external_assert_state: external_bad_state_id,
+        internal_assert_state: internal_bad_state_id,
+    }
 }
