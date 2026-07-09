@@ -82,9 +82,9 @@ fn struct_to_modules(st: &SymbolTable, protos: Vec<Protocol>) -> FxHashMap<Strin
 }
 
 fn implement_remap(
-    st: &SymbolTable,
-    originals: &FxHashMap<String, Module>,
-    remap: RemapModule,
+    _st: &SymbolTable,
+    _originals: &FxHashMap<String, Module>,
+    _remap: RemapModule,
 ) -> Module {
     todo!()
 }

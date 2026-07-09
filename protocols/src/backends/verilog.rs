@@ -126,7 +126,7 @@ pub fn to_verilog(
 
     // one task for each protocol
     for proto in &module.protos {
-        let sym_verilog = gen_sym_to_verilog_map(st, proto, &module, &instance_name);
+        let sym_verilog = gen_sym_to_verilog_map(st, proto, module, &instance_name);
         proto_to_verilog(st, proto, &sym_verilog, out)?;
     }
 
