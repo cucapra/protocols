@@ -284,6 +284,14 @@ impl ProtoGraph {
         self.nodes.iter()
     }
 
+    pub fn nodes_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut Node)> + '_ {
+        self.nodes.iter_mut()
+    }
+
+    pub fn ops_mut(&mut self) -> impl Iterator<Item = (OpId, &mut Op)> + '_ {
+        self.ops.iter_mut()
+    }
+
     pub fn node_mut(&mut self, node_id: NodeId) -> &mut Node {
         &mut self.nodes[node_id]
     }

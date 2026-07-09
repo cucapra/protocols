@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use patronus::expr::{ExprRef, Type as PatronusType, Context as ExprContext};
+use patronus::expr::{Context as ExprContext, ExprRef, Type as PatronusType};
 use rustc_hash::FxHashMap;
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
@@ -42,7 +42,11 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    pub fn with_expr_ctx(ctx: ProtocolContext, symbols: &'a SymbolTable, expr_ctx: ExprContext) -> Self {
+    pub fn with_expr_ctx(
+        ctx: ProtocolContext,
+        symbols: &'a SymbolTable,
+        expr_ctx: ExprContext,
+    ) -> Self {
         Self {
             ir: ProtoGraph::with_expr_ctx(ctx, expr_ctx),
             symbols,

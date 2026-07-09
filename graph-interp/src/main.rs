@@ -1,6 +1,7 @@
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use clap::Parser;
+use baa::Value as BaaValue;
 use patronus::expr::ExprRef;
+use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::into_transition_system;
 use protocols::frontend::ast::{Ast, Protocol};
@@ -16,8 +17,10 @@ use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
-use protocols::{PatronusSim, Value, frontend, transaction_frontend, PortId};
+use protocols::interpreter::Value as WaveValue;
+use protocols::{PatronusSim, PortId, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -117,6 +120,20 @@ fn print_trace_success(trace_index: usize) {
 fn print_trace_separator(trace_index: usize) {
     if trace_index > 0 {
         println!("\n---\n");
+    }
+}
+
+fn record_transition_waveform(
+    waveform: &mut FxHashMap<PortId, Vec<WaveValue>>,
+    sim: &Interpreter,
+    port_expr_refs: &FxHashMap<PortId, ExprRef>,
+) {
+    for (port, expr) in port_expr_refs {
+        let value = match sim.get(*expr) {
+            BaaValue::BitVec(value) => WaveValue::Concrete(value),
+            BaaValue::Array(_) => panic!("DUT ports should be bit-vectors"),
+        };
+        waveform.entry(*port).or_default().push(value);
     }
 }
 
@@ -251,8 +268,8 @@ fn run_transition_system(
         let sys = sim.sys.clone();
         let port_map = sim.port_map.clone();
         let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
-            sim.inputs()
-                .filter_map(|input| sim.get_port_expr(input).map(|expr| (input, expr))),
+            sim.ios()
+                .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
         );
 
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st, sim.ctx.clone());
@@ -260,9 +277,30 @@ fn run_transition_system(
         let rd = reaching_definitions(&mut joint, st);
         propagate_assignments(&mut joint, st, &rd);
 
-        // put the trace directly into the sim
-        let (_ctx, _sys) = into_transition_system(joint, sys, port_map, port_expr_refs, st);
+        // TODO: This is totally stupid
+        let step_bound = joint.nodes().count() + 1;
+        let (ctx, sys, port_expr_refs) =
+            into_transition_system(joint, sys, port_map, port_expr_refs, st);
 
+        let mut transition_sim = Interpreter::new(&ctx, &sys);
+        transition_sim.init(InitKind::Zero);
+        let mut waveform = FxHashMap::default();
+        for _ in 0..step_bound {
+            record_transition_waveform(&mut waveform, &transition_sim, &port_expr_refs);
+            transition_sim.step();
+        }
+
+        if cli.ascii_waveform {
+            print_trace_success(trace_index);
+            print_ascii_waveform(
+                waveform,
+                |port| sim.port_name(port).to_string(),
+                |port| sim.port_width(port),
+                false,
+            );
+        } else {
+            print_trace_success(trace_index);
+        }
     }
 }
 
