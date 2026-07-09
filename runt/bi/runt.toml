@@ -1,0 +1,19 @@
+ver = "0.4.1"
+
+[[tests]]
+name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy.s1_buggy_bi"
+paths = [
+  "../../tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
+]
+expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
+expect_name = "s1_buggy.bi.expect"
+cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_interp.fst --instances dut:WriteSubordinate --show-steps --include-in-progress 2>/dev/null"
+
+[[tests]]
+name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed.s1_fixed_bi"
+paths = [
+  "../../tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
+]
+expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
+expect_name = "s1_fixed.bi.expect"
+cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_interp.fst --instances dut:WriteSubordinate --show-steps 2>/dev/null"

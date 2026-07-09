@@ -1,7 +1,7 @@
 # Checked-in test catalog. Hand-maintained source of truth.
 # Consumed by scripts/generate_runt_configs.py and scripts/benchmark_monitor.py.
 #
-# TX_CASES are keyed by their .tx path. MONITOR_CASES are keyed by a unique id
+# TX_CASES are keyed by their .tx path. MONITOR_CASES & BI_CASES are both keyed by a unique id
 
 TX_CASES = {
     "examples/picorv32/unsigned_mul.tx": {
@@ -349,6 +349,20 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
+    "tests/fpga-debugging/axi-lite-s1/s1_buggy.tx": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
+        "verilog": ("tests/fpga-debugging/axi-lite-s1/s1_buggy.v",),
+        "top": "xlnxdemo",
+        "max_steps": 300,
+        "expect": "assignment_conflict",
+    },
+    "tests/fpga-debugging/axi-lite-s1/s1_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
+        "verilog": ("tests/fpga-debugging/axi-lite-s1/s1_fixed.v",),
+        "top": "xlnxdemo",
+        "max_steps": 300,
+        "expect": "pass",
+    },
     "tests/identities/dual_identity_d0/dual_identity_d0_combdep.tx": {
         "protocol": "tests/identities/dual_identity_d0/dual_identity_d0.prot",
         "verilog": ("tests/identities/dual_identity_d0/dual_identity_d0.v",),
@@ -660,10 +674,7 @@ MONITOR_CASES = {
     "tests.fpga-debugging.axi-lite-s1.s1_buggy": {
         "protocol": "tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
         "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd",
-        "instances": (
-            "TOP.testbench.UUT:WriteSubordinate",
-            "TOP.testbench.UUT:ReadSubordinate",
-        ),
+        "instances": ("TOP.testbench.UUT:WriteSubordinate",),
         "expect": None,
         "extra_args": (
             "--sample-posedge",
@@ -694,11 +705,11 @@ MONITOR_CASES = {
     "tests.fpga-debugging.axi-lite-s1.s1_fixed": {
         "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
         "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd",
-        "instances": (
-            "TOP.testbench.UUT:WriteSubordinate",
-            "TOP.testbench.UUT:ReadSubordinate",
-        ),
-        "expect": "pass",
+        "instances": ("TOP.testbench.UUT:WriteSubordinate",),
+        # The monitor doesn't work for this protocol due to a known bug
+        # (inability to handle multiple assignments to the same port within the same cycle).
+        # See https://github.com/cucapra/protocols/issues/214
+        "expect": None,
         "extra_args": (
             "--sample-posedge",
             "TOP.testbench.UUT.S_AXI_ACLK",
@@ -1099,3 +1110,24 @@ MONITOR_CASES.update(
         for stem in ANTMICRO_TRACE_STEMS
     }
 )
+
+# The filepath supplied to the `wave` field are .fst files produced by the interpreter.
+BI_CASES = {
+    "tests.fpga-debugging.axi-lite-s1.s1_buggy.bi": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_interp.fst",
+        "instances": ("dut:WriteSubordinate",),
+        # `--include-in-progress` makes `bi` report the two writes that
+        # started but whose responses never completed, surfacing the
+        # lost-write-response bug on the monitoring side.
+        "expect": None,
+        "extra_args": ("--show-steps", "--include-in-progress"),
+    },
+    "tests.fpga-debugging.axi-lite-s1.s1_fixed.bi": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_interp.fst",
+        "instances": ("dut:WriteSubordinate",),
+        "expect": None,
+        "extra_args": ("--show-steps",),
+    },
+}

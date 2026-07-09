@@ -37,3 +37,4 @@ scripts/__pycache__/
 !tests/fpga-debugging/axis-async-fifo-c4/*.png
 
 /*.fst
+scripts/__pycache__/

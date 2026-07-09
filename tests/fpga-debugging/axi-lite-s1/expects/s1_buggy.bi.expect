@@ -1,0 +1,13 @@
+// trace 0
+trace {
+    reset(); [0]
+    write(8, 7, X, 0); [7 .. ]
+    write(4, 42, X, 4); [1 .. ]
+}
+
+// trace 1
+trace {
+    reset(); [0]
+    write(8, 7, X, 0); [7 .. ]
+    write(4, 42, X, 3); [2 .. ]
+}
