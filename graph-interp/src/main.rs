@@ -144,12 +144,6 @@ fn record_transition_waveform(
     }
 }
 
-fn pop_transition_waveform(waveform: &mut FxHashMap<PortId, Vec<WaveValue>>) {
-    for values in waveform.values_mut() {
-        values.pop();
-    }
-}
-
 /// lower each protocol once and interpret every
 /// transaction against its own symbolic protocol graph.
 fn run_classic(
@@ -290,12 +284,13 @@ fn run_transition_system(
         let rd = reaching_definitions(&mut joint, st);
         propagate_assignments(&mut joint, st, &rd);
 
-        // TODO: This is totally stupid
         let res = into_transition_system(joint, sys, port_map, port_expr_refs, st);
 
         let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
+        // TODO: once the PatronusSim switches to random, so should we
         transition_sim.init(InitKind::Zero);
         let mut waveform = FxHashMap::default();
+        let mut cycle = 0;
         loop {
             record_transition_waveform(
                 &mut waveform,
@@ -308,16 +303,21 @@ fn run_transition_system(
             let state = transition_sim.get(res.node_symbol);
             // println!("{:?}", state);
             if state == transition_sim.get(res.done_state.unwrap()) {
-                pop_transition_waveform(&mut waveform);
+                // ignore the last cycle (we went one cycle too far)
+                for values in waveform.values_mut() {
+                    values.pop();
+                }
+
                 print_trace_success(trace_index);
                 break;
             } else if state == transition_sim.get(res.external_assert_state) {
-                println!("Assertion failure.");
+                println!("Assertion failure in cycle {}.", cycle);
                 break;
             } else if state == transition_sim.get(res.internal_assert_state) {
-                println!("Internal assertion failure.");
+                println!("Internal assertion failure in cycle {}", cycle);
                 break;
             }
+            cycle += 1;
         }
 
         if cli.ascii_waveform {

@@ -21,7 +21,6 @@ fn guard_exprs_to_ite(v: Vec<GuardedExpr>, ctx: &mut Context, default: ExprRef) 
         ite = ctx.ite(ge.guard, ge.expr, ite);
     }
 
-    // println!("{}", ite.serialize_to_str(ctx));
     ite
 }
 
@@ -184,7 +183,7 @@ pub fn into_transition_system(
     // the initial node state is the entry
     let entry_id = ctx.bit_vec_val(pg.entry.as_u32(), node_id_width);
     let external_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32(), node_id_width);
-    // println!("External bad state: {:?}", pg.next_node_id().as_u32());
+
     // TODO: is it safe to assume node ids are monotone?
     let internal_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 1, node_id_width);
     let done_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 2, node_id_width);
@@ -270,18 +269,11 @@ pub fn into_transition_system(
         expr: internal_bad_state_id,
     });
 
-    // TODO: ITE form is only equivalent if transition guards out of a node are mutually exclusive
-    let transition_ite = guard_exprs_to_ite(transitions, &mut ctx, external_bad_state_id);
-    // add the "node" state and the transition function for it
-    let node_state = State {
-        symbol: node_sym,
-        init: Some(entry_id),
-        next: Some(transition_ite),
-    };
+    let mut transition_ite = guard_exprs_to_ite(transitions, &mut ctx, external_bad_state_id);
 
     // set up ITE expressions based on what node state we're in for each port,
     // and replace the inputs with the ITEs everywhere
-    // TODO: is this the correct way to get ports here
+    // TODO: is this the correct way to get ports here?
     let input_symbols: Vec<SymbolId> = st
         .get_children(&pg.proto_ctx.type_param.unwrap())
         .into_iter()
@@ -325,20 +317,25 @@ pub fn into_transition_system(
             let node_equals = ctx.equal(node_sym, node_id_expr);
 
             input_ite = ctx.ite(node_equals, assignment_ite, input_ite);
-            input_is_dont_care =
-                ctx.ite(node_equals, assignment_is_dont_care, input_is_dont_care);
+            input_is_dont_care = ctx.ite(node_equals, assignment_is_dont_care, input_is_dont_care);
         }
 
         // replace the input ExprRef with the input_ite everywhere
         let input_port = *symbol_to_port.get(&input).unwrap();
         let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
         replace_expr_uses(&mut ts, &mut ctx, input_expr_ref, input_ite);
+        transition_ite = replace_expr(&mut ctx, transition_ite, input_expr_ref, input_ite);
         for expr in port_to_expr.values_mut() {
             *expr = replace_expr(&mut ctx, *expr, input_expr_ref, input_ite);
         }
         is_dont_care.insert(input_port, input_is_dont_care);
     }
 
+    let node_state = State {
+        symbol: node_sym,
+        init: Some(entry_id),
+        next: Some(transition_ite),
+    };
     ts.add_state(&ctx, node_state);
     LoweredSystemResult {
         ctx,
