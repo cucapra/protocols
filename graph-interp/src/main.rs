@@ -4,10 +4,10 @@ use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::into_transition_system;
-use protocols::frontend::ast::{Ast, Protocol};
-use protocols::frontend::design::{Design, find_a_single_design};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::{Module, require_single_module};
 use protocols::interpreter::Value as WaveValue;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
@@ -259,18 +259,17 @@ fn run_respect_forks(
 fn run_transition_system(
     cli: &Cli,
     st: &SymbolTable,
-    protos: &[Protocol],
-    design: &Design,
+    module: &Module,
     traces: &[Vec<(String, Vec<Value>)>],
 ) {
     // TODO: Duplicate lowering process as respect forks
     let protos_by_name: FxHashMap<&str, &Protocol> =
-        protos.iter().map(|p| (p.name.as_str(), p)).collect();
+        module.protos.iter().map(|p| (p.name.as_str(), p)).collect();
 
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
         // jankily reuse the sim to get all the stuff we need
-        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
         let sys = sim.sys.clone();
         let port_map = sim.port_map.clone();
         let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
@@ -340,9 +339,9 @@ fn main() {
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.transition_system {
-            run_transition_system(&cli, st, &ast.protos, &design, &traces);
+            run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {
-            run_respect_forks(&cli, st, &ast.protos, &design, &traces);
+            run_respect_forks(&cli, &st, &module, &traces);
         } else {
             run_classic(&cli, &st, &module, traces);
         }
