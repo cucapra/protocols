@@ -4,10 +4,10 @@ use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::into_transition_system;
-use protocols::frontend::ast::{Ast, Protocol};
-use protocols::frontend::design::{Design, find_a_single_design};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::{Module, require_single_module};
 use protocols::interpreter::Value as WaveValue;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
@@ -76,7 +76,7 @@ struct Cli {
     transition_system: bool,
 }
 
-fn load_protocols(cli: &Cli) -> Ast {
+fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
     frontend(
         &cli.protocol,
@@ -86,9 +86,9 @@ fn load_protocols(cli: &Cli) -> Ast {
     .unwrap()
 }
 
-fn load_traces(cli: &Cli, ast: &Ast) -> Vec<Vec<(String, Vec<Value>)>> {
+fn load_traces(cli: &Cli, st: &SymbolTable, module: &Module) -> Vec<Vec<(String, Vec<Value>)>> {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
-    transaction_frontend(&cli.transactions, ast, &mut handler).unwrap()
+    transaction_frontend(&cli.transactions, st, &module.protos, &mut handler).unwrap()
 }
 
 fn build_arg_map<'a>(
@@ -149,11 +149,11 @@ fn record_transition_waveform(
 fn run_classic(
     cli: &Cli,
     st: &SymbolTable,
-    protos: &[Protocol],
-    design: &Design,
+    design: &Module,
     traces: Vec<Vec<(String, Vec<Value>)>>,
 ) {
-    let mut graphs: Vec<(String, ProtoGraph)> = protos
+    let mut graphs: Vec<(String, ProtoGraph)> = design
+        .protos
         .iter()
         .map(|proto| (proto.name.clone(), lower_ast_to_ir(proto.clone(), st)))
         .collect();
@@ -199,16 +199,15 @@ fn run_classic(
 fn run_respect_forks(
     cli: &Cli,
     st: &SymbolTable,
-    protos: &[Protocol],
-    design: &Design,
+    module: &Module,
     traces: &[Vec<(String, Vec<Value>)>],
 ) {
     let protos_by_name: FxHashMap<&str, &Protocol> =
-        protos.iter().map(|p| (p.name.as_str(), p)).collect();
+        module.protos.iter().map(|p| (p.name.as_str(), p)).collect();
 
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
-        let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
+        let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
 
         let mut joint = lower_trace_to_ir(trace, &protos_by_name, st, sim.ctx.clone());
 
@@ -260,18 +259,17 @@ fn run_respect_forks(
 fn run_transition_system(
     cli: &Cli,
     st: &SymbolTable,
-    protos: &[Protocol],
-    design: &Design,
+    module: &Module,
     traces: &[Vec<(String, Vec<Value>)>],
 ) {
     // TODO: Duplicate lowering process as respect forks
     let protos_by_name: FxHashMap<&str, &Protocol> =
-        protos.iter().map(|p| (p.name.as_str(), p)).collect();
+        module.protos.iter().map(|p| (p.name.as_str(), p)).collect();
 
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
         // jankily reuse the sim to get all the stuff we need
-        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
         let sys = sim.sys.clone();
         let port_map = sim.port_map.clone();
         let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
@@ -333,20 +331,19 @@ fn run_transition_system(
 
 fn main() {
     let cli = Cli::parse();
-    let ast = load_protocols(&cli);
-    let st = &ast.st;
-    let traces = load_traces(&cli, &ast);
-    let design = find_a_single_design(&ast, &cli.protocol).unwrap();
+    let (st, modules) = load_protocols(&cli);
+    let module = require_single_module(modules, &cli.protocol).unwrap();
+    let traces = load_traces(&cli, &st, &module);
 
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.transition_system {
-            run_transition_system(&cli, st, &ast.protos, &design, &traces);
+            run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {
-            run_respect_forks(&cli, st, &ast.protos, &design, &traces);
+            run_respect_forks(&cli, &st, &module, &traces);
         } else {
-            run_classic(&cli, st, &ast.protos, &design, traces);
+            run_classic(&cli, &st, &module, traces);
         }
     }));
     std::panic::set_hook(old_hook);

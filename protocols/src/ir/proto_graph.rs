@@ -358,6 +358,7 @@ mod tests {
     use super::*;
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::frontend::require_single_module;
     use crate::ir::lowering::lower_ast_to_ir;
     use std::path::Path;
     use tempfile::NamedTempFile;
@@ -372,19 +373,20 @@ mod tests {
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
-        let ast = frontend(&[path], &mut handler, skip_static_step_fork_checks).unwrap();
+        let (st, modules) = frontend(&[&path], &mut handler, skip_static_step_fork_checks).unwrap();
+        let module = require_single_module(modules, &[&path]).unwrap();
         let proto = match protocol_name {
-            Some(protocol_name) => ast
+            Some(protocol_name) => module
                 .protos
                 .into_iter()
                 .find(|ast| ast.name == protocol_name)
                 .unwrap(),
             None => {
-                assert_eq!(ast.protos.len(), 1);
-                ast.protos.into_iter().next().unwrap()
+                assert_eq!(module.protos.len(), 1);
+                module.protos.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(proto, &ast.st)
+        lower_ast_to_ir(proto, &st)
     }
 
     #[test]

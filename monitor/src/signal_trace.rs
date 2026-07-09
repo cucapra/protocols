@@ -1,17 +1,16 @@
-// Copyright 2025 Cornell University
+// Copyright 2025-26 Cornell University
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use crate::designs::Instance;
 use anyhow::Context;
 use baa::BitVecValue;
-use protocols::frontend::design::Design;
+use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::SeedableRng;
 use rustc_hash::FxHashMap;
 use wellen::{Hierarchy, SignalEncoding, SignalRef};
-
-use crate::Instance;
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug)]
@@ -136,7 +135,7 @@ impl WaveSignalTrace {
     /// `Direct` or `RisingEdge`).
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
-        designs: &FxHashMap<String, Design>,
+        modules: &[Module],
         instances: &[Instance],
         sample_posedge: Option<String>,
         time_unit: Option<String>,
@@ -145,7 +144,7 @@ impl WaveSignalTrace {
 
         // find instances in the waveform hierarchy
         let (port_map, clock_signal) =
-            find_instances(wave.hierarchy(), designs, instances, sample_posedge);
+            find_instances(wave.hierarchy(), modules, instances, sample_posedge);
 
         // Determine the sampling mode based on the vavlue received
         // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
@@ -208,7 +207,7 @@ impl WaveSignalTrace {
 /// (the latter is only `Some` if `sample_posedge` corresponds to a valid signal)
 fn find_instances(
     hierachy: &Hierarchy,
-    designs: &FxHashMap<String, Design>,
+    modules: &[Module],
     instances: &[Instance],
     sample_posedge: Option<String>,
 ) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
@@ -218,7 +217,7 @@ fn find_instances(
 
     for (inst_id, inst) in instances.iter().enumerate() {
         // fetch the design from the hashmap (the design tells us what pins to expect)
-        let design = &designs[&inst.design_name];
+        let module = &modules[inst.module_id];
 
         let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
         if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
@@ -226,7 +225,7 @@ fn find_instances(
 
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
-            for (field_idx, field) in design.pins.iter().enumerate() {
+            for (field_idx, field) in module.pins.iter().enumerate() {
                 // find a variable that has a matching name
                 if let Some(var) = instance_scope
                     .vars(hierachy)
@@ -283,7 +282,7 @@ fn find_instances(
 
                     // store a mapping from any SymbolId that refers to this pin
                     let value = hierachy[var].signal_ref();
-                    for (_, syms) in design.protocols.iter() {
+                    for syms in module.proto_pin_map.iter() {
                         let key = PortKey {
                             instance_id: inst_id as u32,
                             pin_id: syms[field_idx],

@@ -6,8 +6,10 @@ use std::path::Path;
 
 use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
-use protocols::frontend::ast::Ast;
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::{Module, require_single_module};
 use protocols::{Value, frontend, transaction_frontend};
 
 #[derive(Parser, Debug)]
@@ -49,10 +51,14 @@ enum Cmds {
     },
 }
 
-fn load_trace(ast: &Ast, transactions: Option<&str>) -> Vec<(String, Vec<Value>)> {
+fn load_trace(
+    st: &SymbolTable,
+    protos: &[Protocol],
+    transactions: Option<&str>,
+) -> Vec<(String, Vec<Value>)> {
     if let Some(filename) = transactions {
         let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-        let traces = transaction_frontend(filename, ast, &mut d).unwrap();
+        let traces = transaction_frontend(filename, st, protos, &mut d).unwrap();
         if !traces.is_empty() {
             if traces.len() > 1 {
                 log::warn!("More than 1 trace in {filename}. Picking first one.");
@@ -67,13 +73,14 @@ fn load_trace(ast: &Ast, transactions: Option<&str>) -> Vec<(String, Vec<Value>)
 }
 
 fn make_verilog_tb(
-    ast: &Ast,
+    st: &SymbolTable,
+    module: &Module,
     verilog_tb: String,
     transactions: Option<String>,
     vcd_out: Option<String>,
     clock: Option<String>,
 ) {
-    let trace = load_trace(ast, transactions.as_deref());
+    let trace = load_trace(st, &module.protos, transactions.as_deref());
     let mut pins = vec![];
     if let Some(clock) = clock {
         pins.push((clock, PinAnnotation::Clock));
@@ -83,7 +90,8 @@ fn make_verilog_tb(
     let tb_name = "tb";
     to_verilog(
         tb_name,
-        ast,
+        st,
+        module,
         &pins,
         vcd_out.as_deref(),
         &trace,
@@ -93,7 +101,8 @@ fn make_verilog_tb(
 }
 
 fn run_verilog_tb(
-    ast: &Ast,
+    st: &SymbolTable,
+    module: &Module,
     run_dir: String,
     transactions: Option<String>,
     clock: Option<String>,
@@ -121,7 +130,8 @@ fn run_verilog_tb(
     let verilog_tb_str = abs_cwd.join(verilog_tb).to_str().unwrap().to_string();
     let vcd_out_rel = "dump.vcd";
     make_verilog_tb(
-        ast,
+        st,
+        module,
         verilog_tb_str,
         transactions,
         Some(vcd_out_rel.to_string()),
@@ -174,13 +184,15 @@ fn main() {
     // we always parse and type check the protocol file
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let ast = frontend(&args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let (st, modules) = frontend(&args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
 
     match args.command {
         None => {}
         Some(Cmds::Constructs) => {
-            for p in &ast.protos {
-                println!("{}: {}", p.name, p.used_constructs());
+            for m in &modules {
+                for p in &m.protos {
+                    println!("{}: {}", p.name, p.used_constructs());
+                }
             }
         }
         Some(Cmds::Verilog {
@@ -189,7 +201,8 @@ fn main() {
             vcd_out,
             clock,
         }) => {
-            make_verilog_tb(&ast, verilog_tb, transactions, vcd_out, clock);
+            let module = require_single_module(modules, &args.protocol).unwrap();
+            make_verilog_tb(&st, &module, verilog_tb, transactions, vcd_out, clock);
         }
         Some(Cmds::RunVerilog {
             run_dir,
@@ -197,7 +210,8 @@ fn main() {
             clock,
             verilog,
         }) => {
-            run_verilog_tb(&ast, run_dir, transactions, clock, verilog);
+            let module = require_single_module(modules, &args.protocol).unwrap();
+            run_verilog_tb(&st, &module, run_dir, transactions, clock, verilog);
         }
     }
 }
