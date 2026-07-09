@@ -216,9 +216,19 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
 
+    ts_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["path"],
+        "--transition-system",
+        "--ascii-waveform",
+    ]
+    _tx_tail(ts_cmd, case, with_max_steps=False)
+
     return [
         ("ast", repo_root_command(ast_cmd, stderr="discard")),
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
+        ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
 
 

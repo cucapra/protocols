@@ -4,7 +4,7 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
-use patronus::expr::{Context, ExprRef, SerializableIrNode, Type, simple_transform_expr};
+use patronus::expr::{Context, ExprRef, Type, simple_transform_expr};
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
@@ -21,7 +21,7 @@ fn guard_exprs_to_ite(v: Vec<GuardedExpr>, ctx: &mut Context, default: ExprRef) 
         ite = ctx.ite(ge.guard, ge.expr, ite);
     }
 
-    println!("{}", ite.serialize_to_str(ctx));
+    // println!("{}", ite.serialize_to_str(ctx));
     ite
 }
 
@@ -170,10 +170,9 @@ pub fn into_transition_system(
     // the initial node state is the entry
     let entry_id = ctx.bit_vec_val(pg.entry.as_u32(), node_id_width);
     let external_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32(), node_id_width);
-    println!("External bad state: {:?}", pg.next_node_id().as_u32());
+    // println!("External bad state: {:?}", pg.next_node_id().as_u32());
     // TODO: is it safe to assume node ids are monotone?
-    let internal_bad_state_id =
-        ctx.bit_vec_val(u32::from(pg.next_node_id().as_u32() + 1), node_id_width);
+    let internal_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 1, node_id_width);
 
     let mut transitions: Vec<GuardedExpr> = vec![];
     // create the transition function - only use the reachable nodes for efficiency
@@ -203,6 +202,8 @@ pub fn into_transition_system(
             }
         }
 
+        // these need to come later in the vector so they are preferred in the ITE
+        // i.e. assertions are checked before transitions
         for action in &pg[id].actions {
             match pg[action.op].clone() {
                 Op::AssertEq(lhs, rhs) => {
@@ -279,12 +280,8 @@ pub fn into_transition_system(
                 .next()
                 .unwrap();
 
-            let assignment_ite = assignment_to_ite(
-                assignment,
-                &mut ctx,
-                input_dont_care.clone(),
-                input_dont_care.clone(),
-            );
+            let assignment_ite =
+                assignment_to_ite(assignment, &mut ctx, input_dont_care, input_dont_care);
 
             let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
             let node_equals = ctx.equal(node_sym, node_id_expr);

@@ -281,14 +281,14 @@ fn run_transition_system(
         let res = into_transition_system(joint, sys, port_map, port_expr_refs, st);
 
         let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
-        transition_sim.init(InitKind::Zero);
+        transition_sim.init(InitKind::Random(0));
         let mut waveform = FxHashMap::default();
         loop {
             record_transition_waveform(&mut waveform, &transition_sim, &res.port_to_expr);
             transition_sim.step();
 
             let state = transition_sim.get(res.node_symbol);
-            println!("{:?}", state);
+            // println!("{:?}", state);
             if state == transition_sim.get(res.done_state.unwrap()) {
                 print_trace_success(trace_index);
                 break;
