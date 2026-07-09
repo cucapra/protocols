@@ -1,11 +1,14 @@
-use std::panic::{AssertUnwindSafe, catch_unwind};
-
+use baa::{BitVecOps, Value as BaaValue};
 use clap::Parser;
+use patronus::expr::ExprRef;
+use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
+use protocols::backends::into_transition_system;
 use protocols::frontend::ast::{Ast, Protocol};
 use protocols::frontend::design::{Design, find_a_single_design};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
+use protocols::interpreter::Value as WaveValue;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
@@ -15,8 +18,9 @@ use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
-use protocols::{PatronusSim, Value, frontend, transaction_frontend};
+use protocols::{PatronusSim, PortId, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -67,6 +71,9 @@ struct Cli {
     /// Print reaching definition analysis results
     #[arg(long)]
     reaching_definitions: bool,
+
+    #[arg(long)]
+    transition_system: bool,
 }
 
 fn load_protocols(cli: &Cli) -> Ast {
@@ -113,6 +120,27 @@ fn print_trace_success(trace_index: usize) {
 fn print_trace_separator(trace_index: usize) {
     if trace_index > 0 {
         println!("\n---\n");
+    }
+}
+
+fn record_transition_waveform(
+    waveform: &mut FxHashMap<PortId, Vec<WaveValue>>,
+    sim: &Interpreter,
+    port_expr_refs: &FxHashMap<PortId, ExprRef>,
+    is_dont_care: &FxHashMap<PortId, ExprRef>,
+) {
+    for (port, expr) in port_expr_refs {
+        let value = if let Some(is_dont_care) = is_dont_care.get(port)
+            && matches!(sim.get(*is_dont_care), BaaValue::BitVec(value) if value.is_one())
+        {
+            WaveValue::DontCare
+        } else {
+            match sim.get(*expr) {
+                BaaValue::BitVec(value) => WaveValue::Concrete(value),
+                BaaValue::Array(_) => panic!("DUT ports should be bit-vectors"),
+            }
+        };
+        waveform.entry(*port).or_default().push(value);
     }
 }
 
@@ -182,7 +210,7 @@ fn run_respect_forks(
         print_trace_separator(trace_index);
         let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
 
-        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st);
+        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st, sim.ctx.clone());
 
         if cli.graphout {
             println!("// joint graph for trace {trace_index}");
@@ -229,6 +257,80 @@ fn run_respect_forks(
     }
 }
 
+fn run_transition_system(
+    cli: &Cli,
+    st: &SymbolTable,
+    protos: &[Protocol],
+    design: &Design,
+    traces: &[Vec<(String, Vec<Value>)>],
+) {
+    // TODO: Duplicate lowering process as respect forks
+    let protos_by_name: FxHashMap<&str, &Protocol> =
+        protos.iter().map(|p| (p.name.as_str(), p)).collect();
+
+    for (trace_index, trace) in traces.iter().enumerate() {
+        print_trace_separator(trace_index);
+        // jankily reuse the sim to get all the stuff we need
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
+        let sys = sim.sys.clone();
+        let port_map = sim.port_map.clone();
+        let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
+            sim.ios()
+                .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
+        );
+
+        let mut joint = lower_trace_to_ir(trace, &protos_by_name, st, sim.ctx.clone());
+        joint = determinized(joint, st);
+        let rd = reaching_definitions(&mut joint, st);
+        propagate_assignments(&mut joint, st, &rd);
+
+        let res = into_transition_system(joint, sys, port_map, port_expr_refs, st);
+
+        let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
+        // TODO: once the PatronusSim switches to random, so should we
+        transition_sim.init(InitKind::Zero);
+        let mut waveform = FxHashMap::default();
+        let mut cycle = 0;
+        loop {
+            record_transition_waveform(
+                &mut waveform,
+                &transition_sim,
+                &res.port_to_expr,
+                &res.is_dont_care,
+            );
+            transition_sim.step();
+
+            let state = transition_sim.get(res.node_symbol);
+            // println!("{:?}", state);
+            if state == transition_sim.get(res.done_state.unwrap()) {
+                // ignore the last cycle (we went one cycle too far)
+                for values in waveform.values_mut() {
+                    values.pop();
+                }
+
+                print_trace_success(trace_index);
+                break;
+            } else if state == transition_sim.get(res.external_assert_state) {
+                println!("Assertion failure in cycle {}.", cycle);
+                break;
+            } else if state == transition_sim.get(res.internal_assert_state) {
+                println!("Internal assertion failure in cycle {}", cycle);
+                break;
+            }
+            cycle += 1;
+        }
+
+        if cli.ascii_waveform {
+            print_ascii_waveform(
+                waveform,
+                |port| sim.port_name(port).to_string(),
+                |port| sim.port_width(port),
+                false,
+            );
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     let ast = load_protocols(&cli);
@@ -239,7 +341,9 @@ fn main() {
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
-        if cli.respect_forks {
+        if cli.transition_system {
+            run_transition_system(&cli, st, &ast.protos, &design, &traces);
+        } else if cli.respect_forks {
             run_respect_forks(&cli, st, &ast.protos, &design, &traces);
         } else {
             run_classic(&cli, st, &ast.protos, &design, traces);

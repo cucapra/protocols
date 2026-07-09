@@ -171,7 +171,10 @@ impl Clone for ProtoGraph {
 
 impl ProtoGraph {
     pub fn new(proto_ctx: ProtocolContext) -> Self {
-        let expr_ctx = ExprContext::default();
+        Self::with_expr_ctx(proto_ctx, ExprContext::default())
+    }
+
+    pub fn with_expr_ctx(proto_ctx: ProtocolContext, expr_ctx: ExprContext) -> Self {
         let mut nodes = PrimaryMap::new();
         let entry = Node::empty();
         let entry_id: NodeId = nodes.push(entry);
@@ -279,6 +282,14 @@ impl ProtoGraph {
 
     pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
         self.nodes.iter()
+    }
+
+    pub fn nodes_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut Node)> + '_ {
+        self.nodes.iter_mut()
+    }
+
+    pub fn ops_mut(&mut self) -> impl Iterator<Item = (OpId, &mut Op)> + '_ {
+        self.ops.iter_mut()
     }
 
     pub fn node_mut(&mut self, node_id: NodeId) -> &mut Node {
