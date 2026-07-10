@@ -2,7 +2,7 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::frontend::ast::{Ast, Clock, Protocol, RemapModule};
+use crate::frontend::ast::{Ast, Clock, Expr, ExprId, Protocol, RemapModule, Stmt, StmtId};
 use crate::frontend::symbol::{Field, SymbolId, SymbolTable, Type};
 use rustc_hash::FxHashMap;
 
@@ -107,10 +107,91 @@ fn implement_remap(
     }
 }
 
-struct RemapInfo {}
+struct Remapper<'a> {
+    orig: &'a Protocol,
+    out: Protocol,
+}
 
 fn remap_proto(st: &SymbolTable, orig: &Protocol) -> Protocol {
-    let mut out = Protocol::new(orig.name, orig.scope);
+    Remapper::new(orig).run()
+}
 
-    out
+impl<'a> Remapper<'a> {
+    fn new(orig: &'a Protocol) -> Self {
+        let out = Protocol::new(orig.name.clone(), orig.scope);
+        Self { orig, out }
+    }
+}
+
+impl Remapper<'_> {
+    fn run(mut self) -> Protocol {
+        let body = self.on_stmt(self.orig.body);
+        self.out.body = body;
+        self.out
+    }
+
+    fn on_stmt(&mut self, stmt: StmtId) -> StmtId {
+        match self.orig[stmt].clone() {
+            Stmt::Block(inner) => {
+                let inner = inner.into_iter().map(|s| self.on_stmt(s)).collect();
+                self.out.s(Stmt::Block(inner))
+            }
+            Stmt::Assign(_, _) => {
+                todo!()
+            }
+            Stmt::Step => self.out.s(Stmt::Step),
+            Stmt::Fork => self.out.s(Stmt::Fork),
+            Stmt::While(cond, body) => {
+                let cond = self.on_expr(cond);
+                let body = self.on_stmt(body);
+                self.out.s(Stmt::While(cond, body))
+            }
+            Stmt::RepeatLoop(n, body) => {
+                let n = self.on_expr(n);
+                let body = self.on_stmt(body);
+                self.out.s(Stmt::RepeatLoop(n, body))
+            }
+            Stmt::ForInLoop(loop_var, r, body) => {
+                let r = self.on_expr(r);
+                let body = self.on_stmt(body);
+                self.out.s(Stmt::ForInLoop(loop_var, r, body))
+            }
+            Stmt::IfElse(cond, tru, fals) => {
+                let cond = self.on_expr(cond);
+                let tru = self.on_stmt(tru);
+                let fals = self.on_stmt(fals);
+                self.out.s(Stmt::IfElse(cond, tru, fals))
+            }
+            Stmt::AssertEq(l, r) => {
+                let l = self.on_expr(l);
+                let r = self.on_expr(r);
+                self.out.s(Stmt::AssertEq(l, r))
+            }
+        }
+    }
+
+    fn on_expr(&mut self, expr: ExprId) -> ExprId {
+        match self.orig[expr].clone() {
+            Expr::Const(a) => self.out.e(Expr::Const(a)),
+            Expr::Sym(_) => {
+                todo!()
+            }
+            Expr::DontCare => self.out.dont_care_id(),
+            Expr::Binary(op, a, b) => {
+                let a = self.on_expr(a);
+                let b = self.on_expr(b);
+                self.out.e(Expr::Binary(op, a, b))
+            }
+            Expr::Unary(op, a) => {
+                let a = self.on_expr(a);
+                self.out.e(Expr::Unary(op, a))
+            }
+            Expr::Slice(e, hi, lo) => {
+                let e = self.on_expr(e);
+                self.out.e(Expr::Slice(e, hi, lo))
+            }
+            Expr::IsLastIteration => self.out.e(Expr::IsLastIteration),
+            Expr::IterCount(v) => self.out.e(Expr::IterCount(v)),
+        }
+    }
 }
