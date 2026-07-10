@@ -339,7 +339,7 @@ fn run_transition_system(
                 println!("Assertion failure in cycle {}.", cycle);
                 break;
             } else if state == transition_sim.get(res.internal_assert_state) {
-                println!("Internal assertion failure in cycle {}", cycle);
+                println!("Internal assertion failure in cycle {}.", cycle);
                 break;
             }
             cycle += 1;

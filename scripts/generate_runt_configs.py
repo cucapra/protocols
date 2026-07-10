@@ -232,15 +232,14 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
 
 
-def waveform_fail_diff_runt_command(case: dict) -> list[tuple[str, str]]:
+def fail_runt_command(case: dict) -> list[tuple[str, str]]:
     graph_cmd = [
         *binary_prefix("graph-interp"),
         "--transactions",
         case["path"],
         "--respect-forks",
         "--determinize",
-        "--brief-graph-errors",
-        "--ascii-waveform",
+        "--brief-graph-errors"
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
 
@@ -249,13 +248,12 @@ def waveform_fail_diff_runt_command(case: dict) -> list[tuple[str, str]]:
         "--transactions",
         case["path"],
         "--transition-system",
-        "--ascii-waveform",
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
     return [
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
-        # ("ts", repo_root_command(ts_cmd, stderr="discard")),
+        ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
 
 
@@ -264,7 +262,7 @@ RUNT_BUILDERS = {
     "graph_interp": graph_interp_runt_command,
     "monitor": monitor_runt_command,
     "waveform": waveform_runt_command,
-    "waveform_fail_diff": waveform_fail_diff_runt_command,
+    "fail": fail_runt_command,
 }
 
 
@@ -332,7 +330,7 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
     return list(filter(lambda c: c["path"] not in xfailed, graph_interp_cases(cases)))
 
 
-def waveform_fail_diff_cases(cases: list[dict]) -> list[dict]:
+def fail_cases(cases: list[dict]) -> list[dict]:
     """Runtime-failing tx cases whose graph and transition-system waveforms should match."""
     # Stuff like max steps and combinational dependency errors aren't enforced right now.
     runtime_failures = {"assertion_mismatch", "assignment_conflict"}
@@ -392,7 +390,7 @@ def generate_runt_configs() -> None:
         "monitor": ("monitor", mon),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
-        "waveform_fail_diff": ("waveform_fail_diff", waveform_fail_diff_cases(tx)),
+        "fail": ("fail", fail_cases(tx)),
     }
 
     # A golden may be shared by several variants of the same test (e.g. the

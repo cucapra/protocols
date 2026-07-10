@@ -12,10 +12,20 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
 use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
+use crate::ir::propagate_assigns::propagate_assignments_from;
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::reaching_defs::reaching_definitions;
 use patronus::expr::Context as ExprContext;
 
 impl<'a> Lowerer<'a> {
+    fn postprocess_trace_fragment(&mut self, fragment: &LoweredFragmentInfo) {
+        // The newly lowered transaction is still disconnected from the existing
+        // trace graph, so propagation has to start from the fragment entry.
+        contract_edges(&mut self.ir, self.symbols);
+        let rd = reaching_definitions(&mut self.ir, self.symbols);
+        propagate_assignments_from(&mut self.ir, self.symbols, &rd, fragment.entry);
+    }
+
     /// Build the per-copy argument substitution and lower one transaction body.
     fn lower_transaction(
         &mut self,
@@ -179,8 +189,10 @@ impl<'a> Lowerer<'a> {
 
         let fragment = self.lower_transaction(ast, values, keep_done);
 
-        // TODO: we're applying contract_edges to the entire IR, but technically this is a bit wasteful since it's going to iterate over all the nodes even though we only want to contract this component of the graph
-        contract_edges(&mut self.ir, self.symbols);
+        // TODO: we're applying these passes to the entire IR, but technically
+        // this is a bit wasteful since we only need to postprocess this
+        // disconnected fragment before grafting it into the trace graph.
+        self.postprocess_trace_fragment(&fragment);
         let next = self.next_trace_graft_points(&fragment);
 
         for (node, guard) in graft_points {
@@ -215,8 +227,7 @@ pub fn lower_trace_to_ir(
     lowerer
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
-    contract_edges(&mut lowerer.ir, symbols);
-    // normalize_assignments(&mut lowerer.ir, symbols);
+    lowerer.postprocess_trace_fragment(&first);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.next_trace_graft_points(&first);
