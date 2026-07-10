@@ -9,12 +9,9 @@ use rustc_hash::FxHashMap;
 use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
-use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
+use crate::ir::edge_contract::{append_action, guard_assignment};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
-use crate::ir::propagate_assigns::propagate_assignments_from;
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
-use crate::ir::reaching_defs::reaching_definitions;
 use patronus::expr::Context as ExprContext;
 
 impl<'a> Lowerer<'a> {

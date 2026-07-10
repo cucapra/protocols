@@ -364,12 +364,12 @@ fn run_transition_system(
 /// transaction against its own symbolic protocol graph.
 fn run_bmc(cli: &Cli, st: &SymbolTable, design: &Module) {
     // FIXME: probably can get away with borrowing instead of cloning cloning
-    let (mut pg, proto_choice) =
-        lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
+    let (mut pg, _) = lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
     println!("{}", to_dot_string(&pg, st).as_str());
     // println!("pre-determinize");
-    // pg = determinized(pg, st);
-    // println!("{}", to_dot_string(&pg, st).as_str());
+    pg.garbage_collect_unreachable();
+    pg = determinized(pg, st);
+    println!("{}", to_dot_string(&pg, st).as_str());
 }
 
 fn main() {
