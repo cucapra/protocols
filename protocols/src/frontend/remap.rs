@@ -82,9 +82,35 @@ fn struct_to_modules(st: &SymbolTable, protos: Vec<Protocol>) -> FxHashMap<Strin
 }
 
 fn implement_remap(
-    _st: &SymbolTable,
-    _originals: &FxHashMap<String, Module>,
-    _remap: RemapModule,
+    st: &SymbolTable,
+    originals: &FxHashMap<String, Module>,
+    remap: RemapModule,
 ) -> Module {
-    todo!()
+    let mut pins = vec![];
+    let mut protos = vec![];
+    let mut proto_pin_map = vec![];
+    for impl_struct_id in &remap.implements {
+        let orig_mod = &originals[st[impl_struct_id].name()];
+        for pin in &orig_mod.pins {}
+        for proto in &orig_mod.protos {
+            protos.push(remap_proto(st, proto));
+        }
+        println!("{}", orig_mod.name)
+    }
+
+    Module {
+        name: remap.name,
+        clock: remap.clock,
+        pins,
+        protos,
+        proto_pin_map,
+    }
+}
+
+struct RemapInfo {}
+
+fn remap_proto(st: &SymbolTable, orig: &Protocol) -> Protocol {
+    let mut out = Protocol::new(orig.name, orig.scope);
+
+    out
 }
