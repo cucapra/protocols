@@ -7,7 +7,11 @@ use rustc_hash::FxHashMap;
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
+use crate::ir::edge_contract::contract_edges;
+use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
+use crate::ir::propagate_assigns::propagate_assignments_from;
 use crate::ir::proto_graph::*;
+use crate::ir::reaching_defs::reaching_definitions;
 
 /// substitution of argument symbols to concrete expressions for trace lowering
 pub type TraceArgSubst = FxHashMap<SymbolId, ExprRef>;
@@ -53,6 +57,65 @@ impl<'a> Lowerer<'a> {
             trace_arg_subst: TraceArgSubst::default(),
             current_fragment_nodes: Vec::new(),
         }
+    }
+
+    pub fn postprocess_trace_fragment(&mut self, fragment: &LoweredFragmentInfo) {
+        // The newly lowered transaction is still disconnected from the existing
+        // trace graph, so propagation has to start from the fragment entry.
+        contract_edges(&mut self.ir, self.symbols);
+        let rd = reaching_definitions(&mut self.ir, self.symbols);
+        propagate_assignments_from(&mut self.ir, self.symbols, &rd, fragment.entry);
+    }
+
+    pub fn graft_points(&mut self, fragment: &LoweredFragmentInfo) -> Vec<(NodeId, ExprRef)> {
+        let fork_reach = reaching_forks_from(&mut self.ir, fragment.entry);
+        let ir = &self.ir;
+
+        // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
+        let mut graft_points: Vec<(NodeId, ExprRef)> = fragment
+            .nodes
+            .iter()
+            .flat_map(|id| {
+                let node = &ir[*id];
+                node.actions
+                    .iter()
+                    .filter(|action| matches!(ir[action.op], Op::Fork))
+                    .map(move |action| (*id, action.guard))
+            })
+            .collect();
+
+        // at every fork point, we want to have it proven that we haven't forked before
+        for (fork_node, _) in &graft_points {
+            let reachability = fork_reach.in_reach.get(fork_node).copied().unwrap();
+            assert!(
+                matches!(
+                    reachability,
+                    // nodes never get cleaned up, so there are old (pre-contraction) fork nodes that are Unreachable we need to account for
+                    ForkReachability::Unreachable | ForkReachability::DefinitelyNotForked
+                ),
+                "fork node {fork_node} can be reached after a prior fork"
+            );
+        }
+
+        // if we can prove we haven't forked up to know, we'll also graft onto the exit
+        // if we can prove we have forked up to know, we won't graft onto the exit node
+        // otherwise, panic! - we're gonna have an exponential blowup
+        let exit_reachability = fork_reach
+            .in_reach
+            .get(&fragment.exit)
+            .copied()
+            .unwrap_or(ForkReachability::Unreachable);
+        match exit_reachability {
+            ForkReachability::DefinitelyNotForked => {
+                graft_points.push((fragment.exit, self.ir.true_id()));
+            }
+            ForkReachability::DefinitelyForked | ForkReachability::Unreachable => {}
+            ForkReachability::MaybeForked => {
+                panic!("done node {} may or may not have forked", fragment.exit);
+            }
+        }
+
+        graft_points
     }
 
     /// Add a new node to the IR and track it in current fragment
