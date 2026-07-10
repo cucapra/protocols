@@ -12,6 +12,7 @@ use protocols::interpreter::Value as WaveValue;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
+use protocols::ir::graph_interpreter::{GraphInterpretFailure, GraphInterpretFailureKind};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::propagate_assigns::propagate_assignments;
@@ -71,6 +72,10 @@ struct Cli {
     /// Print reaching definition analysis results
     #[arg(long)]
     reaching_definitions: bool,
+
+    /// Print graph-interpreter failures in the same short form as transition-system failures.
+    #[arg(long)]
+    brief_graph_errors: bool,
 
     #[arg(long)]
     transition_system: bool,
@@ -144,6 +149,18 @@ fn record_transition_waveform(
     }
 }
 
+fn print_graph_failure(failure: &GraphInterpretFailure, brief: bool) {
+    let kind = match failure.kind {
+        GraphInterpretFailureKind::ExternalAssertion => "Assertion failure",
+        GraphInterpretFailureKind::InternalAssertion => "Internal assertion failure",
+    };
+    if brief {
+        println!("{kind} in cycle {}.", failure.cycle);
+    } else {
+        println!("{kind} in cycle {}: {}", failure.cycle, failure.message);
+    }
+}
+
 /// lower each protocol once and interpret every
 /// transaction against its own symbolic protocol graph.
 fn run_classic(
@@ -178,6 +195,7 @@ fn run_classic(
     for (trace_index, trace) in traces.into_iter().enumerate() {
         print_trace_separator(trace_index);
         let mut sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), design, None).unwrap();
+        let mut trace_failed = false;
 
         for (name, values) in trace {
             let (_, pg) = graphs
@@ -189,9 +207,16 @@ fn run_classic(
             propagate_assignments(pg, st, &rd);
 
             let args = build_arg_map(&pg.args, st, values);
-            graph_interpreter::interpret(pg, st, args, &mut sim);
+            let result = graph_interpreter::interpret(pg, st, args, &mut sim);
+            if let Some(failure) = result.failure {
+                print_graph_failure(&failure, cli.brief_graph_errors);
+                trace_failed = true;
+                break;
+            }
         }
-        print_trace_success(trace_index);
+        if !trace_failed {
+            print_trace_success(trace_index);
+        }
     }
 }
 
@@ -240,16 +265,18 @@ fn run_respect_forks(
         }
 
         // args are baked into the graph as constants, so we just pass in an empty map here
-        let waveform = graph_interpreter::interpret(&joint, st, FxHashMap::default(), &mut sim);
-        if cli.ascii_waveform {
+        let result = graph_interpreter::interpret(&joint, st, FxHashMap::default(), &mut sim);
+        if cli.ascii_waveform && result.failure.is_none() {
             print_trace_success(trace_index);
             // println!("ascii");
             print_ascii_waveform(
-                waveform,
+                result.waveform,
                 |port| sim.port_name(port).to_string(),
                 |port| sim.port_width(port),
                 false,
             );
+        } else if let Some(failure) = result.failure {
+            print_graph_failure(&failure, cli.brief_graph_errors);
         } else {
             print_trace_success(trace_index);
         }
@@ -312,7 +339,7 @@ fn run_transition_system(
                 println!("Assertion failure in cycle {}.", cycle);
                 break;
             } else if state == transition_sim.get(res.internal_assert_state) {
-                println!("Internal assertion failure in cycle {}", cycle);
+                println!("Internal assertion failure in cycle {}.", cycle);
                 break;
             }
             cycle += 1;

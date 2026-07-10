@@ -12,6 +12,24 @@ use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::interpreter::Value as WaveValue;
 use crate::ir::proto_graph::{Assignment, Op, ProtoGraph};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphInterpretFailureKind {
+    ExternalAssertion,
+    InternalAssertion,
+}
+
+#[derive(Debug, Clone)]
+pub struct GraphInterpretFailure {
+    pub kind: GraphInterpretFailureKind,
+    pub cycle: usize,
+    pub message: String,
+}
+
+pub struct GraphInterpretResult {
+    pub waveform: FxHashMap<PortId, Vec<WaveValue>>,
+    pub failure: Option<GraphInterpretFailure>,
+}
+
 enum GraphBinding {
     Sim(PortId),
     Arg(ArgValue),
@@ -189,9 +207,9 @@ fn evaluate_assert_equal(
     store: &SymbolValueStore,
     lhs: ExprRef,
     rhs: ExprRef,
-) {
+) -> Result<(), String> {
     if protocol.dont_cares.contains(&lhs) || protocol.dont_cares.contains(&rhs) {
-        panic!("assert_eq on DontCare");
+        return Err("assert_eq on DontCare".to_string());
     }
 
     let lhs = eval_expr(&protocol.expr_ctx, store, lhs);
@@ -199,14 +217,16 @@ fn evaluate_assert_equal(
     match (lhs, rhs) {
         (BaaValue::BitVec(lhs), BaaValue::BitVec(rhs)) => {
             assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");
-            assert!(
-                lhs.is_equal(&rhs),
-                "assert_eq failed: lhs={} rhs={}",
-                serialize_bitvec(&lhs, false),
-                serialize_bitvec(&rhs, false)
-            );
+            if !lhs.is_equal(&rhs) {
+                return Err(format!(
+                    "assert_eq failed: lhs={} rhs={}",
+                    serialize_bitvec(&lhs, false),
+                    serialize_bitvec(&rhs, false)
+                ));
+            }
+            Ok(())
         }
-        _ => panic!("assert_eq on non-bit-vector values"),
+        _ => Err("assert_eq on non-bit-vector values".to_string()),
     }
 }
 
@@ -259,7 +279,7 @@ pub fn interpret(
     st: &SymbolTable,
     args: FxHashMap<&str, ArgValue>,
     sim: &mut PatronusSim,
-) -> FxHashMap<PortId, Vec<WaveValue>> {
+) -> GraphInterpretResult {
     let mut waveform = FxHashMap::default();
     let mut current_inputs =
         FxHashMap::from_iter(sim.inputs().map(|port| (port, WaveValue::DontCare)));
@@ -269,6 +289,7 @@ pub fn interpret(
     let mut store = build_value_store(pg, &bindings, sim, &mut rng);
 
     let mut curr = pg.entry;
+    let mut cycle = 0;
     loop {
         read_sim_values(&mut store, &bindings, sim);
 
@@ -335,13 +356,31 @@ pub fn interpret(
                 match &pg[action.op] {
                     Op::Assign(_, _) => {}
                     Op::AssertEq(lhs, rhs) => {
-                        evaluate_assert_equal(pg, &store, *lhs, *rhs);
+                        if let Err(message) = evaluate_assert_equal(pg, &store, *lhs, *rhs) {
+                            return GraphInterpretResult {
+                                waveform,
+                                failure: Some(GraphInterpretFailure {
+                                    kind: GraphInterpretFailureKind::ExternalAssertion,
+                                    cycle,
+                                    message,
+                                }),
+                            };
+                        }
                     }
                     Op::Fork => {}
-                    Op::InternalAssertFalse => panic!(
-                        "internal assertion failed at graph node {curr}: guard {} evaluated true",
-                        pg.expr_ctx[action.guard].serialize_to_str(&pg.expr_ctx)
-                    ),
+                    Op::InternalAssertFalse => {
+                        return GraphInterpretResult {
+                            waveform,
+                            failure: Some(GraphInterpretFailure {
+                                kind: GraphInterpretFailureKind::InternalAssertion,
+                                cycle,
+                                message: format!(
+                                    "internal assertion failed at graph node {curr}: guard {} evaluated true",
+                                    pg.expr_ctx[action.guard].serialize_to_str(&pg.expr_ctx)
+                                ),
+                            }),
+                        };
+                    }
                     Op::Done => done_triggered = true,
                 }
             }
@@ -376,6 +415,7 @@ pub fn interpret(
                     update_value_store(&mut store, pg, &bindings, sim, &mut rng);
                     // println!("stepping");
                     sim.step();
+                    cycle += 1;
                 }
                 curr = t.target;
             }
@@ -383,5 +423,8 @@ pub fn interpret(
         }
     }
 
-    waveform
+    GraphInterpretResult {
+        waveform,
+        failure: None,
+    }
 }

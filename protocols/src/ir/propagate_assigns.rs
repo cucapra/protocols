@@ -34,6 +34,7 @@ fn all_ports_present(
     reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
     pg: &ProtoGraph,
     st: &SymbolTable,
+    start: NodeId,
 ) -> bool {
     let input_ports: Vec<SymbolId> = st
         .get_children(&pg.proto_ctx.type_param.unwrap())
@@ -41,7 +42,7 @@ fn all_ports_present(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    for nid in reachable_node_ids(pg, pg.entry) {
+    for nid in reachable_node_ids(pg, start) {
         let Some(rd) = reaching_defs.get(&nid) else {
             return false;
         };
@@ -65,8 +66,18 @@ pub fn propagate_assignments(
     st: &SymbolTable,
     rd: &FxHashMap<NodeId, ReachingDefs>,
 ) {
+    let start = pg.entry;
+    propagate_assignments_from(pg, st, rd, start);
+}
+
+pub fn propagate_assignments_from(
+    pg: &mut ProtoGraph,
+    st: &SymbolTable,
+    rd: &FxHashMap<NodeId, ReachingDefs>,
+    start: NodeId,
+) {
     assert!(
-        all_ports_present(rd, pg, st),
+        all_ports_present(rd, pg, st, start),
         "cannot propagate assignments unless all ports are present at all nodes"
     );
 
@@ -76,7 +87,7 @@ pub fn propagate_assignments(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    let node_ids = reachable_node_ids(pg, pg.entry);
+    let node_ids = reachable_node_ids(pg, start);
 
     for id in node_ids {
         let Some(node_defs) = rd.get(&id) else {
