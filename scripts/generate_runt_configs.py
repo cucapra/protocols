@@ -232,11 +232,39 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
 
 
+def waveform_fail_diff_runt_command(case: dict) -> list[tuple[str, str]]:
+    graph_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["path"],
+        "--respect-forks",
+        "--determinize",
+        "--brief-graph-errors",
+        "--ascii-waveform",
+    ]
+    _tx_tail(graph_cmd, case, with_max_steps=False)
+
+    ts_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["path"],
+        "--transition-system",
+        "--ascii-waveform",
+    ]
+    _tx_tail(ts_cmd, case, with_max_steps=False)
+
+    return [
+        ("graph", repo_root_command(graph_cmd, stderr="discard")),
+        # ("ts", repo_root_command(ts_cmd, stderr="discard")),
+    ]
+
+
 RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "monitor": monitor_runt_command,
     "waveform": waveform_runt_command,
+    "waveform_fail_diff": waveform_fail_diff_runt_command,
 }
 
 
@@ -304,6 +332,21 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
     return list(filter(lambda c: c["path"] not in xfailed, graph_interp_cases(cases)))
 
 
+def waveform_fail_diff_cases(cases: list[dict]) -> list[dict]:
+    """Runtime-failing tx cases whose graph and transition-system waveforms should match."""
+    # Stuff like max steps and combinational dependency errors aren't enforced right now.
+    runtime_failures = {"assertion_mismatch", "assignment_conflict"}
+    graph_interp_unsupported = {"for_in_loop", "repeat_loop"}
+
+    selected = [
+        c
+        for c in cases
+        if c["expected"] in runtime_failures
+        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+    ]
+    return sorted(selected, key=lambda c: c["path"])
+
+
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     build = RUNT_BUILDERS[runner]
     suites = []
@@ -349,6 +392,7 @@ def generate_runt_configs() -> None:
         "monitor": ("monitor", mon),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
+        "waveform_fail_diff": ("waveform_fail_diff", waveform_fail_diff_cases(tx)),
     }
 
     # A golden may be shared by several variants of the same test (e.g. the
