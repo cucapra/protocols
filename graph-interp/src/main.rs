@@ -366,8 +366,10 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, design: &Module) {
     // FIXME: probably can get away with borrowing instead of cloning cloning
     let (mut pg, proto_choice) =
         lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
-    pg = determinized(pg, st);
     println!("{}", to_dot_string(&pg, st).as_str());
+    // println!("pre-determinize");
+    // pg = determinized(pg, st);
+    // println!("{}", to_dot_string(&pg, st).as_str());
 }
 
 fn main() {
