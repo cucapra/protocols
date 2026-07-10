@@ -21,37 +21,34 @@ pub fn lower_bmc(
     // set up the lowerer and lower the initial transaction
     let mut lowerer = Lowerer::with_expr_ctx(first_ast.ctx.clone(), symbols, expr_ctx);
     let first = lowerer.lower_protocol_fragment(first_ast, bound == 1);
+    lowerer.postprocess_trace_fragment(&first);
+
     let entry_node = lowerer.ir.entry;
     let proto_idx_expr = lowerer.ir.expr_ctx.bit_vec_val(0, width);
     let node_equals = lowerer.ir.expr_ctx.equal(proto_choice, proto_idx_expr);
-    lowerer
-        .ir
-        .push_transition(entry_node, Transition::new(node_equals, first.entry, false));
-    lowerer.postprocess_trace_fragment(&first);
     graft_points.extend(
         lowerer
             .graft_points(&first)
             .into_iter()
             .map(|(node, guard)| (node, lowerer.ir.expr_ctx.and(guard, node_equals))),
     );
+    lowerer.graft_contracted_entry(entry_node, first.entry, node_equals);
 
     // do the same with the rest of the protocols
     for (proto_idx, protocol) in protos[1..].iter().enumerate() {
         let lowered_proto = lowerer.lower_protocol_fragment(protocol, bound == 1);
+        lowerer.postprocess_trace_fragment(&lowered_proto);
+
         let proto_idx = proto_idx + 1;
         let proto_idx_expr = lowerer.ir.expr_ctx.bit_vec_val(proto_idx, width);
         let node_equals = lowerer.ir.expr_ctx.equal(proto_choice, proto_idx_expr);
-        lowerer.ir.push_transition(
-            entry_node,
-            Transition::new(node_equals, lowered_proto.entry, false),
-        );
-        lowerer.postprocess_trace_fragment(&lowered_proto);
         graft_points.extend(
             lowerer
                 .graft_points(&lowered_proto)
                 .into_iter()
                 .map(|(node, guard)| (node, lowerer.ir.expr_ctx.and(guard, node_equals))),
         );
+        lowerer.graft_contracted_entry(entry_node, lowered_proto.entry, node_equals)
     }
 
     let mut next_graft_points: Vec<(NodeId, ExprRef)> = vec![];
@@ -70,7 +67,14 @@ pub fn lower_bmc(
 
                 lowerer.graft_contracted_entry(node, lowered_proto.entry, and_guard);
 
-                next_graft_points.extend(lowerer.graft_points(&lowered_proto));
+                next_graft_points.extend(
+                    lowerer
+                        .graft_points(&lowered_proto)
+                        .into_iter()
+                        .map(|(next_node, next_guard)| {
+                            (next_node, lowerer.ir.expr_ctx.and(and_guard, next_guard))
+                        }),
+                );
             }
         }
 
