@@ -9,6 +9,7 @@ use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::frontend::{Module, require_single_module};
 use protocols::interpreter::Value as WaveValue;
+use protocols::ir::bounded_lowering::lower_bmc;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
@@ -22,7 +23,6 @@ use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, PortId, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use protocols::ir::bounded_lowering::lower_bmc;
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -362,13 +362,10 @@ fn run_transition_system(
 
 /// lower each protocol once and interpret every
 /// transaction against its own symbolic protocol graph.
-fn run_bmc(
-    cli: &Cli,
-    st: &SymbolTable,
-    design: &Module,
-) {
+fn run_bmc(cli: &Cli, st: &SymbolTable, design: &Module) {
     // FIXME: probably can get away with borrowing instead of cloning cloning
-    let (mut pg, proto_choice) = lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
+    let (mut pg, proto_choice) =
+        lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
     pg = determinized(pg, st);
     println!("{}", to_dot_string(&pg, st).as_str());
 }
