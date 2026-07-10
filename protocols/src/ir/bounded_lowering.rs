@@ -1,7 +1,7 @@
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
-use crate::ir::proto_graph::{NodeId, ProtoGraph, Transition};
+use crate::ir::proto_graph::{NodeId, ProtoGraph};
 use patronus::expr::{Context as ExprContext, ExprRef};
 
 /// Lower a set of protocols to a joint IR that represents any trace up to `k` in length
@@ -15,7 +15,7 @@ pub fn lower_bmc(
     let width = usize::BITS - protos.len().leading_zeros();
     let proto_choice = expr_ctx.bv_symbol("proto_choice", width);
 
-    let first_ast = protos.get(0).unwrap();
+    let first_ast = protos.first().unwrap();
     let mut graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
     // set up the lowerer and lower the initial transaction

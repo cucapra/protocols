@@ -77,7 +77,10 @@ impl<'a> Lowerer<'a> {
             .nodes
             .iter()
             .flat_map(|id| {
-                let reachability = fork_reach.in_reach.get(id).copied()
+                let reachability = fork_reach
+                    .in_reach
+                    .get(id)
+                    .copied()
                     .unwrap_or(ForkReachability::Unreachable);
 
                 if reachability != ForkReachability::DefinitelyNotForked {
