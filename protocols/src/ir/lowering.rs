@@ -72,15 +72,25 @@ impl<'a> Lowerer<'a> {
         let ir = &self.ir;
 
         // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
+        // TODO: instead of reachability, we should just run garbage collection
         let mut graft_points: Vec<(NodeId, ExprRef)> = fragment
             .nodes
             .iter()
             .flat_map(|id| {
+                let reachability = fork_reach.in_reach.get(id).copied()
+                    .unwrap_or(ForkReachability::Unreachable);
+
+                if reachability != ForkReachability::DefinitelyNotForked {
+                    return Vec::new().into_iter();
+                }
+
                 let node = &ir[*id];
                 node.actions
                     .iter()
                     .filter(|action| matches!(ir[action.op], Op::Fork))
                     .map(move |action| (*id, action.guard))
+                    .collect::<Vec<_>>()
+                    .into_iter()
             })
             .collect();
 

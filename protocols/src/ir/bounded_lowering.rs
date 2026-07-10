@@ -55,6 +55,8 @@ pub fn lower_bmc(
 
     // do the next (bound-1) lowerings
     for i in 1..bound {
+        println!("{}", i);
+        println!("{}", graft_points.len());
         while let Some((node, guard)) = graft_points.pop() {
             for (proto_idx, protocol) in protos.iter().enumerate() {
                 // fork if `guard AND proto_choice == proto_idx
@@ -64,17 +66,18 @@ pub fn lower_bmc(
 
                 let lowered_proto = lowerer.lower_protocol_fragment(protocol, i + 1 == bound);
                 lowerer.postprocess_trace_fragment(&lowered_proto);
+                // println!("postprocess");
+                let fragment_graft_points = lowerer
+                    .graft_points(&lowered_proto)
+                    .into_iter()
+                    .map(|(next_node, next_guard)| {
+                        (next_node, lowerer.ir.expr_ctx.and(and_guard, next_guard))
+                    })
+                    .collect::<Vec<_>>();
 
                 lowerer.graft_contracted_entry(node, lowered_proto.entry, and_guard);
 
-                next_graft_points.extend(
-                    lowerer
-                        .graft_points(&lowered_proto)
-                        .into_iter()
-                        .map(|(next_node, next_guard)| {
-                            (next_node, lowerer.ir.expr_ctx.and(and_guard, next_guard))
-                        }),
-                );
+                next_graft_points.extend(fragment_graft_points);
             }
         }
 
