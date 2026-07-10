@@ -239,7 +239,7 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         case["path"],
         "--respect-forks",
         "--determinize",
-        "--brief-graph-errors"
+        "--brief-graph-errors",
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
 
