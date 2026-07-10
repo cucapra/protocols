@@ -1,6 +1,6 @@
 use baa::{BitVecOps, Value as BaaValue};
 use clap::Parser;
-use patronus::expr::ExprRef;
+use patronus::expr::{Context, ExprRef};
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::into_transition_system;
@@ -22,6 +22,7 @@ use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, PortId, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use protocols::ir::bounded_lowering::lower_bmc;
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -79,6 +80,9 @@ struct Cli {
 
     #[arg(long)]
     transition_system: bool,
+
+    #[arg(long, default_value_t)]
+    bound: usize,
 }
 
 fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
@@ -356,6 +360,19 @@ fn run_transition_system(
     }
 }
 
+/// lower each protocol once and interpret every
+/// transaction against its own symbolic protocol graph.
+fn run_bmc(
+    cli: &Cli,
+    st: &SymbolTable,
+    design: &Module,
+) {
+    // FIXME: probably can get away with borrowing instead of cloning cloning
+    let (mut pg, proto_choice) = lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
+    pg = determinized(pg, st);
+    println!("{}", to_dot_string(&pg, st).as_str());
+}
+
 fn main() {
     let cli = Cli::parse();
     let (st, modules) = load_protocols(&cli);
@@ -365,6 +382,9 @@ fn main() {
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
+        if cli.bound > 0 {
+            run_bmc(&cli, &st, &module);
+        }
         if cli.transition_system {
             run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {
