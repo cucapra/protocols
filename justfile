@@ -1,8 +1,9 @@
 # Runs the Runt snapshot suites that together cover every test
 runt:
-  cargo build --offline --package protocols-interp --package protocols-monitor --package graph-interp
+  cargo build --offline --package protocols-interp --package protocols-monitor --package graph-interp --package bi
   runt --max-futures 1 runt/interp
   runt --max-futures 1 runt/monitor
+  runt --max-futures 1 runt/bi
   runt --max-futures 1 runt/graph_interp
   runt --max-futures 1 runt/waveform
   runt --max-futures 1 runt/fail
