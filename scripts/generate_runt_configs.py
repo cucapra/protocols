@@ -194,6 +194,7 @@ def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
         cmd = timeout_cmd(case["timeout_secs"], cmd)
     return [("", repo_root_command(cmd))]
 
+
 # Same as `monitor_runt_command` above but for BI test cases
 def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*binary_prefix("bi"), "--protocol", case["path"]]
