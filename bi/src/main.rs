@@ -92,9 +92,9 @@ struct Cli {
 #[allow(unused_variables)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // By default, a Rust panic error messages prints the OS's thread ID
-    // (e.g. `"thread 'main' (<tid>)`), but this changes every time we run this executable. 
+    // (e.g. `"thread 'main' (<tid>)`), but this changes every time we run this executable.
     // To prevent the TID from appearing in error messages that appear in the expected
-    // output files for Runt, we register a custom panic hook that only prints 
+    // output files for Runt, we register a custom panic hook that only prints
     // the error message & source code location associated with the panic
     // (via the `Display` trait for the `PanicHookInfo` type).
     std::panic::set_hook(Box::new(|info| eprintln!("{}", info)));
