@@ -15,11 +15,11 @@ trace {
     idle();  // [time: 0ns -> 25ns]
     read_v1(64, 0);  // [time: 25ns -> 100ns]
 }
-[0m[1m[38;5;9merror[0m[1m: [read_v2@4] executing step 0 of the transaction: 0 != 1[0m
-    [0m[34m┌─[0m tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot:161:5
-    [0m[34m│[0m
-[0m[34m161[0m [0m[34m│[0m     [0m[31mDUT.S_AXI_ARVALID := 1'b1;[0m
-    [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[read_v2@4] executing step 0 of the transaction: 0 != 1[0m
+error: [read_v2@4] executing step 0 of the transaction: 0 != 1
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot:161:5
+    │
+161 │     DUT.S_AXI_ARVALID := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v2@4] executing step 0 of the transaction: 0 != 1
 
 
 // trace 1
@@ -33,11 +33,11 @@ trace {
     idle();  // [time: 0ns -> 25ns]
     read_v1(64, 0);  // [time: 25ns -> 100ns]
 }
-[0m[1m[38;5;9merror[0m[1m: [idle@4] executing step 0 of the transaction: 1 != 0[0m
-    [0m[34m┌─[0m tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot:108:5
-    [0m[34m│[0m
-[0m[34m108[0m [0m[34m│[0m     [0m[31mDUT.S_AXI_RREADY  := 1'b0;[0m
-    [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[idle@4] executing step 0 of the transaction: 1 != 0[0m
+error: [idle@4] executing step 0 of the transaction: 1 != 0
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot:108:5
+    │
+108 │     DUT.S_AXI_RREADY  := 1'b0;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle@4] executing step 0 of the transaction: 1 != 0
 
 
 // trace 3

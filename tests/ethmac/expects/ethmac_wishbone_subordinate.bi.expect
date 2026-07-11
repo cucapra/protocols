@@ -1,7 +1,7 @@
 error: the following required arguments were not provided:
   --wave <WAVE_FILE>
 
-Usage: bi --protocol <PROTOCOLS_FILE> --wave <WAVE_FILE> --show-waveform-time --instances <INSTANCES>... --sample-posedge <SIGNAL_TO_SAMPLE_ON_RISING_EDGE> --time-unit <TIME_UNIT>
+Usage: bi --wave <WAVE_FILE> --show-waveform-time --color <COLOR_CHOICE> --protocol <PROTOCOLS_FILE> --instances <INSTANCES>... --sample-posedge <SIGNAL_TO_SAMPLE_ON_RISING_EDGE> --time-unit <TIME_UNIT>
 
 For more information, try '--help'.
 ---CODE---

@@ -1,5 +1,5 @@
 
-thread 'main' (11280585) panicked at bi/src/bi.rs:739:29:
+thread 'main' (11302885) panicked at bi/src/bi.rs:739:29:
 not yet implemented: we currently expect one side of an assert_eq to be a port!
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ---CODE---
