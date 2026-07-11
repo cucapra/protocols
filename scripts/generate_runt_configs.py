@@ -205,7 +205,9 @@ def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd += case["extra_args"]
     if case["timeout_secs"] is not None:
         cmd = timeout_cmd(case["timeout_secs"], cmd)
-    return [("", repo_root_command(cmd))]
+    # We redirect stderr to stdout so that the expected output files
+    # contain error messages if BI fails
+    return [("", repo_root_command(cmd, stderr="stdout"))]
 
 
 def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
