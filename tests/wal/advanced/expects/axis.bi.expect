@@ -5,5 +5,12 @@ trace {
     send_data(2);  // [time: 2212ns -> 2220ns]
     send_data(3);  // [time: 2916ns -> 2924ns]
 }
+[0m[1m[38;5;9merror[0m[1m: [send_data@453] executing step 88 of the transaction: 05 != 04[0m
+   [0m[34m┌─[0m tests/wal/advanced/axis.prot:10:5
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     [0m[31mD.m_axis_tdata := data;[0m
+   [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[send_data@453] executing step 88 of the transaction: 05 != 04[0m
+
+Error: "Monitor failed"
 ---CODE---
 1

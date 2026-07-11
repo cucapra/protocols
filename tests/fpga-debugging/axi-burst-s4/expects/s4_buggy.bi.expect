@@ -1,5 +1,12 @@
 // trace 0
 trace {
 }
+[0m[1m[38;5;9merror[0m[1m: [write_burst@95] executing step 67 of the transaction: 0 != 1[0m
+   [0m[34m┌─[0m tests/fpga-debugging/axi-burst-s4/s4_buggy.prot:63:5
+   [0m[34m│[0m
+[0m[34m63[0m [0m[34m│[0m     [0m[31mDUT.m_wlast := 1'b1;[0m
+   [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[write_burst@95] executing step 67 of the transaction: 0 != 1[0m
+
+Error: "Monitor failed"
 ---CODE---
 1

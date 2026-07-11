@@ -1,2 +1,8 @@
+
+thread 'main' (11280470) panicked at bi/src/constraints.rs:120:9:
+assertion `left == right` failed
+  left: 32
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ---CODE---
 101

@@ -44,5 +44,12 @@ trace {
     push(9);  // [time: 140ns -> 142.5ns]
     push(233);  // [time: 142.5ns -> 145ns]
 }
+[0m[1m[38;5;9merror[0m[1m: [push@63] executing step 1 of the transaction: 01 != 00[0m
+   [0m[34m┌─[0m tests/fpga-debugging/axis-fifo-d4/d4_fixed.prot:89:5
+   [0m[34m│[0m
+[0m[34m89[0m [0m[34m│[0m     [0m[31mDUT.s_axis_tdata := data;[0m
+   [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[push@63] executing step 1 of the transaction: 01 != 00[0m
+
+Error: "Monitor failed"
 ---CODE---
 1

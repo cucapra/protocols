@@ -1,2 +1,6 @@
+
+thread 'main' (11279289) panicked at bi/src/bi.rs:628:21:
+[add_busy_wait@00!] Cannot fork at step zero!
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ---CODE---
 101

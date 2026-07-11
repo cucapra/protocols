@@ -1,2 +1,8 @@
+
+thread 'main' (11280542) panicked at bi/src/main.rs:90:9:
+assertion `left == right` failed: Only nano seconds are supported
+  left: "s"
+ right: "ns"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ---CODE---
 101
