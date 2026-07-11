@@ -91,7 +91,7 @@ def expect_name(case: dict, runner: str) -> str:
 
 def expect_dir(case: dict, runner: str) -> str:
     wave = case.get("wave")
-    base = Path(wave if runner == "monitor" and wave else case["path"]).parent
+    base = Path(wave if runner in ("monitor", "bi") and wave else case["path"]).parent
     return f"../../{base.as_posix()}/expects"
 
 
@@ -194,6 +194,18 @@ def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
         cmd = timeout_cmd(case["timeout_secs"], cmd)
     return [("", repo_root_command(cmd))]
 
+# Same as `monitor_runt_command` above but for BI test cases
+def bi_runt_command(case: dict) -> list[tuple[str, str]]:
+    cmd = [*binary_prefix("bi"), "--protocol", case["path"]]
+    if case["wave"]:
+        cmd += ["--wave", case["wave"]]
+    if case["instances"]:
+        cmd += ["--instances", *case["instances"]]
+    cmd += case["extra_args"]
+    if case["timeout_secs"] is not None:
+        cmd = timeout_cmd(case["timeout_secs"], cmd)
+    return [("", repo_root_command(cmd))]
+
 
 def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ast_cmd = [
@@ -261,6 +273,7 @@ RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "monitor": monitor_runt_command,
+    "bi": bi_runt_command,
     "waveform": waveform_runt_command,
     "fail": fail_runt_command,
 }
@@ -388,6 +401,9 @@ def generate_runt_configs() -> None:
     suite_specs = {
         "interp": ("interp", tx),
         "monitor": ("monitor", mon),
+        # Note: bi uses the same cases as the monitor (i.e. MONITOR_CASES)
+        # as the monitor/bi share largely the same CLI args
+        "bi": ("bi", mon),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
         "fail": ("fail", fail_cases(tx)),
