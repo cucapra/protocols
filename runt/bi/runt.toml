@@ -7,7 +7,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "add_d1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/adders/add_d1.prot --wave tests/adders/add_d1.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/add_d1.prot --wave tests/adders/add_d1.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
 name = "bi.tests_adders_add_d2.add_d2_bi"
@@ -16,7 +16,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "add_d2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/adders/add_d2.prot --wave tests/adders/add_d2.fst --instances add_d2:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/add_d2.prot --wave tests/adders/add_d2.fst --instances add_d2:Adder 2>&1"
 
 [[tests]]
 name = "bi.tests_adders_add_var_cyc.add_var_cyc_bi"
@@ -25,7 +25,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "add_var_cyc.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/adders/add_var_cyc.prot --wave tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/add_var_cyc.prot --wave tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
 name = "bi.tests_adders_busy_wait.busy_wait_bi"
@@ -34,7 +34,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "busy_wait.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/adders/busy_wait.prot --wave tests/adders/busy_wait.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/busy_wait.prot --wave tests/adders/busy_wait.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
 name = "bi.tests_adders_loop_with_assigns.loop_with_assigns_bi"
@@ -43,7 +43,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "loop_with_assigns.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/adders/loop_with_assigns.prot --wave tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/loop_with_assigns.prot --wave tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
 name = "bi.tests_adders_nested_busy_wait.nested_busy_wait_bi"
@@ -52,7 +52,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "nested_busy_wait.bi.expect"
-cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --color never --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
 name = "bi.tests_alus_alu_d1_monitor.alu_d1_bi"
@@ -61,7 +61,7 @@ paths = [
 ]
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/alus/alu_d1.monitor.prot --wave tests/alus/alu_d1.fst --instances alu_d1:ALU 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/alus/alu_d1.monitor.prot --wave tests/alus/alu_d1.fst --instances alu_d1:ALU 2>&1"
 
 [[tests]]
 name = "bi.tests_alus_alu_d2_monitor.alu_d2_bi"
@@ -70,7 +70,7 @@ paths = [
 ]
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/alus/alu_d2.monitor.prot --wave tests/alus/alu_d2.fst --instances alu_d2:ALU 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/alus/alu_d2.monitor.prot --wave tests/alus/alu_d2.fst --instances alu_d2:ALU 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_1_bi"
@@ -79,7 +79,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_2_bi"
@@ -88,7 +88,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_3_bi"
@@ -97,7 +97,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_4_bi"
@@ -106,7 +106,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_5_bi"
@@ -115,7 +115,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_5.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_5.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_5.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_6_bi"
@@ -124,7 +124,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_6.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_6.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_6.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_7_bi"
@@ -133,7 +133,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_7.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_7.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_7.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_8_bi"
@@ -142,7 +142,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_classic/expects"
 expect_name = "test_fifo_classic_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_1_bi"
@@ -151,7 +151,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_2_bi"
@@ -160,7 +160,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_3_bi"
@@ -169,7 +169,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_4_bi"
@@ -178,7 +178,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_5_bi"
@@ -187,7 +187,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_5.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_5.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_5.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_6_bi"
@@ -196,7 +196,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_6.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_6.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_6.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_7_bi"
@@ -205,7 +205,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_7.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_7.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_7.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_constant_8_bi"
@@ -214,7 +214,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/fifo_constant/expects"
 expect_name = "test_fifo_constant_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_16_0_bi"
@@ -223,7 +223,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_16_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_16_12_bi"
@@ -232,7 +232,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_16_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_16_4_bi"
@@ -241,7 +241,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_16_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_16_8_bi"
@@ -250,7 +250,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_16_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_1_0_bi"
@@ -259,7 +259,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_1_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_1_12_bi"
@@ -268,7 +268,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_1_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_1_4_bi"
@@ -277,7 +277,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_1_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_1_8_bi"
@@ -286,7 +286,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_1_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_2_0_bi"
@@ -295,7 +295,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_2_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_2_12_bi"
@@ -304,7 +304,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_2_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_2_4_bi"
@@ -313,7 +313,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_2_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_2_8_bi"
@@ -322,7 +322,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_2_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_4_0_bi"
@@ -331,7 +331,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_4_12_bi"
@@ -340,7 +340,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_4_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_4_4_bi"
@@ -349,7 +349,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_4_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_4_8_bi"
@@ -358,7 +358,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_4_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_8_0_bi"
@@ -367,7 +367,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_8_12_bi"
@@ -376,7 +376,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_8_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_12.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_8_4_bi"
@@ -385,7 +385,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_8_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_4.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_classic_8_8_bi"
@@ -394,7 +394,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_classic/expects"
 expect_name = "test_sram_classic_8_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_8.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_0_0_bi"
@@ -403,7 +403,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_0_1_bi"
@@ -412,7 +412,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_0_2_bi"
@@ -421,7 +421,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_0_3_bi"
@@ -430,7 +430,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_12_0_bi"
@@ -439,7 +439,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_12_1_bi"
@@ -448,7 +448,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_12_2_bi"
@@ -457,7 +457,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_12_3_bi"
@@ -466,7 +466,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_4_0_bi"
@@ -475,7 +475,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_4_1_bi"
@@ -484,7 +484,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_4_2_bi"
@@ -493,7 +493,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_4_3_bi"
@@ -502,7 +502,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_8_0_bi"
@@ -511,7 +511,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_8_1_bi"
@@ -520,7 +520,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_8_2_bi"
@@ -529,7 +529,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_16_8_3_bi"
@@ -538,7 +538,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_16_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_0_0_bi"
@@ -547,7 +547,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_0_1_bi"
@@ -556,7 +556,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_0_2_bi"
@@ -565,7 +565,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_0_3_bi"
@@ -574,7 +574,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_12_0_bi"
@@ -583,7 +583,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_12_1_bi"
@@ -592,7 +592,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_12_2_bi"
@@ -601,7 +601,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_12_3_bi"
@@ -610,7 +610,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_4_0_bi"
@@ -619,7 +619,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_4_1_bi"
@@ -628,7 +628,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_4_2_bi"
@@ -637,7 +637,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_4_3_bi"
@@ -646,7 +646,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_8_0_bi"
@@ -655,7 +655,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_8_1_bi"
@@ -664,7 +664,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_8_2_bi"
@@ -673,7 +673,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_1_8_3_bi"
@@ -682,7 +682,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_1_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_0_0_bi"
@@ -691,7 +691,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_0_1_bi"
@@ -700,7 +700,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_0_2_bi"
@@ -709,7 +709,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_0_3_bi"
@@ -718,7 +718,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_12_0_bi"
@@ -727,7 +727,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_12_1_bi"
@@ -736,7 +736,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_12_2_bi"
@@ -745,7 +745,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_12_3_bi"
@@ -754,7 +754,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_4_0_bi"
@@ -763,7 +763,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_4_1_bi"
@@ -772,7 +772,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_4_2_bi"
@@ -781,7 +781,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_4_3_bi"
@@ -790,7 +790,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_8_0_bi"
@@ -799,7 +799,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_8_1_bi"
@@ -808,7 +808,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_8_2_bi"
@@ -817,7 +817,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_2_8_3_bi"
@@ -826,7 +826,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_2_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_0_0_bi"
@@ -835,7 +835,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_0_1_bi"
@@ -844,7 +844,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_0_2_bi"
@@ -853,7 +853,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_0_3_bi"
@@ -862,7 +862,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_12_0_bi"
@@ -871,7 +871,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_12_1_bi"
@@ -880,7 +880,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_12_2_bi"
@@ -889,7 +889,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_12_3_bi"
@@ -898,7 +898,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_4_0_bi"
@@ -907,7 +907,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_4_1_bi"
@@ -916,7 +916,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_4_2_bi"
@@ -925,7 +925,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_4_3_bi"
@@ -934,7 +934,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_8_0_bi"
@@ -943,7 +943,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_8_1_bi"
@@ -952,7 +952,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_8_2_bi"
@@ -961,7 +961,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_4_8_3_bi"
@@ -970,7 +970,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_4_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_0_0_bi"
@@ -979,7 +979,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_0_1_bi"
@@ -988,7 +988,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_0_2_bi"
@@ -997,7 +997,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_0_3_bi"
@@ -1006,7 +1006,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_12_0_bi"
@@ -1015,7 +1015,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_12_1_bi"
@@ -1024,7 +1024,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_12_2_bi"
@@ -1033,7 +1033,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_12_3_bi"
@@ -1042,7 +1042,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_4_0_bi"
@@ -1051,7 +1051,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_4_1_bi"
@@ -1060,7 +1060,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_4_2_bi"
@@ -1069,7 +1069,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_4_3_bi"
@@ -1078,7 +1078,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_8_0_bi"
@@ -1087,7 +1087,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_0.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_8_1_bi"
@@ -1096,7 +1096,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_8_2_bi"
@@ -1105,7 +1105,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_sram_incrementing_8_8_3_bi"
@@ -1114,7 +1114,7 @@ paths = [
 ]
 expect_dir = "../../tests/antmicro/sram_incrementing/expects"
 expect_name = "test_sram_incrementing_8_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/antmicro/wishbone_subordinate.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_3.fst --instances tb.dut:WBSubordinate --sample-posedge tb.dut.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_brave_new_world_francis_bit_truncation_fft.bit_truncation_fft_bi"
@@ -1123,7 +1123,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world_francis/expects"
 expect_name = "bit_truncation_fft.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/brave_new_world_francis/bit_truncation_fft.prot --wave tests/brave_new_world_francis/bit_truncation_fft.fst --instances round11_rne_unsigned_fixed:BitTruncationFFT 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/brave_new_world_francis/bit_truncation_fft.prot --wave tests/brave_new_world_francis/bit_truncation_fft.fst --instances round11_rne_unsigned_fixed:BitTruncationFFT 2>&1"
 
 [[tests]]
 name = "bi.tests_brave_new_world_francis_bit_truncation_sha.bit_truncation_sha_bi"
@@ -1132,7 +1132,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world_francis/expects"
 expect_name = "bit_truncation_sha.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/brave_new_world_francis/bit_truncation_sha.prot --wave tests/brave_new_world_francis/bit_truncation_sha.fst --instances bit_truncation_sha_fixed:bit_truncation_sha 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/brave_new_world_francis/bit_truncation_sha.prot --wave tests/brave_new_world_francis/bit_truncation_sha.fst --instances bit_truncation_sha_fixed:bit_truncation_sha 2>&1"
 
 [[tests]]
 name = "bi.tests_brave_new_world_francis_ftu_sha.ftu_sha_bi"
@@ -1141,7 +1141,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world_francis/expects"
 expect_name = "ftu_sha.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/brave_new_world_francis/ftu_sha.prot --wave tests/brave_new_world_francis/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/brave_new_world_francis/ftu_sha.prot --wave tests/brave_new_world_francis/ftu_sha.fst --instances fsm_update_fixed_gated:FailureToUpdateSHA 2>&1"
 
 [[tests]]
 name = "bi.tests_brave_new_world_francis_signal_async.signal_async_bi"
@@ -1150,7 +1150,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world_francis/expects"
 expect_name = "signal_async.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/brave_new_world_francis/signal_async.prot --wave tests/brave_new_world_francis/signal_async.fst --instances signal_async_fix:SignalAsyncSpec 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/brave_new_world_francis/signal_async.prot --wave tests/brave_new_world_francis/signal_async.fst --instances signal_async_fix:SignalAsyncSpec 2>&1"
 
 [[tests]]
 name = "bi.tests_brave_new_world_francis_use_without_valid.use_without_valid_bi"
@@ -1159,7 +1159,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world_francis/expects"
 expect_name = "use_without_valid.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/brave_new_world_francis/use_without_valid.prot --wave tests/brave_new_world_francis/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/brave_new_world_francis/use_without_valid.prot --wave tests/brave_new_world_francis/use_without_valid.fst --instances use_without_valid_fix:UseWithoutValid 2>&1"
 
 [[tests]]
 name = "bi.tests_ethmac_ethmac_wishbone_manager.ethmac_wishbone_manager_bi"
@@ -1168,7 +1168,7 @@ paths = [
 ]
 expect_dir = "../../tests/ethmac/expects"
 expect_name = "ethmac_wishbone_manager.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/ethmac/ethmac_wishbone_manager.prot --instances tb_ethernet:WBManager --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/ethmac/ethmac_wishbone_manager.prot --instances tb_ethernet:WBManager --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_ethmac_ethmac_wishbone_subordinate.ethmac_wishbone_subordinate_bi"
@@ -1177,7 +1177,7 @@ paths = [
 ]
 expect_dir = "../../tests/ethmac/expects"
 expect_name = "ethmac_wishbone_subordinate.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/ethmac/ethmac_wishbone_subordinate.prot --instances tb_ethernet:WBSubordinate --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/ethmac/ethmac_wishbone_subordinate.prot --instances tb_ethernet:WBSubordinate --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_fifo_monitor.fifo_bi"
@@ -1186,7 +1186,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "fifo.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fifo/fifo.monitor.prot --wave tests/fifo/fifo.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/fifo.monitor.prot --wave tests/fifo/fifo.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_push_pop_identity.push_pop_identity_bi"
@@ -1195,7 +1195,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_identity.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fifo/push_pop_identity.prot --wave tests/fifo/push_pop_identity.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_identity.prot --wave tests/fifo/push_pop_identity.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_push_pop_loop_empty.push_pop_loop_empty_bi"
@@ -1204,7 +1204,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_loop_empty.bi.expect"
-cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --color never --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_push_pop_loop_not_empty.push_pop_loop_not_empty_bi"
@@ -1213,7 +1213,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_loop_not_empty.bi.expect"
-cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --protocol tests/fifo/push_pop_loop_not_empty.prot --wave tests/fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --color never --protocol tests/fifo/push_pop_loop_not_empty.prot --wave tests/fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_burst_s4_s4_buggy.s4_buggy_bi"
@@ -1222,7 +1222,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-burst-s4/expects"
 expect_name = "s4_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-burst-s4/s4_buggy.prot --wave tests/fpga-debugging/axi-burst-s4/s4_buggy.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-burst-s4/s4_buggy.prot --wave tests/fpga-debugging/axi-burst-s4/s4_buggy.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_burst_s4_s4_fixed.s4_fixed_bi"
@@ -1231,7 +1231,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-burst-s4/expects"
 expect_name = "s4_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-burst-s4/s4_fixed.prot --wave tests/fpga-debugging/axi-burst-s4/s4_fixed.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-burst-s4/s4_fixed.prot --wave tests/fpga-debugging/axi-burst-s4/s4_fixed.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy.s1_buggy_bi"
@@ -1240,7 +1240,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy_workload_1.s1_buggy_workload_1_bi"
@@ -1249,7 +1249,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_buggy_workload_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed.s1_fixed_bi"
@@ -1258,7 +1258,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed_workload_1.s1_fixed_workload_1_bi"
@@ -1267,7 +1267,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
 expect_name = "s1_fixed_workload_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_stream_s2_s2_buggy.s2_buggy_bi"
@@ -1276,7 +1276,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-stream-s2/s2_buggy.prot --wave tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2_buggy.prot --wave tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_stream_s2_s2_fixed.s2_fixed_bi"
@@ -1285,7 +1285,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axi-stream-s2/s2_fixed.prot --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2_fixed.prot --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_adapter_s3_s3_buggy.s3_buggy_bi"
@@ -1294,7 +1294,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_bi"
@@ -1303,7 +1303,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_bi"
@@ -1312,7 +1312,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_bi"
@@ -1321,7 +1321,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d11_d11_buggy.d11_buggy_bi"
@@ -1330,7 +1330,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d11/expects"
 expect_name = "d11_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-fifo-d11/d11_buggy.prot --wave tests/fpga-debugging/axis-fifo-d11/d11_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-fifo-d11/d11_buggy.prot --wave tests/fpga-debugging/axis-fifo-d11/d11_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d11_d11_fixed.d11_fixed_bi"
@@ -1339,7 +1339,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d11/expects"
 expect_name = "d11_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-fifo-d11/d11_fixed.prot --wave tests/fpga-debugging/axis-fifo-d11/d11_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-fifo-d11/d11_fixed.prot --wave tests/fpga-debugging/axis-fifo-d11/d11_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d12_d12_buggy.d12_buggy_bi"
@@ -1348,7 +1348,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d12/expects"
 expect_name = "d12_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-fifo-d12/d12_buggy.prot --wave tests/fpga-debugging/axis-fifo-d12/d12_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-fifo-d12/d12_buggy.prot --wave tests/fpga-debugging/axis-fifo-d12/d12_buggy.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d12_d12_fixed.d12_fixed_bi"
@@ -1357,7 +1357,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d12/expects"
 expect_name = "d12_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-fifo-d12/d12_fixed.prot --wave tests/fpga-debugging/axis-fifo-d12/d12_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-fifo-d12/d12_fixed.prot --wave tests/fpga-debugging/axis-fifo-d12/d12_fixed.fst --instances TOP.test_axis_fifo:AxisFifo --sample-posedge TOP.test_axis_fifo.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d4_d4_buggy.d4_buggy_bi"
@@ -1366,7 +1366,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d4/expects"
 expect_name = "d4_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-fifo-d4/d4_buggy.prot --wave tests/fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-fifo-d4/d4_buggy.prot --wave tests/fpga-debugging/axis-fifo-d4/d4_buggy.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d4_d4_fixed.d4_fixed_bi"
@@ -1375,7 +1375,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-fifo-d4/expects"
 expect_name = "d4_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/fpga-debugging/axis-fifo-d4/d4_fixed.prot --wave tests/fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-fifo-d4/d4_fixed.prot --wave tests/fpga-debugging/axis-fifo-d4/d4_fixed.fst --instances TOP.axis_fifo_wrapper.axis_fifo_inst:AxisFifo --sample-posedge TOP.axis_fifo_wrapper.axis_fifo_inst.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_identities_identity_d1.identity_d1_bi"
@@ -1384,7 +1384,7 @@ paths = [
 ]
 expect_dir = "../../tests/identities/expects"
 expect_name = "identity_d1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/identities/identity_d1.prot --wave tests/identities/identity_d1.fst --instances identity_d1:Identity 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/identities/identity_d1.prot --wave tests/identities/identity_d1.fst --instances identity_d1:Identity 2>&1"
 
 [[tests]]
 name = "bi.tests_multi_multi0.multi0_bi"
@@ -1393,7 +1393,7 @@ paths = [
 ]
 expect_dir = "../../tests/multi/expects"
 expect_name = "multi0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multi/multi0.prot --wave tests/multi/multi0.fst --instances multi0:multi0 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multi/multi0.prot --wave tests/multi/multi0.fst --instances multi0:multi0 2>&1"
 
 [[tests]]
 name = "bi.tests_multi_multi0keep.multi0keep_bi"
@@ -1402,7 +1402,7 @@ paths = [
 ]
 expect_dir = "../../tests/multi/expects"
 expect_name = "multi0keep.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multi/multi0keep.prot --wave tests/multi/multi0keep.fst --instances multi0keep:multi0keep 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multi/multi0keep.prot --wave tests/multi/multi0keep.fst --instances multi0keep:multi0keep 2>&1"
 
 [[tests]]
 name = "bi.tests_multi_multi0keep2const.multi0keep2const_bi"
@@ -1411,7 +1411,7 @@ paths = [
 ]
 expect_dir = "../../tests/multi/expects"
 expect_name = "multi0keep2const.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multi/multi0keep2const.prot --wave tests/multi/multi0keep2const.fst --instances multi0keep2const:multi0keep2const 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multi/multi0keep2const.prot --wave tests/multi/multi0keep2const.fst --instances multi0keep2const:multi0keep2const 2>&1"
 
 [[tests]]
 name = "bi.tests_multi_multi2const.multi2const_bi"
@@ -1420,7 +1420,7 @@ paths = [
 ]
 expect_dir = "../../tests/multi/expects"
 expect_name = "multi2const.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multi/multi2const.prot --wave tests/multi/multi2const.fst --instances multi2const:multi2const 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multi/multi2const.prot --wave tests/multi/multi2const.fst --instances multi2const:multi2const 2>&1"
 
 [[tests]]
 name = "bi.tests_multi_multi2multi.multi2multi_bi"
@@ -1429,7 +1429,7 @@ paths = [
 ]
 expect_dir = "../../tests/multi/expects"
 expect_name = "multi2multi.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multi/multi2multi.prot --wave tests/multi/multi2multi.fst --instances multi2multi:multi2multi 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multi/multi2multi.prot --wave tests/multi/multi2multi.fst --instances multi2multi:multi2multi 2>&1"
 
 [[tests]]
 name = "bi.tests_multi_multi_data.multi_data_bi"
@@ -1438,7 +1438,7 @@ paths = [
 ]
 expect_dir = "../../tests/multi/expects"
 expect_name = "multi_data.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multi/multi_data.prot --wave tests/multi/multi_data.fst --instances multi_data:multi_data 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multi/multi_data.prot --wave tests/multi/multi_data.fst --instances multi_data:multi_data 2>&1"
 
 [[tests]]
 name = "bi.tests_multipliers_mult_d2.mult_d2_bi"
@@ -1447,7 +1447,7 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/expects"
 expect_name = "mult_d2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/multipliers/mult_d2.prot --wave tests/multipliers/mult_d2.fst --instances mult_d2:Multiplier 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/multipliers/mult_d2.prot --wave tests/multipliers/mult_d2.fst --instances mult_d2:Multiplier 2>&1"
 
 [[tests]]
 name = "bi.tests_picorv32_pcpi_mul_unsigned_mul.pcpi_mul_unsigned_mul_bi"
@@ -1456,7 +1456,7 @@ paths = [
 ]
 expect_dir = "../../tests/picorv32/expects"
 expect_name = "pcpi_mul_unsigned_mul.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/picorv32/pcpi_mul_unsigned_mul.prot --wave tests/picorv32/unsigned_mul.fst --instances picorv32_pcpi_mul:picorv32_pcpi_mul 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/picorv32/pcpi_mul_unsigned_mul.prot --wave tests/picorv32/unsigned_mul.fst --instances picorv32_pcpi_mul:picorv32_pcpi_mul 2>&1"
 
 [[tests]]
 name = "bi.tests_serv_serv_regfile.serv_regfile_bi"
@@ -1465,7 +1465,7 @@ paths = [
 ]
 expect_dir = "../../tests/serv/expects"
 expect_name = "serv_regfile.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/serv/serv_regfile.prot --wave tests/serv/serv_regfile.fst --instances serv_regfile:Regfile --display-hex 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/serv/serv_regfile.prot --wave tests/serv/serv_regfile.fst --instances serv_regfile:Regfile --display-hex 2>&1"
 
 [[tests]]
 name = "bi.tests_tinyaes128_aes128.aes128_bi"
@@ -1474,7 +1474,7 @@ paths = [
 ]
 expect_dir = "../../tests/tinyaes128/expects"
 expect_name = "aes128.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/tinyaes128/aes128.prot --wave tests/tinyaes128/aes128.fst --instances aes_128:TinyAES128 --display-hex 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/tinyaes128/aes128.prot --wave tests/tinyaes128/aes128.fst --instances aes_128:TinyAES128 --display-hex 2>&1"
 
 [[tests]]
 name = "bi.tests_wal_advanced_axis.axis_bi"
@@ -1483,7 +1483,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wal/advanced/axis.prot --wave tests/wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wal/advanced/axis.prot --wave tests/wal/advanced/uart-axi.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_wal_advanced_axis_failing.axis_failing_bi"
@@ -1492,7 +1492,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_failing.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wal/advanced/axis_failing.prot --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wal/advanced/axis_failing.prot --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_wal_advanced_axis_minimal.axis_minimal_bi"
@@ -1501,7 +1501,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_minimal.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wal/advanced/axis_minimal.prot --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wal/advanced/axis_minimal.prot --wave tests/wal/advanced/uart-axi-minimal.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_wal_advanced_axis_truncated.axis_truncated_bi"
@@ -1510,7 +1510,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_truncated.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wal/advanced/axis_truncated.prot --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wal/advanced/axis_truncated.prot --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_wal_advanced_axis_truncated_include_idle.axis_truncated_include_idle_bi"
@@ -1519,7 +1519,7 @@ paths = [
 ]
 expect_dir = "../../tests/wal/advanced/expects"
 expect_name = "axis_truncated_include_idle.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wal/advanced/axis_truncated_include_idle.prot --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wal/advanced/axis_truncated_include_idle.prot --wave tests/wal/advanced/uart-axi-truncated.fst --instances uut_rx:AXIS --sample-posedge uut_rx.clk --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
 name = "bi.tests_wb_intercon_wb_arb.wb_arb_bi"
@@ -1528,7 +1528,7 @@ paths = [
 ]
 expect_dir = "../../tests/wb_intercon/expects"
 expect_name = "wb_arb.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wb_intercon/wb_arb.prot --instances wb_intercon_tb.wb_arb_tb:WBSubordinate --sample-posedge wb_intercon_tb.wb_arb_tb.wb_clk --show-waveform-time --time-unit s 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wb_intercon/wb_arb.prot --instances wb_intercon_tb.wb_arb_tb:WBSubordinate --sample-posedge wb_intercon_tb.wb_arb_tb.wb_clk --show-waveform-time --time-unit s 2>&1"
 
 [[tests]]
 name = "bi.tests_wb_intercon_wb_cdc.wb_cdc_bi"
@@ -1537,7 +1537,7 @@ paths = [
 ]
 expect_dir = "../../tests/wb_intercon/expects"
 expect_name = "wb_cdc.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wb_intercon/wb_cdc.prot --wave tests/wb_intercon/wb_cdc.fst --instances wb_intercon_tb.wb_cdc_tb.dut:WBSubordinate --sample-posedge wb_intercon_tb.wb_cdc_tb.dut.wbm_clk --show-waveform-time --time-unit s 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wb_intercon/wb_cdc.prot --wave tests/wb_intercon/wb_cdc.fst --instances wb_intercon_tb.wb_cdc_tb.dut:WBSubordinate --sample-posedge wb_intercon_tb.wb_cdc_tb.dut.wbm_clk --show-waveform-time --time-unit s 2>&1"
 
 [[tests]]
 name = "bi.tests_wishbone_wishbone_monitor.wishbone_bi"
@@ -1546,4 +1546,4 @@ paths = [
 ]
 expect_dir = "../../tests/wishbone/expects"
 expect_name = "wishbone.bi.expect"
-cmd = "cd ../.. && target/debug/bi --protocol tests/wishbone/wishbone.monitor.prot --wave tests/wishbone/reqwalker.vcd --instances TOP.reqwalker:WBSubordinate --sample-posedge TOP.reqwalker.i_clk 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wishbone/wishbone.monitor.prot --wave tests/wishbone/reqwalker.vcd --instances TOP.reqwalker:WBSubordinate --sample-posedge TOP.reqwalker.i_clk 2>&1"
