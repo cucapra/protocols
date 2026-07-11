@@ -1,0 +1,16 @@
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    write(64, 2147483648, 0, 0);  // [time: 25ns -> 100ns]
+}
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+}
+
+// trace 1
+trace {
+    idle();  // [time: 0ns -> 25ns]
+}
+---CODE---
+1

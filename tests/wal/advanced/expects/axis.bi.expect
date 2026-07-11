@@ -1,0 +1,9 @@
+// trace 0
+trace {
+    send_data(0);  // [time: 804ns -> 812ns]
+    send_data(1);  // [time: 1508ns -> 1516ns]
+    send_data(2);  // [time: 2212ns -> 2220ns]
+    send_data(3);  // [time: 2916ns -> 2924ns]
+}
+---CODE---
+1

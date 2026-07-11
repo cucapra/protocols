@@ -1,0 +1,4 @@
+// trace 0
+trace {
+    signal_async(6, 7);
+}

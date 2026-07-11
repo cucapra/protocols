@@ -1,0 +1,12 @@
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    write(64, 2147483648, 0, 0);  // [time: 25ns -> 100ns]
+}
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(68, 0, 1);  // [time: 25ns -> 125ns]
+    idle();  // [time: 125ns -> 150ns]
+    idle();  // [time: 150ns -> 150ns]
+}

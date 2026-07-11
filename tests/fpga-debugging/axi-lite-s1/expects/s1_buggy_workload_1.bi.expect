@@ -1,0 +1,49 @@
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    write_stalled(64, 2147483648, 0);  // [time: 25ns -> 75ns]
+    write_stalled(64, 2147483648, 0);  // [time: 75ns -> 100ns]
+}
+
+// trace 1
+trace {
+    write_stalled(64, 2147483648, 1);  // [time: 0ns -> 75ns]
+    write_stalled(64, 2147483648, 0);  // [time: 75ns -> 100ns]
+}
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v1(64, 0);  // [time: 25ns -> 100ns]
+}
+
+// trace 1
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v1(64, 0);  // [time: 25ns -> 100ns]
+}
+
+// trace 2
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v1(64, 0);  // [time: 25ns -> 100ns]
+}
+
+// trace 3
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(64, 0, 0);  // [time: 25ns -> 100ns]
+}
+
+// trace 4
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(64, 0, 0);  // [time: 25ns -> 100ns]
+}
+
+// trace 5
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(64, 0, 0);  // [time: 25ns -> 100ns]
+}
+---CODE---
+1
