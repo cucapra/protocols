@@ -195,9 +195,11 @@ def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
     return [("", repo_root_command(cmd))]
 
 
-# Same as `monitor_runt_command` above but for BI test cases
+# Same as `monitor_runt_command` above but for the BI test cases
 def bi_runt_command(case: dict) -> list[tuple[str, str]]:
-    cmd = [*binary_prefix("bi"), "--protocol", case["path"]]
+    # We pass in `--color never` to BI to suppress color in error messages
+    # (so that the .expect files only display plaintext)
+    cmd = [*binary_prefix("bi"), "--color", "never", "--protocol", case["path"]]
     if case["wave"]:
         cmd += ["--wave", case["wave"]]
     if case["instances"]:
