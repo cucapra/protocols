@@ -36,6 +36,8 @@ jobs:
       run: runt runt/graph_interp
     - name: Run Runt tests for monitor
       run: runt runt/monitor
+    - name: Run Runt tests for bi
+      run: runt runt/bi
     - name: Run Runt tests for waveform
       run: runt runt/waveform
     - name: Run Runt tests for fail
