@@ -5,6 +5,7 @@
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::determinize::{SatResult, check_sat};
 use crate::ir::edge_contract::{merge_ordered_assignment, merge_unordered_assignment};
+use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use itertools::Itertools;
 use patronus::expr::ExprRef;
@@ -15,12 +16,33 @@ pub type ReachingDefs = FxHashMap<String, Assignment>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and
 /// returns the in-neighbors for each node.
-pub fn predecessors(pg: &ProtoGraph) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
-    let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
+use std::collections::{HashSet, VecDeque};
 
-    for (n, _) in pg.nodes() {
-        for t in pg[n].clone().transitions {
-            predecessors.entry(t.target).or_default().push((n, t.guard));
+pub fn predecessors(pg: &ProtoGraph, start: NodeId) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
+    let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
+    let mut visited: HashSet<NodeId> = HashSet::default();
+    let mut queue: VecDeque<NodeId> = VecDeque::new();
+
+    // Start BFS from the given node
+    queue.push_back(start);
+    visited.insert(start);
+
+    while let Some(current_node) = queue.pop_front() {
+        // For each transition from current node
+        for t in pg[current_node].clone().transitions {
+            let target = t.target;
+
+            // Add predecessor relationship
+            predecessors
+                .entry(target)
+                .or_default()
+                .push((current_node, t.guard));
+
+            // If we haven't visited this node yet, add it to queue
+            if !visited.contains(&target) {
+                visited.insert(target);
+                queue.push_back(target);
+            }
         }
     }
 
@@ -193,18 +215,26 @@ fn transfer_assignment(
 }
 
 pub fn reaching_definitions(
+    pg: &mut ProtoGraph,
+    st: &SymbolTable,
+) -> FxHashMap<NodeId, ReachingDefs> {
+    reaching_definitions_from(pg, st, pg.entry)
+}
+
+pub fn reaching_definitions_from(
     // TODO: it's a bit of a shame that we have to pass a mutable graph for an analysis,
     // but the SAT checker mutates expressions by simplifying them
     pg: &mut ProtoGraph,
     st: &SymbolTable,
+    start: NodeId,
 ) -> FxHashMap<NodeId, ReachingDefs> {
-    let preds = predecessors(pg);
+    let preds = predecessors(pg, start);
     let mut in_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
     let mut out_defs: FxHashMap<NodeId, ReachingDefs> = FxHashMap::default();
 
     // worklist by default is all reachable nodes.
     // let mut worklist: Vec<NodeId> = reachable.iter().copied().collect();
-    let mut worklist: Vec<NodeId> = pg.nodes().map(|(id, _)| id).collect();
+    let mut worklist: Vec<NodeId> = reachable_node_ids(pg, start);
 
     while let Some(id) = worklist.pop() {
         let mut merged = ReachingDefs::default();
@@ -233,7 +263,7 @@ pub fn reaching_definitions(
             }
         }
 
-        if id != pg.entry {
+        if id != start {
             in_defs.insert(id, merged);
         }
 

@@ -180,6 +180,11 @@ fn format_expr_node(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
                 format_expr(protocol, *fals)
             )
         }
+        Expr::BVGreaterEqual(a, b) => format!(
+            "ge({}, {})",
+            format_expr(protocol, *a),
+            format_expr(protocol, *b)
+        ),
         _ => panic!(
             "unsupported expression in graphviz formatter: {:?}",
             protocol.expr_ctx[expr_ref]

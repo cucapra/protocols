@@ -1,4 +1,5 @@
 use crate::ir::determinize::{SatResult, check_sat};
+use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
 use crate::ir::reaching_defs::{predecessors, restrict_branch_to_edge, simplify_guard};
 use itertools::Itertools;
@@ -91,10 +92,10 @@ impl ForkFact {
 
 pub fn reaching_forks_from(pg: &mut ProtoGraph, start: NodeId) -> ForkReach {
     // let reachable = reachable_node_ids(pg, start);
-    let preds = predecessors(pg);
+    let preds = predecessors(pg, start);
     let mut in_facts: FxHashMap<NodeId, ForkFact> = FxHashMap::default();
     let mut out: FxHashMap<NodeId, ForkFact> = FxHashMap::default();
-    let node_ids: Vec<NodeId> = pg.nodes().map(|(nid, _)| nid).collect();
+    let node_ids: Vec<NodeId> = reachable_node_ids(pg, start);
     let mut worklist = node_ids.clone();
 
     while let Some(id) = worklist.pop() {
