@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::edge_contract::{append_action, guard_assignment};
+use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::Context as ExprContext;
@@ -133,6 +133,7 @@ impl<'a> Lowerer<'a> {
         for (node, guard) in graft_points {
             self.graft_contracted_entry(node, fragment.entry, guard);
         }
+        contract_edges(&mut self.ir, self.symbols);
 
         self.append_trace_transactions(next, rest, protos_by_name);
     }
@@ -163,6 +164,7 @@ pub fn lower_trace_to_ir(
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     lowerer.postprocess_trace_fragment(&first);
+    contract_edges(&mut lowerer.ir, symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.graft_points(&first);

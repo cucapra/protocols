@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, VecDeque};
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
+use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::ExprRef;
 
@@ -239,12 +240,13 @@ pub fn append_action(
     }
 }
 
+pub fn contract_edges(pg: &mut ProtoGraph, symbols: &SymbolTable) {
+    contract_edges_from(pg, symbols, pg.entry);
+}
+
 /// returns `protocol` with semantic behavior preserved, but no non-step edges
-pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
-    let node_ids = protocol
-        .nodes()
-        .map(|(node_id, _)| node_id)
-        .collect::<Vec<_>>();
+pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, start: NodeId) {
+    let node_ids = reachable_node_ids(protocol, start);
 
     for source_node_id in node_ids.into_iter().rev() {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());

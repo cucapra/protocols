@@ -438,6 +438,16 @@ impl SymbolTable {
             .filter(|(_, entry)| entry.parent() == Some(*parent_name))
             .map(|(id, _)| id)
     }
+
+    pub fn get_args(&self) -> Vec<SymbolId> {
+        self.entries
+            .iter()
+            .filter_map(|(id, entry)| match entry.kind() {
+                SymbolKind::Arg(_) => Some(id),
+                _ => None,
+            })
+            .collect()
+    }
 }
 
 impl Index<&str> for SymbolTable {

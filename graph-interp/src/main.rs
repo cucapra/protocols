@@ -366,7 +366,7 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, design: &Module) {
     // FIXME: probably can get away with borrowing instead of cloning cloning
     let (mut pg, _) = lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
     println!("{}", to_dot_string(&pg, st).as_str());
-    // println!("pre-determinize");
+    println!("pre-determinize");
     pg.garbage_collect_unreachable();
     pg = determinized(pg, st);
     println!("{}", to_dot_string(&pg, st).as_str());
@@ -383,8 +383,7 @@ fn main() {
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.bound > 0 {
             run_bmc(&cli, &st, &module);
-        }
-        if cli.transition_system {
+        } else if cli.transition_system {
             run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {
             run_respect_forks(&cli, &st, &module, &traces);
