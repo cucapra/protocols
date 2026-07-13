@@ -155,7 +155,6 @@ struct Remapper<'a> {
     orig: &'a Protocol,
     lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>,
     map_name_to_dut: FxHashMap<String, SymbolId>,
-    remap_struct_id: StructId,
     remap_ctx: &'a ProtocolContext,
     out: Protocol,
 }
@@ -223,7 +222,6 @@ impl<'a> Remapper<'a> {
             orig,
             out,
             lookup,
-            remap_struct_id,
             map_name_to_dut,
             remap_ctx,
         }
