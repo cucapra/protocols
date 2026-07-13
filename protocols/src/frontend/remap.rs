@@ -6,7 +6,6 @@ use crate::frontend::ast::{
     Ast, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId,
     find_symbols,
 };
-use crate::frontend::serialize::serialize_stmt;
 use crate::frontend::symbol::{Arg, Field, StructId, SymbolId, SymbolKind, SymbolTable, Type};
 use rustc_hash::FxHashMap;
 
@@ -216,6 +215,8 @@ impl<'a> Remapper<'a> {
                 Arg::new(sym)
             })
             .collect();
+
+        out.is_idle = orig.is_idle;
 
         Self {
             st,
