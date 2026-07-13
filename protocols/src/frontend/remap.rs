@@ -397,3 +397,44 @@ impl Remapper<'_> {
         }
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use crate::frontend;
+    use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::frontend::parser::parse_string;
+    use crate::frontend::serialize::serialize_modules_to_string;
+    use clap::ColorChoice;
+    use strip_ansi_escapes::strip_str;
+
+    // derived from the function of the same name in serialize.rs, however, here we go through the full frontend
+    fn test_helper_files(filenames: &[&str], snap_name: &str) {
+        let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
+        let result = frontend(filenames, &mut handler, false);
+        let maybe_ast = result.ok();
+
+        let content = match &maybe_ast {
+            Some((st, modules)) => serialize_modules_to_string(st, modules).unwrap(),
+            None => strip_str(handler.error_string()),
+        };
+        println!("{}", content);
+        crate::frontend::serialize::tests::snap(snap_name, content.clone());
+
+        // check if the output parses
+        if let Some(ast) = maybe_ast {
+            let _ast2 = parse_string(&content, &mut handler).expect("failed to parse serialized");
+        }
+    }
+
+    #[test]
+    #[ignore] // TODO: improve parser to allow slicing expressions
+    fn test_remap_roundtrip() {
+        test_helper_files(
+            &[
+                "../examples/wishbone/wishbone.prot",
+                "../examples/wishbone/antmicro_litex.prot",
+            ],
+            "remap_wishbone_full_frontend",
+        )
+    }
+}

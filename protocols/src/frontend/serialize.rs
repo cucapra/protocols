@@ -549,7 +549,7 @@ pub mod tests {
 
     use strip_ansi_escapes::strip_str;
 
-    fn snap(name: &str, content: String) {
+    pub(crate) fn snap(name: &str, content: String) {
         let mut settings = Settings::clone_current();
         settings.set_snapshot_path(Path::new("../tests/snapshots"));
         settings.bind(|| {
