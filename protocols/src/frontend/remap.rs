@@ -244,12 +244,31 @@ impl Remapper<'_> {
                 let inner = inner.into_iter().map(|s| self.on_stmt(s)).collect();
                 self.out.s(Stmt::Block(inner))
             }
+            Stmt::Assign(lhs, rhs) if rhs == self.orig.expr_dont_care() => {
+                let rhs = self.out.dont_care_id();
+                if let Some((m, _)) = self.lookup.get(&lhs) {
+                    let new_lhs = self.map_name_to_dut[&m.name];
+                    // note: for DontCare assignments, we drop the condition
+                    self.out.s(Stmt::Assign(new_lhs, rhs))
+                } else {
+                    self.out.s(Stmt::Assign(lhs, rhs))
+                }
+            }
             Stmt::Assign(lhs, rhs) => {
                 let rhs = self.on_expr(rhs);
                 if let Some((m, map_sym_id)) = self.lookup.get(&lhs) {
                     let new_lhs = self.map_name_to_dut[&m.name];
                     let new_rhs = self.on_remap_expr(*map_sym_id, rhs, m.rhs);
-                    self.out.s(Stmt::Assign(new_lhs, new_rhs))
+                    let new_assign = self.out.s(Stmt::Assign(new_lhs, new_rhs));
+                    if m.cond != self.remap_ctx.expr_true() {
+                        let extra_assert_cond = self.on_remap_expr(*map_sym_id, rhs, m.cond);
+                        let extra_assert = self
+                            .out
+                            .s(Stmt::AssertEq(extra_assert_cond, self.out.expr_true()));
+                        self.out.s(Stmt::Block(vec![new_assign, extra_assert]))
+                    } else {
+                        new_assign
+                    }
                 } else {
                     self.out.s(Stmt::Assign(lhs, rhs))
                 }
@@ -299,7 +318,7 @@ impl Remapper<'_> {
                     SymbolKind::Dut => unreachable!(),
                     SymbolKind::InPort => panic!("Did not expect to encounter an IN port!"),
                     SymbolKind::OutPort => {
-                        let (m, map_sym_id) = self.lookup[&sym_id];
+                        let (m, _) = self.lookup[&sym_id];
                         // output port mapping should always just be 1:1, this is enforced by the
                         // frontend, but we want an assertion here to catch if that ever changes
                         if let Expr::Sym(remap_rhs) = self.remap_ctx[m.rhs] {
@@ -308,6 +327,7 @@ impl Remapper<'_> {
                         } else {
                             unreachable!("Mapping must be 1:1");
                         }
+                        assert_eq!(m.cond, self.remap_ctx.expr_true());
                         // lookup correct symbol
                         let dut_name = self.st[self.out.type_param.unwrap()].name();
                         let full_name = format!("{dut_name}.{}", m.name);
