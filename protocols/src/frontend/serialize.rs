@@ -374,7 +374,7 @@ fn serialize_struct(
     struct_id: StructId,
 ) -> std::io::Result<()> {
     writeln!(out, "struct {} {{", st[struct_id].name())?;
-    serialize_fields(out, st, &st[struct_id].pins())?;
+    serialize_fields(out, st, st[struct_id].pins())?;
     writeln!(out, "}}\n")
 }
 

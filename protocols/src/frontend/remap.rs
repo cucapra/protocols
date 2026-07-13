@@ -99,15 +99,15 @@ fn implement_remap(
     originals: &FxHashMap<String, Module>,
     remap: RemapModule,
 ) -> Module {
-    let mut pins = vec![];
+    let pins = vec![];
     let mut protos = vec![];
-    let mut proto_pin_map = vec![];
+    let proto_pin_map = vec![];
 
     // create a struct for the remap module
     let remap_pins = remap
         .mappings
         .iter()
-        .map(|m| Field::new(m.name.clone(), m.dir, m.tpe.clone()))
+        .map(|m| Field::new(m.name.clone(), m.dir, m.tpe))
         .collect();
     let remap_struct_id = st.add_struct(remap.name.clone(), remap_pins);
 
@@ -421,7 +421,7 @@ pub mod tests {
         crate::frontend::serialize::tests::snap(snap_name, content.clone());
 
         // check if the output parses
-        if let Some(ast) = maybe_ast {
+        if let Some(_ast) = maybe_ast {
             let _ast2 = parse_string(&content, &mut handler).expect("failed to parse serialized");
         }
     }
