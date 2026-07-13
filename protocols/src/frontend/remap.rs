@@ -140,7 +140,6 @@ fn implement_remap(
 
             protos.push(remap_proto(st, proto, remap_struct_id, &lookup, &remap.ctx));
         }
-        println!("{}", orig_mod.name)
     }
 
     Module {
@@ -239,7 +238,6 @@ impl Remapper<'_> {
     }
 
     fn on_stmt(&mut self, stmt: StmtId) -> StmtId {
-        println!("{}", serialize_stmt(self.orig, self.st, &stmt));
         match self.orig[stmt].clone() {
             Stmt::Block(inner) => {
                 let inner = inner.into_iter().map(|s| self.on_stmt(s)).collect();
@@ -269,8 +267,14 @@ impl Remapper<'_> {
             }
             Stmt::ForInLoop(loop_var, r, body) => {
                 let r = self.on_expr(r);
+                // create a new loop_var symbol
+                let name = self.st[loop_var].name().to_string();
+                let tpe = self.st[loop_var].tpe();
+                debug_assert_eq!(self.st[loop_var].kind(), SymbolKind::LoopVar);
+                let new_loop_var = self.st.add_without_parent(name, tpe, SymbolKind::LoopVar);
+                // now we can visit the body
                 let body = self.on_stmt(body);
-                self.out.s(Stmt::ForInLoop(loop_var, r, body))
+                self.out.s(Stmt::ForInLoop(new_loop_var, r, body))
             }
             Stmt::IfElse(cond, tru, fals) => {
                 let cond = self.on_expr(cond);
@@ -289,20 +293,37 @@ impl Remapper<'_> {
     fn on_expr(&mut self, expr: ExprId) -> ExprId {
         match self.orig[expr].clone() {
             Expr::Const(a) => self.out.e(Expr::Const(a)),
-            Expr::Sym(sym) => {
-                let sym = self.st[sym].clone();
-                match sym.kind() {
+            Expr::Sym(sym_id) => {
+                match self.st[sym_id].kind() {
                     SymbolKind::Dut => unreachable!(),
                     SymbolKind::InPort => panic!("Did not expect to encounter an IN port!"),
                     SymbolKind::OutPort => {
-                        todo!("Substitute out port")
+                        let (m, map_sym_id) = self.lookup[&sym_id];
+                        // output port mapping should always just be 1:1, this is enforced by the
+                        // frontend, but we want an assertion here to catch if that ever changes
+                        if let Expr::Sym(remap_rhs) = self.remap_ctx[m.rhs] {
+                            assert_eq!(self.st[remap_rhs].name(), self.st[sym_id].name());
+                            assert_eq!(self.st[remap_rhs].tpe(), self.st[sym_id].tpe());
+                        } else {
+                            unreachable!("Mapping must be 1:1");
+                        }
+                        // lookup correct symbol
+                        let dut_name = self.st[self.out.type_param.unwrap()].name();
+                        let full_name = format!("{dut_name}.{}", m.name);
+                        let remapped_sym = self
+                            .st
+                            .symbol_id_from_name_in_active_scope(&full_name)
+                            .unwrap();
+                        self.out.e(Expr::Sym(remapped_sym))
                     }
-                    SymbolKind::Arg(a_id) => {
-                        let out_sym = self.out.args[a_id as usize].symbol();
+                    SymbolKind::Arg(_) | SymbolKind::LoopVar => {
+                        // var should already be declared, just look up by name
+                        let name = self.st[sym_id].name();
+                        let out_sym = self
+                            .st
+                            .symbol_id_from_name_in_active_scope(name)
+                            .unwrap_or_else(|| unreachable!("{name} should have been declared!"));
                         self.out.e(Expr::Sym(out_sym))
-                    }
-                    SymbolKind::LoopVar => {
-                        todo!("Substitute loop var")
                     }
                 }
             }
