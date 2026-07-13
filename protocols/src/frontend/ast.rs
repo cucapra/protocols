@@ -465,7 +465,7 @@ pub enum LocationId {
     Stmt(StmtId),
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum BinOp {
     Equal,
     Concat,

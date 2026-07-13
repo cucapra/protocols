@@ -12,14 +12,25 @@ use itertools::Itertools;
 use rustc_hash::FxHashMap;
 
 use crate::Value;
+use crate::frontend::Module;
 use crate::frontend::ast::*;
 use crate::frontend::symbol::*;
 use crate::interpreter::ExprValue;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
-pub fn serialize_to_string(ast: &Ast) -> std::io::Result<String> {
+pub fn serialize_ast_to_string(ast: &Ast) -> std::io::Result<String> {
     let mut out = Vec::new();
-    serialize(&mut out, ast)?;
+    serialize_ast(&mut out, ast)?;
+    let out = String::from_utf8(out).unwrap();
+    Ok(out)
+}
+
+pub fn serialize_modules_to_string(
+    st: &SymbolTable,
+    modules: &[Module],
+) -> std::io::Result<String> {
+    let mut out = Vec::new();
+    serialize_modules(&mut out, st, modules)?;
     let out = String::from_utf8(out).unwrap();
     Ok(out)
 }
@@ -166,18 +177,32 @@ where
         Expr::Binary(op, lhs, rhs) => {
             let e1 = serialize_expr(exprs, st, lhs);
             let e2 = serialize_expr(exprs, st, rhs);
-            format!("{e1} {op} {e2}")
+            format!(
+                "{} {op} {}",
+                maybe_parens(e1, &exprs[*lhs], Some(*op)),
+                maybe_parens(e2, &exprs[*rhs], Some(*op))
+            )
         }
         Expr::Slice(expr, idx1, idx2) => {
             let e = serialize_expr(exprs, st, expr);
             let i = idx1.to_string();
             if *idx2 == *idx1 {
-                format!("{}[{}]", e, i)
+                format!("{}[{}]", maybe_parens(e, &exprs[*expr], None), i)
             } else {
                 let j = idx2.to_string();
-                format!("{}[{}:{}]", e, i, j)
+                format!("{}[{}:{}]", maybe_parens(e, &exprs[*expr], None), i, j)
             }
         }
+    }
+}
+
+/// tries to add parenthesis only when necessary
+fn maybe_parens(serialized: String, expr: &Expr, outer_op: Option<BinOp>) -> String {
+    match expr {
+        // parens only seem necessary around a binary expression
+        // if we are not applying the same expression again (since all our binary expressions are associative)
+        Expr::Binary(inner_op, _, _) if Some(*inner_op) != outer_op => format!("({serialized})"),
+        _ => serialized,
     }
 }
 
@@ -338,20 +363,35 @@ pub fn serialize_structs(
     struct_ids: Vec<StructId>,
 ) -> std::io::Result<()> {
     for struct_id in struct_ids {
-        writeln!(out, "struct {} {{", st[struct_id].name())?;
-
-        for field in st[struct_id].pins() {
-            writeln!(
-                out,
-                "  {} {}: {},",
-                field.dir(),
-                field.name(),
-                serialize_type(st, field.tpe())
-            )?;
-        }
-        writeln!(out, "}}\n")?;
+        serialize_struct(out, st, struct_id)?;
     }
+    Ok(())
+}
 
+fn serialize_struct(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    struct_id: StructId,
+) -> std::io::Result<()> {
+    writeln!(out, "struct {} {{", st[struct_id].name())?;
+    serialize_fields(out, st, &st[struct_id].pins())?;
+    writeln!(out, "}}\n")
+}
+
+fn serialize_fields(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    fields: &[Field],
+) -> std::io::Result<()> {
+    for field in fields {
+        writeln!(
+            out,
+            "  {} {}: {},",
+            field.dir(),
+            field.name(),
+            serialize_type(st, field.tpe())
+        )?;
+    }
     Ok(())
 }
 
@@ -399,62 +439,100 @@ fn serialize_remap_module(
     Ok(())
 }
 
+fn serialize_proto(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    proto: &Protocol,
+) -> std::io::Result<()> {
+    if proto.is_idle {
+        writeln!(out, "#[idle]")?;
+    }
+    write!(out, "prot {}", proto.name)?;
+
+    if let Some(type_param) = proto.type_param {
+        write!(
+            out,
+            "<{}: {}>",
+            st[type_param].name(),
+            serialize_type(st, st[type_param].tpe())
+        )?;
+    }
+
+    write!(out, "(")?;
+
+    if proto.args.is_empty() {
+        writeln!(out, ") {{")?;
+    } else {
+        for (ii, arg) in proto.args.iter().enumerate() {
+            let last_index = ii == proto.args.len() - 1;
+
+            if last_index {
+                writeln!(
+                    out,
+                    "{}: {}) {{",
+                    st[arg].name(),
+                    serialize_type(st, st[arg].tpe())
+                )?;
+            } else {
+                write!(
+                    out,
+                    "{}: {}, ",
+                    st[arg].name(),
+                    serialize_type(st, st[arg].tpe())
+                )?;
+            }
+        }
+    }
+
+    build_statements(out, proto, st, &proto.body, 1)?;
+
+    writeln!(out, "}}\n")
+}
+
 /// Serializes a `Vec` of `(SymbolTable, Transaction)` pairs to the provided
 /// output buffer `out`
-pub fn serialize(out: &mut impl Write, ast: &Ast) -> std::io::Result<()> {
+pub fn serialize_ast(out: &mut impl Write, ast: &Ast) -> std::io::Result<()> {
     let st = &ast.st;
     serialize_structs(out, st, st.struct_ids())?;
     for proto in &ast.protos {
-        if proto.is_idle {
-            writeln!(out, "#[idle]")?;
-        }
-        write!(out, "prot {}", proto.name)?;
-
-        if let Some(type_param) = proto.type_param {
-            write!(
-                out,
-                "<{}: {}>",
-                st[type_param].name(),
-                serialize_type(st, st[type_param].tpe())
-            )?;
-        }
-
-        write!(out, "(")?;
-
-        if proto.args.is_empty() {
-            writeln!(out, ") {{")?;
-        } else {
-            for (ii, arg) in proto.args.iter().enumerate() {
-                let last_index = ii == proto.args.len() - 1;
-
-                if last_index {
-                    writeln!(
-                        out,
-                        "{}: {}) {{",
-                        st[arg].name(),
-                        serialize_type(st, st[arg].tpe())
-                    )?;
-                } else {
-                    write!(
-                        out,
-                        "{}: {}, ",
-                        st[arg].name(),
-                        serialize_type(st, st[arg].tpe())
-                    )?;
-                }
-            }
-        }
-
-        build_statements(out, proto, st, &proto.body, 1)?;
-
-        writeln!(out, "}}\n")?;
+        serialize_proto(out, st, proto)?;
     }
-
     for remap in &ast.remaps {
         writeln!(out)?;
         serialize_remap_module(out, st, remap)?;
     }
 
+    Ok(())
+}
+
+fn serialize_module(out: &mut impl Write, st: &SymbolTable, m: &Module) -> std::io::Result<()> {
+    // print out the non-serializable info as comments
+    match &m.clock {
+        Clock::None => {}
+        Clock::Posedge(name) => {
+            writeln!(out, "// {name} : @posedge clock")?;
+        }
+    }
+
+    // find the module struct and serialize it
+    let module_struct = st.struct_id_from_name(&m.name).unwrap();
+    serialize_struct(out, st, module_struct)?;
+
+    // serialize the protocols in it
+    for proto in &m.protos {
+        serialize_proto(out, st, proto)?;
+    }
+    Ok(())
+}
+
+pub fn serialize_modules(
+    out: &mut impl Write,
+    st: &SymbolTable,
+    modules: &[Module],
+) -> std::io::Result<()> {
+    for m in modules {
+        serialize_module(out, st, m)?;
+    }
     Ok(())
 }
 
@@ -490,7 +568,7 @@ pub mod tests {
         let maybe_ast = result.ok();
 
         let content = match &maybe_ast {
-            Some(ast) => serialize_to_string(ast).unwrap(),
+            Some(ast) => serialize_ast_to_string(ast).unwrap(),
             None => strip_str(handler.error_string()),
         };
         println!("{}", content);
@@ -501,7 +579,7 @@ pub mod tests {
             let ast2 = parse_string(&content, &mut handler).expect("failed to parse serialized");
             assert_ast_eq(&ast, &ast2);
             // round trip 2
-            let content2 = serialize_to_string(&ast2).unwrap();
+            let content2 = serialize_ast_to_string(&ast2).unwrap();
             assert_eq!(content, content2);
         }
     }
@@ -733,6 +811,6 @@ pub mod tests {
             protos: vec![easycond],
             remaps: vec![],
         };
-        println!("{}", serialize_to_string(&ast).unwrap());
+        println!("{}", serialize_ast_to_string(&ast).unwrap());
     }
 }
