@@ -12,7 +12,6 @@ use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, ch
 use crate::frontend::symbol::*;
 use anyhow::{Context, anyhow, bail};
 use baa::BitVecOps;
-use rustc_hash::FxHashSet;
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(

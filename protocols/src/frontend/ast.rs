@@ -571,7 +571,6 @@ pub fn find_symbols(ctx: &ProtocolContext, e: ExprId) -> FxHashSet<SymbolId> {
     out
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
