@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use crate::frontend::ast::{
-    Ast, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId,
+    Ast, BinOp, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId,
     find_symbols,
 };
 use crate::frontend::symbol::{Arg, Field, StructId, SymbolId, SymbolKind, SymbolTable, Type};
@@ -260,9 +260,14 @@ impl Remapper<'_> {
                     let new_assign = self.out.s(Stmt::Assign(new_lhs, new_rhs));
                     if m.cond != self.remap_ctx.expr_true() {
                         let extra_assert_cond = self.on_remap_expr(*map_sym_id, rhs, m.cond);
-                        let extra_assert = self
-                            .out
-                            .s(Stmt::AssertEq(extra_assert_cond, self.out.expr_true()));
+                        let (a, b) = if let Expr::Binary(BinOp::Equal, a, b) =
+                            self.out[extra_assert_cond].clone()
+                        {
+                            (a, b)
+                        } else {
+                            (extra_assert_cond, self.out.expr_true())
+                        };
+                        let extra_assert = self.out.s(Stmt::AssertEq(a, b));
                         self.out.s(Stmt::Block(vec![new_assign, extra_assert]))
                     } else {
                         new_assign

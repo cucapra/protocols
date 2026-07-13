@@ -2,14 +2,14 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use baa::{BitVecOps, BitVecValue, WidthInt};
-use protocols::frontend::ast::*;
-use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable};
-use rustc_hash::{FxHashMap, FxHashSet};
-
 use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
+use baa::{BitVecOps, BitVecValue, WidthInt};
+use protocols::frontend::ast::*;
+use protocols::frontend::serialize::serialize_expr;
+use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct BackwardsInterpreter {
     protos: Vec<ProtoInfo>,
@@ -729,23 +729,63 @@ impl Thread {
                 },
                 Stmt::AssertEq(lhs, rhs) => {
                     self.effectful_stmt_in_step = true;
-                    let (port, other) = match (
+                    let maybe_port_other = match (
                         as_dut_port_symbol(&ti.proto, *lhs),
                         as_dut_port_symbol(&ti.proto, *rhs),
                     ) {
-                        (Some(port), _) => (port, *rhs),
-                        (_, Some(port)) => (port, *lhs),
-                        (None, None) => {
-                            todo!("we currently expect one side of an assert_eq to be a port!")
-                        }
+                        (Some(port), _) => Some((port, *rhs)),
+                        (_, Some(port)) => Some((port, *lhs)),
+                        (None, None) => None,
                     };
                     self.next_stmt = ti.next_stmt[&stmt];
 
-                    if let Some(fail) = self.exec_equality(get_value, ti, stmt, port, other) {
-                        self.failures.push(fail);
-                        Failed
+                    if let Some((port, other)) = maybe_port_other {
+                        if let Some(fail) = self.exec_equality(get_value, ti, stmt, port, other) {
+                            self.failures.push(fail);
+                            Failed
+                        } else {
+                            Ok
+                        }
                     } else {
-                        Ok
+                        // try to evaluate both sides and see if they are constant
+                        let a = self.eval_expr(get_value, ti, *lhs);
+                        let b = self.eval_expr(get_value, ti, *rhs);
+                        match (a, b) {
+                            (ExprValue::Known(a), ExprValue::Known(b)) => {
+                                if a.is_equal(&b) {
+                                    Ok
+                                } else {
+                                    self.failures.push(Failure {
+                                        thread_local_step: self.step,
+                                        proto_id: ti.proto_id,
+                                        thread_name: self.name.clone(),
+                                        stmt,
+                                        a,
+                                        b,
+                                    });
+                                    Failed
+                                }
+                            }
+                            (
+                                ExprValue::UnknownArg(arg_id, what, hi, lo),
+                                ExprValue::Known(value),
+                            )
+                            | (
+                                ExprValue::Known(value),
+                                ExprValue::UnknownArg(arg_id, what, hi, lo),
+                            ) => {
+                                todo!(
+                                    "{}[{hi}:{lo}] = {}",
+                                    ti.sym[ti.proto.args[arg_id].symbol()].name(),
+                                    value.to_bit_str()
+                                );
+                            }
+                            (a, b) => panic!(
+                                "At least one value of an assert_eq is unknown. What should we do?\nassert_eq({}, {})\n{a:?} ==? {b:?}",
+                                serialize_expr(&ti.proto.ctx, &ti.sym, lhs),
+                                serialize_expr(&ti.proto.ctx, &ti.sym, rhs)
+                            ),
+                        }
                     }
                 }
             }
