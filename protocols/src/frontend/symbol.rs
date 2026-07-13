@@ -184,7 +184,7 @@ impl Type {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct SymbolId(u32);
 entity_impl!(SymbolId, "symbol");
 

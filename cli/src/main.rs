@@ -8,6 +8,7 @@ use clap::*;
 use protocols::backends::{PinAnnotation, to_verilog};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::serialize::serialize_modules;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::frontend::{Module, require_single_module};
 use protocols::{Value, frontend, transaction_frontend};
@@ -30,6 +31,8 @@ struct Args {
 enum Cmds {
     /// Print out all the constructs used in each protocol
     Constructs,
+    /// Prints out the protocols after the frontend processing
+    Show,
     Verilog {
         verilog_tb: String,
         #[arg(long)]
@@ -177,6 +180,10 @@ fn run_verilog_tb(
         .unwrap();
 }
 
+fn show(st: &SymbolTable, modules: &[Module]) {
+    serialize_modules(&mut std::io::stdout(), st, modules).unwrap();
+}
+
 fn main() {
     // Parse CLI args
     let args = Args::parse();
@@ -194,6 +201,9 @@ fn main() {
                     println!("{}: {}", p.name, p.used_constructs());
                 }
             }
+        }
+        Some(Cmds::Show) => {
+            show(&st, &modules);
         }
         Some(Cmds::Verilog {
             verilog_tb,
