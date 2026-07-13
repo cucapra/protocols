@@ -2,8 +2,8 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use crate::frontend::ast::{Ast, Clock, Expr, ExprId, Protocol, RemapModule, Stmt, StmtId};
-use crate::frontend::symbol::{Field, SymbolId, SymbolTable, Type};
+use crate::frontend::ast::{find_symbols, Ast, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId};
+use crate::frontend::symbol::{Field, StructId, SymbolId, SymbolKind, SymbolTable, Type};
 use rustc_hash::FxHashMap;
 
 /// Represents a DUT and associated protocols.
@@ -20,11 +20,11 @@ pub struct Module {
     pub proto_pin_map: Vec<Vec<SymbolId>>,
 }
 
-pub fn to_modules(ast: Ast) -> (SymbolTable, Vec<Module>) {
+pub fn to_modules(mut ast: Ast) -> (SymbolTable, Vec<Module>) {
     let mut modules = struct_to_modules(&ast.st, ast.protos);
     for remap in ast.remaps {
         debug_assert!(!modules.contains_key(&remap.name));
-        let m = implement_remap(&ast.st, &modules, remap);
+        let m = implement_remap(&mut ast.st, &modules, remap);
         modules.insert(m.name.clone(), m);
     }
     let mut out: Vec<_> = modules.into_values().collect();
@@ -82,18 +82,44 @@ fn struct_to_modules(st: &SymbolTable, protos: Vec<Protocol>) -> FxHashMap<Strin
 }
 
 fn implement_remap(
-    st: &SymbolTable,
+    st: &mut SymbolTable,
     originals: &FxHashMap<String, Module>,
     remap: RemapModule,
 ) -> Module {
     let mut pins = vec![];
     let mut protos = vec![];
     let mut proto_pin_map = vec![];
+
+    // create a struct for the remap module
+    let remap_pins = remap.mappings.iter().map(|m| Field::new(m.name.clone(), m.dir,  m.tpe.clone())).collect();
+    let remap_struct_id = st.add_struct(remap.name.clone(), remap_pins);
+
+    // pin to remap rule
+    let pin_to_remap: FxHashMap<_, _> = remap.mappings.iter().map(|m| {
+        let rhs_syms: Vec<_> = find_symbols(&remap.ctx, m.rhs).into_iter().collect();
+        let cond_syms: Vec<_> = find_symbols(&remap.ctx, m.cond).into_iter().collect();
+        let mut all_syms: Vec<_> = rhs_syms.into_iter().chain(cond_syms).collect();
+        all_syms.sort();
+        all_syms.dedup();
+        assert_eq!(all_syms.len(), 1);
+        let sym = all_syms.into_iter().next().unwrap();
+        let name = st[sym].full_name(st);
+        (name, (m, sym))
+    }). collect();
+
+
     for impl_struct_id in &remap.implements {
         let orig_mod = &originals[st[impl_struct_id].name()];
-        for pin in &orig_mod.pins {}
-        for proto in &orig_mod.protos {
-            protos.push(remap_proto(st, proto));
+        for (proto, pin_syms) in orig_mod.protos.iter().zip(orig_mod.proto_pin_map.iter()) {
+            // create mappings lookup
+            let lookup: FxHashMap<SymbolId, _> = orig_mod.pins.iter().zip(pin_syms.iter()).map(|(field, sym)| {
+                let name = format!("{}.{}", orig_mod.name, field.name());
+                let mapping = pin_to_remap[&name];
+                (*sym, mapping)
+            }).collect();
+
+
+            protos.push(remap_proto(st, proto, remap_struct_id, &lookup));
         }
         println!("{}", orig_mod.name)
     }
@@ -108,18 +134,32 @@ fn implement_remap(
 }
 
 struct Remapper<'a> {
+    st: &'a mut SymbolTable,
     orig: &'a Protocol,
+    lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>,
+    map_name_to_dut: FxHashMap<String, SymbolId>,
+    remap_struct_id: StructId,
     out: Protocol,
 }
 
-fn remap_proto(st: &SymbolTable, orig: &Protocol) -> Protocol {
-    Remapper::new(orig).run()
+fn remap_proto(st: &mut SymbolTable, orig: &Protocol, remap_struct_id: StructId, lookup: &FxHashMap<SymbolId, (&Mapping, SymbolId)>) -> Protocol {
+    Remapper::new(st, orig, lookup, remap_struct_id).run()
 }
 
 impl<'a> Remapper<'a> {
-    fn new(orig: &'a Protocol) -> Self {
-        let out = Protocol::new(orig.name.clone(), orig.scope);
-        Self { orig, out }
+    fn new(st: &'a mut SymbolTable, orig: &'a Protocol, lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>, remap_struct_id: StructId) -> Self {
+        let mut out = Protocol::new(orig.name.clone(), orig.scope);
+        let scope_name = format!("{}::{}", st[remap_struct_id].name(), out.name);
+        st.enter_scope(&scope_name);
+        let type_param_name = st[orig.type_param.unwrap()].name().to_string();
+        let dut_sym = st.add_without_parent(type_param_name, Type::Struct(remap_struct_id), SymbolKind::Dut);
+        out.type_param = Some(dut_sym);
+        let map_name_to_dut = st[remap_struct_id].pins().clone().into_iter().map(|pin| {
+            let name = pin.name().to_string();
+            let sym = st.add_with_parent(name.clone(), dut_sym);
+            (name, sym)
+        }).collect();
+        Self { st, orig, out, lookup, remap_struct_id, map_name_to_dut }
     }
 }
 
@@ -127,6 +167,7 @@ impl Remapper<'_> {
     fn run(mut self) -> Protocol {
         let body = self.on_stmt(self.orig.body);
         self.out.body = body;
+        self.st.exit_scope();
         self.out
     }
 
@@ -136,8 +177,14 @@ impl Remapper<'_> {
                 let inner = inner.into_iter().map(|s| self.on_stmt(s)).collect();
                 self.out.s(Stmt::Block(inner))
             }
-            Stmt::Assign(_, _) => {
-                todo!()
+            Stmt::Assign(lhs, rhs) => {
+                let rhs = self.on_expr(rhs);
+                if let Some((m, map_sym_id)) = self.lookup.get(&lhs) {
+                    let new_lhs = self.map_name_to_dut[&m.name];
+                    let new_rhs = replace_expr(&mut self.out.ctx, rhs, )
+                } else {
+                    self.out.s(Stmt::Assign(lhs, rhs))
+                }
             }
             Stmt::Step => self.out.s(Stmt::Step),
             Stmt::Fork => self.out.s(Stmt::Fork),
@@ -193,5 +240,31 @@ impl Remapper<'_> {
             Expr::IsLastIteration => self.out.e(Expr::IsLastIteration),
             Expr::IterCount(v) => self.out.e(Expr::IterCount(v)),
         }
+    }
+
+    
+}
+
+fn replace_expr(ctx: &mut ProtocolContext, expr: ExprId, find: ExprId, replace: ExprId) -> ExprId {
+    if expr == find {
+        replace
+    } else {
+        match ctx[expr].clone() {
+            Expr::Binary(op, a, b) => {
+                let a = replace_expr(ctx, a, find, replace);
+                let b = replace_expr(ctx, b, find, replace);
+                ctx.e(Expr::Binary(op, a, b))
+            }
+            Expr::Unary(op, a) => {
+                let a = replace_expr(ctx, a, find, replace);
+                ctx.e(Expr::Unary(op, a))
+            }
+            Expr::Slice(e, hi, lo) => {
+                let e = replace_expr(ctx, e, find, replace);
+                ctx.e(Expr::Slice(e, hi, lo))
+            }
+            _ => expr
+        }
+    }
     }
 }

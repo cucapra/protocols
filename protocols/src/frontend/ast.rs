@@ -544,6 +544,34 @@ impl BoxedExpr {
     }
 }
 
+pub fn find_symbols(ctx: &ProtocolContext, e: ExprId) -> FxHashSet<SymbolId> {
+    let mut out = FxHashSet::default();
+    let mut todo = vec![e];
+    while let Some(e) = todo.pop() {
+        match ctx[e].clone() {
+            Expr::Const(_) => {}
+            Expr::Sym(s) => {
+                out.insert(s);
+            }
+            Expr::DontCare => {}
+            Expr::Binary(_, a, b) => {
+                todo.push(a);
+                todo.push(b);
+            }
+            Expr::Unary(_, a) => {
+                todo.push(a);
+            }
+            Expr::Slice(a, _, _) => {
+                todo.push(a);
+            }
+            Expr::IsLastIteration => {}
+            Expr::IterCount(_) => {}
+        }
+    }
+    out
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
