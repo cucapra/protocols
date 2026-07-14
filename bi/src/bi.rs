@@ -805,7 +805,7 @@ impl Thread {
         }
 
         let a = self.eval_expr(get_value, ti, lhs);
-        let b = self.eval_expr(get_value, ti, lhs);
+        let b = self.eval_expr(get_value, ti, rhs);
 
         match (a, b) {
             (ExprValue::Known(a), ExprValue::Known(b)) => {

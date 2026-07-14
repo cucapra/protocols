@@ -123,7 +123,7 @@ impl DataValue {
     }
 
     pub fn define_bits(&mut self, value: BitVecValue, lsb: u32) {
-        if lsb == 0 {
+        if lsb == 0 && self.value.width() == value.width() {
             self.define_value(value);
         } else {
             debug_assert!(self.value.width() >= value.width());
