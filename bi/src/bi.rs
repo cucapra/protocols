@@ -48,13 +48,18 @@ impl BackwardsInterpreter {
     ) -> Self {
         let protos: Vec<_> = protos
             .iter()
+            .cloned()
             .enumerate()
-            .map(|(proto_id, proto)| {
+            .map(|(proto_id, mut proto)| {
                 let next_stmt = proto.next_stmt_mapping();
-                let pin_exprs = FxHashMap::default(); // TODO: fill
+                let pin_symbols: Vec<_> = proto.dut_pins(sym).collect();
+                let pin_exprs = pin_symbols
+                    .into_iter()
+                    .map(|pin| (pin, proto.ctx.e(Expr::Sym(pin))))
+                    .collect();
                 ProtoInfo {
                     proto_id,
-                    proto: proto.clone(),
+                    proto,
                     sym: sym.clone(),
                     next_stmt,
                     pin_exprs,

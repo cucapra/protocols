@@ -130,9 +130,12 @@ impl ProtocolContext {
         }
     }
 
-    pub fn dut_input_symbols(&self, st: &SymbolTable) -> impl Iterator<Item = SymbolId> {
+    pub fn dut_pins(&self, st: &SymbolTable) -> impl Iterator<Item = SymbolId> {
         st.get_children(&self.dut_sym)
-            .filter(|sym| st[sym].is_in_port())
+    }
+
+    pub fn dut_input_symbols(&self, st: &SymbolTable) -> impl Iterator<Item = SymbolId> {
+        self.dut_pins(st).filter(|sym| st[sym].is_in_port())
     }
 }
 
