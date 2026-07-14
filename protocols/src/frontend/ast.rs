@@ -13,7 +13,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use strum::IntoEnumIterator;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
-use crate::frontend::symbol::{Arg, Dir, ScopeId, StructId, SymbolId, SymbolTable, Type};
+use crate::frontend::symbol::{Arg, Dir, Field, ScopeId, StructId, SymbolId, SymbolTable, Type};
 
 /// Frontend representation of parsed protocol files.
 #[derive(Debug, Clone)]

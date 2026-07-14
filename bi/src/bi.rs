@@ -51,11 +51,13 @@ impl BackwardsInterpreter {
             .enumerate()
             .map(|(proto_id, proto)| {
                 let next_stmt = proto.next_stmt_mapping();
+                let pin_exprs = FxHashMap::default(); // TODO: fill
                 ProtoInfo {
                     proto_id,
                     proto: proto.clone(),
                     sym: sym.clone(),
                     next_stmt,
+                    pin_exprs,
                 }
             })
             .collect();
@@ -729,63 +731,12 @@ impl Thread {
                 },
                 Stmt::AssertEq(lhs, rhs) => {
                     self.effectful_stmt_in_step = true;
-                    let maybe_port_other = match (
-                        as_dut_port_symbol(&ti.proto, *lhs),
-                        as_dut_port_symbol(&ti.proto, *rhs),
-                    ) {
-                        (Some(port), _) => Some((port, *rhs)),
-                        (_, Some(port)) => Some((port, *lhs)),
-                        (None, None) => None,
-                    };
                     self.next_stmt = ti.next_stmt[&stmt];
-
-                    if let Some((port, other)) = maybe_port_other {
-                        if let Some(fail) = self.exec_equality(get_value, ti, stmt, port, other) {
-                            self.failures.push(fail);
-                            Failed
-                        } else {
-                            Ok
-                        }
+                    if let Some(fail) = self.exec_equality(get_value, ti, stmt, *lhs, *rhs) {
+                        self.failures.push(fail);
+                        Failed
                     } else {
-                        // try to evaluate both sides and see if they are constant
-                        let a = self.eval_expr(get_value, ti, *lhs);
-                        let b = self.eval_expr(get_value, ti, *rhs);
-                        match (a, b) {
-                            (ExprValue::Known(a), ExprValue::Known(b)) => {
-                                if a.is_equal(&b) {
-                                    Ok
-                                } else {
-                                    self.failures.push(Failure {
-                                        thread_local_step: self.step,
-                                        proto_id: ti.proto_id,
-                                        thread_name: self.name.clone(),
-                                        stmt,
-                                        a,
-                                        b,
-                                    });
-                                    Failed
-                                }
-                            }
-                            (
-                                ExprValue::UnknownArg(arg_id, what, hi, lo),
-                                ExprValue::Known(value),
-                            )
-                            | (
-                                ExprValue::Known(value),
-                                ExprValue::UnknownArg(arg_id, what, hi, lo),
-                            ) => {
-                                todo!(
-                                    "{}[{hi}:{lo}] = {}",
-                                    ti.sym[ti.proto.args[arg_id].symbol()].name(),
-                                    value.to_bit_str()
-                                );
-                            }
-                            (a, b) => panic!(
-                                "At least one value of an assert_eq is unknown. What should we do?\nassert_eq({}, {})\n{a:?} ==? {b:?}",
-                                serialize_expr(&ti.proto.ctx, &ti.sym, lhs),
-                                serialize_expr(&ti.proto.ctx, &ti.sym, rhs)
-                            ),
-                        }
+                        Ok
                     }
                 }
             }
@@ -826,7 +777,8 @@ impl Thread {
             // only the final assignment to a pin matters
             if !pins_assigned.contains(&pin) {
                 pins_assigned.insert(pin);
-                if let Some(fail) = self.exec_equality(get_value, ti, stmt, pin, expr) {
+                let pin_expr = ti.pin_exprs[&pin];
+                if let Some(fail) = self.exec_equality(get_value, ti, stmt, pin_expr, expr) {
                     self.failures.push(fail);
                 } else if !matches!(ti.proto[expr], Expr::DontCare) {
                     // assignment sticks around for the next step
@@ -838,23 +790,28 @@ impl Thread {
     }
 
     /// used for both assert_eq and assignments
+    /// we try out best to treat lhs and rhs the same since assert_eq is commutative
     fn exec_equality(
         &mut self,
         get_value: &impl Fn(SymbolId) -> BitVecValue,
         ti: &ProtoInfo,
         stmt: StmtId,
-        lhs: SymbolId,
+        lhs: ExprId,
         rhs: ExprId,
     ) -> Option<Failure> {
         // a DontCare imposes no constraints and thus there is nothing to learn, nothing to check
-        if matches!(ti.proto[rhs], Expr::DontCare) {
+        if matches!(ti.proto[rhs], Expr::DontCare) || matches!(ti.proto[lhs], Expr::DontCare) {
             return None;
         }
 
-        let lhs_value = get_value(lhs);
-        match self.eval_expr(get_value, ti, rhs) {
-            ExprValue::Known(rhs_value) => {
-                if rhs_value != lhs_value {
+        let a = self.eval_expr(get_value, ti, lhs);
+        let b = self.eval_expr(get_value, ti, lhs);
+
+        match (a, b) {
+            (ExprValue::Known(a), ExprValue::Known(b)) => {
+                if a.is_equal(&b) {
+                    None
+                } else {
                     // println!(
                     //     "[{}] found a disagreement: {} =/= {}",
                     //     self.name,
@@ -866,28 +823,32 @@ impl Thread {
                         proto_id: ti.proto_id,
                         thread_name: self.name.clone(),
                         stmt,
-                        a: lhs_value,
-                        b: rhs_value,
+                        a,
+                        b,
                     })
-                } else {
-                    None
                 }
             }
-            ExprValue::UnknownArg(arg_id, Some(index), _msb, lsb) => {
-                self.arg_values[arg_id]
-                    .as_seq_mut()
-                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_bits_at(index, lhs_value, lsb);
-                None
-            }
-            ExprValue::UnknownArg(arg_id, None, _msb, lsb) => {
+            (ExprValue::UnknownArg(arg_id, None, _msb, lsb), ExprValue::Known(value))
+            | (ExprValue::Known(value), ExprValue::UnknownArg(arg_id, None, _msb, lsb)) => {
                 self.arg_values[arg_id]
                     .as_scalar_mut()
                     .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_bits(lhs_value, lsb);
+                    .define_bits(value, lsb);
                 None
             }
-            other => todo!("deal with {other:?} on rhs of assignment"),
+            (ExprValue::UnknownArg(arg_id, Some(index), _msb, lsb), ExprValue::Known(value))
+            | (ExprValue::Known(value), ExprValue::UnknownArg(arg_id, Some(index), _msb, lsb)) => {
+                self.arg_values[arg_id]
+                    .as_seq_mut()
+                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
+                    .define_bits_at(index, value, lsb);
+                None
+            }
+            (a, b) => panic!(
+                "At least one value of an assert_eq is unknown. What should we do?\nassert_eq({}, {})\n{a:?} ==? {b:?}",
+                serialize_expr(&ti.proto.ctx, &ti.sym, &lhs),
+                serialize_expr(&ti.proto.ctx, &ti.sym, &rhs)
+            ),
         }
     }
 
@@ -1114,4 +1075,5 @@ struct ProtoInfo {
     proto: Protocol,
     sym: SymbolTable,
     next_stmt: FxHashMap<StmtId, Option<StmtId>>,
+    pin_exprs: FxHashMap<SymbolId, ExprId>,
 }
