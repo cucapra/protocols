@@ -358,7 +358,7 @@ pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
 /// returns `protocol` with explicit assignments to every port
 /// if a port `DUT.in` is not already assigned, we simply generate `[1] DUT.in := DUT.in;`
 pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
-    let dut = protocol.type_param.expect("protocol has no DUT");
+    let dut = protocol.dut_sym;
     let input_ports: Vec<SymbolId> = symbols
         .get_children(&dut)
         .into_iter()

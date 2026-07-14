@@ -394,7 +394,7 @@ impl ParserContext<'_> {
                             self.proto.ctx.scope = self.st.enter_scope(&scope_name);
                             let dut_symbol_id =
                                 declare_struct_instance(self.st, struct_id, path_id_1);
-                            self.proto.type_param = Some(dut_symbol_id);
+                            self.proto.dut_sym = dut_symbol_id;
                         }
                         _ => {
                             let msg = format!(

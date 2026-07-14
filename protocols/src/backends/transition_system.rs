@@ -289,11 +289,7 @@ pub fn into_transition_system(
 
     // set up ITE expressions based on what node state we're in for each port,
     // and replace the inputs with the ITEs everywhere
-    let input_symbols: Vec<SymbolId> = st
-        .get_children(&pg.proto_ctx.type_param.unwrap())
-        .into_iter()
-        .filter(|sym_id| st[*sym_id].is_in_port())
-        .collect();
+    let input_symbols: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
 
     // set up default input drivers per input
     let mut input_drivers = Vec::with_capacity(input_symbols.len());

@@ -39,47 +39,40 @@ pub fn to_modules(mut ast: Ast) -> (SymbolTable, Vec<Module>) {
 fn struct_to_modules(st: &SymbolTable, protos: Vec<Protocol>) -> FxHashMap<String, Module> {
     let mut modules = FxHashMap::default();
     for proto in protos {
-        if let Some(dut_symbol_id) = proto.type_param {
-            // We assume type parameters have to be structs
-            let struct_id = match st[dut_symbol_id].tpe() {
-                Type::Struct(id) => id,
-                o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
-            };
-            let struct_name = st[struct_id].name().to_string();
-            let module = modules
-                .entry(struct_name.clone())
-                .or_insert_with(|| Module {
-                    name: struct_name.clone(),
-                    clock: Clock::None,
-                    pins: st[struct_id].pins().clone(),
-                    protos: vec![],
-                    proto_pin_map: vec![],
-                });
-            assert_eq!(module.name, struct_name);
-            assert_eq!(&module.pins, st[struct_id].pins());
+        let struct_id = proto.dut_struct(st);
+        let struct_name = st[struct_id].name().to_string();
+        let module = modules
+            .entry(struct_name.clone())
+            .or_insert_with(|| Module {
+                name: struct_name.clone(),
+                clock: Clock::None,
+                pins: st[struct_id].pins().clone(),
+                protos: vec![],
+                proto_pin_map: vec![],
+            });
+        assert_eq!(module.name, struct_name);
+        assert_eq!(&module.pins, st[struct_id].pins());
 
-            // find the symbol id in this particular protocol mapping to the pins in the struct
-            let pin_symbols = module
-                .pins
-                .iter()
-                .map(|pin| {
-                    st.symbol_id_from_name(
-                        proto.scope,
-                        &format!("{}.{}", st[dut_symbol_id].name(), pin.name()),
+        // find the symbol id in this particular protocol mapping to the pins in the struct
+        let pin_symbols = module
+            .pins
+            .iter()
+            .map(|pin| {
+                st.symbol_id_from_name(
+                    proto.scope,
+                    &format!("{}.{}", st[proto.dut_sym].name(), pin.name()),
+                )
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Unable to find symbol ID for pin {}, symbol_table is {}",
+                        pin.name(),
+                        st
                     )
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Unable to find symbol ID for pin {}, symbol_table is {}",
-                            pin.name(),
-                            st
-                        )
-                    })
                 })
-                .collect();
-            module.proto_pin_map.push(pin_symbols);
-            module.protos.push(proto);
-        }
-        // skipping any protocols that are not associated with a DUT
+            })
+            .collect();
+        module.proto_pin_map.push(pin_symbols);
+        module.protos.push(proto);
     }
     modules
 }
@@ -184,13 +177,13 @@ impl<'a> Remapper<'a> {
         st.enter_scope(&scope_name);
 
         // create the type parameter
-        let type_param_name = st[orig.type_param.unwrap()].name().to_string();
+        let type_param_name = st[orig.dut_sym].name().to_string();
         let dut_sym = st.add_without_parent(
             type_param_name,
             Type::Struct(remap_struct_id),
             SymbolKind::Dut,
         );
-        out.type_param = Some(dut_sym);
+        out.dut_sym = dut_sym;
         let map_name_to_dut = st[remap_struct_id]
             .pins()
             .clone()
@@ -332,7 +325,7 @@ impl Remapper<'_> {
                         }
                         assert_eq!(m.cond, self.remap_ctx.expr_true());
                         // lookup correct symbol
-                        let dut_name = self.st[self.out.type_param.unwrap()].name();
+                        let dut_name = self.st[self.out.dut_sym].name();
                         let full_name = format!("{dut_name}.{}", m.name);
                         let remapped_sym = self
                             .st

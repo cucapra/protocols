@@ -1037,21 +1037,6 @@ impl ExprValue {
     }
 }
 
-/// returns a dut port symbol if the expression corresponds to one
-fn as_dut_port_symbol(transaction: &Protocol, expr: ExprId) -> Option<SymbolId> {
-    match &transaction[expr] {
-        Expr::Sym(sym_id) => {
-            // we assume that the only symbols are dut ports and arguments
-            if as_arg(transaction, expr).is_none() {
-                Some(*sym_id)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
-}
-
 /// returns argument and id if the expression corresponds to one
 fn as_arg(transaction: &Protocol, expr: ExprId) -> Option<(usize, Arg)> {
     match &transaction[expr] {
