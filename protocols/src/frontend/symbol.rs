@@ -308,6 +308,20 @@ impl SymbolTable {
         self.active_scope = ROOT_SCOPE;
     }
 
+    pub fn scope_name(&self, scope: ScopeId) -> &str {
+        &self.scopes[scope].0
+    }
+
+    pub fn scope_symbols(&self, scope: ScopeId) -> Vec<&str> {
+        self.by_name_sym[scope]
+            .iter()
+            .map(|(name, sym)| {
+                assert_eq!(name, &self[sym].full_name(self));
+                name.as_str()
+            })
+            .collect()
+    }
+
     pub fn add_without_parent(&mut self, name: String, tpe: Type, kind: SymbolKind) -> SymbolId {
         assert!(
             !name.contains('.'),

@@ -57,7 +57,7 @@ pub struct ProtocolContext {
 fn assert_proto_ctx_eq(a: &ProtocolContext, b: &ProtocolContext) {
     assert_eq!(a.name, b.name, "{a:?}\n{b:?}");
     assert_eq!(a.args, b.args, "{a:?}\n{b:?}");
-    assert_eq!(a.type_param, b.type_param, "{a:?}\n{b:?}");
+    assert_eq!(a.dut_sym, b.dut_sym, "{a:?}\n{b:?}");
     assert_eq!(a.is_idle, b.is_idle, "{a:?}\n{b:?}");
     // TODO: expression comparison does not work
     // assert_eq!(a.exprs, b.exprs, "{a:?}\n{b:?}");
@@ -691,7 +691,7 @@ mod tests {
         // 2) create transaction
         let mut calyx_go_done = Protocol::new("calyx_go_done".to_string(), scope);
         calyx_go_done.args = vec![Arg::new(ii), Arg::new(oo)];
-        calyx_go_done.type_param = Some(dut);
+        calyx_go_done.dut_sym = dut;
 
         // 3) create expressions
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));

@@ -52,29 +52,37 @@ fn struct_to_modules(st: &SymbolTable, protos: Vec<Protocol>) -> FxHashMap<Strin
             });
         assert_eq!(module.name, struct_name);
         assert_eq!(&module.pins, st[struct_id].pins());
-
-        // find the symbol id in this particular protocol mapping to the pins in the struct
-        let pin_symbols = module
-            .pins
-            .iter()
-            .map(|pin| {
-                st.symbol_id_from_name(
-                    proto.scope,
-                    &format!("{}.{}", st[proto.dut_sym].name(), pin.name()),
-                )
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Unable to find symbol ID for pin {}, symbol_table is {}",
-                        pin.name(),
-                        st
-                    )
-                })
-            })
-            .collect();
-        module.proto_pin_map.push(pin_symbols);
+        module
+            .proto_pin_map
+            .push(find_pin_mapping(st, &module.pins, &proto));
         module.protos.push(proto);
+        // protocol scope stays the same
     }
     modules
+}
+
+fn find_pin_mapping(st: &SymbolTable, pins: &[Field], proto: &Protocol) -> Vec<SymbolId> {
+    // find the symbol id in this particular protocol mapping to the pins in the struct
+    pins
+        .iter()
+        .map(|pin| {
+            let lookup_name = format!("{}.{}", st[proto.dut_sym].name(), pin.name());
+            let id = st.symbol_id_from_name(
+                proto.scope,
+                &lookup_name,
+            )
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Unable to find symbol ID for pin {} in scope {}.\nAvailable symbols are: {}\nsymbol_table is {}",
+                        lookup_name,
+                        st.scope_name(proto.scope),
+                        st.scope_symbols(proto.scope).join(", "),
+                        st
+                    )
+                });
+            id
+        })
+        .collect()
 }
 
 fn remapped_port(remap: &RemapModule, m: &Mapping) -> SymbolId {
@@ -92,17 +100,16 @@ fn implement_remap(
     originals: &FxHashMap<String, Module>,
     remap: RemapModule,
 ) -> Module {
-    let pins = vec![];
     let mut protos = vec![];
-    let proto_pin_map = vec![];
+    let mut proto_pin_map = vec![];
 
     // create a struct for the remap module
-    let remap_pins = remap
+    let remap_pins: Vec<_> = remap
         .mappings
         .iter()
         .map(|m| Field::new(m.name.clone(), m.dir, m.tpe))
         .collect();
-    let remap_struct_id = st.add_struct(remap.name.clone(), remap_pins);
+    let remap_struct_id = st.add_struct(remap.name.clone(), remap_pins.clone());
 
     // pin to remap rule
     let pin_to_remap: FxHashMap<_, _> = remap
@@ -130,14 +137,16 @@ fn implement_remap(
                 })
                 .collect();
 
-            protos.push(remap_proto(st, proto, remap_struct_id, &lookup, &remap.ctx));
+            let remapped_proto = remap_proto(st, proto, remap_struct_id, &lookup, &remap.ctx);
+            proto_pin_map.push(find_pin_mapping(st, &remap_pins, &remapped_proto));
+            protos.push(remapped_proto);
         }
     }
 
     Module {
         name: remap.name,
         clock: remap.clock,
-        pins,
+        pins: remap_pins,
         protos,
         proto_pin_map,
     }
@@ -174,7 +183,7 @@ impl<'a> Remapper<'a> {
 
         // create a symbol table scope
         let scope_name = format!("{}::{}", st[remap_struct_id].name(), out.name);
-        st.enter_scope(&scope_name);
+        out.scope = st.enter_scope(&scope_name);
 
         // create the type parameter
         let type_param_name = st[orig.dut_sym].name().to_string();

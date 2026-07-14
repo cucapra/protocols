@@ -779,7 +779,7 @@ pub mod tests {
         // 2) create transaction
         let mut easycond = Protocol::new("easycond".to_string(), scope);
         easycond.args = vec![Arg::new(a), Arg::new(b)];
-        easycond.type_param = Some(dut);
+        easycond.dut_sym = dut;
 
         // 3) create expressions
         let a_expr = easycond.e(Expr::Sym(a));
