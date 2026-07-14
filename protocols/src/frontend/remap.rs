@@ -239,7 +239,7 @@ impl Remapper<'_> {
     }
 
     fn on_stmt(&mut self, stmt: StmtId) -> StmtId {
-        match self.orig[stmt].clone() {
+        let new_stmt = match self.orig[stmt].clone() {
             Stmt::Block(inner) => {
                 let inner = inner.into_iter().map(|s| self.on_stmt(s)).collect();
                 self.out.s(Stmt::Block(inner))
@@ -270,6 +270,8 @@ impl Remapper<'_> {
                             (extra_assert_cond, self.out.expr_true())
                         };
                         let extra_assert = self.out.s(Stmt::AssertEq(a, b));
+                        self.clone_stmt_loc(stmt, new_assign);
+                        self.clone_stmt_loc(stmt, extra_assert);
                         self.out.s(Stmt::Block(vec![new_assign, extra_assert]))
                     } else {
                         new_assign
@@ -312,6 +314,14 @@ impl Remapper<'_> {
                 let r = self.on_expr(r);
                 self.out.s(Stmt::AssertEq(l, r))
             }
+        };
+        self.clone_stmt_loc(stmt, new_stmt);
+        new_stmt
+    }
+
+    fn clone_stmt_loc(&mut self, old_stmt: StmtId, new_stmt: StmtId) {
+        if let Some((start, end, fileid)) = self.orig.get_stmt_loc(old_stmt) {
+            self.out.add_stmt_loc(new_stmt, start, end, fileid);
         }
     }
 
