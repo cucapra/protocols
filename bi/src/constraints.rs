@@ -6,6 +6,7 @@ use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
 use protocols::Value;
 use protocols::frontend::serialize::serialize_type;
 use protocols::frontend::symbol::{Arg, SymbolTable, Type};
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub enum ArgValue {
@@ -108,7 +109,10 @@ impl DataValue {
 
     #[allow(dead_code)]
     fn define_bit(&mut self, bit: WidthInt, value: u8) {
-        debug_assert!(!self.bit_is_known(bit));
+        debug_assert!(
+            !self.bit_is_known(bit),
+            "bit{bit} should not be redefined as it is already known"
+        );
         debug_assert!(bit < self.value.width());
         if value != 0 {
             self.value.set_bit(bit);
@@ -118,6 +122,7 @@ impl DataValue {
 
     pub fn define_value(&mut self, value: BitVecValue) {
         debug_assert_eq!(self.value.width(), value.width());
+        debug_assert!(self.known.is_zero());
         self.value = value;
         self.known = BitVecValue::ones(self.value.width());
     }
@@ -127,15 +132,31 @@ impl DataValue {
             self.define_value(value);
         } else {
             debug_assert!(self.value.width() >= value.width());
-            let msb = self.value.width() - 1 - lsb;
+            let msb = value.width() - 1 + lsb;
             debug_assert!(msb >= lsb);
             debug_assert!(self.value.width() > msb);
-            let already_known = !self.known.slice(msb, lsb).is_zero();
-            debug_assert!(!already_known);
             for bit in lsb..(msb) + 1 {
                 self.define_bit(bit, value.is_bit_set(bit - lsb) as u8);
             }
         }
+    }
+}
+
+impl Display for DataValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut out = String::with_capacity(self.value.width() as usize);
+        for bit_index in (0..self.value.width()).rev() {
+            let cc = match (
+                self.known.is_bit_set(bit_index),
+                self.value.is_bit_set(bit_index),
+            ) {
+                (true, true) => '1',
+                (true, false) => '0',
+                (false, _) => '?',
+            };
+            out.push(cc);
+        }
+        write!(f, "{out}")
     }
 }
 
@@ -198,5 +219,24 @@ impl SeqValue {
 
     pub fn min_len(&self) -> u64 {
         self.values.len() as u64
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_partial_bit_definition() {
+        let mut arg = DataValue::unknown(5);
+        // define lower bits to be 0
+        arg.define_bits(BitVecValue::zero(2), 0);
+        assert!(arg.bit_is_known(0));
+        assert!(arg.bit_is_known(1));
+        assert!(!arg.bit_is_known(2));
+        assert!(arg.get_known().is_none());
+        assert_eq!(format!("{arg}"), "???00");
+        arg.define_bits(BitVecValue::ones(3), 2);
+        assert_eq!(arg.get_known().unwrap().to_u64().unwrap(), 0b11100);
     }
 }

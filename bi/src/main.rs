@@ -182,6 +182,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     |step| step_to_time.step_to_ns(step),
                 );
 
+                assert!(!fails.is_empty(), "TODO: better failures");
+
                 for fail in fails {
                     let proto = &protos[fail.proto_id];
                     let msg = format!(
