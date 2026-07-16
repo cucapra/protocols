@@ -203,16 +203,19 @@ fn type_check_stmt(
             // the same type as the LHS
             if rhs_type == Type::Unknown {
                 rhs_type = lhs_type;
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Inferred RHS type as {} from LHS type {}.",
-                        serialize_type(st, rhs_type),
-                        serialize_type(st, lhs_type)
-                    ),
-                    Level::Warning,
-                );
+                let rhs_is_dont_care = matches!(tr[rhs], Expr::DontCare);
+                if !rhs_is_dont_care {
+                    handler.emit_diagnostic_stmt(
+                        tr,
+                        stmt_id,
+                        &format!(
+                            "Inferred RHS type as {} from LHS type {}.",
+                            serialize_type(st, rhs_type),
+                            serialize_type(st, lhs_type)
+                        ),
+                        Level::Warning,
+                    );
+                }
             }
             // Check whether the LHS & RHS have equivalent types
             if lhs_type.is_equivalent(&rhs_type) {
