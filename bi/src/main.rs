@@ -16,6 +16,7 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
 use protocols::frontend::Module;
+use protocols::frontend::ast::Clock;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use rustc_hash::FxHashSet;
 
@@ -80,8 +81,31 @@ struct Cli {
     display_hex: bool,
 }
 
+fn get_clock(modules: &[Module], cli_sample_posedge: Option<String>) -> Option<String> {
+    let mut clocks: Vec<String> = modules
+        .iter()
+        .flat_map(|m| match &m.clock {
+            Clock::None => None,
+            Clock::Posedge(name) => Some(name.to_string()),
+        })
+        .collect();
+    if let Some(name) = cli_sample_posedge {
+        clocks.push(name);
+    }
+    clocks.sort();
+    clocks.dedup();
+    match clocks.as_slice() {
+        [one] => Some(one.clone()),
+        [] => None,
+        other => {
+            eprintln!("Too many clocks: {:?}", other);
+            std::process::exit(100);
+        }
+    }
+}
+
 #[allow(unused_variables)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     // Parse CLI args
     let cli = Cli::parse();
 
@@ -93,13 +117,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
-    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks)?;
+    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let posedge_clock = get_clock(&modules, cli.sample_posedge);
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
         println!("Available DUTs are: {}", collects_module_names(&modules));
         println!("No instances specified. Nothing to monitor. Exiting...");
-        return Ok(());
+        return;
     }
 
     let instances: Vec<Instance> = cli
@@ -124,13 +149,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) =
-            WaveSignalTrace::open(&cli.wave, &modules, &instances, cli.sample_posedge.clone())
+        if let Ok(mut trace) = WaveSignalTrace::open(&cli.wave, &modules, &instances, posedge_clock)
         {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances)?;
+            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances).unwrap();
             run_bis(bis.as_mut_slice(), &mut trace)
         }
     };
@@ -203,9 +227,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if at_least_one_has_failed {
-        Err("Monitor failed".into())
+        std::process::exit(1);
     } else {
-        Ok(())
+        std::process::exit(0);
     }
 }
 
