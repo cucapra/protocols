@@ -897,7 +897,7 @@ impl DiagnosticEmitter {
                 stmt_id,
                 ..
             } => {
-                handler.emit_diagnostic_stmt_for_thread(
+                handler.emit_diagnostic_stmt(
                     transaction,
                     stmt_id,
                     &format!(
@@ -909,7 +909,6 @@ impl DiagnosticEmitter {
                         serialize_bitvec(new_value, handler.display_hex)
                     ),
                     Level::Error,
-                    Some(*thread_idx),
                 );
             }
             ThreadError::ExecutionLimitExceeded { max_steps } => {
