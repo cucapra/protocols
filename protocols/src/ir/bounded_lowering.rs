@@ -1,7 +1,7 @@
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer};
-use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph};
 use patronus::expr::{Context as ExprContext, ExprRef, TypeCheck};
 use rustc_hash::FxHashMap;
 
@@ -14,6 +14,19 @@ fn mark_graft_point_ready(lowerer: &mut Lowerer<'_>, node: NodeId, guard: ExprRe
         let fork_op = lowerer.ir.o(Op::Fork);
         lowerer.ir.push_action(node, Action::new(guard, fork_op));
     }
+}
+
+fn graft_choice_entries_into(
+    lowerer: &mut Lowerer<'_>,
+    parent: NodeId,
+    choices: Vec<(NodeId, ExprRef)>,
+) {
+    let merged = lowerer.ir.n(Node::empty());
+    for (entry, guard) in choices {
+        lowerer.graft_contracted_entry(merged, entry, guard);
+    }
+    let true_id = lowerer.ir.true_id();
+    lowerer.graft_contracted_entry(parent, merged, true_id);
 }
 
 /// Lower a set of protocols to a joint IR that represents any trace up to `k` in length
@@ -42,8 +55,9 @@ pub fn lower_bmc(
     // TODO: Handle done vs not done
     let mut lowered_protocols: Vec<LoweredFragmentInfo> = vec![];
     for protocol in protos {
-        let pg = lowerer.lower_protocol_fragment(&protocol, false);
-        lowerer.postprocess_trace_fragment(&pg);
+        let mut pg = lowerer.lower_protocol_fragment(&protocol, false, true);
+        // lowerer.postprocess_trace_fragment(&pg);
+        pg.graft_points = lowerer.graft_points(&pg);
         lowered_protocols.push(pg);
     }
 
@@ -57,6 +71,7 @@ pub fn lower_bmc(
         })
         .collect();
 
+    // TODO: should we have per-instance and per-protocol just for debugging
     let instance_substitutions: Vec<FxHashMap<ExprRef, ExprRef>> = (0..bound)
         .map(|slot| {
             arg_symbols
@@ -106,10 +121,7 @@ pub fn lower_bmc(
         graft_points.extend(new_frag.graft_points.clone());
         initial_choices.push((new_frag.entry, node_equals));
     }
-    // lowerer.graft_choice_entries(entry_node, initial_choices);
-    for (node, guard) in initial_choices {
-        lowerer.graft_contracted_entry(entry_node, node, guard);
-    }
+    graft_choice_entries_into(&mut lowerer, entry_node, initial_choices);
 
     let mut next_graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
@@ -150,10 +162,7 @@ pub fn lower_bmc(
                 next_graft_points.extend(new_frag.graft_points.clone());
                 choices.push((new_frag.entry, and_guard));
             }
-            // lowerer.graft_choice_entries(node, choices);
-            for (node, guard) in choices {
-                lowerer.graft_contracted_entry(graft_node, node, guard);
-            }
+            graft_choice_entries_into(&mut lowerer, graft_node, choices);
         }
 
         // refill with the new set of graft points

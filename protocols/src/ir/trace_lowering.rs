@@ -40,7 +40,7 @@ impl<'a> Lowerer<'a> {
 
         // set the arg substitution to the current transaction's args
         self.trace_arg_subst = subst;
-        self.lower_protocol_fragment(ast, keep_done)
+        self.lower_protocol_fragment(ast, keep_done, false)
     }
 
     /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.

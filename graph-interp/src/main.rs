@@ -369,7 +369,7 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, design: &Module) {
     println!("pre-determinize");
     pg.garbage_collect_unreachable();
     pg = determinized(pg, st);
-    println!("{}", to_dot_string(&pg, st).as_str());
+    // println!("{}", to_dot_string(&pg, st).as_str());
 }
 
 fn main() {
