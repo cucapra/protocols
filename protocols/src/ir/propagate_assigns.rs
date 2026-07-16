@@ -79,7 +79,6 @@ pub fn propagate_assignments_from(
 
     let input_ports: Vec<SymbolId> = st
         .get_children(&pg.proto_ctx.dut_sym)
-        .into_iter()
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 

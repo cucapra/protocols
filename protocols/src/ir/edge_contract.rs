@@ -361,7 +361,6 @@ pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     let dut = protocol.dut_sym;
     let input_ports: Vec<SymbolId> = symbols
         .get_children(&dut)
-        .into_iter()
         .filter(|sym_id| symbols[*sym_id].is_in_port())
         .collect();
 

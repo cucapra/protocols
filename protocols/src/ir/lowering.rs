@@ -296,7 +296,6 @@ impl<'a> Lowerer<'a> {
         for input in self
             .symbols
             .get_children(&dut)
-            .into_iter()
             .filter(|sym| self.symbols[*sym].is_in_port())
         {
             let assignment = Assignment::dont_care(self.ir.true_id());

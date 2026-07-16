@@ -67,7 +67,8 @@ fn find_pin_mapping(st: &SymbolTable, pins: &[Field], proto: &Protocol) -> Vec<S
         .iter()
         .map(|pin| {
             let lookup_name = format!("{}.{}", st[proto.dut_sym].name(), pin.name());
-            let id = st.symbol_id_from_name(
+
+            st.symbol_id_from_name(
                 proto.scope,
                 &lookup_name,
             )
@@ -79,8 +80,7 @@ fn find_pin_mapping(st: &SymbolTable, pins: &[Field], proto: &Protocol) -> Vec<S
                         st.scope_symbols(proto.scope).join(", "),
                         st
                     )
-                });
-            id
+                })
         })
         .collect()
 }
