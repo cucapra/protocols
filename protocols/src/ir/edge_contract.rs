@@ -93,6 +93,24 @@ pub fn effective_concretes(
     effective
 }
 
+fn coalesce_concretes(
+    protocol: &mut ProtoGraph,
+    concretes: Vec<(ExprRef, ExprRef)>,
+) -> Vec<(ExprRef, ExprRef)> {
+    let mut coalesced = Vec::with_capacity(concretes.len());
+    for (guard, rhs) in concretes {
+        if let Some((existing_guard, _)) = coalesced
+            .iter_mut()
+            .find(|(_, existing_rhs)| *existing_rhs == rhs)
+        {
+            *existing_guard = protocol.or_guard(*existing_guard, guard);
+        } else {
+            coalesced.push((guard, rhs));
+        }
+    }
+    coalesced
+}
+
 pub fn merge_ordered_assignment(
     protocol: &mut ProtoGraph,
     existing: Assignment,
@@ -160,6 +178,7 @@ pub fn merge_unordered_assignment(
     
     let mut concretes = existing_effective;
     concretes.extend(new_effective);
+    let concretes = coalesce_concretes(protocol, concretes);
 
     Assignment {
         dont_care,
