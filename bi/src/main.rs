@@ -17,7 +17,7 @@ use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -78,10 +78,6 @@ struct Cli {
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
-
-    /// Rename pins of the DUT. &{field name in the struct} = ${verilog name}
-    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
-    rename: Vec<String>,
 }
 
 #[allow(unused_variables)]
@@ -112,16 +108,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|arg| parse_instance(&modules, arg))
         .collect();
 
-    let renames: FxHashMap<_, _> = cli
-        .rename
-        .iter()
-        .map(|arg| {
-            let parts: Vec<_> = arg.split('=').map(|p| p.trim()).collect();
-            assert_eq!(parts.len(), 2, "Invalid rename arg: {arg}");
-            (parts[0].to_string(), parts[1].to_string())
-        })
-        .collect();
-
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
         .map(|inst| modules[inst.module_id].protos.clone())
@@ -138,17 +124,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) = WaveSignalTrace::open(
-            &cli.wave,
-            &modules,
-            &instances,
-            &renames,
-            cli.sample_posedge.clone(),
-        ) {
+        if let Ok(mut trace) =
+            WaveSignalTrace::open(&cli.wave, &modules, &instances, cli.sample_posedge.clone())
+        {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances, &renames)?;
+            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances)?;
             run_bis(bis.as_mut_slice(), &mut trace)
         }
     };
