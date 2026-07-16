@@ -138,15 +138,26 @@ pub fn merge_unordered_assignment(
         }
     }
 
-    let existing_concretes = concrete_coverage(protocol, &existing);
-    let new_concretes = concrete_coverage(protocol, &new);
+    let mut existing_concretes = concrete_coverage(protocol, &existing);
+    existing_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, existing_concretes);
+    let mut new_concretes = concrete_coverage(protocol, &new);
+    new_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, new_concretes);
 
-    let not_new_concretes = protocol.not_guard(new_concretes);
-    let existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
-    let not_existing_concretes = protocol.not_guard(existing_concretes);
-    let new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
-    let dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
+    let mut not_new_concretes = protocol.not_guard(new_concretes);
+    // not_new_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, not_new_concretes);
 
+    let mut existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
+    // existing_dont_care = protocol.simplifier.simplify(&mut protocol.expr_ctx, existing_dont_care);
+
+    let mut not_existing_concretes = protocol.not_guard(existing_concretes);
+    // not_existing_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, not_existing_concretes);
+
+    let mut new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
+    // new_dont_care = protocol.simplifier.simplify(&mut protocol.expr_ctx, new_dont_care);
+
+    let mut dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
+    // dont_care = protocol.simplifier.simplify(&mut protocol.expr_ctx, dont_care);
+    
     let mut concretes = existing_effective;
     concretes.extend(new_effective);
 

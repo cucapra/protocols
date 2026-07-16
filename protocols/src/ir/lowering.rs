@@ -401,6 +401,7 @@ impl<'a> Lowerer<'a> {
         &mut self,
         ast: &Protocol,
         keep_done: bool,
+        postprocess: bool,
     ) -> LoweredFragmentInfo {
         debug_assert!(
             self.current_fragment_nodes.is_empty(),
@@ -425,6 +426,13 @@ impl<'a> Lowerer<'a> {
         let true_id = self.ir.true_id();
         self.ir
             .push_transition(entry, Transition::new(true_id, body_entry, false));
+        
+        if postprocess {
+            contract_edges_from(&mut self.ir, self.symbols, entry);
+            let rd = reaching_definitions_from(&mut self.ir, self.symbols, entry);
+            // propagate_assignments_from(&mut self.ir, self.symbols, &rd, entry);
+        }
+        
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
         let graft_points = self.graft_points_from_node(&nodes, entry, done);
         LoweredFragmentInfo {
@@ -574,7 +582,7 @@ impl<'a> Lowerer<'a> {
 pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
     // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
-    let fragment = lowerer.lower_protocol_fragment(&ast, true);
+    let fragment = lowerer.lower_protocol_fragment(&ast, true, false);
 
     // link up the default entry node of the ir with the entry node of the lowered AST
     let entry_node = lowerer.ir.entry;
