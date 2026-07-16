@@ -2,8 +2,4 @@
 source: protocols/src/frontend/typecheck.rs
 expression: content
 ---
-warning: Inferred RHS type as u32 from LHS type u32.
-   ┌─ tests/calyx_go_done/calyx_go_done_struct.prot:15:3
-   │
-15 │   dut.ii := X;
-   │   ^^^^^^^^^^^^ Inferred RHS type as u32 from LHS type u32.
+
