@@ -91,19 +91,13 @@ impl WaveSignalTrace {
         filename: &impl AsRef<std::path::Path>,
         modules: &[Module],
         instances: &[Instance],
-        renames: &FxHashMap<String, String>,
         sample_posedge: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
         let mut wave = wellen::simple::read(filename)?;
 
         // find instances in the waveform hierarchy
-        let (port_map, clock_signal) = find_instances(
-            wave.hierarchy(),
-            modules,
-            instances,
-            renames,
-            sample_posedge,
-        );
+        let (port_map, clock_signal) =
+            find_instances(wave.hierarchy(), modules, instances, sample_posedge);
 
         // Determine the sampling mode based on the vavlue received
         // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
@@ -161,7 +155,6 @@ fn find_instances(
     hierachy: &Hierarchy,
     modules: &[Module],
     instances: &[Instance],
-    renames: &FxHashMap<String, String>,
     sample_posedge: Option<String>,
 ) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
     let mut port_map = FxHashMap::default();
@@ -178,10 +171,7 @@ fn find_instances(
             // for every pin designed in our struct, we have to find the correct
             // variable that corresponds to it
             for (field_idx, field) in module.pins.iter().enumerate() {
-                let pin_name = renames
-                    .get(field.name())
-                    .cloned()
-                    .unwrap_or(field.name().to_string());
+                let pin_name = field.name().to_string();
                 // find a variable that has a matching name
                 if let Some(var) = instance_scope
                     .vars(hierachy)
@@ -405,7 +395,6 @@ impl AsciWaveTrace {
         filename: impl AsRef<std::path::Path>,
         modules: &[Module],
         instances: &[Instance],
-        renames: &FxHashMap<String, String>,
     ) -> std::io::Result<Self> {
         let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
         let content = std::fs::read_to_string(filename)?;
@@ -415,10 +404,7 @@ impl AsciWaveTrace {
         for (inst_id, inst) in instances.iter().enumerate() {
             let module = &modules[inst.module_id];
             for (field_idx, field) in module.pins.iter().enumerate() {
-                let pin_name = renames
-                    .get(field.name())
-                    .cloned()
-                    .unwrap_or(field.name().to_string());
+                let pin_name = field.name().to_string();
                 let name = if inst.name.is_empty() {
                     pin_name
                 } else {

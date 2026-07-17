@@ -447,18 +447,14 @@ fn serialize_proto(
     if proto.is_idle {
         writeln!(out, "#[idle]")?;
     }
-    write!(out, "prot {}", proto.name)?;
-
-    if let Some(type_param) = proto.type_param {
-        write!(
-            out,
-            "<{}: {}>",
-            st[type_param].name(),
-            serialize_type(st, st[type_param].tpe())
-        )?;
-    }
-
-    write!(out, "(")?;
+    let dut = &st[proto.dut_sym];
+    write!(
+        out,
+        "prot {}<{}: {}>(",
+        proto.name,
+        dut.name(),
+        serialize_type(st, dut.tpe())
+    )?;
 
     if proto.args.is_empty() {
         writeln!(out, ") {{")?;
@@ -783,7 +779,7 @@ pub mod tests {
         // 2) create transaction
         let mut easycond = Protocol::new("easycond".to_string(), scope);
         easycond.args = vec![Arg::new(a), Arg::new(b)];
-        easycond.type_param = Some(dut);
+        easycond.dut_sym = dut;
 
         // 3) create expressions
         let a_expr = easycond.e(Expr::Sym(a));

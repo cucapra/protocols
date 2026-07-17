@@ -3,7 +3,7 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use crate::frontend::ast::{
-    Ast, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId,
+    Ast, BinOp, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId,
     find_symbols,
 };
 use crate::frontend::symbol::{Arg, Field, StructId, SymbolId, SymbolKind, SymbolTable, Type};
@@ -39,49 +39,50 @@ pub fn to_modules(mut ast: Ast) -> (SymbolTable, Vec<Module>) {
 fn struct_to_modules(st: &SymbolTable, protos: Vec<Protocol>) -> FxHashMap<String, Module> {
     let mut modules = FxHashMap::default();
     for proto in protos {
-        if let Some(dut_symbol_id) = proto.type_param {
-            // We assume type parameters have to be structs
-            let struct_id = match st[dut_symbol_id].tpe() {
-                Type::Struct(id) => id,
-                o => panic!("Expect type parameter to always be a struct! But got: `{o:?}`"),
-            };
-            let struct_name = st[struct_id].name().to_string();
-            let module = modules
-                .entry(struct_name.clone())
-                .or_insert_with(|| Module {
-                    name: struct_name.clone(),
-                    clock: Clock::None,
-                    pins: st[struct_id].pins().clone(),
-                    protos: vec![],
-                    proto_pin_map: vec![],
-                });
-            assert_eq!(module.name, struct_name);
-            assert_eq!(&module.pins, st[struct_id].pins());
-
-            // find the symbol id in this particular protocol mapping to the pins in the struct
-            let pin_symbols = module
-                .pins
-                .iter()
-                .map(|pin| {
-                    st.symbol_id_from_name(
-                        proto.scope,
-                        &format!("{}.{}", st[dut_symbol_id].name(), pin.name()),
-                    )
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Unable to find symbol ID for pin {}, symbol_table is {}",
-                            pin.name(),
-                            st
-                        )
-                    })
-                })
-                .collect();
-            module.proto_pin_map.push(pin_symbols);
-            module.protos.push(proto);
-        }
-        // skipping any protocols that are not associated with a DUT
+        let struct_id = proto.dut_struct(st);
+        let struct_name = st[struct_id].name().to_string();
+        let module = modules
+            .entry(struct_name.clone())
+            .or_insert_with(|| Module {
+                name: struct_name.clone(),
+                clock: Clock::None,
+                pins: st[struct_id].pins().clone(),
+                protos: vec![],
+                proto_pin_map: vec![],
+            });
+        assert_eq!(module.name, struct_name);
+        assert_eq!(&module.pins, st[struct_id].pins());
+        module
+            .proto_pin_map
+            .push(find_pin_mapping(st, &module.pins, &proto));
+        module.protos.push(proto);
+        // protocol scope stays the same
     }
     modules
+}
+
+fn find_pin_mapping(st: &SymbolTable, pins: &[Field], proto: &Protocol) -> Vec<SymbolId> {
+    // find the symbol id in this particular protocol mapping to the pins in the struct
+    pins
+        .iter()
+        .map(|pin| {
+            let lookup_name = format!("{}.{}", st[proto.dut_sym].name(), pin.name());
+
+            st.symbol_id_from_name(
+                proto.scope,
+                &lookup_name,
+            )
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Unable to find symbol ID for pin {} in scope {}.\nAvailable symbols are: {}\nsymbol_table is {}",
+                        lookup_name,
+                        st.scope_name(proto.scope),
+                        st.scope_symbols(proto.scope).join(", "),
+                        st
+                    )
+                })
+        })
+        .collect()
 }
 
 fn remapped_port(remap: &RemapModule, m: &Mapping) -> SymbolId {
@@ -99,17 +100,16 @@ fn implement_remap(
     originals: &FxHashMap<String, Module>,
     remap: RemapModule,
 ) -> Module {
-    let pins = vec![];
     let mut protos = vec![];
-    let proto_pin_map = vec![];
+    let mut proto_pin_map = vec![];
 
     // create a struct for the remap module
-    let remap_pins = remap
+    let remap_pins: Vec<_> = remap
         .mappings
         .iter()
         .map(|m| Field::new(m.name.clone(), m.dir, m.tpe))
         .collect();
-    let remap_struct_id = st.add_struct(remap.name.clone(), remap_pins);
+    let remap_struct_id = st.add_struct(remap.name.clone(), remap_pins.clone());
 
     // pin to remap rule
     let pin_to_remap: FxHashMap<_, _> = remap
@@ -137,14 +137,16 @@ fn implement_remap(
                 })
                 .collect();
 
-            protos.push(remap_proto(st, proto, remap_struct_id, &lookup, &remap.ctx));
+            let remapped_proto = remap_proto(st, proto, remap_struct_id, &lookup, &remap.ctx);
+            proto_pin_map.push(find_pin_mapping(st, &remap_pins, &remapped_proto));
+            protos.push(remapped_proto);
         }
     }
 
     Module {
         name: remap.name,
         clock: remap.clock,
-        pins,
+        pins: remap_pins,
         protos,
         proto_pin_map,
     }
@@ -181,16 +183,16 @@ impl<'a> Remapper<'a> {
 
         // create a symbol table scope
         let scope_name = format!("{}::{}", st[remap_struct_id].name(), out.name);
-        st.enter_scope(&scope_name);
+        out.scope = st.enter_scope(&scope_name);
 
         // create the type parameter
-        let type_param_name = st[orig.type_param.unwrap()].name().to_string();
+        let type_param_name = st[orig.dut_sym].name().to_string();
         let dut_sym = st.add_without_parent(
             type_param_name,
             Type::Struct(remap_struct_id),
             SymbolKind::Dut,
         );
-        out.type_param = Some(dut_sym);
+        out.dut_sym = dut_sym;
         let map_name_to_dut = st[remap_struct_id]
             .pins()
             .clone()
@@ -237,7 +239,7 @@ impl Remapper<'_> {
     }
 
     fn on_stmt(&mut self, stmt: StmtId) -> StmtId {
-        match self.orig[stmt].clone() {
+        let new_stmt = match self.orig[stmt].clone() {
             Stmt::Block(inner) => {
                 let inner = inner.into_iter().map(|s| self.on_stmt(s)).collect();
                 self.out.s(Stmt::Block(inner))
@@ -260,9 +262,16 @@ impl Remapper<'_> {
                     let new_assign = self.out.s(Stmt::Assign(new_lhs, new_rhs));
                     if m.cond != self.remap_ctx.expr_true() {
                         let extra_assert_cond = self.on_remap_expr(*map_sym_id, rhs, m.cond);
-                        let extra_assert = self
-                            .out
-                            .s(Stmt::AssertEq(extra_assert_cond, self.out.expr_true()));
+                        let (a, b) = if let Expr::Binary(BinOp::Equal, a, b) =
+                            self.out[extra_assert_cond].clone()
+                        {
+                            (a, b)
+                        } else {
+                            (extra_assert_cond, self.out.expr_true())
+                        };
+                        let extra_assert = self.out.s(Stmt::AssertEq(a, b));
+                        self.clone_stmt_loc(stmt, new_assign);
+                        self.clone_stmt_loc(stmt, extra_assert);
                         self.out.s(Stmt::Block(vec![new_assign, extra_assert]))
                     } else {
                         new_assign
@@ -305,6 +314,14 @@ impl Remapper<'_> {
                 let r = self.on_expr(r);
                 self.out.s(Stmt::AssertEq(l, r))
             }
+        };
+        self.clone_stmt_loc(stmt, new_stmt);
+        new_stmt
+    }
+
+    fn clone_stmt_loc(&mut self, old_stmt: StmtId, new_stmt: StmtId) {
+        if let Some((start, end, fileid)) = self.orig.get_stmt_loc(old_stmt) {
+            self.out.add_stmt_loc(new_stmt, start, end, fileid);
         }
     }
 
@@ -327,7 +344,7 @@ impl Remapper<'_> {
                         }
                         assert_eq!(m.cond, self.remap_ctx.expr_true());
                         // lookup correct symbol
-                        let dut_name = self.st[self.out.type_param.unwrap()].name();
+                        let dut_name = self.st[self.out.dut_sym].name();
                         let full_name = format!("{dut_name}.{}", m.name);
                         let remapped_sym = self
                             .st

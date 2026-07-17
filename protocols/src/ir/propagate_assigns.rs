@@ -36,11 +36,7 @@ fn all_ports_present(
     st: &SymbolTable,
     start: NodeId,
 ) -> bool {
-    let input_ports: Vec<SymbolId> = st
-        .get_children(&pg.proto_ctx.type_param.unwrap())
-        .into_iter()
-        .filter(|sym_id| st[*sym_id].is_in_port())
-        .collect();
+    let input_ports: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
 
     for nid in reachable_node_ids(pg, start) {
         let Some(rd) = reaching_defs.get(&nid) else {
@@ -82,8 +78,7 @@ pub fn propagate_assignments_from(
     );
 
     let input_ports: Vec<SymbolId> = st
-        .get_children(&pg.proto_ctx.type_param.unwrap())
-        .into_iter()
+        .get_children(&pg.proto_ctx.dut_sym)
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 

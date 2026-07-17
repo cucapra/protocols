@@ -53,25 +53,8 @@ pub fn check_if_symbol_is_dut_port(
 ) -> anyhow::Result<()> {
     // Fully-qualify the name of the identifier
     let symbol_full_name = symbol_table.full_name_from_symbol_id(&symbol_id);
-
-    // Helper string for direction in error messages
-    let direction_str = match direction {
-        Some(Dir::In) => "in",
-        Some(Dir::Out) => "out",
-        None => "in/out",
-    };
-
-    match (tr.type_param, symbol_table[symbol_id].parent()) {
-        (None, _) => {
-            let error_msg = format!(
-                "Expected {} to be a struct's {}put field,
-                but the function {} is not parameterized by any structs",
-                symbol_full_name, direction_str, tr.name
-            );
-            handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
-            Err(anyhow!(error_msg))
-        }
-        (Some(_), None) => {
+    match symbol_table[symbol_id].parent() {
+        None => {
             // The identifier doesn't have a parent, so we need to
             // perform more granular analysis before emitting the error message
             match lang_feature {
@@ -97,10 +80,10 @@ pub fn check_if_symbol_is_dut_port(
                 LangFeature::Assertions => Ok(()),
             }
         }
-        (Some(struct_id), Some(parent_symbol_id)) => {
+        Some(parent_symbol_id) => {
             // Check whether the name of the identifier corresponds
             // to a DUT port with the specified direction
-            let struct_name = symbol_table[struct_id].name();
+            let struct_name = symbol_table[tr.dut_sym].name();
             if let Type::Struct(struct_id) = symbol_table[parent_symbol_id].tpe() {
                 // `struct` is a reserved keyword in Rust,
                 // so this variable of type `Struct`
@@ -145,7 +128,7 @@ pub fn check_if_symbol_is_dut_port(
                 let parent_name = symbol_table[parent_symbol_id].name();
                 let error_msg = format!(
                     "Expected {} to be an output field of struct {}({}) but got {}({}) as the parent struct instead",
-                    symbol_full_name, struct_name, struct_id, parent_name, parent_symbol_id
+                    symbol_full_name, struct_name, tr.dut_sym, parent_name, parent_symbol_id
                 );
                 handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                 Err(anyhow!(error_msg))

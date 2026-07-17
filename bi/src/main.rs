@@ -16,8 +16,9 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
 use protocols::frontend::Module;
+use protocols::frontend::ast::Clock;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -78,14 +79,33 @@ struct Cli {
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
+}
 
-    /// Rename pins of the DUT. &{field name in the struct} = ${verilog name}
-    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
-    rename: Vec<String>,
+fn get_clock(modules: &[Module], cli_sample_posedge: Option<String>) -> Option<String> {
+    let mut clocks: Vec<String> = modules
+        .iter()
+        .flat_map(|m| match &m.clock {
+            Clock::None => None,
+            Clock::Posedge(name) => Some(name.to_string()),
+        })
+        .collect();
+    if let Some(name) = cli_sample_posedge {
+        clocks.push(name);
+    }
+    clocks.sort();
+    clocks.dedup();
+    match clocks.as_slice() {
+        [one] => Some(one.clone()),
+        [] => None,
+        other => {
+            eprintln!("Too many clocks: {:?}", other);
+            std::process::exit(100);
+        }
+    }
 }
 
 #[allow(unused_variables)]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     // Parse CLI args
     let cli = Cli::parse();
 
@@ -97,29 +117,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
-    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks)?;
+    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let posedge_clock = get_clock(&modules, cli.sample_posedge);
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
         println!("Available DUTs are: {}", collects_module_names(&modules));
         println!("No instances specified. Nothing to monitor. Exiting...");
-        return Ok(());
+        return;
     }
 
     let instances: Vec<Instance> = cli
         .instances
         .iter()
         .map(|arg| parse_instance(&modules, arg))
-        .collect();
-
-    let renames: FxHashMap<_, _> = cli
-        .rename
-        .iter()
-        .map(|arg| {
-            let parts: Vec<_> = arg.split('=').map(|p| p.trim()).collect();
-            assert_eq!(parts.len(), 2, "Invalid rename arg: {arg}");
-            (parts[0].to_string(), parts[1].to_string())
-        })
         .collect();
 
     let bi_protos: Vec<Vec<_>> = instances
@@ -138,17 +149,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) = WaveSignalTrace::open(
-            &cli.wave,
-            &modules,
-            &instances,
-            &renames,
-            cli.sample_posedge.clone(),
-        ) {
+        if let Ok(mut trace) = WaveSignalTrace::open(&cli.wave, &modules, &instances, posedge_clock)
+        {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances, &renames)?;
+            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances).unwrap();
             run_bis(bis.as_mut_slice(), &mut trace)
         }
     };
@@ -181,6 +187,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     cli.display_hex,
                     |step| step_to_time.step_to_ns(step),
                 );
+
+                assert!(!fails.is_empty(), "TODO: better failures");
 
                 for fail in fails {
                     let proto = &protos[fail.proto_id];
@@ -219,9 +227,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if at_least_one_has_failed {
-        Err("Monitor failed".into())
+        std::process::exit(1);
     } else {
-        Ok(())
+        std::process::exit(0);
     }
 }
 

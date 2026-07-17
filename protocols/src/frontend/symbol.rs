@@ -188,6 +188,8 @@ impl Type {
 pub struct SymbolId(u32);
 entity_impl!(SymbolId, "symbol");
 
+pub const INVALID_SYMBOL_ID: SymbolId = SymbolId(u32::MAX);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SymbolTable {
     entries: PrimaryMap<SymbolId, SymbolTableEntry>,
@@ -306,6 +308,20 @@ impl SymbolTable {
         self.active_scope = ROOT_SCOPE;
     }
 
+    pub fn scope_name(&self, scope: ScopeId) -> &str {
+        &self.scopes[scope].0
+    }
+
+    pub fn scope_symbols(&self, scope: ScopeId) -> Vec<&str> {
+        self.by_name_sym[scope]
+            .iter()
+            .map(|(name, sym)| {
+                assert_eq!(name, &self[sym].full_name(self));
+                name.as_str()
+            })
+            .collect()
+    }
+
     pub fn add_without_parent(&mut self, name: String, tpe: Type, kind: SymbolKind) -> SymbolId {
         assert!(
             !name.contains('.'),
@@ -416,14 +432,11 @@ impl SymbolTable {
         self.structs.keys().collect()
     }
 
-    pub fn get_children(&self, parent_name: &SymbolId) -> Vec<SymbolId> {
-        let mut children = vec![];
-        for (id, entry) in self.entries.iter() {
-            if entry.parent() == Some(*parent_name) {
-                children.push(id);
-            }
-        }
-        children
+    pub fn get_children(&self, parent_name: &SymbolId) -> impl Iterator<Item = SymbolId> {
+        self.entries
+            .iter()
+            .filter(|(_, entry)| entry.parent() == Some(*parent_name))
+            .map(|(id, _)| id)
     }
 }
 
