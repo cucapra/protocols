@@ -101,7 +101,7 @@ def expect_dir(case: dict, _runner: str) -> str:
 
 
 def binary_prefix(binary: str) -> list[str]:
-    return [f"target/debug/{binary}"]
+    return [f"target/release/{binary}"]
 
 
 def repo_root_command(cmd: list[str], stderr: str = "discard") -> str:
@@ -169,7 +169,7 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     _tx_tail(cmd, case, with_max_steps=False)
 
     # wishbone and fifo only work with --respect-forks
-    if case["paths"][0].startswith("tests/fifo/") or case["paths"][0].startswith(
+    if case["path"].startswith("tests/fifo/") or case["path"].startswith(
         "tests/wishbone/"
     ):
         flag_sets = [("respect_forks", ["--respect-forks", "--determinize"])]
@@ -229,11 +229,28 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
-    return [
-        ("ast", repo_root_command(ast_cmd, stderr="discard")),
-        ("graph", repo_root_command(graph_cmd, stderr="discard")),
-        ("ts", repo_root_command(ts_cmd, stderr="discard")),
+    variants: list[tuple[str, str, str | None]] = [
+        ("ast", repo_root_command(ast_cmd, stderr="discard"), None),
+        ("graph", repo_root_command(graph_cmd, stderr="discard"), None),
+        ("ts", repo_root_command(ts_cmd, stderr="discard"), None),
     ]
+
+    max_protocols = tx_max_trace_protocols(case["path"])
+    if max_protocols is not None:
+        bounded_cmd = [
+            *binary_prefix("graph-interp"),
+            "--transactions",
+            case["path"],
+            "--bound",
+            str(max_protocols),
+            "--ascii-waveform",
+        ]
+        _tx_tail(bounded_cmd, case, with_max_steps=False)
+        variants.append(
+            ("", repo_root_command(bounded_cmd, stderr="discard"), None)
+        )
+
+    return variants
 
 
 def fail_runt_command(case: dict) -> list[tuple[str, str]]:
@@ -259,6 +276,24 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
         ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
+
+
+@lru_cache(maxsize=None)
+def tx_max_trace_protocols(path: str) -> int | None:
+    tx_path = REPO_ROOT / path
+    if not tx_path.exists():
+        return None
+
+    content = tx_path.read_text()
+    max_protocols = 0
+    for block in re.findall(r"trace\s*{([^}]*)}", content, re.DOTALL):
+        protocols = [
+            line.strip()
+            for line in block.splitlines()
+            if line.strip() and not line.strip().startswith("//")
+        ]
+        max_protocols = max(max_protocols, len(protocols))
+    return max_protocols or None
 
 
 RUNT_BUILDERS = {
@@ -312,7 +347,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
-        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+           and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["paths"][0])
 
@@ -346,16 +381,15 @@ def fail_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] in runtime_failures
-        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+           and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["paths"][0])
-
 
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     build = RUNT_BUILDERS[runner]
     suites = []
-    for case in sorted(cases, key=lambda c: (c["paths"][0], expect_name(c, runner))):
-        path = case["paths"][0]
+    for case in sorted(cases, key=lambda c: (c["path"], expect_name(c, runner))):
+        path = case["path"]
         edir = expect_dir(case, runner)
         ename = expect_name(case, runner)
         base_name = (
