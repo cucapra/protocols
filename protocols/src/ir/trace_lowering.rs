@@ -9,7 +9,9 @@ use rustc_hash::FxHashMap;
 use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
+use crate::ir::edge_contract::{
+    append_action, append_action_disjoint, contract_edges, guard_assignment,
+};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::Context as ExprContext;
@@ -50,6 +52,37 @@ impl<'a> Lowerer<'a> {
         entry_node_id: NodeId,
         graft_guard: ExprRef,
     ) {
+        self.graft_contracted_entry_with_mode(
+            graft_points_node_id,
+            entry_node_id,
+            graft_guard,
+            false,
+        );
+    }
+
+    /// Graft an entry whose guard is mutually exclusive with the other entries
+    /// being accumulated into the same node.
+    pub fn graft_disjoint_contracted_entry(
+        &mut self,
+        graft_points_node_id: NodeId,
+        entry_node_id: NodeId,
+        graft_guard: ExprRef,
+    ) {
+        self.graft_contracted_entry_with_mode(
+            graft_points_node_id,
+            entry_node_id,
+            graft_guard,
+            true,
+        );
+    }
+
+    fn graft_contracted_entry_with_mode(
+        &mut self,
+        graft_points_node_id: NodeId,
+        entry_node_id: NodeId,
+        graft_guard: ExprRef,
+        disjoint: bool,
+    ) {
         let mut actions = self.ir[graft_points_node_id].actions.clone();
         let entry_actions = self.ir[entry_node_id].actions.clone();
         let mut internal_assert_guard = None;
@@ -72,14 +105,23 @@ impl<'a> Lowerer<'a> {
                     action.with_guard(guard)
                 }
             };
-            append_action(
-                &mut self.ir,
-                self.symbols,
-                &mut actions,
-                &mut internal_assert_guard,
-                guarded_action,
-                false,
-            );
+            if disjoint {
+                append_action_disjoint(
+                    &mut self.ir,
+                    self.symbols,
+                    &mut actions,
+                    guarded_action,
+                );
+            } else {
+                append_action(
+                    &mut self.ir,
+                    self.symbols,
+                    &mut actions,
+                    &mut internal_assert_guard,
+                    guarded_action,
+                    false,
+                );
+            }
         }
 
         if let Some(internal_assert_guard) = internal_assert_guard {
