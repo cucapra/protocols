@@ -99,9 +99,8 @@ fn coalesce_concretes(
 ) -> Vec<(ExprRef, ExprRef)> {
     let mut coalesced = Vec::with_capacity(concretes.len());
     for (guard, rhs) in concretes {
-        if let Some((existing_guard, _)) = coalesced
-            .iter_mut()
-            .find(|(_, existing_rhs)| *existing_rhs == rhs)
+        if let Some((existing_guard, existing_rhs)) = coalesced.last_mut()
+            && *existing_rhs == rhs
         {
             *existing_guard = protocol.or_guard(*existing_guard, guard);
         } else {
