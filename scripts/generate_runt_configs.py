@@ -182,17 +182,35 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
 
 
 def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
-    cmd = [*binary_prefix("protocols-monitor"), "--protocol", case["path"]]
+    monitor_cmd = [*binary_prefix("protocols-monitor"), "--protocol", case["path"]]
     if case["wave"]:
-        cmd += ["--wave", case["wave"]]
+        monitor_cmd += ["--wave", case["wave"]]
     if case["instances"]:
-        cmd += ["--instances", *case["instances"]]
+        monitor_cmd += ["--instances", *case["instances"]]
     if case["max_steps"] is not None:
-        cmd += ["--max-steps", str(case["max_steps"])]
-    cmd += case["extra_args"]
+        monitor_cmd += ["--max-steps", str(case["max_steps"])]
+    monitor_cmd += case["extra_args"]
     if case["timeout_secs"] is not None:
-        cmd = timeout_cmd(case["timeout_secs"], cmd)
-    return [("", repo_root_command(cmd))]
+        monitor_cmd = timeout_cmd(case["timeout_secs"], monitor_cmd)
+    cmds = [("monitor", repo_root_command(monitor_cmd))]
+
+    # for passing test cases, we also want to run the bi
+    if case["expected"] == "pass":
+        bi_cmd = [
+            *binary_prefix("bi"),
+            "--protocol",
+            case["path"],
+            "--wave",
+            case["wave"],
+            "--instances",
+            *case["instances"],
+        ]
+        if case["max_steps"] is not None:
+            bi_cmd += ["--max-steps", str(case["max_steps"])]
+        bi_cmd += case["extra_args"]
+        cmds += [("bi", repo_root_command(bi_cmd))]
+
+    return cmds
 
 
 def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
