@@ -1,7 +1,7 @@
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer};
-use crate::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use patronus::expr::{Context as ExprContext, ExprRef, TypeCheck};
 use rustc_hash::FxHashMap;
 
@@ -21,12 +21,7 @@ fn graft_choice_entries_into(
     parent: NodeId,
     choices: Vec<(NodeId, ExprRef)>,
 ) {
-    // let merged = lowerer.ir.n(Node::empty());
-    for (entry, guard) in choices {
-        lowerer.graft_disjoint_contracted_entry(parent, entry, guard);
-    }
-    // let true_id = lowerer.ir.true_id();
-    // lowerer.graft_contracted_entry(parent, merged, true_id);
+    lowerer.graft_disjoint_contracted_entries(parent, &choices);
 }
 
 /// Lower a set of protocols to a joint IR that represents any trace up to `k` in length

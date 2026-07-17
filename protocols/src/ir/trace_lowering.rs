@@ -8,12 +8,14 @@ use rustc_hash::FxHashMap;
 
 use crate::Value;
 use crate::frontend::ast::Protocol;
-use crate::frontend::symbol::SymbolTable;
+use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::edge_contract::{
     append_action, append_action_disjoint, contract_edges, guard_assignment,
+    merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch,
+    same_assignment_target,
 };
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
-use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::Context as ExprContext;
 
 impl<'a> Lowerer<'a> {
@@ -76,6 +78,96 @@ impl<'a> Lowerer<'a> {
         );
     }
 
+    /// Graft a group of entries whose guards are mutually exclusive. The
+    /// assignments are assembled once per target before touching the parent.
+    pub fn graft_disjoint_contracted_entries(
+        &mut self,
+        graft_points_node_id: NodeId,
+        choices: &[(NodeId, ExprRef)],
+    ) {
+        let mut actions = self.ir[graft_points_node_id].actions.clone();
+        let mut assignments: Vec<(SymbolId, Vec<(ExprRef, Assignment)>)> = Vec::new();
+        let mut transitions = self.ir[graft_points_node_id].transitions.clone();
+        let mut internal_assert_guard = None;
+
+        for &(entry_node_id, graft_guard) in choices {
+            for action in self.ir[entry_node_id].actions.clone() {
+                match self.ir[action.op].clone() {
+                    Op::Assign(symbol_id, assignment) => {
+                        assert_eq!(
+                            action.guard,
+                            self.ir.true_id(),
+                            "assignment action guards must be 1; path conditions belong in Assignment"
+                        );
+                        let assignment = (graft_guard, assignment);
+                        let Some((_, grouped)) = assignments.iter_mut().find(|(target, _)| {
+                            same_assignment_target(self.symbols, *target, symbol_id)
+                        }) else {
+                            assignments.push((symbol_id, vec![assignment]));
+                            continue;
+                        };
+                        grouped.push(assignment);
+                    }
+                    _ => {
+                        let guard = self.ir.and_guard(graft_guard, action.guard);
+                        append_action_disjoint(
+                            &mut self.ir,
+                            self.symbols,
+                            &mut actions,
+                            action.with_guard(guard),
+                        );
+                    }
+                }
+            }
+
+            for transition in self.ir[entry_node_id].transitions.clone() {
+                let guard = self.ir.and_guard(graft_guard, transition.guard);
+                transitions.push(transition.with_guard(guard));
+            }
+        }
+
+        for (symbol_id, grouped) in assignments {
+            let existing_idx = actions.iter().position(|prior_action| {
+                matches!(
+                    self.ir[prior_action.op],
+                    Op::Assign(prior_symbol_id, _)
+                        if same_assignment_target(self.symbols, prior_symbol_id, symbol_id)
+                )
+            });
+            let assignment = if let Some(idx) = existing_idx {
+                let existing = match self.ir[actions[idx].op].clone() {
+                    Op::Assign(_, assignment) => assignment,
+                    _ => unreachable!(),
+                };
+                merge_unordered_assignment_with_disjoint_batch(
+                    &mut self.ir,
+                    &mut internal_assert_guard,
+                    existing,
+                    grouped,
+                )
+            } else {
+                merge_disjoint_guarded_assignments(&mut self.ir, grouped).0
+            };
+            let op = self.ir.o(Op::Assign(symbol_id, assignment));
+            let true_id = self.ir.true_id();
+            if let Some(idx) = existing_idx {
+                actions[idx].guard = true_id;
+                actions[idx].op = op;
+            } else {
+                actions.push(Action::new(true_id, op));
+            }
+        }
+
+        if let Some(internal_assert_guard) = internal_assert_guard {
+            let internal_assert_op = self.ir.o(Op::InternalAssertFalse);
+            actions.push(Action::new(internal_assert_guard, internal_assert_op));
+        }
+
+        let graft_points_node = self.ir.node_mut(graft_points_node_id);
+        graft_points_node.actions = actions;
+        graft_points_node.transitions = transitions;
+    }
+
     fn graft_contracted_entry_with_mode(
         &mut self,
         graft_points_node_id: NodeId,
@@ -106,12 +198,7 @@ impl<'a> Lowerer<'a> {
                 }
             };
             if disjoint {
-                append_action_disjoint(
-                    &mut self.ir,
-                    self.symbols,
-                    &mut actions,
-                    guarded_action,
-                );
+                append_action_disjoint(&mut self.ir, self.symbols, &mut actions, guarded_action);
             } else {
                 append_action(
                     &mut self.ir,
