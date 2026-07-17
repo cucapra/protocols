@@ -430,7 +430,7 @@ impl<'a> Lowerer<'a> {
         if postprocess {
             contract_edges_from(&mut self.ir, self.symbols, entry);
             let rd = reaching_definitions_from(&mut self.ir, self.symbols, entry);
-            // propagate_assignments_from(&mut self.ir, self.symbols, &rd, entry);
+            propagate_assignments_from(&mut self.ir, self.symbols, &rd, entry);
         }
 
         let nodes = std::mem::take(&mut self.current_fragment_nodes);

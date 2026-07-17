@@ -184,6 +184,20 @@ pub fn merge_unordered_assignment(
     }
 }
 
+fn merge_disjoint_assignment(
+    protocol: &mut ProtoGraph,
+    existing: Assignment,
+    new: Assignment,
+) -> Assignment {
+    let mut concretes = concretes_without_dont_care(protocol, &existing);
+    concretes.extend(concretes_without_dont_care(protocol, &new));
+
+    Assignment {
+        dont_care: protocol.or_guard(existing.dont_care, new.dont_care),
+        concretes: coalesce_concretes(protocol, concretes),
+    }
+}
+
 pub fn append_action(
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
@@ -191,6 +205,50 @@ pub fn append_action(
     internal_assert_guard: &mut Option<ExprRef>,
     action: Action,
     ordered: bool,
+) {
+    append_action_with_mode(
+        protocol,
+        symbols,
+        actions,
+        internal_assert_guard,
+        action,
+        if ordered {
+            ActionMergeMode::Ordered
+        } else {
+            ActionMergeMode::Unordered
+        },
+    );
+}
+
+pub fn append_action_disjoint(
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    actions: &mut Vec<Action>,
+    action: Action,
+) {
+    append_action_with_mode(
+        protocol,
+        symbols,
+        actions,
+        &mut None,
+        action,
+        ActionMergeMode::Disjoint,
+    );
+}
+
+enum ActionMergeMode {
+    Ordered,
+    Unordered,
+    Disjoint,
+}
+
+fn append_action_with_mode(
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    actions: &mut Vec<Action>,
+    internal_assert_guard: &mut Option<ExprRef>,
+    action: Action,
+    mode: ActionMergeMode,
 ) {
     match protocol[action.op].clone() {
         Op::Assign(symbol_id, assignment) => {
@@ -222,15 +280,19 @@ pub fn append_action(
                 _ => unreachable!(),
             };
 
-            let merged_assignment = if ordered {
-                merge_ordered_assignment(protocol, existing_assignment, assignment)
-            } else {
-                merge_unordered_assignment(
+            let merged_assignment = match mode {
+                ActionMergeMode::Ordered => {
+                    merge_ordered_assignment(protocol, existing_assignment, assignment)
+                }
+                ActionMergeMode::Unordered => merge_unordered_assignment(
                     protocol,
                     internal_assert_guard,
                     existing_assignment,
                     assignment,
-                )
+                ),
+                ActionMergeMode::Disjoint => {
+                    merge_disjoint_assignment(protocol, existing_assignment, assignment)
+                }
             };
 
             let new_op = protocol.o(Op::Assign(symbol_id, merged_assignment));
@@ -242,8 +304,10 @@ pub fn append_action(
                 .iter_mut()
                 .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
             {
-                let overlap = protocol.and_guard(existing_action.guard, action.guard);
-                record_internal_assert(protocol, internal_assert_guard, overlap);
+                if !matches!(mode, ActionMergeMode::Disjoint) {
+                    let overlap = protocol.and_guard(existing_action.guard, action.guard);
+                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                }
                 existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
             } else {
                 actions.push(action);
