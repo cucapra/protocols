@@ -74,25 +74,6 @@ pub fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> 
     protocol.and_guard(not_dont_care, raw_coverage)
 }
 
-pub fn effective_concretes(
-    protocol: &mut ProtoGraph,
-    assignment: &Assignment,
-) -> Vec<(ExprRef, ExprRef)> {
-    let mut prior = assignment.dont_care;
-    let mut effective = Vec::with_capacity(assignment.concretes.len());
-
-    for (guard, rhs) in &assignment.concretes {
-        let not_prior = protocol.not_guard(prior);
-        let effective_guard = protocol.and_guard(not_prior, *guard);
-        if effective_guard != protocol.false_id() {
-            effective.push((effective_guard, *rhs));
-        }
-        prior = protocol.or_guard(prior, *guard);
-    }
-
-    effective
-}
-
 fn coalesce_concretes(
     protocol: &mut ProtoGraph,
     concretes: Vec<(ExprRef, ExprRef)>,
@@ -108,6 +89,21 @@ fn coalesce_concretes(
         }
     }
     coalesced
+}
+
+fn concretes_without_dont_care(
+    protocol: &mut ProtoGraph,
+    assignment: &Assignment,
+) -> Vec<(ExprRef, ExprRef)> {
+    let not_dont_care = protocol.not_guard(assignment.dont_care);
+    assignment
+        .concretes
+        .iter()
+        .filter_map(|(guard, rhs)| {
+            let guard = protocol.and_guard(not_dont_care, *guard);
+            (guard != protocol.false_id()).then_some((guard, *rhs))
+        })
+        .collect()
 }
 
 pub fn merge_ordered_assignment(
@@ -137,22 +133,30 @@ pub fn merge_unordered_assignment(
     existing: Assignment,
     new: Assignment,
 ) -> Assignment {
-    let existing_effective = effective_concretes(protocol, &existing);
-    let new_effective = effective_concretes(protocol, &new);
+    // Check conflicts using effective guards, but do not put those expanded
+    // guards in the merged assignment. The raw vectors already carry their
+    // precedence through their order.
+    let mut prior_existing = existing.dont_care;
+    for (existing_guard, existing_rhs) in &existing.concretes {
+        let not_prior_existing = protocol.not_guard(prior_existing);
+        let existing_effective = protocol.and_guard(not_prior_existing, *existing_guard);
+        let mut prior_new = new.dont_care;
 
-    for (existing_guard, existing_rhs) in &existing_effective {
-        for (new_guard, new_rhs) in &new_effective {
-            // assignments to the same value are totally legal
-            if existing_rhs == new_rhs {
-                continue;
+        for (new_guard, new_rhs) in &new.concretes {
+            let not_prior_new = protocol.not_guard(prior_new);
+            let new_effective = protocol.and_guard(not_prior_new, *new_guard);
+
+            if existing_rhs != new_rhs {
+                let overlap = protocol.and_guard(existing_effective, new_effective);
+                if overlap != protocol.false_id() {
+                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                }
             }
 
-            // assignments to different concrete values are illegal
-            let overlap = protocol.and_guard(*existing_guard, *new_guard);
-            if overlap != protocol.false_id() {
-                record_internal_assert(protocol, internal_assert_guard, overlap);
-            }
+            prior_new = protocol.or_guard(prior_new, *new_guard);
         }
+
+        prior_existing = protocol.or_guard(prior_existing, *existing_guard);
     }
 
     let mut existing_concretes = concrete_coverage(protocol, &existing);
@@ -160,23 +164,18 @@ pub fn merge_unordered_assignment(
     let mut new_concretes = concrete_coverage(protocol, &new);
     new_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, new_concretes);
 
-    let mut not_new_concretes = protocol.not_guard(new_concretes);
-    // not_new_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, not_new_concretes);
+    let not_new_concretes = protocol.not_guard(new_concretes);
 
-    let mut existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
-    // existing_dont_care = protocol.simplifier.simplify(&mut protocol.expr_ctx, existing_dont_care);
+    let existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
 
-    let mut not_existing_concretes = protocol.not_guard(existing_concretes);
-    // not_existing_concretes = protocol.simplifier.simplify(&mut protocol.expr_ctx, not_existing_concretes);
+    let not_existing_concretes = protocol.not_guard(existing_concretes);
 
-    let mut new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
-    // new_dont_care = protocol.simplifier.simplify(&mut protocol.expr_ctx, new_dont_care);
+    let new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
 
-    let mut dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
-    // dont_care = protocol.simplifier.simplify(&mut protocol.expr_ctx, dont_care);
+    let dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
     
-    let mut concretes = existing_effective;
-    concretes.extend(new_effective);
+    let mut concretes = concretes_without_dont_care(protocol, &existing);
+    concretes.extend(concretes_without_dont_care(protocol, &new));
     let concretes = coalesce_concretes(protocol, concretes);
 
     Assignment {
