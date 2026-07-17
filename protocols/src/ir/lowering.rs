@@ -426,13 +426,13 @@ impl<'a> Lowerer<'a> {
         let true_id = self.ir.true_id();
         self.ir
             .push_transition(entry, Transition::new(true_id, body_entry, false));
-        
+
         if postprocess {
             contract_edges_from(&mut self.ir, self.symbols, entry);
             let rd = reaching_definitions_from(&mut self.ir, self.symbols, entry);
             // propagate_assignments_from(&mut self.ir, self.symbols, &rd, entry);
         }
-        
+
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
         let graft_points = self.graft_points_from_node(&nodes, entry, done);
         LoweredFragmentInfo {
