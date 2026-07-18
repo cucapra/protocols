@@ -150,14 +150,12 @@ pub struct Failure {
     pub proto_id: usize,
     pub thread_name: String,
     pub stmt: StmtId,
-    pub a: BitVecValue,
-    pub b: BitVecValue,
-    pub kind: FailureKind
+    pub kind: FailureKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FailureKind {
-    /// When the value of a signal in the waveform differs from what we expect 
+    /// When the value of a signal in the waveform differs from what we expect
     /// (i.e. a constraint is violated)
     SignalValueMismatch { lhs: BitVecValue, rhs: BitVecValue },
     /// A `fork` was reached before any `step`s have been called
@@ -170,12 +168,14 @@ impl Failure {
         match &self.kind {
             FailureKind::SignalValueMismatch { lhs, rhs } => format!(
                 "[{}] executing step {} of the transaction: {} != {}",
-                self.thread_name, self.thread_local_step,
-                lhs.to_hex_str(), rhs.to_hex_str(),
+                self.thread_name,
+                self.thread_local_step,
+                lhs.to_hex_str(),
+                rhs.to_hex_str(),
             ),
-            FailureKind::ForkBeforeStep => format!(
-                "[{}] cannot fork at step zero", self.thread_name,
-            ),
+            FailureKind::ForkBeforeStep => {
+                format!("[{}] cannot fork at step zero", self.thread_name,)
+            }
         }
     }
 }

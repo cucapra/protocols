@@ -632,11 +632,21 @@ impl Thread {
                     }
                 }
                 Stmt::Fork => {
-                    assert!(self.step > 0, "[{}] Cannot fork at step zero!", self.name);
-                    self.has_forked = true;
-                    self.next_stmt = ti.next_stmt[&stmt];
-                    self.effectful_stmt_in_step = true;
-                    Fork
+                    if self.step > 0 {
+                        self.has_forked = true;
+                        self.next_stmt = ti.next_stmt[&stmt];
+                        self.effectful_stmt_in_step = true;
+                        Fork
+                    } else {
+                        self.failures.push(Failure {
+                            thread_local_step: self.step,
+                            proto_id: ti.proto_id,
+                            thread_name: self.name.clone(),
+                            stmt,
+                            kind: FailureKind::ForkBeforeStep,
+                        });
+                        Failed
+                    }
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self
@@ -828,9 +838,7 @@ impl Thread {
                         proto_id: ti.proto_id,
                         thread_name: self.name.clone(),
                         stmt,
-                        a: a.clone(),
-                        b: b.clone(),
-                        kind: FailureKind::SignalValueMismatch { lhs: a, rhs: b }
+                        kind: FailureKind::SignalValueMismatch { lhs: a, rhs: b },
                     })
                 }
             }
