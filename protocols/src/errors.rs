@@ -75,7 +75,7 @@ pub enum EvaluationError {
         start: u32,
         end: u32,
     },
-    /// (Trace comparison) When the value of an expression on the RHS
+    /// (For bi only) When the value of an expression on the RHS
     /// of an assignment disagreess with the actual observed trace value
     ValueDisagreesWithTrace {
         expr_id: ExprId,
@@ -85,7 +85,7 @@ pub enum EvaluationError {
         symbol_name: String,
         cycle_count: u32,
     },
-    /// (Trace comparison) When a constraint established by an assignment
+    /// (For bi only) When a constraint established by an assignment
     /// no longer holds after stepping to a new cycle
     ConstraintViolation {
         symbol_id: SymbolId,
