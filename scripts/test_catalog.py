@@ -539,14 +539,14 @@ BI_CASES = {
         "expect": None,
         "timeout_secs": 5,
     },
-    "tests.alus.alu_d1.monitor": {
-        "protocol": "tests/alus/alu_d1.monitor.prot",
+    "tests.alus.alu_d1.bi": {
+        "protocol": "tests/alus/alu_d1.bi.prot",
         "wave": "tests/alus/alu_d1.fst",
         "instances": ("alu_d1:ALU",),
         "expect": "pass",
     },
-    "tests.alus.alu_d2.monitor": {
-        "protocol": "tests/alus/alu_d2.monitor.prot",
+    "tests.alus.alu_d2.bi": {
+        "protocol": "tests/alus/alu_d2.bi.prot",
         "wave": "tests/alus/alu_d2.fst",
         "instances": ("alu_d2:ALU",),
         "expect": "pass",
@@ -605,8 +605,8 @@ BI_CASES = {
             "ns",
         ),
     },
-    "tests.fifo.fifo.monitor": {
-        "protocol": "tests/fifo/fifo.monitor.prot",
+    "tests.fifo.fifo.bi": {
+        "protocol": "tests/fifo/fifo.bi.prot",
         "wave": "tests/fifo/fifo.fst",
         "instances": ("fifo_wrapper:Fifo",),
         "expect": "pass",
@@ -1048,8 +1048,8 @@ BI_CASES = {
             "s",
         ),
     },
-    "tests.wishbone.wishbone.monitor": {
-        "protocol": "tests/wishbone/wishbone.monitor.prot",
+    "tests.wishbone.wishbone.bi": {
+        "protocol": "tests/wishbone/wishbone.bi.prot",
         "wave": "tests/wishbone/reqwalker.vcd",
         "instances": ("TOP.reqwalker:WBSubordinate",),
         "expect": "pass",
