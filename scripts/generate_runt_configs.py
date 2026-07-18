@@ -71,13 +71,13 @@ def replace_non_alphanumerics(value: object) -> str:
 
 
 def case_stem(case: dict) -> str:
-    # antmicro monitor cases share one .prot but differ by wave, so name them by
-    # the wave; otherwise use the test file's stem (dropping a .monitor suffix).
+    # antmicro cases share one .prot but differ by wave, so name them by
+    # the wave; otherwise use the test file's stem (dropping a .bi suffix).
     wave = case.get("wave")
     if wave and case["path"].startswith("tests/antmicro/"):
         return Path(wave).stem
     stem = Path(case["path"]).stem
-    return stem.removesuffix(".monitor")
+    return stem.removesuffix(".bi")
 
 
 def expect_name(case: dict, runner: str) -> str:
