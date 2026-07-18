@@ -150,9 +150,12 @@ pub struct Failure {
     pub proto_id: usize,
     pub thread_name: String,
     pub stmt: StmtId,
+    /// The specific kind of failure
     pub kind: FailureKind,
 }
 
+/// The specific reason why the BI failed
+/// (e.g. a constraint was violated, or a `fork` was encountered before a `step`, etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum FailureKind {
     /// When the value of a signal in the waveform differs from what we expect
