@@ -1,4 +1,75 @@
-panicked at bi/src/bi.rs:628:21:
-[pop_n_times@00!] Cannot fork at step zero!
----CODE---
-101
+// trace 0
+trace {
+    reset();
+    push_n_times(7, 1);
+    push_n_times(7, 2);
+    pop_n_times(7, 2);
+    check_not_empty();
+}
+
+// trace 1
+trace {
+    reset();
+    push_n_times(7, 1);
+    push_n_times(7, 2);
+    pop_n_times(7, 1);
+    pop_n_times(7, 1);
+    check_not_empty();
+}
+
+// trace 2
+trace {
+    reset();
+    push_n_times(7, 1);
+    push_n_times(7, 1);
+    push_n_times(7, 1);
+    pop_n_times(7, 2);
+    check_not_empty();
+}
+
+// trace 3
+trace {
+    reset();
+    push_n_times(7, 1);
+    push_n_times(7, 1);
+    push_n_times(7, 1);
+    pop_n_times(7, 1);
+    pop_n_times(7, 1);
+    check_not_empty();
+}
+
+// trace 4
+trace {
+    reset();
+    push_n_times(7, 3);
+    pop_n_times(7, 2);
+    check_not_empty();
+}
+
+// trace 5
+trace {
+    reset();
+    push_n_times(7, 3);
+    pop_n_times(7, 1);
+    pop_n_times(7, 1);
+    check_not_empty();
+}
+
+// trace 6
+trace {
+    reset();
+    push_n_times(7, 2);
+    push_n_times(7, 1);
+    pop_n_times(7, 2);
+    check_not_empty();
+}
+
+// trace 7
+trace {
+    reset();
+    push_n_times(7, 2);
+    push_n_times(7, 1);
+    pop_n_times(7, 1);
+    pop_n_times(7, 1);
+    check_not_empty();
+}
