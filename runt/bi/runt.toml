@@ -52,25 +52,25 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "nested_busy_wait.bi.expect"
-cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --color never --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
-name = "bi.tests_alus_alu_d1_monitor.alu_d1_bi"
+name = "bi.tests_alus_alu_d1_bi.alu_d1_bi"
 paths = [
-  "../../tests/alus/alu_d1.monitor.prot",
+  "../../tests/alus/alu_d1.bi.prot",
 ]
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/alus/alu_d1.monitor.prot --wave tests/alus/alu_d1.fst --instances alu_d1:ALU 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/alus/alu_d1.bi.prot --wave tests/alus/alu_d1.fst --instances alu_d1:ALU 2>&1"
 
 [[tests]]
-name = "bi.tests_alus_alu_d2_monitor.alu_d2_bi"
+name = "bi.tests_alus_alu_d2_bi.alu_d2_bi"
 paths = [
-  "../../tests/alus/alu_d2.monitor.prot",
+  "../../tests/alus/alu_d2.bi.prot",
 ]
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/alus/alu_d2.monitor.prot --wave tests/alus/alu_d2.fst --instances alu_d2:ALU 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/alus/alu_d2.bi.prot --wave tests/alus/alu_d2.fst --instances alu_d2:ALU 2>&1"
 
 [[tests]]
 name = "bi.tests_antmicro_wishbone_subordinate.test_fifo_classic_1_bi"
@@ -1180,13 +1180,13 @@ expect_name = "ethmac_wishbone_subordinate.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/ethmac/ethmac_wishbone_subordinate.prot --instances tb_ethernet:WBSubordinate --sample-posedge tb_ethernet.wb_clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fifo_fifo_monitor.fifo_bi"
+name = "bi.tests_fifo_fifo_bi.fifo_bi"
 paths = [
-  "../../tests/fifo/fifo.monitor.prot",
+  "../../tests/fifo/fifo.bi.prot",
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "fifo.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/fifo.monitor.prot --wave tests/fifo/fifo.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/fifo.bi.prot --wave tests/fifo/fifo.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_push_pop_identity.push_pop_identity_bi"
@@ -1204,7 +1204,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_loop_empty.bi.expect"
-cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --color never --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_push_pop_loop_not_empty.push_pop_loop_not_empty_bi"
@@ -1213,7 +1213,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_loop_not_empty.bi.expect"
-cmd = "cd ../.. && python3 -c 'import os, signal, subprocess, sys\np = subprocess.Popen(sys.argv[2:], start_new_session=True)\ntry:\n    sys.exit(p.wait(timeout=float(sys.argv[1])))\nexcept subprocess.TimeoutExpired:\n    os.killpg(p.pid, signal.SIGKILL)\n    sys.exit(124)\n' 5 target/debug/bi --color never --protocol tests/fifo/push_pop_loop_not_empty.prot --wave tests/fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_loop_not_empty.prot --wave tests/fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_burst_s4_s4_buggy.s4_buggy_bi"
@@ -1540,10 +1540,10 @@ expect_name = "wb_cdc.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wb_intercon/wb_cdc.prot --wave tests/wb_intercon/wb_cdc.fst --instances wb_intercon_tb.wb_cdc_tb.dut:WBSubordinate --sample-posedge wb_intercon_tb.wb_cdc_tb.dut.wbm_clk --show-waveform-time --time-unit s 2>&1"
 
 [[tests]]
-name = "bi.tests_wishbone_wishbone_monitor.wishbone_bi"
+name = "bi.tests_wishbone_wishbone_bi.wishbone_bi"
 paths = [
-  "../../tests/wishbone/wishbone.monitor.prot",
+  "../../tests/wishbone/wishbone.bi.prot",
 ]
 expect_dir = "../../tests/wishbone/expects"
 expect_name = "wishbone.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wishbone/wishbone.monitor.prot --wave tests/wishbone/reqwalker.vcd --instances TOP.reqwalker:WBSubordinate --sample-posedge TOP.reqwalker.i_clk 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/wishbone/wishbone.bi.prot --wave tests/wishbone/reqwalker.vcd --instances TOP.reqwalker:WBSubordinate --sample-posedge TOP.reqwalker.i_clk 2>&1"
