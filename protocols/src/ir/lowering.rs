@@ -291,15 +291,11 @@ impl<'a> Lowerer<'a> {
     }
 
     fn add_input_dont_care_assignments(&mut self, ast: &Protocol, node_id: NodeId) {
-        let dut = ast
-            .ctx
-            .type_param
-            .expect("protocol should have a DUT type parameter");
+        let dut = ast.ctx.dut_sym;
 
         for input in self
             .symbols
             .get_children(&dut)
-            .into_iter()
             .filter(|sym| self.symbols[*sym].is_in_port())
         {
             let assignment = Assignment::dont_care(self.ir.true_id());

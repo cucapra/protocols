@@ -21,8 +21,7 @@ pub fn to_verilog(
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     // derive the instance name from the first protocol
-    let instance_name_id = module.protos[0].type_param.unwrap();
-    let instance_name = st[instance_name_id].name().to_string();
+    let instance_name = st[module.protos[0].dut_sym].name().to_string();
 
     // header
     writeln!(out, "// Testbench generated with protocols")?;

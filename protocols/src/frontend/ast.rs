@@ -13,7 +13,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use strum::IntoEnumIterator;
 
 use crate::frontend::serialize::{build_statements, serialize_expr};
-use crate::frontend::symbol::{Arg, Dir, ScopeId, StructId, SymbolId, SymbolTable, Type};
+use crate::frontend::symbol::{
+    Arg, Dir, INVALID_SYMBOL_ID, ScopeId, StructId, SymbolId, SymbolTable, Type,
+};
 
 /// Frontend representation of parsed protocol files.
 #[derive(Debug, Clone)]
@@ -31,8 +33,8 @@ pub struct ProtocolContext {
     /// List of `Arg`s to the `Protocol`
     pub args: Vec<Arg>,
 
-    /// Optional type parameter (identified by its `SymbolId`)
-    pub type_param: Option<SymbolId>,
+    /// type parameter symbol
+    pub dut_sym: SymbolId,
 
     /// Whether the protocol has been marked as `idle` with `#[idle]`
     pub is_idle: bool,
@@ -55,7 +57,7 @@ pub struct ProtocolContext {
 fn assert_proto_ctx_eq(a: &ProtocolContext, b: &ProtocolContext) {
     assert_eq!(a.name, b.name, "{a:?}\n{b:?}");
     assert_eq!(a.args, b.args, "{a:?}\n{b:?}");
-    assert_eq!(a.type_param, b.type_param, "{a:?}\n{b:?}");
+    assert_eq!(a.dut_sym, b.dut_sym, "{a:?}\n{b:?}");
     assert_eq!(a.is_idle, b.is_idle, "{a:?}\n{b:?}");
     // TODO: expression comparison does not work
     // assert_eq!(a.exprs, b.exprs, "{a:?}\n{b:?}");
@@ -74,7 +76,7 @@ impl ProtocolContext {
         Self {
             name,
             args: Vec::default(),
-            type_param: None,
+            dut_sym: INVALID_SYMBOL_ID,
             is_idle: false,
             exprs,
             dont_care_id,
@@ -118,6 +120,22 @@ impl ProtocolContext {
 
     pub fn expr_loc_clone(&self) -> SecondaryMap<ExprId, (usize, usize, usize)> {
         self.expr_loc.clone()
+    }
+
+    pub fn dut_struct(&self, st: &SymbolTable) -> StructId {
+        if let Type::Struct(struct_id) = st[self.dut_sym].tpe() {
+            struct_id
+        } else {
+            unreachable!("DUT must always be a struct")
+        }
+    }
+
+    pub fn dut_pins(&self, st: &SymbolTable) -> impl Iterator<Item = SymbolId> {
+        st.get_children(&self.dut_sym)
+    }
+
+    pub fn dut_input_symbols(&self, st: &SymbolTable) -> impl Iterator<Item = SymbolId> {
+        self.dut_pins(st).filter(|sym| st[sym].is_in_port())
     }
 }
 
@@ -465,7 +483,7 @@ pub enum LocationId {
     Stmt(StmtId),
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum BinOp {
     Equal,
     Concat,
@@ -542,6 +560,33 @@ impl BoxedExpr {
             BoxedExpr::Slice(_, _, _, _, end) => *end,
         }
     }
+}
+
+pub fn find_symbols(ctx: &ProtocolContext, e: ExprId) -> FxHashSet<SymbolId> {
+    let mut out = FxHashSet::default();
+    let mut todo = vec![e];
+    while let Some(e) = todo.pop() {
+        match ctx[e].clone() {
+            Expr::Const(_) => {}
+            Expr::Sym(s) => {
+                out.insert(s);
+            }
+            Expr::DontCare => {}
+            Expr::Binary(_, a, b) => {
+                todo.push(a);
+                todo.push(b);
+            }
+            Expr::Unary(_, a) => {
+                todo.push(a);
+            }
+            Expr::Slice(a, _, _) => {
+                todo.push(a);
+            }
+            Expr::IsLastIteration => {}
+            Expr::IterCount(_) => {}
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -649,7 +694,7 @@ mod tests {
         // 2) create transaction
         let mut calyx_go_done = Protocol::new("calyx_go_done".to_string(), scope);
         calyx_go_done.args = vec![Arg::new(ii), Arg::new(oo)];
-        calyx_go_done.type_param = Some(dut);
+        calyx_go_done.dut_sym = dut;
 
         // 3) create expressions
         let ii_expr = calyx_go_done.e(Expr::Sym(ii));

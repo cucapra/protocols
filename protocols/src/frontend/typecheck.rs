@@ -12,7 +12,6 @@ use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, ch
 use crate::frontend::symbol::*;
 use anyhow::{Context, anyhow, bail};
 use baa::BitVecOps;
-use rustc_hash::FxHashSet;
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -204,16 +203,19 @@ fn type_check_stmt(
             // the same type as the LHS
             if rhs_type == Type::Unknown {
                 rhs_type = lhs_type;
-                handler.emit_diagnostic_stmt(
-                    tr,
-                    stmt_id,
-                    &format!(
-                        "Inferred RHS type as {} from LHS type {}.",
-                        serialize_type(st, rhs_type),
-                        serialize_type(st, lhs_type)
-                    ),
-                    Level::Warning,
-                );
+                let rhs_is_dont_care = matches!(tr[rhs], Expr::DontCare);
+                if !rhs_is_dont_care {
+                    handler.emit_diagnostic_stmt(
+                        tr,
+                        stmt_id,
+                        &format!(
+                            "Inferred RHS type as {} from LHS type {}.",
+                            serialize_type(st, rhs_type),
+                            serialize_type(st, lhs_type)
+                        ),
+                        Level::Warning,
+                    );
+                }
             }
             // Check whether the LHS & RHS have equivalent types
             if lhs_type.is_equivalent(&rhs_type) {
@@ -347,33 +349,6 @@ fn type_check_stmt(
             Ok(())
         }
     }
-}
-
-fn find_symbols(ctx: &ProtocolContext, e: ExprId) -> FxHashSet<SymbolId> {
-    let mut out = FxHashSet::default();
-    let mut todo = vec![e];
-    while let Some(e) = todo.pop() {
-        match ctx[e].clone() {
-            Expr::Const(_) => {}
-            Expr::Sym(s) => {
-                out.insert(s);
-            }
-            Expr::DontCare => {}
-            Expr::Binary(_, a, b) => {
-                todo.push(a);
-                todo.push(b);
-            }
-            Expr::Unary(_, a) => {
-                todo.push(a);
-            }
-            Expr::Slice(a, _, _) => {
-                todo.push(a);
-            }
-            Expr::IsLastIteration => {}
-            Expr::IterCount(_) => {}
-        }
-    }
-    out
 }
 
 /// For input pins,

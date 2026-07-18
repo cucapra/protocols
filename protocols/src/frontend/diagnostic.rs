@@ -17,7 +17,6 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{Buffer, Color, ColorSpec, WriteColor};
 use pest::RuleType;
 use pest::iterators::Pair;
-use rustc_hash::FxHashSet;
 
 use crate::Value;
 use crate::frontend::ast::*;
@@ -114,7 +113,6 @@ impl Diagnostic {
 
 pub struct DiagnosticHandler {
     files: SimpleFiles<String, String>,
-    reported_errs: FxHashSet<ErrorKey>,
     error_string: String,
     /// `color_choice` indicates whether to emit error messages w/ ANSI colors
     color_choice: ColorChoice,
@@ -146,7 +144,6 @@ impl DiagnosticHandler {
     ) -> Self {
         Self {
             files: SimpleFiles::new(),
-            reported_errs: FxHashSet::default(),
             error_string: String::new(),
             color_choice,
             no_error_locations: error_locations,
@@ -195,10 +192,7 @@ impl DiagnosticHandler {
         if level == Level::Warning && !self.emit_warnings {
             return;
         }
-        // need to check errors to avoid recursive duplication of error message
-        if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
-            return;
-        }
+
         let mut buffer = self.create_buffer();
         if let Some((start, end, fileid)) = tr.get_expr_loc(*expr_id) {
             let label = Label {
@@ -218,6 +212,11 @@ impl DiagnosticHandler {
             let error_msg = String::from_utf8_lossy(buffer.as_slice());
             self.error_string.push_str(&error_msg);
             eprint!("{}", error_msg);
+        } else {
+            panic!(
+                "Failed to get location information for expression {:?} in {}",
+                *expr_id, tr.name
+            );
         }
     }
 
@@ -295,31 +294,11 @@ impl DiagnosticHandler {
         message: &str,
         level: Level,
     ) {
-        self.emit_diagnostic_stmt_for_thread(tr, stmt_id, message, level, None)
-    }
-
-    /// Like `emit_diagnostic_stmt`, but with an optional thread_idx for per-thread deduplication.
-    /// Use this when the same statement can have different errors for different threads.
-    pub fn emit_diagnostic_stmt_for_thread(
-        &mut self,
-        tr: &Protocol,
-        stmt_id: &StmtId,
-        message: &str,
-        level: Level,
-        thread_idx: Option<usize>,
-    ) {
         // Skip warnings if emit_warnings is false
         if level == Level::Warning && !self.emit_warnings {
             return;
         }
-        // need to check errors to avoid recursive duplication of error message
-        let key = match thread_idx {
-            Some(idx) => ErrorKey::StmtKeyWithThread(*stmt_id, idx),
-            None => ErrorKey::StmtKey(*stmt_id),
-        };
-        if !self.reported_errs.insert(key) {
-            return;
-        }
+
         let buffer = &mut self.create_buffer();
         if let Some((start, end, fileid)) = tr.get_stmt_loc(*stmt_id) {
             let label = Label {
@@ -339,6 +318,11 @@ impl DiagnosticHandler {
             let error_msg = String::from_utf8_lossy(buffer.as_slice());
             self.error_string.push_str(&error_msg);
             eprint!("{}", error_msg);
+        } else {
+            panic!(
+                "Failed to get location info for stmt {:?} in {}",
+                *stmt_id, tr.name
+            );
         }
     }
 
@@ -417,9 +401,7 @@ impl DiagnosticHandler {
         if level == Level::Warning && !self.emit_warnings {
             return;
         }
-        if !self.reported_errs.insert(ErrorKey::ExprKey(*expr_id)) {
-            return;
-        }
+
         let buffer = &mut self.create_buffer();
         let mut locations = Vec::new();
         let mut fileid_opt = None;
