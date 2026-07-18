@@ -1,8 +1,7 @@
 # Checked-in test catalog. Hand-maintained source of truth.
 # Consumed by scripts/generate_runt_configs.py.
 #
-# TX_CASES are keyed by their .tx path. MONITOR_CASES (the wave-based cases that
-# drive the bi suite) are keyed by a unique id
+# TX_CASES are keyed by their .tx path. BI_CASES are keyed by a unique id
 
 TX_CASES = {
     "examples/picorv32/unsigned_mul.tx": {
@@ -502,7 +501,7 @@ TX_CASES = {
     },
 }
 
-MONITOR_CASES = {
+BI_CASES = {
     "tests.adders.add_d1": {
         "protocol": "tests/adders/add_d1.prot",
         "wave": "tests/adders/add_d1.fst",
@@ -1094,7 +1093,7 @@ def _antmicro_case(stem):
     }
 
 
-MONITOR_CASES.update(
+BI_CASES.update(
     {
         f"tests.antmicro.{stem.replace('/', '.')}": _antmicro_case(stem)
         for stem in ANTMICRO_TRACE_STEMS

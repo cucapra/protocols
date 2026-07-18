@@ -43,18 +43,16 @@ def load_tx_cases() -> list[dict]:
     return out
 
 
-def load_monitor_cases() -> list[dict]:
-    """Same idea as load_tx_cases but for the monitor cases"""
+def load_bi_cases() -> list[dict]:
+    """Same idea as load_tx_cases but for the bi cases"""
     out = []
-    for case_id, c in test_catalog.MONITOR_CASES.items():
+    for case_id, c in test_catalog.BI_CASES.items():
         out.append(
             {
                 "id": case_id,
                 "path": c["protocol"],
                 "wave": c.get("wave"),
                 "instances": c.get("instances", ()),
-                "max_steps": c.get("max_steps"),
-                "timeout_secs": c.get("timeout_secs"),
                 "extra_args": c.get("extra_args", ()),
                 "expected": c["expect"],
             }
@@ -190,8 +188,6 @@ def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     if case["instances"]:
         cmd += ["--instances", *case["instances"]]
     cmd += case["extra_args"]
-    if case["timeout_secs"] is not None:
-        cmd = timeout_cmd(case["timeout_secs"], cmd)
     # We redirect stderr to stdout so that the expected output files
     # contain error messages if BI fails
     return [("", repo_root_command(cmd, stderr="stdout"))]
@@ -384,13 +380,12 @@ def write_runt_toml(output_dir: Path, suites) -> None:
 
 def generate_runt_configs() -> None:
     tx = load_tx_cases()
-    mon = load_monitor_cases()
+    bi = load_bi_cases()
     # Each suite maps a name to (runner, cases). interp + graph_interp
-    # together cover every tx test.
+    # together cover every test.
     suite_specs = {
         "interp": ("interp", tx),
-        # The bi suite runs over the wave-based cases (MONITOR_CASES).
-        "bi": ("bi", mon),
+        "bi": ("bi", bi),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
         "fail": ("fail", fail_cases(tx)),
