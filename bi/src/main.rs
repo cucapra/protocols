@@ -120,7 +120,7 @@ fn main() {
     // parse protocol file
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
-    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
+    let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
     let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
     let posedge_clock = get_clock(&modules, cli.sample_posedge);
 
