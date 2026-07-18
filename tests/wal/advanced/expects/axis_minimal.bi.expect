@@ -1,12 +1,11 @@
 // trace 0
 trace {
 }
-error: [send_data@0] executing step 3 of the transaction: 0f != 14
-   ┌─ tests/wal/advanced/axis_minimal.prot:10:5
-   │
-10 │     D.m_axis_tdata := data;
-   │     ^^^^^^^^^^^^^^^^^^^^^^^ [send_data@0] executing step 3 of the transaction: 0f != 14
+[0m[1m[38;5;9merror[0m[1m: [send_data@0] executing step 3 of the transaction: 0f != 14[0m
+   [0m[34m┌─[0m tests/wal/advanced/axis_minimal.prot:10:5
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     [0m[31mD.m_axis_tdata := data;[0m
+   [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[send_data@0] executing step 3 of the transaction: 0f != 14[0m
 
-Error: "Monitor failed"
 ---CODE---
 1

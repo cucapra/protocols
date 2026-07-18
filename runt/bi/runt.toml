@@ -1204,7 +1204,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_loop_empty.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo --max-traces 20 2>&1"
 
 [[tests]]
 name = "bi.tests_fifo_push_pop_loop_not_empty.push_pop_loop_not_empty_bi"

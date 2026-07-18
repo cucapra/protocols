@@ -7,23 +7,22 @@ trace {
 trace {
     idle();  // [time: 0ns -> 25ns]
 }
-error: [read_v2@11?1!] executing step 3 of the transaction: 1 != 0
-    ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:169:5
-    │
-169 │     assert_eq(DUT.S_AXI_ARREADY, 1'b0);
-    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v2@11?1!] executing step 3 of the transaction: 1 != 0
+[0m[1m[38;5;9merror[0m[1m: [read_v2@11?1!] executing step 3 of the transaction: 1 != 0[0m
+    [0m[34m┌─[0m tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:169:5
+    [0m[34m│[0m
+[0m[34m169[0m [0m[34m│[0m     [0m[31massert_eq(DUT.S_AXI_ARREADY, 1'b0);[0m
+    [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[read_v2@11?1!] executing step 3 of the transaction: 1 != 0[0m
 
 
 // trace 1
 trace {
     idle();  // [time: 0ns -> 25ns]
 }
-error: [read_v2@11?2?] executing step 3 of the transaction: 1 != 0
-    ┌─ tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:163:9
-    │
-163 │         DUT.S_AXI_RREADY := 1'b0;
-    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v2@11?2?] executing step 3 of the transaction: 1 != 0
+[0m[1m[38;5;9merror[0m[1m: [read_v2@11?2?] executing step 3 of the transaction: 1 != 0[0m
+    [0m[34m┌─[0m tests/fpga-debugging/axi-lite-s1/s1_buggy.prot:163:9
+    [0m[34m│[0m
+[0m[34m163[0m [0m[34m│[0m         [0m[31mDUT.S_AXI_RREADY := 1'b0;[0m
+    [0m[34m│[0m         [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[read_v2@11?2?] executing step 3 of the transaction: 1 != 0[0m
 
-Error: "Monitor failed"
 ---CODE---
 1

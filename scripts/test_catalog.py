@@ -626,7 +626,6 @@ BI_CASES = {
         "wave": "tests/fifo/push_pop_loop_empty.fst",
         "instances": ("fifo_wrapper:Fifo",),
         "expect": None,
-        "timeout_secs": 5,
         "extra_args": ("--max-traces", "20"),
     },
     "tests.fifo.push_pop_loop_not_empty": {

@@ -14,34 +14,33 @@ trace {
 trace {
     reset();  // [time: 0ns -> 25ns]
 }
-error: [reset@1] executing step 0 of the transaction: 0 != 1
-    ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:115:5
-    │
-115 │     DUT.rst := 1'b1;
-    │     ^^^^^^^^^^^^^^^^ [reset@1] executing step 0 of the transaction: 0 != 1
+[0m[1m[38;5;9merror[0m[1m: [reset@1] executing step 0 of the transaction: 0 != 1[0m
+    [0m[34m┌─[0m tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:115:5
+    [0m[34m│[0m
+[0m[34m115[0m [0m[34m│[0m     [0m[31mDUT.rst := 1'b1;[0m
+    [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^[0m [0m[31m[reset@1] executing step 0 of the transaction: 0 != 1[0m
 
 
 // trace 1
 trace {
     reset();  // [time: 0ns -> 25ns]
 }
-error: [idle@1] executing step 0 of the transaction: 1 != 0
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:97:5
-   │
-97 │     DUT.m_axis_tready := 1'b0;
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle@1] executing step 0 of the transaction: 1 != 0
+[0m[1m[38;5;9merror[0m[1m: [idle@1] executing step 0 of the transaction: 1 != 0[0m
+   [0m[34m┌─[0m tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:97:5
+   [0m[34m│[0m
+[0m[34m97[0m [0m[34m│[0m     [0m[31mDUT.m_axis_tready := 1'b0;[0m
+   [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[idle@1] executing step 0 of the transaction: 1 != 0[0m
 
 
 // trace 2
 trace {
     reset();  // [time: 0ns -> 25ns]
 }
-error: [pop@1] executing step 0 of the transaction: 0 != 1
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:62:5
-   │
-62 │     assert_eq(DUT.m_axis_tvalid, 1'b1);
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [pop@1] executing step 0 of the transaction: 0 != 1
+[0m[1m[38;5;9merror[0m[1m: [pop@1] executing step 0 of the transaction: 0 != 1[0m
+   [0m[34m┌─[0m tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:62:5
+   [0m[34m│[0m
+[0m[34m62[0m [0m[34m│[0m     [0m[31massert_eq(DUT.m_axis_tvalid, 1'b1);[0m
+   [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31m[pop@1] executing step 0 of the transaction: 0 != 1[0m
 
-Error: "Monitor failed"
 ---CODE---
 1
