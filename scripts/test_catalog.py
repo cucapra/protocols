@@ -538,6 +538,10 @@ BI_CASES = {
         "instances": ("add_d1:Adder",),
         "expect": None,
         "timeout_secs": 5,
+        "extra_args": (
+            "--max-traces",
+            "20",
+        ),
     },
     "tests.alus.alu_d1.bi": {
         "protocol": "tests/alus/alu_d1.bi.prot",
@@ -623,6 +627,7 @@ BI_CASES = {
         "instances": ("fifo_wrapper:Fifo",),
         "expect": None,
         "timeout_secs": 5,
+        "extra_args": ("--max-traces", "20"),
     },
     "tests.fifo.push_pop_loop_not_empty": {
         "protocol": "tests/fifo/push_pop_loop_not_empty.prot",

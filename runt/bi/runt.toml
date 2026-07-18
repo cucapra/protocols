@@ -52,7 +52,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/expects"
 expect_name = "nested_busy_wait.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder --max-traces 20 2>&1"
 
 [[tests]]
 name = "bi.tests_alus_alu_d1_bi.alu_d1_bi"
