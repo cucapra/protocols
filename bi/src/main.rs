@@ -114,13 +114,14 @@ fn main() {
     let cli = Cli::parse();
 
     if let Some(tu) = cli.time_unit
-        && tu != "ns" {
-            eprintln!(
-                "Only nano seconds are supported (received time unit {}). Exiting...",
-                tu
-            );
-            return;
-        }
+        && tu != "ns"
+    {
+        eprintln!(
+            "Only nano seconds are supported (received time unit {}). Exiting...",
+            tu
+        );
+        return;
+    }
 
     // parse protocol file
     let show_warnings = false;
