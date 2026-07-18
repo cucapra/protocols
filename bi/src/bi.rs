@@ -828,8 +828,9 @@ impl Thread {
                         proto_id: ti.proto_id,
                         thread_name: self.name.clone(),
                         stmt,
-                        a,
-                        b,
+                        a: a.clone(),
+                        b: b.clone(),
+                        kind: FailureKind::SignalValueMismatch { lhs: a, rhs: b }
                     })
                 }
             }
