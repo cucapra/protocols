@@ -91,7 +91,7 @@ def expect_name(case: dict, runner: str) -> str:
 
 def expect_dir(case: dict, runner: str) -> str:
     wave = case.get("wave")
-    base = Path(wave if runner in ("monitor", "bi") and wave else case["path"]).parent
+    base = Path(wave if runner == "bi" and wave else case["path"]).parent
     return f"../../{base.as_posix()}/expects"
 
 
@@ -105,7 +105,7 @@ def binary_prefix(binary: str) -> list[str]:
 def repo_root_command(cmd: list[str], stderr: str = "discard") -> str:
     # Each runt test runs exactly one path, so we bake it straight into the
     # command. Runt captures stdout; interp snapshots intentionally include
-    # diagnostics, while monitor/graph snapshots historically discard stderr.
+    # diagnostics, while graph snapshots historically discard stderr.
     if stderr == "stdout":
         tail = " 2>&1"
     elif stderr == "discard":
@@ -119,7 +119,7 @@ def repo_root_command(cmd: list[str], stderr: str = "discard") -> str:
 
 def timeout_cmd(timeout_secs: int, cmd: list[str]) -> list[str]:
     # Runt doesn't support expected timeouts, so we have to have this wrapper
-    # on the interp/monitor commands
+    # on the interp/bi commands
     # Run in a new process group and kill the whole group (cargo's child binary
     # included) on expiry, exiting 124 to match coreutils.
     script = (
@@ -181,21 +181,6 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
 
 
-def monitor_runt_command(case: dict) -> list[tuple[str, str]]:
-    cmd = [*binary_prefix("protocols-monitor"), "--protocol", case["path"]]
-    if case["wave"]:
-        cmd += ["--wave", case["wave"]]
-    if case["instances"]:
-        cmd += ["--instances", *case["instances"]]
-    if case["max_steps"] is not None:
-        cmd += ["--max-steps", str(case["max_steps"])]
-    cmd += case["extra_args"]
-    if case["timeout_secs"] is not None:
-        cmd = timeout_cmd(case["timeout_secs"], cmd)
-    return [("", repo_root_command(cmd))]
-
-
-# Same as `monitor_runt_command` above but for the BI test cases
 def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     # We pass in `--color never` to BI to suppress color in error messages
     # (so that the .expect files only display plaintext)
@@ -277,7 +262,6 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
 RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
-    "monitor": monitor_runt_command,
     "bi": bi_runt_command,
     "waveform": waveform_runt_command,
     "fail": fail_runt_command,
@@ -401,13 +385,11 @@ def write_runt_toml(output_dir: Path, suites) -> None:
 def generate_runt_configs() -> None:
     tx = load_tx_cases()
     mon = load_monitor_cases()
-    # Each suite maps a name to (runner, cases). interp + monitor + graph_interp
-    # together cover every test.
+    # Each suite maps a name to (runner, cases). interp + graph_interp
+    # together cover every tx test.
     suite_specs = {
         "interp": ("interp", tx),
-        "monitor": ("monitor", mon),
-        # Note: bi uses the same cases as the monitor (i.e. MONITOR_CASES)
-        # as the monitor/bi share largely the same CLI args
+        # The bi suite runs over the wave-based cases (MONITOR_CASES).
         "bi": ("bi", mon),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),

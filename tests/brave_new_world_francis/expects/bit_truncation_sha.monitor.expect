@@ -1,4 +1,0 @@
-// trace 0
-trace {
-    bit_truncation_sha(4398046511104, 68719476736);
-}

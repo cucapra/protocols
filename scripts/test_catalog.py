@@ -1,7 +1,8 @@
 # Checked-in test catalog. Hand-maintained source of truth.
-# Consumed by scripts/generate_runt_configs.py and scripts/benchmark_monitor.py.
+# Consumed by scripts/generate_runt_configs.py.
 #
-# TX_CASES are keyed by their .tx path. MONITOR_CASES are keyed by a unique id
+# TX_CASES are keyed by their .tx path. MONITOR_CASES (the wave-based cases that
+# drive the bi suite) are keyed by a unique id
 
 TX_CASES = {
     "examples/picorv32/unsigned_mul.tx": {

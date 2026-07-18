@@ -34,8 +34,6 @@ jobs:
       run: runt runt/interp
     - name: Run Runt tests for graph-interpreter
       run: runt runt/graph_interp
-    - name: Run Runt tests for monitor
-      run: runt runt/monitor
     - name: Run Runt tests for bi
       run: runt runt/bi
     - name: Run Runt tests for waveform
@@ -122,30 +120,7 @@ jobs:
       - name: Use ruff (via uv) to format Python files
         # We pass in `--preview-features format` to suppress 
         # uv's warning messages about the formatter being experimental
-        run: uv format --check --preview-features format      
-
-  # benchmark:
-  #   name: Performance Benchmarks
-  #   runs-on: ubuntu-24.04
-  #   timeout-minutes: 30
-
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0  # Fetch all history to access baseline
-  #     - uses: ./.github/actions/setup-test-environment
-  #       with:
-  #         github_token: ${{ secrets.GITHUB_TOKEN }}
-  #     - name: Install hyperfine
-  #       run: |
-  #         wget https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine_1.19.0_amd64.deb
-  #         sudo dpkg -i hyperfine_1.19.0_amd64.deb
-  #     - name: Build monitor (release)
-  #       run: cargo build --release --package protocols-monitor
-  #     - name: Run benchmarks
-  #       run: uv run scripts/benchmark_monitor.py
-  #     - name: Check for performance regressions
-  #       run: uv run scripts/check_performance_regression.py
+        run: uv format --check --preview-features format
 
 
   verilog:

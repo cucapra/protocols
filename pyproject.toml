@@ -1,13 +1,10 @@
 [project]
 name = "protocols"
 version = "0.1.0"
-description = "Scripts for benchmarking the performance of the Protocols monitor"
+description = "Scripts for generating the Protocols test catalog and Runt configs"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "matplotlib>=3.10.8",
-    "tqdm>=4.67.1",
-]
+dependencies = []
 
 [dependency-groups]
 dev = [
