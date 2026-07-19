@@ -113,16 +113,6 @@ fn build_arg_map<'a>(
         .collect()
 }
 
-fn print_panic_payload(payload: Box<dyn std::any::Any + Send>) {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        println!("{message}");
-    } else if let Some(message) = payload.downcast_ref::<String>() {
-        println!("{message}");
-    } else {
-        println!("graph interpreter panicked");
-    }
-}
-
 fn print_trace_success(trace_index: usize) {
     println!("Trace {} executed successfully!", trace_index);
 }
@@ -511,7 +501,7 @@ fn main() {
 
     // let old_hook = std::panic::take_hook();
     // std::panic::set_hook(Box::new(|_| {}));
-    let result = catch_unwind(AssertUnwindSafe(|| {
+    let _result = catch_unwind(AssertUnwindSafe(|| {
         if cli.bound > 0 {
             run_bmc(&cli, &st, &module, &traces);
         } else if cli.transition_system {

@@ -16,11 +16,11 @@ pub type ReachingDefs = FxHashMap<String, Assignment>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and
 /// returns the in-neighbors for each node.
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 pub fn predecessors(pg: &ProtoGraph, start: NodeId) -> FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> {
     let mut predecessors: FxHashMap<NodeId, Vec<(NodeId, ExprRef)>> = FxHashMap::default();
-    let mut visited: HashSet<NodeId> = HashSet::default();
+    let mut visited: FxHashSet<NodeId> = FxHashSet::default();
     let mut queue: VecDeque<NodeId> = VecDeque::new();
 
     // Start BFS from the given node

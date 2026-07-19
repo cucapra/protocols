@@ -211,13 +211,9 @@ pub fn merge_unordered_assignment(
         .simplify(&mut protocol.expr_ctx, new_concretes);
 
     let not_new_concretes = protocol.not_guard(new_concretes);
-
     let existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
-
     let not_existing_concretes = protocol.not_guard(existing_concretes);
-
     let new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
-
     let dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
 
     let mut concretes = concretes_without_dont_care(protocol, &existing);

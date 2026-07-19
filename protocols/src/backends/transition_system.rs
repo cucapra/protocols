@@ -28,7 +28,7 @@ struct InputDriver {
 }
 
 /// Turn a vector of `IfThenExpr`s, with *Right-to-Left* priority, into an ITE with default `default`
-pub(crate) fn if_thens_to_ite(v: Vec<IfThenExpr>, ctx: &mut Context, default: ExprRef) -> ExprRef {
+pub fn if_thens_to_ite(v: Vec<IfThenExpr>, ctx: &mut Context, default: ExprRef) -> ExprRef {
     let mut ite = default;
 
     for ge in v {
@@ -173,7 +173,7 @@ pub struct LoweredSystemResult {
     pub is_dont_care: FxHashMap<PortId, ExprRef>,
 }
 
-pub(crate) struct CoreLoweredSystem {
+pub struct CoreLoweredSystem {
     pub ctx: Context,
     pub ts: TransitionSystem,
     pub pg: ProtoGraph,
@@ -187,7 +187,7 @@ pub(crate) struct CoreLoweredSystem {
     pub reachable_nodes: Vec<NodeId>,
 }
 
-pub(crate) fn lower_proto_graph_to_transition_system(
+pub fn lower_proto_graph_to_transition_system(
     mut pg: ProtoGraph,
     mut ctx: Context,
     mut ts: TransitionSystem,
