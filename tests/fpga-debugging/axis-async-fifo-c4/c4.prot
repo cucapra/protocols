@@ -1,5 +1,4 @@
-// Only `Sender` supports `push`
-struct Sender {
+struct AsyncFifo {
     // Active-high reset signal
     // Note: AXI-Stream says reset should be active-low,
     // but this DUT uses active-high instead
@@ -11,14 +10,6 @@ struct Sender {
     in s_axis_tdata: u8,
     in s_axis_tvalid: u1,
     out s_axis_tready: u1,
-}
-
-// Only `Receiver` supports `pop`
-struct Receiver {
-    // Active-high reset signal
-    // Note: AXI-Stream says reset should be active-low,
-    // but this DUT uses active-high instead
-    in rst: u1,
 
     // The Receiver receives a READY signal from the environment
     // (environment is ready to read data that is popped from the FIFO)
@@ -30,7 +21,7 @@ struct Receiver {
 
 // PUSH: Write data to FIFO via AXI-Stream receiver interface
 // Performs data transfer when s_axis_tvalid and s_axis_tready are both 1
-prot push<DUT: Sender>(data: u8) {
+prot push<DUT: AsyncFifo>(data: u8) {
     DUT.rst := 1'b0;
 
     // Update the data field and set receiver's valid bit to 1 to indicate
@@ -47,8 +38,8 @@ prot push<DUT: Sender>(data: u8) {
     step();
 }
 
-// POP: Read data from FIFO via AXI-Stream sender interface
-prot pop<DUT: Receiver>(data: u8) {
+// POP: Read data from FIFO (the `data` argument is the data that is popped)
+prot pop<DUT: AsyncFifo>(data: u8) {
     DUT.rst := 1'b0;
     DUT.m_axis_tready := 1'b1;
 
@@ -61,63 +52,38 @@ prot pop<DUT: Receiver>(data: u8) {
     // without waiting for it to become 1.
     assert_eq(DUT.m_axis_tvalid, 1'b1);
 
-    // One cycle for the transfer to complete
-    step();
-
-    // Capture output data
     assert_eq(DUT.m_axis_tdata, data);
 
-    // Release inputs after transaction (i.e. release all constraints)
-    DUT.m_axis_tready := X;
-    DUT.rst := X;
-
-    fork();
+    // One cycle for the transfer to complete
     step();
 }
 
 // IDLE: No transaction occurs on the monitored interface
-// For Sender: no push transaction (no data being written to FIFO)
-// For Receiver: no pop transaction (no data being read from FIFO)
-prot idle<DUT: Sender>() {
+prot idle<DUT: AsyncFifo>() {
     DUT.rst := 1'b0;
 
-    // Ensure no push handshake by setting valid = 0
-    // (Push handshake requires s_axis_tvalid && s_axis_tready)
+    // Ensure no pushes from the sender by setting valid = 0
     DUT.s_axis_tvalid := 1'b0;
 
     // Data is DontCare when valid = 0
     DUT.s_axis_tdata := X;
 
-    step();
-}
-
-prot idle<DUT: Receiver>() {
-    DUT.rst := 1'b0;
-
-    // Ensure no pop handshake by setting ready = 0
-    // (Pop handshake requires m_axis_tvalid && m_axis_tready)
+    // Ensure no pops from the receiver by setting ready = 0
     DUT.m_axis_tready := 1'b0;
 
     step();
 }
 
 // RESET: Assert reset signal to initialize FIFO
-prot reset<DUT: Sender>() {
+prot reset<DUT: AsyncFifo>() {
     DUT.rst := 1'b1;
 
     // Valid must be low when reset is asserted (AXI-Stream spec section 2.8.2)
     DUT.s_axis_tvalid := 1'b0;
-
-    step();
-}
-
-// We have to also define `reset` for the `Receiver` `DUT` since different
-// structs are now treated separately in the new monitor implementation
-prot reset<DUT: Receiver>() {
-    DUT.rst := 1'b1;
 
     // Valid must be low when reset is asserted (AXI-Stream spec section 2.8.2)
     assert_eq(DUT.m_axis_tvalid, 1'b0);
 
     step();
 }
+

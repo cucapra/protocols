@@ -4,23 +4,297 @@ trace {
     idle();  // [time: 25ns -> 50ns]
     push(1);  // [time: 50ns -> 75ns]
     push(2);  // [time: 75ns -> 100ns]
-    push(3);  // [time: 100ns -> 150ns]
-    push(4);  // [time: 150ns -> 175ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 1
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 2
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 3
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 4
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 5
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
     push(5);  // [time: 175ns -> 200ns]
     push(6);  // [time: 200ns -> 225ns]
     push(7);  // [time: 225ns -> 250ns]
     push(8);  // [time: 250ns -> 250ns]
 }
-// trace 0
+
+// trace 6
 trace {
     reset();  // [time: 0ns -> 25ns]
     idle();  // [time: 25ns -> 50ns]
-    idle();  // [time: 50ns -> 75ns]
-    idle();  // [time: 75ns -> 100ns]
-    pop(2);  // [time: 100ns -> 150ns]
-    pop(3);  // [time: 125ns -> 175ns]
-    pop(4);  // [time: 150ns -> 200ns]
-    pop(5);  // [time: 175ns -> 225ns]
-    pop(6);  // [time: 200ns -> 250ns]
-    pop(7);  // [time: 225ns -> 250ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
 }
+
+// trace 7
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 8
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 9
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 10
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 11
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 12
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 13
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 14
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 15
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    pop(3);  // [time: 150ns -> 175ns]
+    pop(4);  // [time: 175ns -> 200ns]
+    push(6);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 16
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    push(4);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 17
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    push(4);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    push(7);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+
+// trace 18
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    push(4);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    pop(7);  // [time: 250ns -> 250ns]
+}
+
+// trace 19
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    pop(1);  // [time: 100ns -> 125ns]
+    push(3);  // [time: 125ns -> 150ns]
+    push(4);  // [time: 150ns -> 175ns]
+    push(5);  // [time: 175ns -> 200ns]
+    pop(5);  // [time: 200ns -> 225ns]
+    pop(6);  // [time: 225ns -> 250ns]
+    push(8);  // [time: 250ns -> 250ns]
+}
+Displayed 20/96 traces.
