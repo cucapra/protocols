@@ -88,7 +88,7 @@ pub fn lower_bmc(
     let entry_node = lowerer.ir.entry;
 
     let mut initial_choices = Vec::with_capacity(num_protos);
-    for idx in 0..num_protos {
+    for (idx, prototype) in lowered_protocols.iter().enumerate().take(num_protos) {
         let proto_idx_expr = lowerer.ir.expr_ctx.bit_vec_val(idx, width);
         let node_equals = if idx + 1 == num_protos {
             lowerer
@@ -98,8 +98,8 @@ pub fn lower_bmc(
         } else {
             lowerer.ir.expr_ctx.equal(proto_choices[0], proto_idx_expr)
         };
-        let prototype = lowered_protocols[idx].clone();
-        let new_frag = lowerer.copy_protocol_fragment(prototype, &instance_substitutions[0]);
+        let new_frag =
+            lowerer.copy_protocol_fragment(prototype.clone(), &instance_substitutions[0]);
 
         // if bound is 1, then exit should have the done action
         if bound == 1 {
@@ -125,7 +125,7 @@ pub fn lower_bmc(
         // TODO: the variable naming here sucks
         while let Some((graft_node, guard)) = graft_points.pop() {
             let mut choices = Vec::with_capacity(num_protos);
-            for idx in 0..num_protos {
+            for (idx, prototype) in lowered_protocols.iter().enumerate().take(num_protos) {
                 // The final protocol absorbs the selector tail.
                 let proto_idx_expr = lowerer.ir.expr_ctx.bit_vec_val(idx, width);
                 let node_equals = if idx + 1 == num_protos {
@@ -138,9 +138,8 @@ pub fn lower_bmc(
                 };
                 let and_guard = lowerer.ir.and_guard(guard, node_equals);
 
-                let prototype = lowered_protocols[idx].clone();
                 let new_frag =
-                    lowerer.copy_protocol_fragment(prototype, &instance_substitutions[i]);
+                    lowerer.copy_protocol_fragment(prototype.clone(), &instance_substitutions[i]);
 
                 // if we're at the last transaction, then exit should have the done action
                 if i == bound - 1 {

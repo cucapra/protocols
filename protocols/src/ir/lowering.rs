@@ -78,7 +78,7 @@ impl<'a> Lowerer<'a> {
 
     pub fn graft_points_from_node(
         &mut self,
-        nodes: &Vec<NodeId>,
+        nodes: &[NodeId],
         entry: NodeId,
         exit: NodeId,
     ) -> Vec<(NodeId, ExprRef)> {
