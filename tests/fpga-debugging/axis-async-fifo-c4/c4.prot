@@ -4,15 +4,21 @@ struct AsyncFifo {
     // but this DUT uses active-high instead
     in rst: u1,
 
-    // The Sender recieves valid and data signals from the environment
-    // (data to be written, i.e. pushed to the FIFO),
-    // and outputs a ready signal, indicating that the FIFO can accept new data
+    // Signals related to pushes.
+    // These signals are named in the DUT with the `s_axis` prefix,
+    // since they are for the subordinate (receiving data).
+    // The subordinate receives valid and data signals from the environment
+    // (data to be pushed to the FIFO),
+    // and outputs a ready signal to the environment.
     in s_axis_tdata: u8,
     in s_axis_tvalid: u1,
     out s_axis_tready: u1,
 
-    // The Receiver receives a ready signal from the environment
-    // (environment is ready to read data that is popped from the FIFO)
+    // Signals related to pops. 
+    // These signals are named in the DUT with the `m_axis` prefix,
+    // since they are for the manager (producing data).
+    // The manager receives a ready signal from the environment
+    // (indicating that the environment is ready to read data that is popped from the FIFO)
     // and outputs a valid signal + the data being popped.
     in m_axis_tready: u1,
     out m_axis_tvalid: u1,
