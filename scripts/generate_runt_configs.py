@@ -70,11 +70,23 @@ def replace_non_alphanumerics(value: object) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_") or "default"
 
 
+def shared_bi_prot_files() -> frozenset[str]:
+    # Set of `.prot` files which are used by more than one BI test case 
+    # (e.g. Antmicro and the Brave New World test cases for fixed/buggy wvaeforms
+    # that share a single .prot file)
+    from collections import Counter
+
+    counts = Counter(test_case["protocol"] for test_case in test_catalog.BI_CASES.values())
+    return frozenset(file for (file, num_cases) in counts.items() if num_cases > 1)
+
+
 def case_stem(case: dict) -> str:
-    # antmicro cases share one .prot but differ by wave, so name them by
-    # the wave; otherwise use the test file's stem (dropping a .bi suffix).
+    # Antmicro & Brave New World test cases for the BI share the same `.prot`
+    # file but have multiple waveforms, so we use the waveform files'
+    # names to identify a particular test, otherwise we use the `.prot` file's stem
+    # to identify a test
     wave = case.get("wave")
-    if wave and case["path"].startswith("tests/antmicro/"):
+    if wave and case["path"] in shared_bi_prot_files():
         return Path(wave).stem
     stem = Path(case["path"]).stem
     return stem.removesuffix(".bi")
@@ -297,6 +309,15 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
     return frozenset(used)
 
 
+# `.tx` files that are kept only for the AST interpreter 
+# and excluded from the graph interpreter for now 
+# (otherwise `.tx` files are shared between the AST & graph interpreters)
+EXCLUDED_GRAPH_INTERPRETER_TEST_CASES = {
+    "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",
+    "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+}
+
+
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
     # Loop constructs the graph interpreter cannot handle (AST construct names).
@@ -306,6 +327,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
+        and c["path"] not in EXCLUDED_GRAPH_INTERPRETER_TEST_CASES
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
@@ -338,6 +360,7 @@ def fail_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] in runtime_failures
+        and c["path"] not in EXCLUDED_GRAPH_INTERPRETER_TEST_CASES
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])

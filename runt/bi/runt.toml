@@ -1306,22 +1306,22 @@ expect_name = "s3_fixed.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_bi"
+name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4.c4_buggy_bi"
 paths = [
-  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot",
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:AsyncFifo --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_bi"
+name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4.c4_fixed_bi"
 paths = [
-  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot",
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --wave tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst --instances TOP.test_axis_async_fifo.UUT.axis_reg_inst:AsyncFifo --sample-posedge TOP.test_axis_async_fifo.UUT.axis_reg_inst.clk --show-waveform-time --time-unit ns --max-traces 20 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_fifo_d11_d11_buggy.d11_buggy_bi"
