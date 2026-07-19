@@ -10,7 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 
 /// the first part of an ITE: the if condition, and the then expression
-struct IfThenExpr {
+pub struct IfThenExpr {
     pub if_cond: ExprRef,
     pub then: ExprRef,
 }
@@ -28,7 +28,7 @@ struct InputDriver {
 }
 
 /// Turn a vector of `IfThenExpr`s, with *Right-to-Left* priority, into an ITE with default `default`
-fn if_thens_to_ite(v: Vec<IfThenExpr>, ctx: &mut Context, default: ExprRef) -> ExprRef {
+pub(crate) fn if_thens_to_ite(v: Vec<IfThenExpr>, ctx: &mut Context, default: ExprRef) -> ExprRef {
     let mut ite = default;
 
     for ge in v {
@@ -173,16 +173,32 @@ pub struct LoweredSystemResult {
     pub is_dont_care: FxHashMap<PortId, ExprRef>,
 }
 
-pub fn into_transition_system(
+pub(crate) struct CoreLoweredSystem {
+    pub ctx: Context,
+    pub ts: TransitionSystem,
+    pub pg: ProtoGraph,
+    pub port_to_expr: FxHashMap<PortId, ExprRef>,
+    pub node_symbol: ExprRef,
+    pub node_id_width: u64,
+    pub done_state: ExprRef,
+    pub external_assert_state: ExprRef,
+    pub internal_assert_state: ExprRef,
+    pub is_dont_care: FxHashMap<PortId, ExprRef>,
+    pub reachable_nodes: Vec<NodeId>,
+}
+
+pub(crate) fn lower_proto_graph_to_transition_system(
     mut pg: ProtoGraph,
+    mut ctx: Context,
     mut ts: TransitionSystem,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
-    port_to_expr: FxHashMap<PortId, ExprRef>,
+    mut port_to_expr: FxHashMap<PortId, ExprRef>,
     st: &SymbolTable,
-) -> LoweredSystemResult {
-    let mut ctx = std::mem::take(&mut pg.expr_ctx);
-    let mut port_to_expr = port_to_expr;
+) -> CoreLoweredSystem {
     let mut is_dont_care = FxHashMap::default();
+    for &dont_care in &pg.dont_cares {
+        ts.add_input(&ctx, dont_care);
+    }
     bind_proto_graph_ports_to_dut(&mut pg, &mut ctx, &symbol_to_port, &port_to_expr);
 
     let node_count = pg.nodes().try_len().unwrap() as u64 + 3;
@@ -319,12 +335,15 @@ pub fn into_transition_system(
     }
 
     // populate the input drivers with assignments in the reachable nodes
-    for id in reachable_nodes {
-        let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
-        let node_equals = ctx.equal(node_sym, node_id_expr);
+    for (input, driver) in &mut input_drivers {
+        let mut assignment_failed_guard = ctx.get_false();
+        let mut grouped_assignments: Vec<(Assignment, ExprRef)> = Vec::new();
 
-        for (input, driver) in &mut input_drivers {
-            let assignment: Assignment = pg[id]
+        for id in &reachable_nodes {
+            let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
+            let node_equals = ctx.equal(node_sym, node_id_expr);
+
+            let assignment: Assignment = pg[*id]
                 .actions
                 .iter()
                 .filter_map(|action| match pg[action.op].clone() {
@@ -334,18 +353,33 @@ pub fn into_transition_system(
                 .next()
                 .unwrap();
 
-            let assignment_is_dont_care = assignment.dont_care;
             let assignment_is_triggered = assignment_is_triggered(&assignment, &mut ctx);
             let assignment_not_triggered = ctx.not(assignment_is_triggered);
 
             // if an assignment isn't triggered, go to the bad state
             let input_assignment_failed = ctx.and(node_equals, assignment_not_triggered);
+            assignment_failed_guard = ctx.or(assignment_failed_guard, input_assignment_failed);
+
+            if let Some((_, group_guard)) = grouped_assignments
+                .iter_mut()
+                .find(|(grouped_assignment, _)| *grouped_assignment == assignment)
+            {
+                *group_guard = ctx.or(*group_guard, node_equals);
+            } else {
+                grouped_assignments.push((assignment, node_equals));
+            }
+        }
+
+        if assignment_failed_guard != ctx.get_false() {
             transition_ite = ctx.ite(
-                input_assignment_failed,
+                assignment_failed_guard,
                 internal_bad_state_id,
                 transition_ite,
             );
+        }
 
+        for (assignment, group_guard) in grouped_assignments {
+            let assignment_is_dont_care = assignment.dont_care;
             let assignment_ite = assignment_to_ite(
                 assignment,
                 &mut ctx,
@@ -353,9 +387,9 @@ pub fn into_transition_system(
                 driver.input_expr_ref,
             );
 
-            driver.input_ite = ctx.ite(node_equals, assignment_ite, driver.input_ite);
+            driver.input_ite = ctx.ite(group_guard, assignment_ite, driver.input_ite);
             driver.input_is_dont_care = ctx.ite(
-                node_equals,
+                group_guard,
                 assignment_is_dont_care,
                 driver.input_is_dont_care,
             );
@@ -383,14 +417,41 @@ pub fn into_transition_system(
         next: Some(transition_ite),
     };
     ts.add_state(&ctx, node_state);
-    LoweredSystemResult {
+
+    CoreLoweredSystem {
         ctx,
         ts,
+        pg,
         port_to_expr,
         node_symbol: node_sym,
-        done_state: Some(done_state_id),
+        node_id_width,
+        done_state: done_state_id,
         external_assert_state: external_bad_state_id,
         internal_assert_state: internal_bad_state_id,
         is_dont_care,
+        reachable_nodes,
+    }
+}
+
+pub fn into_transition_system(
+    mut pg: ProtoGraph,
+    ts: TransitionSystem,
+    symbol_to_port: FxHashMap<SymbolId, PortId>,
+    port_to_expr: FxHashMap<PortId, ExprRef>,
+    st: &SymbolTable,
+) -> LoweredSystemResult {
+    let ctx = std::mem::take(&mut pg.expr_ctx);
+    let core =
+        lower_proto_graph_to_transition_system(pg, ctx, ts, symbol_to_port, port_to_expr, st);
+
+    LoweredSystemResult {
+        ctx: core.ctx,
+        ts: core.ts,
+        port_to_expr: core.port_to_expr,
+        node_symbol: core.node_symbol,
+        done_state: Some(core.done_state),
+        external_assert_state: core.external_assert_state,
+        internal_assert_state: core.internal_assert_state,
+        is_dont_care: core.is_dont_care,
     }
 }

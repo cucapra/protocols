@@ -1,6 +1,7 @@
 use std::collections::{BTreeSet, VecDeque};
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
+use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::ExprRef;
 
@@ -62,6 +63,29 @@ pub fn guard_assignment(
     }
 }
 
+pub fn guard_disjoint_assignment(
+    protocol: &mut ProtoGraph,
+    assignment: Assignment,
+    guard: ExprRef,
+) -> Assignment {
+    let not_dont_care = protocol.not_guard(assignment.dont_care);
+    let dont_care = protocol.and_guard(guard, assignment.dont_care);
+    let concretes = assignment
+        .concretes
+        .into_iter()
+        .filter_map(|(branch_guard, rhs)| {
+            let branch_guard = protocol.and_guard(not_dont_care, branch_guard);
+            let guarded = protocol.and_guard(guard, branch_guard);
+            (guarded != protocol.false_id()).then_some((guarded, rhs))
+        })
+        .collect();
+
+    Assignment {
+        dont_care,
+        concretes,
+    }
+}
+
 pub fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> ExprRef {
     let raw_coverage = assignment
         .concretes
@@ -73,7 +97,7 @@ pub fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> 
     protocol.and_guard(not_dont_care, raw_coverage)
 }
 
-pub fn effective_concretes(
+fn effective_concretes(
     protocol: &mut ProtoGraph,
     assignment: &Assignment,
 ) -> Vec<(ExprRef, ExprRef)> {
@@ -90,6 +114,38 @@ pub fn effective_concretes(
     }
 
     effective
+}
+
+fn coalesce_concretes(
+    protocol: &mut ProtoGraph,
+    concretes: Vec<(ExprRef, ExprRef)>,
+) -> Vec<(ExprRef, ExprRef)> {
+    let mut coalesced = Vec::with_capacity(concretes.len());
+    for (guard, rhs) in concretes {
+        if let Some((existing_guard, existing_rhs)) = coalesced.last_mut()
+            && *existing_rhs == rhs
+        {
+            *existing_guard = protocol.or_guard(*existing_guard, guard);
+        } else {
+            coalesced.push((guard, rhs));
+        }
+    }
+    coalesced
+}
+
+fn concretes_without_dont_care(
+    protocol: &mut ProtoGraph,
+    assignment: &Assignment,
+) -> Vec<(ExprRef, ExprRef)> {
+    let not_dont_care = protocol.not_guard(assignment.dont_care);
+    assignment
+        .concretes
+        .iter()
+        .filter_map(|(guard, rhs)| {
+            let guard = protocol.and_guard(not_dont_care, *guard);
+            (guard != protocol.false_id()).then_some((guard, *rhs))
+        })
+        .collect()
 }
 
 pub fn merge_ordered_assignment(
@@ -119,40 +175,187 @@ pub fn merge_unordered_assignment(
     existing: Assignment,
     new: Assignment,
 ) -> Assignment {
-    let existing_effective = effective_concretes(protocol, &existing);
-    let new_effective = effective_concretes(protocol, &new);
+    // Check conflicts using effective guards, but do not put those expanded
+    // guards in the merged assignment. The raw vectors already carry their
+    // precedence through their order.
+    let mut prior_existing = existing.dont_care;
+    for (existing_guard, existing_rhs) in &existing.concretes {
+        let not_prior_existing = protocol.not_guard(prior_existing);
+        let existing_effective = protocol.and_guard(not_prior_existing, *existing_guard);
+        let mut prior_new = new.dont_care;
 
-    for (existing_guard, existing_rhs) in &existing_effective {
-        for (new_guard, new_rhs) in &new_effective {
-            // assignments to the same value are totally legal
-            if existing_rhs == new_rhs {
-                continue;
+        for (new_guard, new_rhs) in &new.concretes {
+            let not_prior_new = protocol.not_guard(prior_new);
+            let new_effective = protocol.and_guard(not_prior_new, *new_guard);
+
+            if existing_rhs != new_rhs {
+                let overlap = protocol.and_guard(existing_effective, new_effective);
+                if overlap != protocol.false_id() {
+                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                }
             }
 
-            // assignments to different concrete values are illegal
-            let overlap = protocol.and_guard(*existing_guard, *new_guard);
-            if overlap != protocol.false_id() {
-                record_internal_assert(protocol, internal_assert_guard, overlap);
-            }
+            prior_new = protocol.or_guard(prior_new, *new_guard);
         }
+
+        prior_existing = protocol.or_guard(prior_existing, *existing_guard);
     }
 
-    let existing_concretes = concrete_coverage(protocol, &existing);
-    let new_concretes = concrete_coverage(protocol, &new);
+    let mut existing_concretes = concrete_coverage(protocol, &existing);
+    existing_concretes = protocol
+        .simplifier
+        .simplify(&mut protocol.expr_ctx, existing_concretes);
+    let mut new_concretes = concrete_coverage(protocol, &new);
+    new_concretes = protocol
+        .simplifier
+        .simplify(&mut protocol.expr_ctx, new_concretes);
 
     let not_new_concretes = protocol.not_guard(new_concretes);
+
     let existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
+
     let not_existing_concretes = protocol.not_guard(existing_concretes);
+
     let new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
+
     let dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
 
-    let mut concretes = existing_effective;
-    concretes.extend(new_effective);
+    let mut concretes = concretes_without_dont_care(protocol, &existing);
+    concretes.extend(concretes_without_dont_care(protocol, &new));
+    let concretes = coalesce_concretes(protocol, concretes);
 
     Assignment {
         dont_care,
         concretes,
     }
+}
+
+pub fn merge_disjoint_assignments(
+    protocol: &mut ProtoGraph,
+    assignments: Vec<Assignment>,
+) -> Assignment {
+    let mut dont_care = protocol.false_id();
+    let mut concretes = Vec::new();
+
+    for assignment in assignments {
+        dont_care = protocol.or_guard(dont_care, assignment.dont_care);
+        let group = coalesce_concretes(protocol, assignment.concretes);
+        let prior_groups_end = concretes.len();
+
+        for (guard, rhs) in group {
+            let existing = concretes[..prior_groups_end]
+                .iter()
+                .position(|(_, existing_rhs)| *existing_rhs == rhs);
+            if let Some(index) = existing {
+                concretes[index].0 = protocol.or_guard(concretes[index].0, guard);
+            } else {
+                concretes.push((guard, rhs));
+            }
+        }
+    }
+
+    Assignment {
+        dont_care,
+        concretes,
+    }
+}
+
+pub fn merge_disjoint_guarded_assignments(
+    protocol: &mut ProtoGraph,
+    groups: Vec<(ExprRef, Assignment)>,
+) -> (Assignment, ExprRef) {
+    let mut dont_care = protocol.false_id();
+    let mut coverage = protocol.false_id();
+    let mut concretes = Vec::new();
+
+    for (guard, assignment) in groups {
+        let local_coverage = concrete_coverage(protocol, &assignment);
+        let guarded_coverage = protocol.and_guard(guard, local_coverage);
+        coverage = protocol.or_guard(coverage, guarded_coverage);
+        let guarded_dont_care = protocol.and_guard(guard, assignment.dont_care);
+        dont_care = protocol.or_guard(dont_care, guarded_dont_care);
+
+        let unclipped = concretes_without_dont_care(protocol, &assignment);
+        let guarded = unclipped
+            .into_iter()
+            .map(|(branch, rhs)| (protocol.and_guard(guard, branch), rhs))
+            .collect();
+        let group = coalesce_concretes(protocol, guarded);
+        let prior_groups_end = concretes.len();
+
+        for (branch, rhs) in group {
+            let existing = concretes[..prior_groups_end]
+                .iter()
+                .position(|(_, existing_rhs)| *existing_rhs == rhs);
+            if let Some(index) = existing {
+                concretes[index].0 = protocol.or_guard(concretes[index].0, branch);
+            } else {
+                concretes.push((branch, rhs));
+            }
+        }
+    }
+
+    (
+        Assignment {
+            dont_care,
+            concretes,
+        },
+        coverage,
+    )
+}
+
+pub fn merge_unordered_assignment_with_disjoint_batch(
+    protocol: &mut ProtoGraph,
+    internal_assert_guard: &mut Option<ExprRef>,
+    existing: Assignment,
+    groups: Vec<(ExprRef, Assignment)>,
+) -> Assignment {
+    let existing_effective = effective_concretes(protocol, &existing);
+    for (group_guard, group) in &groups {
+        for (existing_guard, existing_rhs) in &existing_effective {
+            for (branch_guard, group_rhs) in effective_concretes(protocol, group) {
+                if existing_rhs == &group_rhs {
+                    continue;
+                }
+                let guarded_branch = protocol.and_guard(*group_guard, branch_guard);
+                let overlap = protocol.and_guard(*existing_guard, guarded_branch);
+                if overlap != protocol.false_id() {
+                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                }
+            }
+        }
+    }
+
+    let (batch, batch_coverage) = merge_disjoint_guarded_assignments(protocol, groups);
+    if existing.dont_care == protocol.true_id() && existing.concretes.is_empty() {
+        let dont_care = protocol.not_guard(batch_coverage);
+        return Assignment {
+            dont_care,
+            concretes: batch.concretes,
+        };
+    }
+
+    let existing_coverage = concrete_coverage(protocol, &existing);
+    let not_batch_coverage = protocol.not_guard(batch_coverage);
+    let existing_dont_care = protocol.and_guard(not_batch_coverage, existing.dont_care);
+    let not_existing_coverage = protocol.not_guard(existing_coverage);
+    let batch_dont_care = protocol.and_guard(not_existing_coverage, batch.dont_care);
+
+    let mut concretes = concretes_without_dont_care(protocol, &existing);
+    concretes.extend(batch.concretes);
+
+    Assignment {
+        dont_care: protocol.or_guard(existing_dont_care, batch_dont_care),
+        concretes: coalesce_concretes(protocol, concretes),
+    }
+}
+
+fn merge_disjoint_assignment(
+    protocol: &mut ProtoGraph,
+    existing: Assignment,
+    new: Assignment,
+) -> Assignment {
+    merge_disjoint_assignments(protocol, vec![existing, new])
 }
 
 pub fn append_action(
@@ -162,6 +365,50 @@ pub fn append_action(
     internal_assert_guard: &mut Option<ExprRef>,
     action: Action,
     ordered: bool,
+) {
+    append_action_with_mode(
+        protocol,
+        symbols,
+        actions,
+        internal_assert_guard,
+        action,
+        if ordered {
+            ActionMergeMode::Ordered
+        } else {
+            ActionMergeMode::Unordered
+        },
+    );
+}
+
+pub fn append_action_disjoint(
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    actions: &mut Vec<Action>,
+    action: Action,
+) {
+    append_action_with_mode(
+        protocol,
+        symbols,
+        actions,
+        &mut None,
+        action,
+        ActionMergeMode::Disjoint,
+    );
+}
+
+enum ActionMergeMode {
+    Ordered,
+    Unordered,
+    Disjoint,
+}
+
+fn append_action_with_mode(
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    actions: &mut Vec<Action>,
+    internal_assert_guard: &mut Option<ExprRef>,
+    action: Action,
+    mode: ActionMergeMode,
 ) {
     match protocol[action.op].clone() {
         Op::Assign(symbol_id, assignment) => {
@@ -193,15 +440,19 @@ pub fn append_action(
                 _ => unreachable!(),
             };
 
-            let merged_assignment = if ordered {
-                merge_ordered_assignment(protocol, existing_assignment, assignment)
-            } else {
-                merge_unordered_assignment(
+            let merged_assignment = match mode {
+                ActionMergeMode::Ordered => {
+                    merge_ordered_assignment(protocol, existing_assignment, assignment)
+                }
+                ActionMergeMode::Unordered => merge_unordered_assignment(
                     protocol,
                     internal_assert_guard,
                     existing_assignment,
                     assignment,
-                )
+                ),
+                ActionMergeMode::Disjoint => {
+                    merge_disjoint_assignment(protocol, existing_assignment, assignment)
+                }
             };
 
             let new_op = protocol.o(Op::Assign(symbol_id, merged_assignment));
@@ -213,8 +464,10 @@ pub fn append_action(
                 .iter_mut()
                 .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
             {
-                let overlap = protocol.and_guard(existing_action.guard, action.guard);
-                record_internal_assert(protocol, internal_assert_guard, overlap);
+                if !matches!(mode, ActionMergeMode::Disjoint) {
+                    let overlap = protocol.and_guard(existing_action.guard, action.guard);
+                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                }
                 existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
             } else {
                 actions.push(action);
@@ -239,12 +492,13 @@ pub fn append_action(
     }
 }
 
+pub fn contract_edges(pg: &mut ProtoGraph, symbols: &SymbolTable) {
+    contract_edges_from(pg, symbols, pg.entry);
+}
+
 /// returns `protocol` with semantic behavior preserved, but no non-step edges
-pub fn contract_edges(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
-    let node_ids = protocol
-        .nodes()
-        .map(|(node_id, _)| node_id)
-        .collect::<Vec<_>>();
+pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, start: NodeId) {
+    let node_ids = reachable_node_ids(protocol, start);
 
     for source_node_id in node_ids.into_iter().rev() {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());

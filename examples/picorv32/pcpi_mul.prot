@@ -53,7 +53,7 @@ prot pcpi_mul_reset<p: picorv32_pcpi_mul>() {
 
 #[idle]
 prot idle<p: picorv32_pcpi_mul>() {
-  p.resetn := 1'b1;
-  p.pcpi_valid := 1'b0;
-  step();
+ p.resetn := 1'b1;
+ p.pcpi_valid := 1'b0;
+ step();
 }

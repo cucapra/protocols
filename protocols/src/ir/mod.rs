@@ -1,3 +1,4 @@
+pub mod bounded_lowering;
 pub mod determinize;
 pub mod edge_contract;
 pub mod fork_reach;

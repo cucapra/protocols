@@ -7,6 +7,7 @@ use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{Context as ExprContext, ExprRef, Simplifier, SparseExprMap};
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut, Index};
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
@@ -304,6 +305,66 @@ impl ProtoGraph {
     /// push a transition `t` onto `node_id`
     pub fn push_transition(&mut self, node_id: NodeId, t: Transition) {
         self.nodes[node_id].transitions.push(t);
+    }
+
+    /// Rebuild the graph from the subgraph reachable from `entry`.
+    /// This compacts both node IDs and op IDs.
+    pub fn garbage_collect_unreachable(&mut self) {
+        let mut reachable_old_nodes = Vec::new();
+        let mut seen = FxHashSet::default();
+        let mut q = VecDeque::from([self.entry]);
+
+        while let Some(node_id) = q.pop_front() {
+            if !seen.insert(node_id) {
+                continue;
+            }
+            reachable_old_nodes.push(node_id);
+            for transition in &self.nodes[node_id].transitions {
+                q.push_back(transition.target);
+            }
+        }
+
+        let mut node_map: FxHashMap<NodeId, NodeId> = FxHashMap::default();
+        let mut new_nodes = PrimaryMap::new();
+        for old_node_id in &reachable_old_nodes {
+            let new_node_id = new_nodes.push(self.nodes[*old_node_id].clone());
+            node_map.insert(*old_node_id, new_node_id);
+        }
+
+        let mut reachable_old_ops = Vec::new();
+        let mut seen_ops = FxHashSet::default();
+        for (_, node) in new_nodes.iter() {
+            for action in &node.actions {
+                if seen_ops.insert(action.op) {
+                    reachable_old_ops.push(action.op);
+                }
+            }
+        }
+
+        let mut op_map: FxHashMap<OpId, OpId> = FxHashMap::default();
+        let mut new_ops = PrimaryMap::new();
+        let mut new_op_loc = SecondaryMap::new();
+        for old_op_id in reachable_old_ops {
+            let new_op_id = new_ops.push(self.ops[old_op_id].clone());
+            op_map.insert(old_op_id, new_op_id);
+            if let Some(loc) = self.op_loc.get(old_op_id).copied() {
+                new_op_loc[new_op_id] = loc;
+            }
+        }
+
+        for (_, node) in new_nodes.iter_mut() {
+            for action in &mut node.actions {
+                action.op = op_map[&action.op];
+            }
+            for transition in &mut node.transitions {
+                transition.target = node_map[&transition.target];
+            }
+        }
+
+        self.entry = node_map[&self.entry];
+        self.nodes = new_nodes;
+        self.ops = new_ops;
+        self.op_loc = new_op_loc;
     }
 }
 
@@ -606,5 +667,32 @@ mod tests {
         assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
         assert!(matches!(ir.ops[exit.actions[2].op], Op::Assign(_, _)));
         assert!(exit.transitions.is_empty());
+    }
+
+    #[test]
+    fn garbage_collects_unreachable_nodes_and_ops() {
+        let mut pg = ProtoGraph::new(ProtocolContext::new(
+            "test".into(),
+            crate::frontend::symbol::ROOT_SCOPE,
+        ));
+        let reachable = pg.n(Node::empty());
+        let unreachable = pg.n(Node::empty());
+
+        let fork = pg.o(Op::Fork);
+        let done = pg.o(Op::Done);
+
+        let true_id = pg.true_id();
+        pg.push_action(reachable, Action::new(true_id, fork));
+        pg.push_action(unreachable, Action::new(true_id, done));
+        pg.push_transition(pg.entry, Transition::new(true_id, reachable, false));
+
+        assert_eq!(pg.nodes.len(), 3);
+        assert_eq!(pg.ops.len(), 2);
+
+        pg.garbage_collect_unreachable();
+
+        assert_eq!(pg.nodes.len(), 2);
+        assert_eq!(pg.ops.len(), 1);
+        assert_eq!(pg[pg.entry].transitions.len(), 1);
     }
 }

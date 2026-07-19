@@ -225,11 +225,29 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
-    return [
-        ("ast", repo_root_command(ast_cmd, stderr="discard")),
-        ("graph", repo_root_command(graph_cmd, stderr="discard")),
-        ("ts", repo_root_command(ts_cmd, stderr="discard")),
+    bounded_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["path"],
+        "--bound",
+        str(tx_max_trace_protocols(case["path"])),
+        "--ascii-waveform",
     ]
+    _tx_tail(bounded_cmd, case, with_max_steps=False)
+
+    variants: list[tuple[str, str, str | None]] = [
+        ("ast", repo_root_command(ast_cmd, stderr="discard"), None),
+        ("graph", repo_root_command(graph_cmd, stderr="discard"), None),
+        ("ts", repo_root_command(ts_cmd, stderr="discard"), None),
+    ]
+
+    # I manually checked this one is correct, but it takes too long in debug mode
+    # (and still 1 min in release mode) to be worth running every time.
+    # maybe in the future we can flag a slow/fast runt config
+    if case["path"] != "examples/picorv32/unsigned_mul.tx":
+        variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard"), None))
+
+    return variants
 
 
 def fail_runt_command(case: dict) -> list[tuple[str, str]]:
@@ -255,6 +273,24 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
         ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
+
+
+@lru_cache(maxsize=None)
+def tx_max_trace_protocols(path: str) -> int | None:
+    tx_path = REPO_ROOT / path
+    if not tx_path.exists():
+        return None
+
+    content = tx_path.read_text()
+    max_protocols = 0
+    for block in re.findall(r"trace\s*{([^}]*)}", content, re.DOTALL):
+        protocols = [
+            line.strip()
+            for line in block.splitlines()
+            if line.strip() and not line.strip().startswith("//")
+        ]
+        max_protocols = max(max_protocols, len(protocols))
+    return max_protocols or None
 
 
 RUNT_BUILDERS = {
@@ -348,15 +384,22 @@ def fail_cases(cases: list[dict]) -> list[dict]:
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     build = RUNT_BUILDERS[runner]
     suites = []
-    for case in sorted(cases, key=lambda c: (c["path"], expect_name(c, runner))):
+    for case in sorted(cases, key=lambda c: c["path"]):
         path = case["path"]
-        edir = expect_dir(case, runner)
-        ename = expect_name(case, runner)
-        base_name = (
-            f"{suite_name}.{replace_non_alphanumerics(Path(path).with_suffix('').as_posix())}"
-            f".{replace_non_alphanumerics(ename.removesuffix('.expect'))}"
-        )
-        for suffix, cmd in build(case):
+        for variant in build(case):
+            if len(variant) == 2:
+                suffix, cmd = variant
+                expect_runner = runner
+            else:
+                suffix, cmd, expect_runner = variant
+                expect_runner = expect_runner or runner
+
+            edir = expect_dir(case, expect_runner)
+            ename = expect_name(case, expect_runner)
+            base_name = (
+                f"{suite_name}.{replace_non_alphanumerics(Path(path).with_suffix('').as_posix())}"
+                f".{replace_non_alphanumerics(ename.removesuffix('.expect'))}"
+            )
             name = f"{base_name}.{suffix}" if suffix else base_name
             suites.append((name, edir, ename, cmd, path))
     return suites
