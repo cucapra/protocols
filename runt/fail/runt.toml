@@ -7,7 +7,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_incorrect.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/add_incorrect.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_incorrect.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_add_incorrect.add_incorrect_fail.ts"
@@ -16,7 +16,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_incorrect.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/add_incorrect.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_incorrect.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_add_incorrect_implicit.add_incorrect_implicit_fail.graph"
@@ -25,7 +25,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_incorrect_implicit.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/add_incorrect_implicit.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_incorrect_implicit.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_add_incorrect_implicit.add_incorrect_implicit_fail.ts"
@@ -34,7 +34,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_incorrect_implicit.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/add_incorrect_implicit.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_incorrect_implicit.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_add_multitrace.add_multitrace_fail.graph"
@@ -43,7 +43,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_multitrace.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/add_multitrace.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_add_multitrace.add_multitrace_fail.ts"
@@ -52,7 +52,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "add_multitrace.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/add_multitrace.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_both_threads_fail.both_threads_fail_fail.graph"
@@ -61,7 +61,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/both_threads_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_both_threads_fail.both_threads_fail_fail.ts"
@@ -70,7 +70,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/both_threads_fail.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_fail.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_first_fail_second_norun.first_fail_second_norun_fail.graph"
@@ -79,7 +79,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "first_fail_second_norun.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/first_fail_second_norun.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/first_fail_second_norun.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_first_fail_second_norun.first_fail_second_norun_fail.ts"
@@ -88,7 +88,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "first_fail_second_norun.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/first_fail_second_norun.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/first_fail_second_norun.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_first_thread_fails.first_thread_fails_fail.graph"
@@ -97,7 +97,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "first_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/first_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/first_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_first_thread_fails.first_thread_fails_fail.ts"
@@ -106,7 +106,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "first_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/first_thread_fails.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/first_thread_fails.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_second_thread_fails.second_thread_fails_fail.graph"
@@ -115,7 +115,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "second_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/second_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/second_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_second_thread_fails.second_thread_fails_fail.ts"
@@ -124,7 +124,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "second_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/second_thread_fails.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/second_thread_fails.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_wait_and_add_incorrect_implicit.wait_and_add_incorrect_implicit_fail.graph"
@@ -133,7 +133,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "wait_and_add_incorrect_implicit.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/wait_and_add_incorrect_implicit.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/wait_and_add_incorrect_implicit.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d1_wait_and_add_incorrect_implicit.wait_and_add_incorrect_implicit_fail.ts"
@@ -142,7 +142,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "wait_and_add_incorrect_implicit.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d1/wait_and_add_incorrect_implicit.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/wait_and_add_incorrect_implicit.tx --transition-system --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d2_no_dontcare_conflict.no_dontcare_conflict_fail.graph"
@@ -151,7 +151,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d2/expects"
 expect_name = "no_dontcare_conflict.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d2/no_dontcare_conflict.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/no_dontcare_conflict.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/no_dontcare_conflict.tx --respect-forks --determinize --brief-graph-errors --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/no_dontcare_conflict.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_adders_adder_d2_no_dontcare_conflict.no_dontcare_conflict_fail.ts"
@@ -160,7 +160,7 @@ paths = [
 ]
 expect_dir = "../../tests/adders/adder_d2/expects"
 expect_name = "no_dontcare_conflict.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/adders/adder_d2/no_dontcare_conflict.tx --transition-system --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/no_dontcare_conflict.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/no_dontcare_conflict.tx --transition-system --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/no_dontcare_conflict.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_bounded_ready_valid_toy_reciever_3.toy_reciever_3_fail.graph"
@@ -169,7 +169,7 @@ paths = [
 ]
 expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_3.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_3.tx --respect-forks --determinize --brief-graph-errors --verilog tests/bounded_ready_valid/toy_receiver_3.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_3.tx --respect-forks --determinize --brief-graph-errors --verilog tests/bounded_ready_valid/toy_receiver_3.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_bounded_ready_valid_toy_reciever_3.toy_reciever_3_fail.ts"
@@ -178,7 +178,7 @@ paths = [
 ]
 expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_3.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_3.tx --transition-system --verilog tests/bounded_ready_valid/toy_receiver_3.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_3.tx --transition-system --verilog tests/bounded_ready_valid/toy_receiver_3.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_bit_truncation_bit_truncation_fft_bug.bit_truncation_fft_bug_fail.graph"
@@ -187,7 +187,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
 expect_name = "bit_truncation_fft_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_fft.prot --module bit_truncation_fft_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_fft.prot --module bit_truncation_fft_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_bit_truncation_bit_truncation_fft_bug.bit_truncation_fft_bug_fail.ts"
@@ -196,7 +196,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
 expect_name = "bit_truncation_fft_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.tx --transition-system --verilog tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_fft.prot --module bit_truncation_fft_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.tx --transition-system --verilog tests/brave_new_world/bit_truncation/bit_truncation_fft_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_fft.prot --module bit_truncation_fft_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_bit_truncation_bit_truncation_sha_bug.bit_truncation_sha_bug_fail.graph"
@@ -205,7 +205,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
 expect_name = "bit_truncation_sha_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_bit_truncation_bit_truncation_sha_bug.bit_truncation_sha_bug_fail.ts"
@@ -214,7 +214,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
 expect_name = "bit_truncation_sha_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.tx --transition-system --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.tx --transition-system --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_bug.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_failure_to_update_ftu_sha_bug.ftu_sha_bug_fail.graph"
@@ -223,7 +223,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/failure_to_update/expects"
 expect_name = "ftu_sha_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/failure_to_update/ftu_sha_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/failure_to_update/ftu_sha_bug.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_buggy 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/failure_to_update/ftu_sha_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/failure_to_update/ftu_sha_bug.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_buggy 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_failure_to_update_ftu_sha_bug.ftu_sha_bug_fail.ts"
@@ -232,7 +232,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/failure_to_update/expects"
 expect_name = "ftu_sha_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/failure_to_update/ftu_sha_bug.tx --transition-system --verilog tests/brave_new_world/failure_to_update/ftu_sha_bug.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_buggy 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/failure_to_update/ftu_sha_bug.tx --transition-system --verilog tests/brave_new_world/failure_to_update/ftu_sha_bug.v --protocol tests/brave_new_world/failure_to_update/ftu_sha.prot --module fsm_update_buggy 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_signal_asynchrony_signal_async_bug.signal_async_bug_fail.graph"
@@ -241,7 +241,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/signal_asynchrony/expects"
 expect_name = "signal_async_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/signal_asynchrony/signal_async_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/signal_asynchrony/signal_async_bug.v --protocol tests/brave_new_world/signal_asynchrony/signal_async.prot --module signal_async_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/signal_asynchrony/signal_async_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/signal_asynchrony/signal_async_bug.v --protocol tests/brave_new_world/signal_asynchrony/signal_async.prot --module signal_async_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_signal_asynchrony_signal_async_bug.signal_async_bug_fail.ts"
@@ -250,7 +250,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/signal_asynchrony/expects"
 expect_name = "signal_async_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/signal_asynchrony/signal_async_bug.tx --transition-system --verilog tests/brave_new_world/signal_asynchrony/signal_async_bug.v --protocol tests/brave_new_world/signal_asynchrony/signal_async.prot --module signal_async_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/signal_asynchrony/signal_async_bug.tx --transition-system --verilog tests/brave_new_world/signal_asynchrony/signal_async_bug.v --protocol tests/brave_new_world/signal_asynchrony/signal_async.prot --module signal_async_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_use_without_valid_use_without_valid_bug.use_without_valid_bug_fail.graph"
@@ -259,7 +259,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/use_without_valid/expects"
 expect_name = "use_without_valid_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/use_without_valid/use_without_valid_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/use_without_valid/use_without_valid_bug.v --protocol tests/brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/use_without_valid/use_without_valid_bug.tx --respect-forks --determinize --brief-graph-errors --verilog tests/brave_new_world/use_without_valid/use_without_valid_bug.v --protocol tests/brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_brave_new_world_use_without_valid_use_without_valid_bug.use_without_valid_bug_fail.ts"
@@ -268,7 +268,7 @@ paths = [
 ]
 expect_dir = "../../tests/brave_new_world/use_without_valid/expects"
 expect_name = "use_without_valid_bug.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/brave_new_world/use_without_valid/use_without_valid_bug.tx --transition-system --verilog tests/brave_new_world/use_without_valid/use_without_valid_bug.v --protocol tests/brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_bug 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/use_without_valid/use_without_valid_bug.tx --transition-system --verilog tests/brave_new_world/use_without_valid/use_without_valid_bug.v --protocol tests/brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_bug 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_fifo_pop_before_push_fail.pop_before_push_fail_fail.graph"
@@ -277,7 +277,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "pop_before_push_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/fifo/pop_before_push_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/pop_before_push_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_fifo_pop_before_push_fail.pop_before_push_fail_fail.ts"
@@ -286,7 +286,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "pop_before_push_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/fifo/pop_before_push_fail.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/pop_before_push_fail.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_fifo_pop_empty_fail.pop_empty_fail_fail.graph"
@@ -295,7 +295,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "pop_empty_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/fifo/pop_empty_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/pop_empty_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_fifo_pop_empty_fail.pop_empty_fail_fail.ts"
@@ -304,7 +304,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "pop_empty_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/fifo/pop_empty_fail.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/pop_empty_fail.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_fifo_push_pop_conflict.push_pop_conflict_fail.graph"
@@ -313,7 +313,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_conflict.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/fifo/push_pop_conflict.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_conflict.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_fifo_push_pop_conflict.push_pop_conflict_fail.ts"
@@ -322,7 +322,7 @@ paths = [
 ]
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_conflict.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/fifo/push_pop_conflict.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_conflict.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_identities_identity_d1_explicit_fork.explicit_fork_fail.graph"
@@ -331,7 +331,7 @@ paths = [
 ]
 expect_dir = "../../tests/identities/identity_d1/expects"
 expect_name = "explicit_fork.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/identities/identity_d1/explicit_fork.tx --respect-forks --determinize --brief-graph-errors --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d1/explicit_fork.tx --respect-forks --determinize --brief-graph-errors --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_identities_identity_d1_explicit_fork.explicit_fork_fail.ts"
@@ -340,7 +340,7 @@ paths = [
 ]
 expect_dir = "../../tests/identities/identity_d1/expects"
 expect_name = "explicit_fork.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/identities/identity_d1/explicit_fork.tx --transition-system --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d1/explicit_fork.tx --transition-system --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_identities_identity_d2_two_different_assignments_error.two_different_assignments_error_fail.graph"
@@ -349,7 +349,7 @@ paths = [
 ]
 expect_dir = "../../tests/identities/identity_d2/expects"
 expect_name = "two_different_assignments_error.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/identities/identity_d2/two_different_assignments_error.tx --respect-forks --determinize --brief-graph-errors --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d2/two_different_assignments_error.tx --respect-forks --determinize --brief-graph-errors --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_identities_identity_d2_two_different_assignments_error.two_different_assignments_error_fail.ts"
@@ -358,7 +358,7 @@ paths = [
 ]
 expect_dir = "../../tests/identities/identity_d2/expects"
 expect_name = "two_different_assignments_error.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/identities/identity_d2/two_different_assignments_error.tx --transition-system --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d2/two_different_assignments_error.tx --transition-system --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_multipliers_mult_d2_both_threads_fail.both_threads_fail_fail.graph"
@@ -367,7 +367,7 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/multipliers/mult_d2/both_threads_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_fail.tx --respect-forks --determinize --brief-graph-errors --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_multipliers_mult_d2_both_threads_fail.both_threads_fail_fail.ts"
@@ -376,7 +376,7 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_fail.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/multipliers/mult_d2/both_threads_fail.tx --transition-system --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_fail.tx --transition-system --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_multipliers_mult_d2_first_thread_fails.first_thread_fails_fail.graph"
@@ -385,7 +385,7 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "first_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/multipliers/mult_d2/first_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/first_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_multipliers_mult_d2_first_thread_fails.first_thread_fails_fail.ts"
@@ -394,7 +394,7 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "first_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/multipliers/mult_d2/first_thread_fails.tx --transition-system --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/first_thread_fails.tx --transition-system --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_multipliers_mult_d2_second_thread_fails.second_thread_fails_fail.graph"
@@ -403,7 +403,7 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "second_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/multipliers/mult_d2/second_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/second_thread_fails.tx --respect-forks --determinize --brief-graph-errors --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "fail.tests_multipliers_mult_d2_second_thread_fails.second_thread_fails_fail.ts"
@@ -412,4 +412,4 @@ paths = [
 ]
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "second_thread_fails.fail.expect"
-cmd = "cd ../.. && target/release/graph-interp --transactions tests/multipliers/mult_d2/second_thread_fails.tx --transition-system --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/second_thread_fails.tx --transition-system --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"

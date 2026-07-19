@@ -1,9 +1,10 @@
-use baa::{BitVecOps, Value as BaaValue};
+use baa::{BitVecOps, BitVecValue, Value as BaaValue};
 use clap::Parser;
-use patronus::expr::{Context, ExprRef};
+use patronus::expr::ExprRef;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
-use protocols::backends::into_transition_system;
+use protocols::backends::bmc_transition_system::into_bmc_transition_system;
+use protocols::backends::transition_system::into_transition_system;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
@@ -92,7 +93,7 @@ fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
         &mut handler,
         cli.skip_static_step_fork_checks,
     )
-    .unwrap()
+        .unwrap()
 }
 
 fn load_traces(cli: &Cli, st: &SymbolTable, module: &Module) -> Vec<Vec<(String, Vec<Value>)>> {
@@ -362,14 +363,146 @@ fn run_transition_system(
 
 /// lower each protocol once and interpret every
 /// transaction against its own symbolic protocol graph.
-fn run_bmc(cli: &Cli, st: &SymbolTable, design: &Module) {
-    // FIXME: probably can get away with borrowing instead of cloning cloning
-    let (mut pg, _) = lower_bmc(design.protos.clone(), st, Context::default(), cli.bound);
-    println!("{}", to_dot_string(&pg, st).as_str());
-    println!("pre-determinize");
-    pg.garbage_collect_unreachable();
-    pg = determinized(pg, st);
-    println!("{}", to_dot_string(&pg, st).as_str());
+fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, Vec<Value>)>]) {
+    let protos_by_name: FxHashMap<String, &Protocol> =
+        module.protos.iter().map(|p| (p.name.clone(), p)).collect();
+
+    for (trace_index, trace) in traces.iter().enumerate() {
+        print_trace_separator(trace_index);
+        assert!(
+            trace.len() <= cli.bound,
+            "trace {} contains {} protocol instances but BMC bound is {}",
+            trace_index,
+            trace.len(),
+            cli.bound
+        );
+        let mut used_protocol_names = Vec::new();
+        for (name, _) in trace {
+            if !used_protocol_names.contains(&name.as_str()) {
+                used_protocol_names.push(name.as_str());
+            }
+        }
+        let used_protocols: Vec<Protocol> = used_protocol_names
+            .iter()
+            .map(|name| (*protos_by_name.get(*name).unwrap()).clone())
+            .collect();
+        let protocol_choice_indices: FxHashMap<&str, u64> = used_protocol_names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| (*name, index as u64))
+            .collect();
+
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
+        // The graph and DUT transition system must share an expression
+        // context, including port expressions such as DUT.o_ack.
+        let (mut pg, proto_choices) =
+            lower_bmc(used_protocols, st, sim.ctx.clone(), cli.bound);
+        pg.garbage_collect_unreachable();
+        pg = determinized(pg, st);
+
+        if cli.graphout {
+            println!("{}", to_dot_string(&pg, st));
+        }
+
+        let sys = sim.sys.clone();
+        let port_map = sim.port_map.clone();
+        let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
+            sim
+                .ios()
+                .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
+        );
+        let res = into_bmc_transition_system(
+            pg.clone(),
+            sys,
+            proto_choices,
+            port_map,
+            port_expr_refs,
+            st,
+        );
+
+        let num_protos = used_protocol_names.len();
+        let proto_choice_width = if num_protos <= 1 {
+            1
+        } else {
+            usize::BITS - (num_protos - 1).leading_zeros()
+        };
+
+        let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
+        // println!("Transition system");
+        // TODO: once the PatronusSim switches to random, so should we
+        transition_sim.init(InitKind::Zero);
+        let mut waveform = FxHashMap::default();
+        let mut cycle = 0;
+        let mut should_drive_transaction = true;
+        let mut transaction_idx = 0;
+        loop {
+            if should_drive_transaction && transaction_idx < trace.len() {
+                let (proto_str, values) = &trace[transaction_idx];
+                let instance_idx = transaction_idx;
+                let proto = *protos_by_name.get(proto_str).unwrap();
+                for (arg_expr, v) in proto
+                    .args
+                    .iter()
+                    .map(|a| res.protocol_inputs[&(instance_idx, a.symbol())])
+                    .zip(values)
+                {
+                    let bvv: BitVecValue = v.clone().try_into().expect("value not in bitvec");
+                    transition_sim.set(arg_expr, &bvv);
+                }
+
+                transition_sim.set(
+                    res.protocol_choices[instance_idx],
+                    &BitVecValue::from_u64(
+                        protocol_choice_indices[proto_str.as_str()],
+                        proto_choice_width,
+                    ),
+                );
+                transaction_idx += 1;
+            }
+
+            record_transition_waveform(
+                &mut waveform,
+                &transition_sim,
+                &res.port_to_expr,
+                &res.is_dont_care,
+            );
+
+            transition_sim.step();
+            should_drive_transaction = transition_sim
+                .get(res.fork_ready)
+                .try_into_u64()
+                .expect("fork ready failed")
+                == 1;
+
+            let state = transition_sim.get(res.node_symbol);
+            // println!("{:?}", state);
+            if state == transition_sim.get(res.done_state.unwrap()) {
+                // ignore the last cycle (we went one cycle too far)
+                for values in waveform.values_mut() {
+                    values.pop();
+                }
+
+                print_trace_success(trace_index);
+                break;
+            } else if state == transition_sim.get(res.external_assert_state) {
+                println!("Assertion failure in cycle {}.", cycle);
+                break;
+            } else if state == transition_sim.get(res.internal_assert_state) {
+                println!("Internal assertion failure in cycle {}.", cycle);
+                break;
+            }
+            cycle += 1;
+        }
+
+        if cli.ascii_waveform {
+            print_ascii_waveform(
+                waveform,
+                |port| sim.port_name(port).to_string(),
+                |port| sim.port_width(port),
+                false,
+            );
+        }
+    }
 }
 
 fn main() {
@@ -378,11 +511,11 @@ fn main() {
     let module = require_single_module(modules, &cli.protocol).unwrap();
     let traces = load_traces(&cli, &st, &module);
 
-    let old_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
+    // let old_hook = std::panic::take_hook();
+    // std::panic::set_hook(Box::new(|_| {}));
     let result = catch_unwind(AssertUnwindSafe(|| {
         if cli.bound > 0 {
-            run_bmc(&cli, &st, &module);
+            run_bmc(&cli, &st, &module, &traces);
         } else if cli.transition_system {
             run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {
@@ -391,10 +524,10 @@ fn main() {
             run_classic(&cli, &st, &module, traces);
         }
     }));
-    std::panic::set_hook(old_hook);
-
-    if let Err(payload) = result {
-        print_panic_payload(payload);
-        std::process::exit(101);
-    }
+    // std::panic::set_hook(old_hook);
+    //
+    // // if let Err(payload) = result {
+    // //     print_panic_payload(payload);
+    // //     std::process::exit(101);
+    // // }
 }

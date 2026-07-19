@@ -99,7 +99,7 @@ def expect_dir(case: dict, runner: str) -> str:
 
 
 def binary_prefix(binary: str) -> list[str]:
-    return [f"target/release/{binary}"]
+    return [f"target/debug/{binary}"]
 
 
 def repo_root_command(cmd: list[str], stderr: str = "discard") -> str:
@@ -243,7 +243,7 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         ]
         _tx_tail(bounded_cmd, case, with_max_steps=False)
         variants.append(
-            ("", repo_root_command(bounded_cmd, stderr="discard"), None)
+            ("bmc", repo_root_command(bounded_cmd, stderr="discard"), None)
         )
 
     return variants
