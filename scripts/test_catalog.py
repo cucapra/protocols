@@ -824,7 +824,7 @@ BI_CASES = {
             "--time-unit",
             "ns",
             "--max-traces",
-            "20"
+            "20",
         ),
     },
     "tests.fpga-debugging.axis-fifo-d11.d11_buggy": {

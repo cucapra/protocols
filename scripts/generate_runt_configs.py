@@ -16,6 +16,7 @@ import shlex
 import subprocess
 from functools import lru_cache
 from pathlib import Path
+from collections import Counter
 
 import test_catalog
 
@@ -71,12 +72,13 @@ def replace_non_alphanumerics(value: object) -> str:
 
 
 def shared_bi_prot_files() -> frozenset[str]:
-    # Set of `.prot` files which are used by more than one BI test case 
+    # Set of `.prot` files which are used by more than one BI test case
     # (e.g. Antmicro and the Brave New World test cases for fixed/buggy wvaeforms
     # that share a single .prot file)
-    from collections import Counter
 
-    counts = Counter(test_case["protocol"] for test_case in test_catalog.BI_CASES.values())
+    counts = Counter(
+        str(test_case["protocol"]) for test_case in test_catalog.BI_CASES.values()
+    )
     return frozenset(file for (file, num_cases) in counts.items() if num_cases > 1)
 
 
@@ -309,8 +311,8 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
     return frozenset(used)
 
 
-# `.tx` files that are kept only for the AST interpreter 
-# and excluded from the graph interpreter for now 
+# `.tx` files that are kept only for the AST interpreter
+# and excluded from the graph interpreter for now
 # (otherwise `.tx` files are shared between the AST & graph interpreters)
 EXCLUDED_GRAPH_INTERPRETER_TEST_CASES = {
     "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",
