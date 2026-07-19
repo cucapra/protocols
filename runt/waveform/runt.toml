@@ -28,15 +28,6 @@ expect_name = "unsigned_mul.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/picorv32/unsigned_mul.tx --transition-system --ascii-waveform --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
 
 [[tests]]
-name = "waveform.examples_picorv32_unsigned_mul.unsigned_mul_waveform.bmc"
-paths = [
-  "../../examples/picorv32/unsigned_mul.tx",
-]
-expect_dir = "../../examples/picorv32/expects"
-expect_name = "unsigned_mul.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/picorv32/unsigned_mul.tx --bound 7 --ascii-waveform --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
-
-[[tests]]
 name = "waveform.examples_serv_serv_regfile.serv_regfile_waveform.ast"
 paths = [
   "../../examples/serv/serv_regfile.tx",

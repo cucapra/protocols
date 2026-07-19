@@ -93,7 +93,7 @@ fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
         &mut handler,
         cli.skip_static_step_fork_checks,
     )
-        .unwrap()
+    .unwrap()
 }
 
 fn load_traces(cli: &Cli, st: &SymbolTable, module: &Module) -> Vec<Vec<(String, Vec<Value>)>> {
@@ -395,8 +395,7 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
         let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
         // The graph and DUT transition system must share an expression
         // context, including port expressions such as DUT.o_ack.
-        let (mut pg, proto_choices) =
-            lower_bmc(used_protocols, st, sim.ctx.clone(), cli.bound);
+        let (mut pg, proto_choices) = lower_bmc(used_protocols, st, sim.ctx.clone(), cli.bound);
         pg.garbage_collect_unreachable();
         pg = determinized(pg, st);
 
@@ -407,8 +406,7 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
         let sys = sim.sys.clone();
         let port_map = sim.port_map.clone();
         let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
-            sim
-                .ios()
+            sim.ios()
                 .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
         );
         let res = into_bmc_transition_system(

@@ -120,9 +120,7 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
                 let lit = if selected {
                     targets.insert(t.target);
                     t.guard
-                } else if (0..n).any(|j| {
-                    (mask >> j) & 1 == 1 && mutually_exclusive[i][j]
-                }) {
+                } else if (0..n).any(|j| (mask >> j) & 1 == 1 && mutually_exclusive[i][j]) {
                     // A selected transition already implies that this guard is
                     // false, so its negation would only add expression noise.
                     continue;
