@@ -3,9 +3,9 @@ trace {
     reset();  // [time: 0ns -> 25ns]
 }
 error: [reset@1] executing step 0 of the transaction: 0 != 1
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:79:5
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:83:5
    │
-79 │     DUT.rst := 1'b1;
+83 │     DUT.rst := 1'b1;
    │     ^^^^^^^^^^^^^^^^ [reset@1] executing step 0 of the transaction: 0 != 1
 
 
@@ -14,9 +14,9 @@ trace {
     reset();  // [time: 0ns -> 25ns]
 }
 error: [idle@1] executing step 0 of the transaction: 1 != 0
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:72:5
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:76:5
    │
-72 │     DUT.m_axis_tready := 1'b0;
+76 │     DUT.m_axis_tready := 1'b0;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle@1] executing step 0 of the transaction: 1 != 0
 
 
@@ -25,9 +25,9 @@ trace {
     reset();  // [time: 0ns -> 25ns]
 }
 error: [pop@1] executing step 0 of the transaction: 0 != 1
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:53:5
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:57:5
    │
-53 │     assert_eq(DUT.m_axis_tvalid, 1'b1);
+57 │     assert_eq(DUT.m_axis_tvalid, 1'b1);
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [pop@1] executing step 0 of the transaction: 0 != 1
 
 
@@ -36,9 +36,9 @@ trace {
     reset();  // [time: 0ns -> 25ns]
 }
 error: [push@1] executing step 0 of the transaction: 0 != 1
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:30:5
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:35:5
    │
-30 │     DUT.s_axis_tvalid := 1'b1;
+35 │     DUT.s_axis_tvalid := 1'b1;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [push@1] executing step 0 of the transaction: 0 != 1
 
 ---CODE---
