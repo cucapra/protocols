@@ -325,6 +325,24 @@ expect_name = "push_pop_conflict.fail.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_conflict.tx --transition-system --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
+name = "fail.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_fail.graph"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_buggy.fail.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx --respect-forks --determinize --brief-graph-errors --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>/dev/null"
+
+[[tests]]
+name = "fail.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_fail.ts"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_buggy.fail.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx --transition-system --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>/dev/null"
+
+[[tests]]
 name = "fail.tests_identities_identity_d1_explicit_fork.explicit_fork_fail.graph"
 paths = [
   "../../tests/identities/identity_d1/explicit_fork.tx",

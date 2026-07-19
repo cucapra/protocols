@@ -311,15 +311,6 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
     return frozenset(used)
 
 
-# `.tx` files that are kept only for the AST interpreter
-# and excluded from the graph interpreter for now
-# (otherwise `.tx` files are shared between the AST & graph interpreters)
-EXCLUDED_GRAPH_INTERPRETER_TEST_CASES = {
-    "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",
-    "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
-}
-
-
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
     # Loop constructs the graph interpreter cannot handle (AST construct names).
@@ -329,7 +320,6 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
-        and c["path"] not in EXCLUDED_GRAPH_INTERPRETER_TEST_CASES
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
@@ -362,7 +352,6 @@ def fail_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] in runtime_failures
-        and c["path"] not in EXCLUDED_GRAPH_INTERPRETER_TEST_CASES
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
