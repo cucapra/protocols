@@ -335,11 +335,14 @@ pub(crate) fn lower_proto_graph_to_transition_system(
     }
 
     // populate the input drivers with assignments in the reachable nodes
-    for id in &reachable_nodes {
-        let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
-        let node_equals = ctx.equal(node_sym, node_id_expr);
+    for (input, driver) in &mut input_drivers {
+        let mut assignment_failed_guard = ctx.get_false();
+        let mut grouped_assignments: Vec<(Assignment, ExprRef)> = Vec::new();
 
-        for (input, driver) in &mut input_drivers {
+        for id in &reachable_nodes {
+            let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
+            let node_equals = ctx.equal(node_sym, node_id_expr);
+
             let assignment: Assignment = pg[*id]
                 .actions
                 .iter()
@@ -350,18 +353,33 @@ pub(crate) fn lower_proto_graph_to_transition_system(
                 .next()
                 .unwrap();
 
-            let assignment_is_dont_care = assignment.dont_care;
             let assignment_is_triggered = assignment_is_triggered(&assignment, &mut ctx);
             let assignment_not_triggered = ctx.not(assignment_is_triggered);
 
             // if an assignment isn't triggered, go to the bad state
             let input_assignment_failed = ctx.and(node_equals, assignment_not_triggered);
+            assignment_failed_guard = ctx.or(assignment_failed_guard, input_assignment_failed);
+
+            if let Some((_, group_guard)) = grouped_assignments
+                .iter_mut()
+                .find(|(grouped_assignment, _)| *grouped_assignment == assignment)
+            {
+                *group_guard = ctx.or(*group_guard, node_equals);
+            } else {
+                grouped_assignments.push((assignment, node_equals));
+            }
+        }
+
+        if assignment_failed_guard != ctx.get_false() {
             transition_ite = ctx.ite(
-                input_assignment_failed,
+                assignment_failed_guard,
                 internal_bad_state_id,
                 transition_ite,
             );
+        }
 
+        for (assignment, group_guard) in grouped_assignments {
+            let assignment_is_dont_care = assignment.dont_care;
             let assignment_ite = assignment_to_ite(
                 assignment,
                 &mut ctx,
@@ -369,9 +387,9 @@ pub(crate) fn lower_proto_graph_to_transition_system(
                 driver.input_expr_ref,
             );
 
-            driver.input_ite = ctx.ite(node_equals, assignment_ite, driver.input_ite);
+            driver.input_ite = ctx.ite(group_guard, assignment_ite, driver.input_ite);
             driver.input_is_dont_care = ctx.ite(
-                node_equals,
+                group_guard,
                 assignment_is_dont_care,
                 driver.input_is_dont_care,
             );

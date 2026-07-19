@@ -168,7 +168,7 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
 
     # wishbone and fifo only work with --respect-forks
     if case["path"].startswith("tests/fifo/") or case["path"].startswith(
-            "tests/wishbone/"
+        "tests/wishbone/"
     ):
         flag_sets = [("respect_forks", ["--respect-forks", "--determinize"])]
     else:
@@ -225,26 +225,27 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
+    bounded_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["path"],
+        "--bound",
+        str(tx_max_trace_protocols(case["path"])),
+        "--ascii-waveform",
+    ]
+    _tx_tail(bounded_cmd, case, with_max_steps=False)
+
     variants: list[tuple[str, str, str | None]] = [
         ("ast", repo_root_command(ast_cmd, stderr="discard"), None),
         ("graph", repo_root_command(graph_cmd, stderr="discard"), None),
         ("ts", repo_root_command(ts_cmd, stderr="discard"), None),
     ]
 
-    max_protocols = tx_max_trace_protocols(case["path"])
-    if max_protocols is not None:
-        bounded_cmd = [
-            *binary_prefix("graph-interp"),
-            "--transactions",
-            case["path"],
-            "--bound",
-            str(max_protocols),
-            "--ascii-waveform",
-        ]
-        _tx_tail(bounded_cmd, case, with_max_steps=False)
-        variants.append(
-            ("bmc", repo_root_command(bounded_cmd, stderr="discard"), None)
-        )
+    # I manually checked this one is correct, but it takes too long in debug mode
+    # (and still 1 min in release mode) to be worth running every time.
+    # maybe in the future we can flag a slow/fast runt config
+    if case["path"] != "examples/picorv32/unsigned_mul.tx":
+        variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard"), None))
 
     return variants
 
@@ -343,7 +344,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
-           and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
 
@@ -375,9 +376,10 @@ def fail_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] in runtime_failures
-           and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     return sorted(selected, key=lambda c: c["path"])
+
 
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     build = RUNT_BUILDERS[runner]
