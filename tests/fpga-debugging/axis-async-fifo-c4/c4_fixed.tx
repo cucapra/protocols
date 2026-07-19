@@ -1,0 +1,11 @@
+trace {
+    reset();
+    idle();
+    push(1);
+    push(2);
+    push(3);
+    idle();
+    idle();
+    pop(1);
+    pop(2);
+}

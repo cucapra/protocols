@@ -1,0 +1,9 @@
+error: The two expressions did not evaluate to the same value (in transaction `pop(1)`)
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:53:15
+   │
+53 │     assert_eq(DUT.m_axis_tvalid, 1'b1);
+   │               ^^^^^^^^^^^^^^^^^^^^^^^ LHS Value: 0, RHS Value: 1
+
+Trace 0 execution failed.
+---CODE---
+101
