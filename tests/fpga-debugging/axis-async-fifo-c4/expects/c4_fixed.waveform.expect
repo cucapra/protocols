@@ -1,0 +1,8 @@
+Trace 0 executed successfully!
+m_axis_tready     x 0 x x x x x 0 0 1 1
+s_axis_tvalid     0 0 1 1 1 1 1 0 0 x x
+s_axis_tdata[7:0] x x 1 1 1 2 3 x x x x
+rst               1 0 0 0 0 0 0 0 0 0 0
+m_axis_tdata[7:0] 0 0 0 0 0 0 0 0 1 1 2
+m_axis_tvalid     0 0 0 0 0 0 0 0 1 1 1
+s_axis_tready     0 0 0 0 1 1 1 1 1 1 1
