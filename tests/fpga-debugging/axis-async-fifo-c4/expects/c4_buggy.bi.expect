@@ -42,6 +42,5 @@ error: [pop@1] executing step 0 of the transaction: 0 != 1
 62 │     assert_eq(DUT.m_axis_tvalid, 1'b1);
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [pop@1] executing step 0 of the transaction: 0 != 1
 
-Error: "Monitor failed"
 ---CODE---
 1

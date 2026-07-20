@@ -50,6 +50,5 @@ error: [push@63] executing step 1 of the transaction: 01 != 00
 89 │     DUT.s_axis_tdata := data;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^ [push@63] executing step 1 of the transaction: 01 != 00
 
-Error: "Monitor failed"
 ---CODE---
 1

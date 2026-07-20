@@ -7,6 +7,5 @@ error: [send_data@0] executing step 88 of the transaction: 0f != 0e
 10 │     D.m_axis_tdata := data;
    │     ^^^^^^^^^^^^^^^^^^^^^^^ [send_data@0] executing step 88 of the transaction: 0f != 0e
 
-Error: "Monitor failed"
 ---CODE---
 1

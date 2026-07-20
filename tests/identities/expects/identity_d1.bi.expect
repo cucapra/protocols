@@ -1,4 +1,4 @@
-panicked at bi/src/bi.rs:739:29:
-not yet implemented: we currently expect one side of an assert_eq to be a port!
----CODE---
-101
+// trace 0
+trace {
+    slicing_ok(1, X);
+}

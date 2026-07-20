@@ -24,6 +24,5 @@ error: [read_v2@11?2?] executing step 3 of the transaction: 1 != 0
 163 │         DUT.S_AXI_RREADY := 1'b0;
     │         ^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v2@11?2?] executing step 3 of the transaction: 1 != 0
 
-Error: "Monitor failed"
 ---CODE---
 1

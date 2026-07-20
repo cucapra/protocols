@@ -1,6 +1,1 @@
-panicked at bi/src/main.rs:106:9:
-assertion `left == right` failed: Only nano seconds are supported
-  left: "s"
- right: "ns"
----CODE---
-101
+Only nano seconds are supported (received time unit s). Exiting...

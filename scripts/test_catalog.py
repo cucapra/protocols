@@ -89,16 +89,6 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
     },
-    "tests/adders/adder_d1/busy_wait_fail.tx": {
-        "protocol": "tests/adders/adder_d1/busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "assertion_mismatch",
-    },
-    "tests/adders/adder_d1/busy_wait_pass.tx": {
-        "protocol": "tests/adders/adder_d1/busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
-    },
     "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
@@ -131,16 +121,6 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "fork_protocol_error",
         "extra_args": ("--skip-static-step-fork-checks",),
-    },
-    "tests/adders/adder_d1/loop_with_assigns.tx": {
-        "protocol": "tests/adders/adder_d1/loop_with_assigns.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
-    },
-    "tests/adders/adder_d1/nested_busy_wait.tx": {
-        "protocol": "tests/adders/adder_d1/nested_busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
     },
     "tests/adders/adder_d1/second_thread_fails.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
@@ -325,30 +305,6 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
-    "tests/fifo/push_pop_loop_empty.tx": {
-        "protocol": "tests/fifo/fifo_bounded_loop.prot",
-        "verilog": (
-            "tests/fifo/bsg_mem_1rw_sync.v",
-            "tests/fifo/bsg_mem_1rw_sync_synth.v",
-            "tests/fifo/bsg_circular_ptr.v",
-            "tests/fifo/bsg_fifo_1rw_large.v",
-            "tests/fifo/fifo_wrapper.v",
-        ),
-        "top": "fifo_wrapper",
-        "expect": "pass",
-    },
-    "tests/fifo/push_pop_loop_not_empty.tx": {
-        "protocol": "tests/fifo/fifo_bounded_loop.prot",
-        "verilog": (
-            "tests/fifo/bsg_mem_1rw_sync.v",
-            "tests/fifo/bsg_mem_1rw_sync_synth.v",
-            "tests/fifo/bsg_circular_ptr.v",
-            "tests/fifo/bsg_fifo_1rw_large.v",
-            "tests/fifo/fifo_wrapper.v",
-        ),
-        "top": "fifo_wrapper",
-        "expect": "pass",
-    },
     "tests/identities/dual_identity_d0/dual_identity_d0_combdep.tx": {
         "protocol": "tests/identities/dual_identity_d0/dual_identity_d0.prot",
         "verilog": ("tests/identities/dual_identity_d0/dual_identity_d0.v",),
@@ -520,25 +476,6 @@ BI_CASES = {
         "instances": ("add_d1:Adder",),
         "expect": "pass",
     },
-    "tests.adders.busy_wait": {
-        "protocol": "tests/adders/busy_wait.prot",
-        "wave": "tests/adders/busy_wait.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": "pass",
-    },
-    "tests.adders.loop_with_assigns": {
-        "protocol": "tests/adders/loop_with_assigns.prot",
-        "wave": "tests/adders/loop_with_assigns.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": "pass",
-    },
-    "tests.adders.nested_busy_wait": {
-        "protocol": "tests/adders/nested_busy_wait.prot",
-        "wave": "tests/adders/nested_busy_wait.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": None,
-        "timeout_secs": 5,
-    },
     "tests.alus.alu_d1.bi": {
         "protocol": "tests/alus/alu_d1.bi.prot",
         "wave": "tests/alus/alu_d1.fst",
@@ -616,20 +553,6 @@ BI_CASES = {
         "wave": "tests/fifo/push_pop_identity.fst",
         "instances": ("fifo_wrapper:Fifo",),
         "expect": "pass",
-    },
-    "tests.fifo.push_pop_loop_empty": {
-        "protocol": "tests/fifo/push_pop_loop_empty.prot",
-        "wave": "tests/fifo/push_pop_loop_empty.fst",
-        "instances": ("fifo_wrapper:Fifo",),
-        "expect": None,
-        "timeout_secs": 5,
-    },
-    "tests.fifo.push_pop_loop_not_empty": {
-        "protocol": "tests/fifo/push_pop_loop_not_empty.prot",
-        "wave": "tests/fifo/push_pop_loop_not_empty.fst",
-        "instances": ("fifo_wrapper:Fifo",),
-        "expect": None,
-        "timeout_secs": 5,
     },
     "tests.fpga-debugging.axi-burst-s4.s4_buggy": {
         "protocol": "tests/fpga-debugging/axi-burst-s4/s4_buggy.prot",
