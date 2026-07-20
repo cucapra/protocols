@@ -126,13 +126,16 @@ fn print_trace_separator(trace_index: usize) {
 fn record_transition_waveform(
     waveform: &mut FxHashMap<PortId, Vec<WaveValue>>,
     sim: &Interpreter,
+    dut: &PatronusSim,
     port_expr_refs: &FxHashMap<PortId, ExprRef>,
     is_dont_care: &FxHashMap<PortId, ExprRef>,
 ) {
     for (port, expr) in port_expr_refs {
-        let value = if let Some(is_dont_care) = is_dont_care.get(port)
-            && matches!(sim.get(*is_dont_care), BaaValue::BitVec(value) if value.is_one())
-        {
+        let value = if dut.coi_inputs(*port).any(|input| {
+            is_dont_care.get(&input).is_some_and(|is_dont_care| {
+                matches!(sim.get(*is_dont_care), BaaValue::BitVec(value) if value.is_one())
+            })
+        }) {
             WaveValue::DontCare
         } else {
             match sim.get(*expr) {
@@ -315,6 +318,7 @@ fn run_transition_system(
             record_transition_waveform(
                 &mut waveform,
                 &transition_sim,
+                &sim,
                 &res.port_to_expr,
                 &res.is_dont_care,
             );
@@ -380,7 +384,6 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
             .iter()
             .flat_map(|protocol| protocol.args.iter().map(|arg| arg.symbol()))
             .collect();
-        println!("{:?}", used_protocol_names);
         let protocol_choice_indices: FxHashMap<&str, u64> = used_protocol_names
             .iter()
             .enumerate()
@@ -457,6 +460,7 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
             record_transition_waveform(
                 &mut waveform,
                 &transition_sim,
+                &sim,
                 &res.port_to_expr,
                 &res.is_dont_care,
             );
