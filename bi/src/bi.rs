@@ -638,14 +638,8 @@ impl Thread {
                         self.effectful_stmt_in_step = true;
                         Fork
                     } else {
-                        self.failures.push(Failure {
-                            thread_local_step: self.step,
-                            proto_id: ti.proto_id,
-                            thread_name: self.name.clone(),
-                            stmt,
-                            kind: FailureKind::ForkBeforeStep,
-                        });
-                        Failed
+                        eprintln!("[{}] Cannot fork at step zero!", self.name);
+                        std::process::exit(1);
                     }
                 }
                 Stmt::While(cond, body) => {
@@ -838,7 +832,8 @@ impl Thread {
                         proto_id: ti.proto_id,
                         thread_name: self.name.clone(),
                         stmt,
-                        kind: FailureKind::SignalValueMismatch { lhs: a, rhs: b },
+                        a,
+                        b,
                     })
                 }
             }
