@@ -9,9 +9,10 @@ use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::ops::DerefMut;
-use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};
+use wellen::{Hierarchy, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
 
 /// The result of advancing the clock cycle by one step
 #[derive(Debug, PartialEq)]
@@ -138,7 +139,7 @@ impl WaveSignalTrace {
     /// Helper function that returns the string representation of a
     /// `SignalValue` associated with a particular `SignalRef`
     /// at a given `time_step`
-    fn get_value(&self, signal_ref: SignalRef, time_step: u32) -> String {
+    fn get_value(&self, signal_ref: SignalRef, time_step: u32) -> SignalValueRef<'_> {
         // Get the clock signal
         let signal = self
             .wave
@@ -148,10 +149,7 @@ impl WaveSignalTrace {
             .get_offset(time_step)
             .unwrap_or_else(|| panic!("Unable to get offset for time_step {}", time_step));
         // Get the last value in the time step (this is to deal with delta cycles)
-        let value = signal.get_value_at(&offset, offset.elements - 1);
-        value
-            .to_bit_string()
-            .unwrap_or_else(|| panic!("Unable to convert {value} to bit-string"))
+        signal.get_value_at(&offset, offset.elements - 1)
     }
 }
 
@@ -183,7 +181,7 @@ fn find_instances(
                     .vars(hierachy)
                     .find(|v| hierachy[*v].name(hierachy) == pin_name)
                 {
-                    let waveform_bits = hierachy[var].length().expect("not a bit vector");
+                    let waveform_bits = hierachy[var].length(hierachy).expect("not a bit vector");
 
                     // Set up `sample_posedge` to
                     // refer to the clock signal (if one is specified)
@@ -297,15 +295,21 @@ impl SignalTrace for WaveSignalTrace {
                 // Next, as long as the time-step is in bounds...
                 while self.time_step < total_steps {
                     // ...first fetch the current signal value before incrementing
-                    let prev_value = self.get_value(clock_signal_ref, self.time_step);
+                    let prev_value: bool = self
+                        .get_value(clock_signal_ref, self.time_step)
+                        .try_into()
+                        .unwrap();
 
                     // Then, increment the `time_step`, and check whether
                     // the prevous value is 0 while the new value is 1
                     // If yes, we have encountered a rising clock-edge
                     // and have found the new `time_step` for the waveform
                     self.time_step += 1;
-                    let new_value = self.get_value(clock_signal_ref, self.time_step);
-                    if prev_value == "0" && new_value == "1" {
+                    let new_value: bool = self
+                        .get_value(clock_signal_ref, self.time_step)
+                        .try_into()
+                        .unwrap();
+                    if !prev_value && new_value {
                         self.step_to_idx.push(self.time_step);
                         return StepResult::Ok;
                     }
@@ -334,18 +338,25 @@ impl SignalTrace for WaveSignalTrace {
 
         // Obtain the `SignalValue` at the current `time_step`
         // (represented as a bit-string)
-        let bit_str = self.get_value(*signal_ref, self.time_step);
-
-        BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|_| {
-            // If the bit-string can't be converted into a BitVecValue
-            // (e.g. because the waveform contains "x"), generate
-            // a random value of the appropriate bit-width.
-            let bitwidth = match self.wave.hierarchy().get_signal_tpe(*signal_ref) {
-                Some(SignalEncoding::BitVector(width)) => width.get(),
-                _ => panic!("Expected a bit-vector signal for key {:?}", key),
-            };
-            BitVecValue::random(self.rng.borrow_mut().deref_mut(), bitwidth)
-        })
+        match self.get_value(*signal_ref, self.time_step) {
+            SignalValueRef::BitVec(bv) if let Some(bytes_be) = bv.be_bytes() => {
+                let bytes_le: SmallVec<[u8; 12]> = bytes_be.iter().cloned().rev().collect();
+                BitVecValue::from_bytes_le(bytes_le.as_slice(), bv.width())
+            }
+            SignalValueRef::BitVec(bv) => {
+                // 4/9 state bit vec
+                debug_assert!(
+                    !bv.iter_lsb_to_msb()
+                        .all(|b| matches!(b.as_ascii(), '0' | '1'))
+                );
+                BitVecValue::random(self.rng.borrow_mut().deref_mut(), bv.width())
+            }
+            SignalValueRef::Event => {
+                unreachable!("event's are 0-bit and do not make sense in protocols")
+            }
+            SignalValueRef::String(_) => unreachable!("protocols do not support strings"),
+            SignalValueRef::Real(_) => unreachable!("protocols do not support reals"),
+        }
     }
 
     fn step_to_time(&self) -> StepToTime {
