@@ -373,6 +373,9 @@ impl StepToTime {
                 TimescaleUnit::FemtoSeconds => format!("{}ns", time as f64 / 1000.0 / 1000.0),
                 TimescaleUnit::PicoSeconds => format!("{}ns", time as f64 / 1000.0),
                 TimescaleUnit::NanoSeconds => format!("{}ns", time),
+                TimescaleUnit::MicroSeconds => format!("{}ns", time as f64 * 1000.0),
+                TimescaleUnit::MilliSeconds => format!("{}ns", time as f64 * 1000.0 * 1000.0),
+                TimescaleUnit::Seconds => format!("{}ns", time as f64 * 1000.0 * 1000.0 * 1000.0),
                 other => todo!("support {other:?}"),
             }
         } else {

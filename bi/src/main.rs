@@ -76,6 +76,11 @@ struct Cli {
     #[arg(long)]
     max_traces: Option<u32>,
 
+    /// To suppress colors in error messages, pass in `--color never`.
+    /// Otherwise, by default, error messages are displayed with colors.
+    #[arg(long, value_name = "COLOR_CHOICE", default_value = "auto")]
+    color: ColorChoice,
+
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
@@ -109,14 +114,20 @@ fn main() {
     // Parse CLI args
     let cli = Cli::parse();
 
-    if let Some(tu) = cli.time_unit {
-        assert_eq!(tu, "ns", "Only nano seconds are supported");
+    if let Some(tu) = cli.time_unit
+        && tu != "ns"
+    {
+        eprintln!(
+            "Only nano seconds are supported (received time unit {}). Exiting...",
+            tu
+        );
+        return;
     }
 
     // parse protocol file
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
-    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, show_warnings, false);
+    let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
     let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
     let posedge_clock = get_clock(&modules, cli.sample_posedge);
 

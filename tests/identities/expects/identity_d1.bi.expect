@@ -1,0 +1,4 @@
+// trace 0
+trace {
+    slicing_ok(1, X);
+}

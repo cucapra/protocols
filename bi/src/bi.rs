@@ -632,11 +632,15 @@ impl Thread {
                     }
                 }
                 Stmt::Fork => {
-                    assert!(self.step > 0, "[{}] Cannot fork at step zero!", self.name);
-                    self.has_forked = true;
-                    self.next_stmt = ti.next_stmt[&stmt];
-                    self.effectful_stmt_in_step = true;
-                    Fork
+                    if self.step > 0 {
+                        self.has_forked = true;
+                        self.next_stmt = ti.next_stmt[&stmt];
+                        self.effectful_stmt_in_step = true;
+                        Fork
+                    } else {
+                        eprintln!("[{}] Cannot fork at step zero!", self.name);
+                        std::process::exit(1);
+                    }
                 }
                 Stmt::While(cond, body) => {
                     let cond_value = self

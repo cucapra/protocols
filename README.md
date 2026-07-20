@@ -11,9 +11,9 @@ A protocol is described using an `prot` definition containing a sequence of stat
 
 This repository contains:
 - An *interpreter* for the DSL
-- A *monitor* tool, which given a specification of a hardware module's communication behavior (written in our DSL)
+- A *backwards interpreter* (BI) tool, which given a specification of a hardware module's communication behavior (written in our DSL)
   and a `.fst` waveform file, infers a transaction-level trace that is consistent with the waveform data 
-- Common infrastructure shared between the interpreter & the monitor, such as a parser, type-checker and pretty-printer for our DSL
+- Common infrastructure shared between the interpreter & the BI, such as a parser, type-checker and pretty-printer for our DSL
 These tools are all implemented in Rust, with some auxiliary benchmarking scripts written in Python.
 
 ## Installation + Build Instructions
@@ -29,17 +29,7 @@ Note: the instructions below assume a macOS environment.
 - (Optional) Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
 - Run `cargo install --git https://github.com/Nikil-Shyamsunder/runt.git` to install our fork of [Runt](https://github.com/rachitnigam/runt), a command-line tool we use for snapshot tests. Runt compares the output of our tools to expected outputs stored in dedicated files. 
-
-**Dependencies for benchmarking the monitor**:
 - Run `uv sync` to install the Python dependencies specified in `pyproject.toml` 
-- Then, from the top-level directory, run the following scripts (note that they take ~3 minutes to run):
-```bash
-$ uv run scripts/benchmark_monitor.py      
-$ uv run scripts/plot_benchmark_results.py 
-```
-- This produces a CSV and a scatter plot measuring the performance of the monitor in 
-  `benchmark_results/benchmark_results.csv` and `benchmark_results/benchmark_plot.png` respectively
-
 - Some of the benchmarks correspond to real-world bugs taken from the [artifact for *Debugging in the Brave New World of Reconfigurable Hardware* (Ma et al. ASPLOS '22)](https://github.com/efeslab/asplos22-hardware-debugging-artifact) -- these can be found in the `tests/fpga-debugging` sub-directory 
   (more details in the `README` of the sub-directories corresponding to each bug)
 
@@ -49,43 +39,47 @@ $ uv run scripts/plot_benchmark_results.py
 **Building the source code**:
 - Run `cargo build` to build the Rust code
 - Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Runt)
-  - To only run the subset of tests for the monitor, run `just monitor` 
 - To generate HTML documentation, run `just doc` (this opens Cargo-generated docs in your browser)
 
-## Monitor CLI
-The CLI for the monitor can be used as follows:
+## Backwards Interpreter CLI
+The CLI for the BI can be used as follows:
 ```bash 
-$ cargo monitor --help
+$ cargo bi --help
+analyze signal traces to extract transactions
 
-Usage: protocols-monitor [OPTIONS] --protocol <PROTOCOLS_FILE> --wave <WAVE_FILE>
+Usage: bi [OPTIONS] --wave <WAVE_FILE>
 
 Options:
   -p, --protocol <PROTOCOLS_FILE>
-          Path to a Protocol (.prot) file
+          One or several protocol files.
   -w, --wave <WAVE_FILE>
           Path to a waveform trace (.fst, .vcd, .ghw) file
   -i, --instances <INSTANCES>...
-          A mapping of DUT struct in the protocol file to an instance in the signal trace. Multiple arguments can be passed if they're seperated by whitespace. Format is: `${instance_name}:${dut_struct_name}`
+          A mapping of DUT struct in the protocol file to an instance in the signal trace. Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
   -v, --verbose...
           Increase logging verbosity
   -q, --quiet...
           Decrease logging verbosity
-      --color <COLOR_CHOICE>
-          To suppress colors in error messages, pass in `--color never` Otherwise, by default, error messages are displayed w/ ANSI colors [default: auto] [possible values: auto, always, never]
-  -d, --display-hex
-          If enabled, displays integer literals using hexadecimal notation
       --sample-posedge <SIGNAL_TO_SAMPLE_ON_RISING_EDGE>
           Optional argument which specifies the name of the signal to sample on a rising edge (posedge). If enabled, this flag acts as the "clock" signal for the monitor. Note: the full path to the signal should be passed as this argument, e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace
-      --show-waveform-time
-          If enabled, displays the start & end waveform time for each inferred transaction
-      --show-thread-ids
-          If enabled, displays the thread ID corresponding to each inferred transaction
-      --time-unit <TIME_UNIT>
-          Specifies the time unit for displaying waveform times. Can only be used with --show-waveform-time. Valid options: fs, ps, ns, us, ms, s, auto Default is 'auto' which selects the unit based on the maximum time in the waveform
-      --print-num-steps
-          Optional flag: if enabled, prints the no. of (logical) steps (i.e. clock cycles) taken by the montior
       --include-idle
           Optional flag: if enabled, always prints out idle transcations regardless of whether the protocol has been annotated with `#[idle]`
+      --show-steps
+          If enabled, displays the start & end step for each inferred transaction
+      --include-in-progress
+          This flag will make the bi append any in-progress transactions to the trace
+      --show-waveform-time
+
+      --time-unit <TIME_UNIT>
+
+      --max-traces <MAX_TRACES>
+          Limit the number of traces written to stdout
+      --color <COLOR_CHOICE>
+          To suppress colors in error messages, pass in `--color never`. Otherwise, by default, error messages are displayed with colors [default: auto] [possible values: auto, always, never]
+  -d, --display-hex
+          If enabled, displays integer literals using hexadecimal notation
+  -r, --rename <RENAME>...
+          Rename pins of the DUT. &{field name in the struct} = ${verilog name}
   -h, --help
           Print help
 ```
@@ -93,7 +87,7 @@ Options:
 Example usage:
 ```bash
 $ cd tests
-$ cargo monitor -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
+$ cargo bi -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
 ```
 
 ## Interpreter CLI

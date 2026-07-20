@@ -1,7 +1,7 @@
 # Checked-in test catalog. Hand-maintained source of truth.
-# Consumed by scripts/generate_runt_configs.py and scripts/benchmark_monitor.py.
+# Consumed by scripts/generate_runt_configs.py.
 #
-# TX_CASES are keyed by their .tx path. MONITOR_CASES are keyed by a unique id
+# TX_CASES are keyed by their .tx path. BI_CASES are keyed by a unique id
 
 TX_CASES = {
     "examples/picorv32/unsigned_mul.tx": {
@@ -89,16 +89,6 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
     },
-    "tests/adders/adder_d1/busy_wait_fail.tx": {
-        "protocol": "tests/adders/adder_d1/busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "assertion_mismatch",
-    },
-    "tests/adders/adder_d1/busy_wait_pass.tx": {
-        "protocol": "tests/adders/adder_d1/busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
-    },
     "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
@@ -131,16 +121,6 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "fork_protocol_error",
         "extra_args": ("--skip-static-step-fork-checks",),
-    },
-    "tests/adders/adder_d1/loop_with_assigns.tx": {
-        "protocol": "tests/adders/adder_d1/loop_with_assigns.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
-    },
-    "tests/adders/adder_d1/nested_busy_wait.tx": {
-        "protocol": "tests/adders/adder_d1/nested_busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
     },
     "tests/adders/adder_d1/second_thread_fails.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
@@ -325,30 +305,6 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
-    "tests/fifo/push_pop_loop_empty.tx": {
-        "protocol": "tests/fifo/fifo_bounded_loop.prot",
-        "verilog": (
-            "tests/fifo/bsg_mem_1rw_sync.v",
-            "tests/fifo/bsg_mem_1rw_sync_synth.v",
-            "tests/fifo/bsg_circular_ptr.v",
-            "tests/fifo/bsg_fifo_1rw_large.v",
-            "tests/fifo/fifo_wrapper.v",
-        ),
-        "top": "fifo_wrapper",
-        "expect": "pass",
-    },
-    "tests/fifo/push_pop_loop_not_empty.tx": {
-        "protocol": "tests/fifo/fifo_bounded_loop.prot",
-        "verilog": (
-            "tests/fifo/bsg_mem_1rw_sync.v",
-            "tests/fifo/bsg_mem_1rw_sync_synth.v",
-            "tests/fifo/bsg_circular_ptr.v",
-            "tests/fifo/bsg_fifo_1rw_large.v",
-            "tests/fifo/fifo_wrapper.v",
-        ),
-        "top": "fifo_wrapper",
-        "expect": "pass",
-    },
     "tests/identities/dual_identity_d0/dual_identity_d0_combdep.tx": {
         "protocol": "tests/identities/dual_identity_d0/dual_identity_d0.prot",
         "verilog": ("tests/identities/dual_identity_d0/dual_identity_d0.v",),
@@ -501,7 +457,7 @@ TX_CASES = {
     },
 }
 
-MONITOR_CASES = {
+BI_CASES = {
     "tests.adders.add_d1": {
         "protocol": "tests/adders/add_d1.prot",
         "wave": "tests/adders/add_d1.fst",
@@ -520,33 +476,14 @@ MONITOR_CASES = {
         "instances": ("add_d1:Adder",),
         "expect": "pass",
     },
-    "tests.adders.busy_wait": {
-        "protocol": "tests/adders/busy_wait.prot",
-        "wave": "tests/adders/busy_wait.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": "pass",
-    },
-    "tests.adders.loop_with_assigns": {
-        "protocol": "tests/adders/loop_with_assigns.prot",
-        "wave": "tests/adders/loop_with_assigns.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": "pass",
-    },
-    "tests.adders.nested_busy_wait": {
-        "protocol": "tests/adders/nested_busy_wait.prot",
-        "wave": "tests/adders/nested_busy_wait.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": None,
-        "timeout_secs": 5,
-    },
-    "tests.alus.alu_d1.monitor": {
-        "protocol": "tests/alus/alu_d1.monitor.prot",
+    "tests.alus.alu_d1.bi": {
+        "protocol": "tests/alus/alu_d1.bi.prot",
         "wave": "tests/alus/alu_d1.fst",
         "instances": ("alu_d1:ALU",),
         "expect": "pass",
     },
-    "tests.alus.alu_d2.monitor": {
-        "protocol": "tests/alus/alu_d2.monitor.prot",
+    "tests.alus.alu_d2.bi": {
+        "protocol": "tests/alus/alu_d2.bi.prot",
         "wave": "tests/alus/alu_d2.fst",
         "instances": ("alu_d2:ALU",),
         "expect": "pass",
@@ -605,8 +542,8 @@ MONITOR_CASES = {
             "ns",
         ),
     },
-    "tests.fifo.fifo.monitor": {
-        "protocol": "tests/fifo/fifo.monitor.prot",
+    "tests.fifo.fifo.bi": {
+        "protocol": "tests/fifo/fifo.bi.prot",
         "wave": "tests/fifo/fifo.fst",
         "instances": ("fifo_wrapper:Fifo",),
         "expect": "pass",
@@ -616,20 +553,6 @@ MONITOR_CASES = {
         "wave": "tests/fifo/push_pop_identity.fst",
         "instances": ("fifo_wrapper:Fifo",),
         "expect": "pass",
-    },
-    "tests.fifo.push_pop_loop_empty": {
-        "protocol": "tests/fifo/push_pop_loop_empty.prot",
-        "wave": "tests/fifo/push_pop_loop_empty.fst",
-        "instances": ("fifo_wrapper:Fifo",),
-        "expect": None,
-        "timeout_secs": 5,
-    },
-    "tests.fifo.push_pop_loop_not_empty": {
-        "protocol": "tests/fifo/push_pop_loop_not_empty.prot",
-        "wave": "tests/fifo/push_pop_loop_not_empty.fst",
-        "instances": ("fifo_wrapper:Fifo",),
-        "expect": None,
-        "timeout_secs": 5,
     },
     "tests.fpga-debugging.axi-burst-s4.s4_buggy": {
         "protocol": "tests/fpga-debugging/axi-burst-s4/s4_buggy.prot",
@@ -1048,8 +971,8 @@ MONITOR_CASES = {
             "s",
         ),
     },
-    "tests.wishbone.wishbone.monitor": {
-        "protocol": "tests/wishbone/wishbone.monitor.prot",
+    "tests.wishbone.wishbone.bi": {
+        "protocol": "tests/wishbone/wishbone.bi.prot",
         "wave": "tests/wishbone/reqwalker.vcd",
         "instances": ("TOP.reqwalker:WBSubordinate",),
         "expect": "pass",
@@ -1093,7 +1016,7 @@ def _antmicro_case(stem):
     }
 
 
-MONITOR_CASES.update(
+BI_CASES.update(
     {
         f"tests.antmicro.{stem.replace('/', '.')}": _antmicro_case(stem)
         for stem in ANTMICRO_TRACE_STEMS

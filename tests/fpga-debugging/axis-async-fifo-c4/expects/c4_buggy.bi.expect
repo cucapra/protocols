@@ -1,0 +1,46 @@
+// trace 0
+trace {
+    reset();  // [time: 0ns -> 25ns]
+    idle();  // [time: 25ns -> 50ns]
+    push(1);  // [time: 50ns -> 75ns]
+    push(2);  // [time: 75ns -> 100ns]
+    push(3);  // [time: 100ns -> 125ns]
+    push(4);  // [time: 125ns -> 150ns]
+    push(5);  // [time: 150ns -> 175ns]
+    push(6);  // [time: 175ns -> 200ns]
+    push(7);  // [time: 200ns -> 200ns]
+}
+// trace 0
+trace {
+    reset();  // [time: 0ns -> 25ns]
+}
+error: [reset@1] executing step 0 of the transaction: 0 != 1
+    ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:115:5
+    │
+115 │     DUT.rst := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [reset@1] executing step 0 of the transaction: 0 != 1
+
+
+// trace 1
+trace {
+    reset();  // [time: 0ns -> 25ns]
+}
+error: [idle@1] executing step 0 of the transaction: 1 != 0
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:97:5
+   │
+97 │     DUT.m_axis_tready := 1'b0;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle@1] executing step 0 of the transaction: 1 != 0
+
+
+// trace 2
+trace {
+    reset();  // [time: 0ns -> 25ns]
+}
+error: [pop@1] executing step 0 of the transaction: 0 != 1
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot:62:5
+   │
+62 │     assert_eq(DUT.m_axis_tvalid, 1'b1);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [pop@1] executing step 0 of the transaction: 0 != 1
+
+---CODE---
+1
