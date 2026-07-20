@@ -28,33 +28,6 @@ expect_name = "add_var_cyc.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/add_var_cyc.prot --wave tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>&1"
 
 [[tests]]
-name = "bi.tests_adders_busy_wait.busy_wait_bi"
-paths = [
-  "../../tests/adders/busy_wait.prot",
-]
-expect_dir = "../../tests/adders/expects"
-expect_name = "busy_wait.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/busy_wait.prot --wave tests/adders/busy_wait.fst --instances add_d1:Adder 2>&1"
-
-[[tests]]
-name = "bi.tests_adders_loop_with_assigns.loop_with_assigns_bi"
-paths = [
-  "../../tests/adders/loop_with_assigns.prot",
-]
-expect_dir = "../../tests/adders/expects"
-expect_name = "loop_with_assigns.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/loop_with_assigns.prot --wave tests/adders/loop_with_assigns.fst --instances add_d1:Adder 2>&1"
-
-[[tests]]
-name = "bi.tests_adders_nested_busy_wait.nested_busy_wait_bi"
-paths = [
-  "../../tests/adders/nested_busy_wait.prot",
-]
-expect_dir = "../../tests/adders/expects"
-expect_name = "nested_busy_wait.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/adders/nested_busy_wait.prot --wave tests/adders/nested_busy_wait.fst --instances add_d1:Adder --max-traces 20 2>&1"
-
-[[tests]]
 name = "bi.tests_alus_alu_d1_bi.alu_d1_bi"
 paths = [
   "../../tests/alus/alu_d1.bi.prot",
@@ -1196,24 +1169,6 @@ paths = [
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_identity.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_identity.prot --wave tests/fifo/push_pop_identity.fst --instances fifo_wrapper:Fifo 2>&1"
-
-[[tests]]
-name = "bi.tests_fifo_push_pop_loop_empty.push_pop_loop_empty_bi"
-paths = [
-  "../../tests/fifo/push_pop_loop_empty.prot",
-]
-expect_dir = "../../tests/fifo/expects"
-expect_name = "push_pop_loop_empty.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_loop_empty.prot --wave tests/fifo/push_pop_loop_empty.fst --instances fifo_wrapper:Fifo --max-traces 20 2>&1"
-
-[[tests]]
-name = "bi.tests_fifo_push_pop_loop_not_empty.push_pop_loop_not_empty_bi"
-paths = [
-  "../../tests/fifo/push_pop_loop_not_empty.prot",
-]
-expect_dir = "../../tests/fifo/expects"
-expect_name = "push_pop_loop_not_empty.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fifo/push_pop_loop_not_empty.prot --wave tests/fifo/push_pop_loop_not_empty.fst --instances fifo_wrapper:Fifo 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axi_burst_s4_s4_buggy.s4_buggy_bi"

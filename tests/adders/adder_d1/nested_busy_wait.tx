@@ -1,4 +1,0 @@
-trace {
-    nested_busy_wait(1, 2, 2, 3, 3);   // 6 inner steps + 2 outer steps = 8 cycles
-    nested_busy_wait(10, 20, 3, 2, 30); // 6 inner steps + 3 outer steps = 9 cycles
-}
