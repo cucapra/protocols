@@ -4,7 +4,7 @@
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::Instance;
-use baa::{BitVecOps, BitVecValue, WidthInt};
+use baa::{BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
 use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::{Rng, SeedableRng};
@@ -56,6 +56,9 @@ pub struct WaveSignalTrace {
     wave: wellen::simple::Waveform,
     port_map: FxHashMap<PortKey, SignalRef>,
 
+    /// cached values for the current step
+    values: FxHashMap<PortKey, BitVecValue>,
+
     /// The sampling mode to be used on the waveform
     sampling_mode: WaveSamplingMode,
 
@@ -73,6 +76,9 @@ pub struct WaveSignalTrace {
 
     /// Maps a logical step to time step.
     step_to_idx: Vec<u32>,
+
+    /// to generate values for `x`
+    rng: rand::rngs::SmallRng,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -118,15 +124,40 @@ impl WaveSignalTrace {
         signals.dedup();
         wave.load_signals(&signals);
 
-        Ok(Self {
+        let mut out = Self {
             wave,
             port_map,
+            values: Default::default(),
             sampling_mode,
             logical_step: 0,
             time_step: 0,
             clock_signal,
             step_to_idx: vec![0],
-        })
+            rng: rand::rngs::SmallRng::seed_from_u64(0),
+        };
+        out.update_values();
+        Ok(out)
+    }
+
+    /// reads values in current step from trace
+    fn update_values(&mut self) {
+        for (&key, &signal_ref) in self.port_map.iter() {
+            // Obtain the `SignalValue` at the current `time_step`
+            // (represented as a bit-string)
+            let bit_str = self.get_value(signal_ref, self.time_step);
+
+            let value = BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|_| {
+                // If the bit-string can't be converted into a BitVecValue
+                // (e.g. because the waveform contains "x"), generate
+                // a random value of the appropriate bit-width.
+                let bitwidth = match self.wave.hierarchy().get_signal_tpe(signal_ref) {
+                    Some(SignalEncoding::BitVector(width)) => width.get(),
+                    _ => panic!("Expected a bit-vector signal for key {:?}", key),
+                };
+                BitVecValue::random(&mut self.rng, bitwidth)
+            });
+            self.values.insert(key, value);
+        }
     }
 
     /// Helper function that returns the string representation of a
@@ -277,6 +308,7 @@ impl SignalTrace for WaveSignalTrace {
                     self.time_step += 1;
                     self.step_to_idx.push(self.time_step);
                 }
+                self.update_values();
                 if self.logical_step == total_steps {
                     StepResult::Done
                 } else {
@@ -301,6 +333,7 @@ impl SignalTrace for WaveSignalTrace {
                     let new_value = self.get_value(clock_signal_ref, self.time_step);
                     if prev_value == "0" && new_value == "1" {
                         self.step_to_idx.push(self.time_step);
+                        self.update_values();
                         return StepResult::Ok;
                     }
                 }
@@ -323,24 +356,7 @@ impl SignalTrace for WaveSignalTrace {
             instance_id,
             pin_id: pin,
         };
-        // Get the Wellen `SignalRef` (akin to `SignalId`)
-        let signal_ref = self.port_map.get(&key).unwrap();
-
-        // Obtain the `SignalValue` at the current `time_step`
-        // (represented as a bit-string)
-        let bit_str = self.get_value(*signal_ref, self.time_step);
-
-        BitVecValue::from_bit_str(&bit_str).unwrap_or_else(|_| {
-            // If the bit-string can't be converted into a BitVecValue
-            // (e.g. because the waveform contains "x"), generate
-            // a random value of the appropriate bit-width.
-            let bitwidth = match self.wave.hierarchy().get_signal_tpe(*signal_ref) {
-                Some(SignalEncoding::BitVector(width)) => width.get(),
-                _ => panic!("Expected a bit-vector signal for key {:?}", key),
-            };
-            let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
-            BitVecValue::random(&mut rng, bitwidth)
-        })
+        self.values[&key].clone()
     }
 
     fn step_to_time(&self) -> StepToTime {
