@@ -376,6 +376,11 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
             .iter()
             .map(|name| (*protos_by_name.get(*name).unwrap()).clone())
             .collect();
+        let protocol_arg_symbols: Vec<_> = used_protocols
+            .iter()
+            .flat_map(|protocol| protocol.args.iter().map(|arg| arg.symbol()))
+            .collect();
+        println!("{:?}", used_protocol_names);
         let protocol_choice_indices: FxHashMap<&str, u64> = used_protocol_names
             .iter()
             .enumerate()
@@ -405,6 +410,7 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
             proto_choices,
             port_map,
             port_expr_refs,
+            &protocol_arg_symbols,
             st,
         );
 

@@ -26,7 +26,7 @@ fn symbol_bitvec_expr(
         crate::frontend::symbol::Type::BitVec(width) => {
             ctx.bv_symbol(&expr_name, width as WidthInt)
         }
-        _ => panic!("unsupported input type for {}", full_name),
+        _ => panic!("unsupported input type {:?} for {}",  st[symbol_id].tpe(), full_name),
     }
 }
 
@@ -50,6 +50,7 @@ pub fn into_bmc_transition_system(
     proto_choices: Vec<ExprRef>,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
     port_to_expr: FxHashMap<PortId, ExprRef>,
+    protocol_arg_symbols: &[SymbolId],
     st: &SymbolTable,
 ) -> LoweredSystemResult {
     let mut ctx = std::mem::take(&mut pg.expr_ctx);
@@ -58,10 +59,8 @@ pub fn into_bmc_transition_system(
     let mut added_protocol_inputs = FxHashSet::default();
     for (instance, proto_choice) in proto_choices.iter().enumerate() {
         ts.add_input(&ctx, *proto_choice);
-        for symbol_id in st.get_args() {
-            if !matches!(st[symbol_id].kind(), SymbolKind::Arg(_)) {
-                continue;
-            }
+        for &symbol_id in protocol_arg_symbols {
+            debug_assert!(matches!(st[symbol_id].kind(), SymbolKind::Arg(_)));
             let expr = symbol_bitvec_expr(&mut ctx, st, symbol_id, instance);
             if added_protocol_inputs.insert(expr) {
                 ts.add_input(&ctx, expr);
