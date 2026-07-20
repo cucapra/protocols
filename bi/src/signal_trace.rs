@@ -9,6 +9,8 @@ use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
+use std::cell::RefCell;
+use std::ops::DerefMut;
 use wellen::{Hierarchy, SignalEncoding, SignalRef, Time, Timescale, TimescaleUnit};
 
 /// The result of advancing the clock cycle by one step
@@ -73,6 +75,9 @@ pub struct WaveSignalTrace {
 
     /// Maps a logical step to time step.
     step_to_idx: Vec<u32>,
+
+    /// for generating random values to replace X
+    rng: RefCell<rand::rngs::SmallRng>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -126,6 +131,7 @@ impl WaveSignalTrace {
             time_step: 0,
             clock_signal,
             step_to_idx: vec![0],
+            rng: RefCell::new(rand::rngs::SmallRng::seed_from_u64(0)),
         })
     }
 
@@ -338,8 +344,7 @@ impl SignalTrace for WaveSignalTrace {
                 Some(SignalEncoding::BitVector(width)) => width.get(),
                 _ => panic!("Expected a bit-vector signal for key {:?}", key),
             };
-            let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
-            BitVecValue::random(&mut rng, bitwidth)
+            BitVecValue::random(self.rng.borrow_mut().deref_mut(), bitwidth)
         })
     }
 
