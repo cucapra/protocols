@@ -90,8 +90,7 @@ def expect_name(case: dict, runner: str) -> str:
     return f"{replace_non_alphanumerics(case_stem(case))}.{runner}.expect"
 
 
-def expect_dir(case: dict, runner: str) -> str:
-    wave = case.get("wave")
+def expect_dir(case: dict, _runner: str) -> str:
     base = Path(case["paths"][0]).parent
     return f"../../{base.as_posix()}/expects"
 
