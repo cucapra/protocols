@@ -31,7 +31,7 @@ def load_tx_cases() -> list[dict]:
     for path, c in test_catalog.TX_CASES.items():
         out.append(
             {
-                "path": path,
+                "paths": [path],
                 "protocol_path": c["protocol"],
                 "module": c.get("top"),
                 "verilog": c.get("verilog", ()),
@@ -47,16 +47,19 @@ def load_bi_cases() -> list[dict]:
     """Same idea as load_tx_cases but for the bi cases"""
     out = []
     for case_id, c in test_catalog.BI_CASES.items():
-        out.append(
-            {
-                "id": case_id,
-                "path": c["protocol"],
-                "wave": c.get("wave"),
-                "instances": c.get("instances", ()),
-                "extra_args": c.get("extra_args", ()),
-                "expected": c["expect"],
-            }
-        )
+        case = {
+            "id": case_id,
+            "wave": c.get("wave"),
+            "instances": c.get("instances", ()),
+            "extra_args": c.get("extra_args", ()),
+            "expected": c["expect"],
+        }
+        if "protocol" in c:
+            assert "protocols" not in c
+            case["paths"] = [c["protocol"]]
+        else:
+            case["paths"] = c["protocols"]
+        out.append(case)
     return out
 
 
@@ -74,9 +77,9 @@ def case_stem(case: dict) -> str:
     # antmicro cases share one .prot but differ by wave, so name them by
     # the wave; otherwise use the test file's stem (dropping a .bi suffix).
     wave = case.get("wave")
-    if wave and case["path"].startswith("tests/antmicro/"):
+    if wave and "antmicro" in wave:
         return Path(wave).stem
-    stem = Path(case["path"]).stem
+    stem = Path(case["paths"][0]).stem
     return stem.removesuffix(".bi")
 
 
@@ -89,7 +92,7 @@ def expect_name(case: dict, runner: str) -> str:
 
 def expect_dir(case: dict, runner: str) -> str:
     wave = case.get("wave")
-    base = Path(wave if runner == "bi" and wave else case["path"]).parent
+    base = Path(case["paths"][0]).parent
     return f"../../{base.as_posix()}/expects"
 
 
@@ -154,18 +157,18 @@ def interp_runt_command(case: dict) -> list[tuple[str, str]]:
         "--color",
         "never",
         "--transactions",
-        case["path"],
+        " ".join(case["paths"]),
     ]
     _tx_tail(cmd, case, with_max_steps=True)
     return [("", repo_root_command(cmd, stderr="stdout"))]
 
 
 def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
-    cmd = [*binary_prefix("graph-interp"), "--transactions", case["path"]]
+    cmd = [*binary_prefix("graph-interp"), "--transactions", " ".join(case["paths"])]
     _tx_tail(cmd, case, with_max_steps=False)
 
     # wishbone and fifo only work with --respect-forks
-    if case["path"].startswith("tests/fifo/") or case["path"].startswith(
+    if case["paths"][0].startswith("tests/fifo/") or case["paths"][0].startswith(
         "tests/wishbone/"
     ):
         flag_sets = [("respect_forks", ["--respect-forks", "--determinize"])]
@@ -182,7 +185,9 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
 def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     # We pass in `--color never` to BI to suppress color in error messages
     # (so that the .expect files only display plaintext)
-    cmd = [*binary_prefix("bi"), "--color", "never", "--protocol", case["path"]]
+    cmd = [*binary_prefix("bi"), "--color", "never"]
+    for p in case["paths"]:
+        cmd += ["--protocol", p]
     if case["wave"]:
         cmd += ["--wave", case["wave"]]
     if case["instances"]:
@@ -199,7 +204,7 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         "--color",
         "never",
         "--transactions",
-        case["path"],
+        " ".join(case["paths"]),
         "--ascii-waveform",
     ]
     _tx_tail(ast_cmd, case, with_max_steps=True)
@@ -207,7 +212,7 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     graph_cmd = [
         *binary_prefix("graph-interp"),
         "--transactions",
-        case["path"],
+        " ".join(case["paths"]),
         "--respect-forks",
         "--determinize",
         "--ascii-waveform",
@@ -217,7 +222,7 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ts_cmd = [
         *binary_prefix("graph-interp"),
         "--transactions",
-        case["path"],
+        " ".join(case["paths"]),
         "--transition-system",
         "--ascii-waveform",
     ]
@@ -234,7 +239,7 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
     graph_cmd = [
         *binary_prefix("graph-interp"),
         "--transactions",
-        case["path"],
+        " ".join(case["paths"]),
         "--respect-forks",
         "--determinize",
         "--brief-graph-errors",
@@ -244,7 +249,7 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
     ts_cmd = [
         *binary_prefix("graph-interp"),
         "--transactions",
-        case["path"],
+        " ".join(case["paths"]),
         "--transition-system",
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
@@ -308,7 +313,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         if c["expected"] == "pass"
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
-    return sorted(selected, key=lambda c: c["path"])
+    return sorted(selected, key=lambda c: c["paths"][0])
 
 
 def waveform_cases(cases: list[dict]) -> list[dict]:
@@ -325,7 +330,9 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
         "tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
     ]
 
-    return list(filter(lambda c: c["path"] not in xfailed, graph_interp_cases(cases)))
+    return list(
+        filter(lambda c: c["paths"][0] not in xfailed, graph_interp_cases(cases))
+    )
 
 
 def fail_cases(cases: list[dict]) -> list[dict]:
@@ -340,14 +347,14 @@ def fail_cases(cases: list[dict]) -> list[dict]:
         if c["expected"] in runtime_failures
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
-    return sorted(selected, key=lambda c: c["path"])
+    return sorted(selected, key=lambda c: c["paths"][0])
 
 
 def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
     build = RUNT_BUILDERS[runner]
     suites = []
-    for case in sorted(cases, key=lambda c: (c["path"], expect_name(c, runner))):
-        path = case["path"]
+    for case in sorted(cases, key=lambda c: (c["paths"][0], expect_name(c, runner))):
+        path = case["paths"][0]
         edir = expect_dir(case, runner)
         ename = expect_name(case, runner)
         base_name = (
