@@ -130,7 +130,7 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     step();
 }
 
-prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
+prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -168,7 +168,7 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
     }
 }
 
-prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
+prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -205,7 +205,7 @@ prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
     }
 }
 
-prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -243,7 +243,7 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
     }
 }
 
-prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -282,7 +282,7 @@ prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data
 }
 
 
-prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -321,7 +321,7 @@ prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, dat
     }
 }
 
-prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -360,7 +360,7 @@ prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data
     }
 }
 
-prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -399,7 +399,7 @@ prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, dat
     }
 }
 
-prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -438,7 +438,7 @@ prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data
     }
 }
 
-prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
@@ -476,7 +476,7 @@ prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, da
     }
 }
 
-prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
     assert_eq(mask, 4'b1111); // TODO: support other masks
 
     // no RST
