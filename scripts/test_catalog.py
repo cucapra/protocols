@@ -1101,6 +1101,6 @@ BI_CASES.update(
         )
         for stem in ANTMICRO_TRACE_STEMS
         # for now, we exclude warp burst modes for 8 and 16
-        if not ("incrementing" in stem and int(stem[-1]) in {2, 3})
+        if not ("incrementing" in stem and int(stem[-1]) in {3})
     }
 )

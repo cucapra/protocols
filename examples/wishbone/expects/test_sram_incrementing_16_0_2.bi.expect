@@ -1,0 +1,33 @@
+// trace 0
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+}
+error: [read_burst_increment_wrap_8@41] executing step 9 of the transaction: 04000008 != 04000000
+    ┌─ examples/wishbone/wishbone.prot:486:9
+    │
+486 │         self.ADR := start_addr[31:5] ## (start_addr[4:2] + iter_count::<u3>()) ## start_addr[1:0];
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@41] executing step 9 of the transaction: 04000008 != 04000000
+
+
+// trace 1
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+}
+error: [read_burst_increment_wrap_8@41L] executing step 9 of the transaction: 2 != 7
+    ┌─ examples/wishbone/wishbone.prot:490:13
+    │
+490 │             self.CTI := 3'b111;
+    │             ^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@41L] executing step 9 of the transaction: 2 != 7
+
+error: [read_burst_increment_wrap_8@41L] executing step 9 of the transaction: 04000008 != 04000000
+    ┌─ examples/wishbone/wishbone.prot:486:9
+    │
+486 │         self.ADR := start_addr[31:5] ## (start_addr[4:2] + iter_count::<u3>()) ## start_addr[1:0];
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@41L] executing step 9 of the transaction: 04000008 != 04000000
+
+---CODE---
+1

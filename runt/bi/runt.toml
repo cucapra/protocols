@@ -343,6 +343,15 @@ expect_name = "test_sram_incrementing_16_0_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_0_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_16_0_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_12_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -359,6 +368,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_16_12_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_12_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_16_12_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_4_0_bi"
@@ -379,6 +397,15 @@ expect_name = "test_sram_incrementing_16_4_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_4_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_16_4_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_8_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -395,6 +422,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_16_8_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_16_8_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_16_8_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_0_0_bi"
@@ -415,6 +451,15 @@ expect_name = "test_sram_incrementing_1_0_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_0_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_1_0_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_12_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -431,6 +476,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_1_12_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_12_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_1_12_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_4_0_bi"
@@ -451,6 +505,15 @@ expect_name = "test_sram_incrementing_1_4_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_4_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_1_4_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_8_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -467,6 +530,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_1_8_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_1_8_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_1_8_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_0_0_bi"
@@ -487,6 +559,15 @@ expect_name = "test_sram_incrementing_2_0_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_0_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_2_0_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_12_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -503,6 +584,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_2_12_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_12_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_2_12_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_4_0_bi"
@@ -523,6 +613,15 @@ expect_name = "test_sram_incrementing_2_4_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_4_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_2_4_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_8_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -539,6 +638,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_2_8_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_2_8_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_2_8_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_0_0_bi"
@@ -559,6 +667,15 @@ expect_name = "test_sram_incrementing_4_0_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_0_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_4_0_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_12_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -575,6 +692,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_4_12_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_12_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_4_12_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_4_0_bi"
@@ -595,6 +721,15 @@ expect_name = "test_sram_incrementing_4_4_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_4_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_4_4_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_8_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -611,6 +746,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_4_8_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_4_8_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_4_8_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_0_0_bi"
@@ -631,6 +775,15 @@ expect_name = "test_sram_incrementing_8_0_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_0_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_8_0_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_12_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -647,6 +800,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_8_12_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_12_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_8_12_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_4_0_bi"
@@ -667,6 +829,15 @@ expect_name = "test_sram_incrementing_8_4_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_4_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_8_4_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_8_0_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
@@ -683,6 +854,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "test_sram_incrementing_8_8_1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.test_sram_incrementing_8_8_2_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "test_sram_incrementing_8_8_2.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.tests_adders_add_d1.add_d1_bi"
