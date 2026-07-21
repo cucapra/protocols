@@ -163,7 +163,7 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
   self.WE := 1'd1;
   self.SEL := mask;
   for d in data {
-    self.ADR := start_addr + iter_count::<u32>();
+    self.ADR := start_addr + (iter_count::<u30>() ## 2'd0);
     self.DAT_O := d;
     if is_last() {
       self.CTI := 3'd7;
@@ -186,7 +186,7 @@ prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data
   self.WE := 1'd0;
   self.SEL := mask;
   for d in data {
-    self.ADR := start_addr + iter_count::<u32>();
+    self.ADR := start_addr + (iter_count::<u30>() ## 2'd0);
     if is_last() {
       self.CTI := 3'd7;
     } else {
