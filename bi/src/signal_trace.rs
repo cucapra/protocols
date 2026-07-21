@@ -533,7 +533,7 @@ fn parse_name_and_width(value: &str) -> (String, WidthInt) {
     }
 }
 
-fn parse_value(value: &str, width: WidthInt, rnd: &mut impl Rng) -> BitVecValue {
+fn parse_value(value: &str, width: WidthInt, rnd: &mut impl rand::Rng) -> BitVecValue {
     let value = value.to_lowercase();
     let r = if value == "x" {
         BitVecValue::random(rnd, width)
