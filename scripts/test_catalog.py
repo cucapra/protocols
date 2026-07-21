@@ -1043,7 +1043,7 @@ BI_CASES.update(
             stem
         )
         for stem in ANTMICRO_TRACE_STEMS
-        # for now we include only the classic (i.e. non-burst) cases
-        if "classic" in stem
+        # for now, we include only the classic (i.e. non-burst) and constant cases
+        if "classic" in stem or "constant" in stem
     }
 )
