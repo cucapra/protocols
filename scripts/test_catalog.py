@@ -980,15 +980,7 @@ BI_CASES = {
     },
 }
 
-ANTMICRO_EXTRA_ARGS = (
-    "--sample-posedge",
-    "tb.dut.clk",
-    "--show-waveform-time",
-    "--time-unit",
-    "ns",
-)
-ANTMICRO_PROTOCOL = "tests/antmicro/wishbone_subordinate.prot"
-
+# waveform traces from the antmicro/litex wishbone tests
 ANTMICRO_TRACE_STEMS = (
     [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
     + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
@@ -1006,19 +998,52 @@ ANTMICRO_TRACE_STEMS = (
 )
 
 
-def _antmicro_case(stem):
+def _antmicro_test_proto_case(stem):
+    """generate a testcase for antmicro traces with the wishbone_subordinate protocol"""
     return {
-        "protocol": ANTMICRO_PROTOCOL,
+        "protocol": "tests/antmicro/wishbone_subordinate.prot",
         "wave": f"tests/antmicro/{stem}.fst",
         "instances": ("tb.dut:WBSubordinate",),
         "expect": "pass",
-        "extra_args": ANTMICRO_EXTRA_ARGS,
+        "extra_args": [
+            "--sample-posedge",
+            "tb.dut.clk",
+            "--show-waveform-time",
+            "--time-unit",
+            "ns",
+        ],
     }
 
 
 BI_CASES.update(
     {
-        f"tests.antmicro.{stem.replace('/', '.')}": _antmicro_case(stem)
+        f"tests.antmicro.{stem.replace('/', '.')}": _antmicro_test_proto_case(stem)
         for stem in ANTMICRO_TRACE_STEMS
+    }
+)
+
+
+def _antmicro_example_proto_case(stem):
+    """generate a testcase for our wishbone protocol description in examples"""
+    return {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/antmicro_litex.prot",
+        ],
+        "wave": f"tests/antmicro/{stem}.fst",
+        "instances": ("tb.dut:LitexWishbone",),
+        "expect": "pass",
+        "extra_args": ["--show-steps", "--display-hex"],
+    }
+
+
+BI_CASES.update(
+    {
+        f"examples.wishbone.antmicro.{stem.replace('/', '.')}": _antmicro_example_proto_case(
+            stem
+        )
+        for stem in ANTMICRO_TRACE_STEMS
+        # for now we include only the classic (i.e. non-burst) cases
+        if "classic" in stem
     }
 )
