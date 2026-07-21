@@ -1037,13 +1037,17 @@ def _antmicro_example_proto_case(stem):
     }
 
 
+def is_wrap_burst(stem: str) -> bool:
+    return "incrementing" in stem and int(stem[-1]) in {1, 2, 3}
+
+
 BI_CASES.update(
     {
         f"examples.wishbone.antmicro.{stem.replace('/', '.')}": _antmicro_example_proto_case(
             stem
         )
         for stem in ANTMICRO_TRACE_STEMS
-        # for now, we include only the classic (i.e. non-burst) and constant cases
-        if "classic" in stem or "constant" in stem
+        # for now, we exclude wraping burst modes
+        if not is_wrap_burst(stem)
     }
 )

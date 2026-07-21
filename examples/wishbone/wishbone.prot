@@ -288,7 +288,7 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
     self.SEL := mask;
 
     for d in data {
-        self.ADR := start_addr + iter_count::<u32>();
+        self.ADR := start_addr + (iter_count::<u30>() ## 2'b00);
         self.DAT_O := d;
 
         // indicate end of cycle for last item
@@ -326,7 +326,7 @@ prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data
     self.SEL := mask;
 
     for d in data {
-        self.ADR := start_addr + iter_count::<u32>();
+        self.ADR := start_addr + (iter_count::<u30>() ## 2'b00);
 
         // indicate end of cycle for last item
         if is_last() {

@@ -1,0 +1,16 @@
+// trace 0
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+    read_burst_single(0xf, 0x10000008, 0x64d444f5); [11 .. 12]
+    reset(); [17]
+    reset(); [18]
+    reset(); [19]
+    write_burst_single(0xf, 0x10000008, 0xd36eb81e); [24 .. 25]
+    reset(); [34]
+    reset(); [35]
+    reset(); [36]
+    write_burst_single(0xf, 0x10000008, 0x27ae8edf); [41 .. 42]
+    read_burst_single(0xf, 0x10000008, 0x27ae8edf); [43 .. 44]
+}
