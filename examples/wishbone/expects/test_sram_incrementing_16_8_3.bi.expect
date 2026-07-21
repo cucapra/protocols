@@ -1,0 +1,16 @@
+// trace 0
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+    read_burst_increment_wrap_16(0xf, 0x10000008, 0x[a28d3953, 528210d1, fb4e95ac, 631003c7, 0988a5bd, 3547ea52, 574fb6a6, 2a5a122e, cf91926c, f2825b46, c2b3362f, 6bc52a78, d4524683, b1e688b6, 938dbd64, 7f7234af]); [41 .. 57]
+    reset(); [62]
+    reset(); [63]
+    reset(); [64]
+    write_burst_increment_wrap_16(0xf, 0x10000008, X); [69 .. 85]
+    reset(); [154]
+    reset(); [155]
+    reset(); [156]
+    write_burst_increment_wrap_16(0xf, 0x10000008, X); [161 .. 177]
+    read_burst_single(0xf, 0x10000008, 0xacc93896); [178 .. 179]
+}
