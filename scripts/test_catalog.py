@@ -1023,6 +1023,63 @@ BI_CASES.update(
 )
 
 
+def _correct_burst_addr(start, cti, num_elements):
+    bits = cti + 1
+    assert bits in {2, 3, 4}
+    mask = (1 << bits) - 1
+
+    upper_start = (start >> (bits + 2)) << (bits + 2)
+    lower_start = start & 0b11
+    base = upper_start | lower_start
+    counter_start = (start >> 2) & mask
+    return [base | (((counter_start + i) & mask) << 2) for i in range(num_elements)]
+
+
+def _incorrect_burst_addr(start, cti, num_elements):
+    bits = cti + 1
+    assert bits in {2, 3, 4}
+    mask = (1 << bits) - 1
+    addresses = []
+    adr_base = (start >> 2) & (~mask)
+    cnt_offset = (start >> 2) & mask
+
+    for i in range(num_elements):
+        # lsb = counter + offset, overflow ignored
+        offset_lsb = (i + cnt_offset) & mask
+        # msb = counter value without wrapped bytes
+        offset_msb = i & (~mask)
+        addresses.append((adr_base + offset_msb + offset_lsb) << 2)
+
+    return addresses
+
+
+def _expect_antmicro(stem: str) -> str:
+    """the antmicro RTL has a wrong implementation for wrap mode
+    - correct implementation: https://github.com/fusesoc/wb_common/blob/3bdab31f22dc7155d30d611b37668c8da5030409/wb_common.v#L42
+    - incorrect: https://github.com/antmicro/wishbone-interconnect-burst-mode-benchmark/blob/547fa0e9d7256059354559bbbe5d8b95272aab69/test/tests/wb_master.py#L51
+    """
+    if "incrementing" in stem:
+        parts = stem.split("_")
+        cti = int(parts[-1])
+        offset = int(parts[-2])
+        num_elements = int(parts[-3])
+        if cti == 0:
+            return "pass"
+
+        expected = _correct_burst_addr(offset, cti, num_elements)
+        actual = _incorrect_burst_addr(offset, cti, num_elements)
+        if expected == actual:
+            return "pass"
+
+        print(f"{stem=} is expected to fail the bi")
+        print(f"  {expected=}")
+        print(f"  {actual=}")
+
+        return "fail"
+    else:
+        return "pass"
+
+
 def _antmicro_example_proto_case(stem):
     """generate a testcase for our wishbone protocol description in examples"""
     return {
@@ -1032,13 +1089,9 @@ def _antmicro_example_proto_case(stem):
         ],
         "wave": f"tests/antmicro/{stem}.fst",
         "instances": ("tb.dut:LitexWishbone",),
-        "expect": "pass",
+        "expect": _expect_antmicro(stem),
         "extra_args": ["--show-steps", "--display-hex"],
     }
-
-
-def is_wrap_burst(stem: str) -> bool:
-    return "incrementing" in stem and int(stem[-1]) in {1, 2, 3}
 
 
 BI_CASES.update(
@@ -1047,7 +1100,7 @@ BI_CASES.update(
             stem
         )
         for stem in ANTMICRO_TRACE_STEMS
-        # for now, we exclude wraping burst modes
-        if not is_wrap_burst(stem)
+        # for now, we exclude warp burst modes for 8 and 16
+        if not ("incrementing" in stem and int(stem[-1]) in {2, 3})
     }
 )
