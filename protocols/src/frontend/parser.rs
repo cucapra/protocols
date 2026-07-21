@@ -283,6 +283,12 @@ fn parse_type(
                 let seq_id = st.add_seq(inner_tpe, 1);
                 Ok(Type::Seq(seq_id))
             }
+            Rule::seq_plus_plus_tpe => {
+                let inner_tpe =
+                    parse_type(diag, fileid, st, inner_type.into_inner().next().unwrap())?;
+                let seq_id = st.add_seq(inner_tpe, 2);
+                Ok(Type::Seq(seq_id))
+            }
             _ => {
                 let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
                 diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);

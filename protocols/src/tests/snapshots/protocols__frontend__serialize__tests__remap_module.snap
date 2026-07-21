@@ -73,7 +73,41 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
   step();
 }
 
-prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
+prot write_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+  assert_eq(mask, 4'd15);
+  self.RST := 1'd0;
+  self.CTI := 3'd7;
+  self.BTE := X;
+  self.CYC := 1'd1;
+  self.STB := 1'd1;
+  self.WE := 1'd1;
+  self.ADR := addr;
+  self.SEL := mask;
+  self.DAT_O := data;
+  while self.ACK == 1'd0 {
+    step();
+  }
+  step();
+}
+
+prot read_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+  assert_eq(mask, 4'd15);
+  self.RST := 1'd0;
+  self.CTI := 3'd7;
+  self.BTE := X;
+  self.CYC := 1'd1;
+  self.STB := 1'd1;
+  self.WE := 1'd0;
+  self.ADR := addr;
+  self.SEL := mask;
+  while self.ACK == 1'd0 {
+    step();
+  }
+  assert_eq(self.DAT_I, data);
+  step();
+}
+
+prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd1;
@@ -96,7 +130,7 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
   }
 }
 
-prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
+prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd1;
@@ -119,7 +153,7 @@ prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]+) {
   }
 }
 
-prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -142,7 +176,7 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
   }
 }
 
-prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -165,7 +199,7 @@ prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data
   }
 }
 
-prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -188,7 +222,7 @@ prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, dat
   }
 }
 
-prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -211,7 +245,7 @@ prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data
   }
 }
 
-prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -234,7 +268,7 @@ prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, dat
   }
 }
 
-prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -257,7 +291,7 @@ prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data
   }
 }
 
-prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;
@@ -279,7 +313,7 @@ prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, da
   }
 }
 
-prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]+) {
+prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
   assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd2;

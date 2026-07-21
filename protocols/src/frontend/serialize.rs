@@ -45,6 +45,7 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
             let suffix = match st[seq_id].min_len() {
                 0 => "",
                 1 => "+",
+                2 => "++",
                 other => unreachable!("unexpected min length of {other}"),
             };
             format!("[{}]{suffix}", serialize_type(st, st[seq_id].tpe()))
