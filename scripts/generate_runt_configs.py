@@ -16,7 +16,6 @@ import shlex
 import subprocess
 from functools import lru_cache
 from pathlib import Path
-from collections import Counter
 
 import test_catalog
 
@@ -74,28 +73,13 @@ def replace_non_alphanumerics(value: object) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_") or "default"
 
 
-def shared_bi_prot_files() -> frozenset[str]:
-    # Set of `.prot` files which are used by more than one BI test case
-    # (e.g. Antmicro and the Brave New World test cases for fixed/buggy wvaeforms
-    # that share a single .prot file)
-
-    counts = Counter()
-    for test_case in test_catalog.BI_CASES.values():
-        if "protocol" in test_case:
-            counts[str(test_case["protocol"])] += 1
-        else:
-            for p in test_case["protocols"]:
-                counts[str(p)] += 1
-    return frozenset(file for (file, num_cases) in counts.items() if num_cases > 1)
-
-
 def case_stem(case: dict) -> str:
     # Antmicro & Brave New World test cases for the BI share the same `.prot`
     # file but have multiple waveforms, so we use the waveform files'
     # names to identify a particular test, otherwise we use the `.prot` file's stem
     # to identify a test
     wave = case.get("wave")
-    if wave and any(p in shared_bi_prot_files() for p in case["paths"]):
+    if wave and ("antmicro" in wave or "fpga-debugging" in wave):
         return Path(wave).stem
     stem = Path(case["paths"][0]).stem
     return stem.removesuffix(".bi")

@@ -2233,39 +2233,39 @@ expect_name = "s4_fixed.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-burst-s4/s4_fixed.prot --wave tests/fpga-debugging/axi-burst-s4/s4_fixed.vcd --instances TOP.test_l2_cache_wait_state.axi_bus:WriteSubordinate --sample-posedge TOP.test_l2_cache_wait_state.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy.s1_buggy_bi"
+name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy.s1_buggy_workload2_bi"
 paths = [
   "../../tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
-expect_name = "s1_buggy.bi.expect"
+expect_name = "s1_buggy_workload2.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy_workload_1.s1_buggy_workload_1_bi"
+name = "bi.tests_fpga_debugging_axi_lite_s1_s1_buggy_workload_1.s1_buggy_workload1_bi"
 paths = [
   "../../tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
-expect_name = "s1_buggy_workload_1.bi.expect"
+expect_name = "s1_buggy_workload1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed.s1_fixed_bi"
+name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed.s1_fixed_workload2_bi"
 paths = [
   "../../tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
-expect_name = "s1_fixed.bi.expect"
+expect_name = "s1_fixed_workload2.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed_workload_1.s1_fixed_workload_1_bi"
+name = "bi.tests_fpga_debugging_axi_lite_s1_s1_fixed_workload_1.s1_fixed_workload1_bi"
 paths = [
   "../../tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axi-lite-s1/expects"
-expect_name = "s1_fixed_workload_1.bi.expect"
+expect_name = "s1_fixed_workload1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
