@@ -11,6 +11,7 @@ mod signal_trace;
 use crate::bi::*;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
+use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
@@ -202,7 +203,14 @@ fn main() {
 
                 for fail in fails {
                     let proto = &protos[fail.proto_id];
-                    d.emit_diagnostic_stmt(proto, &fail.stmt, &fail.message(), Level::Error);
+                    let msg = format!(
+                        "[{}] executing step {} of the transaction: {} != {}",
+                        fail.thread_name,
+                        fail.thread_local_step,
+                        fail.a.to_hex_str(),
+                        fail.b.to_hex_str()
+                    );
+                    d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
                 }
             }
         } else {
