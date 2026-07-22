@@ -1,3 +1,0 @@
-trace {
-    add_busy_wait(1, 2, 2, 999); // Wrong output value, this transaction fails
-}

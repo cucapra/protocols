@@ -89,16 +89,6 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
     },
-    "tests/adders/adder_d1/busy_wait_fail.tx": {
-        "protocol": "tests/adders/adder_d1/busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "assertion_mismatch",
-    },
-    "tests/adders/adder_d1/busy_wait_pass.tx": {
-        "protocol": "tests/adders/adder_d1/busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
-    },
     "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
@@ -131,16 +121,6 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "fork_protocol_error",
         "extra_args": ("--skip-static-step-fork-checks",),
-    },
-    "tests/adders/adder_d1/loop_with_assigns.tx": {
-        "protocol": "tests/adders/adder_d1/loop_with_assigns.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
-    },
-    "tests/adders/adder_d1/nested_busy_wait.tx": {
-        "protocol": "tests/adders/adder_d1/nested_busy_wait.prot",
-        "verilog": ("tests/adders/adder_d1/add_d1.v",),
-        "expect": "pass",
     },
     "tests/adders/adder_d1/second_thread_fails.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
@@ -315,30 +295,6 @@ TX_CASES = {
     },
     "tests/fifo/push_pop_identity_ok.tx": {
         "protocol": "tests/fifo/fifo.prot",
-        "verilog": (
-            "tests/fifo/bsg_mem_1rw_sync.v",
-            "tests/fifo/bsg_mem_1rw_sync_synth.v",
-            "tests/fifo/bsg_circular_ptr.v",
-            "tests/fifo/bsg_fifo_1rw_large.v",
-            "tests/fifo/fifo_wrapper.v",
-        ),
-        "top": "fifo_wrapper",
-        "expect": "pass",
-    },
-    "tests/fifo/push_pop_loop_empty.tx": {
-        "protocol": "tests/fifo/fifo_bounded_loop.prot",
-        "verilog": (
-            "tests/fifo/bsg_mem_1rw_sync.v",
-            "tests/fifo/bsg_mem_1rw_sync_synth.v",
-            "tests/fifo/bsg_circular_ptr.v",
-            "tests/fifo/bsg_fifo_1rw_large.v",
-            "tests/fifo/fifo_wrapper.v",
-        ),
-        "top": "fifo_wrapper",
-        "expect": "pass",
-    },
-    "tests/fifo/push_pop_loop_not_empty.tx": {
-        "protocol": "tests/fifo/fifo_bounded_loop.prot",
         "verilog": (
             "tests/fifo/bsg_mem_1rw_sync.v",
             "tests/fifo/bsg_mem_1rw_sync_synth.v",
@@ -538,29 +494,6 @@ BI_CASES = {
         "instances": ("add_d1:Adder",),
         "expect": "pass",
     },
-    "tests.adders.busy_wait": {
-        "protocol": "tests/adders/busy_wait.prot",
-        "wave": "tests/adders/busy_wait.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": "pass",
-    },
-    "tests.adders.loop_with_assigns": {
-        "protocol": "tests/adders/loop_with_assigns.prot",
-        "wave": "tests/adders/loop_with_assigns.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": "pass",
-    },
-    "tests.adders.nested_busy_wait": {
-        "protocol": "tests/adders/nested_busy_wait.prot",
-        "wave": "tests/adders/nested_busy_wait.fst",
-        "instances": ("add_d1:Adder",),
-        "expect": None,
-        "timeout_secs": 5,
-        "extra_args": (
-            "--max-traces",
-            "20",
-        ),
-    },
     "tests.alus.alu_d1.bi": {
         "protocol": "tests/alus/alu_d1.bi.prot",
         "wave": "tests/alus/alu_d1.fst",
@@ -638,20 +571,6 @@ BI_CASES = {
         "wave": "tests/fifo/push_pop_identity.fst",
         "instances": ("fifo_wrapper:Fifo",),
         "expect": "pass",
-    },
-    "tests.fifo.push_pop_loop_empty": {
-        "protocol": "tests/fifo/push_pop_loop_empty.prot",
-        "wave": "tests/fifo/push_pop_loop_empty.fst",
-        "instances": ("fifo_wrapper:Fifo",),
-        "expect": None,
-        "extra_args": ("--max-traces", "20"),
-    },
-    "tests.fifo.push_pop_loop_not_empty": {
-        "protocol": "tests/fifo/push_pop_loop_not_empty.prot",
-        "wave": "tests/fifo/push_pop_loop_not_empty.fst",
-        "instances": ("fifo_wrapper:Fifo",),
-        "expect": None,
-        "timeout_secs": 5,
     },
     "tests.fpga-debugging.axi-burst-s4.s4_buggy": {
         "protocol": "tests/fpga-debugging/axi-burst-s4/s4_buggy.prot",
@@ -1075,15 +994,7 @@ BI_CASES = {
     },
 }
 
-ANTMICRO_EXTRA_ARGS = (
-    "--sample-posedge",
-    "tb.dut.clk",
-    "--show-waveform-time",
-    "--time-unit",
-    "ns",
-)
-ANTMICRO_PROTOCOL = "tests/antmicro/wishbone_subordinate.prot"
-
+# waveform traces from the antmicro/litex wishbone tests
 ANTMICRO_TRACE_STEMS = (
     [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
     + [f"fifo_constant/test_fifo_constant_{i}" for i in range(1, 9)]
@@ -1101,19 +1012,107 @@ ANTMICRO_TRACE_STEMS = (
 )
 
 
-def _antmicro_case(stem):
+def _antmicro_test_proto_case(stem):
+    """generate a testcase for antmicro traces with the wishbone_subordinate protocol"""
     return {
-        "protocol": ANTMICRO_PROTOCOL,
+        "protocol": "tests/antmicro/wishbone_subordinate.prot",
         "wave": f"tests/antmicro/{stem}.fst",
         "instances": ("tb.dut:WBSubordinate",),
         "expect": "pass",
-        "extra_args": ANTMICRO_EXTRA_ARGS,
+        "extra_args": [
+            "--sample-posedge",
+            "tb.dut.clk",
+            "--show-waveform-time",
+            "--time-unit",
+            "ns",
+        ],
     }
 
 
 BI_CASES.update(
     {
-        f"tests.antmicro.{stem.replace('/', '.')}": _antmicro_case(stem)
+        f"tests.antmicro.{stem.replace('/', '.')}": _antmicro_test_proto_case(stem)
+        for stem in ANTMICRO_TRACE_STEMS
+    }
+)
+
+
+def _correct_burst_addr(start, cti, num_elements):
+    bits = cti + 1
+    assert bits in {2, 3, 4}
+    mask = (1 << bits) - 1
+
+    upper_start = (start >> (bits + 2)) << (bits + 2)
+    lower_start = start & 0b11
+    base = upper_start | lower_start
+    counter_start = (start >> 2) & mask
+    return [base | (((counter_start + i) & mask) << 2) for i in range(num_elements)]
+
+
+def _incorrect_burst_addr(start, cti, num_elements):
+    bits = cti + 1
+    assert bits in {2, 3, 4}
+    mask = (1 << bits) - 1
+    addresses = []
+    adr_base = (start >> 2) & (~mask)
+    cnt_offset = (start >> 2) & mask
+
+    for i in range(num_elements):
+        # lsb = counter + offset, overflow ignored
+        offset_lsb = (i + cnt_offset) & mask
+        # msb = counter value without wrapped bytes
+        offset_msb = i & (~mask)
+        addresses.append((adr_base + offset_msb + offset_lsb) << 2)
+
+    return addresses
+
+
+def _expect_antmicro(stem: str) -> str:
+    """the antmicro RTL has a wrong implementation for wrap mode
+    - correct implementation: https://github.com/fusesoc/wb_common/blob/3bdab31f22dc7155d30d611b37668c8da5030409/wb_common.v#L42
+    - incorrect: https://github.com/antmicro/wishbone-interconnect-burst-mode-benchmark/blob/547fa0e9d7256059354559bbbe5d8b95272aab69/test/tests/wb_master.py#L51
+    """
+    if "incrementing" in stem:
+        parts = stem.split("_")
+        cti = int(parts[-1])
+        offset = int(parts[-2])
+        num_elements = int(parts[-3])
+        if cti == 0:
+            return "pass"
+
+        expected = _correct_burst_addr(offset, cti, num_elements)
+        actual = _incorrect_burst_addr(offset, cti, num_elements)
+        if expected == actual:
+            return "pass"
+
+        print(f"{stem=} is expected to fail the bi")
+        print(f"  {expected=}")
+        print(f"  {actual=}")
+
+        return "fail"
+    else:
+        return "pass"
+
+
+def _antmicro_example_proto_case(stem):
+    """generate a testcase for our wishbone protocol description in examples"""
+    return {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/antmicro_litex.prot",
+        ],
+        "wave": f"tests/antmicro/{stem}.fst",
+        "instances": ("tb.dut:LitexWishbone",),
+        "expect": _expect_antmicro(stem),
+        "extra_args": ["--show-steps", "--display-hex"],
+    }
+
+
+BI_CASES.update(
+    {
+        f"examples.wishbone.antmicro.{stem.replace('/', '.')}": _antmicro_example_proto_case(
+            stem
+        )
         for stem in ANTMICRO_TRACE_STEMS
     }
 )

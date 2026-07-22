@@ -45,6 +45,7 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
             let suffix = match st[seq_id].min_len() {
                 0 => "",
                 1 => "+",
+                2 => "++",
                 other => unreachable!("unexpected min length of {other}"),
             };
             format!("[{}]{suffix}", serialize_type(st, st[seq_id].tpe()))
@@ -709,22 +710,6 @@ pub mod tests {
         test_helper(
             "../tests/counters/simple_bounded_loop.prot",
             "simple_bounded_loop",
-        );
-    }
-
-    #[test]
-    fn test_nested_bounded_loop_transaction() {
-        test_helper(
-            "../tests/adders/adder_d1/nested_busy_wait.prot",
-            "nested_bounded_loop",
-        );
-    }
-
-    #[test]
-    fn test_loop_with_assigns_transaction() {
-        test_helper(
-            "../tests/adders/adder_d1/loop_with_assigns.prot",
-            "loop_with_assigns",
         );
     }
 

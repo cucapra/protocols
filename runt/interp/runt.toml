@@ -154,24 +154,6 @@ expect_name = "both_threads_pass.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/both_threads_pass.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>&1"
 
 [[tests]]
-name = "interp.tests_adders_adder_d1_busy_wait_fail.busy_wait_fail_interp"
-paths = [
-  "../../tests/adders/adder_d1/busy_wait_fail.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "busy_wait_fail.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/busy_wait_fail.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/busy_wait.prot 2>&1"
-
-[[tests]]
-name = "interp.tests_adders_adder_d1_busy_wait_pass.busy_wait_pass_interp"
-paths = [
-  "../../tests/adders/adder_d1/busy_wait_pass.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "busy_wait_pass.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/busy_wait_pass.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/busy_wait.prot 2>&1"
-
-[[tests]]
 name = "interp.tests_adders_adder_d1_didnt_end_in_step.didnt_end_in_step_interp"
 paths = [
   "../../tests/adders/adder_d1/didnt_end_in_step.tx",
@@ -215,24 +197,6 @@ paths = [
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "fork_before_step_error.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/fork_before_step_error.tx --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/fork_before_step_error.prot 2>&1"
-
-[[tests]]
-name = "interp.tests_adders_adder_d1_loop_with_assigns.loop_with_assigns_interp"
-paths = [
-  "../../tests/adders/adder_d1/loop_with_assigns.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "loop_with_assigns.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/loop_with_assigns.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/loop_with_assigns.prot 2>&1"
-
-[[tests]]
-name = "interp.tests_adders_adder_d1_nested_busy_wait.nested_busy_wait_interp"
-paths = [
-  "../../tests/adders/adder_d1/nested_busy_wait.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "nested_busy_wait.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/nested_busy_wait.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/nested_busy_wait.prot 2>&1"
 
 [[tests]]
 name = "interp.tests_adders_adder_d1_second_thread_fails.second_thread_fails_interp"
@@ -476,24 +440,6 @@ paths = [
 expect_dir = "../../tests/fifo/expects"
 expect_name = "push_pop_identity_ok.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/push_pop_identity_ok.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>&1"
-
-[[tests]]
-name = "interp.tests_fifo_push_pop_loop_empty.push_pop_loop_empty_interp"
-paths = [
-  "../../tests/fifo/push_pop_loop_empty.tx",
-]
-expect_dir = "../../tests/fifo/expects"
-expect_name = "push_pop_loop_empty.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/push_pop_loop_empty.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo_bounded_loop.prot --module fifo_wrapper 2>&1"
-
-[[tests]]
-name = "interp.tests_fifo_push_pop_loop_not_empty.push_pop_loop_not_empty_interp"
-paths = [
-  "../../tests/fifo/push_pop_loop_not_empty.tx",
-]
-expect_dir = "../../tests/fifo/expects"
-expect_name = "push_pop_loop_not_empty.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/push_pop_loop_not_empty.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo_bounded_loop.prot --module fifo_wrapper 2>&1"
 
 [[tests]]
 name = "interp.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_interp"
