@@ -1,0 +1,77 @@
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+}
+// trace 0
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v1(64, 0);  // [time: 25ns -> 100ns]
+}
+error: [read_v2@4] executing step 0 of the transaction: 0 != 1
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot:161:5
+    │
+161 │     DUT.S_AXI_ARVALID := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v2@4] executing step 0 of the transaction: 0 != 1
+
+
+// trace 1
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v1(64, 0);  // [time: 25ns -> 100ns]
+}
+error: [read_v1@4] executing step 0 of the transaction: 0 != 1
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot:124:5
+    │
+124 │     DUT.S_AXI_ARVALID := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v1@4] executing step 0 of the transaction: 0 != 1
+
+
+// trace 2
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v1(64, 0);  // [time: 25ns -> 100ns]
+}
+error: [idle@4] executing step 0 of the transaction: 1 != 0
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot:108:5
+    │
+108 │     DUT.S_AXI_RREADY  := 1'b0;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle@4] executing step 0 of the transaction: 1 != 0
+
+
+// trace 3
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(64, 0, 0);  // [time: 25ns -> 100ns]
+}
+error: [read_v2@4] executing step 0 of the transaction: 0 != 1
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot:161:5
+    │
+161 │     DUT.S_AXI_ARVALID := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v2@4] executing step 0 of the transaction: 0 != 1
+
+
+// trace 4
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(64, 0, 0);  // [time: 25ns -> 100ns]
+}
+error: [read_v1@4] executing step 0 of the transaction: 0 != 1
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot:124:5
+    │
+124 │     DUT.S_AXI_ARVALID := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_v1@4] executing step 0 of the transaction: 0 != 1
+
+
+// trace 5
+trace {
+    idle();  // [time: 0ns -> 25ns]
+    read_v2(64, 0, 0);  // [time: 25ns -> 100ns]
+}
+error: [idle@4] executing step 0 of the transaction: 1 != 0
+    ┌─ tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot:108:5
+    │
+108 │     DUT.S_AXI_RREADY  := 1'b0;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle@4] executing step 0 of the transaction: 1 != 0
+
+---CODE---
+1
