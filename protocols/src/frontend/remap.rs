@@ -130,10 +130,9 @@ fn implement_remap(
                 .pins
                 .iter()
                 .zip(pin_syms.iter())
-                .map(|(field, sym)| {
+                .flat_map(|(field, sym)| {
                     let name = format!("{}.{}", orig_mod.name, field.name());
-                    let mapping = pin_to_remap[&name];
-                    (*sym, mapping)
+                    pin_to_remap.get(&name).map(|&mapping| (*sym, mapping))
                 })
                 .collect();
 

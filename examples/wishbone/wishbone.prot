@@ -14,6 +14,8 @@ interface Wishbone {
     in DAT_O: u32,
     // error from server
     out ERR: u1,
+    // request to retry from server
+    out RTY: u1,
     // mask for data in/out from client
     in SEL: u4,
     // indicates a valid transfer cycle from client
