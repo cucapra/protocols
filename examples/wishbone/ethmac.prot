@@ -1,0 +1,112 @@
+// --instances tb_ethernet.eth_top.wishbone:Tb_ethernetEth_topWishboneMWb --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetEth_topWishboneMWb : Wishbone {
+  in WB_CLK_I : clock @posedge,
+  in Reset : u1 = Wishbone.RST,
+  in m_wb_adr_o : u30 = Wishbone.ADR[31:2] with Wishbone.ADR[1:0] == 2'd0,
+  out m_wb_dat_i : u32 = Wishbone.DAT_I,
+  in m_wb_dat_o : u32 = Wishbone.DAT_O,
+  in m_wb_we_o : u1 = Wishbone.WE,
+  in m_wb_stb_o : u1 = Wishbone.STB,
+  in m_wb_cyc_o : u1 = Wishbone.CYC,
+  out m_wb_ack_i : u1 = Wishbone.ACK,
+  in m_wb_sel_o : u4 = Wishbone.SEL,
+  out m_wb_err_i : u1 = Wishbone.ERR,
+  in m_wb_cti_o : u3 = Wishbone.CTI,
+  in m_wb_bte_o : u2 = Wishbone.BTE,
+}
+
+// --instances tb_ethernet.eth_top:Tb_ethernetEth_topMWb --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetEth_topMWb : Wishbone {
+  in wb_clk_i : clock @posedge,
+  in wb_rst_i : u1 = Wishbone.RST,
+  in m_wb_adr_o : u32 = Wishbone.ADR,
+  out m_wb_dat_i : u32 = Wishbone.DAT_I,
+  in m_wb_dat_o : u32 = Wishbone.DAT_O,
+  in m_wb_we_o : u1 = Wishbone.WE,
+  in m_wb_stb_o : u1 = Wishbone.STB,
+  in m_wb_cyc_o : u1 = Wishbone.CYC,
+  out m_wb_ack_i : u1 = Wishbone.ACK,
+  in m_wb_sel_o : u4 = Wishbone.SEL,
+  out m_wb_err_i : u1 = Wishbone.ERR,
+  in m_wb_cti_o : u3 = Wishbone.CTI,
+  in m_wb_bte_o : u2 = Wishbone.BTE,
+}
+
+// --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetWb_masterWbm_low_level : Wishbone {
+  in CLK_I : clock @posedge,
+  in RST_I : u1 = Wishbone.RST,
+  in ADR_O : u32 = Wishbone.ADR,
+  out DAT_I : u32 = Wishbone.DAT_I,
+  in DAT_O : u32 = Wishbone.DAT_O,
+  in WE_O : u1 = Wishbone.WE,
+  in STB_O : u1 = Wishbone.STB,
+  in CYC_O : u1 = Wishbone.CYC,
+  out ACK_I : u1 = Wishbone.ACK,
+  in SEL_O : u4 = Wishbone.SEL,
+  out ERR_I : u1 = Wishbone.ERR,
+  out RTY_I : u1 = Wishbone.RTY,
+}
+
+// --instances tb_ethernet.wb_master:Tb_ethernetWb_master --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetWb_master : Wishbone {
+  in CLK_I : clock @posedge,
+  in RST_I : u1 = Wishbone.RST,
+  in ADR_O : u32 = Wishbone.ADR,
+  out DAT_I : u32 = Wishbone.DAT_I,
+  in DAT_O : u32 = Wishbone.DAT_O,
+  in WE_O : u1 = Wishbone.WE,
+  in STB_O : u1 = Wishbone.STB,
+  in CYC_O : u1 = Wishbone.CYC,
+  out ACK_I : u1 = Wishbone.ACK,
+  in SEL_O : u4 = Wishbone.SEL,
+  out ERR_I : u1 = Wishbone.ERR,
+  out RTY_I : u1 = Wishbone.RTY,
+}
+
+// --instances tb_ethernet.wb_slave:Tb_ethernetWb_slave --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetWb_slave : Wishbone {
+  in CLK_I : clock @posedge,
+  in RST_I : u1 = Wishbone.RST,
+  in ADR_I : u32 = Wishbone.ADR,
+  out DAT_I : u32 = Wishbone.DAT_I,
+  in DAT_O : u32 = Wishbone.DAT_O,
+  in WE_I : u1 = Wishbone.WE,
+  in STB_I : u1 = Wishbone.STB,
+  in CYC_I : u1 = Wishbone.CYC,
+  out ACK_O : u1 = Wishbone.ACK,
+  in SEL_I : u4 = Wishbone.SEL,
+  out ERR_O : u1 = Wishbone.ERR,
+  out RTY_O : u1 = Wishbone.RTY,
+}
+
+// --instances tb_ethernet:Tb_ethernetEthSlWb --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetEthSlWb : Wishbone {
+  in wb_clk : clock @posedge,
+  in wb_rst : u1 = Wishbone.RST,
+  in eth_sl_wb_adr_i : u32 = Wishbone.ADR,
+  out eth_sl_wb_dat_i : u32 = Wishbone.DAT_I,
+  in eth_sl_wb_dat_o : u32 = Wishbone.DAT_O,
+  in eth_sl_wb_we_i : u1 = Wishbone.WE,
+  in eth_sl_wb_stb_i : u1 = Wishbone.STB,
+  in eth_sl_wb_cyc_i : u1 = Wishbone.CYC,
+  out eth_sl_wb_ack_o : u1 = Wishbone.ACK,
+  in eth_sl_wb_sel_i : u4 = Wishbone.SEL,
+  out eth_sl_wb_err_o : u1 = Wishbone.ERR,
+}
+
+// --instances tb_ethernet:Tb_ethernetEthMaWb --wave wishbone/ethmac/ethmac.fst
+module Tb_ethernetEthMaWb : Wishbone {
+  in wb_clk : clock @posedge,
+  in wb_rst : u1 = Wishbone.RST,
+  in eth_ma_wb_adr_o : u32 = Wishbone.ADR,
+  out eth_ma_wb_dat_i : u32 = Wishbone.DAT_I,
+  in eth_ma_wb_dat_o : u32 = Wishbone.DAT_O,
+  in eth_ma_wb_we_o : u1 = Wishbone.WE,
+  in eth_ma_wb_stb_o : u1 = Wishbone.STB,
+  in eth_ma_wb_cyc_o : u1 = Wishbone.CYC,
+  out eth_ma_wb_ack_i : u1 = Wishbone.ACK,
+  in eth_ma_wb_sel_o : u4 = Wishbone.SEL,
+  out eth_ma_wb_err_i : u1 = Wishbone.ERR,
+}
+
