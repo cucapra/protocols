@@ -32,7 +32,10 @@ enum Cmds {
     /// Print out all the constructs used in each protocol
     Constructs,
     /// Prints out the protocols after the frontend processing
-    Show,
+    Show {
+        #[arg(long, help = "only include these modules")]
+        include: Vec<String>,
+    },
     Verilog {
         verilog_tb: String,
         #[arg(long)]
@@ -180,8 +183,17 @@ fn run_verilog_tb(
         .unwrap();
 }
 
-fn show(st: &SymbolTable, modules: &[Module]) {
-    serialize_modules(&mut std::io::stdout(), st, modules).unwrap();
+fn show(st: &SymbolTable, modules: &[Module], include: &[String]) {
+    if include.is_empty() {
+        serialize_modules(&mut std::io::stdout(), st, modules).unwrap();
+    } else {
+        let modules: Vec<_> = modules
+            .iter()
+            .filter(|m| include.contains(&m.name))
+            .cloned()
+            .collect();
+        serialize_modules(&mut std::io::stdout(), st, &modules).unwrap();
+    }
 }
 
 fn main() {
@@ -202,8 +214,8 @@ fn main() {
                 }
             }
         }
-        Some(Cmds::Show) => {
-            show(&st, &modules);
+        Some(Cmds::Show { include }) => {
+            show(&st, &modules, &include);
         }
         Some(Cmds::Verilog {
             verilog_tb,

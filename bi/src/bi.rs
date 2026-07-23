@@ -786,7 +786,18 @@ impl Thread {
             // only the final assignment to a pin matters
             if !pins_assigned.contains(&pin) {
                 pins_assigned.insert(pin);
-                let pin_expr = ti.pin_exprs[&pin];
+                let pin_expr = *ti.pin_exprs.get(&pin).unwrap_or_else(|| {
+                    panic!(
+                        "pin `{}` ({:?}) not found\navailable: {}",
+                        ti.sym[pin].full_name(&ti.sym),
+                        pin,
+                        ti.pin_exprs
+                            .keys()
+                            .map(|p| ti.sym[p].full_name(&ti.sym).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                });
                 if let Some(fail) = self.exec_equality(get_value, ti, stmt, pin_expr, expr) {
                     self.failures.push(fail);
                 } else if !matches!(ti.proto[expr], Expr::DontCare) {
