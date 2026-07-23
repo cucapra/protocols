@@ -34,7 +34,8 @@
           "transactions"
         ],
         "extensions": [
-          ".tx"
+          ".tx",
+          ".bi.expect"
         ],
         "configuration": "./transactions-configuration.json"
       }

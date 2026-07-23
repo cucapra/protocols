@@ -121,13 +121,7 @@ assign {output_axis_tlast, output_axis_tuser, output_axis_tdata} = data_out_reg;
 // - However, the write pointer `input_rst_sync3` (used in line 162 in `if (input_rst_sync3) ...`)
 //   hasn't been initialized yet.
 // As a consequence, data can be written to uninitialized FIFO state during the reset.
-//
-// Inferred transaction-level trace by the monitor (`c4_buggy.out`):
-//   Time 0-25ns:   reset() - async_rst is 1
-//   Time 25-50ns:  idle() - input_rst_sync3 still high (reset being synced)
-//   Time 50-100ns: push_and_pop(2,2) - Data is accepted too early (bug)
-//                  At 50ns, input_rst_sync3 may still be 1, but tready = 1 allows for writes
-//                  This violates the invariant that no data should be accepted during reset sync
+
 assign input_axis_tready = ~full;
 assign output_axis_tvalid = output_axis_tvalid_reg;
 

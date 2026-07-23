@@ -305,6 +305,24 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
+    "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx": {
+        "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
+        "verilog": (
+            "tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v",
+            "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.v",
+        ),
+        "top": "c4_dut",
+        "expect": "assertion_mismatch",
+    },
+    "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
+        "verilog": (
+            "tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v",
+            "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v",
+        ),
+        "top": "c4_dut",
+        "expect": "pass",
+    },
     "tests/identities/dual_identity_d0/dual_identity_d0_combdep.tx": {
         "protocol": "tests/identities/dual_identity_d0/dual_identity_d0.prot",
         "verilog": ("tests/identities/dual_identity_d0/dual_identity_d0.v",),
@@ -701,12 +719,9 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_buggy": {
-        "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.prot",
+        "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
         "wave": "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst",
-        "instances": (
-            "TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender",
-            "TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver",
-        ),
+        "instances": ("TOP.test_axis_async_fifo.UUT.axis_reg_inst:AsyncFifo",),
         "expect": None,
         "extra_args": (
             "--sample-posedge",
@@ -717,12 +732,9 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_fixed": {
-        "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.prot",
+        "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
         "wave": "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.fst",
-        "instances": (
-            "TOP.test_axis_async_fifo.UUT.axis_reg_inst:Sender",
-            "TOP.test_axis_async_fifo.UUT.axis_reg_inst:Receiver",
-        ),
+        "instances": ("TOP.test_axis_async_fifo.UUT.axis_reg_inst:AsyncFifo",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
@@ -730,6 +742,8 @@ BI_CASES = {
             "--show-waveform-time",
             "--time-unit",
             "ns",
+            "--max-traces",
+            "20",
         ),
     },
     "tests.fpga-debugging.axis-fifo-d11.d11_buggy": {

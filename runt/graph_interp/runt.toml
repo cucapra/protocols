@@ -532,6 +532,33 @@ expect_name = "push_pop_identity_ok.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_identity_ok.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_graph_interp"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_fixed.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_graph_interp.contract_edges"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_fixed.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut --contract-edges 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_graph_interp.respect_forks"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_fixed.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_identities_identity_d0_passthrough_combdep.passthrough_combdep_graph_interp"
 paths = [
   "../../tests/identities/identity_d0/passthrough_combdep.tx",

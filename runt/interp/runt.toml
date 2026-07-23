@@ -442,6 +442,24 @@ expect_name = "push_pop_identity_ok.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/push_pop_identity_ok.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>&1"
 
 [[tests]]
+name = "interp.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_interp"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_buggy.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>&1"
+
+[[tests]]
+name = "interp.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_interp"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_fixed.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>&1"
+
+[[tests]]
 name = "interp.tests_identities_dual_identity_d0_dual_identity_d0_combdep.dual_identity_d0_combdep_interp"
 paths = [
   "../../tests/identities/dual_identity_d0/dual_identity_d0_combdep.tx",
