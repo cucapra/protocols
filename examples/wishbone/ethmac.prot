@@ -45,7 +45,7 @@ module Tb_ethernetWb_masterWbm_low_level : Wishbone {
   out ACK_I : u1 = Wishbone.ACK,
   in SEL_O : u4 = Wishbone.SEL,
   out ERR_I : u1 = Wishbone.ERR,
-  out RTY_I : u1 = Wishbone.RTY,
+  // out RTY_I : u1 = Wishbone.RTY,
 }
 
 // --instances tb_ethernet.wb_master:Tb_ethernetWb_master --wave wishbone/ethmac/ethmac.fst
@@ -61,7 +61,7 @@ module Tb_ethernetWb_master : Wishbone {
   out ACK_I : u1 = Wishbone.ACK,
   in SEL_O : u4 = Wishbone.SEL,
   out ERR_I : u1 = Wishbone.ERR,
-  out RTY_I : u1 = Wishbone.RTY,
+  // out RTY_I : u1 = Wishbone.RTY,
 }
 
 // --instances tb_ethernet.wb_slave:Tb_ethernetWb_slave --wave wishbone/ethmac/ethmac.fst
@@ -77,7 +77,7 @@ module Tb_ethernetWb_slave : Wishbone {
   out ACK_O : u1 = Wishbone.ACK,
   in SEL_I : u4 = Wishbone.SEL,
   out ERR_O : u1 = Wishbone.ERR,
-  out RTY_O : u1 = Wishbone.RTY,
+  // out RTY_O : u1 = Wishbone.RTY,
 }
 
 // --instances tb_ethernet:Tb_ethernetEthSlWb --wave wishbone/ethmac/ethmac.fst
