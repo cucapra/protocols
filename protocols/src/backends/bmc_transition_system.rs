@@ -26,7 +26,11 @@ fn symbol_bitvec_expr(
         crate::frontend::symbol::Type::BitVec(width) => {
             ctx.bv_symbol(&expr_name, width as WidthInt)
         }
-        _ => panic!("unsupported input type {:?} for {}",  st[symbol_id].tpe(), full_name),
+        _ => panic!(
+            "unsupported input type {:?} for {}",
+            st[symbol_id].tpe(),
+            full_name
+        ),
     }
 }
 

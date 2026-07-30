@@ -249,9 +249,11 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     # (and still 1 min in release mode) to be worth running every time.
     # maybe in the future we can flag a slow/fast runt config
     # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
-    if case["paths"][0] != "examples/picorv32/unsigned_mul.tx" and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx":
+    if (
+        case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
+        and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
+    ):
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
-
 
     return variants
 
