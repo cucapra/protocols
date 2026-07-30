@@ -48,13 +48,9 @@ prot pop<DUT: AsyncFifo>(data: u8) {
     DUT.m_axis_tready := 1'b1;
 
     // Valid needs to be 1 in order for data exchange to occur
-    // Note: we don't use a while-loop here to wait for `m_axis_tvalid` to become 1,
-    // since when `m_axis_tready = 1 && m_axis_tvalid = 0`, that means the environment is ready
-    // to read the popped data but the DUT has no valid data on its output ports.
-    // This situation should not be described in a `pop` transaction,
-    // so we just assert that `m_axis_tvalid` must be 1 during a `pop` transaction
-    // without waiting for it to become 1.
-    assert_eq(DUT.m_axis_tvalid, 1'b1);
+    while (!(DUT.m_axis_tvalid == 1'b1)) {
+        step();
+    }
 
     // Check that the data on DUT's output port is the data we expect to be popped
     assert_eq(DUT.m_axis_tdata, data);
@@ -83,7 +79,15 @@ prot reset<DUT: AsyncFifo>() {
     DUT.rst := 1'b1;
 
     // Valid must be low when reset is asserted (AXI-Stream spec section 2.7.2)
+    // This ensures that no `push`es can occur during `reset`
     DUT.s_axis_tvalid := 1'b0;
+
+    // Similarly, no `pop`s may occur during `reset`
+    // (This corresponds to setting the manager's `ready` port to 0, since
+    // this `ready` signal is supplied by the environment to the DUT and is 1
+    // when a request for a `pop` happens)
+    DUT.m_axis_tready := 1'b0;
+
     assert_eq(DUT.m_axis_tvalid, 1'b0);
 
     step();
