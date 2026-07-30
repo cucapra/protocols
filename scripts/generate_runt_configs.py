@@ -229,11 +229,33 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
-    return [
+    bounded_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        case["paths"][0],
+        "--bound",
+        str(tx_max_trace_protocols(case["paths"][0])),
+        "--ascii-waveform",
+    ]
+    _tx_tail(bounded_cmd, case, with_max_steps=False)
+
+    variants: list[tuple[str, str]] = [
         ("ast", repo_root_command(ast_cmd, stderr="discard")),
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
         ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
+
+    # I manually checked this one is correct, but it takes too long in debug mode
+    # (and still 1 min in release mode) to be worth running every time.
+    # maybe in the future we can flag a slow/fast runt config
+    # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
+    if (
+        case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
+        and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
+    ):
+        variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
+
+    return variants
 
 
 def fail_runt_command(case: dict) -> list[tuple[str, str]]:
@@ -259,6 +281,24 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
         ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
+
+
+@lru_cache(maxsize=None)
+def tx_max_trace_protocols(path: str) -> int | None:
+    tx_path = REPO_ROOT / path
+    if not tx_path.exists():
+        return None
+
+    content = tx_path.read_text()
+    max_protocols = 0
+    for block in re.findall(r"trace\s*{([^}]*)}", content, re.DOTALL):
+        protocols = [
+            line.strip()
+            for line in block.splitlines()
+            if line.strip() and not line.strip().startswith("//")
+        ]
+        max_protocols = max(max_protocols, len(protocols))
+    return max_protocols or None
 
 
 RUNT_BUILDERS = {

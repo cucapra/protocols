@@ -39,13 +39,13 @@ digraph "count_up" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] dut.a := a if 1"];
-  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
+  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node7 [label=""];
+  node7 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
   node4 -> node1 [label="1 / step"];
-  node7 [label=""];
-  node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
-  node7 -> node4 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
@@ -86,13 +86,13 @@ digraph "count_up" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] dut.a := a if 1"];
-  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
+  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node7 [label="[1] dut.a := a if 1"];
+  node7 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := a if 1"];
   node4 -> node1 [label="1 / step"];
-  node7 [label="[1] dut.a := a if 1"];
-  node7 -> node7 [label="not(eq(dut.s, dut.a)) / step"];
-  node7 -> node4 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
@@ -135,13 +135,13 @@ digraph "count_up_extra_assertion" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] dut.a := a if 1\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
-  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
+  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
+  node8 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork"];
   node4 -> node1 [label="1 / step"];
-  node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
-  node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
-  node8 -> node4 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
@@ -184,12 +184,12 @@ digraph "count_up_extra_assertion" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] dut.a := a if 1\n[eq(dut.s, dut.a)] assert_eq(dut.s, a)"];
-  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
   node0 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
+  node0 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)\n[1] dut.a := a if 1"];
+  node8 -> node4 [label="eq(dut.s, dut.a) / step"];
+  node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
   node4 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] dut.a := a if 1"];
   node4 -> node1 [label="1 / step"];
-  node8 [label="[eq(dut.s, dut.a)] assert_eq(dut.s, a)\n[1] dut.a := a if 1"];
-  node8 -> node8 [label="not(eq(dut.s, dut.a)) / step"];
-  node8 -> node4 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
