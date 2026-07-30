@@ -1,7 +1,7 @@
 error: The two expressions did not evaluate to the same value (in transaction `pop(1)`)
-   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:63:15
+   ┌─ tests/fpga-debugging/axis-async-fifo-c4/c4.prot:56:15
    │
-63 │     assert_eq(DUT.m_axis_tdata, data);
+56 │     assert_eq(DUT.m_axis_tdata, data);
    │               ^^^^^^^^^^^^^^^^^^^^^^ LHS Value: 3, RHS Value: 1
 
 Trace 0 execution failed.
