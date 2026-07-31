@@ -20,6 +20,7 @@ use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
 use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
+use protocols::ir::steady_state_lowering::lower_steady_state;
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, PortId, Value, frontend, transaction_frontend};
 use rustc_hash::FxHashMap;
@@ -84,6 +85,9 @@ struct Cli {
 
     #[arg(long, default_value_t)]
     bound: usize,
+
+    #[arg(long)]
+    steady_state: bool,
 }
 
 fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
@@ -503,6 +507,41 @@ fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, 
     }
 }
 
+fn run_steady_state(
+    cli: &Cli,
+    st: &SymbolTable,
+    module: &Module,
+    traces: &[Vec<(String, Vec<Value>)>],
+) {
+    let protos_by_name: FxHashMap<String, &Protocol> =
+        module.protos.iter().map(|p| (p.name.clone(), p)).collect();
+
+    for (trace_index, trace) in traces.iter().enumerate() {
+        print_trace_separator(trace_index);
+        let mut used_protocol_names = Vec::new();
+        for (name, _) in trace {
+            if !used_protocol_names.contains(&name.as_str()) {
+                used_protocol_names.push(name.as_str());
+            }
+        }
+        let used_protocols: Vec<Protocol> = used_protocol_names
+            .iter()
+            .map(|name| (*protos_by_name.get(*name).unwrap()).clone())
+            .collect();
+
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
+        // The graph and DUT transition system must share an expression
+        // context, including port expressions such as DUT.o_ack.
+        let (mut pg, _proto_choice) = lower_steady_state(used_protocols, st, sim.ctx.clone());
+        pg.garbage_collect_unreachable();
+        pg = determinized(pg, st);
+
+        if cli.graphout {
+            println!("{}", to_dot_string(&pg, st));
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     let (st, modules) = load_protocols(&cli);
@@ -512,6 +551,9 @@ fn main() {
     // let old_hook = std::panic::take_hook();
     // std::panic::set_hook(Box::new(|_| {}));
     let _result = catch_unwind(AssertUnwindSafe(|| {
+        if cli.steady_state {
+            run_steady_state(&cli, &st, &module, &traces);
+        }
         if cli.bound > 0 {
             run_bmc(&cli, &st, &module, &traces);
         } else if cli.transition_system {

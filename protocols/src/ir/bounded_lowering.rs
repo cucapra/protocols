@@ -5,7 +5,7 @@ use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use patronus::expr::{Context as ExprContext, ExprRef, TypeCheck};
 use rustc_hash::FxHashMap;
 
-fn mark_graft_point_ready(lowerer: &mut Lowerer<'_>, node: NodeId, guard: ExprRef) {
+pub fn mark_graft_point_ready(lowerer: &mut Lowerer<'_>, node: NodeId, guard: ExprRef) {
     let already_ready = lowerer.ir[node]
         .actions
         .iter()
@@ -16,7 +16,7 @@ fn mark_graft_point_ready(lowerer: &mut Lowerer<'_>, node: NodeId, guard: ExprRe
     }
 }
 
-fn graft_choice_entries_into(
+pub fn graft_choice_entries_into(
     lowerer: &mut Lowerer<'_>,
     parent: NodeId,
     choices: Vec<(NodeId, ExprRef)>,
