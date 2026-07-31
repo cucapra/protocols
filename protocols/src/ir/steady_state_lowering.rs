@@ -1,9 +1,9 @@
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
-use crate::ir::bounded_lowering::{graft_choice_entries_into, mark_graft_point_ready};
+use crate::ir::bounded_lowering::graft_choice_entries_into;
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
-use patronus::expr::{Context as ExprContext, ExprRef};
+use patronus::expr::{Context as ExprContext, ExprRef, TypeCheck};
 use rustc_hash::FxHashMap;
 
 fn loop_exit_to_entry(lowerer: &mut Lowerer<'_>, fragment: &LoweredFragmentInfo, entry: NodeId) {
@@ -39,7 +39,6 @@ pub fn lower_steady_state(
     let proto_choice: ExprRef = expr_ctx.bv_symbol(&"proto_choice".to_string(), width);
 
     let first_ast = protos.first().unwrap();
-    let mut graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
     // set up the lowerer and lower all the protocols
     let mut lowerer = Lowerer::with_expr_ctx(first_ast.ctx.clone(), symbols, expr_ctx);
@@ -62,16 +61,26 @@ pub fn lower_steady_state(
         })
         .collect();
 
-    // TODO: kinda janky way to make an identity instance substitution
+    // The steady-state automaton has one reusable transaction slot. Use the
+    // same #0 argument names that `into_bmc_transition_system` creates for its
+    // first slot so the copied graph reads those transition-system inputs.
     let instance_substitutions: FxHashMap<ExprRef, ExprRef> = arg_symbols
         .iter()
-        .filter_map(|symbol_id| lowerer.ir.symbol_expr(*symbol_id).map(|expr| (expr, expr)))
+        .filter_map(|symbol_id| {
+            let old_expr = lowerer.ir.symbol_expr(*symbol_id)?;
+            let width = old_expr.get_bv_type(&lowerer.ir.expr_ctx)?;
+            let name = lowerer.symbols.full_name_from_symbol_id(symbol_id);
+            let slot_expr = lowerer.ir.expr_ctx.bv_symbol(&format!("{name}#0"), width);
+            Some((old_expr, slot_expr))
+        })
         .collect();
 
     let entry_node = lowerer.ir.entry;
     // the entry node is a fork point (where we start new transactions)
     let fork_op = lowerer.ir.o(Op::Fork);
-    lowerer.ir.push_action(entry_node, Action::new(lowerer.ir.true_id(), fork_op));
+    lowerer
+        .ir
+        .push_action(entry_node, Action::new(lowerer.ir.true_id(), fork_op));
 
     let mut initial_choices = Vec::with_capacity(num_protos);
     for (idx, prototype) in lowered_protocols.iter().enumerate().take(num_protos) {
@@ -86,12 +95,8 @@ pub fn lower_steady_state(
         };
         let new_frag = lowerer.copy_protocol_fragment(prototype.clone(), &instance_substitutions);
 
-        // for &(node, guard) in &new_frag.graft_points {
-        //     mark_graft_point_ready(&mut lowerer, node, guard);
-        // }
-        // graft_points.extend(new_frag.graft_points.clone());
         initial_choices.push((new_frag.entry, node_equals));
-        
+
         loop_exit_to_entry(&mut lowerer, &new_frag, entry_node);
     }
     graft_choice_entries_into(&mut lowerer, entry_node, initial_choices);

@@ -528,16 +528,117 @@ fn run_steady_state(
             .iter()
             .map(|name| (*protos_by_name.get(*name).unwrap()).clone())
             .collect();
+        let protocol_arg_symbols: Vec<_> = used_protocols
+            .iter()
+            .flat_map(|protocol| protocol.args.iter().map(|arg| arg.symbol()))
+            .collect();
+        let protocol_choice_indices: FxHashMap<&str, u64> = used_protocol_names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| (*name, index as u64))
+            .collect();
 
         let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
         // The graph and DUT transition system must share an expression
         // context, including port expressions such as DUT.o_ack.
-        let (mut pg, _proto_choice) = lower_steady_state(used_protocols, st, sim.ctx.clone());
+        let (mut pg, proto_choice) = lower_steady_state(used_protocols, st, sim.ctx.clone());
         pg.garbage_collect_unreachable();
         pg = determinized(pg, st);
 
         if cli.graphout {
             println!("{}", to_dot_string(&pg, st));
+        }
+
+        let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
+            sim.ios()
+                .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
+        );
+        let res = into_bmc_transition_system(
+            pg,
+            sim.sys.clone(),
+            vec![proto_choice],
+            sim.port_map.clone(),
+            port_expr_refs,
+            &protocol_arg_symbols,
+            st,
+        );
+
+        let proto_choice_width = if used_protocol_names.len() <= 1 {
+            1
+        } else {
+            usize::BITS - (used_protocol_names.len() - 1).leading_zeros()
+        };
+        let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
+        transition_sim.init(InitKind::Zero);
+        let mut waveform = FxHashMap::default();
+        let mut transaction_idx = 0;
+
+        loop {
+            let at_fork = transition_sim
+                .get(res.fork_ready)
+                .try_into_u64()
+                .expect("fork ready failed")
+                == 1;
+            if at_fork {
+                if transaction_idx == trace.len() {
+                    print_trace_success(trace_index);
+                    break;
+                }
+
+                let (proto_name, values) = &trace[transaction_idx];
+                let proto = *protos_by_name.get(proto_name).unwrap();
+                for (arg_expr, value) in proto
+                    .args
+                    .iter()
+                    .map(|arg| res.protocol_inputs[&(0, arg.symbol())])
+                    .zip(values)
+                {
+                    let value: BitVecValue = value.clone().try_into().expect("value not in bitvec");
+                    transition_sim.set(arg_expr, &value);
+                }
+                transition_sim.set(
+                    res.protocol_choices[0],
+                    &BitVecValue::from_u64(
+                        protocol_choice_indices[proto_name.as_str()],
+                        proto_choice_width,
+                    ),
+                );
+                transaction_idx += 1;
+            }
+
+            record_transition_waveform(
+                &mut waveform,
+                &transition_sim,
+                &sim,
+                &res.port_to_expr,
+                &res.is_dont_care,
+            );
+            transition_sim.step();
+
+            let state = transition_sim.get(res.node_symbol);
+            if state == transition_sim.get(res.external_assert_state) {
+                println!(
+                    "Assertion failure while executing transaction {}.",
+                    transaction_idx - 1
+                );
+                break;
+            }
+            if state == transition_sim.get(res.internal_assert_state) {
+                println!(
+                    "Internal assertion failure while executing transaction {}.",
+                    transaction_idx - 1
+                );
+                break;
+            }
+        }
+
+        if cli.ascii_waveform {
+            print_ascii_waveform(
+                waveform,
+                |port| sim.port_name(port).to_string(),
+                |port| sim.port_width(port),
+                false,
+            );
         }
     }
 }
@@ -553,8 +654,7 @@ fn main() {
     let _result = catch_unwind(AssertUnwindSafe(|| {
         if cli.steady_state {
             run_steady_state(&cli, &st, &module, &traces);
-        }
-        if cli.bound > 0 {
+        } else if cli.bound > 0 {
             run_bmc(&cli, &st, &module, &traces);
         } else if cli.transition_system {
             run_transition_system(&cli, &st, &module, &traces);
