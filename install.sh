@@ -39,8 +39,8 @@ else
     echo "Cargo already installed: $(cargo --version)"
 fi
 
-# Check that Rust version matches current version requirement in cargo.toml (1.88)
-REQUIRED_RUST="1.88"
+# Check that Rust version matches current version requirement in cargo.toml (1.95)
+REQUIRED_RUST="1.95"
 CURRENT_RUST=$(rustc --version | awk '{print $2}')
 if [[ "$(printf '%s\n' "$REQUIRED_RUST" "$CURRENT_RUST" | sort -V | head -1)" != "$REQUIRED_RUST" ]]; then
     echo "Rust $CURRENT_RUST is older than required version $REQUIRED_RUST, updating..."
