@@ -95,6 +95,19 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
 
         let mut new_trans: Vec<Transition> = Vec::new();
         let n = transitions.len();
+        let transition_guards: Vec<_> = transitions.iter().map(|t| t.guard).collect();
+        let mut mutually_exclusive = vec![vec![false; n]; n];
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let overlap = protocol.and_guard(transition_guards[i], transition_guards[j]);
+                let disjoint = matches!(
+                    check_sat(&mut protocol, overlap),
+                    SatResult::DefinitelyUnsat
+                );
+                mutually_exclusive[i][j] = disjoint;
+                mutually_exclusive[j][i] = disjoint;
+            }
+        }
 
         // Each nonzero mask selects the transitions enabled in one guard minterm.
         // TODO: Handle states with 128 or more outgoing transitions.
@@ -103,12 +116,16 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
             let mut guard = protocol.true_id();
             let mut targets: DFANode = BTreeSet::new();
             for (i, t) in transitions.iter().enumerate() {
-                let (lit, target) = (t.guard, t.target);
-                let lit = if (mask >> i) & 1 == 1 {
-                    targets.insert(target);
-                    lit
+                let selected = (mask >> i) & 1 == 1;
+                let lit = if selected {
+                    targets.insert(t.target);
+                    t.guard
+                } else if (0..n).any(|j| (mask >> j) & 1 == 1 && mutually_exclusive[i][j]) {
+                    // A selected transition already implies that this guard is
+                    // false, so its negation would only add expression noise.
+                    continue;
                 } else {
-                    protocol.not_guard(lit)
+                    protocol.not_guard(t.guard)
                 };
                 guard = protocol.and_guard(guard, lit);
             }

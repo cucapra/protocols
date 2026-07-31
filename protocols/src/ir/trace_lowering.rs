@@ -8,24 +8,17 @@ use rustc_hash::FxHashMap;
 
 use crate::Value;
 use crate::frontend::ast::Protocol;
-use crate::frontend::symbol::SymbolTable;
-use crate::ir::edge_contract::{append_action, contract_edges, guard_assignment};
-use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
+use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::ir::edge_contract::{
+    append_action, append_action_disjoint, contract_edges, guard_assignment,
+    merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch,
+    same_assignment_target,
+};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
-use crate::ir::propagate_assigns::propagate_assignments_from;
-use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
-use crate::ir::reaching_defs::reaching_definitions;
+use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::Context as ExprContext;
 
 impl<'a> Lowerer<'a> {
-    fn postprocess_trace_fragment(&mut self, fragment: &LoweredFragmentInfo) {
-        // The newly lowered transaction is still disconnected from the existing
-        // trace graph, so propagation has to start from the fragment entry.
-        contract_edges(&mut self.ir, self.symbols);
-        let rd = reaching_definitions(&mut self.ir, self.symbols);
-        propagate_assignments_from(&mut self.ir, self.symbols, &rd, fragment.entry);
-    }
-
     /// Build the per-copy argument substitution and lower one transaction body.
     fn lower_transaction(
         &mut self,
@@ -51,69 +44,136 @@ impl<'a> Lowerer<'a> {
 
         // set the arg substitution to the current transaction's args
         self.trace_arg_subst = subst;
-        self.lower_protocol_fragment(ast, keep_done)
-    }
-
-    fn next_trace_graft_points(
-        &mut self,
-        fragment: &LoweredFragmentInfo,
-    ) -> Vec<(NodeId, ExprRef)> {
-        let fork_reach = reaching_forks_from(&mut self.ir, fragment.entry);
-        let ir = &self.ir;
-
-        // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
-        let mut graft_points: Vec<(NodeId, ExprRef)> = fragment
-            .nodes
-            .iter()
-            .flat_map(|id| {
-                let node = &ir[*id];
-                node.actions
-                    .iter()
-                    .filter(|action| matches!(ir[action.op], Op::Fork))
-                    .map(move |action| (*id, action.guard))
-            })
-            .collect();
-
-        // at every fork point, we want to have it proven that we haven't forked before
-        for (fork_node, _) in &graft_points {
-            let reachability = fork_reach.in_reach.get(fork_node).copied().unwrap();
-            assert!(
-                matches!(
-                    reachability,
-                    // nodes never get cleaned up, so there are old (pre-contraction) fork nodes that are Unreachable we need to account for
-                    ForkReachability::Unreachable | ForkReachability::DefinitelyNotForked
-                ),
-                "fork node {fork_node} can be reached after a prior fork"
-            );
-        }
-
-        // if we can prove we haven't forked up to know, we'll also graft onto the exit
-        // if we can prove we have forked up to know, we won't graft onto the exit node
-        // otherwise, panic! - we're gonna have an exponential blowup
-        let exit_reachability = fork_reach
-            .in_reach
-            .get(&fragment.exit)
-            .copied()
-            .unwrap_or(ForkReachability::Unreachable);
-        match exit_reachability {
-            ForkReachability::DefinitelyNotForked => {
-                graft_points.push((fragment.exit, self.ir.true_id()));
-            }
-            ForkReachability::DefinitelyForked | ForkReachability::Unreachable => {}
-            ForkReachability::MaybeForked => {
-                panic!("done node {} may or may not have forked", fragment.exit);
-            }
-        }
-
-        graft_points
+        self.lower_protocol_fragment(ast, keep_done, false)
     }
 
     /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.
-    fn graft_contracted_entry(
+    pub fn graft_contracted_entry(
         &mut self,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
+    ) {
+        self.graft_contracted_entry_with_mode(
+            graft_points_node_id,
+            entry_node_id,
+            graft_guard,
+            false,
+        );
+    }
+
+    /// Graft an entry whose guard is mutually exclusive with the other entries
+    /// being accumulated into the same node.
+    pub fn graft_disjoint_contracted_entry(
+        &mut self,
+        graft_points_node_id: NodeId,
+        entry_node_id: NodeId,
+        graft_guard: ExprRef,
+    ) {
+        self.graft_contracted_entry_with_mode(
+            graft_points_node_id,
+            entry_node_id,
+            graft_guard,
+            true,
+        );
+    }
+
+    /// Graft a group of entries whose guards are mutually exclusive. The
+    /// assignments are assembled once per target before touching the parent.
+    pub fn graft_disjoint_contracted_entries(
+        &mut self,
+        graft_points_node_id: NodeId,
+        choices: &[(NodeId, ExprRef)],
+    ) {
+        let mut actions = self.ir[graft_points_node_id].actions.clone();
+        let mut assignments: Vec<(SymbolId, Vec<(ExprRef, Assignment)>)> = Vec::new();
+        let mut transitions = self.ir[graft_points_node_id].transitions.clone();
+        let mut internal_assert_guard = None;
+
+        for &(entry_node_id, graft_guard) in choices {
+            for action in self.ir[entry_node_id].actions.clone() {
+                match self.ir[action.op].clone() {
+                    Op::Assign(symbol_id, assignment) => {
+                        assert_eq!(
+                            action.guard,
+                            self.ir.true_id(),
+                            "assignment action guards must be 1; path conditions belong in Assignment"
+                        );
+                        let assignment = (graft_guard, assignment);
+                        let Some((_, grouped)) = assignments.iter_mut().find(|(target, _)| {
+                            same_assignment_target(self.symbols, *target, symbol_id)
+                        }) else {
+                            assignments.push((symbol_id, vec![assignment]));
+                            continue;
+                        };
+                        grouped.push(assignment);
+                    }
+                    _ => {
+                        let guard = self.ir.and_guard(graft_guard, action.guard);
+                        append_action_disjoint(
+                            &mut self.ir,
+                            self.symbols,
+                            &mut actions,
+                            action.with_guard(guard),
+                        );
+                    }
+                }
+            }
+
+            for transition in self.ir[entry_node_id].transitions.clone() {
+                let guard = self.ir.and_guard(graft_guard, transition.guard);
+                transitions.push(transition.with_guard(guard));
+            }
+        }
+
+        for (symbol_id, grouped) in assignments {
+            let existing_idx = actions.iter().position(|prior_action| {
+                matches!(
+                    self.ir[prior_action.op],
+                    Op::Assign(prior_symbol_id, _)
+                        if same_assignment_target(self.symbols, prior_symbol_id, symbol_id)
+                )
+            });
+            let assignment = if let Some(idx) = existing_idx {
+                let existing = match self.ir[actions[idx].op].clone() {
+                    Op::Assign(_, assignment) => assignment,
+                    _ => unreachable!(),
+                };
+                merge_unordered_assignment_with_disjoint_batch(
+                    &mut self.ir,
+                    &mut internal_assert_guard,
+                    existing,
+                    grouped,
+                )
+            } else {
+                merge_disjoint_guarded_assignments(&mut self.ir, grouped).0
+            };
+            let op = self.ir.o(Op::Assign(symbol_id, assignment));
+            let true_id = self.ir.true_id();
+            if let Some(idx) = existing_idx {
+                actions[idx].guard = true_id;
+                actions[idx].op = op;
+            } else {
+                actions.push(Action::new(true_id, op));
+            }
+        }
+
+        if let Some(internal_assert_guard) = internal_assert_guard {
+            let internal_assert_op = self.ir.o(Op::InternalAssertFalse);
+            actions.push(Action::new(internal_assert_guard, internal_assert_op));
+        }
+
+        let graft_points_node = self.ir.node_mut(graft_points_node_id);
+        graft_points_node.actions = actions;
+        graft_points_node.transitions = transitions;
+    }
+
+    fn graft_contracted_entry_with_mode(
+        &mut self,
+        graft_points_node_id: NodeId,
+        entry_node_id: NodeId,
+        graft_guard: ExprRef,
+        disjoint: bool,
     ) {
         let mut actions = self.ir[graft_points_node_id].actions.clone();
         let entry_actions = self.ir[entry_node_id].actions.clone();
@@ -137,14 +197,18 @@ impl<'a> Lowerer<'a> {
                     action.with_guard(guard)
                 }
             };
-            append_action(
-                &mut self.ir,
-                self.symbols,
-                &mut actions,
-                &mut internal_assert_guard,
-                guarded_action,
-                false,
-            );
+            if disjoint {
+                append_action_disjoint(&mut self.ir, self.symbols, &mut actions, guarded_action);
+            } else {
+                append_action(
+                    &mut self.ir,
+                    self.symbols,
+                    &mut actions,
+                    &mut internal_assert_guard,
+                    guarded_action,
+                    false,
+                );
+            }
         }
 
         if let Some(internal_assert_guard) = internal_assert_guard {
@@ -193,11 +257,12 @@ impl<'a> Lowerer<'a> {
         // this is a bit wasteful since we only need to postprocess this
         // disconnected fragment before grafting it into the trace graph.
         self.postprocess_trace_fragment(&fragment);
-        let next = self.next_trace_graft_points(&fragment);
+        let next = self.graft_points(&fragment);
 
         for (node, guard) in graft_points {
             self.graft_contracted_entry(node, fragment.entry, guard);
         }
+        contract_edges(&mut self.ir, self.symbols);
 
         self.append_trace_transactions(next, rest, protos_by_name);
     }
@@ -228,9 +293,10 @@ pub fn lower_trace_to_ir(
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     lowerer.postprocess_trace_fragment(&first);
+    contract_edges(&mut lowerer.ir, symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
-    let graft_points = lowerer.next_trace_graft_points(&first);
+    let graft_points = lowerer.graft_points(&first);
     lowerer.append_trace_transactions(graft_points, &trace[1..], protos_by_name);
     lowerer.ir.simplify_all_exprs();
     lowerer.ir
