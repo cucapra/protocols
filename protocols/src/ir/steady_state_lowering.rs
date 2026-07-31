@@ -1,11 +1,25 @@
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use crate::ir::bounded_lowering::{graft_choice_entries_into, mark_graft_point_ready};
-use crate::ir::edge_contract::contract_edges;
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer};
-use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph, Transition};
-use patronus::expr::{Context as ExprContext, ExprRef, TypeCheck};
+use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
+use patronus::expr::{Context as ExprContext, ExprRef};
 use rustc_hash::FxHashMap;
+
+fn loop_exit_to_entry(lowerer: &mut Lowerer<'_>, fragment: &LoweredFragmentInfo, entry: NodeId) {
+    for node in fragment.nodes.iter().copied() {
+        if node == fragment.exit {
+            continue;
+        }
+
+        for transition in &mut lowerer.ir.node_mut(node).transitions {
+            if transition.target == fragment.exit {
+                transition.target = entry;
+                transition.consumes_step = true;
+            }
+        }
+    }
+}
 
 /// Lower a set of protocols to a joint IR that represents traces of any length
 /// Precondition: every `p \in protos` must fork in its exit node (there is no possibility of
@@ -55,6 +69,9 @@ pub fn lower_steady_state(
         .collect();
 
     let entry_node = lowerer.ir.entry;
+    // the entry node is a fork point (where we start new transactions)
+    let fork_op = lowerer.ir.o(Op::Fork);
+    lowerer.ir.push_action(entry_node, Action::new(lowerer.ir.true_id(), fork_op));
 
     let mut initial_choices = Vec::with_capacity(num_protos);
     for (idx, prototype) in lowered_protocols.iter().enumerate().take(num_protos) {
@@ -69,19 +86,13 @@ pub fn lower_steady_state(
         };
         let new_frag = lowerer.copy_protocol_fragment(prototype.clone(), &instance_substitutions);
 
-        // TODO: all exits have the done action. If these were interpreter, the graph interpreter would actually get mad at this,
-        // but it shouldn't. Done doesn't really have meaning for driver automata, just for monitors.
-        let done_op = lowerer.ir.o(Op::Done);
-        let true_id = lowerer.ir.true_id();
-        lowerer
-            .ir
-            .push_action(new_frag.exit, Action::new(true_id, done_op));
-
-        for &(node, guard) in &new_frag.graft_points {
-            mark_graft_point_ready(&mut lowerer, node, guard);
-        }
-        graft_points.extend(new_frag.graft_points.clone());
+        // for &(node, guard) in &new_frag.graft_points {
+        //     mark_graft_point_ready(&mut lowerer, node, guard);
+        // }
+        // graft_points.extend(new_frag.graft_points.clone());
         initial_choices.push((new_frag.entry, node_equals));
+        
+        loop_exit_to_entry(&mut lowerer, &new_frag, entry_node);
     }
     graft_choice_entries_into(&mut lowerer, entry_node, initial_choices);
 
