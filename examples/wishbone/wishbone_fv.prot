@@ -1,0 +1,564 @@
+// Wishbone pins for this project from the server (the one servicing requests) perspective
+interface Wishbone {
+    // high active RST pin (the wishbone spec requires all signals to be high active)
+    in i_reset: u1,
+    // acknowledge (from server)
+    out i_wb_ack: u1,
+    // address (from client)
+    in i_wb_addr: u32,
+    // cycle output, indicates bus cycle in progress (from client)
+    in i_wb_cyc: u1,
+    // read data from server
+    out i_wb_data: u32,
+    // write data from client
+    in i_wb_idata: u32,
+    // error from server
+    out i_wb_err: u1,
+    // mask for data in/out from client
+    in i_wb_sel: u4,
+    // indicates a valid transfer cycle from client
+    in i_wb_stb: u1,
+    // write enable (i.e. not read) from client
+    in i_wb_we: u1,
+    in BTE: u2,
+    in CTI: u3,
+}
+
+prot reset<self: Wishbone>() {
+    self.RST := 1'b1;
+    self.CYC := 1'b0;
+    self.STB := 1'b0;
+    step();
+}
+
+#[idle]
+prot idle_no_cycle<self: Wishbone>() {
+    self.RST := 1'b0;
+    self.CYC := 1'b0;
+    step();
+}
+
+prot idle_continue_cycle<self: Wishbone>() {
+    self.RST := 1'b0;
+    self.CYC := 1'b1;
+    self.STB := 1'b0;
+    step();
+}
+
+prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+    // no RST
+    self.RST := 1'b0;
+    // classic cycle (in which case bte is don't care)
+    self.CTI := 3'b0;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.ADR := addr;
+    self.SEL := mask;
+    self.DAT_O := data;
+
+    // TODO: masking
+    // if !mask[0] { DAT_O[ 7: 0] := X; }
+    // if !mask[1] { DAT_O[15: 8] := X; }
+    // if !mask[2] { DAT_O[23:16] := X; }
+    // if !mask[3] { DAT_O[31:24] := X; }
+
+
+    while self.ACK == 1'b0 {
+        step();
+    }
+
+    // acknowledge is now true
+    step();
+}
+
+prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // classic cycle (in which case bte is don't care)
+    self.CTI := 3'b0;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.ADR := addr;
+    self.SEL := mask;
+    self.DAT_O := X;
+
+    while self.ACK == 1'b0 {
+        step();
+    }
+
+    // TODO: masking
+    // if mask[0] { assert_eq(self.DAT_I[ 7: 0], data[ 7: 0]); }
+    // if mask[1] { assert_eq(self.DAT_I[15: 8], data[15: 8]); }
+    // if mask[2] { assert_eq(self.DAT_I[23:16], data[23:16]); }
+    // if mask[3] { assert_eq(self.DAT_I[31:24], data[31:24]); }
+
+    assert_eq(self.DAT_I, data);
+    step();
+}
+
+// a burst with only a single item uses a special cti of 7
+prot write_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // final burst item
+    self.CTI := 3'b111;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.ADR := addr;
+    self.SEL := mask;
+    self.DAT_O := data;
+
+    // wait for ack
+    while self.ACK == 1'b0 {
+        step();
+    }
+
+    // acknowledge is now true for one cycle
+    step();
+}
+
+// a burst with only a single item uses a special cti of 7
+prot read_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // final burst item
+    self.CTI := 3'b111;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.ADR := addr;
+    self.SEL := mask;
+
+
+    // wait for ack
+    while self.ACK == 1'b0 {
+        step();
+    }
+
+    // acknowledge is now true for one cycle and we get the data
+    assert_eq(self.DAT_I, data); // TODO: take mask into account
+    step();
+}
+
+prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // constant burst cycle (in which case bte is don't care)
+    self.CTI := 3'b001;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.ADR := addr;
+    self.SEL := mask;
+
+    for d in data {
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // constant burst cycle (in which case bte is don't care)
+    self.CTI := 3'b001;
+    self.BTE := X;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.ADR := addr;
+    self.SEL := mask;
+
+    for d in data {
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d); // TODO: take mask into account
+        step();
+    }
+}
+
+prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b00;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        self.ADR := start_addr + (iter_count::<u30>() ## 2'b00);
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b00;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        self.ADR := start_addr + (iter_count::<u30>() ## 2'b00);
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d); // TODO: take mask into account
+        step();
+    }
+}
+
+
+prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b01; // wrap 4
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 2 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:4] ## (start_addr[3:2] + iter_count::<u2>()) ## start_addr[1:0];
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b01; // wrap 4
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 2 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:4] ## (start_addr[3:2] + iter_count::<u2>()) ## start_addr[1:0];
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d); // TODO: take mask into account
+        step();
+    }
+}
+
+prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b10; // wrap 8
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 3 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:5] ## (start_addr[4:2] + iter_count::<u3>()) ## start_addr[1:0];
+        self.DAT_O := d;
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b10; // wrap 8
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 3 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:5] ## (start_addr[4:2] + iter_count::<u3>()) ## start_addr[1:0];
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d); // TODO: take mask into account
+        step();
+    }
+}
+
+prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b11; // wrap 16
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b1;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 4 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:6] ## (start_addr[5:2] + iter_count::<u4>()) ## start_addr[1:0];
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle
+        step();
+    }
+}
+
+prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b11; // wrap 16
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are writing
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        // we increment the last 4 bits, modulo the 2-bits that are always zero because of the 32-bit interface
+        self.ADR := start_addr[31:6] ## (start_addr[5:2] + iter_count::<u4>()) ## start_addr[1:0];
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d); // TODO: take mask into account
+        step();
+    }
+}

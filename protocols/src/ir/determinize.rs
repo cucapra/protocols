@@ -132,32 +132,55 @@ fn transition_guards_after_node_updates(
     let mut substitutions = FxHashMap::default();
 
     for action in actions {
-        let crate::ir::proto_graph::Op::Assign(symbol, assignment) =
-            protocol[action.op].clone()
+        let crate::ir::proto_graph::Op::Assign(symbol, assignment) = protocol[action.op].clone()
         else {
             continue;
         };
-        if !protocol.state_init.contains_key(&symbol)
-            || assignment.dont_care != protocol.false_id()
+        if !protocol.state_init.contains_key(&symbol) || assignment.dont_care != protocol.false_id()
         {
             continue;
         }
         let Some(lhs) = protocol.symbol_expr(symbol) else {
             continue;
         };
-        if !lhs.is_bool(&protocol.expr_ctx) {
-            continue;
-        }
+        let prior = substitutions.get(&lhs).copied().unwrap_or(lhs);
+        let action_guard = simple_transform_expr(
+            &mut protocol.expr_ctx,
+            action.guard,
+            |_ctx, candidate, _children| substitutions.get(&candidate).copied(),
+        );
+        let branches: Vec<_> = assignment
+            .concretes
+            .iter()
+            .map(|(guard, rhs)| {
+                (
+                    simple_transform_expr(
+                        &mut protocol.expr_ctx,
+                        *guard,
+                        |_ctx, candidate, _children| substitutions.get(&candidate).copied(),
+                    ),
+                    simple_transform_expr(
+                        &mut protocol.expr_ctx,
+                        *rhs,
+                        |_ctx, candidate, _children| substitutions.get(&candidate).copied(),
+                    ),
+                )
+            })
+            .collect();
 
         // Assignment branches use first-match priority. If no branch fires,
         // monitor state holds its old value.
-        let mut next = lhs;
-        for (branch_guard, rhs) in assignment.concretes.iter().rev() {
-            let guard = protocol.and_guard(action.guard, *branch_guard);
-            let when_set = protocol.and_guard(guard, *rhs);
-            let not_guard = protocol.not_guard(guard);
-            let when_held = protocol.and_guard(not_guard, next);
-            next = protocol.or_guard(when_set, when_held);
+        let mut next = prior;
+        for (branch_guard, rhs) in branches.into_iter().rev() {
+            let guard = protocol.and_guard(action_guard, branch_guard);
+            next = if lhs.is_bool(&protocol.expr_ctx) {
+                let when_set = protocol.and_guard(guard, rhs);
+                let not_guard = protocol.not_guard(guard);
+                let when_held = protocol.and_guard(not_guard, next);
+                protocol.or_guard(when_set, when_held)
+            } else {
+                protocol.expr_ctx.ite(guard, rhs, next)
+            };
         }
         substitutions.insert(lhs, next);
     }
@@ -166,9 +189,9 @@ fn transition_guards_after_node_updates(
         .iter()
         .map(|transition| {
             let guard = simple_transform_expr(
-            &mut protocol.expr_ctx,
-            transition.guard,
-            |_ctx, candidate, _children| substitutions.get(&candidate).copied(),
+                &mut protocol.expr_ctx,
+                transition.guard,
+                |_ctx, candidate, _children| substitutions.get(&candidate).copied(),
             );
             protocol.simplifier.simplify(&mut protocol.expr_ctx, guard)
         })

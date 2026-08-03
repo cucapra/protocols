@@ -404,13 +404,11 @@ fn learn_equality_knownness(
             } else {
                 Knownness::Maybe
             };
-            facts
-                .entry(candidate)
-                .and_modify(|knownness| {
-                    if *knownness == Knownness::Unknown {
-                        *knownness = learned;
-                    }
-                });
+            facts.entry(candidate).and_modify(|knownness| {
+                if *knownness == Knownness::Unknown {
+                    *knownness = learned;
+                }
+            });
         }
     }
 }
@@ -604,14 +602,7 @@ fn transform_candidate_fragment(
                         &parameters,
                         &local_facts,
                     );
-                    learn_equality_knownness(
-                        pg,
-                        active,
-                        lhs,
-                        rhs,
-                        &parameters,
-                        &mut local_facts,
-                    );
+                    learn_equality_knownness(pg, active, lhs, rhs, &parameters, &mut local_facts);
                 }
                 Op::Fork => return Err(ToMonitorError::UnsupportedFork),
                 Op::InternalAssertFalse | Op::Done => {
@@ -713,13 +704,17 @@ fn loop_fragment_exit_to_entry(
                 transition.consumes_step = true;
             }
         }
-        if pg[node]
+        let return_guards: Vec<_> = pg[node]
             .transitions
             .iter()
-            .any(|transition| transition.target == entry)
-        {
+            .filter(|transition| transition.target == entry)
+            .map(|transition| transition.guard)
+            .collect();
+        let return_guard = or_all(pg, return_guards);
+        if return_guard != pg.false_id() {
             let done = pg.o(Op::Done);
-            pg.push_action(node, Action::new(live_expr, done));
+            let done_guard = pg.and_guard(live_expr, return_guard);
+            pg.push_action(node, Action::new(done_guard, done));
         }
     }
 }
@@ -930,20 +925,11 @@ mod tests {
         let protocol_file = "../examples/wishbone/wishbone.prot";
         let trace_file = "../examples/wishbone/read_write.tx";
         let mut diagnostics = DiagnosticHandler::default();
-        let (mut symbols, modules) =
-            frontend(&[protocol_file], &mut diagnostics, true).unwrap();
+        let (mut symbols, modules) = frontend(&[protocol_file], &mut diagnostics, true).unwrap();
         let module = require_single_module(modules, &[protocol_file]).unwrap();
-        let traces = transaction_frontend(
-            trace_file,
-            &symbols,
-            &module.protos,
-            &mut diagnostics,
-        )
-        .unwrap();
-        let selected_names: HashSet<_> = traces[0]
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect();
+        let traces =
+            transaction_frontend(trace_file, &symbols, &module.protos, &mut diagnostics).unwrap();
+        let selected_names: HashSet<_> = traces[0].iter().map(|(name, _)| name.as_str()).collect();
         let selected = module
             .protos
             .into_iter()

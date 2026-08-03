@@ -6,6 +6,4 @@ trace {
     idle_no_cycle();
     write(0b1111, 0x4000000, 0x1111);
     reset();
-    read(0b1111, 0x4000000, 0x1112);
-    idle_no_cycle();
 }
