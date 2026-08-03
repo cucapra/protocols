@@ -9,6 +9,7 @@ pub mod propagate_assigns;
 pub mod proto_graph;
 pub mod reaching_defs;
 pub mod steady_state_lowering;
+pub mod to_monitor;
 pub mod trace_lowering;
 // TODO: add a function to transform AST to IR
 // pub fn frontend(

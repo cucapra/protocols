@@ -523,6 +523,9 @@ impl<'a> Evaluator<'a> {
                             .unwrap();
                         Ok(ExprValue::Concrete(value.clone()))
                     }
+                    SymbolKind::MonitorState => {
+                        unreachable!("monitor state is not part of AST interpretation")
+                    }
                 }
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
@@ -741,6 +744,9 @@ impl<'a> Evaluator<'a> {
                 "loop_var".to_string(),
                 stmt_id,
             )),
+            SymbolKind::MonitorState => {
+                unreachable!("monitor state is not part of AST interpretation")
+            }
         }
     }
 

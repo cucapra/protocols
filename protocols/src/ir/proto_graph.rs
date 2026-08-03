@@ -145,6 +145,14 @@ pub struct ProtoGraph {
     /// symbol expressions representing DontCare
     pub dont_cares: FxHashSet<ExprRef>,
 
+    /// Symbols that are state in this graph and their initial values.
+    ///
+    /// This is populated by IR-to-IR transformations such as `to_monitor`.
+    /// Keeping the declaration on the graph lets `Op::Assign` represent both
+    /// DUT driving assignments in a driver graph and state updates in a
+    /// monitor graph without adding another operation kind.
+    pub state_init: FxHashMap<SymbolId, ExprRef>,
+
     nodes: PrimaryMap<NodeId, Node>,
 
     ops: PrimaryMap<OpId, Op>,
@@ -163,6 +171,7 @@ impl Clone for ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
             dont_cares: self.dont_cares.clone(),
+            state_init: self.state_init.clone(),
             nodes: self.nodes.clone(),
             ops: self.ops.clone(),
             op_loc: self.op_loc.clone(),
@@ -190,6 +199,7 @@ impl ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
+            state_init: FxHashMap::default(),
             nodes,
             ops,
             op_loc,

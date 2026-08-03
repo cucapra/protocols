@@ -361,6 +361,9 @@ impl Remapper<'_> {
                             .unwrap_or_else(|| unreachable!("{name} should have been declared!"));
                         self.out.e(Expr::Sym(out_sym))
                     }
+                    SymbolKind::MonitorState => {
+                        unreachable!("monitor state is not part of frontend remapping")
+                    }
                 }
             }
             Expr::DontCare => self.out.dont_care_id(),

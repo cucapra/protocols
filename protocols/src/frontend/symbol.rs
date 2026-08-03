@@ -53,6 +53,9 @@ pub enum SymbolKind {
     OutPort,
     Arg(u16),
     LoopVar,
+    /// State introduced by an IR-to-IR transformation, such as protocol
+    /// argument knownness in a generated monitor.
+    MonitorState,
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
@@ -595,5 +598,9 @@ impl SymbolTableEntry {
     }
     pub fn is_loop_var(&self) -> bool {
         matches!(self.kind, SymbolKind::LoopVar)
+    }
+
+    pub fn is_monitor_state(&self) -> bool {
+        matches!(self.kind, SymbolKind::MonitorState)
     }
 }
