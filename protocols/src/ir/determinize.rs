@@ -93,6 +93,44 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
             ));
         }
 
+        // The DFA successor only records which NFA target nodes are active,
+        // not which of several parallel edges activated each target. Collapse
+        // those parallel edges before enumerating subsets. Otherwise every
+        // equivalent edge selection becomes a separate minterm which is later
+        // ORed back together into a very large expression.
+        let mut grouped: Vec<Transition> = Vec::new();
+        for transition in transitions {
+            if let Some(existing) = grouped
+                .iter_mut()
+                .find(|existing| existing.target == transition.target)
+            {
+                existing.guard = protocol.or_guard(existing.guard, transition.guard);
+            } else {
+                grouped.push(transition);
+            }
+        }
+        let transitions = grouped;
+
+        if let Some(first) = transitions.first()
+            && transitions
+                .iter()
+                .all(|transition| transition.target == first.target)
+        {
+            let guard = transitions
+                .iter()
+                .fold(protocol.false_id(), |guard, transition| {
+                    protocol.or_guard(guard, transition.guard)
+                });
+            let target = BTreeSet::from([first.target]);
+            let target_id =
+                get_or_create_state(target, &mut state_ids, &mut worklist, &mut new_nodes);
+            new_nodes[this_id] = NFANode {
+                actions,
+                transitions: vec![Transition::new(guard, target_id, true)],
+            };
+            continue;
+        }
+
         let mut new_trans: Vec<Transition> = Vec::new();
         let n = transitions.len();
         let transition_guards: Vec<_> = transitions.iter().map(|t| t.guard).collect();
@@ -136,9 +174,14 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
                 SatResult::MaybeSat => guard,
             };
 
+            let target_id =
+                get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
+            if let Some(existing) = new_trans
+                .iter_mut()
+                .find(|transition| transition.target == target_id && transition.consumes_step)
             {
-                let target_id =
-                    get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
+                existing.guard = protocol.or_guard(existing.guard, guard);
+            } else {
                 new_trans.push(Transition::new(guard, target_id, true));
             }
         }
