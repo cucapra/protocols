@@ -955,7 +955,7 @@ mod tests {
         let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../scripts/wishbone_read_write_monitor.dot");
         fs::write(output, &serialized).unwrap();
-        // assert!(!serialized.contains("internal_assert_false"));
+        assert!(!serialized.contains("internal_assert_false"));
         println!("{serialized}");
     }
 }

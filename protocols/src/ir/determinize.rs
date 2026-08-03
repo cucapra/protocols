@@ -8,8 +8,8 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::append_action;
 use crate::ir::proto_graph::{Node as NFANode, NodeId, ProtoGraph, Transition};
 use cranelift_entity::PrimaryMap;
-use patronus::expr::ExprRef;
-use rustc_hash::FxHashMap;
+use patronus::expr::{Expr, ExprRef, TypeCheck, simple_transform_expr};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// A DFA Node is a set of NFA nodes active at the same time.
 type DFANode = BTreeSet<NodeId>;
@@ -39,6 +39,68 @@ pub enum SatResult {
     AlwaysSat,
 }
 
+fn collect_boolean_atoms(protocol: &ProtoGraph, expr: ExprRef, atoms: &mut FxHashSet<ExprRef>) {
+    if expr == protocol.true_id() || expr == protocol.false_id() {
+        return;
+    }
+    match protocol.expr_ctx[expr] {
+        Expr::BVAnd(lhs, rhs, 1) | Expr::BVOr(lhs, rhs, 1) => {
+            collect_boolean_atoms(protocol, lhs, atoms);
+            collect_boolean_atoms(protocol, rhs, atoms);
+        }
+        Expr::BVNot(inner, 1) => collect_boolean_atoms(protocol, inner, atoms),
+        _ => {
+            atoms.insert(expr);
+        }
+    }
+}
+
+fn eval_boolean_skeleton(
+    protocol: &ProtoGraph,
+    expr: ExprRef,
+    values: &FxHashMap<ExprRef, bool>,
+) -> bool {
+    if expr == protocol.true_id() {
+        return true;
+    }
+    if expr == protocol.false_id() {
+        return false;
+    }
+    match protocol.expr_ctx[expr] {
+        Expr::BVAnd(lhs, rhs, 1) => {
+            eval_boolean_skeleton(protocol, lhs, values)
+                && eval_boolean_skeleton(protocol, rhs, values)
+        }
+        Expr::BVOr(lhs, rhs, 1) => {
+            eval_boolean_skeleton(protocol, lhs, values)
+                || eval_boolean_skeleton(protocol, rhs, values)
+        }
+        Expr::BVNot(inner, 1) => !eval_boolean_skeleton(protocol, inner, values),
+        _ => values[&expr],
+    }
+}
+
+fn propositionally_unsat(protocol: &ProtoGraph, expr: ExprRef) -> bool {
+    let mut atoms = FxHashSet::default();
+    collect_boolean_atoms(protocol, expr, &mut atoms);
+    // Keep this lightweight. Falling back to MaybeSat is always sound.
+    if atoms.len() > 16 {
+        return false;
+    }
+    let atoms: Vec<_> = atoms.into_iter().collect();
+    for mask in 0usize..(1usize << atoms.len()) {
+        let values = atoms
+            .iter()
+            .enumerate()
+            .map(|(index, atom)| (*atom, (mask >> index) & 1 == 1))
+            .collect();
+        if eval_boolean_skeleton(protocol, expr, &values) {
+            return false;
+        }
+    }
+    true
+}
+
 // TODO: Strengthen this with a real SAT/SMT query to prune more aggressively.
 pub fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
     let simplified = {
@@ -50,9 +112,67 @@ pub fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
         SatResult::DefinitelyUnsat
     } else if simplified == protocol.true_id() {
         SatResult::AlwaysSat
+    } else if propositionally_unsat(protocol, simplified) {
+        SatResult::DefinitelyUnsat
     } else {
-        SatResult::MaybeSat
+        let negated = protocol.not_guard(simplified);
+        if propositionally_unsat(protocol, negated) {
+            SatResult::AlwaysSat
+        } else {
+            SatResult::MaybeSat
+        }
     }
+}
+
+fn transition_guards_after_node_updates(
+    protocol: &mut ProtoGraph,
+    actions: &[crate::ir::proto_graph::Action],
+    transitions: &[Transition],
+) -> Vec<ExprRef> {
+    let mut substitutions = FxHashMap::default();
+
+    for action in actions {
+        let crate::ir::proto_graph::Op::Assign(symbol, assignment) =
+            protocol[action.op].clone()
+        else {
+            continue;
+        };
+        if !protocol.state_init.contains_key(&symbol)
+            || assignment.dont_care != protocol.false_id()
+        {
+            continue;
+        }
+        let Some(lhs) = protocol.symbol_expr(symbol) else {
+            continue;
+        };
+        if !lhs.is_bool(&protocol.expr_ctx) {
+            continue;
+        }
+
+        // Assignment branches use first-match priority. If no branch fires,
+        // monitor state holds its old value.
+        let mut next = lhs;
+        for (branch_guard, rhs) in assignment.concretes.iter().rev() {
+            let guard = protocol.and_guard(action.guard, *branch_guard);
+            let when_set = protocol.and_guard(guard, *rhs);
+            let not_guard = protocol.not_guard(guard);
+            let when_held = protocol.and_guard(not_guard, next);
+            next = protocol.or_guard(when_set, when_held);
+        }
+        substitutions.insert(lhs, next);
+    }
+
+    transitions
+        .iter()
+        .map(|transition| {
+            let guard = simple_transform_expr(
+            &mut protocol.expr_ctx,
+            transition.guard,
+            |_ctx, candidate, _children| substitutions.get(&candidate).copied(),
+            );
+            protocol.simplifier.simplify(&mut protocol.expr_ctx, guard)
+        })
+        .collect()
 }
 
 /// Perform subset construction.
@@ -133,11 +253,12 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
 
         let mut new_trans: Vec<Transition> = Vec::new();
         let n = transitions.len();
-        let transition_guards: Vec<_> = transitions.iter().map(|t| t.guard).collect();
+        let analysis_guards =
+            transition_guards_after_node_updates(&mut protocol, &actions, &transitions);
         let mut mutually_exclusive = vec![vec![false; n]; n];
         for i in 0..n {
             for j in (i + 1)..n {
-                let overlap = protocol.and_guard(transition_guards[i], transition_guards[j]);
+                let overlap = protocol.and_guard(analysis_guards[i], analysis_guards[j]);
                 let disjoint = matches!(
                     check_sat(&mut protocol, overlap),
                     SatResult::DefinitelyUnsat
@@ -152,27 +273,31 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
         assert!(n <= 128);
         for mask in 1u128..(1u128 << n) {
             let mut guard = protocol.true_id();
+            let mut analysis_guard = protocol.true_id();
             let mut targets: DFANode = BTreeSet::new();
             for (i, t) in transitions.iter().enumerate() {
                 let selected = (mask >> i) & 1 == 1;
-                let lit = if selected {
+                let (lit, analysis_lit) = if selected {
                     targets.insert(t.target);
-                    t.guard
+                    (t.guard, analysis_guards[i])
                 } else if (0..n).any(|j| (mask >> j) & 1 == 1 && mutually_exclusive[i][j]) {
                     // A selected transition already implies that this guard is
                     // false, so its negation would only add expression noise.
                     continue;
                 } else {
-                    protocol.not_guard(t.guard)
+                    (
+                        protocol.not_guard(t.guard),
+                        protocol.not_guard(analysis_guards[i]),
+                    )
                 };
                 guard = protocol.and_guard(guard, lit);
+                analysis_guard = protocol.and_guard(analysis_guard, analysis_lit);
             }
 
-            let guard = match check_sat(&mut protocol, guard) {
+            match check_sat(&mut protocol, analysis_guard) {
                 SatResult::DefinitelyUnsat => continue,
-                SatResult::AlwaysSat => protocol.true_id(),
-                SatResult::MaybeSat => guard,
-            };
+                SatResult::AlwaysSat | SatResult::MaybeSat => {}
+            }
 
             let target_id =
                 get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
