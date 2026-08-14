@@ -34,8 +34,11 @@ impl ProtocolTiming {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LiveTransaction {
     pub protocol: ProtocolId,
+    /// Global fork number, used in the displayed meta-automaton.
     pub instance: usize,
-    /// Counts down from ProtocolTiming::post_cycles. 
+    /// Instance number within this protocol's FIFO bank set.
+    pub bank_instance: usize,
+    /// Counts down from ProtocolTiming::post_cycles.
     /// The final post-phase cycle is zero.
     pub post_cycle: usize,
 }
@@ -55,6 +58,8 @@ pub enum MetaFrontier {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MetaState {
     pub live: Vec<LiveTransaction>,
+    /// Next FIFO instance number, independently maintained for each protocol.
+    pub next_bank_instances: Vec<usize>,
     /// Bounded trees have no frontier after their final fork.
     pub frontier: Option<MetaFrontier>,
 }
@@ -71,14 +76,21 @@ pub struct BankRotation {
     pub amount: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InstanceShift {
+    pub protocol: ProtocolId,
+    pub amount: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetaEdge {
     pub protocol: ProtocolId,
     pub outcome: MetaOutcome,
     pub target: MetaNodeId,
-    /// Amount subtracted from the raw successor's instance superscripts.
-    pub instance_shift: usize,
+    pub instance_shifts: Vec<InstanceShift>,
     pub rotations: Vec<BankRotation>,
+    /// Global display-superscript normalization, not a bank update.
+    canonical_shift: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,20 +173,27 @@ fn advance_live(live: &[LiveTransaction]) -> Vec<LiveTransaction> {
 
 fn fork_successor(
     mut live: Vec<LiveTransaction>,
+    mut next_bank_instances: Vec<usize>,
     protocols: &[ProtocolTiming],
     protocol: ProtocolId,
     instance: usize,
     introduce_next_choice: bool,
 ) -> MetaState {
+    let bank_instance = next_bank_instances[protocol];
+    next_bank_instances[protocol] = bank_instance
+        .checked_add(1)
+        .expect("protocol instance number overflow");
     live.push(LiveTransaction {
         protocol,
         instance,
+        bank_instance,
         post_cycle: protocols[protocol].post_cycles - 1,
     });
     live.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
 
     MetaState {
         live,
+        next_bank_instances,
         frontier: introduce_next_choice.then(|| MetaFrontier::Choice {
             instance: instance.checked_add(1).expect("instance number overflow"),
         }),
@@ -200,6 +219,7 @@ fn successors(
                     result.push(Successor {
                         state: fork_successor(
                             advanced.clone(),
+                            state.next_bank_instances.clone(),
                             protocols,
                             protocol,
                             instance,
@@ -213,6 +233,7 @@ fn successors(
                     result.push(Successor {
                         state: MetaState {
                             live: advanced.clone(),
+                            next_bank_instances: state.next_bank_instances.clone(),
                             frontier: Some(MetaFrontier::Pre {
                                 protocol,
                                 instance,
@@ -236,6 +257,7 @@ fn successors(
                 result.push(Successor {
                     state: fork_successor(
                         advanced.clone(),
+                        state.next_bank_instances.clone(),
                         protocols,
                         protocol,
                         instance,
@@ -249,6 +271,7 @@ fn successors(
                 result.push(Successor {
                     state: MetaState {
                         live: advanced,
+                        next_bank_instances: state.next_bank_instances.clone(),
                         frontier: Some(MetaFrontier::Pre {
                             protocol,
                             instance,
@@ -270,7 +293,7 @@ fn successors(
     result
 }
 
-fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
+fn canonicalize(mut state: MetaState) -> (MetaState, usize, Vec<InstanceShift>) {
     let live_min = state
         .live
         .iter()
@@ -302,7 +325,32 @@ fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
             elapsed,
         },
     });
-    (state, shift)
+
+    let mut instance_shifts = Vec::new();
+    for protocol in 0..state.next_bank_instances.len() {
+        let protocol_shift = state
+            .live
+            .iter()
+            .filter(|transaction| transaction.protocol == protocol)
+            .map(|transaction| transaction.bank_instance)
+            .chain(std::iter::once(state.next_bank_instances[protocol]))
+            .min()
+            .unwrap();
+        for transaction in &mut state.live {
+            if transaction.protocol == protocol {
+                transaction.bank_instance -= protocol_shift;
+            }
+        }
+        state.next_bank_instances[protocol] -= protocol_shift;
+        if protocol_shift != 0 {
+            instance_shifts.push(InstanceShift {
+                protocol,
+                amount: protocol_shift,
+            });
+        }
+    }
+
+    (state, shift, instance_shifts)
 }
 
 fn push_bounded_node(
@@ -335,8 +383,9 @@ fn push_bounded_node(
             protocol: successor.protocol,
             outcome: successor.outcome,
             target,
-            instance_shift: 0,
+            instance_shifts: Vec::new(),
             rotations: Vec::new(),
+            canonical_shift: 0,
         });
     }
     id
@@ -365,23 +414,20 @@ fn bank_counts(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
     counts
 }
 
-fn actual_protocols(state: &MetaState, protocol_count: usize) -> Vec<bool> {
-    let mut present = vec![false; protocol_count];
-    for transaction in &state.live {
-        present[transaction.protocol] = true;
-    }
-    if let Some(MetaFrontier::Pre { protocol, .. }) = state.frontier {
-        present[protocol] = true;
-    }
-    present
+fn instance_shift(edge: &MetaEdge, protocol: ProtocolId) -> usize {
+    edge.instance_shifts
+        .iter()
+        .find(|shift| shift.protocol == protocol)
+        .map_or(0, |shift| shift.amount)
 }
 
 fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge) {
     let target = &graph.nodes[edge.target].state;
-    let raw_target_live = |protocol, instance, post_cycle| {
+    let raw_target_live = |protocol, instance, bank_instance, post_cycle| {
         target.live.iter().any(|transaction| {
             transaction.protocol == protocol
-                && transaction.instance + edge.instance_shift == instance
+                && transaction.instance + edge.canonical_shift == instance
+                && transaction.bank_instance + instance_shift(edge, protocol) == bank_instance
                 && transaction.post_cycle == post_cycle
         })
     };
@@ -392,6 +438,7 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
                 raw_target_live(
                     transaction.protocol,
                     transaction.instance,
+                    transaction.bank_instance,
                     transaction.post_cycle - 1
                 ),
                 "canonicalization reordered a live transaction"
@@ -411,11 +458,15 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
                     instance: target_instance,
                     ..
                 }) if target_protocol == protocol
-                    && target_instance + edge.instance_shift == instance
+                    && target_instance + edge.canonical_shift == instance
+                    && target.next_bank_instances[protocol]
+                        + instance_shift(edge, protocol)
+                        == graph.nodes[source].state.next_bank_instances[protocol]
             )),
             MetaOutcome::Fork => assert!(raw_target_live(
                 protocol,
                 instance,
+                graph.nodes[source].state.next_bank_instances[protocol],
                 graph.protocols[protocol].post_cycles - 1
             )),
         }
@@ -424,21 +475,20 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
 
 fn add_rotations(graph: &mut MetaAutomaton) {
     for source in 0..graph.nodes.len() {
-        let source_protocols = actual_protocols(&graph.nodes[source].state, graph.protocols.len());
         let edges = graph.nodes[source].edges.clone();
         for (edge_index, edge) in edges.iter().enumerate() {
             validate_fifo_edge(graph, source, edge);
-            let target_protocols =
-                actual_protocols(&graph.nodes[edge.target].state, graph.protocols.len());
-            let mut rotations = Vec::new();
-            for protocol in 0..graph.protocols.len() {
-                if source_protocols[protocol] || target_protocols[protocol] {
-                    let amount = edge.instance_shift % graph.bank_counts[protocol];
-                    if amount != 0 {
-                        rotations.push(BankRotation { protocol, amount });
-                    }
-                }
-            }
+            let rotations = edge
+                .instance_shifts
+                .iter()
+                .filter_map(|shift| {
+                    let amount = shift.amount % graph.bank_counts[shift.protocol];
+                    (amount != 0).then_some(BankRotation {
+                        protocol: shift.protocol,
+                        amount,
+                    })
+                })
+                .collect();
             graph.nodes[source].edges[edge_index].rotations = rotations;
         }
     }
@@ -453,6 +503,7 @@ pub fn bounded_driver_meta(protocols: Vec<ProtocolTiming>, fork_bound: usize) ->
         &protocols,
         MetaState {
             live: Vec::new(),
+            next_bank_instances: vec![0; protocols.len()],
             frontier: Some(MetaFrontier::Choice { instance: 0 }),
         },
         0,
@@ -471,6 +522,7 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
     let protocols = validate_and_normalize(protocols);
     let entry_state = MetaState {
         live: Vec::new(),
+        next_bank_instances: vec![0; protocols.len()],
         frontier: Some(MetaFrontier::Choice { instance: 0 }),
     };
     let mut nodes = vec![MetaNode {
@@ -484,7 +536,7 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
         let state = nodes[cursor].state.clone();
         let mut edges = Vec::new();
         for successor in successors(&state, &protocols, true) {
-            let (canonical, shift) = canonicalize(successor.state);
+            let (canonical, canonical_shift, instance_shifts) = canonicalize(successor.state);
             let target = if let Some(target) = states.get(&canonical) {
                 *target
             } else {
@@ -500,8 +552,9 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
                 protocol: successor.protocol,
                 outcome: successor.outcome,
                 target,
-                instance_shift: shift,
+                instance_shifts,
                 rotations: Vec::new(),
+                canonical_shift,
             });
         }
         nodes[cursor].edges = edges;
