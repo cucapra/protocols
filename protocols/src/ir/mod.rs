@@ -6,6 +6,7 @@ pub mod graph_interpreter;
 pub mod graphviz;
 pub mod lowering;
 pub mod meta_automaton;
+pub mod meta_graphviz;
 pub mod propagate_assigns;
 pub mod proto_graph;
 pub mod reaching_defs;

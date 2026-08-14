@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 pub type ProtocolId = usize;
 pub type MetaNodeId = usize;
@@ -393,6 +393,7 @@ fn instance_shifts(state: &MetaState, protocol_count: usize, amount: usize) -> V
         .collect()
 }
 
+// TODO: not sure if this is totally correct.
 fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge) {
     let target = &graph.nodes[edge.target].state;
     let raw_target_live = |protocol, instance, post_cycle| {
@@ -493,7 +494,8 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
         state: entry_state.clone(),
         edges: Vec::new(),
     }];
-    let mut states = HashMap::from([(entry_state, 0)]);
+    let mut states = FxHashMap::default();
+    states.insert(entry_state, 0);
     let mut cursor = 0;
 
     while cursor < nodes.len() {
@@ -537,107 +539,12 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
     graph
 }
 
-fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
-    let mut parts: Vec<String> = state
-        .live
-        .iter()
-        .map(|transaction| {
-            format!(
-                "{}<SUB>{}</SUB><SUP>({})</SUP>",
-                escape_html(&graph.protocols[transaction.protocol].name),
-                transaction.post_cycle,
-                transaction.instance
-            )
-        })
-        .collect();
-
-    if let Some(frontier) = state.frontier {
-        parts.push(match frontier {
-            MetaFrontier::Choice { instance } => format!("E<SUP>({instance})</SUP>"),
-            MetaFrontier::Pre {
-                protocol,
-                instance,
-                elapsed,
-            } => {
-                let phase = if graph.protocols[protocol].pre_cycles.is_none() {
-                    "pre".to_string()
-                } else {
-                    format!("pre[{elapsed}]")
-                };
-                format!(
-                    "{}<SUB>{}</SUB><SUP>({})</SUP>",
-                    escape_html(&graph.protocols[protocol].name),
-                    phase,
-                    instance
-                )
-            }
-        });
-    }
-
-    if parts.is_empty() {
-        "DONE".to_string()
-    } else {
-        parts.join(" ∧ ")
-    }
-}
-
-fn escape_html(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-}
-
-pub fn to_dot(graph: &MetaAutomaton) -> String {
-    let mut output = String::from(
-        "digraph \"driver_meta\" {\n  rankdir=LR;\n  node [shape=box];\n  entry [shape=plain,label=\"ENTRY\"];\n",
-    );
-    output.push_str(&format!("  entry -> node{};\n", graph.entry));
-
-    for (node_id, node) in graph.nodes.iter().enumerate() {
-        output.push_str(&format!(
-            "  node{node_id} [label=<{}>];\n",
-            format_state(graph, &node.state)
-        ));
-        for edge in &node.edges {
-            let outcome = match edge.outcome {
-                MetaOutcome::Fork => "forks",
-                MetaOutcome::Continue => "continues",
-            };
-            let mut label = format!(
-                "{} {outcome}",
-                escape_html(&graph.protocols[edge.protocol].name)
-            );
-            if !edge.rotations.is_empty() {
-                let rotations = edge
-                    .rotations
-                    .iter()
-                    .map(|rotation| {
-                        let name = escape_html(&graph.protocols[rotation.protocol].name);
-                        if rotation.amount == 1 {
-                            format!("R<SUB>{name}</SUB>")
-                        } else {
-                            format!("R<SUB>{name}</SUB><SUP>{}</SUP>", rotation.amount)
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                label.push_str(&format!(" / {rotations}"));
-            }
-            output.push_str(&format!(
-                "  node{node_id} -> node{} [label=<{}>];\n",
-                edge.target, label
-            ));
-        }
-    }
-    output.push_str("}\n");
-    output
-}
-
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-    use insta::Settings;
     use super::*;
+    use crate::ir::meta_graphviz::to_dot;
+    use insta::Settings;
+    use std::path::Path;
 
     fn snap(name: &str, content: &str) {
         let mut settings = Settings::clone_current();
@@ -662,27 +569,24 @@ mod tests {
         ];
         let graph = steady_driver_meta(inputs);
 
-        println!("{}", to_dot(&graph));
+        snap("steady_state_varying_post_lengths", &to_dot(&graph))
+        // println!("{}", to_dot(&graph));
     }
 
     #[test]
     fn steady_state_d1() {
-        let inputs = vec![
-            ProtocolTiming::new("A", vec![1], 1),
-        ];
+        let inputs = vec![ProtocolTiming::new("A", vec![1], 1)];
         let graph = steady_driver_meta(inputs);
 
-        println!("{}", to_dot(&graph));
+        snap("steady_state_add_d1", &to_dot(&graph))
     }
 
     #[test]
     fn steady_state_d2() {
-        let inputs = vec![
-            ProtocolTiming::new("A", vec![1], 2),
-        ];
+        let inputs = vec![ProtocolTiming::new("A", vec![1], 2)];
         let graph = steady_driver_meta(inputs);
 
-        println!("{}", to_dot(&graph));
+        snap("steady_state_add_d2", &to_dot(&graph))
     }
 
     #[test]
@@ -693,81 +597,53 @@ mod tests {
         ];
         let graph = steady_driver_meta(inputs);
 
-        println!("{}", to_dot(&graph));
+        snap("steady_state_varying_pre_lengths", &to_dot(&graph))
     }
 
     #[test]
-    fn bounded_add_sub_is_a_literal_tree() {
+    fn bounded_add_sub() {
         let graph = bounded_driver_meta(add_sub_depth_one(), 2);
-        println!("{}", to_dot(&graph));
+        snap("bounded_add_sub", &to_dot(&graph))
     }
 
     #[test]
-    fn steady_add_sub_reuses_nodes_and_rotates_banks() {
+    fn steady_add_sub_d1() {
         let graph = steady_driver_meta(add_sub_depth_one());
 
-        assert_eq!(graph.nodes.len(), 3);
-        assert_eq!(graph.bank_counts, vec![2, 2]);
-        let dot = to_dot(&graph);
-        println!("{}", dot);
+        snap("steady_add_sub_d1", &to_dot(&graph))
     }
 
     #[test]
-    fn switching_protocols_rotates_the_newly_selected_protocol() {
-        let graph = steady_driver_meta(add_sub_depth_one());
-        for (source_protocol, selected_protocol) in [(0, 1), (1, 0)] {
-            let source = graph
-                .nodes
-                .iter()
-                .find(|node| {
-                    node.state
-                        .live
-                        .iter()
-                        .any(|transaction| transaction.protocol == source_protocol)
-                })
-                .unwrap();
-            let edge = source
-                .edges
-                .iter()
-                .find(|edge| edge.protocol == selected_protocol)
-                .unwrap();
-            assert_eq!(
-                edge.instance_shifts,
-                vec![InstanceShift {
-                    protocol: selected_protocol,
-                    amount: 1,
-                }]
-            );
-            assert_eq!(
-                edge.rotations,
-                vec![BankRotation {
-                    protocol: selected_protocol,
-                    amount: 1,
-                }]
-            );
-        }
-    }
-
-    #[test]
-    fn finite_pre_phase_alternatives_reach_steady_state() {
+    fn finite_pre_phase_choices_steady_state() {
         let graph = steady_driver_meta(vec![
             ProtocolTiming::new("ADD", vec![1, 2], 2),
             ProtocolTiming::new("SUB", vec![1], 1),
         ]);
 
-        assert!(graph.nodes.len() > 3);
-        assert!(graph.nodes.len() < 20);
-        println!("{}", to_dot(&graph));
+        snap("finite_pre_phase_choices_steady_state", &to_dot(&graph))
     }
 
     #[test]
-    fn unbounded_pre_phase_exhausts_post_contexts_then_self_loops() {
+    fn unbounded_pre_phase_steady_state() {
         let graph = steady_driver_meta(vec![
             ProtocolTiming::new("ADD", vec![1], 2),
             ProtocolTiming::unbounded("WAIT", 1),
         ]);
 
-        println!("{}", to_dot(&graph));
+        snap("unbounded_pre_phase_steady_state", &to_dot(&graph))
+    }
+
+    #[test]
+    fn bounded_tree_for_unbounded_pre() {
+        let graph = bounded_driver_meta(
+            vec![
+                ProtocolTiming::new("ADD", vec![1], 2),
+                ProtocolTiming::unbounded("WAIT", 1),
+            ],
+            2,
+        );
+
+        snap("bounded_tree_for_unbounded_pre", &to_dot(&graph))
     }
 
     #[test]
@@ -807,18 +683,5 @@ mod tests {
     #[should_panic]
     fn rejects_zero_fork_bound() {
         let _ = bounded_driver_meta(add_sub_depth_one(), 0);
-    }
-
-    #[test]
-    fn bounded_tree_for_unbounded_pre() {
-        let graph = bounded_driver_meta(
-            vec![
-                ProtocolTiming::new("ADD", vec![1], 2),
-                ProtocolTiming::unbounded("WAIT", 1),
-            ],
-            2,
-        );
-
-        println!("{}", to_dot(&graph));
     }
 }

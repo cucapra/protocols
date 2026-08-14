@@ -1,0 +1,23 @@
+---
+source: protocols/src/ir/meta_automaton.rs
+expression: content
+---
+digraph "driver_meta" {
+  rankdir=LR;
+  node [shape=box];
+  entry [shape=plain,label="ENTRY"];
+  entry -> node0;
+  node0 [label=<E<SUP>(0)</SUP>>];
+  node0 -> node1 [label=<A forks>];
+  node0 -> node4 [label=<S forks>];
+  node1 [label=<A<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
+  node1 -> node2 [label=<A forks>];
+  node1 -> node3 [label=<S forks>];
+  node2 [label=<A<SUB>0</SUB><SUP>(1)</SUP>>];
+  node3 [label=<S<SUB>0</SUB><SUP>(1)</SUP>>];
+  node4 [label=<S<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
+  node4 -> node5 [label=<A forks>];
+  node4 -> node6 [label=<S forks>];
+  node5 [label=<A<SUB>0</SUB><SUP>(1)</SUP>>];
+  node6 [label=<S<SUB>0</SUB><SUP>(1)</SUP>>];
+}
