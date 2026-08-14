@@ -5,6 +5,7 @@ pub mod fork_reach;
 pub mod graph_interpreter;
 pub mod graphviz;
 pub mod lowering;
+pub mod meta_automaton;
 pub mod propagate_assigns;
 pub mod proto_graph;
 pub mod reaching_defs;
