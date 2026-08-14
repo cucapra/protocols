@@ -34,10 +34,7 @@ impl ProtocolTiming {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LiveTransaction {
     pub protocol: ProtocolId,
-    /// Global fork number, used in the displayed meta-automaton.
     pub instance: usize,
-    /// Instance number within this protocol's FIFO bank set.
-    pub bank_instance: usize,
     /// Counts down from ProtocolTiming::post_cycles.
     /// The final post-phase cycle is zero.
     pub post_cycle: usize,
@@ -58,8 +55,6 @@ pub enum MetaFrontier {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MetaState {
     pub live: Vec<LiveTransaction>,
-    /// Next FIFO instance number, independently maintained for each protocol.
-    pub next_bank_instances: Vec<usize>,
     /// Bounded trees have no frontier after their final fork.
     pub frontier: Option<MetaFrontier>,
 }
@@ -173,27 +168,20 @@ fn advance_live(live: &[LiveTransaction]) -> Vec<LiveTransaction> {
 
 fn fork_successor(
     mut live: Vec<LiveTransaction>,
-    mut next_bank_instances: Vec<usize>,
     protocols: &[ProtocolTiming],
     protocol: ProtocolId,
     instance: usize,
     introduce_next_choice: bool,
 ) -> MetaState {
-    let bank_instance = next_bank_instances[protocol];
-    next_bank_instances[protocol] = bank_instance
-        .checked_add(1)
-        .expect("protocol instance number overflow");
     live.push(LiveTransaction {
         protocol,
         instance,
-        bank_instance,
         post_cycle: protocols[protocol].post_cycles - 1,
     });
     live.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
 
     MetaState {
         live,
-        next_bank_instances,
         frontier: introduce_next_choice.then(|| MetaFrontier::Choice {
             instance: instance.checked_add(1).expect("instance number overflow"),
         }),
@@ -219,7 +207,6 @@ fn successors(
                     result.push(Successor {
                         state: fork_successor(
                             advanced.clone(),
-                            state.next_bank_instances.clone(),
                             protocols,
                             protocol,
                             instance,
@@ -233,7 +220,6 @@ fn successors(
                     result.push(Successor {
                         state: MetaState {
                             live: advanced.clone(),
-                            next_bank_instances: state.next_bank_instances.clone(),
                             frontier: Some(MetaFrontier::Pre {
                                 protocol,
                                 instance,
@@ -257,7 +243,6 @@ fn successors(
                 result.push(Successor {
                     state: fork_successor(
                         advanced.clone(),
-                        state.next_bank_instances.clone(),
                         protocols,
                         protocol,
                         instance,
@@ -271,7 +256,6 @@ fn successors(
                 result.push(Successor {
                     state: MetaState {
                         live: advanced,
-                        next_bank_instances: state.next_bank_instances.clone(),
                         frontier: Some(MetaFrontier::Pre {
                             protocol,
                             instance,
@@ -293,7 +277,7 @@ fn successors(
     result
 }
 
-fn canonicalize(mut state: MetaState) -> (MetaState, usize, Vec<InstanceShift>) {
+fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
     let live_min = state
         .live
         .iter()
@@ -326,31 +310,7 @@ fn canonicalize(mut state: MetaState) -> (MetaState, usize, Vec<InstanceShift>) 
         },
     });
 
-    let mut instance_shifts = Vec::new();
-    for protocol in 0..state.next_bank_instances.len() {
-        let protocol_shift = state
-            .live
-            .iter()
-            .filter(|transaction| transaction.protocol == protocol)
-            .map(|transaction| transaction.bank_instance)
-            .chain(std::iter::once(state.next_bank_instances[protocol]))
-            .min()
-            .unwrap();
-        for transaction in &mut state.live {
-            if transaction.protocol == protocol {
-                transaction.bank_instance -= protocol_shift;
-            }
-        }
-        state.next_bank_instances[protocol] -= protocol_shift;
-        if protocol_shift != 0 {
-            instance_shifts.push(InstanceShift {
-                protocol,
-                amount: protocol_shift,
-            });
-        }
-    }
-
-    (state, shift, instance_shifts)
+    (state, shift)
 }
 
 fn push_bounded_node(
@@ -414,20 +374,31 @@ fn bank_counts(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
     counts
 }
 
-fn instance_shift(edge: &MetaEdge, protocol: ProtocolId) -> usize {
-    edge.instance_shifts
-        .iter()
-        .find(|shift| shift.protocol == protocol)
-        .map_or(0, |shift| shift.amount)
+fn instance_shifts(state: &MetaState, protocol_count: usize, amount: usize) -> Vec<InstanceShift> {
+    if amount == 0 {
+        return Vec::new();
+    }
+
+    let mut actual = vec![false; protocol_count];
+    for transaction in &state.live {
+        actual[transaction.protocol] = true;
+    }
+    if let Some(MetaFrontier::Pre { protocol, .. }) = state.frontier {
+        actual[protocol] = true;
+    }
+    actual
+        .into_iter()
+        .enumerate()
+        .filter_map(|(protocol, actual)| actual.then_some(InstanceShift { protocol, amount }))
+        .collect()
 }
 
 fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge) {
     let target = &graph.nodes[edge.target].state;
-    let raw_target_live = |protocol, instance, bank_instance, post_cycle| {
+    let raw_target_live = |protocol, instance, post_cycle| {
         target.live.iter().any(|transaction| {
             transaction.protocol == protocol
                 && transaction.instance + edge.canonical_shift == instance
-                && transaction.bank_instance + instance_shift(edge, protocol) == bank_instance
                 && transaction.post_cycle == post_cycle
         })
     };
@@ -438,7 +409,6 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
                 raw_target_live(
                     transaction.protocol,
                     transaction.instance,
-                    transaction.bank_instance,
                     transaction.post_cycle - 1
                 ),
                 "canonicalization reordered a live transaction"
@@ -459,14 +429,10 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
                     ..
                 }) if target_protocol == protocol
                     && target_instance + edge.canonical_shift == instance
-                    && target.next_bank_instances[protocol]
-                        + instance_shift(edge, protocol)
-                        == graph.nodes[source].state.next_bank_instances[protocol]
             )),
             MetaOutcome::Fork => assert!(raw_target_live(
                 protocol,
                 instance,
-                graph.nodes[source].state.next_bank_instances[protocol],
                 graph.protocols[protocol].post_cycles - 1
             )),
         }
@@ -503,7 +469,6 @@ pub fn bounded_driver_meta(protocols: Vec<ProtocolTiming>, fork_bound: usize) ->
         &protocols,
         MetaState {
             live: Vec::new(),
-            next_bank_instances: vec![0; protocols.len()],
             frontier: Some(MetaFrontier::Choice { instance: 0 }),
         },
         0,
@@ -522,7 +487,6 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
     let protocols = validate_and_normalize(protocols);
     let entry_state = MetaState {
         live: Vec::new(),
-        next_bank_instances: vec![0; protocols.len()],
         frontier: Some(MetaFrontier::Choice { instance: 0 }),
     };
     let mut nodes = vec![MetaNode {
@@ -536,7 +500,8 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
         let state = nodes[cursor].state.clone();
         let mut edges = Vec::new();
         for successor in successors(&state, &protocols, true) {
-            let (canonical, canonical_shift, instance_shifts) = canonicalize(successor.state);
+            let (canonical, canonical_shift) = canonicalize(successor.state);
+            let instance_shifts = instance_shifts(&canonical, protocols.len(), canonical_shift);
             let target = if let Some(target) = states.get(&canonical) {
                 *target
             } else {
@@ -670,7 +635,17 @@ pub fn to_dot(graph: &MetaAutomaton) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+    use insta::Settings;
     use super::*;
+
+    fn snap(name: &str, content: &str) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
+    }
 
     fn add_sub_depth_one() -> Vec<ProtocolTiming> {
         vec![
@@ -684,6 +659,26 @@ mod tests {
         let inputs = vec![
             ProtocolTiming::new("A", vec![1], 1),
             ProtocolTiming::new("S", vec![1], 2),
+        ];
+        let graph = steady_driver_meta(inputs);
+
+        println!("{}", to_dot(&graph));
+    }
+
+    #[test]
+    fn steady_state_d1() {
+        let inputs = vec![
+            ProtocolTiming::new("A", vec![1], 1),
+        ];
+        let graph = steady_driver_meta(inputs);
+
+        println!("{}", to_dot(&graph));
+    }
+
+    #[test]
+    fn steady_state_d2() {
+        let inputs = vec![
+            ProtocolTiming::new("A", vec![1], 2),
         ];
         let graph = steady_driver_meta(inputs);
 
@@ -715,6 +710,42 @@ mod tests {
         assert_eq!(graph.bank_counts, vec![2, 2]);
         let dot = to_dot(&graph);
         println!("{}", dot);
+    }
+
+    #[test]
+    fn switching_protocols_rotates_the_newly_selected_protocol() {
+        let graph = steady_driver_meta(add_sub_depth_one());
+        for (source_protocol, selected_protocol) in [(0, 1), (1, 0)] {
+            let source = graph
+                .nodes
+                .iter()
+                .find(|node| {
+                    node.state
+                        .live
+                        .iter()
+                        .any(|transaction| transaction.protocol == source_protocol)
+                })
+                .unwrap();
+            let edge = source
+                .edges
+                .iter()
+                .find(|edge| edge.protocol == selected_protocol)
+                .unwrap();
+            assert_eq!(
+                edge.instance_shifts,
+                vec![InstanceShift {
+                    protocol: selected_protocol,
+                    amount: 1,
+                }]
+            );
+            assert_eq!(
+                edge.rotations,
+                vec![BankRotation {
+                    protocol: selected_protocol,
+                    amount: 1,
+                }]
+            );
+        }
     }
 
     #[test]
