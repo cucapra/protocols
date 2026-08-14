@@ -1,4 +1,4 @@
-use crate::ir::meta_automaton::{MetaAutomaton, MetaFrontier, MetaOutcome, MetaState};
+use crate::ir::meta_automaton::{ForkTiming, MetaAutomaton, MetaFrontier, MetaOutcome, MetaState};
 
 fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
     let mut parts: Vec<String> = state
@@ -17,20 +17,10 @@ fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
     if let Some(frontier) = state.frontier {
         parts.push(match frontier {
             MetaFrontier::Choice { instance } => format!("E<SUP>({instance})</SUP>"),
-            MetaFrontier::Pre {
-                protocol,
-                instance,
-                elapsed,
-            } => {
-                let phase = if graph.protocols[protocol].pre_cycles.is_none() {
-                    "pre".to_string()
-                } else {
-                    format!("pre[{elapsed}]")
-                };
+            MetaFrontier::Pre { protocol, instance } => {
                 format!(
-                    "{}<SUB>{}</SUB><SUP>({})</SUP>",
+                    "{}<SUB>pre</SUB><SUP>({})</SUP>",
                     escape_html(&graph.protocols[protocol].name),
-                    phase,
                     instance
                 )
             }
@@ -62,14 +52,26 @@ pub fn to_dot(graph: &MetaAutomaton) -> String {
             format_state(graph, &node.state)
         ));
         for edge in &node.edges {
-            let outcome = match edge.outcome {
-                MetaOutcome::Fork => "forks",
-                MetaOutcome::Continue => "continues",
+            let name = escape_html(&graph.protocols[edge.protocol].name);
+            let mut label = match edge.outcome {
+                MetaOutcome::Select => format!("select {name}"),
+                MetaOutcome::Fork => match edge.fork_timing.as_ref().unwrap() {
+                    ForkTiming::Exact(lengths) if lengths.len() == 1 => {
+                        format!("{name} forks after {}", lengths[0])
+                    }
+                    ForkTiming::Exact(lengths) => format!(
+                        "{name} forks after {{{}}}",
+                        lengths
+                            .iter()
+                            .map(usize::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    ForkTiming::AtLeast(length) => {
+                        format!("{name} forks after ≥{length}")
+                    }
+                },
             };
-            let mut label = format!(
-                "{} {outcome}",
-                escape_html(&graph.protocols[edge.protocol].name)
-            );
             if !edge.rotations.is_empty() {
                 let rotations = edge
                     .rotations
