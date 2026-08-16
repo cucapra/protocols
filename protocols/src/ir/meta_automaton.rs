@@ -44,11 +44,10 @@ pub struct LiveTransaction {
 pub enum MetaFrontier {
     /// The driver has not yet selected the next protocol.
     Choice { instance: usize },
-    /// A selected protocol has consumed `elapsed` pre-phase cycles without forking.
+    /// A selected protocol is somewhere in its pre-phase.
     Pre {
         protocol: ProtocolId,
         instance: usize,
-        elapsed: usize,
     },
 }
 
@@ -61,8 +60,16 @@ pub struct MetaState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetaOutcome {
+    Select,
     Fork,
-    Continue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForkTiming {
+    /// These exact pre-phase lengths all produce the same meta successor.
+    Exact(Vec<usize>),
+    /// Every length at least this value has the same drained context.
+    AtLeast(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +91,9 @@ pub struct MetaEdge {
     pub target: MetaNodeId,
     pub instance_shifts: Vec<InstanceShift>,
     pub rotations: Vec<BankRotation>,
+    pub fork_timing: Option<ForkTiming>,
+    /// Number of cycles by which the meta-level post transactions advance.
+    pub advance_cycles: usize,
     /// Global display-superscript normalization, not a bank update.
     canonical_shift: usize,
 }
@@ -107,6 +117,8 @@ struct Successor {
     state: MetaState,
     protocol: ProtocolId,
     outcome: MetaOutcome,
+    fork_timing: Option<ForkTiming>,
+    advance_cycles: usize,
 }
 
 fn validate_and_normalize(mut protocols: Vec<ProtocolTiming>) -> Vec<ProtocolTiming> {
@@ -151,19 +163,58 @@ fn validate_and_normalize(mut protocols: Vec<ProtocolTiming>) -> Vec<ProtocolTim
     protocols
 }
 
-fn advance_live(live: &[LiveTransaction]) -> Vec<LiveTransaction> {
+fn advance_live(live: &[LiveTransaction], cycles: usize) -> Vec<LiveTransaction> {
     live.iter()
         .filter_map(|transaction| {
-            if transaction.post_cycle == 0 {
+            if transaction.post_cycle < cycles {
                 None
             } else {
                 Some(LiveTransaction {
-                    post_cycle: transaction.post_cycle - 1,
+                    post_cycle: transaction.post_cycle - cycles,
                     ..*transaction
                 })
             }
         })
         .collect()
+}
+
+fn drain_cycles(live: &[LiveTransaction]) -> usize {
+    live.iter()
+        .map(|transaction| transaction.post_cycle + 1)
+        .max()
+        .unwrap_or(0)
+}
+
+fn relevant_fork_timings(pre_cycles: Option<&[usize]>, drain: usize) -> Vec<(usize, ForkTiming)> {
+    match pre_cycles {
+        Some(lengths) => {
+            let mut groups: Vec<(usize, Vec<usize>)> = Vec::new();
+            for &length in lengths {
+                let effective = length.min(drain);
+                if let Some((_, grouped)) = groups.iter_mut().find(|(prior, _)| *prior == effective)
+                {
+                    grouped.push(length);
+                } else {
+                    groups.push((effective, vec![length]));
+                }
+            }
+            groups
+                .into_iter()
+                .map(|(effective, lengths)| (effective, ForkTiming::Exact(lengths)))
+                .collect()
+        }
+        None if drain == 0 => vec![(0, ForkTiming::AtLeast(1))],
+        None => (1..=drain)
+            .map(|cycles| {
+                let timing = if cycles == drain {
+                    ForkTiming::AtLeast(cycles)
+                } else {
+                    ForkTiming::Exact(vec![cycles])
+                };
+                (cycles, timing)
+            })
+            .collect(),
+    }
 }
 
 fn fork_successor(
@@ -196,53 +247,31 @@ fn successors(
     let Some(frontier) = state.frontier else {
         return Vec::new();
     };
-    let advanced = advance_live(&state.live);
     let mut result = Vec::new();
 
     match frontier {
         MetaFrontier::Choice { instance } => {
             for protocol in 0..protocols.len() {
-                let timings = protocols[protocol].pre_cycles.as_deref();
-                if timings.is_none_or(|timings| timings.binary_search(&1).is_ok()) {
-                    result.push(Successor {
-                        state: fork_successor(
-                            advanced.clone(),
-                            protocols,
-                            protocol,
-                            instance,
-                            introduce_next_choice,
-                        ),
-                        protocol,
-                        outcome: MetaOutcome::Fork,
-                    });
-                }
-                if timings.is_none_or(|timings| timings.last().copied().unwrap() > 1) {
-                    result.push(Successor {
-                        state: MetaState {
-                            live: advanced.clone(),
-                            frontier: Some(MetaFrontier::Pre {
-                                protocol,
-                                instance,
-                                elapsed: 1,
-                            }),
-                        },
-                        protocol,
-                        outcome: MetaOutcome::Continue,
-                    });
-                }
+                result.push(Successor {
+                    state: MetaState {
+                        live: state.live.clone(),
+                        frontier: Some(MetaFrontier::Pre { protocol, instance }),
+                    },
+                    protocol,
+                    outcome: MetaOutcome::Select,
+                    fork_timing: None,
+                    advance_cycles: 0,
+                });
             }
         }
-        MetaFrontier::Pre {
-            protocol,
-            instance,
-            elapsed,
-        } => {
-            let next = elapsed.checked_add(1).expect("pre-phase length overflow");
-            let timings = protocols[protocol].pre_cycles.as_deref();
-            if timings.is_none_or(|timings| timings.binary_search(&next).is_ok()) {
+        MetaFrontier::Pre { protocol, instance } => {
+            let drain = drain_cycles(&state.live);
+            for (advance_cycles, fork_timing) in
+                relevant_fork_timings(protocols[protocol].pre_cycles.as_deref(), drain)
+            {
                 result.push(Successor {
                     state: fork_successor(
-                        advanced.clone(),
+                        advance_live(&state.live, advance_cycles),
                         protocols,
                         protocol,
                         instance,
@@ -250,21 +279,8 @@ fn successors(
                     ),
                     protocol,
                     outcome: MetaOutcome::Fork,
-                });
-            }
-            if timings.is_none_or(|timings| timings.last().copied().unwrap() > next) {
-                result.push(Successor {
-                    state: MetaState {
-                        live: advanced,
-                        frontier: Some(MetaFrontier::Pre {
-                            protocol,
-                            instance,
-                            // All unbounded wait cycles have the same control shape.
-                            elapsed: if timings.is_none() { elapsed } else { next },
-                        }),
-                    },
-                    protocol,
-                    outcome: MetaOutcome::Continue,
+                    fork_timing: Some(fork_timing),
+                    advance_cycles,
                 });
             }
         }
@@ -299,14 +315,9 @@ fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
         MetaFrontier::Choice { instance } => MetaFrontier::Choice {
             instance: instance - shift,
         },
-        MetaFrontier::Pre {
-            protocol,
-            instance,
-            elapsed,
-        } => MetaFrontier::Pre {
+        MetaFrontier::Pre { protocol, instance } => MetaFrontier::Pre {
             protocol,
             instance: instance - shift,
-            elapsed,
         },
     });
 
@@ -332,19 +343,15 @@ fn push_bounded_node(
 
     for successor in successors(&state, protocols, forks + 1 < fork_bound) {
         let next_forks = forks + usize::from(successor.outcome == MetaOutcome::Fork);
-        // An unbounded pre-phase eventually drains all surrounding post-phase
-        // transactions. Continuing after that produces this exact state again.
-        let target = if successor.outcome == MetaOutcome::Continue && successor.state == state {
-            id
-        } else {
-            push_bounded_node(nodes, protocols, successor.state, next_forks, fork_bound)
-        };
+        let target = push_bounded_node(nodes, protocols, successor.state, next_forks, fork_bound);
         nodes[id].edges.push(MetaEdge {
             protocol: successor.protocol,
             outcome: successor.outcome,
             target,
             instance_shifts: Vec::new(),
             rotations: Vec::new(),
+            fork_timing: successor.fork_timing,
+            advance_cycles: successor.advance_cycles,
             canonical_shift: 0,
         });
     }
@@ -395,6 +402,7 @@ fn instance_shifts(state: &MetaState, protocol_count: usize, amount: usize) -> V
 
 // TODO: not sure if this is totally correct.
 fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge) {
+    let source = &graph.nodes[source].state;
     let target = &graph.nodes[edge.target].state;
     let raw_target_live = |protocol, instance, post_cycle| {
         target.live.iter().any(|transaction| {
@@ -404,38 +412,48 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
         })
     };
 
-    for transaction in &graph.nodes[source].state.live {
-        if transaction.post_cycle > 0 {
-            assert!(
-                raw_target_live(
+    match edge.outcome {
+        MetaOutcome::Select => {
+            assert_eq!(edge.advance_cycles, 0);
+            assert!(edge.fork_timing.is_none());
+            for transaction in &source.live {
+                assert!(raw_target_live(
                     transaction.protocol,
                     transaction.instance,
-                    transaction.post_cycle - 1
-                ),
-                "canonicalization reordered a live transaction"
-            );
-        }
-    }
-
-    if let Some(MetaFrontier::Pre {
-        protocol, instance, ..
-    }) = graph.nodes[source].state.frontier
-    {
-        match edge.outcome {
-            MetaOutcome::Continue => assert!(matches!(
+                    transaction.post_cycle
+                ));
+            }
+            assert!(matches!(
                 target.frontier,
-                Some(MetaFrontier::Pre {
-                    protocol: target_protocol,
-                    instance: target_instance,
-                    ..
-                }) if target_protocol == protocol
-                    && target_instance + edge.canonical_shift == instance
-            )),
-            MetaOutcome::Fork => assert!(raw_target_live(
+                Some(MetaFrontier::Pre { protocol, instance })
+                    if protocol == edge.protocol
+                        && Some(instance + edge.canonical_shift)
+                            == source.frontier.map(|frontier| match frontier {
+                                MetaFrontier::Choice { instance } => instance,
+                                MetaFrontier::Pre { .. } => unreachable!(),
+                            })
+            ));
+        }
+        MetaOutcome::Fork => {
+            assert!(edge.fork_timing.is_some());
+            for transaction in &source.live {
+                if transaction.post_cycle >= edge.advance_cycles {
+                    assert!(raw_target_live(
+                        transaction.protocol,
+                        transaction.instance,
+                        transaction.post_cycle - edge.advance_cycles
+                    ));
+                }
+            }
+            let MetaFrontier::Pre { protocol, instance } = source.frontier.unwrap() else {
+                panic!("fork edge must leave a pre node")
+            };
+            assert_eq!(protocol, edge.protocol);
+            assert!(raw_target_live(
                 protocol,
                 instance,
                 graph.protocols[protocol].post_cycles - 1
-            )),
+            ));
         }
     }
 }
@@ -521,6 +539,8 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
                 target,
                 instance_shifts,
                 rotations: Vec::new(),
+                fork_timing: successor.fork_timing,
+                advance_cycles: successor.advance_cycles,
                 canonical_shift,
             });
         }
@@ -562,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn steady_state_varying_lengths() {
+    fn steady_state_varying_post_lengths() {
         let inputs = vec![
             ProtocolTiming::new("A", vec![1], 1),
             ProtocolTiming::new("S", vec![1], 2),
@@ -598,6 +618,17 @@ mod tests {
         let graph = steady_driver_meta(inputs);
 
         snap("steady_state_varying_pre_lengths", &to_dot(&graph))
+    }
+
+    #[test]
+    fn steady_state_varying_pre_and_post_lengths() {
+        let inputs = vec![
+            ProtocolTiming::new("A", vec![1, 2], 1),
+            ProtocolTiming::new("S", vec![1], 2),
+        ];
+        let graph = steady_driver_meta(inputs);
+
+        snap("steady_state_varying_pre_and_post_lengths", &to_dot(&graph))
     }
 
     #[test]
