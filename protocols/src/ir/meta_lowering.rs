@@ -11,7 +11,9 @@ use crate::ir::meta_automaton::{
     ForkTiming, MetaAutomaton, MetaFrontier, MetaOutcome, ProtocolTiming, steady_driver_meta,
 };
 use crate::ir::meta_timing::analyze_protocol_timing;
-use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{
+    Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Cursor {
@@ -308,8 +310,8 @@ pub fn lower_steady_driver_nfa(
         for edge in &node.edges {
             assert_eq!(edge.outcome, MetaOutcome::Select);
             let value = lowerer.ir.expr_ctx.bit_vec_val(edge.protocol, width);
-            let guard = if edge.protocol + 1 == protocols.len() {
-                lowerer.ir.expr_ctx.greater_or_equal(node_choice, value)
+            let guard = if protocols.len() == 1 {
+                lowerer.ir.true_id()
             } else {
                 lowerer.ir.expr_ctx.equal(node_choice, value)
             };
@@ -334,7 +336,21 @@ pub fn lower_steady_driver_nfa(
                 })
                 .expect("boundary timing must have a meta successor");
             let target = controls[edge.target].expect("steady-state boundary must reach a choice");
+            let first_new_transition = lowerer.ir[boundary].transitions.len();
             lowerer.graft_contracted_entry(boundary, target, lowerer.ir.true_id());
+            let rotations: Vec<_> = edge
+                .rotations
+                .iter()
+                .map(|rotation| TransitionRotation {
+                    protocol: meta.protocols[rotation.protocol].name.clone(),
+                    amount: rotation.amount,
+                })
+                .collect();
+            for transition in
+                &mut lowerer.ir.node_mut(boundary).transitions[first_new_transition..]
+            {
+                transition.rotations.extend(rotations.clone());
+            }
         }
     }
 
@@ -358,17 +374,26 @@ mod tests {
     use crate::ir::graphviz::to_dot_string;
     use insta::Settings;
 
-    fn snap(name: &str, filename: &str) {
+    fn snap_selected(name: &str, filename: &str, selected: &[&str]) {
         let mut handler = DiagnosticHandler::default();
         let (symbols, modules) = frontend(&[filename], &mut handler, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
+        let protocols = module
+            .protos
+            .into_iter()
+            .filter(|protocol| selected.is_empty() || selected.contains(&protocol.name.as_str()))
+            .collect();
         let (graph, _, _) =
-            lower_steady_driver_nfa(module.protos, &symbols, ExprContext::default());
+            lower_steady_driver_nfa(protocols, &symbols, ExprContext::default());
         let dot = to_dot_string(&graph, &symbols);
 
         let mut settings = Settings::clone_current();
         settings.set_snapshot_path(Path::new("../tests/snapshots"));
         settings.bind(|| insta::assert_snapshot!(name, dot));
+    }
+
+    fn snap(name: &str, filename: &str) {
+        snap_selected(name, filename, &[]);
     }
 
     #[test]
@@ -381,6 +406,24 @@ mod tests {
         snap(
             "meta_driver_add_d0",
             "../tests/adders/adder_d0/add_d0.prot",
+        );
+    }
+
+    #[test]
+    fn add_sub_d1_driver_graphviz() {
+        snap_selected(
+            "meta_driver_add_sub_d1",
+            "../tests/alus/alu_d1.prot",
+            &["add", "sub"],
+        );
+    }
+
+    #[test]
+    fn add_sub_d2_driver_graphviz() {
+        snap_selected(
+            "meta_driver_add_sub_d2",
+            "../tests/alus/alu_d2.prot",
+            &["add", "sub"],
         );
     }
 }
