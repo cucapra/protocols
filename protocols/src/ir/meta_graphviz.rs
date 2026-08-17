@@ -17,10 +17,15 @@ fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
     if let Some(frontier) = state.frontier {
         parts.push(match frontier {
             MetaFrontier::Choice { instance } => format!("E<SUP>({instance})</SUP>"),
-            MetaFrontier::Pre { protocol, instance } => {
+            MetaFrontier::Pre {
+                protocol,
+                instance,
+                elapsed,
+            } => {
                 format!(
-                    "{}<SUB>pre</SUB><SUP>({})</SUP>",
+                    "{}<SUB>pre[{}]</SUB><SUP>({})</SUP>",
                     escape_html(&graph.protocols[protocol].name),
+                    elapsed,
                     instance
                 )
             }
@@ -54,7 +59,7 @@ pub fn to_dot(graph: &MetaAutomaton) -> String {
         for edge in &node.edges {
             let name = escape_html(&graph.protocols[edge.protocol].name);
             let mut label = match edge.outcome {
-                MetaOutcome::Select => format!("select {name}"),
+                MetaOutcome::Continue => format!("{name} continues"),
                 MetaOutcome::Fork => match edge.fork_timing.as_ref().unwrap() {
                     ForkTiming::Exact(lengths) if lengths.len() == 1 => {
                         let verb = if graph.protocols[edge.protocol].post_cycles == 0 {

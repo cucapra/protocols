@@ -10,5 +10,6 @@ digraph "driver_meta" {
   node0 [label=<E<SUP>(0)</SUP>>];
   node0 -> node1 [label=<A forks after 1>];
   node1 [label=<A<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
-  node1 -> node1 [label=<A forks after 1 / R<SUB>A</SUB>>];
+  node1 -> node2 [label=<A forks after 1>];
+  node2 [label=<A<SUB>0</SUB><SUP>(1)</SUP>>];
 }

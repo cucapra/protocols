@@ -8,15 +8,9 @@ digraph "driver_meta" {
   entry [shape=plain,label="ENTRY"];
   entry -> node0;
   node0 [label=<E<SUP>(0)</SUP>>];
-  node0 -> node1 [label=<select A>];
-  node1 [label=<A<SUB>pre</SUB><SUP>(0)</SUP>>];
+  node0 -> node1 [label=<A forks after 1>];
+  node1 [label=<A<SUB>1</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
   node1 -> node2 [label=<A forks after 1>];
-  node2 [label=<A<SUB>1</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
-  node2 -> node3 [label=<select A>];
-  node3 [label=<A<SUB>1</SUB><SUP>(0)</SUP> ∧ A<SUB>pre</SUB><SUP>(1)</SUP>>];
-  node3 -> node4 [label=<A forks after 1>];
-  node4 [label=<A<SUB>0</SUB><SUP>(0)</SUP> ∧ A<SUB>1</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
-  node4 -> node5 [label=<select A>];
-  node5 [label=<A<SUB>0</SUB><SUP>(0)</SUP> ∧ A<SUB>1</SUB><SUP>(1)</SUP> ∧ A<SUB>pre</SUB><SUP>(2)</SUP>>];
-  node5 -> node4 [label=<A forks after 1 / R<SUB>A</SUB>>];
+  node2 [label=<A<SUB>0</SUB><SUP>(0)</SUP> ∧ A<SUB>1</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
+  node2 -> node2 [label=<A forks after 1 / R<SUB>A</SUB>>];
 }
