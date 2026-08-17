@@ -57,18 +57,35 @@ pub fn to_dot(graph: &MetaAutomaton) -> String {
                 MetaOutcome::Select => format!("select {name}"),
                 MetaOutcome::Fork => match edge.fork_timing.as_ref().unwrap() {
                     ForkTiming::Exact(lengths) if lengths.len() == 1 => {
-                        format!("{name} forks after {}", lengths[0])
+                        let verb = if graph.protocols[edge.protocol].post_cycles == 0 {
+                            "finishes"
+                        } else {
+                            "forks"
+                        };
+                        format!("{name} {verb} after {}", lengths[0])
                     }
-                    ForkTiming::Exact(lengths) => format!(
-                        "{name} forks after {{{}}}",
-                        lengths
-                            .iter()
-                            .map(usize::to_string)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
+                    ForkTiming::Exact(lengths) => {
+                        let verb = if graph.protocols[edge.protocol].post_cycles == 0 {
+                            "finishes"
+                        } else {
+                            "forks"
+                        };
+                        format!(
+                            "{name} {verb} after {{{}}}",
+                            lengths
+                                .iter()
+                                .map(usize::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    }
                     ForkTiming::AtLeast(length) => {
-                        format!("{name} forks after ≥{length}")
+                        let verb = if graph.protocols[edge.protocol].post_cycles == 0 {
+                            "finishes"
+                        } else {
+                            "forks"
+                        };
+                        format!("{name} {verb} after ≥{length}")
                     }
                 },
             };

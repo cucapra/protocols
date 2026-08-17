@@ -6,10 +6,12 @@ pub type MetaNodeId = usize;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolTiming {
     pub name: String,
-    /// Every cycle at which this protocol may fork, counted from its selection.
-    /// `None` means that it may fork in any cycle and may continue forever.
+    /// Every cycle at which this protocol may reach its phase boundary, counted
+    /// from its selection. The boundary is done when `post_cycles` is zero.
+    /// `None` means that it may reach the boundary in any cycle or continue forever.
     pub pre_cycles: Option<Vec<usize>>,
-    /// Fixed post-phase lifetime, including the fork cycle.
+    /// Fixed post-phase lifetime, including the fork cycle. Zero means that the
+    /// protocol has no fork and therefore no post-phase.
     pub post_cycles: usize,
 }
 
@@ -61,6 +63,7 @@ pub struct MetaState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetaOutcome {
     Select,
+    /// Reaches fork, or done for a protocol with no post-phase.
     Fork,
 }
 
@@ -129,11 +132,6 @@ fn validate_and_normalize(mut protocols: Vec<ProtocolTiming>) -> Vec<ProtocolTim
 
     for protocol in &mut protocols {
         assert!(!protocol.name.is_empty(), "protocol names cannot be empty");
-        assert!(
-            protocol.post_cycles > 0,
-            "{} must have a nonzero post-phase bound",
-            protocol.name
-        );
         if let Some(pre_cycles) = &mut protocol.pre_cycles {
             assert!(
                 !pre_cycles.is_empty(),
@@ -224,11 +222,13 @@ fn fork_successor(
     instance: usize,
     introduce_next_choice: bool,
 ) -> MetaState {
-    live.push(LiveTransaction {
-        protocol,
-        instance,
-        post_cycle: protocols[protocol].post_cycles - 1,
-    });
+    if protocols[protocol].post_cycles > 0 {
+        live.push(LiveTransaction {
+            protocol,
+            instance,
+            post_cycle: protocols[protocol].post_cycles - 1,
+        });
+    }
     live.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
 
     MetaState {
@@ -449,11 +449,13 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
                 panic!("fork edge must leave a pre node")
             };
             assert_eq!(protocol, edge.protocol);
-            assert!(raw_target_live(
-                protocol,
-                instance,
-                graph.protocols[protocol].post_cycles - 1
-            ));
+            if graph.protocols[protocol].post_cycles > 0 {
+                assert!(raw_target_live(
+                    protocol,
+                    instance,
+                    graph.protocols[protocol].post_cycles - 1
+                ));
+            }
         }
     }
 }
@@ -684,9 +686,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn rejects_zero_post_bound() {
-        let _ = steady_driver_meta(vec![ProtocolTiming::new("ADD", vec![1], 0)]);
+    fn accepts_protocol_without_post_phase() {
+        let graph = steady_driver_meta(vec![ProtocolTiming::new("ADD", vec![1], 0)]);
+        assert!(graph.nodes.iter().all(|node| node.state.live.is_empty()));
     }
 
     #[test]
