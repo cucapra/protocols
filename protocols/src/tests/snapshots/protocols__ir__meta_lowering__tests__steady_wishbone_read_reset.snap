@@ -1,0 +1,21 @@
+---
+source: protocols/src/ir/meta_lowering.rs
+expression: dot
+---
+digraph "reset" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[node_choice] assert_eq(mask#0_read, 15)\n[and(node_choice, self.ACK)] assert_eq(self.DAT_I, data#0_read)\n[1] self.RST := 1 if not(node_choice); 0 if node_choice\n[1] self.ADR := X if not(node_choice); addr#0_read if node_choice\n[1] self.CYC := X if not(node_choice); 1 if node_choice\n[1] self.DAT_O := X if 1\n[1] self.SEL := X if not(node_choice); mask#0_read if node_choice\n[1] self.STB := X if not(node_choice); 1 if node_choice\n[1] self.WE := X if not(node_choice); 0 if node_choice\n[1] self.BTE := X if 1\n[1] self.CTI := X if not(node_choice); 0 if node_choice"];
+  node0 -> node1 [label="not(node_choice) / step"];
+  node0 -> node0 [label="and(node_choice, self.ACK) / step"];
+  node0 -> node2 [label="and(node_choice, not(self.ACK)) / step"];
+  node1 [label="[1] fork\n[1] self.CYC := 0 if 1; 1 if node_choice\n[1] self.STB := 0 if 1; 1 if node_choice\n[node_choice] assert_eq(mask#1_read, 15)\n[and(node_choice, self.ACK)] assert_eq(self.DAT_I, data#1_read)\n[1] self.RST := 1 if not(node_choice); 0 if node_choice\n[1] self.ADR := X if not(node_choice); addr#1_read if node_choice\n[1] self.DAT_O := X if 1\n[1] self.SEL := X if not(node_choice); mask#1_read if node_choice\n[1] self.WE := X if not(node_choice); 0 if node_choice\n[1] self.BTE := X if 1\n[1] self.CTI := X if not(node_choice); 0 if node_choice\n[node_choice] internal_assert_false"];
+  node1 -> node1 [label="not(node_choice) / step / R_reset"];
+  node1 -> node0 [label="and(node_choice, self.ACK) / step"];
+  node1 -> node2 [label="and(node_choice, not(self.ACK)) / step"];
+  node2 [label="[self.ACK] assert_eq(self.DAT_I, data#0_read)"];
+  node2 -> node0 [label="self.ACK / step"];
+  node2 -> node2 [label="not(self.ACK) / step"];
+}

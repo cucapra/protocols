@@ -411,9 +411,7 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
     let (protocol, instance) = match source.frontier.unwrap() {
         MetaFrontier::Choice { instance } => (edge.protocol, instance),
         MetaFrontier::Pre {
-            protocol,
-            instance,
-            ..
+            protocol, instance, ..
         } => {
             assert_eq!(protocol, edge.protocol);
             (protocol, instance)
@@ -660,6 +658,34 @@ mod tests {
         ]);
 
         snap("unbounded_pre_phase_steady_state", &to_dot(&graph))
+    }
+
+    #[test]
+    fn unbounded_pre_phase_steady_state_simple() {
+        // struct device {
+        //     in a
+        //     in b
+        //     out ready
+        //     out aout
+        //     out bout
+        // }
+        // prot a(a) {
+        //   DUT.a := a;
+        //   step(); DUT.a := X; fork();
+        //   step(); assert_eq(DUT.aout, a); step();
+        // }
+
+        // prot b(b) {
+        //   while !DUT.ready() { step(); }
+        //   step(); DUT.b := b;
+        //   step(); assert_eq(DUT.s, b); step();
+        // }
+        let graph = steady_driver_meta(vec![
+            ProtocolTiming::new("id", vec![1], 2),
+            ProtocolTiming::unbounded("w", 0),
+        ]);
+
+        snap("unbounded_pre_phase_steady_state_simple", &to_dot(&graph))
     }
 
     #[test]

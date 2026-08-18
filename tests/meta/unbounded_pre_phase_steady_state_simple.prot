@@ -1,0 +1,28 @@
+struct Device {
+    in a: u8,
+    in b: u8,
+    out ready: u1,
+    out aout: u8,
+    out bout: u8,
+}
+
+prot id<DUT: Device>(a: u8) {
+    DUT.a := a;
+    step();
+    DUT.a := X;
+    fork();
+    step();
+    assert_eq(DUT.aout, a);
+    step();
+}
+
+prot w<DUT: Device>(b: u8) {
+    while !(DUT.ready == 1'b1) {
+        step();
+    }
+    step();
+    DUT.b := b;
+    step();
+    assert_eq(DUT.bout, b);
+    step();
+}
