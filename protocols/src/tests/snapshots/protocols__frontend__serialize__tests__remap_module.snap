@@ -10,6 +10,7 @@ struct Wishbone {
   out DAT_I: u32,
   in DAT_O: u32,
   out ERR: u1,
+  out RTY: u1,
   in SEL: u4,
   in STB: u1,
   in WE: u1,

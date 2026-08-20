@@ -86,10 +86,18 @@ struct Cli {
     display_hex: bool,
 }
 
-fn get_clock(modules: &[Module], cli_sample_posedge: Option<String>) -> Option<String> {
-    let mut clocks: Vec<String> = modules
+fn get_clock(
+    modules: &[Module],
+    instances: &[Instance],
+    cli_sample_posedge: Option<String>,
+) -> Option<String> {
+    let mut used_modules: Vec<_> = instances.iter().map(|i| i.module_id).collect();
+    used_modules.sort();
+    used_modules.dedup();
+
+    let mut clocks: Vec<String> = used_modules
         .iter()
-        .flat_map(|m| match &m.clock {
+        .flat_map(|&m_id| match &modules[m_id].clock {
             Clock::None => None,
             Clock::Posedge(name) => Some(name.to_string()),
         })
@@ -129,7 +137,6 @@ fn main() {
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
     let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
-    let posedge_clock = get_clock(&modules, cli.sample_posedge);
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -143,6 +150,8 @@ fn main() {
         .iter()
         .map(|arg| parse_instance(&modules, arg))
         .collect();
+
+    let posedge_clock = get_clock(&modules, &instances, cli.sample_posedge);
 
     let bi_protos: Vec<Vec<_>> = instances
         .iter()

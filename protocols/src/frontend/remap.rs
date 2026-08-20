@@ -7,6 +7,7 @@ use crate::frontend::ast::{
     find_symbols,
 };
 use crate::frontend::symbol::{Arg, Field, StructId, SymbolId, SymbolKind, SymbolTable, Type};
+use baa::BitVecValue;
 use rustc_hash::FxHashMap;
 
 /// Represents a DUT and associated protocols.
@@ -122,22 +123,47 @@ fn implement_remap(
         })
         .collect();
 
+    let pin_to_const: FxHashMap<_, _> = remap
+        .consts
+        .iter()
+        .map(|cc| {
+            let name = st[cc.pin].full_name(st);
+            (name, cc.value.clone())
+        })
+        .collect();
+
     for impl_struct_id in &remap.implements {
         let orig_mod = &originals[st[impl_struct_id].name()];
         for (proto, pin_syms) in orig_mod.protos.iter().zip(orig_mod.proto_pin_map.iter()) {
             // create mappings lookup
-            let lookup: FxHashMap<SymbolId, _> = orig_mod
+            let rename_lookup: FxHashMap<SymbolId, _> = orig_mod
                 .pins
                 .iter()
                 .zip(pin_syms.iter())
-                .map(|(field, sym)| {
+                .flat_map(|(field, sym)| {
                     let name = format!("{}.{}", orig_mod.name, field.name());
-                    let mapping = pin_to_remap[&name];
-                    (*sym, mapping)
+                    pin_to_remap.get(&name).map(|&mapping| (*sym, mapping))
                 })
                 .collect();
 
-            let remapped_proto = remap_proto(st, proto, remap_struct_id, &lookup, &remap.ctx);
+            let const_lookup: FxHashMap<SymbolId, _> = orig_mod
+                .pins
+                .iter()
+                .zip(pin_syms.iter())
+                .flat_map(|(field, sym)| {
+                    let name = format!("{}.{}", orig_mod.name, field.name());
+                    pin_to_const.get(&name).map(|value| (*sym, value.clone()))
+                })
+                .collect();
+
+            let remapped_proto = remap_proto(
+                st,
+                proto,
+                remap_struct_id,
+                &rename_lookup,
+                &const_lookup,
+                &remap.ctx,
+            );
             proto_pin_map.push(find_pin_mapping(st, &remap_pins, &remapped_proto));
             protos.push(remapped_proto);
         }
@@ -155,7 +181,8 @@ fn implement_remap(
 struct Remapper<'a> {
     st: &'a mut SymbolTable,
     orig: &'a Protocol,
-    lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>,
+    rename_lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>,
+    const_lookup: &'a FxHashMap<SymbolId, BitVecValue>,
     map_name_to_dut: FxHashMap<String, SymbolId>,
     remap_ctx: &'a ProtocolContext,
     out: Protocol,
@@ -165,17 +192,27 @@ fn remap_proto(
     st: &mut SymbolTable,
     orig: &Protocol,
     remap_struct_id: StructId,
-    lookup: &FxHashMap<SymbolId, (&Mapping, SymbolId)>,
+    rename_lookup: &FxHashMap<SymbolId, (&Mapping, SymbolId)>,
+    const_lookup: &FxHashMap<SymbolId, BitVecValue>,
     remap_ctx: &ProtocolContext,
 ) -> Protocol {
-    Remapper::new(st, orig, lookup, remap_struct_id, remap_ctx).run()
+    Remapper::new(
+        st,
+        orig,
+        rename_lookup,
+        const_lookup,
+        remap_struct_id,
+        remap_ctx,
+    )
+    .run()
 }
 
 impl<'a> Remapper<'a> {
     fn new(
         st: &'a mut SymbolTable,
         orig: &'a Protocol,
-        lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>,
+        rename_lookup: &'a FxHashMap<SymbolId, (&'a Mapping, SymbolId)>,
+        const_lookup: &'a FxHashMap<SymbolId, BitVecValue>,
         remap_struct_id: StructId,
         remap_ctx: &'a ProtocolContext,
     ) -> Self {
@@ -223,7 +260,8 @@ impl<'a> Remapper<'a> {
             st,
             orig,
             out,
-            lookup,
+            rename_lookup,
+            const_lookup,
             map_name_to_dut,
             remap_ctx,
         }
@@ -246,17 +284,20 @@ impl Remapper<'_> {
             }
             Stmt::Assign(lhs, rhs) if rhs == self.orig.expr_dont_care() => {
                 let rhs = self.out.dont_care_id();
-                if let Some((m, _)) = self.lookup.get(&lhs) {
+                if let Some((m, _)) = self.rename_lookup.get(&lhs) {
                     let new_lhs = self.map_name_to_dut[&m.name];
                     // note: for DontCare assignments, we drop the condition
                     self.out.s(Stmt::Assign(new_lhs, rhs))
+                } else if self.const_lookup.contains_key(&lhs) {
+                    // remove assignment
+                    self.out.s(Stmt::Block(vec![]))
                 } else {
                     self.out.s(Stmt::Assign(lhs, rhs))
                 }
             }
             Stmt::Assign(lhs, rhs) => {
                 let rhs = self.on_expr(rhs);
-                if let Some((m, map_sym_id)) = self.lookup.get(&lhs) {
+                if let Some((m, map_sym_id)) = self.rename_lookup.get(&lhs) {
                     let new_lhs = self.map_name_to_dut[&m.name];
                     let new_rhs = self.on_remap_expr(*map_sym_id, rhs, m.rhs);
                     let new_assign = self.out.s(Stmt::Assign(new_lhs, new_rhs));
@@ -276,6 +317,10 @@ impl Remapper<'_> {
                     } else {
                         new_assign
                     }
+                } else if let Some(cc) = self.const_lookup.get(&lhs) {
+                    // we are assigning to a pin that has a constant value => make sure that the assigned value matches
+                    let e = self.out.e(Expr::Const(cc.clone()));
+                    self.out.s(Stmt::AssertEq(e, rhs))
                 } else {
                     self.out.s(Stmt::Assign(lhs, rhs))
                 }
@@ -329,37 +374,43 @@ impl Remapper<'_> {
         match self.orig[expr].clone() {
             Expr::Const(a) => self.out.e(Expr::Const(a)),
             Expr::Sym(sym_id) => {
-                match self.st[sym_id].kind() {
-                    SymbolKind::Dut => unreachable!(),
-                    SymbolKind::InPort => panic!("Did not expect to encounter an IN port!"),
-                    SymbolKind::OutPort => {
-                        let (m, _) = self.lookup[&sym_id];
-                        // output port mapping should always just be 1:1, this is enforced by the
-                        // frontend, but we want an assertion here to catch if that ever changes
-                        if let Expr::Sym(remap_rhs) = self.remap_ctx[m.rhs] {
-                            assert_eq!(self.st[remap_rhs].name(), self.st[sym_id].name());
-                            assert_eq!(self.st[remap_rhs].tpe(), self.st[sym_id].tpe());
-                        } else {
-                            unreachable!("Mapping must be 1:1");
+                if let Some(cc) = self.const_lookup.get(&sym_id) {
+                    self.out.e(Expr::Const(cc.clone()))
+                } else {
+                    match self.st[sym_id].kind() {
+                        SymbolKind::Dut => unreachable!(),
+                        SymbolKind::InPort => panic!("Did not expect to encounter an IN port!"),
+                        SymbolKind::OutPort => {
+                            let (m, _) = self.rename_lookup[&sym_id];
+                            // output port mapping should always just be 1:1, this is enforced by the
+                            // frontend, but we want an assertion here to catch if that ever changes
+                            if let Expr::Sym(remap_rhs) = self.remap_ctx[m.rhs] {
+                                assert_eq!(self.st[remap_rhs].name(), self.st[sym_id].name());
+                                assert_eq!(self.st[remap_rhs].tpe(), self.st[sym_id].tpe());
+                            } else {
+                                unreachable!("Mapping must be 1:1");
+                            }
+                            assert_eq!(m.cond, self.remap_ctx.expr_true());
+                            // lookup correct symbol
+                            let dut_name = self.st[self.out.dut_sym].name();
+                            let full_name = format!("{dut_name}.{}", m.name);
+                            let remapped_sym = self
+                                .st
+                                .symbol_id_from_name_in_active_scope(&full_name)
+                                .unwrap();
+                            self.out.e(Expr::Sym(remapped_sym))
                         }
-                        assert_eq!(m.cond, self.remap_ctx.expr_true());
-                        // lookup correct symbol
-                        let dut_name = self.st[self.out.dut_sym].name();
-                        let full_name = format!("{dut_name}.{}", m.name);
-                        let remapped_sym = self
-                            .st
-                            .symbol_id_from_name_in_active_scope(&full_name)
-                            .unwrap();
-                        self.out.e(Expr::Sym(remapped_sym))
-                    }
-                    SymbolKind::Arg(_) | SymbolKind::LoopVar => {
-                        // var should already be declared, just look up by name
-                        let name = self.st[sym_id].name();
-                        let out_sym = self
-                            .st
-                            .symbol_id_from_name_in_active_scope(name)
-                            .unwrap_or_else(|| unreachable!("{name} should have been declared!"));
-                        self.out.e(Expr::Sym(out_sym))
+                        SymbolKind::Arg(_) | SymbolKind::LoopVar => {
+                            // var should already be declared, just look up by name
+                            let name = self.st[sym_id].name();
+                            let out_sym = self
+                                .st
+                                .symbol_id_from_name_in_active_scope(name)
+                                .unwrap_or_else(|| {
+                                    unreachable!("{name} should have been declared!")
+                                });
+                            self.out.e(Expr::Sym(out_sym))
+                        }
                     }
                 }
             }

@@ -62,6 +62,25 @@ fn expect_rule<T>(
     })
 }
 
+fn parse_integer_expr(pair: Pair) -> Result<BitVecValue, String> {
+    assert_eq!(pair.as_rule(), Rule::integer);
+    // unwrap into width, radix, and then value
+    let mut inner = pair.clone().into_inner();
+    let width: u32 = inner.next().unwrap().as_str().parse::<u32>().unwrap();
+    let radix = inner.next().unwrap().as_rule();
+    let value_str = inner.next().unwrap().as_str();
+
+    let value = match radix {
+        Rule::bin => u64::from_str_radix(value_str, 2),
+        Rule::oct => u64::from_str_radix(value_str, 8),
+        Rule::hex => u64::from_str_radix(value_str, 16),
+        Rule::dec => value_str.parse::<u64>(),
+        _ => unreachable!("Unexpected radix rule: {:?}", radix),
+    };
+
+    Ok(BitVecValue::from_u64(value.unwrap(), width))
+}
+
 fn parse_boxed_expr(
     st: &SymbolTable,
     diag: &mut DiagnosticHandler,
@@ -75,22 +94,7 @@ fn parse_boxed_expr(
 
             match primary.as_rule() {
                 Rule::integer => {
-                    // unwrap into width, radix, and then value
-                    let mut inner = primary.clone().into_inner();
-                    let width: u32 = inner.next().unwrap().as_str().parse::<u32>().unwrap();
-                    let radix = inner.next().unwrap().as_rule();
-                    let value_str = inner.next().unwrap().as_str();
-
-                    let value = match radix {
-                        Rule::bin => u64::from_str_radix(value_str, 2),
-                        Rule::oct => u64::from_str_radix(value_str, 8),
-                        Rule::hex => u64::from_str_radix(value_str, 16),
-                        Rule::dec => value_str.parse::<u64>(),
-                        _ => unreachable!("Unexpected radix rule: {:?}", radix),
-                    };
-
-                    let bvv = BitVecValue::from_u64(value.unwrap(), width);
-
+                    let bvv = parse_integer_expr(primary)?;
                     Ok(BoxedExpr::Const(bvv, start, end))
                 }
                 Rule::path_id => {
@@ -188,7 +192,7 @@ fn boxed_expr_to_expr_id(
             expr_id
         }
         BoxedExpr::DontCare(start, end) => {
-            let expr_id = ctx.e(Expr::DontCare);
+            let expr_id = ctx.dont_care_id();
             ctx.add_expr_loc(expr_id, start, end, fileid);
             expr_id
         }
@@ -757,11 +761,6 @@ struct ModuleCtx<'a> {
 
 type Pair<'a> = pest::iterators::Pair<'a, Rule>;
 
-enum EntryTpe {
-    T(Type),
-    PosedgeClock,
-}
-
 impl ModuleCtx<'_> {
     // Helper method for expected rule errors
     fn expect_rule<T>(
@@ -796,6 +795,37 @@ impl ModuleCtx<'_> {
     }
 
     fn on_module_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::module_entry);
+        let entry = pair.into_inner().next().unwrap();
+        match entry.as_rule() {
+            Rule::clock_entry => self.on_clock_entry(entry),
+            Rule::remap_entry => self.on_remap_entry(entry),
+            Rule::const_entry => self.on_const_entry(entry),
+            other => todo!("Unexpected rule: {:?}", other),
+        }
+    }
+
+    fn on_clock_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::clock_entry);
+        let mut field_inner = pair.clone().into_inner();
+        let id_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let id = id_pair.as_str();
+        if matches!(self.m.clock, Clock::None) {
+            self.m.clock = Clock::Posedge(id.to_string());
+            Ok(())
+        } else {
+            let msg = format!(
+                "Module {} already has a clock declared: {:?}",
+                self.m.name, self.m.clock
+            );
+            self.err(msg, &pair)
+        }
+    }
+
+    fn on_remap_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::remap_entry);
+
         let mut field_inner = pair.clone().into_inner();
         let dir_pair =
             self.expect_rule(field_inner.next(), &pair, "Expected direction in mapping")?;
@@ -803,47 +833,14 @@ impl ModuleCtx<'_> {
             self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
         let tpe_pair = self.expect_rule(field_inner.next(), &pair, "Expected type in mapping")?;
         let dir = parse_dir(self.diag, self.fileid, dir_pair)?;
-        let id = id_pair.as_str();
-        let tpe = self.parse_entry_type(tpe_pair)?;
+        let name = id_pair.as_str().to_string();
+        let tpe = parse_type(self.diag, self.fileid, self.st, tpe_pair)?;
 
-        match tpe {
-            EntryTpe::T(tpe) => {
-                let remap_rule =
-                    self.expect_rule(field_inner.next(), &pair, "Pin remap expected.")?;
-                self.on_pin_remap(dir, id.into(), tpe, &pair, remap_rule)
-            }
-            EntryTpe::PosedgeClock => {
-                if matches!(self.m.clock, Clock::None) {
-                    if dir == Dir::In {
-                        self.m.clock = Clock::Posedge(id.to_string());
-                        Ok(())
-                    } else {
-                        let msg = "A clock must be an input, not an output".into();
-                        self.err(msg, &pair)
-                    }
-                } else {
-                    let msg = format!(
-                        "Module {} already has a clock declared: {:?}",
-                        self.m.name, self.m.clock
-                    );
-                    self.err(msg, &pair)
-                }
-            }
-        }
-    }
-
-    fn on_pin_remap(
-        &mut self,
-        dir: Dir,
-        name: String,
-        tpe: Type,
-        context: &Pair,
-        rule: Pair,
-    ) -> Result<(), String> {
-        assert_eq!(rule.as_rule(), Rule::pin_remap);
-        let mut in_remap = rule.into_inner();
-        let expr_rule =
-            self.expect_rule(in_remap.next(), context, "pin remaps require an expression")?;
+        let expr_rule = self.expect_rule(
+            field_inner.next(),
+            &pair,
+            "pin remaps require an expression",
+        )?;
         let rhs = parse_expr(
             self.st,
             self.diag,
@@ -851,7 +848,7 @@ impl ModuleCtx<'_> {
             &mut self.m.ctx,
             expr_rule.into_inner(),
         )?;
-        let cond = if let Some(cond_rule) = in_remap.next() {
+        let cond = if let Some(cond_rule) = field_inner.next() {
             parse_expr(
                 self.st,
                 self.diag,
@@ -873,24 +870,33 @@ impl ModuleCtx<'_> {
         Ok(())
     }
 
+    fn on_const_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::const_entry);
+        let mut field_inner = pair.clone().into_inner();
+        let id_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let expr_rule = self.expect_rule(
+            field_inner.next(),
+            &pair,
+            "const pins require an expression",
+        )?;
+        let path_id = id_pair.as_str();
+        let pin = self
+            .st
+            .symbol_id_from_name_in_active_scope(path_id)
+            .unwrap();
+
+        let value = parse_integer_expr(expr_rule)?;
+
+        let cc = ConstMapping { pin, value };
+        self.m.consts.push(cc);
+        Ok(())
+    }
+
     fn err(&mut self, msg: String, pair: &Pair) -> Result<(), String> {
         self.diag
             .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
         Err(msg)
-    }
-
-    fn parse_entry_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<EntryTpe, String> {
-        let pair = pair.into_inner().next().unwrap();
-        match pair.as_rule() {
-            Rule::clock_tpe => Ok(EntryTpe::PosedgeClock),
-            Rule::tpe => Ok(EntryTpe::T(parse_type(
-                self.diag,
-                self.fileid,
-                self.st,
-                pair,
-            )?)),
-            other => unreachable!("Unexpected rule: {:?}", other),
-        }
     }
 
     fn on_module_def(&mut self, pair: Pair) -> Result<(), String> {
@@ -1049,6 +1055,7 @@ fn parse_file_internal(
                     clock: Default::default(),
                     implements: vec![],
                     mappings: vec![],
+                    consts: vec![],
                 };
                 let mut ctx = ModuleCtx {
                     st,

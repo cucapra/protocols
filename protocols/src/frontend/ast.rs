@@ -161,6 +161,7 @@ pub struct RemapModule {
     pub clock: Clock,
     pub implements: Vec<StructId>,
     pub mappings: Vec<Mapping>,
+    pub consts: Vec<ConstMapping>,
 }
 
 #[cfg(test)]
@@ -174,11 +175,20 @@ pub(crate) fn assert_remap_eq(a: &RemapModule, b: &RemapModule) {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mapping {
+    /// name of the pin in the module
     pub name: String,
+    /// direction of the pin in the module
     pub dir: Dir,
     pub tpe: Type,
     pub rhs: ExprId,
     pub cond: ExprId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConstMapping {
+    /// struct pin
+    pub pin: SymbolId,
+    pub value: BitVecValue,
 }
 
 #[derive(Debug, Clone)]
