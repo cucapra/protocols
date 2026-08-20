@@ -321,14 +321,7 @@ impl Remapper<'_> {
                 } else if let Some(cc) = self.const_lookup.get(&lhs) {
                     // we are assigning to a pin that has a constant value => make sure that the assigned value matches
                     let e = self.out.e(Expr::Const(cc.clone()));
-
-                    let n = self.out.s(Stmt::AssertEq(e, rhs));
-                    println!(
-                        "replacing {} with {}",
-                        serialize_stmt(self.orig, self.st, &stmt),
-                        serialize_stmt(&self.out, self.st, &n)
-                    );
-                    n
+                    self.out.s(Stmt::AssertEq(e, rhs))
                 } else {
                     self.out.s(Stmt::Assign(lhs, rhs))
                 }
