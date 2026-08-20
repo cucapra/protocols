@@ -38,7 +38,6 @@ interface Wishbone {
     // 7: end of burst
     in CTI: u3,
     // no LOCK
-    // no RTY
 }
 
 prot reset<self: Wishbone>() {
