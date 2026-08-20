@@ -192,7 +192,7 @@ fn boxed_expr_to_expr_id(
             expr_id
         }
         BoxedExpr::DontCare(start, end) => {
-            let expr_id = ctx.e(Expr::DontCare);
+            let expr_id = ctx.dont_care_id();
             ctx.add_expr_loc(expr_id, start, end, fileid);
             expr_id
         }
