@@ -12,7 +12,7 @@ use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, ch
 use crate::frontend::symbol::*;
 use anyhow::{Context, anyhow, bail};
 use baa::BitVecOps;
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -426,11 +426,10 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
         type_check_stmt(proto, &mut ast.st, diag, &proto.body)?;
     }
 
-    for (remap_idx, remap) in ast.remaps.iter().enumerate() {
+    for remap in &ast.remaps {
         let mut found_err = false;
         let ctx = &remap.ctx;
-        let mut interface_pin_to_mapping = FxHashMap::default();
-        let mut interface_pin_to_const = FxHashMap::default();
+        let mut defined_struct_pins = FxHashSet::default();
         for m in &remap.mappings {
             // check that the rhs is of the correct type
             let rhs_tpe = type_check_expr(ctx, &ast.st, diag, &m.rhs)?;
@@ -464,14 +463,25 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
                 Dir::Out => is_output_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
             };
             if let Some(rhs_symbol) = rhs_symbol {
-                interface_pin_to_mapping.insert(ast.st[rhs_symbol].full_name(&ast.st), remap_idx);
+                let full_name = ast.st[rhs_symbol].full_name(&ast.st);
+                if !defined_struct_pins.insert(full_name.clone()) {
+                    let error_msg =
+                        format!("Pin {full_name} has already been remapped in {}", m.name,);
+                    diag.emit_diagnostic_expr(&remap.ctx, &m.rhs, &error_msg, Level::Error);
+                    found_err = true;
+                };
             } else {
                 found_err = true;
             }
         }
 
-        for (cc_idx, cc) in remap.consts.iter().enumerate() {
-            interface_pin_to_const.insert(ast.st[cc.pin].full_name(&ast.st), cc_idx);
+        for cc in &remap.consts {
+            let full_name = ast.st[cc.pin].full_name(&ast.st);
+            if !defined_struct_pins.insert(full_name.clone()) {
+                let error_msg = format!("Pin {full_name} has already been remapped.",);
+                diag.emit_general_message(&error_msg, Level::Error);
+                found_err = true;
+            };
         }
 
         // check to see if there are any pins that we have not remapped
@@ -481,9 +491,7 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
             .flat_map(|remap| {
                 ast.st[*remap].pins().iter().flat_map(|pin| {
                     let full_name = format!("{}.{}", ast.st[*remap].name(), pin.name());
-                    if interface_pin_to_mapping.contains_key(&full_name)
-                        || interface_pin_to_const.contains_key(&full_name)
-                    {
+                    if defined_struct_pins.contains(&full_name) {
                         None
                     } else {
                         Some(full_name)
