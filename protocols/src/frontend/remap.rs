@@ -6,7 +6,6 @@ use crate::frontend::ast::{
     Ast, BinOp, Clock, Expr, ExprId, Mapping, Protocol, ProtocolContext, RemapModule, Stmt, StmtId,
     find_symbols,
 };
-use crate::frontend::serialize::serialize_stmt;
 use crate::frontend::symbol::{Arg, Field, StructId, SymbolId, SymbolKind, SymbolTable, Type};
 use baa::BitVecValue;
 use rustc_hash::FxHashMap;
