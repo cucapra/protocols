@@ -12,6 +12,7 @@ use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, ch
 use crate::frontend::symbol::*;
 use anyhow::{Context, anyhow, bail};
 use baa::BitVecOps;
+use rustc_hash::FxHashMap;
 
 /// Helper function for emitting error messages related to invalid bit-slices
 fn emit_bitslice_type_error(
@@ -359,7 +360,7 @@ fn is_input_map_rhs_ok(
     name: &str,
     rhs: ExprId,
     cond: ExprId,
-) -> bool {
+) -> Option<SymbolId> {
     let rhs_syms: Vec<_> = find_symbols(ctx, rhs).into_iter().collect();
     let cond_syms: Vec<_> = find_symbols(ctx, cond).into_iter().collect();
 
@@ -367,18 +368,18 @@ fn is_input_map_rhs_ok(
         && st[other].is_in_port()
     {
         if cond_syms.is_empty() || cond_syms == rhs_syms {
-            true
+            Some(other)
         } else {
             let msg = format!(
                 "The condition for the mapping of input pin `{name}` can only depend on the same pin as the mapping."
             );
             diag.emit_diagnostic_expr(ctx, &cond, &msg, Level::Error);
-            false
+            None
         }
     } else {
         let msg = format!("Input pin `{name}` must be mapped to a single other pin.");
         diag.emit_diagnostic_expr(ctx, &rhs, &msg, Level::Error);
-        false
+        None
     }
 }
 
@@ -390,21 +391,21 @@ fn is_output_map_rhs_ok(
     name: &str,
     rhs: ExprId,
     cond: ExprId,
-) -> bool {
+) -> Option<SymbolId> {
     if let Expr::Sym(sym_id) = ctx[rhs]
         && st[sym_id].is_out_port()
     {
         if cond == ctx.expr_true() {
-            true
+            Some(sym_id)
         } else {
             let msg = format!("Output pins are not allowed to have a `with` condition ({name}).");
             diag.emit_diagnostic_expr(ctx, &cond, &msg, Level::Error);
-            false
+            None
         }
     } else {
         let msg = format!("Output pin `{name}` can only be mapped directly to another output pin.");
         diag.emit_diagnostic_expr(ctx, &rhs, &msg, Level::Error);
-        false
+        None
     }
 }
 
@@ -425,9 +426,10 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
         type_check_stmt(proto, &mut ast.st, diag, &proto.body)?;
     }
 
-    for remap in &ast.remaps {
+    for (remap_idx, remap) in ast.remaps.iter().enumerate() {
         let mut found_err = false;
         let ctx = &remap.ctx;
+        let mut interface_pin_to_mapping = FxHashMap::default();
         for m in &remap.mappings {
             // check that the rhs is of the correct type
             let rhs_tpe = type_check_expr(ctx, &ast.st, diag, &m.rhs)?;
@@ -456,12 +458,42 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
                 found_err = true;
             }
 
-            let rhs_ok = match m.dir {
+            let rhs_symbol = match m.dir {
                 Dir::In => is_input_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
                 Dir::Out => is_output_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
             };
-            found_err |= !rhs_ok;
+            if let Some(rhs_symbol) = rhs_symbol {
+                interface_pin_to_mapping.insert(ast.st[rhs_symbol].full_name(&ast.st), remap_idx);
+            } else {
+                found_err = true;
+            }
         }
+
+        // check to see if there are any pins that we have not remapped
+        let missing_remaps: Vec<_> = remap
+            .implements
+            .iter()
+            .flat_map(|remap| {
+                ast.st[*remap].pins().iter().flat_map(|pin| {
+                    let full_name = format!("{}.{}", ast.st[*remap].name(), pin.name());
+                    if interface_pin_to_mapping.contains_key(&full_name) {
+                        None
+                    } else {
+                        Some(full_name)
+                    }
+                })
+            })
+            .collect();
+        if !missing_remaps.is_empty() {
+            let error_msg = format!(
+                "[{}] module does not define remaps for all pins. Missing: {}",
+                remap.name,
+                missing_remaps.join(", ")
+            );
+            diag.emit_general_message(&error_msg, Level::Error);
+            found_err = true;
+        }
+
         if found_err {
             bail!("Type error in {}", remap.name);
         }
