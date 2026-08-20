@@ -31,6 +31,7 @@ module Tb_ethernetEth_topMWb : Wishbone {
   out m_wb_err_i : u1 = Wishbone.ERR,
   in m_wb_cti_o : u3 = Wishbone.CTI,
   in m_wb_bte_o : u2 = Wishbone.BTE,
+  const Wishbone.RTY = 1'b0, // no retry
 }
 
 // --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --wave wishbone/ethmac/ethmac.fst
@@ -47,6 +48,9 @@ module Tb_ethernetWb_masterWbm_low_level : Wishbone {
   in SEL_O : u4 = Wishbone.SEL,
   out ERR_I : u1 = Wishbone.ERR,
   out RTY_I : u1 = Wishbone.RTY,
+  // no bursts
+  const Wishbone.BTE = 2'd0,
+  const Wishbone.CTI = 3'd0,
 }
 
 // --instances tb_ethernet.wb_master:Tb_ethernetWb_master --wave wishbone/ethmac/ethmac.fst
@@ -63,6 +67,9 @@ module Tb_ethernetWb_master : Wishbone {
   in SEL_O : u4 = Wishbone.SEL,
   out ERR_I : u1 = Wishbone.ERR,
   out RTY_I : u1 = Wishbone.RTY,
+  // no bursts
+  const Wishbone.BTE = 2'd0,
+  const Wishbone.CTI = 3'd0,
 }
 
 // --instances tb_ethernet.wb_slave:Tb_ethernetWb_slave --wave wishbone/ethmac/ethmac.fst
@@ -79,6 +86,9 @@ module Tb_ethernetWb_slave : Wishbone {
   in SEL_I : u4 = Wishbone.SEL,
   out ERR_O : u1 = Wishbone.ERR,
   out RTY_O : u1 = Wishbone.RTY,
+  // no bursts
+  const Wishbone.BTE = 2'd0,
+  const Wishbone.CTI = 3'd0,
 }
 
 // --instances tb_ethernet:Tb_ethernetEthSlWb --wave wishbone/ethmac/ethmac.fst
@@ -94,6 +104,10 @@ module Tb_ethernetEthSlWb : Wishbone {
   out eth_sl_wb_ack_o : u1 = Wishbone.ACK,
   in eth_sl_wb_sel_i : u4 = Wishbone.SEL,
   out eth_sl_wb_err_o : u1 = Wishbone.ERR,
+  // no bursts
+  const Wishbone.BTE = 2'd0,
+  const Wishbone.CTI = 3'd0,
+  const Wishbone.RTY = 1'b0, // no retry
 }
 
 // --instances tb_ethernet:Tb_ethernetEthMaWb --wave wishbone/ethmac/ethmac.fst
@@ -109,5 +123,9 @@ module Tb_ethernetEthMaWb : Wishbone {
   out eth_ma_wb_ack_i : u1 = Wishbone.ACK,
   in eth_ma_wb_sel_o : u4 = Wishbone.SEL,
   out eth_ma_wb_err_i : u1 = Wishbone.ERR,
+  // no bursts
+  const Wishbone.BTE = 2'd0,
+  const Wishbone.CTI = 3'd0,
+  const Wishbone.RTY = 1'b0, // no retry
 }
 

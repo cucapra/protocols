@@ -430,6 +430,7 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
         let mut found_err = false;
         let ctx = &remap.ctx;
         let mut interface_pin_to_mapping = FxHashMap::default();
+        let mut interface_pin_to_const = FxHashMap::default();
         for m in &remap.mappings {
             // check that the rhs is of the correct type
             let rhs_tpe = type_check_expr(ctx, &ast.st, diag, &m.rhs)?;
@@ -469,6 +470,10 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
             }
         }
 
+        for (cc_idx, cc) in remap.consts.iter().enumerate() {
+            interface_pin_to_const.insert(ast.st[cc.pin].full_name(&ast.st), cc_idx);
+        }
+
         // check to see if there are any pins that we have not remapped
         let missing_remaps: Vec<_> = remap
             .implements
@@ -476,7 +481,9 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
             .flat_map(|remap| {
                 ast.st[*remap].pins().iter().flat_map(|pin| {
                     let full_name = format!("{}.{}", ast.st[*remap].name(), pin.name());
-                    if interface_pin_to_mapping.contains_key(&full_name) {
+                    if interface_pin_to_mapping.contains_key(&full_name)
+                        || interface_pin_to_const.contains_key(&full_name)
+                    {
                         None
                     } else {
                         Some(full_name)
