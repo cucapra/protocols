@@ -16,4 +16,6 @@ module LitexWishbone : Wishbone {
   in wishbone_cti : u3 = Wishbone.CTI,
   in wishbone_bte : u2 = Wishbone.BTE,
   out wishbone_err : u1 = Wishbone.ERR,
+  // RTY is not used
+  const Wishbone.RTY = 1'b0,
 }
