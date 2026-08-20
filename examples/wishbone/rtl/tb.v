@@ -18,6 +18,7 @@ module tb(
   input WE,
   input [3:0] SEL,
   output ERR,
+  output wire RTY,
   input [2:0] CTI,
   input wire [1:0] BTE
 );
@@ -35,6 +36,7 @@ wire [31:0] io_sram_datwr = 0;
 wire io_sram_we = 0;
 wire n_reset;
 assign n_reset = ~RST;
+assign RTY = 0;
 
   dut dut(
     .clk(clk),
