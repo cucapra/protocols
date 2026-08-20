@@ -71,7 +71,11 @@ impl PatronusSim {
                         .inputs
                         .iter()
                         .position(|i| ctx.get_symbol_name(*i).unwrap() == pin.name())
-                        .context("unable to find input pin")?;
+                        .context(format!(
+                            "unable to find input pin `{}` in {}",
+                            pin.name(),
+                            sys.name
+                        ))?;
                     (sys.inputs[pos], pos)
                 }
                 Dir::Out => {
@@ -79,7 +83,11 @@ impl PatronusSim {
                         .outputs
                         .iter()
                         .position(|o| ctx[o.name] == pin.name())
-                        .context("unable to find output pin")?;
+                        .context(format!(
+                            "unable to find output pin `{}` in {}",
+                            pin.name(),
+                            sys.name
+                        ))?;
                     (sys.outputs[pos].expr, pos + sys.inputs.len())
                 }
             };
