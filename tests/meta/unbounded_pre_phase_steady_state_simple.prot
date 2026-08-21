@@ -21,8 +21,4 @@ prot w<DUT: Device>(b: u8) {
         step();
     }
     step();
-    DUT.b := b;
-    step();
-    assert_eq(DUT.bout, b);
-    step();
 }

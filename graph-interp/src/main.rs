@@ -1,9 +1,10 @@
 use baa::{BitVecOps, BitVecValue, Value as BaaValue};
 use clap::Parser;
-use patronus::expr::ExprRef;
+use patronus::expr::{ExprRef, TypeCheck};
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::bmc_transition_system::into_bmc_transition_system;
+use protocols::backends::meta_transition_system::into_meta_transition_system;
 use protocols::backends::transition_system::into_transition_system;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
@@ -81,6 +82,10 @@ struct Cli {
 
     #[arg(long)]
     transition_system: bool,
+
+    /// Build a steady-state meta driver transition system with banked arguments.
+    #[arg(long)]
+    meta_transition_system: bool,
 
     #[arg(long, default_value_t)]
     bound: usize,
@@ -355,6 +360,132 @@ fn run_transition_system(
     }
 }
 
+fn run_meta_transition_system(
+    cli: &Cli,
+    st: &SymbolTable,
+    module: &Module,
+    traces: &[Vec<(String, Vec<Value>)>],
+) {
+    let protos_by_name: FxHashMap<&str, &Protocol> =
+        module.protos.iter().map(|p| (p.name.as_str(), p)).collect();
+
+    for (trace_index, trace) in traces.iter().enumerate() {
+        print_trace_separator(trace_index);
+        let mut used_protocol_names = Vec::new();
+        for (name, _) in trace {
+            if !used_protocol_names.contains(&name.as_str()) {
+                used_protocol_names.push(name.as_str());
+            }
+        }
+        let protocols: Vec<Protocol> = used_protocol_names
+            .iter()
+            .map(|name| (*protos_by_name.get(name).unwrap()).clone())
+            .collect();
+        let protocol_indices: FxHashMap<&str, usize> = used_protocol_names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| (*name, index))
+            .collect();
+
+        let sim = PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap();
+        let port_expr_refs: FxHashMap<PortId, ExprRef> = FxHashMap::from_iter(
+            sim.ios()
+                .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
+        );
+        let res = into_meta_transition_system(
+            protocols,
+            st,
+            sim.sys.clone(),
+            sim.port_map.clone(),
+            port_expr_refs,
+            sim.ctx.clone(),
+        );
+
+        let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
+        transition_sim.init(InitKind::Zero);
+        let mut waveform = FxHashMap::default();
+        let mut transaction_idx = 0;
+        let mut cycle = 0;
+        let mut fork_ready = true;
+
+        loop {
+            if fork_ready {
+                if transaction_idx == trace.len() {
+                    record_transition_waveform(
+                        &mut waveform,
+                        &transition_sim,
+                        &sim,
+                        &res.port_to_expr,
+                        &res.is_dont_care,
+                    );
+
+                    // Assertions on the same control node as the final fork
+                    // are checked by the transition out of that node.
+                    transition_sim.step();
+                    let state = transition_sim.get(res.node_symbol);
+                    if state == transition_sim.get(res.external_assert_state) {
+                        println!("Assertion failure in cycle {}.", cycle);
+                        break;
+                    } else if state == transition_sim.get(res.internal_assert_state) {
+                        println!("Internal assertion failure in cycle {}.", cycle);
+                        break;
+                    }
+                    print_trace_success(trace_index);
+                    break;
+                }
+
+                let (proto_name, values) = &trace[transaction_idx];
+                let protocol_id = protocol_indices[proto_name.as_str()];
+                let protocol = protos_by_name[proto_name.as_str()];
+                assert_eq!(protocol.args.len(), values.len());
+                for (arg, value) in protocol.args.iter().zip(values) {
+                    let input = res.protocol_inputs[&(protocol_id, arg.symbol())];
+                    let bvv: BitVecValue = value.clone().try_into().expect("value not in bitvec");
+                    transition_sim.set(input, &bvv);
+                }
+                transition_sim.set(
+                    res.node_choice,
+                    &BitVecValue::from_u64(protocol_id as u64, res.node_choice.get_bv_type(&res.ctx).unwrap()),
+                );
+                transaction_idx += 1;
+            }
+
+            record_transition_waveform(
+                &mut waveform,
+                &transition_sim,
+                &sim,
+                &res.port_to_expr,
+                &res.is_dont_care,
+            );
+            transition_sim.step();
+            fork_ready = transition_sim
+                .get(res.fork_ready)
+                .try_into_u64()
+                .expect("fork ready failed")
+                == 1;
+
+            let state = transition_sim.get(res.node_symbol);
+            if state == transition_sim.get(res.external_assert_state) {
+                println!("Assertion failure in cycle {}.", cycle);
+                break;
+            } else if state == transition_sim.get(res.internal_assert_state) {
+                println!("Internal assertion failure in cycle {}.", cycle);
+                break;
+            }
+            cycle += 1;
+        }
+
+        if cli.ascii_waveform {
+            print_ascii_waveform(
+                waveform,
+                |port| sim.port_name(port).to_string(),
+                |port| sim.port_width(port),
+                false,
+            );
+        }
+    }
+}
+
 /// lower each protocol once and interpret every
 /// transaction against its own symbolic protocol graph.
 fn run_bmc(cli: &Cli, st: &SymbolTable, module: &Module, traces: &[Vec<(String, Vec<Value>)>]) {
@@ -514,6 +645,8 @@ fn main() {
     let _result = catch_unwind(AssertUnwindSafe(|| {
         if cli.bound > 0 {
             run_bmc(&cli, &st, &module, &traces);
+        } else if cli.meta_transition_system {
+            run_meta_transition_system(&cli, &st, &module, &traces);
         } else if cli.transition_system {
             run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {

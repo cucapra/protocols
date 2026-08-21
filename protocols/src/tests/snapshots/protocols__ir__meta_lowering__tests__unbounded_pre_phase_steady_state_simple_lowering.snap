@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/meta_lowering.rs
+assertion_line: 892
 expression: dot
 ---
 digraph "id" {
@@ -9,26 +10,24 @@ digraph "id" {
   entry_marker -> node0;
   node0 [label="[1] DUT.a := X if node_choice; a#0_id if not(node_choice)\n[1] DUT.b := X if 1"];
   node0 -> node1 [label="not(node_choice) / step"];
+  node0 -> node0 [label="and(node_choice, DUT.ready) / step"];
   node0 -> node2 [label="and(node_choice, not(DUT.ready)) / step"];
-  node0 -> node3 [label="and(node_choice, DUT.ready) / step"];
   node1 [label="[1] DUT.a := X if node_choice; a#1_id if not(node_choice)\n[1] fork\n[1] DUT.b := X if 1"];
-  node1 -> node4 [label="not(node_choice) / step"];
+  node1 -> node3 [label="not(node_choice) / step"];
+  node1 -> node4 [label="and(node_choice, DUT.ready) / step"];
   node1 -> node5 [label="and(node_choice, not(DUT.ready)) / step"];
-  node1 -> node6 [label="and(node_choice, DUT.ready) / step"];
   node2 [label=""];
-  node2 -> node3 [label="DUT.ready / step"];
+  node2 -> node0 [label="DUT.ready / step"];
   node2 -> node2 [label="not(DUT.ready) / step"];
-  node3 [label="[1] DUT.b := b#0_w if 1"];
-  node3 -> node7 [label="1 / step"];
-  node4 [label="[1] assert_eq(DUT.aout, a#0_id)\n[1] DUT.a := X if node_choice; a#2_id if not(node_choice)\n[1] fork\n[1] DUT.b := X if 1"];
-  node4 -> node4 [label="not(node_choice) / step / R_id"];
-  node4 -> node5 [label="and(node_choice, not(DUT.ready)) / step / R_id"];
-  node4 -> node6 [label="and(node_choice, DUT.ready) / step / R_id"];
+  node3 [label="[1] assert_eq(DUT.aout, a#0_id)\n[1] DUT.a := X if node_choice; a#2_id if not(node_choice)\n[1] fork\n[1] DUT.b := X if 1"];
+  node3 -> node3 [label="not(node_choice) / step / R_id"];
+  node3 -> node4 [label="and(node_choice, DUT.ready) / step / R_id"];
+  node3 -> node5 [label="and(node_choice, not(DUT.ready)) / step / R_id"];
+  node4 [label="[1] assert_eq(DUT.aout, a#0_id)\n[1] DUT.a := X if node_choice; a#2_id if not(node_choice)\n[1] DUT.b := X if 1"];
+  node4 -> node1 [label="not(node_choice) / step / R_id^2"];
+  node4 -> node0 [label="and(node_choice, DUT.ready) / step"];
+  node4 -> node2 [label="and(node_choice, not(DUT.ready)) / step"];
   node5 [label="[1] assert_eq(DUT.aout, a#0_id)"];
-  node5 -> node3 [label="DUT.ready / step"];
+  node5 -> node0 [label="DUT.ready / step"];
   node5 -> node2 [label="not(DUT.ready) / step"];
-  node6 [label="[1] assert_eq(DUT.aout, a#0_id)\n[1] DUT.b := b#1_w if 1"];
-  node6 -> node7 [label="1 / step"];
-  node7 [label="[1] assert_eq(DUT.bout, b#0_w)"];
-  node7 -> node0 [label="1 / step"];
 }

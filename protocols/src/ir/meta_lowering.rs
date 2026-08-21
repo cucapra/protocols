@@ -104,7 +104,14 @@ fn boundary_guard(
             is_boundary.then_some(action.guard)
         })
         .collect();
-    if !has_post_phase {
+    if has_post_phase {
+        guards.extend(graph[node].transitions.iter().filter_map(|transition| {
+            let target_is_fork = graph[transition.target].actions.iter().any(|action| {
+                matches!(graph[action.op], Op::Fork)
+            });
+            target_is_fork.then_some(transition.guard)
+        }));
+    } else {
         guards.extend(
             graph[node]
                 .transitions
@@ -240,11 +247,9 @@ fn instance_substitutions(
     protocol
         .args
         .iter()
-        .map(|arg| {
+        .filter_map(|arg| {
             let symbol = arg.symbol();
-            let old = graph
-                .symbol_expr(symbol)
-                .expect("lowered protocol argument must have an expression");
+            let old = graph.symbol_expr(symbol)?;
             let width = old
                 .get_bv_type(&graph.expr_ctx)
                 .expect("protocol arguments must be bit vectors");
@@ -252,7 +257,7 @@ fn instance_substitutions(
             let new = graph
                 .expr_ctx
                 .bv_symbol(&format!("{name}#{instance}_{}", protocol.name), width);
-            (old, new)
+            Some((old, new))
         })
         .collect()
 }
@@ -281,14 +286,15 @@ fn reachable_pre_nodes(graph: &ProtoGraph, entry: NodeId) -> Vec<NodeId> {
         if !seen.insert(node) {
             continue;
         }
-        nodes.push(node);
-
+        // The fork node starts the post-phase and the done node is only a
+        // terminal marker. Neither is a concrete pre-phase frontier.
         let stops = graph[node].actions.iter().any(|action| {
             matches!(graph[action.op], Op::Fork | Op::Done)
         });
         if stops {
             continue;
         }
+        nodes.push(node);
         for transition in step_transitions(graph, node) {
             if !graph[transition.target].actions.iter().any(|action| {
                 matches!(graph[action.op], Op::Done)
@@ -309,7 +315,7 @@ fn lower_exact_meta_driver_nfa(
     protocols: Vec<Protocol>,
     symbols: &SymbolTable,
     expr_ctx: ExprContext,
-) -> (ProtoGraph, ExprRef) {
+) -> (ProtoGraph, ExprRef, FxHashMap<NodeId, usize>) {
     assert!(!protocols.is_empty(), "a driver needs at least one protocol");
     assert_eq!(protocols.len(), meta.protocols.len());
 
@@ -551,10 +557,24 @@ fn lower_exact_meta_driver_nfa(
     let entry = *driver_nodes
         .get(&(meta.entry, None))
         .expect("meta entry must be a choice variant");
+    let choice_instances: FxHashMap<_, _> = driver_nodes
+        .iter()
+        .filter_map(|(&(meta_id, control), &node)| {
+            let Some(MetaFrontier::Choice { instance }) = meta.nodes[meta_id].state.frontier
+            else {
+                return None;
+            };
+            control.is_none().then_some((node, instance))
+        })
+        .collect();
     lowerer.ir.entry = entry;
-    lowerer.ir.garbage_collect_unreachable();
+    let node_map = lowerer.ir.garbage_collect_unreachable();
     lowerer.ir.simplify_all_exprs();
-    (lowerer.ir, node_choice)
+    let choice_instances = choice_instances
+        .into_iter()
+        .filter_map(|(node, instance)| Some((node_map.get(&node).copied()?, instance)))
+        .collect();
+    (lowerer.ir, node_choice, choice_instances)
 }
 
 #[allow(dead_code)]
@@ -785,7 +805,7 @@ pub fn lower_bounded_driver_nfa(
         })
         .collect();
     let meta = bounded_driver_meta(timings, fork_bound);
-    let (graph, node_choice) =
+    let (graph, node_choice, _) =
         lower_exact_meta_driver_nfa(meta.clone(), protocols, symbols, expr_ctx);
     (graph, meta, node_choice)
 }
@@ -814,9 +834,35 @@ pub fn lower_steady_driver_nfa(
         .collect();
     let meta = steady_driver_meta(timings);
     println!("{}", to_dot(&meta));
-    let (graph, node_choice) =
+    let (graph, node_choice, _) =
         lower_exact_meta_driver_nfa(meta.clone(), protocols, symbols, expr_ctx);
     (graph, meta, node_choice)
+}
+
+/// Steady-driver lowering together with the meta choice instance associated
+/// with each lowered choice node.  The mapping is needed by stateful backends
+/// when they capture a newly selected transaction into a bank.
+pub fn lower_steady_driver_nfa_with_choice_instances(
+    protocols: Vec<Protocol>,
+    symbols: &SymbolTable,
+    expr_ctx: ExprContext,
+) -> (ProtoGraph, MetaAutomaton, ExprRef, FxHashMap<NodeId, usize>) {
+    assert!(!protocols.is_empty(), "a driver needs at least one protocol");
+
+    let timings: Vec<_> = protocols
+        .iter()
+        .cloned()
+        .map(|protocol| {
+            let mut graph = lower_ast_to_ir(protocol, symbols);
+            contract_edges(&mut graph, symbols);
+            graph.garbage_collect_unreachable();
+            analyze_protocol_timing(&graph)
+        })
+        .collect();
+    let meta = steady_driver_meta(timings);
+    let (graph, node_choice, choice_instances) =
+        lower_exact_meta_driver_nfa(meta.clone(), protocols, symbols, expr_ctx);
+    (graph, meta, node_choice, choice_instances)
 }
 
 // TODO: Expand branching and looping pre-phase control into multiple concrete
@@ -908,7 +954,7 @@ mod tests {
         let (graph, _, _) = lower_steady_driver_nfa(module.protos, &symbols, ExprContext::default());
 
         assert!(graph.nodes().count() <= 16, "unexpected steady-state blowup");
-        let dfa = determinized(graph, &symbols);
+        let dfa = determinized(graph.clone(), &symbols);
         assert!(dfa.nodes().count() <= 64, "unexpected determinization blowup");
     }
 
@@ -924,8 +970,57 @@ mod tests {
             .collect();
         let (graph, _, _) = lower_steady_driver_nfa(protocols, &symbols, ExprContext::default());
         assert!(graph.nodes().count() <= 8, "unexpected straight-line blowup");
-        let dfa = determinized(graph, &symbols);
+        let dfa = determinized(graph.clone(), &symbols);
         assert!(dfa.nodes().count() <= 16, "unexpected determinization blowup");
+    }
+
+    fn lower_add_sub_with_meta(meta: MetaAutomaton) -> (ProtoGraph, SymbolTable) {
+        let mut handler = DiagnosticHandler::default();
+        let (symbols, modules) = frontend(
+            &["../tests/meta/steady_state_add_sub_long_pre.prot"],
+            &mut handler,
+            false,
+        )
+        .unwrap();
+        let module = require_single_module(
+            modules,
+            &["../tests/meta/steady_state_add_sub_long_pre.prot"],
+        )
+        .unwrap();
+        let protocols = module.protos;
+        let (graph, _, _) = lower_exact_meta_driver_nfa(
+            meta,
+            protocols,
+            &symbols,
+            ExprContext::default(),
+        );
+        (graph, symbols)
+    }
+
+    #[test]
+    fn steady_state_add_sub_long_pre_bounded_meta_lowering() {
+        let meta = steady_driver_meta(vec![
+            ProtocolTiming::new("add", vec![2], 1),
+            ProtocolTiming::new("sub", vec![2], 1),
+        ]);
+        let (graph, symbols) = lower_add_sub_with_meta(meta);
+        assert!(graph.nodes().count() <= 32, "unexpected steady-state blowup");
+        let dfa = determinized(graph.clone(), &symbols);
+        assert!(dfa.nodes().count() <= 128, "unexpected determinization blowup");
+        insta::assert_snapshot!(to_dot_string(&graph, &symbols));
+    }
+
+    #[test]
+    fn steady_state_add_sub_long_pre_unbounded_meta_lowering() {
+        let meta = steady_driver_meta(vec![
+            ProtocolTiming::unbounded("add", 1),
+            ProtocolTiming::unbounded("sub", 1),
+        ]);
+        let (graph, symbols) = lower_add_sub_with_meta(meta);
+        assert!(graph.nodes().count() <= 32, "unexpected steady-state blowup");
+        let dfa = determinized(graph.clone(), &symbols);
+        assert!(dfa.nodes().count() <= 128, "unexpected determinization blowup");
+        insta::assert_snapshot!(to_dot_string(&graph, &symbols));
     }
 
     #[test]

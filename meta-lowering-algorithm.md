@@ -66,6 +66,43 @@ cycle positions are copied into every concrete frontier variant.
 7. Add transitions by inspecting the concrete step transitions from each
    frontier control node.
 
+### Concrete Step Transitions
+
+The phrase "inspect the concrete step transitions" means that we do not infer
+the next state from timing information alone. For each lowered state
+`(meta, control)`, use `control` as a node in the contracted protocol graph and
+look at its outgoing transitions produced by `step()`.
+
+For every such outgoing edge:
+
+1. Copy the edge's guard, including conditions from the protocol's `if` or
+   `while` statements.
+2. Determine whether the edge is a continuation or reaches a protocol
+   boundary. A boundary is identified using the concrete source node's fork or
+   done behavior, not merely by the fact that the meta-automaton has an edge.
+3. Combine the concrete edge guard with the meta edge guard and with the guards
+   for any live post-phase transactions that must advance on the same cycle.
+4. Emit the resulting edge from `(meta, control)` to the lowered state
+   associated with the target control node and target meta node.
+
+For example, suppose a wait loop has these concrete edges:
+
+```text
+wait --!ready--> wait_body
+wait -- ready--> after_wait
+```
+
+The lowering emits both alternatives. The first remains inside the same meta
+pre-phase and targets `(meta, wait_body)`. The second follows the corresponding
+meta edge and targets `(next_meta, after_wait)`. If `after_wait` later reaches a
+fork, that fork is emitted only on the concrete edge where the protocol graph
+actually reaches the fork boundary.
+
+This is what preserves loop behavior: the lowering allocates the finite set of
+concrete control nodes once, then reconnects their guarded edges. It does not
+try to guess whether an unbounded loop has executed a particular number of
+iterations, and it does not unroll the loop.
+
 The same concrete control node may be revisited indefinitely by a loop, but it
 is allocated only once. This is why an unbounded loop does not cause infinite
 unrolling.
