@@ -41,8 +41,6 @@ interface Wishbone {
 
 prot reset<self: Wishbone>() {
     self.RST := 1'b1;
-    step();
-    fork();
     self.CYC := 1'b0;
     self.STB := 1'b0;
     step();

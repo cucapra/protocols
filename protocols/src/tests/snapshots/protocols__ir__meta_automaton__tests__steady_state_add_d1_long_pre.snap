@@ -1,6 +1,5 @@
 ---
 source: protocols/src/ir/meta_automaton.rs
-assertion_line: 559
 expression: content
 ---
 digraph "driver_meta" {

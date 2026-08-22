@@ -601,7 +601,10 @@ mod tests {
 
     #[test]
     fn steady_state_d1_long_pre() {
-        let inputs = vec![ProtocolTiming::new("A", vec![2], 1), ProtocolTiming::new("S", vec![2], 1)];
+        let inputs = vec![
+            ProtocolTiming::new("A", vec![2], 1),
+            ProtocolTiming::new("S", vec![2], 1),
+        ];
         let graph = steady_driver_meta(inputs);
 
         snap("steady_state_add_d1_long_pre", &to_dot(&graph))
@@ -609,7 +612,10 @@ mod tests {
 
     #[test]
     fn steady_state_d1_unbounded_pre() {
-        let inputs = vec![ProtocolTiming::unbounded("A", 1), ProtocolTiming::unbounded("S", 1)];
+        let inputs = vec![
+            ProtocolTiming::unbounded("A", 1),
+            ProtocolTiming::unbounded("S", 1),
+        ];
         let graph = steady_driver_meta(inputs);
 
         snap("steady_state_add_d1_unbounded_pre", &to_dot(&graph))

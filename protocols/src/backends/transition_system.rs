@@ -418,8 +418,10 @@ pub fn lower_proto_graph_to_transition_system(
     };
     // The interpreter exposes these states directly, but BMC needs them as
     // explicit safety properties in order to search for assertion failures.
-    ts.bad_states.push(ctx.equal(node_sym, external_bad_state_id));
-    ts.bad_states.push(ctx.equal(node_sym, internal_bad_state_id));
+    ts.bad_states
+        .push(ctx.equal(node_sym, external_bad_state_id));
+    ts.bad_states
+        .push(ctx.equal(node_sym, internal_bad_state_id));
     ts.add_state(&ctx, node_state);
 
     CoreLoweredSystem {

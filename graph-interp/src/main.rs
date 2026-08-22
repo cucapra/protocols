@@ -445,7 +445,10 @@ fn run_meta_transition_system(
                 }
                 transition_sim.set(
                     res.node_choice,
-                    &BitVecValue::from_u64(protocol_id as u64, res.node_choice.get_bv_type(&res.ctx).unwrap()),
+                    &BitVecValue::from_u64(
+                        protocol_id as u64,
+                        res.node_choice.get_bv_type(&res.ctx).unwrap(),
+                    ),
                 );
                 transaction_idx += 1;
             }

@@ -39,7 +39,7 @@ fn replace_expr(ctx: &mut Context, expr: ExprRef, old: ExprRef, new: ExprRef) ->
 }
 
 fn mod_add(ctx: &mut Context, value: ExprRef, amount: usize, modulus: usize) -> ExprRef {
-    if modulus == 1 || amount % modulus == 0 {
+    if modulus == 1 || amount.is_multiple_of(modulus) {
         return value;
     }
     let width = value.get_bv_type(ctx).unwrap();
@@ -99,15 +99,16 @@ pub fn into_meta_transition_system(
     let rd = reaching_definitions(&mut pg, symbols);
     propagate_assignments(&mut pg, symbols, &rd);
     let ctx = std::mem::take(&mut pg.expr_ctx);
-    let core = lower_proto_graph_to_transition_system(
-        pg,
-        ctx,
-        ts,
-        symbol_to_port,
-        port_to_expr,
+    let core =
+        lower_proto_graph_to_transition_system(pg, ctx, ts, symbol_to_port, port_to_expr, symbols);
+    lower_meta_core(
+        core,
+        protocols,
         symbols,
-    );
-    lower_meta_core(core, protocols, symbols, meta, node_choice, choice_instances)
+        meta,
+        node_choice,
+        choice_instances,
+    )
 }
 
 fn lower_meta_core(
@@ -201,7 +202,12 @@ fn lower_meta_core(
                 let guard = ctx.and(ready, selected_node);
                 let bank = (instance + head_value) % bank_counts[protocol_id];
                 capture[protocol_id][bank] = ctx.or(capture[protocol_id][bank], guard);
-                let physical = mod_add(&mut ctx, heads[protocol_id], instance, bank_counts[protocol_id]);
+                let physical = mod_add(
+                    &mut ctx,
+                    heads[protocol_id],
+                    instance,
+                    bank_counts[protocol_id],
+                );
                 bank_expr = ctx.ite(guard, physical, bank_expr);
             }
         }
@@ -222,14 +228,15 @@ fn lower_meta_core(
                 let mut read = ctx.zero(arg_width as WidthInt);
                 for head_value in 0..bank_counts[protocol_id] {
                     let bank = (instance + head_value) % bank_counts[protocol_id];
-                    let bank_value = bank_states[protocol_id][bank]
-                        [protocol.args.iter().position(|a| a.symbol() == symbol).unwrap()];
+                    let bank_value = bank_states[protocol_id][bank][protocol
+                        .args
+                        .iter()
+                        .position(|a| a.symbol() == symbol)
+                        .unwrap()];
                     let input = protocol_inputs[&(protocol_id, symbol)];
                     let value = ctx.ite(capture[protocol_id][bank], input, bank_value);
-                    let head_literal = ctx.bit_vec_val(
-                        head_value,
-                        heads[protocol_id].get_bv_type(&ctx).unwrap(),
-                    );
+                    let head_literal =
+                        ctx.bit_vec_val(head_value, heads[protocol_id].get_bv_type(&ctx).unwrap());
                     let head_eq = ctx.equal(heads[protocol_id], head_literal);
                     read = ctx.ite(head_eq, value, read);
                 }
@@ -255,17 +262,37 @@ fn lower_meta_core(
                     continue;
                 };
                 let guard = ctx.and(node_guard, transition.guard);
-                let next = mod_add(&mut ctx, heads[protocol_id], amount, bank_counts[protocol_id]);
+                let next = mod_add(
+                    &mut ctx,
+                    heads[protocol_id],
+                    amount,
+                    bank_counts[protocol_id],
+                );
                 head_next = ctx.ite(guard, next, head_next);
             }
         }
-        ts.add_state(&ctx, State { symbol: heads[protocol_id], init: Some(zero), next: Some(head_next) });
+        ts.add_state(
+            &ctx,
+            State {
+                symbol: heads[protocol_id],
+                init: Some(zero),
+                next: Some(head_next),
+            },
+        );
         for (bank, args) in banks.iter().enumerate() {
             for (arg_index, state_arg) in args.iter().enumerate() {
-                let input = protocol_inputs[&(protocol_id, protocols[protocol_id].args[arg_index].symbol())];
+                let input = protocol_inputs
+                    [&(protocol_id, protocols[protocol_id].args[arg_index].symbol())];
                 let next = ctx.ite(capture[protocol_id][bank], input, *state_arg);
                 let init = ctx.zero(state_arg.get_bv_type(&ctx).unwrap());
-                ts.add_state(&ctx, State { symbol: *state_arg, init: Some(init), next: Some(next) });
+                ts.add_state(
+                    &ctx,
+                    State {
+                        symbol: *state_arg,
+                        init: Some(init),
+                        next: Some(next),
+                    },
+                );
             }
         }
     }
@@ -276,7 +303,11 @@ fn lower_meta_core(
 
     ts.add_output(&mut ctx, Cow::from("fork_ready"), ready);
     for (protocol, bank) in protocols.iter().zip(fork_banks.iter()) {
-        ts.add_output(&mut ctx, Cow::from(format!("fork_bank_{}", protocol.name)), *bank);
+        ts.add_output(
+            &mut ctx,
+            Cow::from(format!("fork_bank_{}", protocol.name)),
+            *bank,
+        );
     }
 
     let mut port_to_expr = core.port_to_expr;
@@ -316,9 +347,14 @@ mod tests {
     // TODO: add more testing
     fn add_d1_banked_driver_bmc(add_constraint: bool) -> patronus::mc::ModelCheckResult {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&["../tests/adders/adder_d1/add_d1.prot"], &mut handler, false)
-            .unwrap();
-        let module = require_single_module(modules, &["../tests/adders/adder_d1/add_d1.prot"]).unwrap();
+        let (symbols, modules) = frontend(
+            &["../tests/adders/adder_d1/add_d1.prot"],
+            &mut handler,
+            false,
+        )
+        .unwrap();
+        let module =
+            require_single_module(modules, &["../tests/adders/adder_d1/add_d1.prot"]).unwrap();
         let protocols = module
             .protos
             .iter()
@@ -345,18 +381,26 @@ mod tests {
             sim.ctx.clone(),
         );
 
-        assert!(result
-            .ts
-            .inputs
-            .iter()
-            .all(|input| !result.ctx.get_symbol_name(*input).unwrap().contains("#bank")));
-        assert!(result
-            .ts
-            .states
-            .iter()
-            .any(|state| result.ctx.get_symbol_name(state.symbol).unwrap().contains("#bank0_add")));
+        assert!(result.ts.inputs.iter().all(|input| {
+            !result
+                .ctx
+                .get_symbol_name(*input)
+                .unwrap()
+                .contains("#bank")
+        }));
+        assert!(result.ts.states.iter().any(|state| {
+            result
+                .ctx
+                .get_symbol_name(state.symbol)
+                .unwrap()
+                .contains("#bank0_add")
+        }));
 
-        let add = module.protos.iter().find(|protocol| protocol.name == "add").unwrap();
+        let add = module
+            .protos
+            .iter()
+            .find(|protocol| protocol.name == "add")
+            .unwrap();
         let a = result.protocol_inputs[&(0, add.args[0].symbol())];
         let b = result.protocol_inputs[&(0, add.args[1].symbol())];
         let s = result.protocol_inputs[&(0, add.args[2].symbol())];
