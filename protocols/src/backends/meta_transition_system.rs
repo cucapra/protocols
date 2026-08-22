@@ -313,6 +313,7 @@ mod tests {
     use patronus::mc::bmc;
     use patronus::smt::{Solver, Z3};
 
+    // TODO: add more testing
     fn add_d1_banked_driver_bmc(add_constraint: bool) -> patronus::mc::ModelCheckResult {
         let mut handler = DiagnosticHandler::default();
         let (symbols, modules) = frontend(&["../tests/adders/adder_d1/add_d1.prot"], &mut handler, false)
@@ -363,8 +364,7 @@ mod tests {
         if add_constraint {
             result.ts.constraints.push(result.ctx.equal(s, sum));
         }
-        // The backend registers external/internal assertion states as bad
-        // states; this is an actual assertion check, not a dummy property.
+
         assert_eq!(result.ts.bad_states.len(), 2);
 
         let mut solver = Z3.start(None).unwrap();

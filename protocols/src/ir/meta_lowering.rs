@@ -8,20 +8,14 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::{contract_edges, contract_edges_from};
 use crate::ir::lowering::{Lowerer, lower_ast_to_ir};
 use crate::ir::meta_automaton::{
-    MetaAutomaton, MetaFrontier, MetaOutcome, ProtocolTiming, bounded_driver_meta,
-    steady_driver_meta,
+    MetaAutomaton, MetaFrontier, MetaOutcome, bounded_driver_meta, steady_driver_meta,
 };
-use crate::ir::meta_graphviz::to_dot;
 use crate::ir::meta_timing::analyze_protocol_timing;
 use crate::ir::proto_graph::{
     Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation,
 };
 
 struct ProtocolShape {
-    /// Pre-cycle zero is the cycle represented by E.
-    #[allow(dead_code)]
-    pre: Vec<NodeId>,
-    /// Ordered from the fork cycle through the final post cycle.
     post: Vec<NodeId>,
     done: NodeId,
 }
@@ -62,7 +56,7 @@ fn only_step(graph: &ProtoGraph, node: NodeId) -> &Transition {
     assert_eq!(
         transitions.len(),
         1,
-        "TODO: meta lowering does not yet expand branching protocol cycles"
+        "expected one transition in a linear phase"
     );
     assert!(
         transitions[0].consumes_step,
@@ -106,9 +100,10 @@ fn boundary_guard(
         .collect();
     if has_post_phase {
         guards.extend(graph[node].transitions.iter().filter_map(|transition| {
-            let target_is_fork = graph[transition.target].actions.iter().any(|action| {
-                matches!(graph[action.op], Op::Fork)
-            });
+            let target_is_fork = graph[transition.target]
+                .actions
+                .iter()
+                .any(|action| matches!(graph[action.op], Op::Fork));
             target_is_fork.then_some(transition.guard)
         }));
     } else {
@@ -124,60 +119,28 @@ fn boundary_guard(
         .fold(graph.false_id(), |guard, next| graph.or_guard(guard, next))
 }
 
-// For now actual driver lowering handles one contracted control path. The meta
-// construction itself already handles finite alternatives and unbounded pre phases.
-fn protocol_shape(graph: &ProtoGraph, entry: NodeId, timing: &ProtocolTiming) -> ProtocolShape {
+fn protocol_shape(graph: &ProtoGraph, entry: NodeId, post_cycles: usize) -> ProtocolShape {
     let forks = reachable_markers(graph, entry, true);
     assert!(forks.len() <= 1, "only one fork per protocol is supported");
     let done = reachable_markers(graph, entry, false);
     assert_eq!(done.len(), 1, "each protocol must have exactly one done");
     let boundary = forks.first().copied().unwrap_or(done[0]);
 
-    let mut pre = Vec::new();
-    let mut node = entry;
-    if timing.pre_cycles.is_none() {
-        // The meta automaton intentionally collapses all sufficiently old
-        // iterations of an unbounded pre-phase into one wait state.  Keep the
-        // entry state for the choice edge and the state reached after its first
-        // step for the collapsed frontier state.  The latter may have guarded
-        // transitions (typically the loop exit and loop backedge).
-        pre.push(entry);
-        let transitions = step_transitions(graph, entry);
-        // A loop can begin at the entry node itself, in which case the first
-        // control step already has multiple guarded alternatives.  Keep that
-        // node as the collapsed wait state.  A unique first step, on the
-        // other hand, commonly leads through setup into the loop guard.
-        pre.push(if transitions.len() == 1 {
-            transitions[0].target
-        } else {
-            entry
-        });
-    } else {
-        while node != boundary {
-            assert!(
-                !pre.contains(&node),
-                "looping pre-phase requires an unbounded timing"
-            );
-            pre.push(node);
-            node = only_step(graph, node).target;
-        }
-    }
-
+    let mut node = boundary;
     let mut post = Vec::new();
-    if timing.post_cycles > 0 {
-        node = boundary;
+    if post_cycles > 0 {
         while node != done[0] {
             assert!(!post.contains(&node), "post-phase cannot contain a cycle");
             post.push(node);
             node = only_step(graph, node).target;
         }
-        assert_eq!(post.len(), timing.post_cycles);
+        assert_eq!(post.len(), post_cycles);
     }
 
-    if let Some(lengths) = &timing.pre_cycles {
-        assert_eq!(pre.len(), lengths[0]);
+    ProtocolShape {
+        post,
+        done: done[0],
     }
-    ProtocolShape { pre, post, done: done[0] }
 }
 
 fn remap_expr(
@@ -288,17 +251,20 @@ fn reachable_pre_nodes(graph: &ProtoGraph, entry: NodeId) -> Vec<NodeId> {
         }
         // The fork node starts the post-phase and the done node is only a
         // terminal marker. Neither is a concrete pre-phase frontier.
-        let stops = graph[node].actions.iter().any(|action| {
-            matches!(graph[action.op], Op::Fork | Op::Done)
-        });
+        let stops = graph[node]
+            .actions
+            .iter()
+            .any(|action| matches!(graph[action.op], Op::Fork | Op::Done));
         if stops {
             continue;
         }
         nodes.push(node);
         for transition in step_transitions(graph, node) {
-            if !graph[transition.target].actions.iter().any(|action| {
-                matches!(graph[action.op], Op::Done)
-            }) {
+            if !graph[transition.target]
+                .actions
+                .iter()
+                .any(|action| matches!(graph[action.op], Op::Done))
+            {
                 queue.push_back(transition.target);
             }
         }
@@ -306,17 +272,18 @@ fn reachable_pre_nodes(graph: &ProtoGraph, entry: NodeId) -> Vec<NodeId> {
     nodes
 }
 
-/// Expand each timing-meta state into the concrete protocol control states
-/// that can inhabit its pre-phase.  The timing graph supplies the live
-/// transaction/banking context; concrete control nodes supply the missing
-/// information needed to lower loops and multi-cycle continuations.
+/// Expand each meta state into the concrete protocol states
+/// that can inhabit its pre-phase.
 fn lower_exact_meta_driver_nfa(
     meta: MetaAutomaton,
     protocols: Vec<Protocol>,
     symbols: &SymbolTable,
     expr_ctx: ExprContext,
 ) -> (ProtoGraph, ExprRef, FxHashMap<NodeId, usize>) {
-    assert!(!protocols.is_empty(), "a driver needs at least one protocol");
+    assert!(
+        !protocols.is_empty(),
+        "a driver needs at least one protocol"
+    );
     assert_eq!(protocols.len(), meta.protocols.len());
 
     let mut lowerer = Lowerer::with_expr_ctx(protocols[0].ctx.clone(), symbols, expr_ctx);
@@ -330,7 +297,7 @@ fn lower_exact_meta_driver_nfa(
     let shapes: Vec<_> = fragments
         .iter()
         .zip(&meta.protocols)
-        .map(|(fragment, timing)| protocol_shape(&lowerer.ir, fragment.entry, timing))
+        .map(|(fragment, timing)| protocol_shape(&lowerer.ir, fragment.entry, timing.post_cycles))
         .collect();
     let pre_nodes: Vec<_> = fragments
         .iter()
@@ -351,10 +318,7 @@ fn lower_exact_meta_driver_nfa(
         match meta_node.state.frontier {
             Some(MetaFrontier::Pre { protocol, .. }) => {
                 for &control in &pre_nodes[protocol] {
-                    driver_nodes.insert(
-                        (meta_id, Some(control)),
-                        lowerer.ir.n(Node::empty()),
-                    );
+                    driver_nodes.insert((meta_id, Some(control)), lowerer.ir.n(Node::empty()));
                 }
             }
             Some(MetaFrontier::Choice { .. }) | None => {
@@ -363,8 +327,7 @@ fn lower_exact_meta_driver_nfa(
         }
     }
 
-    // Install actions.  Every concrete variant gets the same live actions,
-    // plus actions from its own frontier control node.
+    // Install actions
     for (meta_id, meta_node) in meta.nodes.iter().enumerate() {
         let variants: Vec<_> = driver_nodes
             .iter()
@@ -381,7 +344,11 @@ fn lower_exact_meta_driver_nfa(
                     symbols,
                     transaction.instance,
                 );
-                let copy = action_copy(&mut lowerer.ir, shapes[protocol].post[index], &substitutions);
+                let copy = action_copy(
+                    &mut lowerer.ir,
+                    shapes[protocol].post[index],
+                    &substitutions,
+                );
                 lowerer.graft_contracted_entry(driver, copy, lowerer.ir.true_id());
             }
 
@@ -391,12 +358,8 @@ fn lower_exact_meta_driver_nfa(
                         .iter()
                         .enumerate()
                         .map(|(protocol, ast)| {
-                            let substitutions = instance_substitutions(
-                                &mut lowerer.ir,
-                                ast,
-                                symbols,
-                                instance,
-                            );
+                            let substitutions =
+                                instance_substitutions(&mut lowerer.ir, ast, symbols, instance);
                             let copy = action_copy(
                                 &mut lowerer.ir,
                                 fragments[protocol].entry,
@@ -414,7 +377,12 @@ fn lower_exact_meta_driver_nfa(
                         .collect();
                     lowerer.graft_disjoint_contracted_entries(driver, &choices);
                 }
-                (Some(MetaFrontier::Pre { protocol, instance, .. }), Some(control)) => {
+                (
+                    Some(MetaFrontier::Pre {
+                        protocol, instance, ..
+                    }),
+                    Some(control),
+                ) => {
                     let substitutions = instance_substitutions(
                         &mut lowerer.ir,
                         &protocols[protocol],
@@ -452,18 +420,17 @@ fn lower_exact_meta_driver_nfa(
                 }
                 (
                     Some(MetaFrontier::Pre {
-                        protocol,
-                        instance,
-                        ..
+                        protocol, instance, ..
                     }),
                     Some(control),
                 ) => (Some(protocol), instance, Some(control)),
                 _ => continue,
             };
 
-            let edges = meta_node.edges.iter().filter(|edge| {
-                frontier_protocol.is_none_or(|protocol| protocol == edge.protocol)
-            });
+            let edges = meta_node
+                .edges
+                .iter()
+                .filter(|edge| frontier_protocol.is_none_or(|protocol| protocol == edge.protocol));
 
             for edge in edges {
                 let protocol = edge.protocol;
@@ -497,10 +464,10 @@ fn lower_exact_meta_driver_nfa(
 
                 for transaction in &meta_node.state.live {
                     let live_protocol = transaction.protocol;
-                    let index = meta.protocols[live_protocol].post_cycles
-                        - 1
-                        - transaction.post_cycle;
-                    let step_guard = only_step(&lowerer.ir, shapes[live_protocol].post[index]).guard;
+                    let index =
+                        meta.protocols[live_protocol].post_cycles - 1 - transaction.post_cycle;
+                    let step_guard =
+                        only_step(&lowerer.ir, shapes[live_protocol].post[index]).guard;
                     let live_substitutions = instance_substitutions(
                         &mut lowerer.ir,
                         &protocols[live_protocol],
@@ -560,8 +527,7 @@ fn lower_exact_meta_driver_nfa(
     let choice_instances: FxHashMap<_, _> = driver_nodes
         .iter()
         .filter_map(|(&(meta_id, control), &node)| {
-            let Some(MetaFrontier::Choice { instance }) = meta.nodes[meta_id].state.frontier
-            else {
+            let Some(MetaFrontier::Choice { instance }) = meta.nodes[meta_id].state.frontier else {
                 return None;
             };
             control.is_none().then_some((node, instance))
@@ -575,211 +541,6 @@ fn lower_exact_meta_driver_nfa(
         .filter_map(|(node, instance)| Some((node_map.get(&node).copied()?, instance)))
         .collect();
     (lowerer.ir, node_choice, choice_instances)
-}
-
-#[allow(dead_code)]
-fn lower_meta_driver_nfa_legacy(
-    meta: MetaAutomaton,
-    protocols: Vec<Protocol>,
-    symbols: &SymbolTable,
-    expr_ctx: ExprContext,
-) -> (ProtoGraph, ExprRef) {
-    assert!(
-        !protocols.is_empty(),
-        "a driver needs at least one protocol"
-    );
-    assert_eq!(
-        protocols.len(),
-        meta.protocols.len(),
-        "meta-automaton protocol count must match the lowered protocols"
-    );
-
-    let mut lowerer = Lowerer::with_expr_ctx(protocols[0].ctx.clone(), symbols, expr_ctx);
-    let mut fragments = Vec::new();
-    for protocol in &protocols {
-        let fragment = lowerer.lower_protocol_fragment(protocol, true, false);
-        contract_edges_from(&mut lowerer.ir, symbols, fragment.entry);
-        fragments.push(fragment);
-    }
-    let shapes: Vec<_> = fragments
-        .iter()
-        .zip(&meta.protocols)
-        .map(|(fragment, timing)| protocol_shape(&lowerer.ir, fragment.entry, timing))
-        .collect();
-
-    let width = if protocols.len() <= 1 {
-        1
-    } else {
-        usize::BITS - (protocols.len() - 1).leading_zeros()
-    };
-    let node_choice = lowerer.ir.expr_ctx.bv_symbol("node_choice", width);
-    let driver_nodes: Vec<_> = meta
-        .nodes
-        .iter()
-        .map(|_| lowerer.ir.n(Node::empty()))
-        .collect();
-
-    // Fill every concrete node from the AND/OR units in its meta state.
-    for (meta_id, meta_node) in meta.nodes.iter().enumerate() {
-        let driver = driver_nodes[meta_id];
-
-        for transaction in &meta_node.state.live {
-            let protocol = transaction.protocol;
-            let shape = &shapes[protocol];
-            let index = meta.protocols[protocol].post_cycles - 1 - transaction.post_cycle;
-            let substitutions = instance_substitutions(
-                &mut lowerer.ir,
-                &protocols[protocol],
-                symbols,
-                transaction.instance,
-            );
-            let copy = action_copy(&mut lowerer.ir, shape.post[index], &substitutions);
-            lowerer.graft_contracted_entry(driver, copy, lowerer.ir.true_id());
-        }
-
-        match meta_node.state.frontier {
-            Some(MetaFrontier::Choice { instance }) => {
-                let mut choices = Vec::new();
-                for protocol in 0..protocols.len() {
-                    let shape = &shapes[protocol];
-                    let substitutions = instance_substitutions(
-                        &mut lowerer.ir,
-                        &protocols[protocol],
-                        symbols,
-                        instance,
-                    );
-                    let copy = action_copy(&mut lowerer.ir, shape.pre[0], &substitutions);
-                    let guard = choice_guard(
-                        &mut lowerer.ir,
-                        node_choice,
-                        protocol,
-                        protocols.len(),
-                        width,
-                    );
-                    choices.push((copy, guard));
-                }
-                lowerer.graft_disjoint_contracted_entries(driver, &choices);
-            }
-            Some(MetaFrontier::Pre {
-                protocol,
-                instance,
-                elapsed,
-            }) => {
-                let shape = &shapes[protocol];
-                let substitutions = instance_substitutions(
-                    &mut lowerer.ir,
-                    &protocols[protocol],
-                    symbols,
-                    instance,
-                );
-                let copy = action_copy(&mut lowerer.ir, shape.pre[elapsed], &substitutions);
-                lowerer.graft_contracted_entry(driver, copy, lowerer.ir.true_id());
-            }
-            None => {
-                let done = lowerer.ir.o(Op::Done);
-                lowerer
-                    .ir
-                    .push_action(driver, Action::new(lowerer.ir.true_id(), done));
-            }
-        }
-    }
-
-    // Meta edges already represent exactly one cycle.
-    for (meta_id, meta_node) in meta.nodes.iter().enumerate() {
-        for edge in &meta_node.edges {
-            let mut guard = match meta_node.state.frontier.unwrap() {
-                MetaFrontier::Choice { .. } => choice_guard(
-                    &mut lowerer.ir,
-                    node_choice,
-                    edge.protocol,
-                    protocols.len(),
-                    width,
-                ),
-                MetaFrontier::Pre { .. } => lowerer.ir.true_id(),
-            };
-
-            // All currently active units must advance on this edge.
-            for transaction in &meta_node.state.live {
-                let mut ir = lowerer.ir.clone();
-                let protocol = transaction.protocol;
-                let index = meta.protocols[protocol].post_cycles - 1 - transaction.post_cycle;
-                let step_guard = only_step(&ir, shapes[protocol].post[index]).guard;
-                let substitutions = instance_substitutions(
-                    &mut ir,
-                    &protocols[protocol],
-                    symbols,
-                    transaction.instance,
-                );
-                let unit_guard = remap_expr(&mut ir, step_guard, &substitutions);
-                guard = lowerer.ir.and_guard(guard, unit_guard);
-            }
-
-            let (protocol, instance, elapsed) = match meta_node.state.frontier.unwrap() {
-                MetaFrontier::Choice { instance } => (edge.protocol, instance, 0),
-                MetaFrontier::Pre {
-                    protocol,
-                    instance,
-                    elapsed,
-                } => (protocol, instance, elapsed),
-            };
-            let source = shapes[protocol].pre[elapsed];
-            let substitutions =
-                instance_substitutions(&mut lowerer.ir, &protocols[protocol], symbols, instance);
-            let raw_boundary_guard = boundary_guard(
-                &mut lowerer.ir,
-                source,
-                meta.protocols[protocol].post_cycles > 0,
-                shapes[protocol].done,
-            );
-            let source_boundary_guard =
-                remap_expr(&mut lowerer.ir, raw_boundary_guard, &substitutions);
-            let source_transitions = step_transitions(&lowerer.ir, source);
-
-            for step in source_transitions {
-                // A contracted loop guard can have both a backedge and an
-                // exit edge.  The phase-boundary action is guarded by the
-                // exit condition, so split the control edge using that same
-                // condition instead of requiring a single step transition.
-                let step_guard = remap_expr(&mut lowerer.ir, step.guard, &substitutions);
-                let outcome_guard = if meta.protocols[protocol].pre_cycles.is_none() {
-                    match edge.outcome {
-                        MetaOutcome::Fork => {
-                            lowerer.ir.and_guard(step_guard, source_boundary_guard)
-                        }
-                        MetaOutcome::Continue => {
-                            let not_boundary = lowerer.ir.not_guard(source_boundary_guard);
-                            lowerer.ir.and_guard(step_guard, not_boundary)
-                        }
-                    }
-                } else {
-                    step_guard
-                };
-                let transition_guard = lowerer.ir.and_guard(guard, outcome_guard);
-                if transition_guard == lowerer.ir.false_id() {
-                    continue;
-                }
-
-                let mut transition =
-                    Transition::new(transition_guard, driver_nodes[edge.target], true);
-                transition.rotations = edge
-                    .rotations
-                    .iter()
-                    .map(|rotation| TransitionRotation {
-                        protocol: meta.protocols[rotation.protocol].name.clone(),
-                        amount: rotation.amount,
-                    })
-                    .collect();
-                lowerer
-                    .ir
-                    .push_transition(driver_nodes[meta_id], transition);
-            }
-        }
-    }
-
-    lowerer.ir.entry = driver_nodes[meta.entry];
-    lowerer.ir.garbage_collect_unreachable();
-    lowerer.ir.simplify_all_exprs();
-    (lowerer.ir, node_choice)
 }
 
 /// Lower a bounded meta-automaton into a driver with one control node per meta node.
@@ -810,44 +571,16 @@ pub fn lower_bounded_driver_nfa(
     (graph, meta, node_choice)
 }
 
-/// Lower a meta-automaton into a driver with one control node per meta node.
-/// Rotations remain transition annotations for later TS lowering.
-pub fn lower_steady_driver_nfa(
-    protocols: Vec<Protocol>,
-    symbols: &SymbolTable,
-    expr_ctx: ExprContext,
-) -> (ProtoGraph, MetaAutomaton, ExprRef) {
-    assert!(
-        !protocols.is_empty(),
-        "a driver needs at least one protocol"
-    );
-
-    let timings: Vec<_> = protocols
-        .iter()
-        .cloned()
-        .map(|protocol| {
-            let mut graph = lower_ast_to_ir(protocol, symbols);
-            contract_edges(&mut graph, symbols);
-            graph.garbage_collect_unreachable();
-            analyze_protocol_timing(&graph)
-        })
-        .collect();
-    let meta = steady_driver_meta(timings);
-    println!("{}", to_dot(&meta));
-    let (graph, node_choice, _) =
-        lower_exact_meta_driver_nfa(meta.clone(), protocols, symbols, expr_ctx);
-    (graph, meta, node_choice)
-}
-
-/// Steady-driver lowering together with the meta choice instance associated
-/// with each lowered choice node.  The mapping is needed by stateful backends
-/// when they capture a newly selected transaction into a bank.
+/// TODO: Explain the return type.
 pub fn lower_steady_driver_nfa_with_choice_instances(
     protocols: Vec<Protocol>,
     symbols: &SymbolTable,
     expr_ctx: ExprContext,
 ) -> (ProtoGraph, MetaAutomaton, ExprRef, FxHashMap<NodeId, usize>) {
-    assert!(!protocols.is_empty(), "a driver needs at least one protocol");
+    assert!(
+        !protocols.is_empty(),
+        "a driver needs at least one protocol"
+    );
 
     let timings: Vec<_> = protocols
         .iter()
@@ -865,12 +598,6 @@ pub fn lower_steady_driver_nfa_with_choice_instances(
     (graph, meta, node_choice, choice_instances)
 }
 
-// TODO: Expand branching and looping pre-phase control into multiple concrete
-// nodes for each meta continuation state.
-// TODO: TS lowering must interpret banked argument names relative to the heads
-// updated by TransitionRotation.
-// TODO: OR merging must never create InternalAssertFalse between alternatives.
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -881,6 +608,7 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::determinize::determinized;
     use crate::ir::graphviz::to_dot_string;
+    use crate::ir::meta_automaton::ProtocolTiming;
     use insta::Settings;
 
     fn snap_selected(name: &str, filename: &str, selected: &[&str]) {
@@ -892,7 +620,11 @@ mod tests {
             .into_iter()
             .filter(|protocol| selected.is_empty() || selected.contains(&protocol.name.as_str()))
             .collect();
-        let (graph, _, _) = lower_steady_driver_nfa(protocols, &symbols, ExprContext::default());
+        let (graph, _, _, _) = lower_steady_driver_nfa_with_choice_instances(
+            protocols,
+            &symbols,
+            ExprContext::default(),
+        );
         let dot = to_dot_string(&graph, &symbols);
 
         let mut settings = Settings::clone_current();
@@ -925,7 +657,11 @@ mod tests {
             frontend(&["../tests/counters/counter.prot"], &mut handler, false).unwrap();
         let module = require_single_module(modules, &["../tests/counters/counter.prot"]).unwrap();
         let protocols = module.protos;
-        let _ = lower_steady_driver_nfa(protocols, &symbols, ExprContext::default());
+        let _ = lower_steady_driver_nfa_with_choice_instances(
+            protocols,
+            &symbols,
+            ExprContext::default(),
+        );
     }
 
     #[test]
@@ -951,27 +687,48 @@ mod tests {
             &["../tests/meta/unbounded_pre_phase_steady_state_simple.prot"],
         )
         .unwrap();
-        let (graph, _, _) = lower_steady_driver_nfa(module.protos, &symbols, ExprContext::default());
+        let (graph, _, _, _) = lower_steady_driver_nfa_with_choice_instances(
+            module.protos,
+            &symbols,
+            ExprContext::default(),
+        );
 
-        assert!(graph.nodes().count() <= 16, "unexpected steady-state blowup");
+        assert!(
+            graph.nodes().count() <= 16,
+            "unexpected steady-state blowup"
+        );
         let dfa = determinized(graph.clone(), &symbols);
-        assert!(dfa.nodes().count() <= 64, "unexpected determinization blowup");
+        assert!(
+            dfa.nodes().count() <= 64,
+            "unexpected determinization blowup"
+        );
     }
 
     #[test]
     fn steady_add_sub_d1_is_finite_and_determinizable() {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&["../tests/alus/alu_d1.prot"], &mut handler, false).unwrap();
+        let (symbols, modules) =
+            frontend(&["../tests/alus/alu_d1.prot"], &mut handler, false).unwrap();
         let module = require_single_module(modules, &["../tests/alus/alu_d1.prot"]).unwrap();
         let protocols = module
             .protos
             .into_iter()
             .filter(|protocol| matches!(protocol.name.as_str(), "add" | "sub"))
             .collect();
-        let (graph, _, _) = lower_steady_driver_nfa(protocols, &symbols, ExprContext::default());
-        assert!(graph.nodes().count() <= 8, "unexpected straight-line blowup");
+        let (graph, _, _, _) = lower_steady_driver_nfa_with_choice_instances(
+            protocols,
+            &symbols,
+            ExprContext::default(),
+        );
+        assert!(
+            graph.nodes().count() <= 8,
+            "unexpected straight-line blowup"
+        );
         let dfa = determinized(graph.clone(), &symbols);
-        assert!(dfa.nodes().count() <= 16, "unexpected determinization blowup");
+        assert!(
+            dfa.nodes().count() <= 16,
+            "unexpected determinization blowup"
+        );
     }
 
     fn lower_add_sub_with_meta(meta: MetaAutomaton) -> (ProtoGraph, SymbolTable) {
@@ -988,12 +745,8 @@ mod tests {
         )
         .unwrap();
         let protocols = module.protos;
-        let (graph, _, _) = lower_exact_meta_driver_nfa(
-            meta,
-            protocols,
-            &symbols,
-            ExprContext::default(),
-        );
+        let (graph, _, _) =
+            lower_exact_meta_driver_nfa(meta, protocols, &symbols, ExprContext::default());
         (graph, symbols)
     }
 
@@ -1004,9 +757,15 @@ mod tests {
             ProtocolTiming::new("sub", vec![2], 1),
         ]);
         let (graph, symbols) = lower_add_sub_with_meta(meta);
-        assert!(graph.nodes().count() <= 32, "unexpected steady-state blowup");
+        assert!(
+            graph.nodes().count() <= 32,
+            "unexpected steady-state blowup"
+        );
         let dfa = determinized(graph.clone(), &symbols);
-        assert!(dfa.nodes().count() <= 128, "unexpected determinization blowup");
+        assert!(
+            dfa.nodes().count() <= 128,
+            "unexpected determinization blowup"
+        );
         insta::assert_snapshot!(to_dot_string(&graph, &symbols));
     }
 
@@ -1017,9 +776,15 @@ mod tests {
             ProtocolTiming::unbounded("sub", 1),
         ]);
         let (graph, symbols) = lower_add_sub_with_meta(meta);
-        assert!(graph.nodes().count() <= 32, "unexpected steady-state blowup");
+        assert!(
+            graph.nodes().count() <= 32,
+            "unexpected steady-state blowup"
+        );
         let dfa = determinized(graph.clone(), &symbols);
-        assert!(dfa.nodes().count() <= 128, "unexpected determinization blowup");
+        assert!(
+            dfa.nodes().count() <= 128,
+            "unexpected determinization blowup"
+        );
         insta::assert_snapshot!(to_dot_string(&graph, &symbols));
     }
 
@@ -1037,7 +802,13 @@ mod tests {
         snap_selected(
             "steady_wishbone",
             "../examples/wishbone/wishbone.prot",
-            &["read", "reset", "write", "idle_no_cycle", "idle_continue_cycle"],
+            &[
+                "read",
+                "reset",
+                "write",
+                "idle_no_cycle",
+                "idle_continue_cycle",
+            ],
         );
     }
 }
