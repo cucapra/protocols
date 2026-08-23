@@ -1,0 +1,32 @@
+---
+source: protocols/src/ir/meta_automaton.rs
+expression: content
+---
+digraph "driver_meta" {
+  rankdir=LR;
+  node [shape=box];
+  entry [shape=plain,label="ENTRY"];
+  entry -> node0;
+  node0 [label=<E<SUP>(0)</SUP>>];
+  node0 -> node1 [label=<id forks after 1>];
+  node0 -> node0 [label=<w finishes after 1>];
+  node0 -> node2 [label=<w continues>];
+  node1 [label=<id<SUB>1</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
+  node1 -> node3 [label=<id forks after 1>];
+  node1 -> node4 [label=<w finishes after 1>];
+  node1 -> node5 [label=<w continues>];
+  node2 [label=<w<SUB>pre[1]</SUB><SUP>(0)</SUP>>];
+  node2 -> node0 [label=<w finishes after 2>];
+  node2 -> node2 [label=<w continues>];
+  node3 [label=<id<SUB>0</SUB><SUP>(0)</SUP> ∧ id<SUB>1</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
+  node3 -> node3 [label=<id forks after 1 / R<SUB>id</SUB>>];
+  node3 -> node4 [label=<w finishes after 1 / R<SUB>id</SUB>>];
+  node3 -> node5 [label=<w continues / R<SUB>id</SUB>>];
+  node4 [label=<id<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(2)</SUP>>];
+  node4 -> node1 [label=<id forks after 1 / R<SUB>id</SUB><SUP>2</SUP>>];
+  node4 -> node0 [label=<w finishes after 1>];
+  node4 -> node2 [label=<w continues>];
+  node5 [label=<id<SUB>0</SUB><SUP>(0)</SUP> ∧ w<SUB>pre[1]</SUB><SUP>(1)</SUP>>];
+  node5 -> node0 [label=<w finishes after 2>];
+  node5 -> node2 [label=<w continues>];
+}

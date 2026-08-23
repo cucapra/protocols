@@ -137,9 +137,22 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
             };
 
             {
+                let mut rotations = Vec::new();
+                for (i, transition) in transitions.iter().enumerate() {
+                    if (mask >> i) & 1 == 0 {
+                        continue;
+                    }
+                    for rotation in &transition.rotations {
+                        if !rotations.contains(rotation) {
+                            rotations.push(rotation.clone());
+                        }
+                    }
+                }
                 let target_id =
                     get_or_create_state(targets, &mut state_ids, &mut worklist, &mut new_nodes);
-                new_trans.push(Transition::new(guard, target_id, true));
+                let mut transition = Transition::new(guard, target_id, true);
+                transition.rotations = rotations;
+                new_trans.push(transition);
             }
         }
 

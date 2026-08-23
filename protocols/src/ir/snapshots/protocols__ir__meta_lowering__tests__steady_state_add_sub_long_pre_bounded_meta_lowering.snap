@@ -1,0 +1,24 @@
+---
+source: protocols/src/ir/meta_lowering.rs
+assertion_line: 1010
+expression: "to_dot_string(&graph, &symbols)"
+---
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a#0_add if not(node_choice); a#0_sub if node_choice\n[1] DUT.b := X if 1\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice"];
+  node0 -> node1 [label="not(node_choice) / step"];
+  node0 -> node2 [label="node_choice / step"];
+  node1 [label="[1] DUT.b := b#0_add if 1"];
+  node1 -> node3 [label="1 / step"];
+  node2 [label="[1] DUT.b := b#0_sub if 1"];
+  node2 -> node4 [label="1 / step"];
+  node3 [label="[1] fork\n[1] DUT.a := a#1_add if not(node_choice); a#1_sub if node_choice\n[1] DUT.b := X if 1\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice\n[1] assert_eq(s#0_add, DUT.s)"];
+  node3 -> node1 [label="not(node_choice) / step / R_add"];
+  node3 -> node2 [label="node_choice / step / R_sub"];
+  node4 [label="[1] fork\n[1] DUT.a := a#1_add if not(node_choice); a#1_sub if node_choice\n[1] DUT.b := X if 1\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice\n[1] assert_eq(s#0_sub, DUT.s)"];
+  node4 -> node1 [label="not(node_choice) / step / R_add"];
+  node4 -> node2 [label="node_choice / step / R_sub"];
+}

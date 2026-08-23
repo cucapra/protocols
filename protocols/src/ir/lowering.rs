@@ -562,6 +562,7 @@ impl<'a> Lowerer<'a> {
                         target: new_target,
                         guard: self.remap_expr(transition.guard, substitutions),
                         consumes_step: transition.consumes_step,
+                        rotations: transition.rotations.clone(),
                     }
                 })
                 .collect();

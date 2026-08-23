@@ -39,11 +39,18 @@ impl Action {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransitionRotation {
+    pub protocol: String,
+    pub amount: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// A Transition is a guard, a target node, and flag if this transition consumes step
 pub struct Transition {
     pub guard: ExprRef,
     pub target: NodeId,
     pub consumes_step: bool,
+    pub rotations: Vec<TransitionRotation>,
 }
 
 impl Transition {
@@ -52,6 +59,7 @@ impl Transition {
             guard,
             target,
             consumes_step,
+            rotations: Vec::new(),
         }
     }
 
@@ -61,6 +69,7 @@ impl Transition {
             guard,
             target: self.target,
             consumes_step: self.consumes_step,
+            rotations: self.rotations.clone(),
         }
     }
 }
@@ -309,7 +318,7 @@ impl ProtoGraph {
 
     /// Rebuild the graph from the subgraph reachable from `entry`.
     /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(&mut self) {
+    pub fn garbage_collect_unreachable(&mut self) -> FxHashMap<NodeId, NodeId> {
         let mut reachable_old_nodes = Vec::new();
         let mut seen = FxHashSet::default();
         let mut q = VecDeque::from([self.entry]);
@@ -365,6 +374,8 @@ impl ProtoGraph {
         self.nodes = new_nodes;
         self.ops = new_ops;
         self.op_loc = new_op_loc;
+
+        node_map
     }
 }
 
@@ -481,6 +492,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(5),
                 consumes_step: false,
+                rotations: vec![],
             }
         );
 
@@ -494,6 +506,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(4),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -507,6 +520,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(3),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -518,6 +532,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(2),
                 consumes_step: true,
+                rotations: vec![],
             }]
         );
 
@@ -534,6 +549,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(1),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -572,6 +588,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(2),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -584,6 +601,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(1),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -611,6 +629,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(10),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -624,6 +643,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(9),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -635,6 +655,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(6),
                 consumes_step: true,
+                rotations: vec![],
             }]
         );
 
@@ -647,6 +668,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(2),
                 consumes_step: false,
+                rotations: vec![],
             }]
         );
 
@@ -658,6 +680,7 @@ mod tests {
                 guard: ir.true_id(),
                 target: NodeId(1),
                 consumes_step: true,
+                rotations: vec![],
             }]
         );
 
