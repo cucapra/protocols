@@ -280,18 +280,20 @@ impl SignalTrace for WaveSignalTrace {
         let signals = self.signals.clone();
         // random initial values
         let mut rng = RefCell::new(rand::rngs::SmallRng::seed_from_u64(0));
-        let mut bv_values: Vec<_> = signals
+        let widths: Vec<_> = signals
             .iter()
             .map(|s| {
-                let width = self
-                    .wave
+                self.wave
                     .hierarchy()
                     .get_signal_tpe(*s)
                     .unwrap()
                     .length()
-                    .unwrap();
-                BitVecValue::random(rng.get_mut(), width)
+                    .unwrap()
             })
+            .collect();
+        let mut bv_values: Vec<_> = widths
+            .iter()
+            .map(|&width| BitVecValue::random(rng.get_mut(), width))
             .collect();
         let mut times = vec![];
         let filter = wellen::stream::Filter::include_signals(&signals);
@@ -334,7 +336,20 @@ impl SignalTrace for WaveSignalTrace {
                         let idx = self.signal_ref_to_idx[s];
                         let value_ref = values.get(s).unwrap();
                         if let SignalValueRef::BitVec(value) = value_ref {
-                            bv_values[idx].assign_from_bytes_be(value.be_bytes().unwrap());
+                            if let Some(value_be_bytes) = value.be_bytes() {
+                                bv_values[idx].assign_from_bytes_be(value_be_bytes);
+                            } else {
+                                // there are X or Z values
+                                debug_assert!(
+                                    value.bit_string().chars().all(|c| c == 'x'),
+                                    "{}",
+                                    value.bit_string()
+                                );
+                                // randomize
+                                let width = widths[idx];
+                                let random_value = BitVecValue::random(rng.get_mut(), width);
+                                bv_values[idx].assign(&random_value);
+                            }
                         } else {
                             unreachable!("we only expect bit vectors");
                         }
