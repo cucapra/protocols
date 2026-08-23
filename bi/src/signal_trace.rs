@@ -24,7 +24,7 @@ pub struct SignalValues<'a> {
 
 impl<'a> SignalValues<'a> {
     /// Returns value of a design input / output at the current step.
-    pub fn get(&self, instance_id: u32, pin_id: SymbolId) -> BitVecValueRef {
+    pub fn get(&self, instance_id: u32, pin_id: SymbolId) -> BitVecValueRef<'_> {
         let key = PortKey {
             instance_id,
             pin_id,
@@ -625,7 +625,7 @@ fn tokenize(line: &str) -> Vec<&str> {
 }
 
 impl SignalTrace for AsciWaveTrace {
-    fn stream_steps(&mut self, callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+    fn stream_steps(&mut self, _callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
         todo!()
     }
     // fn step(&mut self) -> StepResult {
