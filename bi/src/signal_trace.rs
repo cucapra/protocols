@@ -82,8 +82,8 @@ pub struct WaveSignalTrace {
     /// to the optional `--sample_posedge` CLI argument
     clock_signal: Option<SignalRef>,
 
-    /// Maps a logical step to time step.
-    times: Vec<Time>,
+    /// Maps a logical step to time.
+    logical_step_to_time: Vec<Time>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -149,7 +149,7 @@ impl WaveSignalTrace {
             logical_step: 0,
             time_step: 0,
             clock_signal,
-            times: vec![],
+            logical_step_to_time: vec![],
         })
     }
 }
@@ -324,118 +324,16 @@ impl SignalTrace for WaveSignalTrace {
                 StreamError::Wellen(e) => e.to_string(),
                 StreamError::Callback(_) => "???".to_string(),
             })?;
-        self.times = times;
+        self.logical_step_to_time = times;
 
         Ok(())
     }
 
-    /// Advance to the next time step
-    /// (This should map 1:1 to a `step` in the Protocol)
-    // fn step(&mut self) -> StepResult {
-    //     // The no. of times we can call `step` is 1 less than the
-    //     // total no. of cycles available in the signal trace
-    //     let total_steps = (self.wave.time_table().len() - 1) as u32;
-    //     match self.sampling_mode {
-    //         // A `Direct` sampling mode means a `logical_step` maps 1:1
-    //         // to a `time_step` in the waveform
-    //         WaveSamplingMode::Direct => {
-    //             // If we haven't reached the end of the waveform yet
-    //             // (i.e. if `self.logical_step < total_steps`)
-    //             // increment the `logical_step` & `time_step` together
-    //             if self.logical_step < total_steps {
-    //                 self.logical_step += 1;
-    //                 self.time_step += 1;
-    //                 self.step_to_idx.push(self.time_step);
-    //             }
-    //             if self.logical_step == total_steps {
-    //                 StepResult::Done
-    //             } else {
-    //                 StepResult::Ok
-    //             }
-    //         }
-    //         // Sample on the next rising edge of `clock_signal_ref`
-    //         WaveSamplingMode::RisingEdge(clock_signal_ref) => {
-    //             // First, increment the logical step
-    //             self.logical_step += 1;
-    //
-    //             // Next, as long as the time-step is in bounds...
-    //             while self.time_step < total_steps {
-    //                 // ...first fetch the current signal value before incrementing
-    //                 let prev_value: bool = self
-    //                     .get_value(clock_signal_ref, self.time_step)
-    //                     .try_into()
-    //                     .unwrap();
-    //
-    //                 // Then, increment the `time_step`, and check whether
-    //                 // the prevous value is 0 while the new value is 1
-    //                 // If yes, we have encountered a rising clock-edge
-    //                 // and have found the new `time_step` for the waveform
-    //                 self.time_step += 1;
-    //                 let new_value: bool = self
-    //                     .get_value(clock_signal_ref, self.time_step)
-    //                     .try_into()
-    //                     .unwrap();
-    //                 if !prev_value && new_value {
-    //                     self.step_to_idx.push(self.time_step);
-    //                     return StepResult::Ok;
-    //                 }
-    //             }
-    //             // If we reach this point, we cannot increment the `time_step`
-    //             // any further, so we return `Done` to indicate that
-    //             // we've reached the end of the waveform
-    //             StepResult::Done
-    //         }
-    //         WaveSamplingMode::FallingEdge(_) => {
-    //             todo!("Handle WaveSamplingMode::FallingEdge when stepping WaveSignalTrace")
-    //         }
-    //     }
-    // }
-
-    /// Returns value of a design input / output at the current (logical) step.
-    /// Returns `Err` if the `pin` doesn't exist in the port map
-    /// for the given instance.
-    // fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
-    //     let key = PortKey {
-    //         instance_id,
-    //         pin_id: pin,
-    //     };
-    //     // Get the Wellen `SignalRef` (akin to `SignalId`)
-    //     let signal_ref = self.port_map.get(&key).unwrap();
-    //
-    //     // Obtain the `SignalValue` at the current `time_step`
-    //     // (represented as a bit-string)
-    //     match self.get_value(*signal_ref, self.time_step) {
-    //         SignalValueRef::BitVec(bv) if let Some(bytes_be) = bv.be_bytes() => {
-    //             let bytes_le: SmallVec<[u8; 12]> = bytes_be.iter().cloned().rev().collect();
-    //             BitVecValue::from_bytes_le(bytes_le.as_slice(), bv.width())
-    //         }
-    //         SignalValueRef::BitVec(bv) => {
-    //             // 4/9 state bit vec
-    //             debug_assert!(
-    //                 !bv.iter_lsb_to_msb()
-    //                     .all(|b| matches!(b.as_ascii(), '0' | '1'))
-    //             );
-    //             BitVecValue::random(self.rng.borrow_mut().deref_mut(), bv.width())
-    //         }
-    //         SignalValueRef::Event => {
-    //             unreachable!("event's are 0-bit and do not make sense in protocols")
-    //         }
-    //         SignalValueRef::String(_) => unreachable!("protocols do not support strings"),
-    //         SignalValueRef::Real(_) => unreachable!("protocols do not support reals"),
-    //     }
-    // }
-
     fn step_to_time(&self) -> StepToTime {
-        // let tt = self.wave.time_table();
-        // StepToTime {
-        //     logical_step_to_time: self
-        //         .step_to_idx
-        //         .iter()
-        //         .map(|step| tt[*step as usize])
-        //         .collect(),
-        //     timescale: self.wave.hierarchy().timescale(),
-        // }
-        todo!()
+        StepToTime {
+            logical_step_to_time: self.logical_step_to_time.clone(),
+            timescale: self.wave.hierarchy().timescale(),
+        }
     }
 }
 
