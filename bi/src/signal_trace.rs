@@ -3,29 +3,30 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance, run_bis};
-use baa::{BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
+use crate::{Instance};
+use baa::{BitVecMutOps, BitVecOps, BitVecValue, BitVecValueRef, WidthInt, Word};
 use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
-use smallvec::SmallVec;
 use std::cell::RefCell;
-use std::ops::DerefMut;
+use std::io::BufReader;
 use wellen::{Hierarchy, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
+use wellen::stream::{Filter, StreamError};
 
 /// Handle to all signal values at a point in time.
 /// Used in `stream_time_steps`.
 #[derive(Debug, Clone)]
 pub struct SignalValues<'a> {
-    port_map: &'a FxHashMap<(u32, SymbolId), usize>,
+    port_map: &'a FxHashMap<PortKey, usize>,
     values: &'a [BitVecValue],
 }
 
 impl<'a> SignalValues<'a> {
     /// Returns value of a design input / output at the current step.
-    pub fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValueRef {
-        let index = self.port_map[&(instance_id, pin)];
+    pub fn get(&self, instance_id: u32, pin_id: SymbolId) -> BitVecValueRef {
+        let key = PortKey { instance_id, pin_id };
+        let index = self.port_map[&key];
         (&self.values[index]).into()
     }
 }
@@ -39,7 +40,7 @@ pub trait SignalTrace {
 }
 
 /// The `WaveSamplingMode` determines how signals from a waveform are sampled
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum WaveSamplingMode {
     /// Sample on the rising edge of the signal, specified by its
@@ -57,8 +58,11 @@ pub enum WaveSamplingMode {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct WaveSignalTrace {
-    wave: wellen::simple::Waveform,
-    port_map: FxHashMap<PortKey, SignalRef>,
+    wave: wellen::stream::StreamingWaveform<BufReader<std::fs::File>>,
+    port_map: FxHashMap<PortKey, usize>,
+    signal_ref_to_idx: FxHashMap<SignalRef, usize>,
+    /// signals to stream
+    signals: Vec<SignalRef>,
 
     /// The sampling mode to be used on the waveform
     sampling_mode: WaveSamplingMode,
@@ -76,10 +80,7 @@ pub struct WaveSignalTrace {
     clock_signal: Option<SignalRef>,
 
     /// Maps a logical step to time step.
-    step_to_idx: Vec<u32>,
-
-    /// for generating random values to replace X
-    rng: RefCell<rand::rngs::SmallRng>,
+    times: Vec<Time>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -100,10 +101,11 @@ impl WaveSignalTrace {
         instances: &[Instance],
         sample_posedge: Option<String>,
     ) -> Result<Self, wellen::WellenError> {
-        let mut wave = wellen::simple::read(filename)?;
+        let opts = wellen::LoadOptions::default();
+        let wave = wellen::stream::read_from_file(filename, &opts)?;
 
         // find instances in the waveform hierarchy
-        let (port_map, clock_signal) =
+        let (port_to_signal, clock_signal) =
             find_instances(wave.hierarchy(), modules, instances, sample_posedge);
 
         // Determine the sampling mode based on the vavlue received
@@ -116,41 +118,29 @@ impl WaveSignalTrace {
         };
 
         // load all relavant signal references into memory
-        let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
+        let mut signals: Vec<SignalRef> = port_to_signal.values().cloned().collect();
         // Add clock signal if present
         if let Some(clk_sig) = clock_signal {
             signals.push(clk_sig);
         }
         signals.sort();
         signals.dedup();
-        wave.load_signals(&signals);
+
+        let signal_ref_to_idx: FxHashMap<SignalRef, usize> = signals.iter().cloned().enumerate().map(|(ii, s)| (s, ii)).collect();
+        let port_map = port_to_signal.iter().map(|(p, s)| (*p, signal_ref_to_idx[s])).collect();
+
 
         Ok(Self {
             wave,
             port_map,
+            signal_ref_to_idx,
+            signals,
             sampling_mode,
             logical_step: 0,
             time_step: 0,
             clock_signal,
-            step_to_idx: vec![0],
-            rng: RefCell::new(rand::rngs::SmallRng::seed_from_u64(0)),
+            times: vec![],
         })
-    }
-
-    /// Helper function that returns the string representation of a
-    /// `SignalValue` associated with a particular `SignalRef`
-    /// at a given `time_step`
-    fn get_value(&self, signal_ref: SignalRef, time_step: u32) -> SignalValueRef<'_> {
-        // Get the clock signal
-        let signal = self
-            .wave
-            .get_signal(signal_ref)
-            .unwrap_or_else(|| panic!("Unable to get signal for SignalRef {:?}", signal_ref));
-        let offset = signal
-            .get_offset(time_step)
-            .unwrap_or_else(|| panic!("Unable to get offset for time_step {}", time_step));
-        // Get the last value in the time step (this is to deal with delta cycles)
-        signal.get_value_at(&offset, offset.elements - 1)
     }
 }
 
@@ -263,7 +253,76 @@ fn find_instances(
     (port_map, clock_signal)
 }
 
+trait AssignFromBigEndianBytes {
+    fn assign_from_be_bytes(&mut self, bytes: &[u8]);
+}
+
+impl AssignFromBigEndianBytes for BitVecValue {
+    fn assign_from_be_bytes(&mut self, bytes: &[u8]) {
+        let bytes_max = self.width().div_ceil(8);
+        let bytes = if bytes.len() > bytes_max as usize {
+            let extra_zeros = bytes.len() - bytes_max as usize;
+            for b in bytes.iter().take(extra_zeros) {
+                debug_assert_eq!(*b, 0);
+            }
+            &bytes[extra_zeros..]
+        } else { bytes };
+        let bytes_per_word = Word::BITS / u8::BITS;
+        let zero_padding = (self.words().len() * bytes_per_word as usize) - bytes.len();
+        for
+    }
+}
+
 impl SignalTrace for WaveSignalTrace {
+    fn stream_steps(&mut self, callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+        let signals = self.signals.clone();
+        // random initial values
+        let mut rng = RefCell::new(rand::rngs::SmallRng::seed_from_u64(0));
+        let mut bv_values: Vec<_> = signals.iter().map(|s| {
+            let width = self.wave.hierarchy().get_signal_tpe(*s).unwrap().length().unwrap();
+            BitVecValue::random(rng.get_mut(), width)
+        }).collect();
+        let mut times = vec![];
+        let filter = wellen::stream::Filter::include_signals(&signals);
+        let sampling_mode = self.sampling_mode.clone();
+        let mut step_id = 0;
+        let mut prev_clock = false;
+        self.wave.stream_time_steps::<()>(filter, |time, values, changed| {
+            let is_step = match sampling_mode {
+                WaveSamplingMode::RisingEdge(clock) => {
+                    let current_clock: bool = values.get(&clock).unwrap().try_into().unwrap();
+                    let is_step = !prev_clock && current_clock;
+                    prev_clock = current_clock;
+                    is_step
+                }
+                WaveSamplingMode::FallingEdge(_) => todo!(),
+                WaveSamplingMode::Direct => true,
+            };
+            if is_step {
+                for s in changed {
+                    let idx = self.signal_ref_to_idx[s];
+                    let value_ref = values.get(s).unwrap();
+                    if let SignalValueRef::BitVec(value) = value_ref {
+                        bv_values[idx].assign_from_be_bytes(value.be_bytes().unwrap());
+                    } else {
+                        unreachable!("we only expect bit vectors");
+                    }
+
+                }
+                times.push(time);
+                callback(step_id, SignalValues { port_map: &self.port_map, values: &bv_values });
+                step_id += 1;
+            }
+            Ok(())
+        }).map_err(|e| match e {
+            StreamError::Wellen(e) => e.to_string(),
+            StreamError::Callback(_) => "???".to_string(),
+        })?;
+        self.times = times;
+
+        Ok(())
+    }
+
     /// Advance to the next time step
     /// (This should map 1:1 to a `step` in the Protocol)
     // fn step(&mut self) -> StepResult {
@@ -361,15 +420,16 @@ impl SignalTrace for WaveSignalTrace {
     // }
 
     fn step_to_time(&self) -> StepToTime {
-        let tt = self.wave.time_table();
-        StepToTime {
-            logical_step_to_time: self
-                .step_to_idx
-                .iter()
-                .map(|step| tt[*step as usize])
-                .collect(),
-            timescale: self.wave.hierarchy().timescale(),
-        }
+        // let tt = self.wave.time_table();
+        // StepToTime {
+        //     logical_step_to_time: self
+        //         .step_to_idx
+        //         .iter()
+        //         .map(|step| tt[*step as usize])
+        //         .collect(),
+        //     timescale: self.wave.hierarchy().timescale(),
+        // }
+        todo!()
     }
 }
 
@@ -559,6 +619,9 @@ fn tokenize(line: &str) -> Vec<&str> {
 }
 
 impl SignalTrace for AsciWaveTrace {
+    fn stream_steps(&mut self, callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+        todo!()
+    }
     // fn step(&mut self) -> StepResult {
     //     let num_steps = self.values[0].len();
     //     debug_assert!(self.values.iter().all(|v| v.len() == num_steps));
