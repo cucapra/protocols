@@ -3,16 +3,16 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::{Instance};
-use baa::{BitVecMutOps, BitVecOps, BitVecValue, BitVecValueRef, WidthInt, Word};
+use crate::Instance;
+use baa::{BitVecMutOps, BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
 use protocols::frontend::Module;
 use protocols::frontend::symbol::SymbolId;
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::io::BufReader;
+use wellen::stream::StreamError;
 use wellen::{Hierarchy, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
-use wellen::stream::{Filter, StreamError};
 
 /// Handle to all signal values at a point in time.
 /// Used in `stream_time_steps`.
@@ -25,7 +25,10 @@ pub struct SignalValues<'a> {
 impl<'a> SignalValues<'a> {
     /// Returns value of a design input / output at the current step.
     pub fn get(&self, instance_id: u32, pin_id: SymbolId) -> BitVecValueRef {
-        let key = PortKey { instance_id, pin_id };
+        let key = PortKey {
+            instance_id,
+            pin_id,
+        };
         let index = self.port_map[&key];
         (&self.values[index]).into()
     }
@@ -126,9 +129,16 @@ impl WaveSignalTrace {
         signals.sort();
         signals.dedup();
 
-        let signal_ref_to_idx: FxHashMap<SignalRef, usize> = signals.iter().cloned().enumerate().map(|(ii, s)| (s, ii)).collect();
-        let port_map = port_to_signal.iter().map(|(p, s)| (*p, signal_ref_to_idx[s])).collect();
-
+        let signal_ref_to_idx: FxHashMap<SignalRef, usize> = signals
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(ii, s)| (s, ii))
+            .collect();
+        let port_map = port_to_signal
+            .iter()
+            .map(|(p, s)| (*p, signal_ref_to_idx[s]))
+            .collect();
 
         Ok(Self {
             wave,
@@ -253,71 +263,67 @@ fn find_instances(
     (port_map, clock_signal)
 }
 
-trait AssignFromBigEndianBytes {
-    fn assign_from_be_bytes(&mut self, bytes: &[u8]);
-}
-
-impl AssignFromBigEndianBytes for BitVecValue {
-    fn assign_from_be_bytes(&mut self, bytes: &[u8]) {
-        let bytes_max = self.width().div_ceil(8);
-        let bytes = if bytes.len() > bytes_max as usize {
-            let extra_zeros = bytes.len() - bytes_max as usize;
-            for b in bytes.iter().take(extra_zeros) {
-                debug_assert_eq!(*b, 0);
-            }
-            &bytes[extra_zeros..]
-        } else { bytes };
-        let bytes_per_word = Word::BITS / u8::BITS;
-        let zero_padding = (self.words().len() * bytes_per_word as usize) - bytes.len();
-        for
-    }
-}
-
 impl SignalTrace for WaveSignalTrace {
-    fn stream_steps(&mut self, callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+    fn stream_steps(&mut self, mut callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
         let signals = self.signals.clone();
         // random initial values
         let mut rng = RefCell::new(rand::rngs::SmallRng::seed_from_u64(0));
-        let mut bv_values: Vec<_> = signals.iter().map(|s| {
-            let width = self.wave.hierarchy().get_signal_tpe(*s).unwrap().length().unwrap();
-            BitVecValue::random(rng.get_mut(), width)
-        }).collect();
+        let mut bv_values: Vec<_> = signals
+            .iter()
+            .map(|s| {
+                let width = self
+                    .wave
+                    .hierarchy()
+                    .get_signal_tpe(*s)
+                    .unwrap()
+                    .length()
+                    .unwrap();
+                BitVecValue::random(rng.get_mut(), width)
+            })
+            .collect();
         let mut times = vec![];
         let filter = wellen::stream::Filter::include_signals(&signals);
         let sampling_mode = self.sampling_mode.clone();
         let mut step_id = 0;
         let mut prev_clock = false;
-        self.wave.stream_time_steps::<()>(filter, |time, values, changed| {
-            let is_step = match sampling_mode {
-                WaveSamplingMode::RisingEdge(clock) => {
-                    let current_clock: bool = values.get(&clock).unwrap().try_into().unwrap();
-                    let is_step = !prev_clock && current_clock;
-                    prev_clock = current_clock;
-                    is_step
-                }
-                WaveSamplingMode::FallingEdge(_) => todo!(),
-                WaveSamplingMode::Direct => true,
-            };
-            if is_step {
-                for s in changed {
-                    let idx = self.signal_ref_to_idx[s];
-                    let value_ref = values.get(s).unwrap();
-                    if let SignalValueRef::BitVec(value) = value_ref {
-                        bv_values[idx].assign_from_be_bytes(value.be_bytes().unwrap());
-                    } else {
-                        unreachable!("we only expect bit vectors");
+        self.wave
+            .stream_time_steps::<()>(filter, |time, values, changed| {
+                let is_step = match sampling_mode {
+                    WaveSamplingMode::RisingEdge(clock) => {
+                        let current_clock: bool = values.get(&clock).unwrap().try_into().unwrap();
+                        let is_step = !prev_clock && current_clock;
+                        prev_clock = current_clock;
+                        is_step
                     }
-
+                    WaveSamplingMode::FallingEdge(_) => todo!(),
+                    WaveSamplingMode::Direct => true,
+                };
+                if is_step {
+                    for s in changed {
+                        let idx = self.signal_ref_to_idx[s];
+                        let value_ref = values.get(s).unwrap();
+                        if let SignalValueRef::BitVec(value) = value_ref {
+                            bv_values[idx].assign_from_bytes_be(value.be_bytes().unwrap());
+                        } else {
+                            unreachable!("we only expect bit vectors");
+                        }
+                    }
+                    times.push(time);
+                    callback(
+                        step_id,
+                        SignalValues {
+                            port_map: &self.port_map,
+                            values: &bv_values,
+                        },
+                    );
+                    step_id += 1;
                 }
-                times.push(time);
-                callback(step_id, SignalValues { port_map: &self.port_map, values: &bv_values });
-                step_id += 1;
-            }
-            Ok(())
-        }).map_err(|e| match e {
-            StreamError::Wellen(e) => e.to_string(),
-            StreamError::Callback(_) => "???".to_string(),
-        })?;
+                Ok(())
+            })
+            .map_err(|e| match e {
+                StreamError::Wellen(e) => e.to_string(),
+                StreamError::Callback(_) => "???".to_string(),
+            })?;
         self.times = times;
 
         Ok(())
