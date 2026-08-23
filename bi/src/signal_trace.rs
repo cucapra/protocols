@@ -54,7 +54,8 @@ pub enum WaveSamplingMode {
     FallingEdge(SignalRef),
     /// Interpret every time step as a new clock step. This generally only works
     /// for waveforms produced by the Patronus simulator.
-    Direct,
+    /// We include the timetable in order to faithfully include steps with no signal changes.
+    Direct(Vec<Time>),
 }
 
 /// Waveform dump based implementation of a signal trace.
@@ -93,6 +94,13 @@ pub struct PortKey {
     pub pin_id: SymbolId,
 }
 
+fn load_time_table(filename: &impl AsRef<std::path::Path>) -> Vec<Time> {
+    wellen::simple::read(filename)
+        .unwrap()
+        .time_table()
+        .to_vec()
+}
+
 impl WaveSignalTrace {
     /// Opens a waveform at the specified `filename` with the given
     /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
@@ -117,7 +125,11 @@ impl WaveSignalTrace {
         let sampling_mode = if let Some(signal_ref) = clock_signal {
             WaveSamplingMode::RisingEdge(signal_ref)
         } else {
-            WaveSamplingMode::Direct
+            let mut time_table = load_time_table(filename);
+            // traditionally, the last time step is not actually emitted
+            // TODO: should we change this?
+            time_table.pop();
+            WaveSamplingMode::Direct(time_table)
         };
 
         // load all relavant signal references into memory
@@ -283,20 +295,37 @@ impl SignalTrace for WaveSignalTrace {
             .collect();
         let mut times = vec![];
         let filter = wellen::stream::Filter::include_signals(&signals);
-        let sampling_mode = self.sampling_mode.clone();
         let mut step_id = 0;
         let mut prev_clock = false;
         self.wave
             .stream_time_steps::<()>(filter, |time, values, changed| {
-                let is_step = match sampling_mode {
+                let is_step = match &self.sampling_mode {
                     WaveSamplingMode::RisingEdge(clock) => {
-                        let current_clock: bool = values.get(&clock).unwrap().try_into().unwrap();
+                        let current_clock: bool = values.get(clock).unwrap().try_into().unwrap();
                         let is_step = !prev_clock && current_clock;
                         prev_clock = current_clock;
                         is_step
                     }
                     WaveSamplingMode::FallingEdge(_) => todo!(),
-                    WaveSamplingMode::Direct => true,
+                    WaveSamplingMode::Direct(_) => {
+                        // are there any time steps we have missed?
+                        if let Some(prev_time) = times.last().cloned()
+                            && time > prev_time + 1
+                        {
+                            for time in prev_time + 1..time {
+                                times.push(time);
+                                callback(
+                                    step_id,
+                                    SignalValues {
+                                        port_map: &self.port_map,
+                                        values: &bv_values,
+                                    },
+                                );
+                                step_id += 1;
+                            }
+                        }
+                        true
+                    }
                 };
                 if is_step {
                     for s in changed {
@@ -324,6 +353,27 @@ impl SignalTrace for WaveSignalTrace {
                 StreamError::Wellen(e) => e.to_string(),
                 StreamError::Callback(_) => "???".to_string(),
             })?;
+
+        if let WaveSamplingMode::Direct(time_table) = &self.sampling_mode
+            && time_table.last().cloned().unwrap_or_default() > times.last().cloned().unwrap()
+        {
+            let last_time = *times.last().unwrap();
+            // are the time steps that have not been dispatched yet?
+            if let Some(larger_time_idx) = time_table.iter().position(|e| *e > last_time) {
+                for time in &time_table[larger_time_idx..] {
+                    times.push(*time);
+                    callback(
+                        step_id,
+                        SignalValues {
+                            port_map: &self.port_map,
+                            values: &bv_values,
+                        },
+                    );
+                    step_id += 1;
+                }
+            }
+        }
+
         self.logical_step_to_time = times;
 
         Ok(())
