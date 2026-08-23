@@ -994,6 +994,27 @@ BI_CASES = {
     },
 }
 
+# Small Wishbone transactions from the Wishbone specification
+WISHBONE_SPEC_BI = [
+    "3.5_classic_standard_single_read_cycle.wave",
+    "3.7_standard_single_write_cycle.wave",
+    "3.10_standard_block_read_cycle.wave",
+    "3.14_rmw_cycle.wave",
+    "4.8_constant_address_burst.wave",
+    "4.8_constant_address_burst_no_stb_rate_limit.wave",
+]
+
+for wave in WISHBONE_SPEC_BI:
+    name = wave[: -len(".wave")].replace(".", "_")
+    name = f"examples.wishbone.{name}"
+    BI_CASES[name] = {
+        "protocol": "examples/wishbone/wishbone.prot",
+        "wave": f"examples/wishbone/{wave}",
+        "instances": (":Wishbone",),
+        "expect": "pass",
+        "extra_args": ("--display-hex", "--show-steps"),
+    }
+
 # waveform traces from the antmicro/litex wishbone tests
 ANTMICRO_TRACE_STEMS = (
     [f"fifo_classic/test_fifo_classic_{i}" for i in range(1, 9)]
@@ -1084,11 +1105,6 @@ def _expect_antmicro(stem: str) -> str:
         actual = _incorrect_burst_addr(offset, cti, num_elements)
         if expected == actual:
             return "pass"
-
-        print(f"{stem=} is expected to fail the bi")
-        print(f"  {expected=}")
-        print(f"  {actual=}")
-
         return "fail"
     else:
         return "pass"
