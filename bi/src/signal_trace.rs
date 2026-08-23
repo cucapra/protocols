@@ -302,9 +302,11 @@ impl SignalTrace for WaveSignalTrace {
                 let is_step = match &self.sampling_mode {
                     WaveSamplingMode::RisingEdge(clock) => {
                         let current_clock: bool = values.get(clock).unwrap().try_into().unwrap();
-                        let is_step = !prev_clock && current_clock;
+                        let is_rising_edge = !prev_clock && current_clock;
                         prev_clock = current_clock;
-                        is_step
+                        // we always include the first time step, even if there is not an edge
+                        let is_first_step = times.is_empty();
+                        is_rising_edge || is_first_step
                     }
                     WaveSamplingMode::FallingEdge(_) => todo!(),
                     WaveSamplingMode::Direct(_) => {
