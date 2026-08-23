@@ -1,0 +1,6 @@
+// trace 0
+trace {
+    write(0xf, 0x00001234, 0x0000ffff); [1 .. 2]
+    write(0xf, 0x00001234, 0x0000ffff); [4]
+    write(0xf, 0x00001234, 0x0000ffff); [6 .. 9]
+}

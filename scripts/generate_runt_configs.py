@@ -81,6 +81,9 @@ def case_stem(case: dict) -> str:
     wave = case.get("wave")
     if wave and ("antmicro" in wave or "fpga-debugging" in wave):
         return Path(wave).stem
+    # for all the .wave bi benchmarks, we use the id
+    if wave and wave.endswith(".wave"):
+        return case["id"]
     stem = Path(case["paths"][0]).stem
     return stem.removesuffix(".bi")
 
