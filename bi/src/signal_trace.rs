@@ -370,8 +370,7 @@ pub struct AsciWaveTrace {
     // pin id -> step
     values: Vec<Vec<BitVecValue>>,
     pins: Vec<(String, WidthInt)>,
-    symbol_map: FxHashMap<(u32, SymbolId), usize>,
-    step: u32,
+    port_map: FxHashMap<PortKey, usize>,
 }
 
 impl AsciWaveTrace {
@@ -404,8 +403,11 @@ impl AsciWaveTrace {
 
                     // store a mapping from any SymbolId that refers to this pin
                     for syms in &module.proto_pin_map {
-                        let key = (inst_id as u32, syms[field_idx]);
-                        trace.symbol_map.insert(key, wave_id);
+                        let key = PortKey {
+                            instance_id: inst_id as u32,
+                            pin_id: syms[field_idx],
+                        };
+                        trace.port_map.insert(key, wave_id);
                     }
                 } else {
                     panic!("Unable to find pin {name}");
@@ -420,8 +422,7 @@ impl AsciWaveTrace {
         let mut out = Self {
             values: vec![],
             pins: vec![],
-            symbol_map: Default::default(),
-            step: 0,
+            port_map: Default::default(),
         };
 
         let mut pin_ids: FxHashMap<String, usize> = FxHashMap::default();
@@ -523,24 +524,21 @@ fn tokenize(line: &str) -> Vec<&str> {
 }
 
 impl SignalTrace for AsciWaveTrace {
-    fn stream_steps(&mut self, _callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
-        todo!()
+    fn stream_steps(&mut self, mut callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+        let num_steps = self.values[0].len();
+        debug_assert!(self.values.iter().all(|v| v.len() == num_steps));
+        for step in 0..num_steps {
+            let bv_values: Vec<_> = self.values.iter().map(|v| v[step].clone()).collect();
+            callback(
+                step as u32,
+                SignalValues {
+                    port_map: &self.port_map,
+                    values: &bv_values,
+                },
+            );
+        }
+        Ok(())
     }
-    // fn step(&mut self) -> StepResult {
-    //     let num_steps = self.values[0].len();
-    //     debug_assert!(self.values.iter().all(|v| v.len() == num_steps));
-    //     if self.step + 1 < num_steps as u32 {
-    //         self.step += 1;
-    //         StepResult::Ok
-    //     } else {
-    //         StepResult::Done
-    //     }
-    // }
-
-    // fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
-    //     let pin_id = self.symbol_map[&(instance_id, pin)];
-    //     self.values[pin_id][self.step as usize].clone()
-    // }
 
     fn step_to_time(&self) -> StepToTime {
         let num_steps = self.values[0].len() as Time;
