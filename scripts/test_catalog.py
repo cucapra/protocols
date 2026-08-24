@@ -992,6 +992,19 @@ BI_CASES = {
         "expect": "pass",
         "extra_args": ("--sample-posedge", "TOP.reqwalker.i_clk"),
     },
+    # wishbone protocol on a shortened trace from ethmac
+    "examples.wishbone.ethmac_first_62us.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/ethmac.prot",
+        ],
+        "wave": "examples/wishbone/ethmac_first_62us.fst",
+        "instances": (
+            "tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level",
+        ),
+        "expect": "pass",
+        "extra_args": ("--display-hex", "--show-steps"),
+    },
 }
 
 # Small Wishbone transactions from the Wishbone specification

@@ -146,11 +146,12 @@ impl ProtocolContext {
 //     ports: Vec<Field>,
 // }
 //
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Ord, PartialOrd, Hash)]
 pub enum Clock {
     #[default]
     None,
-    Posedge(String),
+    PosEdge(String),
+    NegEdge(String),
 }
 
 /// Represents an unresolved `module`.

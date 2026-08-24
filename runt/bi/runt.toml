@@ -1,6 +1,15 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.ethmac_first_62us_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "ethmac_first_62us.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/ethmac.prot --wave examples/wishbone/ethmac_first_62us.fst --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --display-hex --show-steps 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.examples_wishbone_3_10_standard_block_read_cycle_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",

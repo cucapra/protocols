@@ -1,6 +1,5 @@
 // trace 0
 trace {
     read(0xf, 0x00001234, 0x0000feef); [1 .. 2]
-    idle_continue_cycle(); [3]
     read(0xf, 0x00005678, 0x0000aaff); [4 .. 5]
 }

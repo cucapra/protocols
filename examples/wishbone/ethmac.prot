@@ -36,7 +36,8 @@ module Tb_ethernetEth_topMWb : Wishbone {
 
 // --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --wave wishbone/ethmac/ethmac.fst
 module Tb_ethernetWb_masterWbm_low_level : Wishbone {
-  in CLK_I : clock @posedge,
+  // sampling at posedge gets some signal values wrong
+  in CLK_I : clock @negedge,
   in RST_I : u1 = Wishbone.RST,
   in ADR_O : u32 = Wishbone.ADR,
   out DAT_I : u32 = Wishbone.DAT_I,

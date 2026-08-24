@@ -90,26 +90,28 @@ fn get_clock(
     modules: &[Module],
     instances: &[Instance],
     cli_sample_posedge: Option<String>,
-) -> Option<String> {
+) -> WaveSamplingMode {
     let mut used_modules: Vec<_> = instances.iter().map(|i| i.module_id).collect();
     used_modules.sort();
     used_modules.dedup();
 
-    let mut clocks: Vec<String> = used_modules
+    let mut clocks: Vec<_> = used_modules
         .iter()
         .flat_map(|&m_id| match &modules[m_id].clock {
             Clock::None => None,
-            Clock::Posedge(name) => Some(name.to_string()),
+            other => Some(other.clone()),
         })
         .collect();
     if let Some(name) = cli_sample_posedge {
-        clocks.push(name);
+        clocks.push(Clock::PosEdge(name));
     }
     clocks.sort();
     clocks.dedup();
     match clocks.as_slice() {
-        [one] => Some(one.clone()),
-        [] => None,
+        [Clock::PosEdge(name)] => WaveSamplingMode::RisingEdge(name.to_string()),
+        [Clock::NegEdge(name)] => WaveSamplingMode::FallingEdge(name.to_string()),
+        [Clock::None] => unreachable!(),
+        [] => WaveSamplingMode::Direct,
         other => {
             eprintln!("Too many clocks: {:?}", other);
             std::process::exit(100);
@@ -151,7 +153,7 @@ fn main() {
         .map(|arg| parse_instance(&modules, arg))
         .collect();
 
-    let posedge_clock = get_clock(&modules, &instances, cli.sample_posedge);
+    let sampling_mode = get_clock(&modules, &instances, cli.sample_posedge);
 
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
@@ -170,7 +172,7 @@ fn main() {
     let step_to_time = {
         // try to parse FST, VCD or GHW file
         if let Ok(mut trace) =
-            WaveSignalTrace::open(&cli.wave, &st, &modules, &instances, posedge_clock)
+            WaveSignalTrace::open(&cli.wave, &st, &modules, &instances, sampling_mode)
         {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
@@ -261,11 +263,16 @@ fn run_bis(
 ) -> Result<StepToTime, String> {
     trace.stream_steps(|_step_id, values| {
         // step all backwards interpreters that have not failed
+        let mut r = CallbackResult::Stop;
         for bi in bis.iter_mut() {
             if !bi.has_failed() {
                 let _ = bi.exec_step(values.clone());
+                if !bi.has_failed() {
+                    r = CallbackResult::Continue;
+                }
             }
         }
+        r
     })?;
 
     for bi in bis.iter_mut() {
