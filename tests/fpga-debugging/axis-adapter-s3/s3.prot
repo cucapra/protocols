@@ -99,7 +99,9 @@ prot emit_byte<DUT: AXIS>(data: u8) {
     step();
 }
 
-// DUT emits the last byte of the packet
+// DUT emits the last byte of the packet.
+// Note that this protocol is the same as `emit_byte`,
+// except we assert that `tlast = 1`
 prot emit_last_byte<DUT: AXIS>(data: u8) {
     DUT.rst := 1'b0;         
       

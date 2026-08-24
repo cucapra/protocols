@@ -9,9 +9,9 @@ trace {
     emit_byte(205);  // [time: 200ns -> 225ns]
 }
 error: [emit_last_byte@9] executing step 0 of the transaction: 0 != 1
-    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:108:5
+    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:110:5
     │
-108 │     assert_eq(DUT.output_axis_tkeep, 1'b1);
+110 │     assert_eq(DUT.output_axis_tkeep, 1'b1);
     │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [emit_last_byte@9] executing step 0 of the transaction: 0 != 1
 
 
