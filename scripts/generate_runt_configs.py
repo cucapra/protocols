@@ -79,9 +79,7 @@ def case_stem(case: dict) -> str:
     # names to identify a particular test, otherwise we use the `.prot` file's stem
     # to identify a test
     wave = case.get("wave")
-    if wave and (
-        "antmicro" in wave or "fpga-debugging" in wave or "apb" in wave
-    ):
+    if wave and ("antmicro" in wave or "fpga-debugging" in wave or "apb" in wave):
         return Path(wave).stem
     stem = Path(case["paths"][0]).stem
     return stem.removesuffix(".bi")
