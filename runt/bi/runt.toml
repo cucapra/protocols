@@ -2377,22 +2377,22 @@ expect_name = "s2_fixed.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2.prot --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT:AXISManager --sample-posedge TOP.testbench.UUT.M_AXIS_ACLK --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axis_adapter_s3_s3_buggy.s3_buggy_bi"
+name = "bi.tests_fpga_debugging_axis_adapter_s3_s3.s3_buggy_bi"
 paths = [
-  "../../tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot",
+  "../../tests/fpga-debugging/axis-adapter-s3/s3.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXIS --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_bi"
+name = "bi.tests_fpga_debugging_axis_adapter_s3_s3.s3_fixed_bi"
 paths = [
-  "../../tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot",
+  "../../tests/fpga-debugging/axis-adapter-s3/s3.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst --instances TOP.test_axis_adapter_64_8.UUT:AXIS --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_async_fifo_c4_c4.c4_buggy_bi"

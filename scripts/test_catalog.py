@@ -699,9 +699,9 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_buggy": {
-        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot",
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
         "wave": "tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst",
-        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXISManager",),
+        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXIS",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
@@ -712,9 +712,9 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
-        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot",
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
         "wave": "tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst",
-        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXISManager",),
+        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXIS",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
