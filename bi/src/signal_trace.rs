@@ -414,12 +414,12 @@ impl SignalTrace for WaveSignalTrace {
                 }
 
                 if is_step {
-                    println!("Step {step_id}:");
-                    for (idx, name) in self.names.iter().enumerate() {
-                        if !name.is_empty() {
-                            println!(" - {name}: {}", bv_values[idx].to_hex_str());
-                        }
-                    }
+                    // println!("Step {step_id}:");
+                    // for (idx, name) in self.names.iter().enumerate() {
+                    //     if !name.is_empty() {
+                    //         println!(" - {name}: {}", bv_values[idx].to_hex_str());
+                    //     }
+                    // }
 
                     times.push(time);
                     let r = callback(
