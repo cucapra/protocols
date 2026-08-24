@@ -1,0 +1,4 @@
+---CODE---
+134
+---STDERR---
+sh: line 1: 84021 Abort trap: 6           target/debug/graph-interp --transactions examples/apb/ip_apb.tx --bound 8 --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2> /dev/null
