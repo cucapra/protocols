@@ -10,6 +10,12 @@ TX_CASES = {
         "top": "ip_apb_dut",
         "expect": "pass",
     },
+    "examples/apb/ch_apb_actual.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": ("examples/apb/rtl/ch_apb_slave.sv", "examples/apb/rtl/ch_apb_dut.v"),
+        "top": "ch_apb_dut",
+        "expect": "pass",
+    },
     "examples/apb/ch_apb.tx": {
         "protocol": "examples/apb/apb.prot",
         "verilog": ("examples/apb/rtl/ch_apb_slave.sv", "examples/apb/rtl/ch_apb_dut.v"),

@@ -101,9 +101,7 @@ module apb_slave #(
             if(data_bus_width == mem_block_size) begin
                 memory[PADDR] = PWDATA;
             end
-            // DEAD CODE at DATA_BUS_WIDTH == MEM_BLOCK_SIZE (32 == 32), so the
-            // branch above always runs. Commented out because yosys requires a
-            // constant loop bound and `rqrd_tx_num` is a runtime integer.
+            // Note: This is dead code that is commented out
             // else begin
             //     for(i=0; i< rqrd_tx_num; i=i+1) begin
             //         memory[i] = PWDATA[((i+1)*MEM_BLOCK_SIZE)-1 +: (MEM_BLOCK_SIZE)];
@@ -112,7 +110,7 @@ module apb_slave #(
         end        
     endtask
     
-    // Note: This is dead code that is commented out because yosys cannot resolve `$urandom_range`.
+    // Note: This is dead code that is commented out because Yosys cannot resolve `$urandom_range`.
     // initial begin
     //     state = IDLE;
     //     // compute random wait delay
