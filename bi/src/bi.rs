@@ -5,7 +5,7 @@
 use crate::constraints::ArgValue;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
-use baa::{BitVecOps, BitVecValue, WidthInt};
+use baa::{BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
 use protocols::frontend::ast::*;
 use protocols::frontend::serialize::serialize_expr;
 use protocols::frontend::symbol::{Arg, SymbolId, SymbolTable};
@@ -99,7 +99,7 @@ impl BackwardsInterpreter {
         }
     }
 
-    pub fn exec_step<T: SignalTrace>(&mut self, trace: &T) -> std::result::Result<(), Failures> {
+    pub fn exec_step(&mut self, values: SignalValues) -> std::result::Result<(), Failures> {
         match self.state.clone() {
             BIState::Ready => {}
             BIState::AtEndOfStep => {
@@ -116,7 +116,7 @@ impl BackwardsInterpreter {
         }
         // println!("-------{}: {:?}", self.step, self.state);
         loop {
-            match self.exec_stmt(trace) {
+            match self.exec_stmt(values.clone()) {
                 BIResult::Ok => {}
                 BIResult::Step => {
                     self.state = BIState::AtEndOfStep;
@@ -131,7 +131,7 @@ impl BackwardsInterpreter {
     }
 
     /// execute a single statement
-    fn exec_stmt<T: SignalTrace>(&mut self, trace: &T) -> BIResult {
+    fn exec_stmt(&mut self, values: SignalValues) -> BIResult {
         if let Some(mut path) = self.active.pop() {
             // println!("{}", path.thread_string());
 
@@ -140,7 +140,7 @@ impl BackwardsInterpreter {
                 // let value = trace.get(self.instance_id, sym);
                 // println!("{sym:?} = {} : bv<{}>", value.to_dec_str(), value.width());
                 // value
-                trace.get(self.instance_id, sym)
+                values.get(self.instance_id, sym)
             });
 
             // println!("path.exec_stmt(...) -> {r:?}");
@@ -373,10 +373,10 @@ impl Path {
         !self.failed.is_empty()
     }
 
-    fn exec_stmt(
+    fn exec_stmt<'a>(
         &mut self,
         tis: &[ProtoInfo],
-        get_value: &impl Fn(SymbolId) -> BitVecValue,
+        get_value: &'a impl Fn(SymbolId) -> BitVecValueRef<'a>,
     ) -> (PathResult, Option<ProtoCall>) {
         // we need to always execute the oldest thread first in order to get the correct order
         // of transactions in our output trace (we want the oldest transaction to appear first in the trace)
@@ -587,10 +587,10 @@ impl Thread {
         }
     }
 
-    fn exec_stmt(
+    fn exec_stmt<'a>(
         &mut self,
         ti: &ProtoInfo,
-        get_value: &impl Fn(SymbolId) -> BitVecValue,
+        get_value: &'a impl Fn(SymbolId) -> BitVecValueRef<'a>,
     ) -> ThreadResult {
         use ThreadResult::*;
         if let Some(stmt) = self.next_stmt {
@@ -772,10 +772,10 @@ impl Thread {
 
     /// Must be called at the end of a step in order to check all equality constraints
     /// imposed by assignments in the current step.
-    fn check_assignments(
+    fn check_assignments<'a>(
         &mut self,
         ti: &ProtoInfo,
-        get_value: &impl Fn(SymbolId) -> BitVecValue,
+        get_value: &'a impl Fn(SymbolId) -> BitVecValueRef<'a>,
     ) -> bool {
         let mut pins_assigned = FxHashSet::default();
         let assignments = std::mem::take(&mut self.pin_assignments);
@@ -811,9 +811,9 @@ impl Thread {
 
     /// used for both assert_eq and assignments
     /// we try out best to treat lhs and rhs the same since assert_eq is commutative
-    fn exec_equality(
+    fn exec_equality<'a>(
         &mut self,
-        get_value: &impl Fn(SymbolId) -> BitVecValue,
+        get_value: &'a impl Fn(SymbolId) -> BitVecValueRef<'a>,
         ti: &ProtoInfo,
         stmt: StmtId,
         lhs: ExprId,
@@ -872,9 +872,9 @@ impl Thread {
         }
     }
 
-    fn eval_expr(
+    fn eval_expr<'a>(
         &self,
-        get_value: &impl Fn(SymbolId) -> BitVecValue,
+        get_value: &'a impl Fn(SymbolId) -> BitVecValueRef<'a>,
         ti: &ProtoInfo,
         expr: ExprId,
     ) -> ExprValue {
@@ -889,7 +889,7 @@ impl Thread {
                         .map(ExprValue::Known)
                         .unwrap_or(ExprValue::UnknownArg(arg_index, None, arg.width() - 1, 0))
                 } else if ti.sym[sym_id].is_port() {
-                    ExprValue::Known(get_value(*sym_id))
+                    ExprValue::Known(get_value(*sym_id).into())
                 } else if ti.sym[sym_id].is_loop_var() {
                     let (stmt, iter, _) = *self.loop_iter_counts.iter().rev().find(|(_, _, a)| *a == Some(*sym_id)).expect("failed to find loop variable. Are we outside of the corresponding for-in loop?");
                     if let Stmt::ForInLoop(check_sym_id, seq_expr, _) = ti.proto[stmt] {

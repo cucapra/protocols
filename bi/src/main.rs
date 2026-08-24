@@ -169,7 +169,8 @@ fn main() {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) = WaveSignalTrace::open(&cli.wave, &modules, &instances, posedge_clock)
+        if let Ok(mut trace) =
+            WaveSignalTrace::open(&cli.wave, &st, &modules, &instances, posedge_clock)
         {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
@@ -177,7 +178,8 @@ fn main() {
             let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances).unwrap();
             run_bis(bis.as_mut_slice(), &mut trace)
         }
-    };
+    }
+    .unwrap();
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
@@ -253,19 +255,18 @@ fn main() {
     }
 }
 
-fn run_bis(bis: &mut [BackwardsInterpreter], trace: &mut impl SignalTrace) -> StepToTime {
-    loop {
+fn run_bis(
+    bis: &mut [BackwardsInterpreter],
+    trace: &mut impl SignalTrace,
+) -> Result<StepToTime, String> {
+    trace.stream_steps(|_step_id, values| {
         // step all backwards interpreters that have not failed
         for bi in bis.iter_mut() {
             if !bi.has_failed() {
-                let _ = bi.exec_step(trace);
+                let _ = bi.exec_step(values.clone());
             }
         }
-        // step shared trace
-        if trace.step() == StepResult::Done {
-            break;
-        }
-    }
+    })?;
 
     for bi in bis.iter_mut() {
         if !bi.has_failed() {
@@ -273,7 +274,7 @@ fn run_bis(bis: &mut [BackwardsInterpreter], trace: &mut impl SignalTrace) -> St
         }
     }
 
-    trace.step_to_time()
+    Ok(trace.step_to_time())
 }
 
 fn print_trace(
