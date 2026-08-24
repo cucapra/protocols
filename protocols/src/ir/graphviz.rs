@@ -51,11 +51,26 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
             if transition.guard == protocol.false_id() {
                 continue;
             }
-            let edge_label = if transition.consumes_step {
+            let mut edge_label = if transition.consumes_step {
                 format!("{} / step", format_expr(protocol, transition.guard))
             } else {
                 format_expr(protocol, transition.guard)
             };
+            if !transition.rotations.is_empty() {
+                let rotations = transition
+                    .rotations
+                    .iter()
+                    .map(|rotation| {
+                        if rotation.amount == 1 {
+                            format!("R_{}", rotation.protocol)
+                        } else {
+                            format!("R_{}^{}", rotation.protocol, rotation.amount)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                edge_label.push_str(&format!(" / {rotations}"));
+            }
             out.push_str(&format!(
                 "  {} -> {} [label=\"{}\"];\n",
                 node_id,

@@ -12,4 +12,5 @@ CYC          0      1       1      1      1      1      1      1 0
 // signals missing from the diagram
 RST          0      0       0      0      0      0      0      0 0
 ERR          0      0       0      0      0      0      0      0 0
+RTY          0      0       0      0      0      0      0      0 0
 BTE[1:0]     x      x       x      x      x      x      x      x x

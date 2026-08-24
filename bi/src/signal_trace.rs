@@ -1,66 +1,91 @@
-// Copyright 2025 Cornell University
+// Copyright 2025-26 Cornell University
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
 use crate::Instance;
-use baa::{BitVecOps, BitVecValue, WidthInt};
+use baa::{BitVecMutOps, BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
 use protocols::frontend::Module;
-use protocols::frontend::symbol::SymbolId;
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
-use smallvec::SmallVec;
 use std::cell::RefCell;
-use std::ops::DerefMut;
+use std::io::BufReader;
+use wellen::stream::StreamError;
 use wellen::{Hierarchy, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
 
-/// The result of advancing the clock cycle by one step
-#[derive(Debug, PartialEq)]
-pub enum StepResult {
-    /// advance time by one step and there are values available for this step
-    Ok,
-    /// no more values available
-    Done,
+/// Handle to all signal values at a point in time.
+/// Used in `stream_time_steps`.
+#[derive(Debug, Clone)]
+pub struct SignalValues<'a> {
+    port_map: &'a FxHashMap<PortKey, usize>,
+    values: &'a [BitVecValue],
+}
+
+impl<'a> SignalValues<'a> {
+    /// Returns value of a design input / output at the current step.
+    pub fn get(&self, instance_id: u32, pin_id: SymbolId) -> BitVecValueRef<'_> {
+        let key = PortKey {
+            instance_id,
+            pin_id,
+        };
+        let index = self.port_map[&key];
+        (&self.values[index]).into()
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CallbackResult {
+    Continue,
+    Stop,
 }
 
 /// Provides a trace of signals that we can analyze.
 pub trait SignalTrace {
-    /// Advance to the next time step
-    /// (This should map 1:1 to a `step` in the Protocol)
-    fn step(&mut self) -> StepResult;
-
-    /// Returns value of a design input / output at the current step.
-    /// Returns `Err` if the `pin` doesn't exist in the port map
-    /// for the given instance.
-    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue;
+    /// Streams time steps.
+    fn stream_steps(
+        &mut self,
+        callback: impl FnMut(u32, SignalValues) -> CallbackResult,
+    ) -> Result<(), String>;
 
     fn step_to_time(&self) -> StepToTime;
 }
 
 /// The `WaveSamplingMode` determines how signals from a waveform are sampled
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub enum WaveSamplingMode {
-    /// Sample on the rising edge of the signal, specified by its
-    /// signal identifier (a `SignalRef`)
-    RisingEdge(SignalRef),
-    /// Sample on the falling edge of the signal, specified by its
-    /// signal identifier (a `SignalRef`)
-    FallingEdge(SignalRef),
+    /// Sample on the rising edge of the signal
+    RisingEdge(String),
+    /// Sample on the falling edge of the signal
+    FallingEdge(String),
     /// Interpret every time step as a new clock step. This generally only works
     /// for waveforms produced by the Patronus simulator.
     Direct,
+}
+
+/// A `WaveSamplingMode` with the clock name replaced by its `SignalRef`.
+#[derive(Debug, Clone)]
+enum SamplingMode {
+    RisingEdge(SignalRef),
+    FallingEdge(SignalRef),
+    /// We include the timetable in order to faithfully include steps with no signal changes.
+    Direct(Vec<Time>),
 }
 
 /// Waveform dump based implementation of a signal trace.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct WaveSignalTrace {
-    wave: wellen::simple::Waveform,
-    port_map: FxHashMap<PortKey, SignalRef>,
+    wave: wellen::stream::StreamingWaveform<BufReader<std::fs::File>>,
+    port_map: FxHashMap<PortKey, usize>,
+    signal_ref_to_idx: FxHashMap<SignalRef, usize>,
+    /// signals to stream
+    signals: Vec<SignalRef>,
+    /// signal names for debugging
+    names: Vec<String>,
 
     /// The sampling mode to be used on the waveform
-    sampling_mode: WaveSamplingMode,
+    sampling_mode: SamplingMode,
 
     /// The current (logical) `step()` in the Protocols specification
     logical_step: u32,
@@ -68,17 +93,8 @@ pub struct WaveSignalTrace {
     /// The actual clock time-step in the waveform
     time_step: u32,
 
-    /// An (optional) reference to the signal to treat as the clock signal
-    /// (to be sampled on every rising clockedge)
-    /// Note that this field is only `Some` if the user passes an argument
-    /// to the optional `--sample_posedge` CLI argument
-    clock_signal: Option<SignalRef>,
-
-    /// Maps a logical step to time step.
-    step_to_idx: Vec<u32>,
-
-    /// for generating random values to replace X
-    rng: RefCell<rand::rngs::SmallRng>,
+    /// Maps a logical step to time.
+    logical_step_to_time: Vec<Time>,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -88,6 +104,13 @@ pub struct PortKey {
     pub pin_id: SymbolId,
 }
 
+fn load_time_table(filename: &impl AsRef<std::path::Path>) -> Vec<Time> {
+    wellen::simple::read(filename)
+        .unwrap()
+        .time_table()
+        .to_vec()
+}
+
 impl WaveSignalTrace {
     /// Opens a waveform at the specified `filename` with the given
     /// `Design`s and `Instance`s. The CLI arg `sample_posedge` is passed
@@ -95,61 +118,78 @@ impl WaveSignalTrace {
     /// `Direct` or `RisingEdge`).
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
+        st: &SymbolTable,
         modules: &[Module],
         instances: &[Instance],
-        sample_posedge: Option<String>,
+        sampling_mode: WaveSamplingMode,
     ) -> Result<Self, wellen::WellenError> {
-        let mut wave = wellen::simple::read(filename)?;
+        let opts = wellen::LoadOptions::default();
+        let wave = wellen::stream::read_from_file(filename, &opts)?;
 
         // find instances in the waveform hierarchy
-        let (port_map, clock_signal) =
-            find_instances(wave.hierarchy(), modules, instances, sample_posedge);
+        let (port_to_signal, sampling_mode) =
+            find_instances(wave.hierarchy(), modules, instances, sampling_mode);
 
-        // Determine the sampling mode based on the vavlue received
-        // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
-        // for now (`FallingEdge` is currently unsupported).
-        let sampling_mode = if let Some(signal_ref) = clock_signal {
-            WaveSamplingMode::RisingEdge(signal_ref)
-        } else {
-            WaveSamplingMode::Direct
+        // for direct sampling, we need to add the time table
+        let sampling_mode = match sampling_mode {
+            SamplingMode::Direct(_) => {
+                let mut time_table = load_time_table(filename);
+                // traditionally, the last time step is not actually emitted
+                // TODO: should we change this?
+                time_table.pop();
+                SamplingMode::Direct(time_table)
+            }
+            other => other,
         };
 
         // load all relavant signal references into memory
-        let mut signals: Vec<SignalRef> = port_map.values().cloned().collect();
+        let mut signals: Vec<SignalRef> = port_to_signal.values().cloned().collect();
         // Add clock signal if present
-        if let Some(clk_sig) = clock_signal {
+        if let SamplingMode::RisingEdge(clk_sig) | SamplingMode::FallingEdge(clk_sig) =
+            sampling_mode
+        {
             signals.push(clk_sig);
+        } else {
+            debug_assert!(matches!(sampling_mode, SamplingMode::Direct(_)));
         }
         signals.sort();
         signals.dedup();
-        wave.load_signals(&signals);
+
+        let signal_ref_to_idx: FxHashMap<SignalRef, usize> = signals
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(ii, s)| (s, ii))
+            .collect();
+        let port_map = port_to_signal
+            .iter()
+            .map(|(p, s)| (*p, signal_ref_to_idx[s]))
+            .collect();
+
+        // name lookup for debugging
+        let signal_to_port: FxHashMap<_, _> =
+            port_to_signal.iter().map(|(k, v)| (*v, *k)).collect();
+        let names = signals
+            .iter()
+            .map(|s| {
+                signal_to_port
+                    .get(s)
+                    .map(|p| st[p.pin_id].name().to_string())
+                    .unwrap_or_default()
+            })
+            .collect();
 
         Ok(Self {
             wave,
             port_map,
+            signal_ref_to_idx,
+            signals,
             sampling_mode,
             logical_step: 0,
             time_step: 0,
-            clock_signal,
-            step_to_idx: vec![0],
-            rng: RefCell::new(rand::rngs::SmallRng::seed_from_u64(0)),
+            logical_step_to_time: vec![],
+            names,
         })
-    }
-
-    /// Helper function that returns the string representation of a
-    /// `SignalValue` associated with a particular `SignalRef`
-    /// at a given `time_step`
-    fn get_value(&self, signal_ref: SignalRef, time_step: u32) -> SignalValueRef<'_> {
-        // Get the clock signal
-        let signal = self
-            .wave
-            .get_signal(signal_ref)
-            .unwrap_or_else(|| panic!("Unable to get signal for SignalRef {:?}", signal_ref));
-        let offset = signal
-            .get_offset(time_step)
-            .unwrap_or_else(|| panic!("Unable to get offset for time_step {}", time_step));
-        // Get the last value in the time step (this is to deal with delta cycles)
-        signal.get_value_at(&offset, offset.elements - 1)
     }
 }
 
@@ -159,11 +199,11 @@ fn find_instances(
     hierachy: &Hierarchy,
     modules: &[Module],
     instances: &[Instance],
-    sample_posedge: Option<String>,
-) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
+    sampling_mode: WaveSamplingMode,
+) -> (FxHashMap<PortKey, SignalRef>, SamplingMode) {
     let mut port_map = FxHashMap::default();
 
-    let mut clock_signal: Option<SignalRef> = None;
+    let mut samp_mode_out = SamplingMode::Direct(vec![]);
 
     for (inst_id, inst) in instances.iter().enumerate() {
         let module = &modules[inst.module_id];
@@ -185,37 +225,48 @@ fn find_instances(
 
                     // Set up `sample_posedge` to
                     // refer to the clock signal (if one is specified)
-                    if let Some(ref signal_name) = sample_posedge {
-                        let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
+                    match &sampling_mode {
+                        WaveSamplingMode::RisingEdge(signal_name)
+                        | WaveSamplingMode::FallingEdge(signal_name) => {
+                            let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
 
-                        // The clock signal should be in the same scope as the instance
-                        // So we look it up directly in the instance_scope
-                        match clock_signal_parts.last() {
-                            Some(var_name) => {
-                                if let Some(var) = instance_scope
-                                    .vars(hierachy)
-                                    .find(|v| hierachy[*v].name(hierachy) == *var_name)
-                                {
-                                    let signal_ref = hierachy[var].signal_ref();
-                                    clock_signal = Some(signal_ref);
-                                } else {
-                                    // If not found in instance scope, use `lookup_var`
-                                    match hierachy.lookup_var(
-                                        &clock_signal_parts[0..clock_signal_parts.len() - 1],
-                                        var_name,
-                                    ) {
-                                        Some(var_ref) => {
-                                            let signal_ref = hierachy[var_ref].signal_ref();
-                                            clock_signal = Some(signal_ref);
-                                        }
-                                        None => {
-                                            panic!("Unable to find signal {var_name} in waveform")
+                            // The clock signal should be in the same scope as the instance
+                            // So we look it up directly in the instance_scope
+                            let signal_ref = match clock_signal_parts.last() {
+                                Some(var_name) => {
+                                    if let Some(var) = instance_scope
+                                        .vars(hierachy)
+                                        .find(|v| hierachy[*v].name(hierachy) == *var_name)
+                                    {
+                                        hierachy[var].signal_ref()
+                                    } else {
+                                        // If not found in instance scope, use `lookup_var`
+                                        match hierachy.lookup_var(
+                                            &clock_signal_parts[0..clock_signal_parts.len() - 1],
+                                            var_name,
+                                        ) {
+                                            Some(var_ref) => hierachy[var_ref].signal_ref(),
+                                            None => {
+                                                panic!(
+                                                    "Unable to find signal {var_name} in waveform"
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            None => panic!("Malformed signal {signal_name}"),
+                                None => panic!("Malformed signal {signal_name}"),
+                            };
+                            samp_mode_out = match sampling_mode {
+                                WaveSamplingMode::RisingEdge(_) => {
+                                    SamplingMode::RisingEdge(signal_ref)
+                                }
+                                WaveSamplingMode::FallingEdge(_) => {
+                                    SamplingMode::FallingEdge(signal_ref)
+                                }
+                                WaveSamplingMode::Direct => SamplingMode::Direct(vec![]),
+                            };
                         }
+                        WaveSamplingMode::Direct => {}
                     }
 
                     // Check that bit widths match
@@ -259,114 +310,170 @@ fn find_instances(
             );
         }
     }
-    (port_map, clock_signal)
+    (port_map, samp_mode_out)
 }
 
 impl SignalTrace for WaveSignalTrace {
-    /// Advance to the next time step
-    /// (This should map 1:1 to a `step` in the Protocol)
-    fn step(&mut self) -> StepResult {
-        // The no. of times we can call `step` is 1 less than the
-        // total no. of cycles available in the signal trace
-        let total_steps = (self.wave.time_table().len() - 1) as u32;
-        match self.sampling_mode {
-            // A `Direct` sampling mode means a `logical_step` maps 1:1
-            // to a `time_step` in the waveform
-            WaveSamplingMode::Direct => {
-                // If we haven't reached the end of the waveform yet
-                // (i.e. if `self.logical_step < total_steps`)
-                // increment the `logical_step` & `time_step` together
-                if self.logical_step < total_steps {
-                    self.logical_step += 1;
-                    self.time_step += 1;
-                    self.step_to_idx.push(self.time_step);
-                }
-                if self.logical_step == total_steps {
-                    StepResult::Done
-                } else {
-                    StepResult::Ok
-                }
-            }
-            // Sample on the next rising edge of `clock_signal_ref`
-            WaveSamplingMode::RisingEdge(clock_signal_ref) => {
-                // First, increment the logical step
-                self.logical_step += 1;
+    fn stream_steps(
+        &mut self,
+        mut callback: impl FnMut(u32, SignalValues) -> CallbackResult,
+    ) -> Result<(), String> {
+        let signals = self.signals.clone();
+        // random initial values
+        let mut rng = RefCell::new(rand::rngs::SmallRng::seed_from_u64(0));
+        let widths: Vec<_> = signals
+            .iter()
+            .map(|s| {
+                self.wave
+                    .hierarchy()
+                    .get_signal_tpe(*s)
+                    .unwrap()
+                    .length()
+                    .unwrap()
+            })
+            .collect();
+        let mut bv_values: Vec<_> = widths
+            .iter()
+            .map(|&width| BitVecValue::random(rng.get_mut(), width))
+            .collect();
+        let mut times = vec![];
+        let filter = wellen::stream::Filter::include_signals(&signals);
+        let mut step_id = 0;
+        let mut prev_clock = false;
+        let stream_result = self
+            .wave
+            .stream_time_steps::<()>(filter, |time, values, changed| {
+                let is_step = match &self.sampling_mode {
+                    SamplingMode::RisingEdge(clock) => {
+                        let current_clock: bool = values.get(clock).unwrap().try_into().unwrap();
+                        let is_rising_edge = !prev_clock && current_clock;
+                        prev_clock = current_clock;
+                        // we always include the first time step, even if there is not an edge
+                        let is_first_step = times.is_empty();
+                        is_rising_edge || is_first_step
+                    }
+                    SamplingMode::FallingEdge(clock) => {
+                        let current_clock: bool = values.get(clock).unwrap().try_into().unwrap();
+                        let is_falling_edge = prev_clock && !current_clock;
+                        prev_clock = current_clock;
+                        // we always include the first time step, even if there is not an edge
+                        let is_first_step = times.is_empty();
+                        is_falling_edge || is_first_step
+                    }
+                    SamplingMode::Direct(_) => {
+                        // are there any time steps we have missed?
+                        if let Some(prev_time) = times.last().cloned()
+                            && time > prev_time + 1
+                        {
+                            for time in prev_time + 1..time {
+                                times.push(time);
+                                let r = callback(
+                                    step_id,
+                                    SignalValues {
+                                        port_map: &self.port_map,
+                                        values: &bv_values,
+                                    },
+                                );
+                                if r == CallbackResult::Stop {
+                                    return Err(());
+                                }
+                                step_id += 1;
+                            }
+                        }
+                        true
+                    }
+                };
 
-                // Next, as long as the time-step is in bounds...
-                while self.time_step < total_steps {
-                    // ...first fetch the current signal value before incrementing
-                    let prev_value: bool = self
-                        .get_value(clock_signal_ref, self.time_step)
-                        .try_into()
-                        .unwrap();
-
-                    // Then, increment the `time_step`, and check whether
-                    // the prevous value is 0 while the new value is 1
-                    // If yes, we have encountered a rising clock-edge
-                    // and have found the new `time_step` for the waveform
-                    self.time_step += 1;
-                    let new_value: bool = self
-                        .get_value(clock_signal_ref, self.time_step)
-                        .try_into()
-                        .unwrap();
-                    if !prev_value && new_value {
-                        self.step_to_idx.push(self.time_step);
-                        return StepResult::Ok;
+                // we record all changed values, even if they change between steps
+                for s in changed {
+                    if let SamplingMode::RisingEdge(clock) = &self.sampling_mode
+                        && s == clock
+                    {
+                        continue; // skip clock
+                    }
+                    let idx = self.signal_ref_to_idx[s];
+                    let value_ref = values.get(s).unwrap();
+                    if let SignalValueRef::BitVec(value) = value_ref {
+                        if let Some(value_be_bytes) = value.be_bytes() {
+                            bv_values[idx].assign_from_bytes_be(value_be_bytes);
+                        } else {
+                            // there are X or Z values
+                            debug_assert!(
+                                value.bit_string().chars().all(|c| c == 'x' || c == 'z'),
+                                "{}",
+                                value.bit_string()
+                            );
+                            // randomize
+                            let width = widths[idx];
+                            let random_value = BitVecValue::random(rng.get_mut(), width);
+                            bv_values[idx].assign(&random_value);
+                        }
+                    } else {
+                        unreachable!("we only expect bit vectors");
                     }
                 }
-                // If we reach this point, we cannot increment the `time_step`
-                // any further, so we return `Done` to indicate that
-                // we've reached the end of the waveform
-                StepResult::Done
-            }
-            WaveSamplingMode::FallingEdge(_) => {
-                todo!("Handle WaveSamplingMode::FallingEdge when stepping WaveSignalTrace")
+
+                if is_step {
+                    // println!("Step {step_id}:");
+                    // for (idx, name) in self.names.iter().enumerate() {
+                    //     if !name.is_empty() {
+                    //         println!(" - {name}: {}", bv_values[idx].to_hex_str());
+                    //     }
+                    // }
+
+                    times.push(time);
+                    let r = callback(
+                        step_id,
+                        SignalValues {
+                            port_map: &self.port_map,
+                            values: &bv_values,
+                        },
+                    );
+                    if r == CallbackResult::Stop {
+                        return Err(());
+                    }
+                    step_id += 1;
+                }
+                Ok(())
+            });
+        match stream_result {
+            Ok(_) => {}
+            // our pseudo error just indicates that we wanted to stop streaming early
+            Err(StreamError::Callback(_)) => {}
+            // an error reading the file
+            Err(StreamError::Wellen(e)) => return Err(e.to_string()),
+        }
+        if let SamplingMode::Direct(time_table) = &self.sampling_mode
+            && time_table.last().cloned().unwrap_or_default() > times.last().cloned().unwrap()
+        {
+            let last_time = *times.last().unwrap();
+            // are the time steps that have not been dispatched yet?
+            if let Some(larger_time_idx) = time_table.iter().position(|e| *e > last_time) {
+                for time in &time_table[larger_time_idx..] {
+                    times.push(*time);
+                    let r = callback(
+                        step_id,
+                        SignalValues {
+                            port_map: &self.port_map,
+                            values: &bv_values,
+                        },
+                    );
+                    if r == CallbackResult::Stop {
+                        break;
+                    }
+                    step_id += 1;
+                }
             }
         }
-    }
 
-    /// Returns value of a design input / output at the current (logical) step.
-    /// Returns `Err` if the `pin` doesn't exist in the port map
-    /// for the given instance.
-    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
-        let key = PortKey {
-            instance_id,
-            pin_id: pin,
-        };
-        // Get the Wellen `SignalRef` (akin to `SignalId`)
-        let signal_ref = self.port_map.get(&key).unwrap();
+        self.logical_step_to_time = times;
 
-        // Obtain the `SignalValue` at the current `time_step`
-        // (represented as a bit-string)
-        match self.get_value(*signal_ref, self.time_step) {
-            SignalValueRef::BitVec(bv) if let Some(bytes_be) = bv.be_bytes() => {
-                let bytes_le: SmallVec<[u8; 12]> = bytes_be.iter().cloned().rev().collect();
-                BitVecValue::from_bytes_le(bytes_le.as_slice(), bv.width())
-            }
-            SignalValueRef::BitVec(bv) => {
-                // 4/9 state bit vec
-                debug_assert!(
-                    !bv.iter_lsb_to_msb()
-                        .all(|b| matches!(b.as_ascii(), '0' | '1'))
-                );
-                BitVecValue::random(self.rng.borrow_mut().deref_mut(), bv.width())
-            }
-            SignalValueRef::Event => {
-                unreachable!("event's are 0-bit and do not make sense in protocols")
-            }
-            SignalValueRef::String(_) => unreachable!("protocols do not support strings"),
-            SignalValueRef::Real(_) => unreachable!("protocols do not support reals"),
-        }
+        Ok(())
     }
 
     fn step_to_time(&self) -> StepToTime {
-        let tt = self.wave.time_table();
         StepToTime {
-            logical_step_to_time: self
-                .step_to_idx
-                .iter()
-                .map(|step| tt[*step as usize])
-                .collect(),
+            logical_step_to_time: self.logical_step_to_time.clone(),
             timescale: self.wave.hierarchy().timescale(),
         }
     }
@@ -405,8 +512,7 @@ pub struct AsciWaveTrace {
     // pin id -> step
     values: Vec<Vec<BitVecValue>>,
     pins: Vec<(String, WidthInt)>,
-    symbol_map: FxHashMap<(u32, SymbolId), usize>,
-    step: u32,
+    port_map: FxHashMap<PortKey, usize>,
 }
 
 impl AsciWaveTrace {
@@ -439,8 +545,11 @@ impl AsciWaveTrace {
 
                     // store a mapping from any SymbolId that refers to this pin
                     for syms in &module.proto_pin_map {
-                        let key = (inst_id as u32, syms[field_idx]);
-                        trace.symbol_map.insert(key, wave_id);
+                        let key = PortKey {
+                            instance_id: inst_id as u32,
+                            pin_id: syms[field_idx],
+                        };
+                        trace.port_map.insert(key, wave_id);
                     }
                 } else {
                     panic!("Unable to find pin {name}");
@@ -455,8 +564,7 @@ impl AsciWaveTrace {
         let mut out = Self {
             values: vec![],
             pins: vec![],
-            symbol_map: Default::default(),
-            step: 0,
+            port_map: Default::default(),
         };
 
         let mut pin_ids: FxHashMap<String, usize> = FxHashMap::default();
@@ -558,20 +666,26 @@ fn tokenize(line: &str) -> Vec<&str> {
 }
 
 impl SignalTrace for AsciWaveTrace {
-    fn step(&mut self) -> StepResult {
+    fn stream_steps(
+        &mut self,
+        mut callback: impl FnMut(u32, SignalValues) -> CallbackResult,
+    ) -> Result<(), String> {
         let num_steps = self.values[0].len();
         debug_assert!(self.values.iter().all(|v| v.len() == num_steps));
-        if self.step + 1 < num_steps as u32 {
-            self.step += 1;
-            StepResult::Ok
-        } else {
-            StepResult::Done
+        for step in 0..num_steps {
+            let bv_values: Vec<_> = self.values.iter().map(|v| v[step].clone()).collect();
+            let r = callback(
+                step as u32,
+                SignalValues {
+                    port_map: &self.port_map,
+                    values: &bv_values,
+                },
+            );
+            if r == CallbackResult::Stop {
+                return Ok(());
+            }
         }
-    }
-
-    fn get(&self, instance_id: u32, pin: SymbolId) -> BitVecValue {
-        let pin_id = self.symbol_map[&(instance_id, pin)];
-        self.values[pin_id][self.step as usize].clone()
+        Ok(())
     }
 
     fn step_to_time(&self) -> StepToTime {

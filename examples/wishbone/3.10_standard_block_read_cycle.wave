@@ -15,6 +15,7 @@ CYC          0      1       1 1      1      1 0
 // extra pins not included in the original illustration
 RST          0      0       0 0      0      0 0
 ERR          0      0       0 0      0      0 0
+RTY          0      0       0 0      0      0 0
 CTI[2:0]     0      0       0 0      0      0 0
 BTE[1:0]     x      x       x x      x      x x
 // we ignore TGA/TGD/TGC

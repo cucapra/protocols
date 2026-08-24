@@ -810,9 +810,15 @@ impl ModuleCtx<'_> {
         let mut field_inner = pair.clone().into_inner();
         let id_pair =
             self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let edge_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
         let id = id_pair.as_str();
         if matches!(self.m.clock, Clock::None) {
-            self.m.clock = Clock::Posedge(id.to_string());
+            self.m.clock = match edge_pair.as_str() {
+                "@posedge" => Clock::PosEdge(id.to_string()),
+                "@negedge" => Clock::NegEdge(id.to_string()),
+                other => todo!("deal with clock edge `{other}`"),
+            };
             Ok(())
         } else {
             let msg = format!(

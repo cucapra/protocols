@@ -90,7 +90,8 @@ struct_def = { ("struct" | "interface") ~ path_id ~ "{" ~ field_list? ~ "}" }
 // modules
 module_impl_list = { (non_path_id ~ "+" ~ module_impl_list) | non_path_id }
 clock_tpe = { "clock" ~ "@posedge" }
-clock_entry = {"in" ~ path_id ~ ":" ~ "clock" ~ "@posedge" }
+clock_edge = {"@posedge" | "@negedge"}
+clock_entry = {"in" ~ path_id ~ ":" ~ "clock" ~ clock_edge }
 pin_remap_constraint = {"with" ~ expr}
 remap_entry = {dir ~ path_id ~ ":" ~ tpe ~ "=" ~ expr ~ pin_remap_constraint?}
 const_entry = {"const" ~ path_id ~ "=" ~ integer }

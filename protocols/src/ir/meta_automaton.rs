@@ -6,10 +6,12 @@ pub type MetaNodeId = usize;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolTiming {
     pub name: String,
-    /// Every cycle at which this protocol may fork, counted from its selection.
-    /// `None` means that it may fork in any cycle and may continue forever.
+    /// Every cycle at which this protocol may reach its phase boundary, counted
+    /// from its selection. The boundary is done when `post_cycles` is zero.
+    /// `None` means that it may reach the boundary in any cycle or continue forever.
     pub pre_cycles: Option<Vec<usize>>,
-    /// Fixed post-phase lifetime, including the fork cycle.
+    /// Fixed post-phase lifetime, including the fork cycle. Zero means that the
+    /// protocol has no fork and therefore no post-phase.
     pub post_cycles: usize,
 }
 
@@ -48,6 +50,7 @@ pub enum MetaFrontier {
     Pre {
         protocol: ProtocolId,
         instance: usize,
+        elapsed: usize,
     },
 }
 
@@ -60,8 +63,10 @@ pub struct MetaState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetaOutcome {
-    Select,
+    /// Reaches fork, or done for a protocol with no post-phase.
     Fork,
+    /// The selected protocol remains in its pre-phase after this cycle.
+    Continue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,11 +134,6 @@ fn validate_and_normalize(mut protocols: Vec<ProtocolTiming>) -> Vec<ProtocolTim
 
     for protocol in &mut protocols {
         assert!(!protocol.name.is_empty(), "protocol names cannot be empty");
-        assert!(
-            protocol.post_cycles > 0,
-            "{} must have a nonzero post-phase bound",
-            protocol.name
-        );
         if let Some(pre_cycles) = &mut protocol.pre_cycles {
             assert!(
                 !pre_cycles.is_empty(),
@@ -178,45 +178,6 @@ fn advance_live(live: &[LiveTransaction], cycles: usize) -> Vec<LiveTransaction>
         .collect()
 }
 
-fn drain_cycles(live: &[LiveTransaction]) -> usize {
-    live.iter()
-        .map(|transaction| transaction.post_cycle + 1)
-        .max()
-        .unwrap_or(0)
-}
-
-fn relevant_fork_timings(pre_cycles: Option<&[usize]>, drain: usize) -> Vec<(usize, ForkTiming)> {
-    match pre_cycles {
-        Some(lengths) => {
-            let mut groups: Vec<(usize, Vec<usize>)> = Vec::new();
-            for &length in lengths {
-                let effective = length.min(drain);
-                if let Some((_, grouped)) = groups.iter_mut().find(|(prior, _)| *prior == effective)
-                {
-                    grouped.push(length);
-                } else {
-                    groups.push((effective, vec![length]));
-                }
-            }
-            groups
-                .into_iter()
-                .map(|(effective, lengths)| (effective, ForkTiming::Exact(lengths)))
-                .collect()
-        }
-        None if drain == 0 => vec![(0, ForkTiming::AtLeast(1))],
-        None => (1..=drain)
-            .map(|cycles| {
-                let timing = if cycles == drain {
-                    ForkTiming::AtLeast(cycles)
-                } else {
-                    ForkTiming::Exact(vec![cycles])
-                };
-                (cycles, timing)
-            })
-            .collect(),
-    }
-}
-
 fn fork_successor(
     mut live: Vec<LiveTransaction>,
     protocols: &[ProtocolTiming],
@@ -224,11 +185,13 @@ fn fork_successor(
     instance: usize,
     introduce_next_choice: bool,
 ) -> MetaState {
-    live.push(LiveTransaction {
-        protocol,
-        instance,
-        post_cycle: protocols[protocol].post_cycles - 1,
-    });
+    if protocols[protocol].post_cycles > 0 {
+        live.push(LiveTransaction {
+            protocol,
+            instance,
+            post_cycle: protocols[protocol].post_cycles - 1,
+        });
+    }
     live.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
 
     MetaState {
@@ -249,40 +212,54 @@ fn successors(
     };
     let mut result = Vec::new();
 
-    match frontier {
-        MetaFrontier::Choice { instance } => {
-            for protocol in 0..protocols.len() {
-                result.push(Successor {
-                    state: MetaState {
-                        live: state.live.clone(),
-                        frontier: Some(MetaFrontier::Pre { protocol, instance }),
-                    },
+    let choices: Vec<_> = match frontier {
+        MetaFrontier::Choice { instance } => (0..protocols.len())
+            .map(|protocol| (protocol, instance, 0))
+            .collect(),
+        MetaFrontier::Pre {
+            protocol,
+            instance,
+            elapsed,
+        } => vec![(protocol, instance, elapsed)],
+    };
+
+    for (protocol, instance, elapsed) in choices {
+        let next = elapsed.checked_add(1).expect("pre-phase length overflow");
+        let timing = protocols[protocol].pre_cycles.as_deref();
+        let can_fork = timing.is_none_or(|lengths| lengths.binary_search(&next).is_ok());
+        let can_continue = timing.is_none_or(|lengths| lengths.last().copied().unwrap() > next);
+        let advanced = advance_live(&state.live, 1);
+
+        if can_fork {
+            result.push(Successor {
+                state: fork_successor(
+                    advanced.clone(),
+                    protocols,
                     protocol,
-                    outcome: MetaOutcome::Select,
-                    fork_timing: None,
-                    advance_cycles: 0,
-                });
-            }
+                    instance,
+                    introduce_next_choice,
+                ),
+                protocol,
+                outcome: MetaOutcome::Fork,
+                fork_timing: Some(ForkTiming::Exact(vec![next])),
+                advance_cycles: 1,
+            });
         }
-        MetaFrontier::Pre { protocol, instance } => {
-            let drain = drain_cycles(&state.live);
-            for (advance_cycles, fork_timing) in
-                relevant_fork_timings(protocols[protocol].pre_cycles.as_deref(), drain)
-            {
-                result.push(Successor {
-                    state: fork_successor(
-                        advance_live(&state.live, advance_cycles),
-                        protocols,
+        if can_continue {
+            result.push(Successor {
+                state: MetaState {
+                    live: advanced,
+                    frontier: Some(MetaFrontier::Pre {
                         protocol,
                         instance,
-                        introduce_next_choice,
-                    ),
-                    protocol,
-                    outcome: MetaOutcome::Fork,
-                    fork_timing: Some(fork_timing),
-                    advance_cycles,
-                });
-            }
+                        elapsed: if timing.is_none() { 1 } else { next },
+                    }),
+                },
+                protocol,
+                outcome: MetaOutcome::Continue,
+                fork_timing: None,
+                advance_cycles: 1,
+            });
         }
     }
 
@@ -315,9 +292,14 @@ fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
         MetaFrontier::Choice { instance } => MetaFrontier::Choice {
             instance: instance - shift,
         },
-        MetaFrontier::Pre { protocol, instance } => MetaFrontier::Pre {
+        MetaFrontier::Pre {
+            protocol,
+            instance,
+            elapsed,
+        } => MetaFrontier::Pre {
             protocol,
             instance: instance - shift,
+            elapsed,
         },
     });
 
@@ -343,7 +325,11 @@ fn push_bounded_node(
 
     for successor in successors(&state, protocols, forks + 1 < fork_bound) {
         let next_forks = forks + usize::from(successor.outcome == MetaOutcome::Fork);
-        let target = push_bounded_node(nodes, protocols, successor.state, next_forks, fork_bound);
+        let target = if successor.outcome == MetaOutcome::Continue && successor.state == state {
+            id
+        } else {
+            push_bounded_node(nodes, protocols, successor.state, next_forks, fork_bound)
+        };
         nodes[id].edges.push(MetaEdge {
             protocol: successor.protocol,
             outcome: successor.outcome,
@@ -412,47 +398,47 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
         })
     };
 
-    match edge.outcome {
-        MetaOutcome::Select => {
-            assert_eq!(edge.advance_cycles, 0);
-            assert!(edge.fork_timing.is_none());
-            for transaction in &source.live {
-                assert!(raw_target_live(
-                    transaction.protocol,
-                    transaction.instance,
-                    transaction.post_cycle
-                ));
-            }
-            assert!(matches!(
-                target.frontier,
-                Some(MetaFrontier::Pre { protocol, instance })
-                    if protocol == edge.protocol
-                        && Some(instance + edge.canonical_shift)
-                            == source.frontier.map(|frontier| match frontier {
-                                MetaFrontier::Choice { instance } => instance,
-                                MetaFrontier::Pre { .. } => unreachable!(),
-                            })
+    assert_eq!(edge.advance_cycles, 1);
+    for transaction in &source.live {
+        if transaction.post_cycle > 0 {
+            assert!(raw_target_live(
+                transaction.protocol,
+                transaction.instance,
+                transaction.post_cycle - 1
             ));
         }
+    }
+    let (protocol, instance) = match source.frontier.unwrap() {
+        MetaFrontier::Choice { instance } => (edge.protocol, instance),
+        MetaFrontier::Pre {
+            protocol, instance, ..
+        } => {
+            assert_eq!(protocol, edge.protocol);
+            (protocol, instance)
+        }
+    };
+
+    match edge.outcome {
         MetaOutcome::Fork => {
             assert!(edge.fork_timing.is_some());
-            for transaction in &source.live {
-                if transaction.post_cycle >= edge.advance_cycles {
-                    assert!(raw_target_live(
-                        transaction.protocol,
-                        transaction.instance,
-                        transaction.post_cycle - edge.advance_cycles
-                    ));
-                }
+            if graph.protocols[protocol].post_cycles > 0 {
+                assert!(raw_target_live(
+                    protocol,
+                    instance,
+                    graph.protocols[protocol].post_cycles - 1
+                ));
             }
-            let MetaFrontier::Pre { protocol, instance } = source.frontier.unwrap() else {
-                panic!("fork edge must leave a pre node")
-            };
-            assert_eq!(protocol, edge.protocol);
-            assert!(raw_target_live(
-                protocol,
-                instance,
-                graph.protocols[protocol].post_cycles - 1
+        }
+        MetaOutcome::Continue => {
+            assert!(edge.fork_timing.is_none());
+            assert!(matches!(
+                target.frontier,
+                Some(MetaFrontier::Pre {
+                    protocol: target_protocol,
+                    instance: target_instance,
+                    ..
+                }) if target_protocol == protocol
+                    && target_instance + edge.canonical_shift == instance
             ));
         }
     }
@@ -581,6 +567,10 @@ mod tests {
         ]
     }
 
+    fn add_depth_one() -> Vec<ProtocolTiming> {
+        vec![ProtocolTiming::new("A", vec![1], 1)]
+    }
+
     #[test]
     fn steady_state_varying_post_lengths() {
         let inputs = vec![
@@ -607,6 +597,28 @@ mod tests {
         let graph = steady_driver_meta(inputs);
 
         snap("steady_state_add_d2", &to_dot(&graph))
+    }
+
+    #[test]
+    fn steady_state_d1_long_pre() {
+        let inputs = vec![
+            ProtocolTiming::new("A", vec![2], 1),
+            ProtocolTiming::new("S", vec![2], 1),
+        ];
+        let graph = steady_driver_meta(inputs);
+
+        snap("steady_state_add_d1_long_pre", &to_dot(&graph))
+    }
+
+    #[test]
+    fn steady_state_d1_unbounded_pre() {
+        let inputs = vec![
+            ProtocolTiming::unbounded("A", 1),
+            ProtocolTiming::unbounded("S", 1),
+        ];
+        let graph = steady_driver_meta(inputs);
+
+        snap("steady_state_add_d1_unbounded_pre", &to_dot(&graph))
     }
 
     #[test]
@@ -638,6 +650,12 @@ mod tests {
     }
 
     #[test]
+    fn bounded_add_d1() {
+        let graph = bounded_driver_meta(add_depth_one(), 2);
+        snap("bounded_add_d1", &to_dot(&graph))
+    }
+
+    #[test]
     fn steady_add_sub_d1() {
         let graph = steady_driver_meta(add_sub_depth_one());
 
@@ -665,6 +683,34 @@ mod tests {
     }
 
     #[test]
+    fn unbounded_pre_phase_steady_state_simple() {
+        // struct device {
+        //     in a
+        //     in b
+        //     out ready
+        //     out aout
+        //     out bout
+        // }
+        // prot a(a) {
+        //   DUT.a := a;
+        //   step(); DUT.a := X; fork();
+        //   step(); assert_eq(DUT.aout, a); step();
+        // }
+
+        // prot b(b) {
+        //   while !DUT.ready() { step(); }
+        //   step(); DUT.b := b;
+        //   step(); assert_eq(DUT.s, b); step();
+        // }
+        let graph = steady_driver_meta(vec![
+            ProtocolTiming::new("id", vec![1], 2),
+            ProtocolTiming::unbounded("w", 0),
+        ]);
+
+        snap("unbounded_pre_phase_steady_state_simple", &to_dot(&graph))
+    }
+
+    #[test]
     fn bounded_tree_for_unbounded_pre() {
         let graph = bounded_driver_meta(
             vec![
@@ -684,9 +730,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn rejects_zero_post_bound() {
-        let _ = steady_driver_meta(vec![ProtocolTiming::new("ADD", vec![1], 0)]);
+    fn accepts_protocol_without_post_phase() {
+        let graph = steady_driver_meta(vec![ProtocolTiming::new("ADD", vec![1], 0)]);
+        assert!(graph.nodes.iter().all(|node| node.state.live.is_empty()));
     }
 
     #[test]

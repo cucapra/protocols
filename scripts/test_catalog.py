@@ -1068,7 +1068,41 @@ BI_CASES = {
         "expect": "pass",
         "extra_args": ("--sample-posedge", "TOP.reqwalker.i_clk"),
     },
+    # wishbone protocol on a shortened trace from ethmac
+    "examples.wishbone.ethmac_first_62us.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/ethmac.prot",
+        ],
+        "wave": "examples/wishbone/ethmac_first_62us.fst",
+        "instances": (
+            "tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level",
+        ),
+        "expect": "pass",
+        "extra_args": ("--display-hex", "--show-steps"),
+    },
 }
+
+# Small Wishbone transactions from the Wishbone specification
+WISHBONE_SPEC_BI = [
+    "3.5_classic_standard_single_read_cycle.wave",
+    "3.7_standard_single_write_cycle.wave",
+    "3.10_standard_block_read_cycle.wave",
+    "3.14_rmw_cycle.wave",
+    "4.8_constant_address_burst.wave",
+    "4.8_constant_address_burst_no_stb_rate_limit.wave",
+]
+
+for wave in WISHBONE_SPEC_BI:
+    name = wave[: -len(".wave")].replace(".", "_")
+    name = f"examples.wishbone.{name}"
+    BI_CASES[name] = {
+        "protocol": "examples/wishbone/wishbone.prot",
+        "wave": f"examples/wishbone/{wave}",
+        "instances": (":Wishbone",),
+        "expect": "pass",
+        "extra_args": ("--display-hex", "--show-steps"),
+    }
 
 # waveform traces from the antmicro/litex wishbone tests
 ANTMICRO_TRACE_STEMS = (
@@ -1160,11 +1194,6 @@ def _expect_antmicro(stem: str) -> str:
         actual = _incorrect_burst_addr(offset, cti, num_elements)
         if expected == actual:
             return "pass"
-
-        print(f"{stem=} is expected to fail the bi")
-        print(f"  {expected=}")
-        print(f"  {actual=}")
-
         return "fail"
     else:
         return "pass"

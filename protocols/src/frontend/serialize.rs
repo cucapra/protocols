@@ -415,8 +415,11 @@ fn serialize_remap_module(
 
     match &m.clock {
         Clock::None => {}
-        Clock::Posedge(name) => {
+        Clock::PosEdge(name) => {
             writeln!(out, "  in {name} : clock @posedge,")?;
+        }
+        Clock::NegEdge(name) => {
+            writeln!(out, "  in {name} : clock @negedge,")?;
         }
     }
 
@@ -506,8 +509,11 @@ fn serialize_module(out: &mut impl Write, st: &SymbolTable, m: &Module) -> std::
     // print out the non-serializable info as comments
     match &m.clock {
         Clock::None => {}
-        Clock::Posedge(name) => {
+        Clock::PosEdge(name) => {
             writeln!(out, "// {name} : @posedge clock")?;
+        }
+        Clock::NegEdge(name) => {
+            writeln!(out, "// {name} : @negedge clock")?;
         }
     }
 
