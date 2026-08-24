@@ -53,16 +53,21 @@ pub trait SignalTrace {
 
 /// The `WaveSamplingMode` determines how signals from a waveform are sampled
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum WaveSamplingMode {
-    /// Sample on the rising edge of the signal, specified by its
-    /// signal identifier (a `SignalRef`)
-    RisingEdge(SignalRef),
-    /// Sample on the falling edge of the signal, specified by its
-    /// signal identifier (a `SignalRef`)
-    FallingEdge(SignalRef),
+    /// Sample on the rising edge of the signal
+    RisingEdge(String),
+    /// Sample on the falling edge of the signal
+    FallingEdge(String),
     /// Interpret every time step as a new clock step. This generally only works
     /// for waveforms produced by the Patronus simulator.
+    Direct,
+}
+
+/// A `WaveSamplingMode` with the clock name replaced by its `SignalRef`.
+#[derive(Debug, Clone)]
+enum SamplingMode {
+    RisingEdge(SignalRef),
+    FallingEdge(SignalRef),
     /// We include the timetable in order to faithfully include steps with no signal changes.
     Direct(Vec<Time>),
 }
@@ -80,19 +85,13 @@ pub struct WaveSignalTrace {
     names: Vec<String>,
 
     /// The sampling mode to be used on the waveform
-    sampling_mode: WaveSamplingMode,
+    sampling_mode: SamplingMode,
 
     /// The current (logical) `step()` in the Protocols specification
     logical_step: u32,
 
     /// The actual clock time-step in the waveform
     time_step: u32,
-
-    /// An (optional) reference to the signal to treat as the clock signal
-    /// (to be sampled on every rising clockedge)
-    /// Note that this field is only `Some` if the user passes an argument
-    /// to the optional `--sample_posedge` CLI argument
-    clock_signal: Option<SignalRef>,
 
     /// Maps a logical step to time.
     logical_step_to_time: Vec<Time>,
@@ -122,33 +121,36 @@ impl WaveSignalTrace {
         st: &SymbolTable,
         modules: &[Module],
         instances: &[Instance],
-        sample_posedge: Option<String>,
+        sampling_mode: WaveSamplingMode,
     ) -> Result<Self, wellen::WellenError> {
         let opts = wellen::LoadOptions::default();
         let wave = wellen::stream::read_from_file(filename, &opts)?;
 
         // find instances in the waveform hierarchy
-        let (port_to_signal, clock_signal) =
-            find_instances(wave.hierarchy(), modules, instances, sample_posedge);
+        let (port_to_signal, sampling_mode) =
+            find_instances(wave.hierarchy(), modules, instances, sampling_mode);
 
-        // Determine the sampling mode based on the vavlue received
-        // for `clock_signal`. Note: we only support `Direct` & `RisingEdge`
-        // for now (`FallingEdge` is currently unsupported).
-        let sampling_mode = if let Some(signal_ref) = clock_signal {
-            WaveSamplingMode::RisingEdge(signal_ref)
-        } else {
-            let mut time_table = load_time_table(filename);
-            // traditionally, the last time step is not actually emitted
-            // TODO: should we change this?
-            time_table.pop();
-            WaveSamplingMode::Direct(time_table)
+        // for direct sampling, we need to add the time table
+        let sampling_mode = match sampling_mode {
+            SamplingMode::Direct(_) => {
+                let mut time_table = load_time_table(filename);
+                // traditionally, the last time step is not actually emitted
+                // TODO: should we change this?
+                time_table.pop();
+                SamplingMode::Direct(time_table)
+            }
+            other => other,
         };
 
         // load all relavant signal references into memory
         let mut signals: Vec<SignalRef> = port_to_signal.values().cloned().collect();
         // Add clock signal if present
-        if let Some(clk_sig) = clock_signal {
+        if let SamplingMode::RisingEdge(clk_sig) | SamplingMode::FallingEdge(clk_sig) =
+            sampling_mode
+        {
             signals.push(clk_sig);
+        } else {
+            debug_assert!(matches!(sampling_mode, SamplingMode::Direct(_)));
         }
         signals.sort();
         signals.dedup();
@@ -185,7 +187,6 @@ impl WaveSignalTrace {
             sampling_mode,
             logical_step: 0,
             time_step: 0,
-            clock_signal,
             logical_step_to_time: vec![],
             names,
         })
@@ -198,11 +199,11 @@ fn find_instances(
     hierachy: &Hierarchy,
     modules: &[Module],
     instances: &[Instance],
-    sample_posedge: Option<String>,
-) -> (FxHashMap<PortKey, SignalRef>, Option<SignalRef>) {
+    sampling_mode: WaveSamplingMode,
+) -> (FxHashMap<PortKey, SignalRef>, SamplingMode) {
     let mut port_map = FxHashMap::default();
 
-    let mut clock_signal: Option<SignalRef> = None;
+    let mut samp_mode_out = SamplingMode::Direct(vec![]);
 
     for (inst_id, inst) in instances.iter().enumerate() {
         let module = &modules[inst.module_id];
@@ -224,37 +225,48 @@ fn find_instances(
 
                     // Set up `sample_posedge` to
                     // refer to the clock signal (if one is specified)
-                    if let Some(ref signal_name) = sample_posedge {
-                        let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
+                    match &sampling_mode {
+                        WaveSamplingMode::RisingEdge(signal_name)
+                        | WaveSamplingMode::FallingEdge(signal_name) => {
+                            let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
 
-                        // The clock signal should be in the same scope as the instance
-                        // So we look it up directly in the instance_scope
-                        match clock_signal_parts.last() {
-                            Some(var_name) => {
-                                if let Some(var) = instance_scope
-                                    .vars(hierachy)
-                                    .find(|v| hierachy[*v].name(hierachy) == *var_name)
-                                {
-                                    let signal_ref = hierachy[var].signal_ref();
-                                    clock_signal = Some(signal_ref);
-                                } else {
-                                    // If not found in instance scope, use `lookup_var`
-                                    match hierachy.lookup_var(
-                                        &clock_signal_parts[0..clock_signal_parts.len() - 1],
-                                        var_name,
-                                    ) {
-                                        Some(var_ref) => {
-                                            let signal_ref = hierachy[var_ref].signal_ref();
-                                            clock_signal = Some(signal_ref);
-                                        }
-                                        None => {
-                                            panic!("Unable to find signal {var_name} in waveform")
+                            // The clock signal should be in the same scope as the instance
+                            // So we look it up directly in the instance_scope
+                            let signal_ref = match clock_signal_parts.last() {
+                                Some(var_name) => {
+                                    if let Some(var) = instance_scope
+                                        .vars(hierachy)
+                                        .find(|v| hierachy[*v].name(hierachy) == *var_name)
+                                    {
+                                        hierachy[var].signal_ref()
+                                    } else {
+                                        // If not found in instance scope, use `lookup_var`
+                                        match hierachy.lookup_var(
+                                            &clock_signal_parts[0..clock_signal_parts.len() - 1],
+                                            var_name,
+                                        ) {
+                                            Some(var_ref) => hierachy[var_ref].signal_ref(),
+                                            None => {
+                                                panic!(
+                                                    "Unable to find signal {var_name} in waveform"
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            None => panic!("Malformed signal {signal_name}"),
+                                None => panic!("Malformed signal {signal_name}"),
+                            };
+                            samp_mode_out = match sampling_mode {
+                                WaveSamplingMode::RisingEdge(_) => {
+                                    SamplingMode::RisingEdge(signal_ref)
+                                }
+                                WaveSamplingMode::FallingEdge(_) => {
+                                    SamplingMode::FallingEdge(signal_ref)
+                                }
+                                WaveSamplingMode::Direct => SamplingMode::Direct(vec![]),
+                            };
                         }
+                        WaveSamplingMode::Direct => {}
                     }
 
                     // Check that bit widths match
@@ -298,7 +310,7 @@ fn find_instances(
             );
         }
     }
-    (port_map, clock_signal)
+    (port_map, samp_mode_out)
 }
 
 impl SignalTrace for WaveSignalTrace {
@@ -332,7 +344,7 @@ impl SignalTrace for WaveSignalTrace {
             .wave
             .stream_time_steps::<()>(filter, |time, values, changed| {
                 let is_step = match &self.sampling_mode {
-                    WaveSamplingMode::RisingEdge(clock) => {
+                    SamplingMode::RisingEdge(clock) => {
                         let current_clock: bool = values.get(clock).unwrap().try_into().unwrap();
                         let is_rising_edge = !prev_clock && current_clock;
                         prev_clock = current_clock;
@@ -340,8 +352,15 @@ impl SignalTrace for WaveSignalTrace {
                         let is_first_step = times.is_empty();
                         is_rising_edge || is_first_step
                     }
-                    WaveSamplingMode::FallingEdge(_) => todo!(),
-                    WaveSamplingMode::Direct(_) => {
+                    SamplingMode::FallingEdge(clock) => {
+                        let current_clock: bool = values.get(clock).unwrap().try_into().unwrap();
+                        let is_falling_edge = prev_clock && !current_clock;
+                        prev_clock = current_clock;
+                        // we always include the first time step, even if there is not an edge
+                        let is_first_step = times.is_empty();
+                        is_falling_edge || is_first_step
+                    }
+                    SamplingMode::Direct(_) => {
                         // are there any time steps we have missed?
                         if let Some(prev_time) = times.last().cloned()
                             && time > prev_time + 1
@@ -367,7 +386,7 @@ impl SignalTrace for WaveSignalTrace {
 
                 // we record all changed values, even if they change between steps
                 for s in changed {
-                    if let WaveSamplingMode::RisingEdge(clock) = &self.sampling_mode
+                    if let SamplingMode::RisingEdge(clock) = &self.sampling_mode
                         && s == clock
                     {
                         continue; // skip clock
@@ -424,7 +443,7 @@ impl SignalTrace for WaveSignalTrace {
             // an error reading the file
             Err(StreamError::Wellen(e)) => return Err(e.to_string()),
         }
-        if let WaveSamplingMode::Direct(time_table) = &self.sampling_mode
+        if let SamplingMode::Direct(time_table) = &self.sampling_mode
             && time_table.last().cloned().unwrap_or_default() > times.last().cloned().unwrap()
         {
             let last_time = *times.last().unwrap();
