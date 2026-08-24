@@ -98,6 +98,10 @@ impl Traces {
         }
     }
 
+    pub fn get_tail(&self, trace: TraceId) -> Option<u32> {
+        self.tails[trace.0 as usize]
+    }
+
     /// Helper function for `get_trace`
     fn get_trace_from_tail(&self, tail: u32) -> ProtoTrace {
         let mut out = vec![];
