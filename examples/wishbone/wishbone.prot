@@ -54,6 +54,7 @@ prot idle_no_cycle<self: Wishbone>() {
     step();
 }
 
+#[idle]
 prot idle_continue_cycle<self: Wishbone>() {
     self.RST := 1'b0;
     self.CYC := 1'b1;
