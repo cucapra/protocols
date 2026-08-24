@@ -64,6 +64,69 @@ expect_name = "ip_apb_0.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/ip_apb_0.fst --instances dut:APB --show-steps 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.ethmac_first_62us_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "ethmac_first_62us.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/ethmac.prot --wave examples/wishbone/ethmac_first_62us.fst --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --display-hex --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_3_10_standard_block_read_cycle_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_3_10_standard_block_read_cycle.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/3.10_standard_block_read_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_3_14_rmw_cycle_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_3_14_rmw_cycle.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/3.14_rmw_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_3_5_classic_standard_single_read_cycle_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_3_5_classic_standard_single_read_cycle.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/3.5_classic_standard_single_read_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_3_7_standard_single_write_cycle_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_3_7_standard_single_write_cycle.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/3.7_standard_single_write_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_4_8_constant_address_burst_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_4_8_constant_address_burst.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/4.8_constant_address_burst.wave --instances :Wishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_4_8_constant_address_burst_no_stb_rate_limit_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_4_8_constant_address_burst_no_stb_rate_limit.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/4.8_constant_address_burst_no_stb_rate_limit.wave --instances :Wishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_fifo_classic_1_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",

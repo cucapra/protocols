@@ -80,7 +80,7 @@ def case_stem(case: dict) -> str:
     # to identify a test
     wave = case.get("wave")
     if wave and (
-        "antmicro" in wave or "fpga-debugging" in wave or "ethmac" or "apb" in wave
+        "antmicro" in wave or "fpga-debugging" in wave or "ethmac" in wave or "apb" in wave
     ):
         return Path(wave).stem
     # for all the .wave bi benchmarks, we use the id
