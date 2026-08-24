@@ -150,7 +150,8 @@ impl ProtocolContext {
 pub enum Clock {
     #[default]
     None,
-    Posedge(String),
+    PosEdge(String),
+    NegEdge(String),
 }
 
 /// Represents an unresolved `module`.

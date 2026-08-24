@@ -99,7 +99,7 @@ fn get_clock(
         .iter()
         .flat_map(|&m_id| match &modules[m_id].clock {
             Clock::None => None,
-            Clock::Posedge(name) => Some(name.to_string()),
+            Clock::PosEdge(name) | Clock::NegEdge(name) => Some(name.to_string()),
         })
         .collect();
     if let Some(name) = cli_sample_posedge {
