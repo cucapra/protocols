@@ -1,0 +1,113 @@
+// AXI-Stream width adapter which converts a 64-bit input into 8-bit outputs over multiple cycles
+struct AXIS {
+    // Reset is active-high
+    in rst: u1, 
+
+    // Signals related to the DUT accepting input data from the environment
+
+    // 64-bit data that the DUT accepts as input from the environment
+    in input_axis_tdata: u64,
+
+    // bitmask indicating which bytes of `tdata` are meaningful
+    in input_axis_tkeep: u8, 
+
+    // 1 if this is the last word in a packet
+    in input_axis_tlast: u1,  
+
+    // Indicates if `input_tdata` contains valid data
+    in input_axis_tvalid: u1, 
+
+    // Signal indicating whether the DUT
+    // is ready to accept data from the environment as input
+    out input_axis_tready: u1,
+
+    //----------------------------------------------------------------
+    // Signals related to the DUT emitting data as output
+
+    // 8-bit data that the DUT emits as output
+    out output_axis_tdata: u8,   
+
+    // Output data is 8 bits, so `tkeep` is now just 1 bit wide
+    // `tkeep` is 1 if `output_tdata` contains meaningful data
+    out output_axis_tkeep: u1,  
+
+    // 1 if this is the last word in a packet
+    out output_axis_tlast: u1,
+
+    // Indicates if `output_data` contains valid data
+    out output_axis_tvalid: u1,             
+
+    // Signal indicating whether the environment is ready to 
+    // accept the data emitted by the DUT as output
+    in output_axis_tready: u1,
+}
+
+prot reset<DUT: AXIS>() {
+    DUT.rst := 1'b1;         
+
+    // Valid pin (for both directions) must be low when 
+    // reset is asserted (AXI-Stream spec section 2.7.2) 
+    DUT.input_axis_tvalid := 1'b0;
+    assert_eq(DUT.output_axis_tvalid, 1'b0);
+
+    step();
+}
+
+// When idle, the DUT neither accepts data from the environment,
+// nor does it emit data as output
+#[idle]
+prot idle<DUT: AXIS>() {
+    DUT.rst := 1'b0;         
+    DUT.input_axis_tvalid := 1'b0;
+
+    assert_eq(DUT.output_axis_tvalid, 1'b0);
+    step();
+}
+
+
+// DUT accepts a 64-bit data payload from the environment
+// The `keep` argument is a bitmask indicating which bytes of `data` contain 
+// meaningful data
+prot accept_word<DUT: AXIS>(data: u64, keep: u8, last: u1) {
+    DUT.rst := 1'b0;         
+    DUT.input_axis_tdata := data;
+    DUT.input_axis_tkeep := keep;
+    DUT.input_axis_tlast := last;
+    DUT.input_axis_tvalid := 1'b1;
+
+    // Wait until the DUT signals that it has taken the word
+    while (!(DUT.input_axis_tready == 1'b1)) {
+        step();
+    }
+
+    step();
+}
+
+// DUT emits an 8-bit data payload (not the last byte of the packet)
+prot emit_byte<DUT: AXIS>(data: u8) {
+    DUT.rst := 1'b0;         
+
+    assert_eq(DUT.output_axis_tvalid, 1'b1);
+    assert_eq(DUT.output_axis_tdata, data);
+
+    // Set `tkeep` to 1 to indicate that the output data is meaningful
+    assert_eq(DUT.output_axis_tkeep, 1'b1);
+
+    // Set `tlast` to 0 to indicate this isn't the last byte of the packet
+    assert_eq(DUT.output_axis_tlast, 1'b0);
+
+    step();
+}
+
+// DUT emits the last byte of the packet
+prot emit_last_byte<DUT: AXIS>(data: u8) {
+    DUT.rst := 1'b0;         
+      
+    assert_eq(DUT.output_axis_tvalid, 1'b1);
+    assert_eq(DUT.output_axis_tdata, data);
+    assert_eq(DUT.output_axis_tkeep, 1'b1);
+    assert_eq(DUT.output_axis_tlast, 1'b1);
+
+    step();
+}
+
