@@ -1,6 +1,33 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "graph_interp.examples_apb_ip_apb.ip_apb_graph_interp"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.examples_apb_ip_apb.ip_apb_graph_interp.contract_edges"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut --contract-edges 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.examples_apb_ip_apb.ip_apb_graph_interp.respect_forks"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.examples_picorv32_unsigned_mul.unsigned_mul_graph_interp"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",
