@@ -6,7 +6,7 @@
 use crate::Instance;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
 use protocols::frontend::Module;
-use protocols::frontend::symbol::SymbolId;
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -67,6 +67,8 @@ pub struct WaveSignalTrace {
     signal_ref_to_idx: FxHashMap<SignalRef, usize>,
     /// signals to stream
     signals: Vec<SignalRef>,
+    /// signal names for debugging
+    names: Vec<String>,
 
     /// The sampling mode to be used on the waveform
     sampling_mode: WaveSamplingMode,
@@ -108,6 +110,7 @@ impl WaveSignalTrace {
     /// `Direct` or `RisingEdge`).
     pub fn open(
         filename: &impl AsRef<std::path::Path>,
+        st: &SymbolTable,
         modules: &[Module],
         instances: &[Instance],
         sample_posedge: Option<String>,
@@ -152,6 +155,19 @@ impl WaveSignalTrace {
             .map(|(p, s)| (*p, signal_ref_to_idx[s]))
             .collect();
 
+        // name lookup for debugging
+        let signal_to_port: FxHashMap<_, _> =
+            port_to_signal.iter().map(|(k, v)| (*v, *k)).collect();
+        let names = signals
+            .iter()
+            .map(|s| {
+                signal_to_port
+                    .get(s)
+                    .map(|p| st[p.pin_id].name().to_string())
+                    .unwrap_or_default()
+            })
+            .collect();
+
         Ok(Self {
             wave,
             port_map,
@@ -162,6 +178,7 @@ impl WaveSignalTrace {
             time_step: 0,
             clock_signal,
             logical_step_to_time: vec![],
+            names,
         })
     }
 }
@@ -331,29 +348,37 @@ impl SignalTrace for WaveSignalTrace {
                         true
                     }
                 };
-                if is_step {
-                    for s in changed {
-                        let idx = self.signal_ref_to_idx[s];
-                        let value_ref = values.get(s).unwrap();
-                        if let SignalValueRef::BitVec(value) = value_ref {
-                            if let Some(value_be_bytes) = value.be_bytes() {
-                                bv_values[idx].assign_from_bytes_be(value_be_bytes);
-                            } else {
-                                // there are X or Z values
-                                debug_assert!(
-                                    value.bit_string().chars().all(|c| c == 'x'),
-                                    "{}",
-                                    value.bit_string()
-                                );
-                                // randomize
-                                let width = widths[idx];
-                                let random_value = BitVecValue::random(rng.get_mut(), width);
-                                bv_values[idx].assign(&random_value);
-                            }
-                        } else {
-                            unreachable!("we only expect bit vectors");
-                        }
+
+                // we record all changed values, even if they change between steps
+                for s in changed {
+                    if let WaveSamplingMode::RisingEdge(clock) = &self.sampling_mode
+                        && s == clock
+                    {
+                        continue; // skip clock
                     }
+                    let idx = self.signal_ref_to_idx[s];
+                    let value_ref = values.get(s).unwrap();
+                    if let SignalValueRef::BitVec(value) = value_ref {
+                        if let Some(value_be_bytes) = value.be_bytes() {
+                            bv_values[idx].assign_from_bytes_be(value_be_bytes);
+                        } else {
+                            // there are X or Z values
+                            debug_assert!(
+                                value.bit_string().chars().all(|c| c == 'x' || c == 'z'),
+                                "{}",
+                                value.bit_string()
+                            );
+                            // randomize
+                            let width = widths[idx];
+                            let random_value = BitVecValue::random(rng.get_mut(), width);
+                            bv_values[idx].assign(&random_value);
+                        }
+                    } else {
+                        unreachable!("we only expect bit vectors");
+                    }
+                }
+
+                if is_step {
                     times.push(time);
                     callback(
                         step_id,

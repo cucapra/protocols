@@ -169,7 +169,8 @@ fn main() {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) = WaveSignalTrace::open(&cli.wave, &modules, &instances, posedge_clock)
+        if let Ok(mut trace) =
+            WaveSignalTrace::open(&cli.wave, &st, &modules, &instances, posedge_clock)
         {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
