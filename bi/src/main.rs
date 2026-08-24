@@ -261,10 +261,17 @@ fn run_bis(
 ) -> Result<StepToTime, String> {
     trace.stream_steps(|_step_id, values| {
         // step all backwards interpreters that have not failed
+        let mut exec_count = 0;
         for bi in bis.iter_mut() {
             if !bi.has_failed() {
                 let _ = bi.exec_step(values.clone());
+                exec_count += 1;
             }
+        }
+        if exec_count == 0 {
+            CallbackResult::Stop
+        } else {
+            CallbackResult::Continue
         }
     })?;
 

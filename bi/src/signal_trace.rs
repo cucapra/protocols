@@ -34,10 +34,19 @@ impl<'a> SignalValues<'a> {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CallbackResult {
+    Continue,
+    Stop,
+}
+
 /// Provides a trace of signals that we can analyze.
 pub trait SignalTrace {
     /// Streams time steps.
-    fn stream_steps(&mut self, callback: impl FnMut(u32, SignalValues)) -> Result<(), String>;
+    fn stream_steps(
+        &mut self,
+        callback: impl FnMut(u32, SignalValues) -> CallbackResult,
+    ) -> Result<(), String>;
 
     fn step_to_time(&self) -> StepToTime;
 }
@@ -293,7 +302,10 @@ fn find_instances(
 }
 
 impl SignalTrace for WaveSignalTrace {
-    fn stream_steps(&mut self, mut callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+    fn stream_steps(
+        &mut self,
+        mut callback: impl FnMut(u32, SignalValues) -> CallbackResult,
+    ) -> Result<(), String> {
         let signals = self.signals.clone();
         // random initial values
         let mut rng = RefCell::new(rand::rngs::SmallRng::seed_from_u64(0));
@@ -316,7 +328,8 @@ impl SignalTrace for WaveSignalTrace {
         let filter = wellen::stream::Filter::include_signals(&signals);
         let mut step_id = 0;
         let mut prev_clock = false;
-        self.wave
+        let stream_result = self
+            .wave
             .stream_time_steps::<()>(filter, |time, values, changed| {
                 let is_step = match &self.sampling_mode {
                     WaveSamplingMode::RisingEdge(clock) => {
@@ -335,13 +348,16 @@ impl SignalTrace for WaveSignalTrace {
                         {
                             for time in prev_time + 1..time {
                                 times.push(time);
-                                callback(
+                                let r = callback(
                                     step_id,
                                     SignalValues {
                                         port_map: &self.port_map,
                                         values: &bv_values,
                                     },
                                 );
+                                if r == CallbackResult::Stop {
+                                    return Err(());
+                                }
                                 step_id += 1;
                             }
                         }
@@ -379,23 +395,35 @@ impl SignalTrace for WaveSignalTrace {
                 }
 
                 if is_step {
+                    println!("Step {step_id}:");
+                    for (idx, name) in self.names.iter().enumerate() {
+                        if !name.is_empty() {
+                            println!(" - {name}: {}", bv_values[idx].to_hex_str());
+                        }
+                    }
+
                     times.push(time);
-                    callback(
+                    let r = callback(
                         step_id,
                         SignalValues {
                             port_map: &self.port_map,
                             values: &bv_values,
                         },
                     );
+                    if r == CallbackResult::Stop {
+                        return Err(());
+                    }
                     step_id += 1;
                 }
                 Ok(())
-            })
-            .map_err(|e| match e {
-                StreamError::Wellen(e) => e.to_string(),
-                StreamError::Callback(_) => "???".to_string(),
-            })?;
-
+            });
+        match stream_result {
+            Ok(_) => {}
+            // our pseudo error just indicates that we wanted to stop streaming early
+            Err(StreamError::Callback(_)) => {}
+            // an error reading the file
+            Err(StreamError::Wellen(e)) => return Err(e.to_string()),
+        }
         if let WaveSamplingMode::Direct(time_table) = &self.sampling_mode
             && time_table.last().cloned().unwrap_or_default() > times.last().cloned().unwrap()
         {
@@ -404,13 +432,16 @@ impl SignalTrace for WaveSignalTrace {
             if let Some(larger_time_idx) = time_table.iter().position(|e| *e > last_time) {
                 for time in &time_table[larger_time_idx..] {
                     times.push(*time);
-                    callback(
+                    let r = callback(
                         step_id,
                         SignalValues {
                             port_map: &self.port_map,
                             values: &bv_values,
                         },
                     );
+                    if r == CallbackResult::Stop {
+                        break;
+                    }
                     step_id += 1;
                 }
             }
@@ -616,18 +647,24 @@ fn tokenize(line: &str) -> Vec<&str> {
 }
 
 impl SignalTrace for AsciWaveTrace {
-    fn stream_steps(&mut self, mut callback: impl FnMut(u32, SignalValues)) -> Result<(), String> {
+    fn stream_steps(
+        &mut self,
+        mut callback: impl FnMut(u32, SignalValues) -> CallbackResult,
+    ) -> Result<(), String> {
         let num_steps = self.values[0].len();
         debug_assert!(self.values.iter().all(|v| v.len() == num_steps));
         for step in 0..num_steps {
             let bv_values: Vec<_> = self.values.iter().map(|v| v[step].clone()).collect();
-            callback(
+            let r = callback(
                 step as u32,
                 SignalValues {
                     port_map: &self.port_map,
                     values: &bv_values,
                 },
             );
+            if r == CallbackResult::Stop {
+                return Ok(());
+            }
         }
         Ok(())
     }
