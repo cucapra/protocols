@@ -1,4 +1,4 @@
 ---CODE---
 134
 ---STDERR---
-sh: line 1: 41314 Abort trap: 6           target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --bound 6 --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2> /dev/null
+sh: line 1: 77452 Abort trap: 6           target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --bound 6 --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2> /dev/null
