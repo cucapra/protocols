@@ -18,7 +18,7 @@ use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::Clock;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -197,11 +197,19 @@ fn main() {
         };
 
         if let Some(failures) = bi.failures() {
-            for (ii, (trace_id, fails)) in failures.iter().enumerate() {
-                if ii > 0 {
-                    println!();
-                }
-                let mut proto_trace = bi.protocol_traces().get_trace(*trace_id);
+            // group failures by unique trace
+            let mut failures_by_trace: FxHashMap<Option<u32>, Vec<usize>> = FxHashMap::default();
+            for (ii, (trace_id, _)) in failures.iter().enumerate() {
+                let tail = bi.protocol_traces().get_tail(*trace_id);
+                failures_by_trace.entry(tail).or_default().push(ii);
+            }
+            let mut grouped_failures: Vec<_> = failures_by_trace.into_values().collect();
+            grouped_failures.sort();
+
+            let mut ii = 0;
+            for fail_indices in grouped_failures {
+                let trace_id = failures[fail_indices[0]].0;
+                let mut proto_trace = bi.protocol_traces().get_trace(trace_id);
                 proto_trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
                 print_trace(
                     ii,
@@ -212,18 +220,24 @@ fn main() {
                     |step| step_to_time.step_to_ns(step),
                 );
 
-                assert!(!fails.is_empty(), "TODO: better failures");
-
-                for fail in fails {
-                    let proto = &protos[fail.proto_id];
-                    let msg = format!(
-                        "[{}] executing step {} of the transaction: {} != {}",
-                        fail.thread_name,
-                        fail.thread_local_step,
-                        fail.a.to_hex_str(),
-                        fail.b.to_hex_str()
-                    );
-                    d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+                for fail_idx in fail_indices {
+                    if ii > 0 {
+                        println!();
+                    }
+                    ii += 1;
+                    let fails = &failures[fail_idx].1;
+                    assert!(!fails.is_empty(), "TODO: better failures");
+                    for fail in fails {
+                        let proto = &protos[fail.proto_id];
+                        let msg = format!(
+                            "[{}] executing step {} of the transaction: {} != {}",
+                            fail.thread_name,
+                            fail.thread_local_step,
+                            fail.a.to_hex_str(),
+                            fail.b.to_hex_str()
+                        );
+                        d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+                    }
                 }
             }
         } else {

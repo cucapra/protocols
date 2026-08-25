@@ -41,7 +41,6 @@ prot idle_continue_cycle<self: Wishbone>() {
 }
 
 prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
-  assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd0;
   self.BTE := X;
@@ -58,7 +57,6 @@ prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
 }
 
 prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
-  assert_eq(mask, 4'd15);
   self.RST := 1'd0;
   self.CTI := 3'd0;
   self.BTE := X;
