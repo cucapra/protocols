@@ -398,11 +398,12 @@ impl SignalTrace for WaveSignalTrace {
                             bv_values[idx].assign_from_bytes_be(value_be_bytes);
                         } else {
                             // there are X or Z values
-                            debug_assert!(
-                                value.bit_string().chars().all(|c| c == 'x' || c == 'z'),
-                                "{}",
-                                value.bit_string()
-                            );
+                            let all_x_or_z =
+                                value.bit_string().chars().all(|c| c == 'x' || c == 'z');
+                            if !all_x_or_z {
+                                println!("WARN: encountered a mixed value. Randomizing all bits.");
+                                println!("{}@{step_id}={}", self.names[idx], value.bit_string());
+                            }
                             // randomize
                             let width = widths[idx];
                             let random_value = BitVecValue::random(rng.get_mut(), width);
