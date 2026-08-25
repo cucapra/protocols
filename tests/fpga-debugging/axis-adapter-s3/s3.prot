@@ -118,189 +118,228 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
     // Environment is now ready to accept the output data emitted by the DUT 
     DUT.output_axis_tready := 1'b1;
 
-    // Wait until the DUT indicates that the next byte is valid for emitting
+    // Wait until the DUT indicates that there is valid data to emit
     while (!(DUT.output_axis_tvalid == 1'b1)) {
         step();
     }
-    
+    // Both ready & valid are now 1 in the output direction,
+    // so the DUT can begin to emit the 0th byte
+
     // 0th (rightmost) bit of `keep` is the current value of `tkeep`
     assert_eq(DUT.output_axis_tkeep, keep[0]);
 
     // Rightmost 8 bits of `data` are now on the `output_tdata` pin
     assert_eq(DUT.output_axis_tdata, data[7:0]);
 
-    // If the 0th byte was not the final byte in an entire packet
-    // (note: it could still be the last byte in the data word, but 
-    // AXI-S)
-    if (DUT.output_axis_tlast == 1'b0) {
-        // Then the 1st byte (the next byte) must be kept, 
-        // i.e. its `tkeep` bit must be 1
-        assert_eq(keep[1], 1'b1);
-        // One clock cycle to emit the 0th byte
-        step();
+    // Check if the 0th byte is meaningful
+    if (DUT.output_axis_tkeep == 1'b1) {
+        // Check if it is the end of a packet
+        if (DUT.output_axis_tlast == 1'b1) {
+            // 0th byte is meaningful & also the end of a packet, so the 1st byte shouldn't be kept
+            assert_eq(keep[1], 1'b0);      
+            // One clock cycle to emit the 0th byte
+            step();      
+        } else {
+            // 0th byte is meaningful but not the end of a packet, so the 1st byte should also be kept
+            assert_eq(keep[1], 1'b1);
 
-        // Wait until the DUT indicates that the next byte is valid for emitting
-        while (!(DUT.output_axis_tvalid == 1'b1)) {
-            step();
-        }
-        // DUT provides the next byte of data and its `tkeep` bit on the output pins
-        assert_eq(DUT.output_axis_tdata, data[15:8]);
-        assert_eq(DUT.output_axis_tkeep, keep[1]);
-
-        // If the 1st byte is not the final byte in the entire packet
-        if (DUT.output_axis_tlast == 1'b0) {
-            // then the 2nd byte must be kept, i.e. its `tkeep` bit must be 1
-            assert_eq(keep[2], 1'b1);
-            // One clock cycle to emit the 1st byte
+            // One clock cycle to emit the 0th byte
             step();
 
             // Wait until the DUT indicates that the next byte is valid for emitting
             while (!(DUT.output_axis_tvalid == 1'b1)) {
                 step();
             }
-            // DUT provides the next byte of data and its `tkeep` bit on the output pins
-            assert_eq(DUT.output_axis_tdata, data[23:16]);
-            assert_eq(DUT.output_axis_tkeep, keep[2]);
 
-            // If the 2nd byte isn't the final byte in a packet
-            if (DUT.output_axis_tlast == 1'b0) {
-                // Then the 3rd byte must be kept, i.e. its `tkeep` bit is 1
-                assert_eq(keep[3], 1'b1);
-                // One clock cycle to emit the 2nd byte
-                step();
+            // DUT provides the next byte of data and its `tkeep` on its output pins
+            assert_eq(DUT.output_axis_tkeep, keep[1]);
+            assert_eq(DUT.output_axis_tdata, data[15:8]);
 
-                // Wait until the DUT indicates that the next byte is valid for emitting
-                while (!(DUT.output_axis_tvalid == 1'b1)) {
+            // Check if the 1st byte is meaningful
+            if (DUT.output_axis_tkeep == 1'b1) {
+                // Check if it's the end of a packet 
+                if (DUT.output_axis_tlast == 1'b1) {
+                    // 1st byte is meaningful & also the end of a packet, so the 2nd byte shouldn't be kept
+                    assert_eq(keep[2], 1'b0);
+                    // One clock cycle to emit the 1st byte
                     step();
-                }
-                // DUT provides the next byte of data and its `tkeep` bit on the output pins
-                assert_eq(DUT.output_axis_tdata, data[31:24]);
-                assert_eq(DUT.output_axis_tkeep, keep[3]);    
+                } else {
+                    // 1st byte is meaningful but not the end of a packet, so the 2nd byte should also be kept
+                    assert_eq(keep[2], 1'b1);
 
-                // If the 3rd byte isn't the final byte in a packet
-                if (DUT.output_axis_tlast == 1'b0) {
-                    // Then the 4th byte must be kept
-                    assert_eq(keep[4], 1'b1);
-                    // One clock cycle to emit the 3rd byte
+                    // One clock cycle to emit the 1st byte
                     step();
 
-                    // Wait until the DUT indicates that the next byte is valid for emitting
+                    // Wait till DUT has valid data to emit
                     while (!(DUT.output_axis_tvalid == 1'b1)) {
                         step();
                     }
-                    // DUT provides the next byte of data and its `tkeep` bit on the output pins
-                    assert_eq(DUT.output_axis_tdata, data[39:32]);
-                    assert_eq(DUT.output_axis_tkeep, keep[4]);     
+                    
+                    // DUT provides the next byte of data and its `tkeep` on its output pins
+                    assert_eq(DUT.output_axis_tkeep, keep[2]);
+                    assert_eq(DUT.output_axis_tdata, data[23:16]);
 
-                    // If the 4th byte wasn't the last byte of a packet
-                    if (DUT.output_axis_tlast == 1'b0) {
-                        // The 5th byte must be kept
-                        assert_eq(keep[5], 1'b1);
-                        // One clock cycle to emit the 4th byte
-                        step();
-
-                        // Wait until DUT has valid data to emit
-                        while (!(DUT.output_axis_tvalid == 1'b1)) {
+                    // Check if the 2nd byte is meaningful
+                    if (DUT.output_axis_tkeep == 1'b1) {
+                        // Check if the 2nd byte is the end of a packet
+                        if (DUT.output_axis_tlast == 1'b1) {
+                            // 2nd byte is meaningful & also the end of a packet, so the 3rd byte shouldn't be kept
+                            assert_eq(keep[3], 1'b0);
+                            // One clock cycle to emit the 2nd byte
                             step();
-                        }
-                        // DUT provides the next byte of data and its `tkeep` on its output pins
-                        assert_eq(DUT.output_axis_tdata, data[47:40]);
-                        assert_eq(DUT.output_axis_tkeep, keep[5]);    
+                        } else {
+                            // 2nd byte is meaningful but not the end of a packet, so the 3rd byte should also be kept 
+                            assert_eq(keep[3], 1'b1);
 
-                        // If the 5th byte wasn't the last byte of a packet 
-                        if (DUT.output_axis_tlast == 1'b0) {
-                            // The 6th byte must be kept
-                            assert_eq(keep[6], 1'b1);
-                            // One clock cycle to emit the 5th byte
+                            // One clock cycle to emit the 2nd byte
                             step();
-
-                            // Wait until DUT has valid data to emit
+                            // Wait till DUT has valid data to emit
                             while (!(DUT.output_axis_tvalid == 1'b1)) {
                                 step();
                             }
-                            // DUT provides the next byte of data and its `tkeep` on its output pins
-                            assert_eq(DUT.output_axis_tdata, data[55:48]);
-                            assert_eq(DUT.output_axis_tkeep, keep[6]);
+                            // DUT provides the final byte of data and its `tkeep` on its output pins 
+                            assert_eq(DUT.output_axis_tkeep, keep[3]);
+                            assert_eq(DUT.output_axis_tdata, data[31:24]);
 
-                            // If the 6th byte wasn't the last byte of a packet
-                            if (DUT.output_axis_tlast == 1'b0) {
-                                // The 7th byte must be kept
-                                assert_eq(keep[7], 1'b1);
-                                // One clock cycle to emit the 6th byte
-                                step();
-
-                                // Wait until DUT has valid data to emit
-                                while (!(DUT.output_axis_tvalid == 1'b1)) {
-                                    step();
-                                }
-                                // DUT provides the final byte of data and its `tkeep` on its output pins
-                                assert_eq(DUT.output_axis_tdata, data[63:56]);
-                                assert_eq(DUT.output_axis_tkeep, keep[7]);
-
-                                // The 7th byte is the last byte for a 64-bit word, 
-                                // so we don't need to inspect the `tkeep` bit for the "next" byte
-                                // We only need to check whether this byte is the end of the 
-                                // of the entire packet, which is determined by the `is_final_word_in_packet` parameter
-                                assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
-
-                                // One clock cycle to emit the 7th byte
-                                step();
-                            } else {
-                                // 6th byte was the last byte of a packet
-                                // If the 6th byte is also kept, then the 7th byte must not be kept
-                                if (DUT.output_axis_tkeep == 1'b1) {
-                                    assert_eq(keep[7], 1'b0);
-                                }
-                                step();
-                            }
-                        }  else {
-                            // 5th byte was the last byte of a packet 
-                            // If the 5th byte is also kept, then the 6th byte must not be kept
+                            // Check if the 3rd byte is meaningful
                             if (DUT.output_axis_tkeep == 1'b1) {
-                                assert_eq(keep[6], 1'b0);
+                                // Check if the 3rd byte is the end of a packet
+                                if (DUT.output_axis_tlast == 1'b1) {
+                                    // 3rd byte is meaningful & also the end of the packet, so the 4th byte shouldn't be kept
+                                    assert_eq(keep[4], 1'b0);
+                                    // One clock cycle to emit the 3rd byte
+                                    step();
+                                } else {
+                                    // 3rd byte is meaningful but not the end of a packet, so the 4th byte should also be kept
+                                    assert_eq(keep[4], 1'b1);
+
+                                    // One clock cycle to emit the 3rd byte
+                                    step();
+
+                                    // Wait till DUT has valid data to emit
+                                    while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                        step();
+                                    } 
+                                    // DUT provides the final byte of data and its `tkeep` on its output pins
+                                    assert_eq(DUT.output_axis_tkeep, keep[4]);
+                                    assert_eq(DUT.output_axis_tdata, data[39:32]); 
+
+                                    // Check if the 4th byte is meaningful
+                                    if (DUT.output_axis_tkeep == 1'b1) {
+                                        // Check if the 4th byte is the end of a packet
+                                        if (DUT.output_axis_tlast == 1'b1) {
+                                            // 4th byte is meaningful and also the end of a packet, so the 5th byte shouldn't be kept
+                                            assert_eq(keep[5], 1'b0);
+                                            // One clock cycle to emit the 4th byte
+                                            step();
+                                        } else {
+                                            // 4th byte is meaningful but not the end of a packet, so the 5th byte should also be kept
+                                            assert_eq(keep[5], 1'b1);
+
+                                            // One clock cycle to emit the 5th byte 
+                                            step();
+
+                                            // Wait until DUT has valid data to emit
+                                            while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                                step();
+                                            }
+                                            // DUT provides the final byte of data and its `tkeep` on its output pins
+                                            assert_eq(DUT.output_axis_tkeep, keep[5]);
+                                            assert_eq(DUT.output_axis_tdata, data[47:40]);
+
+                                            // Check if the 5th byte is meaningful
+                                            if (DUT.output_axis_tkeep == 1'b1) {
+                                                // Check if the 5th byte is the end of a packet
+                                                if (DUT.output_axis_tlast == 1'b1) {
+                                                    // 5th byte is meaningful and also the end of a packet, so the 6th byte shouldn't be kept
+                                                    assert_eq(keep[6], 1'b0);
+                                                    // One clock cycle to emit the 5th byte
+                                                    step();
+                                                } else {
+                                                    // 5th byte is meaningful but not the end of a packet, so the 6th byte should also be kept
+                                                    assert_eq(keep[6], 1'b1);
+
+                                                    // One clock cycle to emit the 5th byte
+                                                    step();
+                                                    
+                                                    // Wait until DUT has valid data to emit
+                                                    while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                                        step();
+                                                    }
+                                                    // DUT provides the final byte of data and its `tkeep` on its output pins
+                                                    assert_eq(DUT.output_axis_tkeep, keep[6]);
+                                                    assert_eq(DUT.output_axis_tdata, data[55:48]);
+
+                                                    // Check if the 6th byte is meaningful
+                                                    if (DUT.output_axis_tkeep == 1'b1) {
+                                                        if (DUT.output_axis_tlast == 1'b1) {
+                                                            // 6th byte is meaningful and also the end of a packet, so the 7th byte shouldn't be kept
+                                                            assert_eq(keep[7], 1'b0);
+                                                            // One clock cycle to emit the 6th byte
+                                                            step();
+                                                        } else {
+                                                            // 6th byte is meaningful but not the end of a packet, so the 7th byte should also be kept
+                                                            assert_eq(keep[7], 1'b1);
+
+                                                            // One clock cycle to emit the 6th byte
+                                                            step();
+
+                                                            // Wait until DUT has valid data to emit
+                                                            while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                                                step();
+                                                            }
+                                                            // DUT provides the final byte of data and its `tkeep` on its output pins
+                                                            assert_eq(DUT.output_axis_tkeep, keep[7]);
+                                                            assert_eq(DUT.output_axis_tdata, data[63:56]);
+
+                                                            // The 7th byte is the last byte for a 64-bit word, 
+                                                            // so we don't need to inspect the `tkeep` bit for the "next" byte
+                                                            // We only need to check whether this byte is the end of the 
+                                                            // of the entire packet, which is determined by the `is_final_word_in_packet` parameter
+                                                            assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
+                                                            
+                                                            // One clock cycle to emit the 7th and final byte
+                                                            step();
+                                                        }
+                                                    } else {
+                                                        // 6th byte isn't meaningful (tkeep = 0), so the DUT stops emitting bytes from this point onwards
+                                                        assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
+                                                        step();
+                                                    }
+                                                }
+                                            } else {
+                                                // 5th byte isn't meaningful (tkeep = 0), so the DUT stops emitting bytes from this point onwards
+                                                assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
+                                                step();
+                                            }
+                                        }
+                                    } else {
+                                        // 4th byte isn't meaningful (tkeep = 0), so the DUT stops emitting bytes from this point onwards
+                                        assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
+                                        step();       
+                                    }                                    
+                                }
+                            } else {
+                                // 3rd byte isn't meaningful, so the DUT stops emitting bytes from this point onwards
+                                assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
+                                step();      
                             }
-                            step();
                         }
                     } else {
-                        // 4th byte was the last byte in a packet 
-                        // If the 4th byte is also kept, then the 5th byte must not be kept
-                        if (DUT.output_axis_tkeep == 1'b1) {
-                            assert_eq(keep[5], 1'b0);
-                        }
+                        // 2nd byte isn't meaningful (tkeep = 0), so the DUT stops emitting bytes from this point onwards
+                        assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
                         step();
                     }
-                } else {
-                    // 3rd byte was the last byte in an entire packet
-                    // If the 3rd byte is kept as well, then the 4th byte must not be kept (its `tkeep` bit must be 0)
-                    if (DUT.output_axis_tkeep == 1'b1) {
-                        assert_eq(keep[4], 1'b0);
-                    }
-                    step();
                 }
-
             } else {
-                // 2nd byte was the last byte in an entire packet
-                // If the 2nd byte is kept as well, then the 3rd-byte's `tkeep` must be 0 (i.e. 3rd byte is not kept)
-                if (DUT.output_axis_tkeep == 1'b1) {
-                    assert_eq(keep[3], 1'b0);
-                }
+                // 1st byte isn't meaningful (tkeep = 0) the DUT stops emitting bytes from this point onwards
+                assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
                 step();
-            }
-        } else {
-            // 1st byte was the last byte in an entire packet
-            // If the 1st byte is kept as well, then the 2nd-byte's `tkeep` bit must be 0 (i.e. 2nd byte is not kept)
-            if (DUT.output_axis_tkeep == 1'b1) {
-                assert_eq(keep[2], 1'b0);
-            }
-            step();
+            } 
         }
     } else {
-        // 0th byte was the last byte of the last word of a packet, i.e. `output_axis_tlast == 1` 
-        // If the 0th byte is kept as well (i.e. `tkeep = 1`),
-        // then we know the next byte's corresponding `tkeep` must be 0 (i.e. is not kept)
-        if (DUT.output_axis_tkeep == 1'b1) { 
-            assert_eq(keep[1], 1'b0);
-        }
+        // 0th byte isn't meaningful (tkeep = 0), so the DUT stops emitting bytes from this point onwards
+        assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
         step();
     }
 }

@@ -5,10 +5,10 @@ trace {
     idle();  // [time: 50ns -> 75ns]
 }
 error: [split_word@3] executing step 5 of the transaction: 0 != 1
-    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:198:25
+    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:237:45
     │
-198 │                         assert_eq(keep[5], 1'b1);
-    │                         ^^^^^^^^^^^^^^^^^^^^^^^^^ [split_word@3] executing step 5 of the transaction: 0 != 1
+237 │                                             assert_eq(keep[5], 1'b1);
+    │                                             ^^^^^^^^^^^^^^^^^^^^^^^^^ [split_word@3] executing step 5 of the transaction: 0 != 1
 
 ---CODE---
 1
