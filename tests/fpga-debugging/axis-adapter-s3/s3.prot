@@ -1,7 +1,8 @@
-// AXI-Stream width adapter which converts a 64-bit input into 8-bit outputs over multiple cycles
+// This file describes an AXI-Stream width adapter which 
+// converts a 64-bit input into 8-bit output chunks over multiple cycles
 
 // Notes: 
-// - The DUT has 3 termination conditions
+// - The DUT has 3 termination conditions:
 //    - 1. All the bytes corresponding to the rightmost contiguous sequence of 1s in `tkeep` are emitted, 
 //      e.g. tkeep = 11111111 (all bytes of `tdata` are meaningful)
 //      or tkeep = 00011111 (the 5 least significant bytes of `tdata` are meaningful)
@@ -206,6 +207,9 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1, out
                                     // Last iteration (can't have more than 8 bytes in a 64-bit output)
                                     assert_eq(DUT.output_axis_tkeep, keep[7]);
 
+                                    // Since this is the last iteration of the for-each loop, 
+                                    // there is no "next" bit of `tkeep` to inspect, so 
+                                    // we only need to check `tlast` for the remainder of this case
                                     if is_last() {
                                         assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
                                     } else {
@@ -219,6 +223,9 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1, out
             }
         }
 
+        // We need this step for well-formedness, since 
+        // each loop iteration must take at least one-step
+        // (the DUT also emits at most one byte in one clock cycle)
         step();
     }
 }
