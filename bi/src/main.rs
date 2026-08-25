@@ -91,17 +91,15 @@ fn get_clock(
     instances: &[Instance],
     cli_sample_posedge: Option<String>,
 ) -> WaveSamplingMode {
-    let mut used_modules: Vec<_> = instances.iter().map(|i| i.module_id).collect();
-    used_modules.sort();
-    used_modules.dedup();
-
-    let mut clocks: Vec<_> = used_modules
+    let mut clocks: Vec<Clock> = instances
         .iter()
-        .flat_map(|&m_id| match &modules[m_id].clock {
+        .flat_map(|i| match &modules[i.module_id].clock {
             Clock::None => None,
-            other => Some(other.clone()),
+            Clock::PosEdge(name) => Some(Clock::PosEdge(format!("{}.{name}", i.name))),
+            Clock::NegEdge(name) => Some(Clock::NegEdge(format!("{}.{name}", i.name))),
         })
         .collect();
+
     if let Some(name) = cli_sample_posedge {
         clocks.push(Clock::PosEdge(name));
     }
