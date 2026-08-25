@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::io::BufReader;
 use wellen::stream::StreamError;
-use wellen::{Hierarchy, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
+use wellen::{Hierarchy, ItemRef, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
 
 /// Handle to all signal values at a point in time.
 /// Used in `stream_time_steps`.
@@ -203,111 +203,102 @@ fn find_instances(
 ) -> (FxHashMap<PortKey, SignalRef>, SamplingMode) {
     let mut port_map = FxHashMap::default();
 
-    let mut samp_mode_out = SamplingMode::Direct(vec![]);
+    // find clock signal
+    let samp_mode_out = match &sampling_mode {
+        WaveSamplingMode::RisingEdge(signal_name) | WaveSamplingMode::FallingEdge(signal_name) => {
+            let signal_ref = if let Some(item) = hierachy.lookup_item_by_name(signal_name) {
+                if let ItemRef::Var(var) = item {
+                    hierachy[var].signal_ref()
+                } else {
+                    panic!("Clock `{signal_name}` is a scope, not a particular signal!")
+                }
+            } else {
+                panic!("Failed to find clock signal {signal_name}");
+            };
+            if matches!(sampling_mode, WaveSamplingMode::RisingEdge(_)) {
+                SamplingMode::RisingEdge(signal_ref)
+            } else {
+                SamplingMode::FallingEdge(signal_ref)
+            }
+        }
+        WaveSamplingMode::Direct => SamplingMode::Direct(vec![]),
+    };
 
+    // find instance pins
     for (inst_id, inst) in instances.iter().enumerate() {
         let module = &modules[inst.module_id];
 
-        let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
-        if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
-            let instance_scope = &hierachy[instance_scope];
-
-            // for every pin designed in our struct, we have to find the correct
-            // variable that corresponds to it
-            for (field_idx, field) in module.pins.iter().enumerate() {
-                let pin_name = field.name().to_string();
-                // find a variable that has a matching name
-                if let Some(var) = instance_scope
-                    .vars(hierachy)
-                    .find(|v| hierachy[*v].name(hierachy) == pin_name)
-                {
-                    let waveform_bits = hierachy[var].length(hierachy).expect("not a bit vector");
-
-                    // Set up `sample_posedge` to
-                    // refer to the clock signal (if one is specified)
-                    match &sampling_mode {
-                        WaveSamplingMode::RisingEdge(signal_name)
-                        | WaveSamplingMode::FallingEdge(signal_name) => {
-                            let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
-
-                            // The clock signal should be in the same scope as the instance
-                            // So we look it up directly in the instance_scope
-                            let signal_ref = match clock_signal_parts.last() {
-                                Some(var_name) => {
-                                    if let Some(var) = instance_scope
-                                        .vars(hierachy)
-                                        .find(|v| hierachy[*v].name(hierachy) == *var_name)
-                                    {
-                                        hierachy[var].signal_ref()
-                                    } else {
-                                        // If not found in instance scope, use `lookup_var`
-                                        match hierachy.lookup_var(
-                                            &clock_signal_parts[0..clock_signal_parts.len() - 1],
-                                            var_name,
-                                        ) {
-                                            Some(var_ref) => hierachy[var_ref].signal_ref(),
-                                            None => {
-                                                panic!(
-                                                    "Unable to find signal {var_name} in waveform"
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                None => panic!("Malformed signal {signal_name}"),
-                            };
-                            samp_mode_out = match sampling_mode {
-                                WaveSamplingMode::RisingEdge(_) => {
-                                    SamplingMode::RisingEdge(signal_ref)
-                                }
-                                WaveSamplingMode::FallingEdge(_) => {
-                                    SamplingMode::FallingEdge(signal_ref)
-                                }
-                                WaveSamplingMode::Direct => SamplingMode::Direct(vec![]),
-                            };
-                        }
-                        WaveSamplingMode::Direct => {}
-                    }
-
-                    // Check that bit widths match
-                    assert_eq!(
-                        waveform_bits,
-                        field.bitwidth(),
-                        "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
-                        waveform_bits,
-                        pin_name,
-                        field.bitwidth()
-                    );
-
-                    // store a mapping from any SymbolId that refers to this pin
-                    let value = hierachy[var].signal_ref();
-                    for syms in &module.proto_pin_map {
-                        let key = PortKey {
-                            instance_id: inst_id as u32,
-                            pin_id: syms[field_idx],
-                        };
-                        port_map.insert(key, value);
-                    }
-                } else {
-                    // unable to find a variable whose name matches a pin
-                    let available_vars: Vec<&str> = instance_scope
-                        .vars(hierachy)
-                        .map(|v| hierachy[v].name(hierachy))
-                        .collect();
-                    panic!(
-                        "Failed to find pin {}. Available pins in waveform for instance {} are {}",
-                        field.name(),
-                        inst.name,
-                        available_vars.join(",\n")
-                    );
-                }
+        // check to make sure the instance scope actually exists
+        let inst_scope = if !inst.name.is_empty() {
+            let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
+            if let Some(scope) = hierachy.lookup_scope(&inst_name_parts) {
+                Some(scope)
+            } else {
+                panic!(
+                    "Failed to find instance {}. First scope: {:#?}",
+                    inst.name,
+                    hierachy.first_scope().map(|s| s.full_name(hierachy))
+                );
             }
         } else {
-            panic!(
-                "Failed to find instance {}. First scope: {:#?}",
-                inst.name,
-                hierachy.first_scope().unwrap().full_name(hierachy)
-            );
+            None
+        };
+
+        // for every pin designed in our struct, we have to find the correct
+        // variable that corresponds to it
+        for (field_idx, field) in module.pins.iter().enumerate() {
+            let pin_name = field.name().to_string();
+            let full_name = if inst.name.is_empty() {
+                pin_name.clone()
+            } else {
+                format!("{}.{pin_name}", inst.name)
+            };
+            // find a variable that has a matching name
+            if let Some(ItemRef::Var(var)) = hierachy.lookup_item_by_name(&full_name) {
+                let waveform_bits = hierachy[var].length(hierachy).expect("not a bit vector");
+
+                // Check that bit widths match
+                assert_eq!(
+                    waveform_bits,
+                    field.bitwidth(),
+                    "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
+                    waveform_bits,
+                    pin_name,
+                    field.bitwidth()
+                );
+
+                // store a mapping from any SymbolId that refers to this pin
+                let value = hierachy[var].signal_ref();
+                for syms in &module.proto_pin_map {
+                    let key = PortKey {
+                        instance_id: inst_id as u32,
+                        pin_id: syms[field_idx],
+                    };
+                    port_map.insert(key, value);
+                }
+            } else {
+                // unable to find a variable whose name matches a pin
+                let available_vars: Vec<&str> = inst_scope
+                    .map(|s| {
+                        hierachy[s]
+                            .vars(hierachy)
+                            .map(|v| hierachy[v].name(hierachy))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| {
+                        hierachy
+                            .vars()
+                            .map(|v| hierachy[v].name(hierachy))
+                            .collect()
+                    });
+
+                panic!(
+                    "Failed to find pin {}. Available pins in waveform for instance {} are {}",
+                    field.name(),
+                    inst.name,
+                    available_vars.join(",\n")
+                );
+            }
         }
     }
     (port_map, samp_mode_out)
