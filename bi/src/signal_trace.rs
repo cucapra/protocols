@@ -261,10 +261,8 @@ fn find_instances(
                 assert_eq!(
                     waveform_bits,
                     field.bitwidth(),
-                    "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
-                    waveform_bits,
-                    pin_name,
-                    field.bitwidth()
+                    "The bit-width of the waveform signal `{full_name}` does not match the width of the pin `{pin_name}` in `{}`",
+                    module.name,
                 );
 
                 // store a mapping from any SymbolId that refers to this pin
