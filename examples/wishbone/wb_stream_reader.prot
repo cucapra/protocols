@@ -2,7 +2,8 @@
 // --instances wb_stream_reader_tb.dut:WishboneData
 // stream data output
 module WishboneData : Wishbone {
-  in  clk : clock @posedge,
+  // we sample at the falling edge, because some signals have random delays added (#1?)
+  in  clk : clock @negedge,
   in  rst : u1 = Wishbone.RST,
   in  wbm_adr_o : u32 = Wishbone.ADR,
   out wbm_dat_i : u32 = Wishbone.DAT_I,
@@ -22,7 +23,8 @@ module WishboneData : Wishbone {
 // --instances wb_stream_reader_tb.dut:WishboneControl
 // control interface
 module WishboneControl : Wishbone {
-  in  clk : clock @posedge,
+  // we sample at the falling edge, because some signals have random delays added (#1?)
+  in  clk : clock @negedge,
   in  rst : u1 = Wishbone.RST,
   in  wbs_adr_i : u5 = Wishbone.ADR[4:0] with Wishbone.ADR[31:5] == 27'd0,
   out wbs_dat_o : u32 = Wishbone.DAT_I,
