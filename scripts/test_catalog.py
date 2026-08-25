@@ -1005,6 +1005,17 @@ BI_CASES = {
         "expect": "pass",
         "extra_args": ("--display-hex", "--show-steps"),
     },
+    # wishbone protocol on a litex unittest that is wrong
+    "examples.wishbone.litex_test_sram_burst_wrap_continuous.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/litex_unittest.prot",
+        ],
+        "wave": "examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd",
+        "instances": (":LitexWishbone",),
+        "expect": "pass",
+        "extra_args": ("--display-hex", "--show-steps"),
+    },
 }
 
 # Small Wishbone transactions from the Wishbone specification

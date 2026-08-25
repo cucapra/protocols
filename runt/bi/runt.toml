@@ -64,6 +64,15 @@ expect_name = "examples_wishbone_4_8_constant_address_burst_no_stb_rate_limit.bi
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --wave examples/wishbone/4.8_constant_address_burst_no_stb_rate_limit.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_litex_test_sram_burst_wrap_continuous_bi_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_litex_test_sram_burst_wrap_continuous_bi.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/litex_unittest.prot --wave examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd --instances :LitexWishbone --display-hex --show-steps 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.test_fifo_classic_1_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
