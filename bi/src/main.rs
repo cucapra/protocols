@@ -86,6 +86,14 @@ struct Cli {
     display_hex: bool,
 }
 
+fn add_inst_name(i: &Instance, name: &str) -> String {
+    if i.name.is_empty() {
+        name.to_string()
+    } else {
+        format!("{}.{name}", i.name)
+    }
+}
+
 fn get_clock(
     modules: &[Module],
     instances: &[Instance],
@@ -95,8 +103,8 @@ fn get_clock(
         .iter()
         .flat_map(|i| match &modules[i.module_id].clock {
             Clock::None => None,
-            Clock::PosEdge(name) => Some(Clock::PosEdge(format!("{}.{name}", i.name))),
-            Clock::NegEdge(name) => Some(Clock::NegEdge(format!("{}.{name}", i.name))),
+            Clock::PosEdge(name) => Some(Clock::PosEdge(add_inst_name(i, name))),
+            Clock::NegEdge(name) => Some(Clock::NegEdge(add_inst_name(i, name))),
         })
         .collect();
 

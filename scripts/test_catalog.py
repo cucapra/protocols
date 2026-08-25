@@ -1009,7 +1009,7 @@ BI_CASES = {
     "examples.wishbone.litex_test_sram_burst_wrap_continuous.bi": {
         "protocols": [
             "examples/wishbone/wishbone.prot",
-            "examples/wishbone/lites_unittest.prot",
+            "examples/wishbone/litex_unittest.prot",
         ],
         "wave": "examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd",
         "instances": (":LitexWishbone",),
