@@ -5,9 +5,9 @@ trace {
     idle();  // [time: 50ns -> 75ns]
 }
 error: [split_word@3] executing step 5 of the transaction: 0 != 1
-    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:169:33
+    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:178:33
     │
-169 │                                 assert_eq(keep[5], 1'b1);
+178 │                                 assert_eq(keep[5], 1'b1);
     │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^ [split_word@3] executing step 5 of the transaction: 0 != 1
 
 
@@ -18,9 +18,9 @@ trace {
     idle();  // [time: 50ns -> 75ns]
 }
 error: [split_word@3L] executing step 5 of the transaction: 0 != 1
-    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:163:33
+    ┌─ tests/fpga-debugging/axis-adapter-s3/s3.prot:172:33
     │
-163 │                                 assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
+172 │                                 assert_eq(DUT.output_axis_tlast, is_final_word_in_packet);
     │                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [split_word@3L] executing step 5 of the transaction: 0 != 1
 
 ---CODE---
