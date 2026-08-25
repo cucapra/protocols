@@ -707,8 +707,10 @@ BI_CASES = {
             "--sample-posedge",
             "TOP.test_axis_adapter_64_8.UUT.clk",
             "--show-waveform-time",
+            "--include-idle",
             "--time-unit",
             "ns",
+            "--display-hex"
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
@@ -720,8 +722,11 @@ BI_CASES = {
             "--sample-posedge",
             "TOP.test_axis_adapter_64_8.UUT.clk",
             "--show-waveform-time",
+            "--include-idle",
             "--time-unit",
             "ns",
+            "--include-in-progress",
+            "--display-hex"
         ),
     },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_buggy": {
