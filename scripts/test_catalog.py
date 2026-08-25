@@ -305,6 +305,12 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
+    "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
+        "verilog": ("tests/fpga-debugging/axis-adapter-s3/s3_fixed.v",),
+        "top": "axis_adapter",
+        "expect": "pass",
+    },
     "tests/fpga-debugging/axi-stream-s2/s2_fixed.tx": {
         "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "verilog": ("tests/fpga-debugging/axi-stream-s2/s2_fixed.v",),

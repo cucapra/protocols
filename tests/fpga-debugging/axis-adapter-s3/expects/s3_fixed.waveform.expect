@@ -1,0 +1,12 @@
+Trace 0 executed successfully!
+output_axis_tready                        x                    x                    x                    1                    1                    1                    1                    1
+input_axis_tlast                          x                    1                    1                    x                    x                    x                    x                    x
+input_axis_tvalid                         0                    1                    1                    0                    0                    0                    0                    0
+input_axis_tkeep[7:0]                     x                   31                   31                    x                    x                    x                    x                    x
+input_axis_tdata[63:0]                    x 12379739850550389709 12379739850550389709                    x                    x                    x                    x                    x
+rst                                       1                    0                    0                    0                    0                    0                    0                    0
+output_axis_tlast                         0                    0                    0                    0                    0                    0                    0                    1
+output_axis_tvalid                        0                    0                    0                    1                    1                    1                    1                    1
+output_axis_tkeep                         0                    0                    0                    1                    1                    1                    1                    1
+output_axis_tdata[7:0]                    0                    0                    0                  205                  171                  205                  171                  205
+input_axis_tready                         0                    0                    1                    0                    0                    0                    0                    1

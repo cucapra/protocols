@@ -1,0 +1,6 @@
+trace {
+  reset();
+  idle();
+  // Same transaction with the same input data, as in `s3_fixed.fst` (waveform from Brave New World artifact)
+  split_word(0xabcdabcdabcdabcd, 0x1f, 0b1);
+}
