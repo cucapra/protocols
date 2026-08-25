@@ -710,7 +710,7 @@ BI_CASES = {
             "--include-idle",
             "--time-unit",
             "ns",
-            "--display-hex"
+            "--display-hex",
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
@@ -726,7 +726,7 @@ BI_CASES = {
             "--time-unit",
             "ns",
             "--include-in-progress",
-            "--display-hex"
+            "--display-hex",
         ),
     },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_buggy": {
