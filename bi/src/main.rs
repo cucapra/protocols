@@ -201,10 +201,7 @@ fn main() {
             let mut failures_by_trace: FxHashMap<Option<u32>, Vec<usize>> = FxHashMap::default();
             for (ii, (trace_id, _)) in failures.iter().enumerate() {
                 let tail = bi.protocol_traces().get_tail(*trace_id);
-                failures_by_trace
-                    .entry(tail)
-                    .or_insert_with(Vec::new)
-                    .push(ii);
+                failures_by_trace.entry(tail).or_default().push(ii);
             }
             let mut grouped_failures: Vec<_> = failures_by_trace.into_values().collect();
             grouped_failures.sort();
