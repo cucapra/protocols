@@ -3,5 +3,5 @@ trace {
     reset();  // [time: 0ns -> 25ns]
     idle();  // [time: 25ns -> 50ns]
     idle();  // [time: 50ns -> 75ns]
-    split_word(0xabcdabcdabcdabcd, 0x1f, 0x1, 0x[cd, ab, cd, ab, cd]);  // [time: 75ns -> ]
+    split_word(0xabcdabcdabcdabcd, 0x1f, 0x1);  // [time: 75ns -> 200ns]
 }

@@ -725,7 +725,6 @@ BI_CASES = {
             "--include-idle",
             "--time-unit",
             "ns",
-            "--include-in-progress",
             "--display-hex",
         ),
     },
