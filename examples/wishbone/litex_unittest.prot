@@ -1,0 +1,20 @@
+// Map common wishbone protocol pins from the litex unittests (test/interconnect/test_wishbone.py)
+
+module LitexWishbone : Wishbone {
+  in sys_clk : clock @posedge,
+  const Wishbone.RST = 1'b0, // no reset
+  in adr : u30 = Wishbone.ADR[31:2] with Wishbone.ADR[1:0] == 2'b00,
+  // all other pins just map 1:1
+  out dat_r : u32 = Wishbone.DAT_I,
+  in dat_w : u32 = Wishbone.DAT_O,
+  in cyc : u1 = Wishbone.CYC,
+  in stb : u1 = Wishbone.STB,
+  out ack : u1 = Wishbone.ACK,
+  in we : u1 = Wishbone.WE,
+  in sel : u4 = Wishbone.SEL,
+  in cti : u3 = Wishbone.CTI,
+  in bte : u2 = Wishbone.BTE,
+  // RTY/ERR is not used
+  const Wishbone.RTY = 1'b0,
+  const Wishbone.ERR = 1'b0,
+}
