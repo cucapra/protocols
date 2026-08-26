@@ -717,6 +717,7 @@ BI_CASES = {
             "--time-unit",
             "ns",
             "--display-hex",
+            "--allow-branch-on-arg",
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
@@ -732,6 +733,7 @@ BI_CASES = {
             "--time-unit",
             "ns",
             "--display-hex",
+            "--allow-branch-on-arg",
         ),
     },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_buggy": {
