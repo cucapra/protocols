@@ -305,6 +305,12 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
+    "tests/fpga-debugging/axi-stream-s2/s2_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
+        "verilog": ("tests/fpga-debugging/axi-stream-s2/s2_fixed.v",),
+        "top": "xlnxstream_2018_3",
+        "expect": "pass",
+    },
     "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx": {
         "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
         "verilog": (
@@ -703,7 +709,7 @@ BI_CASES = {
             "--show-waveform-time",
             "--time-unit",
             "ns",
-            "--display-hex"
+            "--display-hex",
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
