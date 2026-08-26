@@ -1,0 +1,42 @@
+
+// --instances wb_stream_reader_tb.dut:WishboneData
+// stream data output
+module WishboneData : Wishbone {
+  // we sample at the falling edge, because some signals have random delays added (#1?)
+  in  clk : clock @negedge,
+  in  rst : u1 = Wishbone.RST,
+  in  wbm_adr_o : u32 = Wishbone.ADR,
+  out wbm_dat_i : u32 = Wishbone.DAT_I,
+  in  wbm_dat_o : u32 = Wishbone.DAT_O,
+  in  wbm_we_o  :  u1 = Wishbone.WE,
+  in  wbm_stb_o :  u1 = Wishbone.STB,
+  in  wbm_cyc_o :  u1 = Wishbone.CYC,
+  out wbm_ack_i :  u1 = Wishbone.ACK,
+  in  wbm_sel_o :  u4 = Wishbone.SEL,
+  out wbm_err_i :  u1 = Wishbone.ERR,
+  in  wbm_cti_o :  u3 = Wishbone.CTI,
+  in  wbm_bte_o :  u2 = Wishbone.BTE,
+  // RTY is not used
+  const Wishbone.RTY = 1'b0,
+}
+
+// --instances wb_stream_reader_tb.dut:WishboneControl
+// control interface
+module WishboneControl : Wishbone {
+  // we sample at the falling edge, because some signals have random delays added (#1?)
+  in  clk : clock @negedge,
+  in  rst : u1 = Wishbone.RST,
+  in  wbs_adr_i : u5 = Wishbone.ADR[4:0] with Wishbone.ADR[31:5] == 27'd0,
+  out wbs_dat_o : u32 = Wishbone.DAT_I,
+  in  wbs_dat_i : u32 = Wishbone.DAT_O,
+  in  wbs_we_i  :  u1 = Wishbone.WE,
+  in  wbs_stb_i :  u1 = Wishbone.STB,
+  in  wbs_cyc_i :  u1 = Wishbone.CYC,
+  out wbs_ack_o :  u1 = Wishbone.ACK,
+  in  wbs_sel_i :  u4 = Wishbone.SEL,
+  out wbs_err_o :  u1 = Wishbone.ERR,
+  in  wbs_cti_i :  u3 = Wishbone.CTI,
+  in  wbs_bte_i :  u2 = Wishbone.BTE,
+  // RTY is not used
+  const Wishbone.RTY = 1'b0,
+}
