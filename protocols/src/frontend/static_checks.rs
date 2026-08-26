@@ -68,14 +68,18 @@ pub fn check_if_symbol_is_dut_port(
                     Err(anyhow!(error_msg))
                 }
                 LangFeature::Conditionals => {
+                    // TODO: delete the commented out code when we decide that we really want
+                    //       to remove this restriction.
                     // Input/output parameters of functions are not allowed
                     // to appear in conditions
-                    let error_msg = format!(
-                        "{} is a function argument, but {} cannot mention function arguments",
-                        symbol_full_name, lang_feature
-                    );
-                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
-                    Err(anyhow!(error_msg))
+                    // let error_msg = format!(
+                    //     "{} is a function argument, but {} cannot mention function arguments",
+                    //     symbol_full_name, lang_feature
+                    // );
+                    // handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
+                    // Err(anyhow!(error_msg))
+
+                    Ok(())
                 }
                 LangFeature::Assertions => Ok(()),
             }
