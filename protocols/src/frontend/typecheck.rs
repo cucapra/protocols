@@ -189,13 +189,14 @@ fn type_check_stmt(
     st: &mut SymbolTable,
     handler: &mut DiagnosticHandler,
     stmt_id: &StmtId,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     match &tr[stmt_id] {
         Stmt::Fork => Ok(()),
         Stmt::Step => Ok(()),
         Stmt::Assign(lhs, rhs) => {
             // First, make sure the assignment itself is well-formed
-            check_assignment_wf(lhs, rhs, stmt_id, tr, st, handler)?;
+            check_assignment_wf(lhs, rhs, stmt_id, tr, st, handler, allow_branch_on_arg)?;
 
             // Then, type-check the two sides of the assignment
             let lhs_type = st[lhs].tpe();
@@ -239,10 +240,10 @@ fn type_check_stmt(
             let cond_type = type_check_expr(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
                 // If the loop guard typechecks, make sure it is well-formed
-                check_condition_wf(cond, tr, st, handler)?;
+                check_condition_wf(cond, tr, st, handler, allow_branch_on_arg)?;
 
                 // Then, type-check the body of the while-loop
-                type_check_stmt(tr, st, handler, bodyid)
+                type_check_stmt(tr, st, handler, bodyid, allow_branch_on_arg)
             } else {
                 let error_msg = format!(
                     "Invalid type for [while] condition: {}",
@@ -259,7 +260,7 @@ fn type_check_stmt(
             // (For the purposes of the protocol for the Brave New World `axi-burst-s4` bug)
             if matches!(num_iterations_type, Type::UnsignedInt | Type::BitVec(8)) {
                 // Then, type-check the loop body
-                type_check_stmt(tr, st, handler, bodyid)
+                type_check_stmt(tr, st, handler, bodyid, allow_branch_on_arg)
             } else {
                 let error_msg = format!(
                     "Invalid type for no. of iterations in bounded loop: expected unsigned integer but got {} instead",
@@ -277,7 +278,7 @@ fn type_check_stmt(
                     // update type of id_expr to be the inner type
                     st.update_type(*id_symbol, inner);
                     // check body
-                    type_check_stmt(tr, st, handler, bodyid)
+                    type_check_stmt(tr, st, handler, bodyid, allow_branch_on_arg)
                 } else {
                     let error_msg = format!(
                         "Only bit-vector sequences are currently supported in loops, not {}.",
@@ -300,11 +301,11 @@ fn type_check_stmt(
             let cond_type = type_check_expr(tr, st, handler, cond)?;
             if let Type::BitVec(1) = cond_type {
                 // If the condition typechecks, make sure it is well-formed
-                check_condition_wf(cond, tr, st, handler)?;
+                check_condition_wf(cond, tr, st, handler, allow_branch_on_arg)?;
 
                 // Then, type-check the bodies of the `then` & `else` branches
-                type_check_stmt(tr, st, handler, ifbody)?;
-                type_check_stmt(tr, st, handler, elsebody)
+                type_check_stmt(tr, st, handler, ifbody, allow_branch_on_arg)?;
+                type_check_stmt(tr, st, handler, elsebody, allow_branch_on_arg)
             } else {
                 let error_msg = format!(
                     "Type mismatch in If/Else condition: {}",
@@ -322,7 +323,7 @@ fn type_check_stmt(
             // Check that the types of both arguments are equivalent
             if expr1_type.is_equivalent(&expr2_type) {
                 // Then, check that the assertion itself is well-formed
-                check_assertion_wf(exprid1, exprid2, tr, st, handler)
+                check_assertion_wf(exprid1, exprid2, tr, st, handler, allow_branch_on_arg)
                     .context("Ill-formed assert_eq statement")?;
 
                 // If all the above checks pass, then the assertion both
@@ -345,7 +346,7 @@ fn type_check_stmt(
         }
         Stmt::Block(stmts) => {
             for stmtid in stmts {
-                type_check_stmt(tr, st, handler, stmtid)?;
+                type_check_stmt(tr, st, handler, stmtid, allow_branch_on_arg)?;
             }
             Ok(())
         }
@@ -411,7 +412,11 @@ fn is_output_map_rhs_ok(
 
 /// Typechecks every function contained in the argument `Vec`
 /// of `(Transaction, SymbolTable)` pairs
-pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow::Result<()> {
+pub(crate) fn type_check(
+    ast: &mut Ast,
+    diag: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
+) -> anyhow::Result<()> {
     for proto in &ast.protos {
         // debug sanity check to make sure the symbol table and the argument list are in sync
         for (index, arg) in proto.args.iter().enumerate() {
@@ -423,7 +428,7 @@ pub(crate) fn type_check(ast: &mut Ast, diag: &mut DiagnosticHandler) -> anyhow:
             );
         }
 
-        type_check_stmt(proto, &mut ast.st, diag, &proto.body)?;
+        type_check_stmt(proto, &mut ast.st, diag, &proto.body, allow_branch_on_arg)?;
     }
 
     for remap in &ast.remaps {
@@ -539,7 +544,7 @@ mod tests {
         let result = parse_file_with_name(file_name, display_filename(file_name), &mut handler);
         let content = match result {
             Ok(mut ast) => {
-                let _ = type_check(&mut ast, &mut handler);
+                let _ = type_check(&mut ast, &mut handler, false);
                 strip_str(handler.error_string())
             }
             Err(_) => strip_str(handler.error_string()),
@@ -665,6 +670,6 @@ mod tests {
             protos: vec![prot],
             remaps: vec![],
         };
-        let _ = type_check(&mut ast, &mut handler);
+        let _ = type_check(&mut ast, &mut handler, false);
     }
 }

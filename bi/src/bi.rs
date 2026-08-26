@@ -467,7 +467,7 @@ impl Path {
 fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: Option<u32>) -> ProtoCall {
     assert!(end.is_none() || thread.next_stmt.is_none());
     let name = tis[thread.transaction_id].proto.name.clone();
-    let args = thread.arg_values.iter().map(|a| a.get_known()).collect();
+    let args = thread.arg_values.iter().map(|a| a.clone().into()).collect();
     let start = thread.start_step;
     ProtoCall {
         name,
@@ -736,6 +736,12 @@ impl Thread {
                         Ok
                     }
                     ExprValue::DependsOnIsLast(stmt) => ForkIsLast(stmt),
+                    ExprValue::UnknownArg(arg_id, None, _, _) => {
+                        panic!(
+                            "If condition depends on unknown argument `{}`",
+                            ti.sym[ti.proto.args[arg_id].symbol()].name()
+                        );
+                    }
                     other => todo!("if condition is {other:?}"),
                 },
                 Stmt::AssertEq(lhs, rhs) => {

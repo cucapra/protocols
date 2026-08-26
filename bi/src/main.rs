@@ -88,6 +88,10 @@ struct Cli {
     /// Instead of randomizing x/z signals, just use zero
     #[arg(long)]
     force_x_to_zero: bool,
+
+    /// Allow arguments to appear in while/if conditions
+    #[arg(long)]
+    allow_branch_on_arg: bool,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -148,7 +152,13 @@ fn main() {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
-    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let (st, modules) = frontend(
+        &cli.protocol,
+        &mut d,
+        skip_static_step_fork_checks,
+        cli.allow_branch_on_arg,
+    )
+    .unwrap();
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -337,15 +347,7 @@ fn print_trace(
             if !is_first {
                 print!(", ");
             }
-            if let Some(v) = arg {
-                if display_hex {
-                    print!("0x{}", v.to_hex_str());
-                } else {
-                    print!("{}", v.to_dec_str());
-                }
-            } else {
-                print!("X");
-            }
+            print!("{}", arg.to_string(display_hex));
         }
         print!(");");
         if show_steps {

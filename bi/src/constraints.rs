@@ -3,9 +3,9 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, WidthInt};
-use protocols::Value;
 use protocols::frontend::serialize::serialize_type;
 use protocols::frontend::symbol::{Arg, SymbolTable, Type};
+use protocols::{SymBitVecValue, SymValue, Value};
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
@@ -219,6 +219,30 @@ impl SeqValue {
 
     pub fn min_len(&self) -> u64 {
         self.values.len() as u64
+    }
+}
+
+impl From<DataValue> for SymValue {
+    fn from(v: DataValue) -> Self {
+        SymValue::new_scalar(v.value, v.known)
+    }
+}
+
+impl From<DataValue> for SymBitVecValue {
+    fn from(v: DataValue) -> Self {
+        SymBitVecValue::new(v.value, v.known)
+    }
+}
+
+impl From<ArgValue> for SymValue {
+    fn from(value: ArgValue) -> Self {
+        match value {
+            ArgValue::Seq(v) => {
+                let entries = v.values.into_iter().map(|v| v.into()).collect();
+                SymValue::new_seq(entries, v.len_is_known)
+            }
+            ArgValue::Data(v) => v.into(),
+        }
     }
 }
 

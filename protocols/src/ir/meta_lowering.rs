@@ -613,7 +613,7 @@ mod tests {
 
     fn snap_selected(name: &str, filename: &str, selected: &[&str]) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false).unwrap();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
         let protocols = module
             .protos
@@ -653,8 +653,13 @@ mod tests {
     #[test]
     fn steady_counter_loop_lowering_does_not_panic() {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) =
-            frontend(&["../tests/counters/counter.prot"], &mut handler, false).unwrap();
+        let (symbols, modules) = frontend(
+            &["../tests/counters/counter.prot"],
+            &mut handler,
+            false,
+            false,
+        )
+        .unwrap();
         let module = require_single_module(modules, &["../tests/counters/counter.prot"]).unwrap();
         let protocols = module.protos;
         let _ = lower_steady_driver_nfa_with_choice_instances(
@@ -679,6 +684,7 @@ mod tests {
         let (symbols, modules) = frontend(
             &["../tests/meta/unbounded_pre_phase_steady_state_simple.prot"],
             &mut handler,
+            false,
             false,
         )
         .unwrap();
@@ -708,7 +714,7 @@ mod tests {
     fn steady_add_sub_d1_is_finite_and_determinizable() {
         let mut handler = DiagnosticHandler::default();
         let (symbols, modules) =
-            frontend(&["../tests/alus/alu_d1.prot"], &mut handler, false).unwrap();
+            frontend(&["../tests/alus/alu_d1.prot"], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &["../tests/alus/alu_d1.prot"]).unwrap();
         let protocols = module
             .protos
@@ -736,6 +742,7 @@ mod tests {
         let (symbols, modules) = frontend(
             &["../tests/meta/steady_state_add_sub_long_pre.prot"],
             &mut handler,
+            false,
             false,
         )
         .unwrap();

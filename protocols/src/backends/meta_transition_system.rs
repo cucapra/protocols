@@ -351,6 +351,7 @@ mod tests {
             &["../tests/adders/adder_d1/add_d1.prot"],
             &mut handler,
             false,
+            false,
         )
         .unwrap();
         let module =

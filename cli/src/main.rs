@@ -203,7 +203,8 @@ fn main() {
     // we always parse and type check the protocol file
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let (st, modules) = frontend(&args.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let (st, modules) =
+        frontend(&args.protocol, &mut d, skip_static_step_fork_checks, false).unwrap();
 
     match args.command {
         None => {}

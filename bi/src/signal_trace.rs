@@ -650,6 +650,13 @@ fn parse_name_and_width(value: &str) -> (String, WidthInt) {
     }
 }
 
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum ValuePrefix {
+    None,
+    Hex,
+    Bin,
+}
+
 fn parse_value(
     value: &str,
     width: WidthInt,
@@ -657,23 +664,85 @@ fn parse_value(
     force_x_to_zero: bool,
 ) -> BitVecValue {
     let value = value.to_lowercase();
-    let r = if value == "x" {
-        if force_x_to_zero {
+    let (prefix, value) = if let Some(v) = value.strip_prefix("0x") {
+        (ValuePrefix::Hex, v.to_string())
+    } else if let Some(v) = value.strip_prefix("0b") {
+        (ValuePrefix::Bin, v.to_string())
+    } else {
+        (ValuePrefix::None, value)
+    };
+
+    if value.contains('x') {
+        let x_value = if force_x_to_zero {
             BitVecValue::zero(width)
         } else {
             BitVecValue::random(rnd, width)
+        };
+        let x_mask = get_x_mask(prefix, &value, width);
+        if x_mask.is_all_ones() {
+            x_value
+        } else {
+            let non_x_value_str = value.replace('x', "0");
+            let non_x_value = parse_non_x_value(prefix, &non_x_value_str, width);
+            x_value.and(&x_mask).or(&non_x_value)
         }
-    } else if let Some(v) = value.strip_prefix("0x") {
-        BitVecValue::from_hex_str(v).unwrap()
-    } else if let Some(v) = value.strip_prefix("0b") {
-        BitVecValue::from_bit_str(v).unwrap()
     } else {
-        BitVecValue::from_str_radix(&value, 10, width).unwrap()
+        parse_non_x_value(prefix, &value, width)
+    }
+}
+
+fn parse_non_x_value(prefix: ValuePrefix, value: &str, width: u32) -> BitVecValue {
+    assert!(!value.contains('x'), "Invalid {width}-bit number: {value}");
+    let r = match prefix {
+        ValuePrefix::None => BitVecValue::from_str_radix(value, 10, width)
+            .unwrap_or_else(|_| panic!("Invalid {width}-bit number: {value}")),
+        ValuePrefix::Hex => BitVecValue::from_hex_str(value).unwrap(),
+        ValuePrefix::Bin => BitVecValue::from_bit_str(value).unwrap(),
     };
     if r.width() < width {
         r.zero_extend(width - r.width())
     } else {
         r
+    }
+}
+
+fn get_x_mask(prefix: ValuePrefix, value: &str, width: u32) -> BitVecValue {
+    if value == "x" {
+        BitVecValue::ones(width)
+    } else if !value.contains('x') {
+        BitVecValue::zero(width)
+    } else {
+        match prefix {
+            ValuePrefix::None => {
+                // mixed x in decimal number is not supported
+                panic!("Invalid {width}-bit number: {value}");
+            }
+            ValuePrefix::Hex => {
+                let mut out = BitVecValue::zero(width);
+                for (ii, hex) in value.chars().rev().enumerate() {
+                    if hex == 'x' {
+                        let lsb = ii as u32 * 4;
+                        for pos in lsb..(lsb + 4) {
+                            out.set_bit(pos);
+                        }
+                    } else {
+                        debug_assert!(hex.is_ascii_hexdigit(), "{hex} at {ii} in {value}");
+                    }
+                }
+                out
+            }
+            ValuePrefix::Bin => {
+                let mut out = BitVecValue::zero(width);
+                for (ii, bit) in value.chars().rev().enumerate() {
+                    if bit == 'x' {
+                        out.set_bit(ii as u32);
+                    } else {
+                        debug_assert!(bit == '0' || bit == '1', "{bit} at {ii} in {value}");
+                    }
+                }
+                out
+            }
+        }
     }
 }
 

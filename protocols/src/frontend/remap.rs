@@ -476,7 +476,7 @@ pub mod tests {
     // derived from the function of the same name in serialize.rs, however, here we go through the full frontend
     fn test_helper_files(filenames: &[&str], snap_name: &str) {
         let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
-        let result = frontend(filenames, &mut handler, false);
+        let result = frontend(filenames, &mut handler, false, false);
         let maybe_ast = result.ok();
 
         let content = match &maybe_ast {

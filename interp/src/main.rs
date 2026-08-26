@@ -136,6 +136,7 @@ fn main() -> anyhow::Result<()> {
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
+        false,
     ) {
         Ok(result) => result,
         Err(error) => exit_after_setup_error(error, !protocols_handler.error_string().is_empty()),
