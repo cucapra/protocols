@@ -84,6 +84,10 @@ struct Cli {
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
+
+    /// Instead of randomizing x/z signals, just use zero
+    #[arg(long)]
+    force_x_to_zero: bool,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -177,13 +181,19 @@ fn main() {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) =
-            WaveSignalTrace::open(&cli.wave, &st, &modules, &instances, sampling_mode)
-        {
+        if let Ok(mut trace) = WaveSignalTrace::open(
+            &cli.wave,
+            &st,
+            &modules,
+            &instances,
+            sampling_mode,
+            cli.force_x_to_zero,
+        ) {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances).unwrap();
+            let mut trace =
+                AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
             run_bis(bis.as_mut_slice(), &mut trace)
         }
     }

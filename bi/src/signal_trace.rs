@@ -95,6 +95,8 @@ pub struct WaveSignalTrace {
 
     /// Maps a logical step to time.
     logical_step_to_time: Vec<Time>,
+
+    force_x_to_zero: bool,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -122,6 +124,7 @@ impl WaveSignalTrace {
         modules: &[Module],
         instances: &[Instance],
         sampling_mode: WaveSamplingMode,
+        force_x_to_zero: bool,
     ) -> Result<Self, wellen::WellenError> {
         let opts = wellen::LoadOptions::default();
         let wave = wellen::stream::read_from_file(filename, &opts)?;
@@ -189,6 +192,7 @@ impl WaveSignalTrace {
             time_step: 0,
             logical_step_to_time: vec![],
             names,
+            force_x_to_zero,
         })
     }
 }
@@ -323,7 +327,13 @@ impl SignalTrace for WaveSignalTrace {
             .collect();
         let mut bv_values: Vec<_> = widths
             .iter()
-            .map(|&width| BitVecValue::random(rng.get_mut(), width))
+            .map(|&width| {
+                if self.force_x_to_zero {
+                    BitVecValue::zero(width)
+                } else {
+                    BitVecValue::random(rng.get_mut(), width)
+                }
+            })
             .collect();
         let mut times = vec![];
         let filter = wellen::stream::Filter::include_signals(&signals);
@@ -395,7 +405,11 @@ impl SignalTrace for WaveSignalTrace {
                             }
                             // randomize
                             let width = widths[idx];
-                            let random_value = BitVecValue::random(rng.get_mut(), width);
+                            let random_value = if self.force_x_to_zero {
+                                BitVecValue::zero(width)
+                            } else {
+                                BitVecValue::random(rng.get_mut(), width)
+                            };
                             bv_values[idx].assign(&random_value);
                         }
                     } else {
@@ -510,10 +524,11 @@ impl AsciWaveTrace {
         filename: impl AsRef<std::path::Path>,
         modules: &[Module],
         instances: &[Instance],
+        force_x_to_zero: bool,
     ) -> std::io::Result<Self> {
         let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
         let content = std::fs::read_to_string(filename)?;
-        let mut trace = Self::parse(&content, &mut rnd);
+        let mut trace = Self::parse(&content, &mut rnd, force_x_to_zero);
 
         // populate pin map
         for (inst_id, inst) in instances.iter().enumerate() {
@@ -550,7 +565,7 @@ impl AsciWaveTrace {
         Ok(trace)
     }
 
-    pub fn parse(content: &str, rnd: &mut impl Rng) -> Self {
+    pub fn parse(content: &str, rnd: &mut impl Rng, force_x_to_zero: bool) -> Self {
         let mut out = Self {
             values: vec![],
             pins: vec![],
@@ -570,7 +585,7 @@ impl AsciWaveTrace {
                 continue;
             }
             // parse signal
-            let (name, width, mut values) = parse_signal_line(line, rnd);
+            let (name, width, mut values) = parse_signal_line(line, rnd, force_x_to_zero);
             if let Some(existing_id) = pin_ids.get(&name) {
                 out.values[*existing_id].append(&mut values);
             } else {
@@ -598,14 +613,18 @@ impl AsciWaveTrace {
     }
 }
 
-fn parse_signal_line(line: &str, rnd: &mut impl Rng) -> (String, WidthInt, Vec<BitVecValue>) {
+fn parse_signal_line(
+    line: &str,
+    rnd: &mut impl Rng,
+    force_x_to_zero: bool,
+) -> (String, WidthInt, Vec<BitVecValue>) {
     let tokens = tokenize(line);
     assert!(!tokens.is_empty());
     let (name, width) = parse_name_and_width(tokens[0]);
     let values = tokens
         .into_iter()
         .skip(1)
-        .map(|t| parse_value(t, width, rnd))
+        .map(|t| parse_value(t, width, rnd, force_x_to_zero))
         .collect();
     (name, width, values)
 }
@@ -631,10 +650,19 @@ fn parse_name_and_width(value: &str) -> (String, WidthInt) {
     }
 }
 
-fn parse_value(value: &str, width: WidthInt, rnd: &mut impl rand::Rng) -> BitVecValue {
+fn parse_value(
+    value: &str,
+    width: WidthInt,
+    rnd: &mut impl rand::Rng,
+    force_x_to_zero: bool,
+) -> BitVecValue {
     let value = value.to_lowercase();
     let r = if value == "x" {
-        BitVecValue::random(rnd, width)
+        if force_x_to_zero {
+            BitVecValue::zero(width)
+        } else {
+            BitVecValue::random(rnd, width)
+        }
     } else if let Some(v) = value.strip_prefix("0x") {
         BitVecValue::from_hex_str(v).unwrap()
     } else if let Some(v) = value.strip_prefix("0b") {
