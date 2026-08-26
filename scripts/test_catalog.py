@@ -305,6 +305,12 @@ TX_CASES = {
         "top": "fifo_wrapper",
         "expect": "pass",
     },
+    "tests/fpga-debugging/axi-stream-s2/s2_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
+        "verilog": ("tests/fpga-debugging/axi-stream-s2/s2_fixed.v",),
+        "top": "xlnxstream_2018_3",
+        "expect": "pass",
+    },
     "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx": {
         "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
         "verilog": (
@@ -667,26 +673,26 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axi-stream-s2.s2_buggy": {
-        "protocol": "tests/fpga-debugging/axi-stream-s2/s2_buggy.prot",
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_buggy.fst",
-        "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
+        "instances": ("TOP.testbench.UUT:AXISManager",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
-            "TOP.testbench.UUT.axi_stream_check.i_aclk",
+            "TOP.testbench.UUT.M_AXIS_ACLK",
             "--show-waveform-time",
             "--time-unit",
             "ns",
         ),
     },
     "tests.fpga-debugging.axi-stream-s2.s2_fixed": {
-        "protocol": "tests/fpga-debugging/axi-stream-s2/s2_fixed.prot",
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_fixed.fst",
-        "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
+        "instances": ("TOP.testbench.UUT:AXISManager",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
-            "TOP.testbench.UUT.axi_stream_check.i_aclk",
+            "TOP.testbench.UUT.M_AXIS_ACLK",
             "--show-waveform-time",
             "--time-unit",
             "ns",

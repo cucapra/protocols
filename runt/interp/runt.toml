@@ -442,6 +442,15 @@ expect_name = "push_pop_identity_ok.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fifo/push_pop_identity_ok.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>&1"
 
 [[tests]]
+name = "interp.tests_fpga_debugging_axi_stream_s2_s2_fixed.s2_fixed_interp"
+paths = [
+  "../../tests/fpga-debugging/axi-stream-s2/s2_fixed.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
+expect_name = "s2_fixed.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axi-stream-s2/s2_fixed.tx --verilog tests/fpga-debugging/axi-stream-s2/s2_fixed.v --protocol tests/fpga-debugging/axi-stream-s2/s2.prot --module xlnxstream_2018_3 2>&1"
+
+[[tests]]
 name = "interp.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_interp"
 paths = [
   "../../tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx",

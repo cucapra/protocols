@@ -1,0 +1,92 @@
+
+struct AXISManager {
+    // Active-low reset
+    in M_AXIS_ARESETN: u1,              
+
+    in M_AXIS_TREADY: u1,              
+
+    out M_AXIS_TVALID: u1,              
+    out M_AXIS_TDATA: u32,              
+    
+    // Indicates if the corresponding byte of `tdata` is a data byte 
+    // or a "position byte" (e.g. offsets)
+    out M_AXIS_TSTRB: u4,               
+    
+    // Indicates if this transfer is for the end of a packet
+    out M_AXIS_TLAST: u1,               
+}
+
+// AXI-Stream spec (section 2.7.2) says during reset,
+// all other signals can be driven to any other value (i.e. are DontCare),
+// so this protocol only assigns to the `aresetn` signal
+prot reset<DUT: AXISManager>() {
+    // Reset is active-low
+    DUT.M_AXIS_ARESETN := 1'b0;
+    step();
+}
+
+// Receive a single value via AXI stream interface.
+prot recv<DUT: AXISManager>(data: u32, strb: u4, is_last: u1, backpressure: uint) {
+    // no reset during transaction
+    DUT.M_AXIS_ARESETN := 1'b1;
+
+    // wait until sender sets data to valid, before that applying backpressure is OK but meaningless
+    while (!(DUT.M_AXIS_TVALID == 1'b1)) {
+        step();
+    }
+
+    // now check data that is being sent
+    assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TSTRB, strb);
+    assert_eq(DUT.M_AXIS_TLAST, is_last);
+
+    // we apply n cycles of backpressure, during these, the valid signal and the data may not change
+    DUT.M_AXIS_TREADY := 1'b0;
+    repeat backpressure iterations {
+      step();
+      assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+      assert_eq(DUT.M_AXIS_TDATA, data);
+      assert_eq(DUT.M_AXIS_TSTRB, strb);
+      assert_eq(DUT.M_AXIS_TLAST, is_last);
+    }
+
+    // now we accept the transaction in a final step
+    DUT.M_AXIS_TREADY := 1'b1;
+    step();
+}
+
+// Models a receive that never makes it to the end.
+// This is a special version of the normal receive in order to represent what it happening
+// at the end of the "fixed" trace. It is unclear what the AXIS spec has to say on this, but it seems
+// a bit like an unintentional behavior on the test bench's side.
+prot recv_aborted_by_reset<DUT: AXISManager>(data: u32, strb: u4, is_last: u1, backpressure: uint) {
+    // no reset during transaction
+    DUT.M_AXIS_ARESETN := 1'b1;
+
+    // wait until sender sets data to valid, before that applying backpressure is OK but meaningless
+    while (!(DUT.M_AXIS_TVALID == 1'b1)) {
+        step();
+    }
+
+    // now check data that is being sent
+    assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TSTRB, strb);
+    assert_eq(DUT.M_AXIS_TLAST, is_last);
+
+    // we apply n cycles of backpressure, during these, the valid signal and the data may not change
+    DUT.M_AXIS_TREADY := 1'b0;
+    repeat backpressure iterations {
+      step();
+      assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+      assert_eq(DUT.M_AXIS_TDATA, data);
+      assert_eq(DUT.M_AXIS_TSTRB, strb);
+      assert_eq(DUT.M_AXIS_TLAST, is_last);
+    }
+
+    // instead of being accepted, the transaction is canceled by reset
+    DUT.M_AXIS_ARESETN := 1'b0;
+    step();
+}
+
+
+
