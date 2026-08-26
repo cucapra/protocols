@@ -79,7 +79,16 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_wb_stream_reader_bi.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/wb_stream_reader.prot --wave examples/wishbone/wb_stream_reader_tb_shortened.fst --instances wb_stream_reader_tb.dut:WishboneData wb_stream_reader_tb.dut:WishboneControl --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/wb_stream.prot --wave examples/wishbone/wb_stream_reader_tb_shortened.fst --instances wb_stream_reader_tb.dut:WishboneData wb_stream_reader_tb.dut:WishboneControl --display-hex --show-steps --force-x-to-zero 2>&1"
+
+[[tests]]
+name = "bi.examples_wishbone_wishbone.examples_wishbone_wb_stream_writer_bi_bi"
+paths = [
+  "../../examples/wishbone/wishbone.prot",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "examples_wishbone_wb_stream_writer_bi.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone.prot --protocol examples/wishbone/wb_stream.prot --wave examples/wishbone/wb_stream_writer_tb_shortened.fst --instances wb_stream_writer_tb.dut:WishboneData wb_stream_writer_tb.dut:WishboneControl --display-hex --show-steps --force-x-to-zero 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.test_fifo_classic_1_bi"

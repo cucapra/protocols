@@ -21,6 +21,7 @@ module WishboneData : Wishbone {
 }
 
 // --instances wb_stream_reader_tb.dut:WishboneControl
+// --instances wb_stream_writer_tb.dut:WishboneControl
 // control interface
 module WishboneControl : Wishbone {
   // we sample at the falling edge, because some signals have random delays added (#1?)
