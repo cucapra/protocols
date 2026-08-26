@@ -1016,6 +1016,21 @@ BI_CASES = {
         "expect": "pass",
         "extra_args": ("--display-hex", "--show-steps"),
     },
+    # wishbone protocol on shortened wb_stream testbench
+    "examples.wishbone.wb_stream_reader.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/wb_stream_reader.prot",
+        ],
+        "wave": "examples/wishbone/wb_stream_reader_tb_shortened.fst",
+        "instances": (
+            "wb_stream_reader_tb.dut:WishboneData",
+            "wb_stream_reader_tb.dut:WishboneControl",
+        ),
+        "expect": "pass",
+        # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
+        "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
+    },
 }
 
 # Small Wishbone transactions from the Wishbone specification
