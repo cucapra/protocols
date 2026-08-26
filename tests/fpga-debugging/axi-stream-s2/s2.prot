@@ -28,18 +28,10 @@ prot reset<DUT: AXISManager>() {
 #[idle]
 prot idle<DUT: AXISManager>() {
     DUT.M_AXIS_ARESETN := 1'b1;        
-    DUT.M_AXIS_TREADY := 1'b0;
     assert_eq(DUT.M_AXIS_TVALID, 1'b0);
-    step();
-}
+    
+    // Note that ready can be either 0 or 1 during idle
 
-// Difference from `idle` is that `ready = 1` in this protocol
-// (receiver is available to receive data)
-prot wait_for_data<DUT: AXISManager>() {
-    DUT.M_AXIS_ARESETN := 1'b1;         
-    DUT.M_AXIS_TREADY := 1'b1;
-
-    assert_eq(DUT.M_AXIS_TVALID, 1'b0);
     step();
 }
 
@@ -74,6 +66,9 @@ prot recv_last<DUT: AXISManager>(data: u32, strb: u4) {
 }
 
 
+// Stalls for `n + 1` clock cycles 
+// (By a stall, we mean that there is backpressure, i.e. `valid = 1`
+// but `ready = 0`)
 prot stall<DUT: AXISManager>(data: u32, last: u1, strb: u4, n: uint) {
     DUT.M_AXIS_ARESETN := 1'b1;         
     DUT.M_AXIS_TREADY := 1'b0;          
