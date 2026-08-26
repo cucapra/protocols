@@ -2359,22 +2359,22 @@ expect_name = "s1_fixed_workload1.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot --wave tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd --instances TOP.testbench.UUT:WriteSubordinate TOP.testbench.UUT:ReadSubordinate --sample-posedge TOP.testbench.UUT.S_AXI_ACLK --show-waveform-time --time-unit ns --include-idle 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axi_stream_s2_s2_buggy.s2_buggy_bi"
+name = "bi.tests_fpga_debugging_axi_stream_s2_s2.s2_buggy_bi"
 paths = [
-  "../../tests/fpga-debugging/axi-stream-s2/s2_buggy.prot",
+  "../../tests/fpga-debugging/axi-stream-s2/s2.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2_buggy.prot --wave tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2.prot --wave tests/fpga-debugging/axi-stream-s2/s2_buggy.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
-name = "bi.tests_fpga_debugging_axi_stream_s2_s2_fixed.s2_fixed_bi"
+name = "bi.tests_fpga_debugging_axi_stream_s2_s2.s2_fixed_bi"
 paths = [
-  "../../tests/fpga-debugging/axi-stream-s2/s2_fixed.prot",
+  "../../tests/fpga-debugging/axi-stream-s2/s2.prot",
 ]
 expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_fixed.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2_fixed.prot --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axi-stream-s2/s2.prot --wave tests/fpga-debugging/axi-stream-s2/s2_fixed.fst --instances TOP.testbench.UUT.axi_stream_check:AXISManager --sample-posedge TOP.testbench.UUT.axi_stream_check.i_aclk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_adapter_s3_s3_buggy.s3_buggy_bi"

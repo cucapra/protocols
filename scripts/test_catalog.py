@@ -667,7 +667,7 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axi-stream-s2.s2_buggy": {
-        "protocol": "tests/fpga-debugging/axi-stream-s2/s2_buggy.prot",
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_buggy.fst",
         "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
         "expect": "pass",
@@ -680,7 +680,7 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axi-stream-s2.s2_fixed": {
-        "protocol": "tests/fpga-debugging/axi-stream-s2/s2_fixed.prot",
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_fixed.fst",
         "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
         "expect": "pass",
