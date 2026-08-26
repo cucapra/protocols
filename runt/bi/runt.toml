@@ -2383,7 +2383,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_buggy.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns --display-hex 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot --wave tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst --instances TOP.test_axis_adapter_64_8.UUT:AXISManager --sample-posedge TOP.test_axis_adapter_64_8.UUT.clk --show-waveform-time --time-unit ns 2>&1"
 
 [[tests]]
 name = "bi.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_bi"

@@ -709,7 +709,6 @@ BI_CASES = {
             "--show-waveform-time",
             "--time-unit",
             "ns",
-            "--display-hex",
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
