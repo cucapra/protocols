@@ -9,10 +9,17 @@ trace {
     recv(6, 15, 0, 0);  // [time: 987.5ns -> 1012.5ns]
 }
 error: [recv@411?] executing step 1 of the transaction: 1 != 0
-   ┌─ tests/fpga-debugging/axi-stream-s2/s2.prot:52:7
+   ┌─ tests/fpga-debugging/axi-stream-s2/s2.prot:50:7
    │
-52 │       assert_eq(DUT.M_AXIS_TLAST, is_last);
+50 │       assert_eq(DUT.M_AXIS_TLAST, is_last);
    │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [recv@411?] executing step 1 of the transaction: 1 != 0
+
+
+error: [recv_aborted_by_reset@411?] executing step 1 of the transaction: 1 != 0
+   ┌─ tests/fpga-debugging/axi-stream-s2/s2.prot:83:7
+   │
+83 │       assert_eq(DUT.M_AXIS_TLAST, is_last);
+   │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [recv_aborted_by_reset@411?] executing step 1 of the transaction: 1 != 0
 
 ---CODE---
 1
