@@ -7,7 +7,7 @@ trace {
     recv(4, 15);  // [time: 937.5ns -> 962.5ns]
     recv(5, 15);  // [time: 962.5ns -> 987.5ns]
     recv(6, 15);  // [time: 987.5ns -> 1012.5ns]
-    stall(7, 0, 15, 1);  // [time: 1012.5ns -> 1062.5ns]
+    stall(7, 0, 15, 0);  // [time: 1012.5ns -> 1062.5ns]
     reset();  // [time: 1062.5ns -> 1087.5ns]
     reset();  // [time: 1087.5ns -> 1087.5ns]
 }
@@ -15,43 +15,13 @@ trace {
 // trace 1
 trace {
     reset();  // [time: 0ns -> 12.5ns]
-    recv(1, 15);  // [time: 837.5ns -> 887.5ns]
-    recv(2, 15);  // [time: 887.5ns -> 912.5ns]
-    recv(3, 15);  // [time: 912.5ns -> 937.5ns]
-    recv(4, 15);  // [time: 937.5ns -> 962.5ns]
-    recv(5, 15);  // [time: 962.5ns -> 987.5ns]
-    recv(6, 15);  // [time: 987.5ns -> 1012.5ns]
-    stall(7, 0, 15, 0);  // [time: 1012.5ns -> 1037.5ns]
-    stall(7, 0, 15, 0);  // [time: 1037.5ns -> 1062.5ns]
-    reset();  // [time: 1062.5ns -> 1087.5ns]
-    reset();  // [time: 1087.5ns -> 1087.5ns]
-}
-
-// trace 2
-trace {
-    reset();  // [time: 0ns -> 12.5ns]
     recv(1, 15);  // [time: 862.5ns -> 887.5ns]
     recv(2, 15);  // [time: 887.5ns -> 912.5ns]
     recv(3, 15);  // [time: 912.5ns -> 937.5ns]
     recv(4, 15);  // [time: 937.5ns -> 962.5ns]
     recv(5, 15);  // [time: 962.5ns -> 987.5ns]
     recv(6, 15);  // [time: 987.5ns -> 1012.5ns]
-    stall(7, 0, 15, 1);  // [time: 1012.5ns -> 1062.5ns]
-    reset();  // [time: 1062.5ns -> 1087.5ns]
-    reset();  // [time: 1087.5ns -> 1087.5ns]
-}
-
-// trace 3
-trace {
-    reset();  // [time: 0ns -> 12.5ns]
-    recv(1, 15);  // [time: 862.5ns -> 887.5ns]
-    recv(2, 15);  // [time: 887.5ns -> 912.5ns]
-    recv(3, 15);  // [time: 912.5ns -> 937.5ns]
-    recv(4, 15);  // [time: 937.5ns -> 962.5ns]
-    recv(5, 15);  // [time: 962.5ns -> 987.5ns]
-    recv(6, 15);  // [time: 987.5ns -> 1012.5ns]
-    stall(7, 0, 15, 0);  // [time: 1012.5ns -> 1037.5ns]
-    stall(7, 0, 15, 0);  // [time: 1037.5ns -> 1062.5ns]
+    stall(7, 0, 15, 0);  // [time: 1012.5ns -> 1062.5ns]
     reset();  // [time: 1062.5ns -> 1087.5ns]
     reset();  // [time: 1087.5ns -> 1087.5ns]
 }

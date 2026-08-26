@@ -8,7 +8,7 @@ trace {
     recv(4, 15);
     recv(5, 15);
     recv(6, 15);
-    stall(7, 0, 15, 0);
+    stall(7, 0, 15, 1);
     recv(7, 15);
     recv_last(8, 15);
 }
