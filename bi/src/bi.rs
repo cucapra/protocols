@@ -736,6 +736,12 @@ impl Thread {
                         Ok
                     }
                     ExprValue::DependsOnIsLast(stmt) => ForkIsLast(stmt),
+                    ExprValue::UnknownArg(arg_id, None, _, _) => {
+                        panic!(
+                            "If condition depends on unknown argument `{}`",
+                            ti.sym[ti.proto.args[arg_id].symbol()].name()
+                        );
+                    }
                     other => todo!("if condition is {other:?}"),
                 },
                 Stmt::AssertEq(lhs, rhs) => {
