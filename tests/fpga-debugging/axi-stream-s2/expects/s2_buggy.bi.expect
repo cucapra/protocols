@@ -1,35 +1,18 @@
 // trace 0
 trace {
     reset();  // [time: 0ns -> 12.5ns]
-    recv(1, 15);  // [time: 837.5ns -> 887.5ns]
-    recv(2, 15);  // [time: 887.5ns -> 912.5ns]
-    recv(3, 15);  // [time: 912.5ns -> 937.5ns]
-    recv(4, 15);  // [time: 937.5ns -> 962.5ns]
-    recv(5, 15);  // [time: 962.5ns -> 987.5ns]
-    recv(6, 15);  // [time: 987.5ns -> 1012.5ns]
+    recv(1, 15, 0, 0);  // [time: 12.5ns -> 887.5ns]
+    recv(2, 15, 0, 0);  // [time: 887.5ns -> 912.5ns]
+    recv(3, 15, 0, 0);  // [time: 912.5ns -> 937.5ns]
+    recv(4, 15, 0, 0);  // [time: 937.5ns -> 962.5ns]
+    recv(5, 15, 0, 0);  // [time: 962.5ns -> 987.5ns]
+    recv(6, 15, 0, 0);  // [time: 987.5ns -> 1012.5ns]
 }
-error: [stall@41] executing step 1 of the transaction: 1 != 0
-   ┌─ tests/fpga-debugging/axi-stream-s2/s2.prot:96:5
+error: [recv@411?] executing step 1 of the transaction: 1 != 0
+   ┌─ tests/fpga-debugging/axi-stream-s2/s2.prot:52:7
    │
-96 │     assert_eq(DUT.M_AXIS_TLAST, last);
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [stall@41] executing step 1 of the transaction: 1 != 0
-
-// trace 1
-trace {
-    reset();  // [time: 0ns -> 12.5ns]
-    recv(1, 15);  // [time: 862.5ns -> 887.5ns]
-    recv(2, 15);  // [time: 887.5ns -> 912.5ns]
-    recv(3, 15);  // [time: 912.5ns -> 937.5ns]
-    recv(4, 15);  // [time: 937.5ns -> 962.5ns]
-    recv(5, 15);  // [time: 962.5ns -> 987.5ns]
-    recv(6, 15);  // [time: 987.5ns -> 1012.5ns]
-}
-
-error: [stall@41] executing step 1 of the transaction: 1 != 0
-   ┌─ tests/fpga-debugging/axi-stream-s2/s2.prot:96:5
-   │
-96 │     assert_eq(DUT.M_AXIS_TLAST, last);
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [stall@41] executing step 1 of the transaction: 1 != 0
+52 │       assert_eq(DUT.M_AXIS_TLAST, is_last);
+   │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [recv@411?] executing step 1 of the transaction: 1 != 0
 
 ---CODE---
 1

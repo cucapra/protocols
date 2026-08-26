@@ -26,86 +26,36 @@ prot reset<DUT: AXISManager>() {
     step();
 }
 
-#[idle]
-prot idle<DUT: AXISManager>() {
-    DUT.M_AXIS_ARESETN := 1'b1;        
-    assert_eq(DUT.M_AXIS_TVALID, 1'b0);
-    
-    // Note that ready can be either 0 or 1 during idle
-
-    step();
-}
 
 // `tlast` is set to 0 for this protocol
-prot recv<DUT: AXISManager>(data: u32, strb: u4) {
-    DUT.M_AXIS_ARESETN := 1'b1;         
-    DUT.M_AXIS_TREADY := 1'b1;      
+prot recv<DUT: AXISManager>(data: u32, strb: u4, is_last: u1, backpressure: uint) {
+    // no reset during transaction
+    DUT.M_AXIS_ARESETN := 1'b1;
 
+    // wait until sender sets data to valid, before that applying backpressure is OK but meaningless
     while (!(DUT.M_AXIS_TVALID == 1'b1)) {
         step();
-    }    
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TSTRB, strb);
-    assert_eq(DUT.M_AXIS_TLAST, 1'b0);
-
-    step();
-}
-
-// Like `recv`, but `tlast` is set to 1
-prot recv_last<DUT: AXISManager>(data: u32, strb: u4) {
-    DUT.M_AXIS_ARESETN := 1'b1;        
-    DUT.M_AXIS_TREADY := 1'b1;         
-
-    while (!(DUT.M_AXIS_TVALID == 1'b1)) {
-        step();
-    }    
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TSTRB, strb);
-    assert_eq(DUT.M_AXIS_TLAST, 1'b1);
-
-    step();
-}
-
-
-// This protocol represents stalling / backpressure, i.e.
-// when we have `valid = 1` but `ready = 0`. The `n` parameter
-// is there to allow for more than 2 cycles of stalling. 
-// When `n = 0`, the `repeat` loop doesn't execute, so we get 
-// a stall lasting 2 cycles. When `n = 1`, the stall lasts for 3 cycles
-// because the repeat loop executes once and so on. 
-// Overall, `stall(...,n)` represents a stall for `n + 2` cycles.
-prot stall<DUT: AXISManager>(data: u32, last: u1, strb: u4, n: uint) {
-    DUT.M_AXIS_ARESETN := 1'b1;         
-    DUT.M_AXIS_TREADY := 1'b0;          
-
-    // Stall only applies when manager has valid data
-    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TLAST, last);
-    assert_eq(DUT.M_AXIS_TSTRB, strb);
-
-    step();
-
-    // AXI-Stream spec (section 2.2.1) says once `valid`
-    // has been asserted, it must remain asserted until the data transfer completes
-    assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-
-    // Other output pins must also remain stable since valid is asserted
-    assert_eq(DUT.M_AXIS_TDATA, data);
-    assert_eq(DUT.M_AXIS_TLAST, last);
-    assert_eq(DUT.M_AXIS_TSTRB, strb); 
-
-    // Stall for n more cycles for any n >= 0
-    repeat n iterations {
-        step();
-    
-        assert_eq(DUT.M_AXIS_TVALID, 1'b1);
-        assert_eq(DUT.M_AXIS_TDATA, data);
-        assert_eq(DUT.M_AXIS_TLAST, last);
-        assert_eq(DUT.M_AXIS_TSTRB, strb);
     }
 
+    // now check data that is being sent
+    assert_eq(DUT.M_AXIS_TDATA, data);
+    assert_eq(DUT.M_AXIS_TSTRB, strb);
+    assert_eq(DUT.M_AXIS_TLAST, is_last);
+
+    // we apply n cycles of backpressure, during these, the valid signal and the data may not change
+    DUT.M_AXIS_TREADY := 1'b0;
+    repeat backpressure iterations {
+      step();
+      assert_eq(DUT.M_AXIS_TVALID, 1'b1);
+      assert_eq(DUT.M_AXIS_TDATA, data);
+      assert_eq(DUT.M_AXIS_TSTRB, strb);
+      assert_eq(DUT.M_AXIS_TLAST, is_last);
+    }
+
+    // now we accept the transaction in a final step
+    DUT.M_AXIS_TREADY := 1'b1;
     step();
 }
+
+
 

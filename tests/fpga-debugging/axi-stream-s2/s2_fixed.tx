@@ -1,14 +1,12 @@
 trace {
     reset();
-    idle();
-    recv(1, 15);
-    recv(2, 15);
-    stall(3, 0, 15, 1);
-    recv(3, 15);
-    recv(4, 15);
-    recv(5, 15);
-    recv(6, 15);
-    stall(7, 0, 15, 1);
-    recv(7, 15);
-    recv_last(8, 15);
+    recv(1, 15, 0, 0);
+    recv(1, 15, 0, 0);
+    recv(2, 15, 0, 0);
+    recv(3, 15, 0, 0);
+    recv(4, 15, 0, 0);
+    recv(5, 15, 0, 0);
+    recv(6, 15, 0, 0);
+    recv(7, 15, 0, 0);
+    recv(8, 15, 1, 0);
 }
