@@ -6,7 +6,7 @@
 
 //! Shared value representation.
 
-use baa::{BitVecOps, BitVecValue};
+use baa::{BitVecOps, BitVecValue, WidthInt};
 
 /// A concrete value of any type.
 #[derive(Debug, Clone)]
@@ -119,6 +119,11 @@ impl TryFrom<SymBitVecValue> for BitVecValue {
 }
 
 impl SymBitVecValue {
+    pub fn new(value: BitVecValue, known: BitVecValue) -> Self {
+        debug_assert_eq!(value.width(), known.width());
+        Self { value, known }
+    }
+
     pub fn unknown(width: u32) -> Self {
         Self {
             value: BitVecValue::zero(width),
@@ -189,10 +194,7 @@ pub struct SymSeqValue {
 impl From<Vec<BitVecValue>> for SymSeqValue {
     fn from(value: Vec<BitVecValue>) -> Self {
         let entries = value.into_iter().map(|e| e.into()).collect();
-        Self {
-            entries,
-            len_is_known: true,
-        }
+        Self::new(entries, true)
     }
 }
 
@@ -209,6 +211,17 @@ impl TryFrom<SymSeqValue> for Vec<BitVecValue> {
 }
 
 impl SymSeqValue {
+    pub fn new(entries: Vec<SymBitVecValue>, len_is_known: bool) -> Self {
+        if let Some(f) = entries.first() {
+            let width = f.width();
+            debug_assert!(entries.iter().all(|e| e.width() == width));
+        }
+        Self {
+            entries,
+            len_is_known,
+        }
+    }
+
     pub fn to_string(&self, _display_hex: bool) -> String {
         todo!()
     }
@@ -234,16 +247,14 @@ impl From<Value> for SymValue {
 
 impl SymValue {
     pub fn new_scalar(value: BitVecValue, known: BitVecValue) -> Self {
-        debug_assert_eq!(value.width(), known.width());
-        let s = SymBitVecValue { value, known };
+        let s = SymBitVecValue::new(value, known);
         Self(SymValueKind::Scalar(s))
     }
 
-    // pub fn new_seq(value: BitVecValue, known: BitVecValue) -> Self {
-    //     debug_assert_eq!(value.width(), known.width());
-    //     let s = SymBitVecValue { value, known };
-    //     Self(SymValueKind::Scalar(s))
-    // }
+    pub fn new_seq(entries: Vec<SymBitVecValue>, len_is_known: bool) -> Self {
+        let s = SymSeqValue::new(entries, len_is_known);
+        Self(SymValueKind::Seq(s))
+    }
 
     pub fn to_string(&self, display_hex: bool) -> String {
         match &self.0 {
