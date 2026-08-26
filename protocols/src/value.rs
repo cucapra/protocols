@@ -70,28 +70,6 @@ impl<'a> TryFrom<&'a Value> for &'a [BitVecValue] {
     }
 }
 
-impl Value {
-    pub fn to_hex_str(&self) -> String {
-        match &self.0 {
-            ValueKind::Scalar(bv) => bv.to_hex_str(),
-            ValueKind::Seq(values) => {
-                let values: Vec<_> = values.iter().map(|v| v.to_hex_str()).collect();
-                format!("[{}]", values.join(", "))
-            }
-        }
-    }
-
-    pub fn to_dec_str(&self) -> String {
-        match &self.0 {
-            ValueKind::Scalar(bv) => bv.to_dec_str(),
-            ValueKind::Seq(values) => {
-                let values: Vec<_> = values.iter().map(|v| v.to_dec_str()).collect();
-                format!("[{}]", values.join(", "))
-            }
-        }
-    }
-}
-
 /// A bit-vector value that may have some unknown bits.
 #[derive(Debug, Clone)]
 pub struct SymBitVecValue {
@@ -222,8 +200,14 @@ impl SymSeqValue {
         }
     }
 
-    pub fn to_string(&self, _display_hex: bool) -> String {
-        todo!()
+    pub fn to_string(&self, display_hex: bool) -> String {
+        let entries: Vec<_> = self
+            .entries
+            .iter()
+            .map(|e| e.to_string(display_hex))
+            .collect();
+        let suffix = if self.len_is_known { "" } else { "+" };
+        format!("[{}]{}", entries.join(", "), suffix)
     }
 }
 
