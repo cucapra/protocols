@@ -736,7 +736,7 @@ CYC_O        0      1       1 0
         "#;
 
         let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
-        let trace = AsciWaveTrace::parse(content, &mut rnd);
+        let trace = AsciWaveTrace::parse(content, &mut rnd, false);
         let expected_pins = [
             ("ADR_O", 32u32),
             ("DAT_I", 32),
