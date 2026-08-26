@@ -41,6 +41,7 @@ impl std::fmt::Display for LangFeature {
 /// - `language_feature` is a `LangFeature` enum that describes the corresponding
 ///   language feature for which the well-formedness check is performed
 ///   (also used for error message purposes)
+#[allow(clippy::too_many_arguments)]
 pub fn check_if_symbol_is_dut_port(
     symbol_id: SymbolId,
     direction: Option<Dir>,
