@@ -337,15 +337,7 @@ fn print_trace(
             if !is_first {
                 print!(", ");
             }
-            if let Some(v) = arg {
-                if display_hex {
-                    print!("0x{}", v.to_hex_str());
-                } else {
-                    print!("{}", v.to_dec_str());
-                }
-            } else {
-                print!("X");
-            }
+            print!("{}", arg.to_string(display_hex));
         }
         print!(");");
         if show_steps {

@@ -5,7 +5,7 @@
 //! # Protocol Traces and Error Reporting
 
 use baa::BitVecValue;
-use protocols::Value;
+use protocols::SymValue;
 use protocols::frontend::ast::StmtId;
 
 /// A `ProtoTrace` (protocol trace) is just a type alias for a list
@@ -18,7 +18,7 @@ pub struct ProtoCall {
     pub name: String,
     pub start: u32,
     pub end: Option<u32>,
-    pub args: Vec<Option<Value>>,
+    pub args: Vec<SymValue>,
 }
 
 /// `TraceId` is an index into the `Traces.tails`

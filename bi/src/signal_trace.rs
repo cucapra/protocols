@@ -673,7 +673,7 @@ fn parse_value(
     };
 
     if value.contains('x') {
-        let mut x_value = if force_x_to_zero {
+        let x_value = if force_x_to_zero {
             BitVecValue::zero(width)
         } else {
             BitVecValue::random(rnd, width)

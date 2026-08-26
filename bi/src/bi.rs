@@ -467,7 +467,7 @@ impl Path {
 fn thread_to_call(tis: &[ProtoInfo], thread: Thread, end: Option<u32>) -> ProtoCall {
     assert!(end.is_none() || thread.next_stmt.is_none());
     let name = tis[thread.transaction_id].proto.name.clone();
-    let args = thread.arg_values.iter().map(|a| a.get_known()).collect();
+    let args = thread.arg_values.iter().map(|a| a.clone().into()).collect();
     let start = thread.start_step;
     ProtoCall {
         name,
