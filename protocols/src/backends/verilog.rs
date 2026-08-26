@@ -419,6 +419,7 @@ pub mod tests {
             &["../tests/alus/alu_d1.prot"],
             &mut DiagnosticHandler::default(),
             false,
+            false,
         )
         .unwrap();
         let tx = [

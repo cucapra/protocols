@@ -97,6 +97,7 @@ fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
         &cli.protocol,
         &mut handler,
         cli.skip_static_step_fork_checks,
+        false,
     )
     .unwrap()
 }

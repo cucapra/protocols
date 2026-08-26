@@ -445,7 +445,8 @@ mod tests {
     fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
-        let (st, modules) = frontend(&[&path], &mut handler, skip_static_step_fork_checks).unwrap();
+        let (st, modules) =
+            frontend(&[&path], &mut handler, skip_static_step_fork_checks, false).unwrap();
         let module = require_single_module(modules, &[&path]).unwrap();
         let proto = match protocol_name {
             Some(protocol_name) => module

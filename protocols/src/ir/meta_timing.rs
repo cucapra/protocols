@@ -145,7 +145,7 @@ mod tests {
 
     fn contracted_protocols(filename: &str) -> Vec<ProtoGraph> {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false).unwrap();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
 
         module

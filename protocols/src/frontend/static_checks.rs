@@ -2,12 +2,11 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use anyhow::anyhow;
-
 use crate::frontend::ast::{BinOp, Expr, ExprId, LocationId, Protocol, StmtId};
 use crate::frontend::diagnostic::{DiagnosticHandler, Level};
 use crate::frontend::serialize::serialize_expr;
 use crate::frontend::symbol::{Dir, SymbolId, SymbolTable, Type};
+use anyhow::anyhow;
 
 /// Enum representing *language features* for which static well-formedness
 /// checks need to be performed
@@ -50,6 +49,7 @@ pub fn check_if_symbol_is_dut_port(
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
     lang_feature: LangFeature,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     // Fully-qualify the name of the identifier
     let symbol_full_name = symbol_table.full_name_from_symbol_id(&symbol_id);
@@ -67,19 +67,16 @@ pub fn check_if_symbol_is_dut_port(
                     handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
                     Err(anyhow!(error_msg))
                 }
+                LangFeature::Conditionals if allow_branch_on_arg => Ok(()),
                 LangFeature::Conditionals => {
-                    // TODO: delete the commented out code when we decide that we really want
-                    //       to remove this restriction.
                     // Input/output parameters of functions are not allowed
                     // to appear in conditions
-                    // let error_msg = format!(
-                    //     "{} is a function argument, but {} cannot mention function arguments",
-                    //     symbol_full_name, lang_feature
-                    // );
-                    // handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
-                    // Err(anyhow!(error_msg))
-
-                    Ok(())
+                    let error_msg = format!(
+                        "{} is a function argument, but {} cannot mention function arguments",
+                        symbol_full_name, lang_feature
+                    );
+                    handler.emit_diagnostic(tr, &location_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
                 }
                 LangFeature::Assertions => Ok(()),
             }
@@ -150,6 +147,7 @@ pub fn check_condition_wf(
     tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     let expr = &tr[expr_id];
     match expr {
@@ -166,6 +164,7 @@ pub fn check_condition_wf(
                 symbol_table,
                 handler,
                 LangFeature::Conditionals,
+                allow_branch_on_arg,
             )
         }
         Expr::DontCare => {
@@ -175,11 +174,11 @@ pub fn check_condition_wf(
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
-            check_condition_wf(expr_id1, tr, symbol_table, handler)?;
-            check_condition_wf(expr_id2, tr, symbol_table, handler)
+            check_condition_wf(expr_id1, tr, symbol_table, handler, allow_branch_on_arg)?;
+            check_condition_wf(expr_id2, tr, symbol_table, handler, allow_branch_on_arg)
         }
         Expr::Unary(_, inner_expr) | Expr::Slice(inner_expr, _, _) => {
-            check_condition_wf(inner_expr, tr, symbol_table, handler)
+            check_condition_wf(inner_expr, tr, symbol_table, handler, allow_branch_on_arg)
         }
     }
 }
@@ -193,6 +192,7 @@ pub fn check_assertion_arg_wf(
     tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     let expr = &tr[expr_id];
     match expr {
@@ -211,6 +211,7 @@ pub fn check_assertion_arg_wf(
                     symbol_table,
                     handler,
                     LangFeature::Assertions,
+                    allow_branch_on_arg,
                 )
             }
         }
@@ -220,12 +221,14 @@ pub fn check_assertion_arg_wf(
             Err(anyhow!(error_msg))
         }
         Expr::Binary(_, expr_id1, expr_id2) => {
-            check_assertion_arg_wf(expr_id1, tr, symbol_table, handler)?;
-            check_assertion_arg_wf(expr_id2, tr, symbol_table, handler)
+            check_assertion_arg_wf(expr_id1, tr, symbol_table, handler, allow_branch_on_arg)?;
+            check_assertion_arg_wf(expr_id2, tr, symbol_table, handler, allow_branch_on_arg)
         }
-        Expr::Unary(_, inner_expr) => check_assertion_arg_wf(inner_expr, tr, symbol_table, handler),
+        Expr::Unary(_, inner_expr) => {
+            check_assertion_arg_wf(inner_expr, tr, symbol_table, handler, allow_branch_on_arg)
+        }
         Expr::Slice(sliced_expr, _, _) => {
-            check_assertion_arg_wf(sliced_expr, tr, symbol_table, handler)
+            check_assertion_arg_wf(sliced_expr, tr, symbol_table, handler, allow_branch_on_arg)
         }
         Expr::IsLastIteration => todo!(),
         Expr::IterCount(_) => todo!(),
@@ -243,14 +246,15 @@ pub fn check_assertion_wf(
     tr: &Protocol,
     st: &SymbolTable,
     handler: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     // Check assertion well-formedness twice, once with `expr_id1` as the LHS
     // & `expr_id2` as the RHS, and once with the LHS/RHS swapped
     // (We need to do this since there is no way a priori to determine which
     // argument is the LHS/RHS, as `assert_eq` is symmetric in its arguments)
 
-    check_assertion_arg_wf(expr_id1, tr, st, handler)?;
-    check_assertion_arg_wf(expr_id2, tr, st, handler)
+    check_assertion_arg_wf(expr_id1, tr, st, handler, allow_branch_on_arg)?;
+    check_assertion_arg_wf(expr_id2, tr, st, handler, allow_branch_on_arg)
 }
 
 /// Recursively checks whether the RHS of an assignment
@@ -267,6 +271,7 @@ pub fn check_assignment_rhs_wf(
     tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     let rhs_expr = &tr[rhs_expr_id];
     match rhs_expr {
@@ -298,6 +303,7 @@ pub fn check_assignment_rhs_wf(
                         symbol_table,
                         handler,
                         LangFeature::Assignments,
+                        allow_branch_on_arg,
                     )
                 } else {
                     // Generic error message for invalid identifiers
@@ -313,8 +319,22 @@ pub fn check_assignment_rhs_wf(
         }
         // add and concat are allowed
         Expr::Binary(BinOp::Concat | BinOp::Add, expr_id1, expr_id2) => {
-            check_assignment_rhs_wf(expr_id1, false, tr, symbol_table, handler)?;
-            check_assignment_rhs_wf(expr_id2, false, tr, symbol_table, handler)
+            check_assignment_rhs_wf(
+                expr_id1,
+                false,
+                tr,
+                symbol_table,
+                handler,
+                allow_branch_on_arg,
+            )?;
+            check_assignment_rhs_wf(
+                expr_id2,
+                false,
+                tr,
+                symbol_table,
+                handler,
+                allow_branch_on_arg,
+            )
         }
         Expr::Binary(_, _, _) => {
             // Other binary operators (e.g. the `==` comparison operator)
@@ -329,7 +349,14 @@ pub fn check_assignment_rhs_wf(
         Expr::Unary(_, inner_expr) | Expr::Slice(inner_expr, _, _) => {
             // Check if the inner expression is well-formed
             // (Note: we do not allow the inner expression to be `DontCare`)
-            check_assignment_rhs_wf(inner_expr, false, tr, symbol_table, handler)
+            check_assignment_rhs_wf(
+                inner_expr,
+                false,
+                tr,
+                symbol_table,
+                handler,
+                allow_branch_on_arg,
+            )
         }
         Expr::IsLastIteration => todo!(),
         Expr::IterCount(_) => Ok(()),
@@ -350,6 +377,7 @@ pub fn check_assignment_wf(
     tr: &Protocol,
     symbol_table: &SymbolTable,
     handler: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<()> {
     // Check if the LHS is a DUT input port
     check_if_symbol_is_dut_port(
@@ -360,8 +388,16 @@ pub fn check_assignment_wf(
         symbol_table,
         handler,
         LangFeature::Assignments,
+        allow_branch_on_arg,
     )?;
 
     // Check if the RHS is well-formed
-    check_assignment_rhs_wf(rhs_expr_id, true, tr, symbol_table, handler)
+    check_assignment_rhs_wf(
+        rhs_expr_id,
+        true,
+        tr,
+        symbol_table,
+        handler,
+        allow_branch_on_arg,
+    )
 }

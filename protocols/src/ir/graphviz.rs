@@ -228,7 +228,7 @@ mod tests {
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false).unwrap();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let mut content = String::new();
         let module = require_single_module(modules, &[filename]).unwrap();
         let st = &symbols;
