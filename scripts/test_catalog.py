@@ -669,11 +669,11 @@ BI_CASES = {
     "tests.fpga-debugging.axi-stream-s2.s2_buggy": {
         "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_buggy.fst",
-        "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
+        "instances": ("TOP.testbench.UUT:AXISManager",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
-            "TOP.testbench.UUT.axi_stream_check.i_aclk",
+            "TOP.testbench.UUT.M_AXIS_ACLK",
             "--show-waveform-time",
             "--time-unit",
             "ns",
@@ -682,11 +682,11 @@ BI_CASES = {
     "tests.fpga-debugging.axi-stream-s2.s2_fixed": {
         "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_fixed.fst",
-        "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
+        "instances": ("TOP.testbench.UUT:AXISManager",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
-            "TOP.testbench.UUT.axi_stream_check.i_aclk",
+            "TOP.testbench.UUT.M_AXIS_ACLK",
             "--show-waveform-time",
             "--time-unit",
             "ns",
@@ -703,6 +703,7 @@ BI_CASES = {
             "--show-waveform-time",
             "--time-unit",
             "ns",
+            "--display-hex"
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
