@@ -617,7 +617,7 @@ module xlnxdemo #
 	    end
 	  else
 	    begin
-	      if (~axi_arready && S_AXI_ARVALID && (!S_AXI_RVALID || S_AXI_RREADY))
+	      if (~axi_arready && S_AXI_ARVALID)
 	        begin
 	          // indicates that the slave has acceped the valid read address
 	          axi_arready <= 1'b1;
