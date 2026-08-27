@@ -73,8 +73,13 @@ prot reset<DUT: AXIS>() {
     // Valid pin (for both directions) must be low when 
     // reset is asserted (AXI-Stream spec section 2.7.2) 
     DUT.input_axis_tvalid := 1'b0;
-    assert_eq(DUT.output_axis_tvalid, 1'b0);
+    step();
 
+    DUT.rst := X;
+    DUT.input_axis_tvalid := X;
+    // one cycle after reset, the output t_valid must be deasserted
+    assert_eq(DUT.output_axis_tvalid, 1'b0);
+    fork();
     step();
 }
 
@@ -84,8 +89,6 @@ prot reset<DUT: AXIS>() {
 prot idle<DUT: AXIS>() {
     DUT.rst := 1'b0;         
     DUT.input_axis_tvalid := 1'b0;
-
-    assert_eq(DUT.output_axis_tvalid, 1'b0);
     step();
 }
 
@@ -111,15 +114,16 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
     DUT.input_axis_tdata := X;
     DUT.input_axis_tkeep := X;
     DUT.input_axis_tlast := X;
-
-    // Since input pins are DontCare, there is no longer valid data, so set `valid = 0`
-    DUT.input_axis_tvalid := 1'b0;
+    // valid can be anything from now on, it is on the DUT to assert backpressure until it is ready
+    DUT.input_axis_tvalid := X;
+    fork();
 
     // Environment is now ready to accept the output data emitted by the DUT 
     DUT.output_axis_tready := 1'b1;
 
     // Wait until the DUT indicates that there is valid data to emit
     while (!(DUT.output_axis_tvalid == 1'b1)) {
+        assert_eq(DUT.input_axis_tready, 1'b0);
         step();
     }
     // Both ready & valid are now 1 in the output direction,
@@ -138,12 +142,14 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
             // 1st byte is meaningful, so the 0th byte can't be the end of the packet,
             // so output tlast must be 0 for the 0th byte
             assert_eq(DUT.output_axis_tlast, 1'b0);
+            assert_eq(DUT.input_axis_tready, 1'b0);
 
             // One clock cycle to emit the 0th byte
             step();
 
             // Wait till DUT has valid data to emit for the 1st byte
             while (!(DUT.output_axis_tvalid == 1'b1)) {
+                assert_eq(DUT.input_axis_tready, 1'b0);
                 step();
             }
 
@@ -157,11 +163,13 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
                 // 2nd byte is meaningful, so the 1st byte can't be the end of the packet,
                 // so output tlast must be 0 for the 1st byte
                 assert_eq(DUT.output_axis_tlast, 1'b0);
+                assert_eq(DUT.input_axis_tready, 1'b0);
 
                 // One clock cycle to emit the 1st byte
                 step();
 
                 while (!(DUT.output_axis_tvalid == 1'b1)) {
+                    assert_eq(DUT.input_axis_tready, 1'b0);
                     step();
                 }
                 assert_eq(DUT.output_axis_tdata, data[23:16]);
@@ -174,11 +182,13 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
                     // 3rd byte is meaningful, so the 2nd byte can't be the end of the packet,
                     // so output tlast must be 0 for the 2nd byte
                     assert_eq(DUT.output_axis_tlast, 1'b0);
+                    assert_eq(DUT.input_axis_tready, 1'b0);
 
                     // One clock cycle to emit the 2nd byte
                     step();
     
                     while (!(DUT.output_axis_tvalid == 1'b1)) {
+                        assert_eq(DUT.input_axis_tready, 1'b0);
                         step();
                     }
                     assert_eq(DUT.output_axis_tdata, data[31:24]);
@@ -189,10 +199,12 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
                     if (keep[4] == 1'b1) {
                         // 4th byte is meaningful, so output tlast must be 0 for the 3rd byte
                         assert_eq(DUT.output_axis_tlast, 1'b0);
+                        assert_eq(DUT.input_axis_tready, 1'b0);
 
                         step();
 
                         while (!(DUT.output_axis_tvalid == 1'b1)) {
+                            assert_eq(DUT.input_axis_tready, 1'b0);
                             step();
                         }
 
@@ -204,10 +216,12 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
                         if (keep[5] == 1'b1) {
                             // 5th byte is meaningful, so output tlast must be 0 for the 4th byte
                             assert_eq(DUT.output_axis_tlast, 1'b0);
+                            assert_eq(DUT.input_axis_tready, 1'b0);
 
                             step();
 
                             while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                assert_eq(DUT.input_axis_tready, 1'b0);
                                 step();
                             }
                             assert_eq(DUT.output_axis_tdata, data[47:40]);
@@ -218,10 +232,12 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
                             if (keep[6] == 1'b1) {
                                 // 6th byte is meaningful, so output tlast must be 0 for the 5th byte
                                 assert_eq(DUT.output_axis_tlast, 1'b0);
+                                assert_eq(DUT.input_axis_tready, 1'b0);
 
                                 step();
 
                                 while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                    assert_eq(DUT.input_axis_tready, 1'b0);
                                     step();
                                 }
                                 assert_eq(DUT.output_axis_tdata, data[55:48]);
@@ -232,10 +248,12 @@ prot split_word<DUT: AXIS>(data: u64, keep: u8, is_final_word_in_packet: u1) {
                                 if (keep[7] == 1'b1) {
                                     // 7th byte is meaningful, so output tlast must be 0 for the 6th byte
                                     assert_eq(DUT.output_axis_tlast, 1'b0);
+                                    assert_eq(DUT.input_axis_tready, 1'b0);
 
                                     step();
 
                                     while (!(DUT.output_axis_tvalid == 1'b1)) {
+                                        assert_eq(DUT.input_axis_tready, 1'b0);
                                         step();
                                     }
                                     assert_eq(DUT.output_axis_tdata, data[63:56]);

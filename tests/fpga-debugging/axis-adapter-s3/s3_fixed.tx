@@ -1,6 +1,62 @@
 trace {
+  idle();
   reset();
   idle();
   // Same transaction with the same input data, as in `s3_fixed.fst` (waveform from Brave New World artifact)
   split_word(0xabcdabcdabcdabcd, 0x1f, 0b1);
+  // enough idle transactions to wait for split_word to finish before we can assert reset
+  idle(); idle(); idle(); idle(); idle(); idle();
+
+  // test a couple of input argument values
+  reset();
+  idle();
+  split_word(0x0000000000000011, 0b00000001, 0);
+  split_word(0x0000000000002211, 0b00000011, 0);
+  split_word(0x0000000000332211, 0b00000111, 0);
+  split_word(0x0000000044332211, 0b00001111, 0);
+  split_word(0x0000005544332211, 0b00011111, 0);
+  split_word(0x0000665544332211, 0b00111111, 0);
+  split_word(0x0077665544332211, 0b01111111, 0);
+  split_word(0x8877665544332211, 0b11111111, 0);
+  split_word(0x0000000000000011, 0b00000001, 0);
+  split_word(0x0000000000002211, 0b00000011, 1);
+  split_word(0x0000000000332211, 0b00000111, 1);
+  split_word(0x0000000044332211, 0b00001111, 1);
+  split_word(0x0000005544332211, 0b00011111, 1);
+  split_word(0x0000665544332211, 0b00111111, 1);
+  split_word(0x0077665544332211, 0b01111111, 1);
+  split_word(0x8877665544332211, 0b11111111, 1);
+  idle();
+  split_word(0x0000000000000011, 0b00000001, 0);
+  idle();
+  split_word(0x0000000000002211, 0b00000011, 0);
+  idle();
+  split_word(0x0000000000332211, 0b00000111, 0);
+  idle();
+  split_word(0x0000000044332211, 0b00001111, 0);
+  idle();
+  split_word(0x0000005544332211, 0b00011111, 0);
+  idle();
+  split_word(0x0000665544332211, 0b00111111, 0);
+  idle();
+  split_word(0x0077665544332211, 0b01111111, 0);
+  idle();
+  split_word(0x8877665544332211, 0b11111111, 0);
+  idle();
+  split_word(0x0000000000000011, 0b00000001, 0);
+  idle();
+  split_word(0x0000000000002211, 0b00000011, 1);
+  idle();
+  split_word(0x0000000000332211, 0b00000111, 1);
+  idle();
+  split_word(0x0000000044332211, 0b00001111, 1);
+  idle();
+  split_word(0x0000005544332211, 0b00011111, 1);
+  idle();
+  split_word(0x0000665544332211, 0b00111111, 1);
+  idle();
+  split_word(0x0077665544332211, 0b01111111, 1);
+  idle();
+  split_word(0x8877665544332211, 0b11111111, 1);
+  idle();
 }
