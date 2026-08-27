@@ -310,6 +310,7 @@ TX_CASES = {
         "verilog": ("tests/fpga-debugging/axis-adapter-s3/s3_fixed.v",),
         "top": "axis_adapter",
         "expect": "pass",
+        "extra_args": ("--allow-branch-on-arg",),
     },
     "tests/fpga-debugging/axi-stream-s2/s2_fixed.tx": {
         "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",

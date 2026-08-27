@@ -682,7 +682,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --ascii-waveform --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --ascii-waveform --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_waveform.graph"
@@ -691,7 +691,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --respect-forks --determinize --ascii-waveform --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --respect-forks --determinize --ascii-waveform --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_waveform.ts"
@@ -700,7 +700,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --transition-system --ascii-waveform --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --transition-system --ascii-waveform --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_waveform.ast"

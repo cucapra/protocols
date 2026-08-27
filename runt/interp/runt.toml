@@ -457,7 +457,7 @@ paths = [
 ]
 expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
 expect_name = "s3_fixed.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>&1"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>&1"
 
 [[tests]]
 name = "interp.tests_fpga_debugging_axis_async_fifo_c4_c4_buggy.c4_buggy_interp"
