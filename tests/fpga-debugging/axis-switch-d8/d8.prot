@@ -1,5 +1,5 @@
 struct AXIS_Switch {
-    // Reset is active-high for this DUT 
+    // Reset is active-high for this DUT
     in rst: u1,
 
     // Note: input `tdata` contains the data from all 4 sources packed together
@@ -8,9 +8,10 @@ struct AXIS_Switch {
 
     in s_axis_tkeep: u4,
     in s_axis_tvalid: u4,
-    in s_axis_tlast: u4
+    in s_axis_tlast: u4,
     in s_axis_tid: u32,
     in s_axis_tdest: u4,
+    in s_axis_tuser: u4,
 
     out s_axis_tready: u4,
 
@@ -22,19 +23,84 @@ struct AXIS_Switch {
     out m_axis_tlast: u1,
     out m_axis_tid: u8,
     out m_axis_tdest: u1,
+    out m_axis_tuser: u1,
 }
 
-// AXI-Stream spec (section 2.7.2) says during reset,
-// all other signals can be driven to any other value (i.e. are DontCare),
-// so this protocol only assigns to the `aresetn` signal
+// AXI-Stream spec (section 2.7.2) says that valid must be 0
+// while reset is asserted, whereas all other signals are unconstrained
 prot reset<DUT: AXIS_Switch>() {
-    DUT.M_AXIS_ARESETN := 1'b1;
+    DUT.rst := 1'b1;
+    DUT.s_axis_tvalid := 4'b0000;
+    assert_eq(DUT.m_axis_tvalid, 1'b0);
     step();
 }
 
-
-prot switch<DUT: AXIS_Switch>(input_data: u32, keep: u4, input_tlast: u4, output_data: u8) {
-
+// None of the 4 sources contains valid data when the DUT is idle
+#[idle]
+prot idle<DUT: AXIS_Switch>() {
+    DUT.rst := 1'b0;
+    DUT.s_axis_tvalid := 4'b0000;
+    step();
 }
 
+// The parameter `input_data` is the data from source 0 only
+prot send_src_0<DUT: AXIS_Switch>(input_data: u8, keep: u1, last: u1, id: u8, dest: u1, user: u1) {
+    DUT.rst := 1'b0;
+
+    DUT.s_axis_tdata[7:0] := input_data;
+    DUT.s_axis_tkeep[0] := keep;
+    DUT.s_axis_tlast[0] := last;
+    DUT.s_axis_tid[7:0] := id;
+    DUT.s_axis_tdest[0] := dest;
+    DUT.s_axis_tuser[0] := user;
+    DUT.s_axis_tvalid[0] := 1'b1;
+
+    // Wait until the DUT signals it is ready to accept the input word
+    while (!(DUT.s_axis_tready[0] == 1'b1)) {
+        step();
+    }
+
+    // One cycle for DUT to accept input data from environment
+    step();
+
+    // DUT has accepted input data, so we set this source's input pins to DontCare
+    DUT.s_axis_tdata[7:0] := X;
+    DUT.s_axis_tkeep[0] := X;
+    DUT.s_axis_tlast[0] := X;
+    DUT.s_axis_tid[7:0] := X;
+    DUT.s_axis_tdest[0] := X;
+    DUT.s_axis_tuser[0] := X;
+    DUT.s_axis_tvalid[0] := X;
+
+    fork();
+
+    // Wait till the DUT indicates there is valid data to emit
+    while (!(DUT.m_axis_tvalid == 1'b1)) {
+        step();
+    }
+    // Data for source 0 now appears on output pins
+    assert_eq(DUT.m_axis_tdata, input_data);
+    assert_eq(DUT.m_axis_tkeep, keep);
+    assert_eq(DUT.m_axis_tlast, last);
+    assert_eq(DUT.m_axis_tdest, dest);
+    assert_eq(DUT.m_axis_tuser, user);
+
+    // Environment applies n cycles of backpressure
+    // During this period, the valid signal and other output pins must remain stable
+    DUT.m_axis_tready := 1'b0;
+    repeat backpressure iterations {
+        step();
+        assert_eq(DUT.m_axis_tvalid, 1'b1); 
+        assert_eq(DUT.m_axis_tdata, input_data);
+        assert_eq(DUT.m_axis_tkeep, keep);
+        assert_eq(DUT.m_axis_tlast, last);
+        assert_eq(DUT.m_axis_tdest, dest);
+        assert_eq(DUT.m_axis_tuser, user);
+    }
+
+    // Environment is now ready to accept the data emitted by the DUT
+    DUT.m_axis_tready := 1'b1;
+
+    step();
+}
 
