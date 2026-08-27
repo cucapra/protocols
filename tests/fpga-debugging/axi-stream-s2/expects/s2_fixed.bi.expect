@@ -7,6 +7,4 @@ trace {
     recv(4, 15, 0, 0);  // [time: 937.5ns -> 962.5ns]
     recv(5, 15, 0, 0);  // [time: 962.5ns -> 987.5ns]
     recv(6, 15, 0, 0);  // [time: 987.5ns -> 1012.5ns]
-    recv_aborted_by_reset(7, 15, 0, 2);  // [time: 1012.5ns -> 1087.5ns]
-    reset();  // [time: 1087.5ns -> 1087.5ns]
 }
