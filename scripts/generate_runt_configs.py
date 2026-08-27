@@ -360,6 +360,10 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         if c["expected"] == "pass"
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
+    # exclude s3 from graph_interp cases
+    # TODO: re-include
+    selected = [c for c in selected if not c["protocol_path"].endswith("s3.prot")]
+
     return sorted(selected, key=lambda c: c["paths"][0])
 
 

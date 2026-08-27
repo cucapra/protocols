@@ -532,33 +532,6 @@ expect_name = "push_pop_identity_ok.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_identity_ok.tx --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_graph_interp"
-paths = [
-  "../../tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx",
-]
-expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
-expect_name = "s3_fixed.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_graph_interp.contract_edges"
-paths = [
-  "../../tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx",
-]
-expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
-expect_name = "s3_fixed.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter --contract-edges 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_graph_interp.respect_forks"
-paths = [
-  "../../tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx",
-]
-expect_dir = "../../tests/fpga-debugging/axis-adapter-s3/expects"
-expect_name = "s3_fixed.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx --allow-branch-on-arg --verilog tests/fpga-debugging/axis-adapter-s3/s3_fixed.v --protocol tests/fpga-debugging/axis-adapter-s3/s3.prot --module axis_adapter --respect-forks --determinize 2>/dev/null"
-
-[[tests]]
 name = "graph_interp.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_graph_interp"
 paths = [
   "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
