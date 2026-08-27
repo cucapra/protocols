@@ -737,6 +737,18 @@ BI_CASES = {
             "--allow-branch-on-arg",
         ),
     },
+    "tests.fpga-debugging.axis-adapter-s3.s3_fixed.on_test_trace": {
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
+        "wave": "tests/fpga-debugging/axis-adapter-s3/s3_fixed_tx.fst",
+        "instances": ("dut:AXIS",),
+        "expect": "pass",
+        "extra_args": (
+            "--show-steps",
+            "--include-idle",
+            "--display-hex",
+            "--allow-branch-on-arg",
+        ),
+    },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_buggy": {
         "protocol": "tests/fpga-debugging/axis-async-fifo-c4/c4.prot",
         "wave": "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.fst",

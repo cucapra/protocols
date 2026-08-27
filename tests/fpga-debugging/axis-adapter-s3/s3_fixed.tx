@@ -58,5 +58,6 @@ trace {
   split_word(0x0077665544332211, 0b01111111, 1);
   idle();
   split_word(0x8877665544332211, 0b11111111, 1);
-  idle();
+  // enough idle transactions to finish the last split_word
+  idle(); idle(); idle(); idle(); idle(); idle(); idle(); idle();
 }
