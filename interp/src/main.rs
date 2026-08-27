@@ -69,6 +69,10 @@ struct Cli {
     /// Prints only trace status lines and ASCII waveforms
     #[arg(long)]
     ascii_waveform: bool,
+
+    /// Allow arguments to appear in while/if conditions
+    #[arg(long)]
+    allow_branch_on_arg: bool,
 }
 
 /// Examples (enables all tracing logs):
@@ -136,7 +140,7 @@ fn main() -> anyhow::Result<()> {
         &cli.protocol,
         &mut protocols_handler,
         cli.skip_static_step_fork_checks,
-        false,
+        cli.allow_branch_on_arg,
     ) {
         Ok(result) => result,
         Err(error) => exit_after_setup_error(error, !protocols_handler.error_string().is_empty()),
