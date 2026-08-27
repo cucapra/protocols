@@ -611,9 +611,9 @@ BI_CASES = {
             "ns",
         ),
     },
-    "tests.fpga-debugging.axi-lite-s1.s1_buggy": {
-        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_buggy.prot",
-        "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_workload2.vcd",
+    "tests.fpga-debugging.axi-lite-s1.s1_buggy_workload_2": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_2.vcd",
         "instances": (
             "TOP.testbench.UUT:WriteSubordinate",
             "TOP.testbench.UUT:ReadSubordinate",
@@ -629,8 +629,8 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axi-lite-s1.s1_buggy_workload_1": {
-        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.prot",
-        "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_workload1.vcd",
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_buggy_workload_1.vcd",
         "instances": (
             "TOP.testbench.UUT:WriteSubordinate",
             "TOP.testbench.UUT:ReadSubordinate",
@@ -645,9 +645,9 @@ BI_CASES = {
             "--include-idle",
         ),
     },
-    "tests.fpga-debugging.axi-lite-s1.s1_fixed": {
-        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed.prot",
-        "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload2.vcd",
+    "tests.fpga-debugging.axi-lite-s1.s1_fixed_workload_2": {
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_2.vcd",
         "instances": (
             "TOP.testbench.UUT:WriteSubordinate",
             "TOP.testbench.UUT:ReadSubordinate",
@@ -663,8 +663,8 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axi-lite-s1.s1_fixed_workload_1": {
-        "protocol": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.prot",
-        "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload1.vcd",
+        "protocol": "tests/fpga-debugging/axi-lite-s1/s1.prot",
+        "wave": "tests/fpga-debugging/axi-lite-s1/s1_fixed_workload_1.vcd",
         "instances": (
             "TOP.testbench.UUT:WriteSubordinate",
             "TOP.testbench.UUT:ReadSubordinate",
