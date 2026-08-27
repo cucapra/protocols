@@ -1,3 +1,6 @@
+// Taken from 
+// https://github.com/efeslab/hardware-bugbase/blob/bugs/s2-protocol-violation-axi-stream/rtl/trace_tb.v
+
 `ifndef VERILATOR
 module testbench;
   reg [4095:0] vcdfile;
