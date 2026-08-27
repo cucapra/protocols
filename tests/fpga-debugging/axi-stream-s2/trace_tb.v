@@ -357,7 +357,7 @@ module testbench(input clock, output reg genclock);
 
     // state 43
     if (cycle == 42) begin
-      PI_M_AXIS_ARESETN <= 1'b1;         // NOTE: this line was previously `M_AXIS_TREADY <= 'd1`, we changed it to `M_AXIS_TREADY <= 'd0`
+      PI_M_AXIS_ARESETN <= 1'b1;         // NOTE: this line was previously `M_AXIS_TREADY <= 'd0`, we changed it to `M_AXIS_TREADY <= 'd1`
       PI_M_AXIS_TREADY <= 1'b0;
     end
 
