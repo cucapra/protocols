@@ -331,6 +331,7 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
             "--bin",
             "protocols-cli",
             "--",
+            "--allow-branch-on-arg",
             "-p",
             protocol_path,
             "constructs",

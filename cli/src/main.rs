@@ -23,6 +23,10 @@ struct Args {
     )]
     protocol: Vec<String>,
 
+    /// Allow arguments to appear in while/if conditions
+    #[arg(long)]
+    allow_branch_on_arg: bool,
+
     #[command(subcommand)]
     command: Option<Cmds>,
 }
@@ -203,8 +207,13 @@ fn main() {
     // we always parse and type check the protocol file
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let (st, modules) =
-        frontend(&args.protocol, &mut d, skip_static_step_fork_checks, false).unwrap();
+    let (st, modules) = frontend(
+        &args.protocol,
+        &mut d,
+        skip_static_step_fork_checks,
+        args.allow_branch_on_arg,
+    )
+    .unwrap();
 
     match args.command {
         None => {}

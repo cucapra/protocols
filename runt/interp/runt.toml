@@ -450,7 +450,6 @@ expect_dir = "../../tests/fpga-debugging/axi-stream-s2/expects"
 expect_name = "s2_fixed.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/fpga-debugging/axi-stream-s2/s2_fixed.tx --verilog tests/fpga-debugging/axi-stream-s2/s2_fixed.v --protocol tests/fpga-debugging/axi-stream-s2/s2.prot --module xlnxstream_2018_3 2>&1"
 
-
 [[tests]]
 name = "interp.tests_fpga_debugging_axis_adapter_s3_s3_fixed.s3_fixed_interp"
 paths = [
