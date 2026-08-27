@@ -2,13 +2,15 @@ struct AXIS_Switch {
     // Reset is active-high for this DUT 
     in rst: u1,
 
+    // Note: input `tdata` contains the data from all 4 sources packed together
+    // The data for each source is 8 bits
     in s_axis_tdata: u32,
+
     in s_axis_tkeep: u4,
     in s_axis_tvalid: u4,
     in s_axis_tlast: u4
     in s_axis_tid: u32,
     in s_axis_tdest: u4,
-    in s_axis_tuser: u4,
 
     out s_axis_tready: u4,
 
@@ -20,15 +22,19 @@ struct AXIS_Switch {
     out m_axis_tlast: u1,
     out m_axis_tid: u8,
     out m_axis_tdest: u1,
-    out m_axis_tuser: u1,
 }
 
 // AXI-Stream spec (section 2.7.2) says during reset,
 // all other signals can be driven to any other value (i.e. are DontCare),
 // so this protocol only assigns to the `aresetn` signal
-prot reset<DUT: AXISManager>() {
+prot reset<DUT: AXIS_Switch>() {
     DUT.M_AXIS_ARESETN := 1'b1;
     step();
+}
+
+
+prot switch<DUT: AXIS_Switch>(input_data: u32, keep: u4, input_tlast: u4, output_data: u8) {
+
 }
 
 
