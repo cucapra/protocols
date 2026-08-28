@@ -1080,9 +1080,14 @@ BI_CASES = {
 
 # Small Wishbone transactions from the Wishbone specification
 WISHBONE_SPEC_BI = [
+    "3.4_pipelined_mode_single_access.wave",
     "3.5_classic_standard_single_read_cycle.wave",
+    "3.6_classic_pipelined_single_read_cycle.wave",
     "3.7_standard_single_write_cycle.wave",
+    "3.8_pipelined_single_write_cycle.wave",
     "3.10_standard_block_read_cycle.wave",
+    "3.11_pipelined_block_read_cycle.wave",
+    "3.13_pipelined_block_write_cycle.wave",
     "3.14_rmw_cycle.wave",
     "4.8_constant_address_burst.wave",
     "4.8_constant_address_burst_no_stb_rate_limit.wave",
@@ -1091,8 +1096,9 @@ WISHBONE_SPEC_BI = [
 for wave in WISHBONE_SPEC_BI:
     name = wave[: -len(".wave")].replace(".", "_")
     name = f"examples.wishbone.{name}"
+    protocol = "wishbone_pipelined.prot" if "pipelined" in wave else "wishbone.prot"
     BI_CASES[name] = {
-        "protocol": "examples/wishbone/wishbone.prot",
+        "protocol": f"examples/wishbone/{protocol}",
         "wave": f"examples/wishbone/{wave}",
         "instances": (":Wishbone",),
         "expect": "pass",
