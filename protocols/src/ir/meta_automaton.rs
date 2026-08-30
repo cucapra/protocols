@@ -6,7 +6,8 @@ pub type MetaNodeId = usize;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolTiming {
     pub name: String,
-    /// The list of possible numbers of cycles required until the protocol forks.
+    /// The sorted, non-repeating list in ascending order of possible numbers of cycles required
+    /// until the protocol forks.
     /// `None` means that it may reach the boundary in any number of cycles.
     /// 0 means the protocol immediately forks (which is disallowed by the well-formedness rules)
     pub pre_cycles: Option<Vec<usize>>,
@@ -36,22 +37,22 @@ impl ProtocolTiming {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct LiveTransaction {
+pub struct PostPhaseTransaction {
     pub protocol: ProtocolId,
     /// Which execution of the protocol this is.
-    /// This is essentially just the bank this protocol's args live in
-    pub bank: usize,
+    /// Logical instance number. Physical bank selection is performed by the
+    /// lowered transition system using the protocol's FIFO head.
+    pub instance: usize,
     /// Counts down from ProtocolTiming::post_cycles.
     /// The final post-phase cycle is zero.
     pub post_cycle: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-/// The frontier is essentially the stuff that's not in the post-phase
 /// There can only ever be one protocol in the 'pre' phase (by the structured concurrency
 /// guarantees of the language), or else we have just forked, and we have not
 /// disambiguated which protocol we're running, in which case we're in the `Choice` version.
-pub enum MetaFrontier {
+pub enum PrePhase {
     /// The driver has not yet selected the next protocol.
     Choice { instance: usize },
     /// A selected protocol is somewhere in its pre-phase.
@@ -65,11 +66,11 @@ pub enum MetaFrontier {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MetaState {
     /// The things in the post-phase
-    pub live: Vec<LiveTransaction>,
-    /// See the definition of `MetaFrontier`. Note the optional,
+    pub post_phase: Vec<PostPhaseTransaction>,
+    /// See the definition of `PrePhase`. Note the optional,
     /// since the frontier can also be empty if we're just doing the
     /// bounded (not steady-state) construction
-    pub frontier: Option<MetaFrontier>,
+    pub pre_phase: Option<PrePhase>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,7 +99,6 @@ pub struct BankRotation {
     pub amount: usize,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetaEdge {
     // At every edge, a protocol (the one in the pre-phase) is forking, or continuing.
@@ -108,11 +108,6 @@ pub struct MetaEdge {
     pub target: MetaNodeId,
     // what rotations are required before transitioning to `target`
     pub rotations: Vec<BankRotation>,
-    /// if we are forking, some extra metadata about what cycles this counts for
-    /// this is useful mostly for debugging and printing the DOT file.
-    pub fork_timing: Option<ForkTiming>,
-    /// Number of cycles by which the meta-level post transactions advance.
-    pub advance_cycles: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,9 +134,6 @@ struct Successor {
     /// Which protocol and by what outcome was the edge taken
     protocol: ProtocolId,
     outcome: MetaOutcome,
-
-    fork_timing: Option<ForkTiming>,
-    advance_cycles: usize,
 }
 
 // need >0 protocols as input with nonempty names
@@ -184,41 +176,26 @@ fn validate_and_normalize(mut protocols: Vec<ProtocolTiming>) -> Vec<ProtocolTim
     protocols
 }
 
-fn advance_live(live: &[LiveTransaction], cycles: usize) -> Vec<LiveTransaction> {
-    live.iter()
-        .filter_map(|transaction| {
-            if transaction.post_cycle < cycles {
-                None
-            } else {
-                Some(LiveTransaction {
-                    post_cycle: transaction.post_cycle - cycles,
-                    ..*transaction
-                })
-            }
-        })
-        .collect()
-}
-
 fn fork_successor(
-    mut live: Vec<LiveTransaction>,
+    mut post_phase_txs: Vec<PostPhaseTransaction>,
     protocols: &[ProtocolTiming],
     protocol: ProtocolId,
-    bank: usize,
+    instance: usize,
     introduce_next_choice: bool,
 ) -> MetaState {
     if protocols[protocol].post_cycles > 0 {
-        live.push(LiveTransaction {
+        post_phase_txs.push(PostPhaseTransaction {
             protocol,
-            bank,
+            instance,
             post_cycle: protocols[protocol].post_cycles - 1,
         });
     }
-    live.sort_by_key(|transaction| (transaction.bank, transaction.protocol));
+    post_phase_txs.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
 
     MetaState {
-        live,
-        frontier: introduce_next_choice.then(|| MetaFrontier::Choice {
-            instance: bank.checked_add(1).expect("instance number overflow"),
+        post_phase: post_phase_txs,
+        pre_phase: introduce_next_choice.then(|| PrePhase::Choice {
+            instance: instance.checked_add(1).expect("instance number overflow"),
         }),
     }
 }
@@ -229,16 +206,22 @@ fn successors(
     protocols: &[ProtocolTiming],
     introduce_next_choice: bool,
 ) -> Vec<Successor> {
-    let Some(frontier) = state.frontier else {
+    // if there is nothing in the pre-phase, we have no successor states
+    // TODO: why?
+    let Some(pre_phase) = state.pre_phase else {
         return Vec::new();
     };
     let mut result = Vec::new();
 
-    let choices: Vec<_> = match frontier {
-        MetaFrontier::Choice { instance } => (0..protocols.len())
+    let choices: Vec<_> = match pre_phase {
+        // Every protocol is a choice, with the same instance number and 0 cycles have elapsed
+        // (Since we're currently in the first cycle of their life).
+        PrePhase::Choice { instance } => (0..protocols.len())
             .map(|protocol| (protocol, instance, 0))
             .collect(),
-        MetaFrontier::Pre {
+        // There is only one protocol in the pre-phase, and it has existing bank and cycles
+        // elapsed data
+        PrePhase::Pre {
             protocol,
             instance,
             elapsed,
@@ -246,11 +229,30 @@ fn successors(
     };
 
     for (protocol, instance, elapsed) in choices {
-        let next = elapsed.checked_add(1).expect("pre-phase length overflow");
+        let next = elapsed + 1;
         let timing = protocols[protocol].pre_cycles.as_deref();
+
+        // we can fork if the number of cycles elapsed meets one of the pre_cycles lengths.
         let can_fork = timing.is_none_or(|lengths| lengths.binary_search(&next).is_ok());
+
+        // we can continue if the number of cycles elapsed is less than one of the pre_cycles lengths
         let can_continue = timing.is_none_or(|lengths| lengths.last().copied().unwrap() > next);
-        let advanced = advance_live(&state.live, 1);
+
+        // everything in the post-phase needs to be advanced 1 cycle
+        // TODO: can we do this in place
+        let advanced: Vec<PostPhaseTransaction> = state.post_phase.iter()
+            // drop the transaction if its
+            .filter_map(|transaction| {
+                if transaction.post_cycle == 0 {
+                    None
+                } else {
+                    Some(PostPhaseTransaction {
+                        post_cycle: transaction.post_cycle - 1,
+                        ..*transaction
+                    })
+                }
+            })
+            .collect();
 
         if can_fork {
             result.push(Successor {
@@ -263,15 +265,13 @@ fn successors(
                 ),
                 protocol,
                 outcome: MetaOutcome::Fork,
-                fork_timing: Some(ForkTiming::Exact(vec![next])),
-                advance_cycles: 1,
             });
         }
         if can_continue {
             result.push(Successor {
                 state: MetaState {
-                    live: advanced,
-                    frontier: Some(MetaFrontier::Pre {
+                    post_phase: advanced,
+                    pre_phase: Some(PrePhase::Pre {
                         protocol,
                         instance,
                         elapsed: if timing.is_none() { 1 } else { next },
@@ -279,8 +279,6 @@ fn successors(
                 },
                 protocol,
                 outcome: MetaOutcome::Continue,
-                fork_timing: None,
-                advance_cycles: 1,
             });
         }
     }
@@ -292,40 +290,121 @@ fn successors(
     result
 }
 
-fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
-    let live_min = state
-        .live
-        .iter()
-        .map(|transaction| transaction.bank)
-        .min();
-    let frontier_min = state.frontier.map(|frontier| match frontier {
-        MetaFrontier::Choice { instance } | MetaFrontier::Pre { instance, .. } => instance,
-    });
-    let shift = live_min
-        .into_iter()
-        .chain(frontier_min)
-        .min()
-        .expect("steady-state nodes cannot be empty");
 
-    for transaction in &mut state.live {
-        transaction.bank -= shift;
+fn canonicalize(mut state: MetaState, protocol_count: usize) -> MetaState {
+    // We assume that if an equivalent state up to renumbering by shifts is available
+    // it will be 0-ed. so, we calculate the 0-ed version of this state and return it.
+
+    // find the minimum instance per-protocol
+    let mut shifts = vec![None; protocol_count];
+    for transaction in &state.post_phase {
+        shifts[transaction.protocol] = Some(
+            shifts[transaction.protocol]
+                .unwrap_or(transaction.instance)
+                .min(transaction.instance),
+        );
     }
-    state.frontier = state.frontier.map(|frontier| match frontier {
-        MetaFrontier::Choice { instance } => MetaFrontier::Choice {
-            instance: instance - shift,
-        },
-        MetaFrontier::Pre {
+    if let Some(PrePhase::Pre {
+        protocol, instance, ..
+    }) = state.pre_phase
+    {
+        shifts[protocol] = Some(shifts[protocol].unwrap_or(instance).min(instance));
+    }
+
+
+    // reset every transactions by their minimum (essentially re-zero everything)
+    for transaction in &mut state.post_phase {
+        transaction.instance -= shifts[transaction.protocol].unwrap();
+    }
+    state.pre_phase = state.pre_phase.map(|frontier| match frontier {
+        PrePhase::Choice { instance } => {
+            let global_shift = shifts.iter().flatten().copied().min().unwrap_or(instance);
+            PrePhase::Choice {
+                instance: instance - global_shift,
+            }
+        }
+        PrePhase::Pre {
             protocol,
             instance,
             elapsed,
-        } => MetaFrontier::Pre {
+        } => PrePhase::Pre {
             protocol,
-            instance: instance - shift,
+            instance: instance - shifts[protocol].unwrap(),
             elapsed,
         },
     });
 
-    (state, shift)
+    state
+}
+
+/// Determine the FIFO-head movement needed to map `source` onto `target`.
+/// The subtraction is deliberately wrapping: rotations are interpreted
+/// modulo the eventual bank count, and the bank count is not known until all
+/// canonical nodes have been constructed.
+fn rotations_between(
+    source: &MetaState,
+    target: &MetaState,
+    protocol_count: usize,
+) -> Vec<BankRotation> {
+    let mut result = Vec::new();
+    for protocol in 0..protocol_count {
+        let mut source_instances: Vec<_> = source
+            .post_phase
+            .iter()
+            .filter(|transaction| transaction.protocol == protocol)
+            .map(|transaction| (transaction.instance, transaction.post_cycle))
+            .collect();
+        let mut target_instances: Vec<_> = target
+            .post_phase
+            .iter()
+            .filter(|transaction| transaction.protocol == protocol)
+            .map(|transaction| (transaction.instance, transaction.post_cycle))
+            .collect();
+        if let Some(PrePhase::Pre {
+            protocol: frontier_protocol,
+            instance,
+            elapsed: _,
+        }) = source.pre_phase
+            && frontier_protocol == protocol
+        {
+            source_instances.push((instance, usize::MAX));
+        }
+        if let Some(PrePhase::Pre {
+            protocol: frontier_protocol,
+            instance,
+            elapsed: _,
+        }) = target.pre_phase
+            && frontier_protocol == protocol
+        {
+            target_instances.push((instance, usize::MAX));
+        }
+        source_instances.sort_unstable();
+        target_instances.sort_unstable();
+        assert_eq!(
+            source_instances.len(),
+            target_instances.len(),
+            "protocol {protocol} changed instance multiplicity while canonicalizing"
+        );
+        let Some((&(source_instance, _), &(target_instance, _))) =
+            source_instances.first().zip(target_instances.first())
+        else {
+            continue;
+        };
+        let amount = source_instance.wrapping_sub(target_instance);
+        assert!(
+            source_instances.iter().zip(&target_instances).all(
+                |(&(source_instance, source_cycle), &(target_instance, target_cycle))| {
+                    source_cycle == target_cycle
+                        && source_instance.wrapping_sub(amount) == target_instance
+                }
+            ),
+            "no single instance shift maps all live instances of protocol {protocol}"
+        );
+        if amount != 0 {
+            result.push(BankRotation { protocol, amount });
+        }
+    }
+    result
 }
 
 fn push_bounded_node(
@@ -335,13 +414,14 @@ fn push_bounded_node(
     forks_so_far: usize,
     fork_bound: usize,
 ) -> MetaNodeId {
+    // create a new node
     let id = nodes.len();
     nodes.push(MetaNode {
         state: state.clone(),
         edges: Vec::new(),
     });
 
-    if state.frontier.is_none() {
+    if state.pre_phase.is_none() {
         return id;
     }
 
@@ -357,8 +437,6 @@ fn push_bounded_node(
             outcome: successor.outcome,
             target,
             rotations: Vec::new(),
-            fork_timing: successor.fork_timing,
-            advance_cycles: successor.advance_cycles,
         });
     }
     id
@@ -368,16 +446,16 @@ fn bank_counts(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
     let mut counts = vec![0; protocol_count];
     for node in nodes {
         let mut state_counts = vec![0; protocol_count];
-        for transaction in &node.state.live {
+        for transaction in &node.state.post_phase {
             state_counts[transaction.protocol] += 1;
         }
-        match node.state.frontier {
-            Some(MetaFrontier::Choice { .. }) => {
+        match node.state.pre_phase {
+            Some(PrePhase::Choice { .. }) => {
                 for count in &mut state_counts {
                     *count += 1;
                 }
             }
-            Some(MetaFrontier::Pre { protocol, .. }) => state_counts[protocol] += 1,
+            Some(PrePhase::Pre { protocol, .. }) => state_counts[protocol] += 1,
             None => {}
         }
         for protocol in 0..protocol_count {
@@ -387,50 +465,37 @@ fn bank_counts(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
     counts
 }
 
-fn rotations(state: &MetaState, protocol_count: usize, amount: usize) -> Vec<BankRotation> {
-    if amount == 0 {
-        return Vec::new();
-    }
-
-    let mut actual = vec![false; protocol_count];
-    for transaction in &state.live {
-        actual[transaction.protocol] = true;
-    }
-    if let Some(MetaFrontier::Pre { protocol, .. }) = state.frontier {
-        actual[protocol] = true;
-    }
-    actual
-        .into_iter()
-        .enumerate()
-        .filter_map(|(protocol, actual)| actual.then_some( BankRotation { protocol, amount }))
-        .collect()
-}
-
-// TODO: not sure if this is totally correct.
 fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge) {
     let source = &graph.nodes[source].state;
     let target = &graph.nodes[edge.target].state;
-    let raw_target_live = |protocol, instance, post_cycle| {
-        target.live.iter().any(|transaction| {
+    let rotation_for = |protocol: ProtocolId| {
+        edge.rotations
+            .iter()
+            .find(|rotation| rotation.protocol == protocol)
+            .map_or(0, |rotation| rotation.amount)
+    };
+    let target_live = |protocol: ProtocolId, instance: usize, post_cycle: usize| {
+        let count = graph.bank_counts[protocol].max(1);
+        target.post_phase.iter().any(|transaction| {
             transaction.protocol == protocol
-                && transaction.bank == instance
+                && transaction.instance
+                    == (instance % count + count - rotation_for(protocol) % count) % count
                 && transaction.post_cycle == post_cycle
         })
     };
 
-    assert_eq!(edge.advance_cycles, 1);
-    for transaction in &source.live {
+    for transaction in &source.post_phase {
         if transaction.post_cycle > 0 {
-            assert!(raw_target_live(
+            assert!(target_live(
                 transaction.protocol,
-                transaction.bank,
+                transaction.instance,
                 transaction.post_cycle - 1
             ));
         }
     }
-    let (protocol, instance) = match source.frontier.unwrap() {
-        MetaFrontier::Choice { instance } => (edge.protocol, instance),
-        MetaFrontier::Pre {
+    let (protocol, instance) = match source.pre_phase.unwrap() {
+        PrePhase::Choice { instance } => (edge.protocol, instance),
+        PrePhase::Pre {
             protocol, instance, ..
         } => {
             assert_eq!(protocol, edge.protocol);
@@ -440,9 +505,8 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
 
     match edge.outcome {
         MetaOutcome::Fork => {
-            assert!(edge.fork_timing.is_some());
             if graph.protocols[protocol].post_cycles > 0 {
-                assert!(raw_target_live(
+                assert!(target_live(
                     protocol,
                     instance,
                     graph.protocols[protocol].post_cycles - 1
@@ -450,15 +514,18 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
             }
         }
         MetaOutcome::Continue => {
-            assert!(edge.fork_timing.is_none());
+            let shift = rotation_for(protocol);
             assert!(matches!(
-                target.frontier,
-                Some(MetaFrontier::Pre {
+                target.pre_phase,
+                Some(PrePhase::Pre {
                     protocol: target_protocol,
                     instance: target_instance,
                     ..
                 }) if target_protocol == protocol
-                    && target_instance == instance
+                    && target_instance
+                        == (instance + graph.bank_counts[protocol].max(1)
+                            - shift % graph.bank_counts[protocol].max(1))
+                            % graph.bank_counts[protocol].max(1)
             ));
         }
     }
@@ -473,7 +540,7 @@ fn add_rotations(graph: &mut MetaAutomaton) {
                 .rotations
                 .iter()
                 .filter_map(|shift| {
-                    let amount = shift.amount % graph.bank_counts[shift.protocol];
+                    let amount = shift.amount % graph.bank_counts[shift.protocol].max(1);
                     (amount != 0).then_some(BankRotation {
                         protocol: shift.protocol,
                         amount,
@@ -490,16 +557,10 @@ pub fn bounded_driver_meta(protocols: Vec<ProtocolTiming>, fork_bound: usize) ->
     let protocols = validate_and_normalize(protocols);
     let mut nodes = Vec::new();
     let initial_state = MetaState {
-        live: Vec::new(),
-        frontier: Some(MetaFrontier::Choice { instance: 0 }),
+        post_phase: Vec::new(),
+        pre_phase: Some(PrePhase::Choice { instance: 0 }),
     };
-    let entry = push_bounded_node(
-        &mut nodes,
-        &protocols,
-        initial_state,
-        0,
-        fork_bound,
-    );
+    let entry = push_bounded_node(&mut nodes, &protocols, initial_state, 0, fork_bound);
     let bank_counts = bank_counts(protocols.len(), &nodes);
     MetaAutomaton {
         protocols,
@@ -512,8 +573,8 @@ pub fn bounded_driver_meta(protocols: Vec<ProtocolTiming>, fork_bound: usize) ->
 pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
     let protocols = validate_and_normalize(protocols);
     let entry_state = MetaState {
-        live: Vec::new(),
-        frontier: Some(MetaFrontier::Choice { instance: 0 }),
+        post_phase: Vec::new(),
+        pre_phase: Some(PrePhase::Choice { instance: 0 }),
     };
     let mut nodes = vec![MetaNode {
         state: entry_state.clone(),
@@ -527,8 +588,8 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
         let state = nodes[cursor].state.clone();
         let mut edges = Vec::new();
         for successor in successors(&state, &protocols, true) {
-            let (canonical, canonical_shift) = canonicalize(successor.state);
-            let rotations = rotations(&canonical, protocols.len(), canonical_shift);
+            let canonical = canonicalize(successor.state.clone(), protocols.len());
+            let rotations = rotations_between(&successor.state, &canonical, protocols.len());
             let target = if let Some(target) = states.get(&canonical) {
                 *target
             } else {
@@ -545,8 +606,6 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
                 outcome: successor.outcome,
                 target,
                 rotations,
-                fork_timing: successor.fork_timing,
-                advance_cycles: successor.advance_cycles,
             });
         }
         nodes[cursor].edges = edges;
@@ -751,7 +810,7 @@ mod tests {
     #[test]
     fn accepts_protocol_without_post_phase() {
         let graph = steady_driver_meta(vec![ProtocolTiming::new("ADD", vec![1], 0)]);
-        assert!(graph.nodes.iter().all(|node| node.state.live.is_empty()));
+        assert!(graph.nodes.iter().all(|node| node.state.post_phase.is_empty()));
     }
 
     #[test]

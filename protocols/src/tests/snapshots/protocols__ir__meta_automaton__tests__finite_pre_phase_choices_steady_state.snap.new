@@ -1,5 +1,6 @@
 ---
 source: protocols/src/ir/meta_automaton.rs
+assertion_line: 623
 expression: content
 ---
 digraph "driver_meta" {
@@ -14,7 +15,7 @@ digraph "driver_meta" {
   node1 [label=<ADD<SUB>1</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
   node1 -> node4 [label=<ADD forks>];
   node1 -> node5 [label=<ADD continues>];
-  node1 -> node6 [label=<SUB forks>];
+  node1 -> node6 [label=<SUB forks / R<SUB>SUB</SUB>>];
   node2 [label=<ADD<SUB>pre[1]</SUB><SUP>(0)</SUP>>];
   node2 -> node1 [label=<ADD forks>];
   node3 [label=<SUB<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
@@ -24,10 +25,10 @@ digraph "driver_meta" {
   node4 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ ADD<SUB>1</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
   node4 -> node4 [label=<ADD forks / R<SUB>ADD</SUB>>];
   node4 -> node5 [label=<ADD continues / R<SUB>ADD</SUB>>];
-  node4 -> node6 [label=<SUB forks / R<SUB>ADD</SUB>, R<SUB>SUB</SUB>>];
+  node4 -> node6 [label=<SUB forks / R<SUB>ADD</SUB>>];
   node5 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ ADD<SUB>pre[1]</SUB><SUP>(1)</SUP>>];
   node5 -> node1 [label=<ADD forks / R<SUB>ADD</SUB>>];
-  node6 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ SUB<SUB>0</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
+  node6 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ SUB<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(2)</SUP>>];
   node6 -> node1 [label=<ADD forks / R<SUB>ADD</SUB><SUP>2</SUP>>];
   node6 -> node2 [label=<ADD continues / R<SUB>ADD</SUB><SUP>2</SUP>>];
   node6 -> node3 [label=<SUB forks>];

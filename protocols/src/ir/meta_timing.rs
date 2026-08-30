@@ -201,6 +201,6 @@ mod tests {
         }
 
         let meta = steady_driver_meta_from_protocols(&graphs);
-        assert!(meta.nodes.iter().all(|node| node.state.live.is_empty()));
+        assert!(meta.nodes.iter().all(|node| node.state.post_phase.is_empty()));
     }
 }
