@@ -9,7 +9,7 @@ fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
                 "{}<SUB>{}</SUB><SUP>({})</SUP>",
                 escape_html(&graph.protocols[transaction.protocol].name),
                 transaction.post_cycle,
-                transaction.instance
+                transaction.bank
             )
         })
         .collect();

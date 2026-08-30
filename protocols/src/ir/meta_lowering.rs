@@ -342,7 +342,7 @@ fn lower_exact_meta_driver_nfa(
                     &mut lowerer.ir,
                     &protocols[protocol],
                     symbols,
-                    transaction.instance,
+                    transaction.bank,
                 );
                 let copy = action_copy(
                     &mut lowerer.ir,
@@ -472,7 +472,7 @@ fn lower_exact_meta_driver_nfa(
                         &mut lowerer.ir,
                         &protocols[live_protocol],
                         symbols,
-                        transaction.instance,
+                        transaction.bank,
                     );
                     let step_guard = remap_expr(&mut lowerer.ir, step_guard, &live_substitutions);
                     base_guard = lowerer.ir.and_guard(base_guard, step_guard);

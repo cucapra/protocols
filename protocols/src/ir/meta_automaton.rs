@@ -6,15 +6,17 @@ pub type MetaNodeId = usize;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtocolTiming {
     pub name: String,
-    /// Every cycle at which this protocol may reach its phase boundary, counted
-    /// from its selection. The boundary is done when `post_cycles` is zero.
-    /// `None` means that it may reach the boundary in any cycle or continue forever.
+    /// The list of possible numbers of cycles required until the protocol forks.
+    /// `None` means that it may reach the boundary in any number of cycles.
+    /// 0 means the protocol immediately forks (which is disallowed by the well-formedness rules)
     pub pre_cycles: Option<Vec<usize>>,
-    /// Fixed post-phase lifetime, including the fork cycle. Zero means that the
-    /// protocol has no fork and therefore no post-phase.
+    /// The lifetime of the protocol in cycles, including the fork cycle.
+    /// If zero, the protocol has no fork and therefore no post-phase.
     pub post_cycles: usize,
 }
 
+// TODO: I feel like these impl helpers are simply unnecessary
+// and can be replaced with direct struct constructions.
 impl ProtocolTiming {
     pub fn new(name: impl Into<String>, pre_cycles: Vec<usize>, post_cycles: usize) -> Self {
         Self {
@@ -36,13 +38,19 @@ impl ProtocolTiming {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LiveTransaction {
     pub protocol: ProtocolId,
-    pub instance: usize,
+    /// Which execution of the protocol this is.
+    /// This is essentially just the bank this protocol's args live in
+    pub bank: usize,
     /// Counts down from ProtocolTiming::post_cycles.
     /// The final post-phase cycle is zero.
     pub post_cycle: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// The frontier is essentially the stuff that's not in the post-phase
+/// There can only ever be one protocol in the 'pre' phase (by the structured concurrency
+/// guarantees of the language), or else we have just forked, and we have not
+/// disambiguated which protocol we're running, in which case we're in the `Choice` version.
 pub enum MetaFrontier {
     /// The driver has not yet selected the next protocol.
     Choice { instance: usize },
@@ -56,16 +64,19 @@ pub enum MetaFrontier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MetaState {
+    /// The things in the post-phase
     pub live: Vec<LiveTransaction>,
-    /// Bounded trees have no frontier after their final fork.
+    /// See the definition of `MetaFrontier`. Note the optional,
+    /// since the frontier can also be empty if we're just doing the
+    /// bounded (not steady-state) construction
     pub frontier: Option<MetaFrontier>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// When we're in the pre-phase, we may transition
+/// into a Fork state or continue in the pre-phase.
 pub enum MetaOutcome {
-    /// Reaches fork, or done for a protocol with no post-phase.
     Fork,
-    /// The selected protocol remains in its pre-phase after this cycle.
     Continue,
 }
 
@@ -77,30 +88,31 @@ pub enum ForkTiming {
     AtLeast(usize),
 }
 
+// A rotation is how much to rotate the instance numbers to reuse
+// an existing node. This is per-protocol. For a given protocol with N instances/banks,
+// the remapping of every instance number `i` is `i + amount (mod N)`
+// TODO: Standardize on Bank or Instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BankRotation {
     pub protocol: ProtocolId,
     pub amount: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InstanceShift {
-    pub protocol: ProtocolId,
-    pub amount: usize,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetaEdge {
+    // At every edge, a protocol (the one in the pre-phase) is forking, or continuing.
     pub protocol: ProtocolId,
+    // Did we choose to fork or continue?
     pub outcome: MetaOutcome,
     pub target: MetaNodeId,
-    pub instance_shifts: Vec<InstanceShift>,
+    // what rotations are required before transitioning to `target`
     pub rotations: Vec<BankRotation>,
+    /// if we are forking, some extra metadata about what cycles this counts for
+    /// this is useful mostly for debugging and printing the DOT file.
     pub fork_timing: Option<ForkTiming>,
     /// Number of cycles by which the meta-level post transactions advance.
     pub advance_cycles: usize,
-    /// Global display-superscript normalization, not a bank update.
-    canonical_shift: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,21 +123,30 @@ pub struct MetaNode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetaAutomaton {
+    // `protocols` and `bank_counts` are parallel arrays.
+    // `bank_counts[i]` are the number of banks required for `protocols[i]`
     pub protocols: Vec<ProtocolTiming>,
+    pub bank_counts: Vec<usize>,
     pub nodes: Vec<MetaNode>,
     pub entry: MetaNodeId,
-    pub bank_counts: Vec<usize>,
 }
 
 #[derive(Debug)]
+/// A temporary structure describing an edge to a new state.
 struct Successor {
+    /// The state produced by taking the edge
     state: MetaState,
+    /// Which protocol and by what outcome was the edge taken
     protocol: ProtocolId,
     outcome: MetaOutcome,
+
     fork_timing: Option<ForkTiming>,
     advance_cycles: usize,
 }
 
+// need >0 protocols as input with nonempty names
+// need >0 pre-phase lengths, and all should be > 0
+// there should be no duplicate protocol names
 fn validate_and_normalize(mut protocols: Vec<ProtocolTiming>) -> Vec<ProtocolTiming> {
     assert!(
         !protocols.is_empty(),
@@ -182,26 +203,27 @@ fn fork_successor(
     mut live: Vec<LiveTransaction>,
     protocols: &[ProtocolTiming],
     protocol: ProtocolId,
-    instance: usize,
+    bank: usize,
     introduce_next_choice: bool,
 ) -> MetaState {
     if protocols[protocol].post_cycles > 0 {
         live.push(LiveTransaction {
             protocol,
-            instance,
+            bank,
             post_cycle: protocols[protocol].post_cycles - 1,
         });
     }
-    live.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
+    live.sort_by_key(|transaction| (transaction.bank, transaction.protocol));
 
     MetaState {
         live,
         frontier: introduce_next_choice.then(|| MetaFrontier::Choice {
-            instance: instance.checked_add(1).expect("instance number overflow"),
+            instance: bank.checked_add(1).expect("instance number overflow"),
         }),
     }
 }
 
+/// Compute all one-cycle transitions from a state
 fn successors(
     state: &MetaState,
     protocols: &[ProtocolTiming],
@@ -274,7 +296,7 @@ fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
     let live_min = state
         .live
         .iter()
-        .map(|transaction| transaction.instance)
+        .map(|transaction| transaction.bank)
         .min();
     let frontier_min = state.frontier.map(|frontier| match frontier {
         MetaFrontier::Choice { instance } | MetaFrontier::Pre { instance, .. } => instance,
@@ -286,7 +308,7 @@ fn canonicalize(mut state: MetaState) -> (MetaState, usize) {
         .expect("steady-state nodes cannot be empty");
 
     for transaction in &mut state.live {
-        transaction.instance -= shift;
+        transaction.bank -= shift;
     }
     state.frontier = state.frontier.map(|frontier| match frontier {
         MetaFrontier::Choice { instance } => MetaFrontier::Choice {
@@ -310,7 +332,7 @@ fn push_bounded_node(
     nodes: &mut Vec<MetaNode>,
     protocols: &[ProtocolTiming],
     state: MetaState,
-    forks: usize,
+    forks_so_far: usize,
     fork_bound: usize,
 ) -> MetaNodeId {
     let id = nodes.len();
@@ -323,8 +345,8 @@ fn push_bounded_node(
         return id;
     }
 
-    for successor in successors(&state, protocols, forks + 1 < fork_bound) {
-        let next_forks = forks + usize::from(successor.outcome == MetaOutcome::Fork);
+    for successor in successors(&state, protocols, forks_so_far + 1 < fork_bound) {
+        let next_forks = forks_so_far + usize::from(successor.outcome == MetaOutcome::Fork);
         let target = if successor.outcome == MetaOutcome::Continue && successor.state == state {
             id
         } else {
@@ -334,11 +356,9 @@ fn push_bounded_node(
             protocol: successor.protocol,
             outcome: successor.outcome,
             target,
-            instance_shifts: Vec::new(),
             rotations: Vec::new(),
             fork_timing: successor.fork_timing,
             advance_cycles: successor.advance_cycles,
-            canonical_shift: 0,
         });
     }
     id
@@ -367,7 +387,7 @@ fn bank_counts(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
     counts
 }
 
-fn instance_shifts(state: &MetaState, protocol_count: usize, amount: usize) -> Vec<InstanceShift> {
+fn rotations(state: &MetaState, protocol_count: usize, amount: usize) -> Vec<BankRotation> {
     if amount == 0 {
         return Vec::new();
     }
@@ -382,7 +402,7 @@ fn instance_shifts(state: &MetaState, protocol_count: usize, amount: usize) -> V
     actual
         .into_iter()
         .enumerate()
-        .filter_map(|(protocol, actual)| actual.then_some(InstanceShift { protocol, amount }))
+        .filter_map(|(protocol, actual)| actual.then_some( BankRotation { protocol, amount }))
         .collect()
 }
 
@@ -393,7 +413,7 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
     let raw_target_live = |protocol, instance, post_cycle| {
         target.live.iter().any(|transaction| {
             transaction.protocol == protocol
-                && transaction.instance + edge.canonical_shift == instance
+                && transaction.bank == instance
                 && transaction.post_cycle == post_cycle
         })
     };
@@ -403,7 +423,7 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
         if transaction.post_cycle > 0 {
             assert!(raw_target_live(
                 transaction.protocol,
-                transaction.instance,
+                transaction.bank,
                 transaction.post_cycle - 1
             ));
         }
@@ -438,7 +458,7 @@ fn validate_fifo_edge(graph: &MetaAutomaton, source: MetaNodeId, edge: &MetaEdge
                     instance: target_instance,
                     ..
                 }) if target_protocol == protocol
-                    && target_instance + edge.canonical_shift == instance
+                    && target_instance == instance
             ));
         }
     }
@@ -450,7 +470,7 @@ fn add_rotations(graph: &mut MetaAutomaton) {
         for (edge_index, edge) in edges.iter().enumerate() {
             validate_fifo_edge(graph, source, edge);
             let rotations = edge
-                .instance_shifts
+                .rotations
                 .iter()
                 .filter_map(|shift| {
                     let amount = shift.amount % graph.bank_counts[shift.protocol];
@@ -469,13 +489,14 @@ pub fn bounded_driver_meta(protocols: Vec<ProtocolTiming>, fork_bound: usize) ->
     assert!(fork_bound > 0, "the fork bound must be nonzero");
     let protocols = validate_and_normalize(protocols);
     let mut nodes = Vec::new();
+    let initial_state = MetaState {
+        live: Vec::new(),
+        frontier: Some(MetaFrontier::Choice { instance: 0 }),
+    };
     let entry = push_bounded_node(
         &mut nodes,
         &protocols,
-        MetaState {
-            live: Vec::new(),
-            frontier: Some(MetaFrontier::Choice { instance: 0 }),
-        },
+        initial_state,
         0,
         fork_bound,
     );
@@ -507,7 +528,7 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
         let mut edges = Vec::new();
         for successor in successors(&state, &protocols, true) {
             let (canonical, canonical_shift) = canonicalize(successor.state);
-            let instance_shifts = instance_shifts(&canonical, protocols.len(), canonical_shift);
+            let rotations = rotations(&canonical, protocols.len(), canonical_shift);
             let target = if let Some(target) = states.get(&canonical) {
                 *target
             } else {
@@ -523,11 +544,9 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
                 protocol: successor.protocol,
                 outcome: successor.outcome,
                 target,
-                instance_shifts,
-                rotations: Vec::new(),
+                rotations,
                 fork_timing: successor.fork_timing,
                 advance_cycles: successor.advance_cycles,
-                canonical_shift,
             });
         }
         nodes[cursor].edges = edges;
