@@ -90,10 +90,15 @@ prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     self.SEL := X;
     self.DAT_O := X;
 
+    // since we do not support concurrent transactions that overlap more than
+    // one cycle, STB needs to be kept low until right before the cycle that we get the ACK in
+    self.STB := 1'b0;
+
     // wait for ack
     while self.ACK == 1'b0 {
         step();
     }
+    self.STB := X;
 
     // acknowledge is now true
     fork();
@@ -126,10 +131,15 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     self.ADR := X;
     self.SEL := X;
 
+    // since we do not support concurrent transactions that overlap more than
+    // one cycle, STB needs to be kept low until right before the cycle that we get the ACK in
+    self.STB := 1'b0;
+
     // wait for ack
     while self.ACK == 1'b0 {
         step();
     }
+    self.STB := X;
 
     // acknowledge is now true
     assert_eq(self.DAT_I, data); // TODO: mask

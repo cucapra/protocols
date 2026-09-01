@@ -1,0 +1,13 @@
+// Inspired by a ZPICPU wishbone implementation which uses the WB pipeline mode for multiple concurrent transactions
+CYC         0 1 1 1 1 1 1 1 1 1 1 1 1 0
+STB         0 1 1 1 1 1 1 1 1 0 0 0 0 0
+ACK         0 0 0 1 1 1 1 1 1 1 1 0 0 0
+ADR[31:0]   X 1 2 3 4 5 6 7 8 X X X X X
+WE          X 0 0 0 0 0 0 0 0 X X X X X
+DAT_I[31:0] X X X 8 7 6 5 4 3 2 1 X X X
+SEL[3:0]    X 0xf 0xf 0xf 0xf 0xf 0xf 0xf 0xf X X X X X
+STALL       0 0 0 0 0 0 0 0 0 0 0 0 0 0
+RST         0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ERR         0 0 0 0 0 0 0 0 0 0 0 0 0 0
+RTY         0 0 0 0 0 0 0 0 0 0 0 0 0 0
+DAT_O[31:0] X X X X X X X X X X X X X X
