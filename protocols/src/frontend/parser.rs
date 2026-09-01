@@ -31,6 +31,7 @@ lazy_static::lazy_static! {
         PrattParser::new()
             .op(Op::infix(eq, Left))
             .op(Op::infix(add, Left))
+            .op(Op::infix(and, Left))
             .op(Op::infix(concat, Left))
             .op(Op::prefix(not))
     };
@@ -152,6 +153,7 @@ fn parse_boxed_expr(
                 Rule::eq => BinOp::Equal,
                 Rule::concat => BinOp::Concat,
                 Rule::add => BinOp::Add,
+                Rule::and => BinOp::And,
                 rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
             };
             Ok(BoxedExpr::Binary(

@@ -301,21 +301,17 @@ impl Remapper<'_> {
                     let new_lhs = self.map_name_to_dut[&m.name];
                     let new_rhs = self.on_remap_expr(*map_sym_id, rhs, m.rhs);
                     let new_assign = self.out.s(Stmt::Assign(new_lhs, new_rhs));
-                    if m.cond != self.remap_ctx.expr_true() {
-                        let extra_assert_cond = self.on_remap_expr(*map_sym_id, rhs, m.cond);
-                        let (a, b) = if let Expr::Binary(BinOp::Equal, a, b) =
-                            self.out[extra_assert_cond].clone()
-                        {
-                            (a, b)
-                        } else {
-                            (extra_assert_cond, self.out.expr_true())
-                        };
-                        let extra_assert = self.out.s(Stmt::AssertEq(a, b));
+                    let extra_assert_cond = self.on_remap_expr(*map_sym_id, rhs, m.cond);
+                    let mut extra_asserts = self.instantiate_assign_cond(extra_assert_cond);
+                    if extra_asserts.is_empty() {
                         self.clone_stmt_loc(stmt, new_assign);
-                        self.clone_stmt_loc(stmt, extra_assert);
-                        self.out.s(Stmt::Block(vec![new_assign, extra_assert]))
-                    } else {
                         new_assign
+                    } else {
+                        extra_asserts.push(new_assign);
+                        for &new_stmt in &extra_asserts {
+                            self.clone_stmt_loc(stmt, new_stmt);
+                        }
+                        self.out.s(Stmt::Block(extra_asserts))
                     }
                 } else if let Some(cc) = self.const_lookup.get(&lhs) {
                     // we are assigning to a pin that has a constant value => make sure that the assigned value matches
@@ -362,6 +358,26 @@ impl Remapper<'_> {
         };
         self.clone_stmt_loc(stmt, new_stmt);
         new_stmt
+    }
+
+    fn instantiate_assign_cond(&mut self, extra_assert_cond: ExprId) -> Vec<StmtId> {
+        match self.out[extra_assert_cond].clone() {
+            Expr::Binary(BinOp::And, a, b) => {
+                let mut a = self.instantiate_assign_cond(a);
+                let mut b = self.instantiate_assign_cond(b);
+                a.append(&mut b);
+                a
+            }
+            Expr::Binary(BinOp::Equal, a, b) => {
+                vec![self.out.s(Stmt::AssertEq(a, b))]
+            }
+            _ => {
+                vec![
+                    self.out
+                        .s(Stmt::AssertEq(extra_assert_cond, self.out.expr_true())),
+                ]
+            }
+        }
     }
 
     fn clone_stmt_loc(&mut self, old_stmt: StmtId, new_stmt: StmtId) {

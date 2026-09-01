@@ -33,10 +33,11 @@ primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     not = { "!" }
-bin_op = _{ eq | concat | add }
+bin_op = _{ eq | concat | add | and }
     eq = { "==" }
     concat = { "##" }
     add = { "+" }
+    and = { "&" }
 
 // handle binary operations and indexing operations
 expr = { atom ~ (bin_op ~ atom)*}
