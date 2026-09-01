@@ -17,7 +17,7 @@ digraph "driver_meta" {
   node2 -> node3 [label=<A forks>];
   node2 -> node4 [label=<S forks>];
   node3 [label=<S<SUB>0</SUB><SUP>(0)</SUP> ∧ A<SUB>0</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
-  node3 -> node1 [label=<A forks>];
+  node3 -> node1 [label=<A forks / R<SUB>A</SUB><SUP>2</SUP>>];
   node3 -> node2 [label=<S forks / R<SUB>S</SUB><SUP>2</SUP>>];
   node4 [label=<S<SUB>0</SUB><SUP>(0)</SUP> ∧ S<SUB>1</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
   node4 -> node3 [label=<A forks / R<SUB>A</SUB>, R<SUB>S</SUB>>];

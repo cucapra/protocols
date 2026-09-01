@@ -30,5 +30,5 @@ digraph "driver_meta" {
   node6 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ SUB<SUB>0</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
   node6 -> node1 [label=<ADD forks / R<SUB>ADD</SUB><SUP>2</SUP>>];
   node6 -> node2 [label=<ADD continues / R<SUB>ADD</SUB><SUP>2</SUP>>];
-  node6 -> node3 [label=<SUB forks>];
+  node6 -> node3 [label=<SUB forks / R<SUB>SUB</SUB><SUP>2</SUP>>];
 }

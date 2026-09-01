@@ -1,4 +1,4 @@
-use crate::ir::meta_automaton::{MetaAutomaton, PrePhase, MetaOutcome, MetaState};
+use crate::ir::meta_automaton::{MetaAutomaton, MetaOutcome, MetaState, PrePhase};
 
 fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
     let mut parts: Vec<String> = state

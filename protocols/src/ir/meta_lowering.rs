@@ -8,7 +8,7 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::{contract_edges, contract_edges_from};
 use crate::ir::lowering::{Lowerer, lower_ast_to_ir};
 use crate::ir::meta_automaton::{
-    MetaAutomaton, PrePhase, MetaOutcome, bounded_driver_meta, steady_driver_meta,
+    MetaAutomaton, MetaOutcome, PrePhase, bounded_driver_meta, steady_driver_meta,
 };
 use crate::ir::meta_timing::analyze_protocol_timing;
 use crate::ir::proto_graph::{
@@ -498,9 +498,7 @@ fn lower_exact_meta_driver_nfa(
 
                     let target_frontier = meta.nodes[edge.target].state.pre_phase;
                     let target_control = match (edge.outcome, target_frontier) {
-                        (MetaOutcome::Continue, Some(PrePhase::Pre { .. })) => {
-                            Some(step.target)
-                        }
+                        (MetaOutcome::Continue, Some(PrePhase::Pre { .. })) => Some(step.target),
                         _ => None,
                     };
                     let target = *driver_nodes

@@ -21,12 +21,12 @@ digraph "driver_meta" {
   node3 [label=<id<SUB>0</SUB><SUP>(0)</SUP> ∧ id<SUB>1</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
   node3 -> node3 [label=<id forks / R<SUB>id</SUB>>];
   node3 -> node4 [label=<w forks / R<SUB>id</SUB>>];
-  node3 -> node5 [label=<w continues / R<SUB>id</SUB>>];
+  node3 -> node5 [label=<w continues / R<SUB>id</SUB>, R<SUB>w</SUB>>];
   node4 [label=<id<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(2)</SUP>>];
   node4 -> node1 [label=<id forks / R<SUB>id</SUB><SUP>2</SUP>>];
   node4 -> node0 [label=<w forks>];
-  node4 -> node2 [label=<w continues>];
+  node4 -> node2 [label=<w continues / R<SUB>w</SUB><SUP>2</SUP>>];
   node5 [label=<id<SUB>0</SUB><SUP>(0)</SUP> ∧ w<SUB>pre[1]</SUB><SUP>(1)</SUP>>];
   node5 -> node0 [label=<w forks>];
-  node5 -> node2 [label=<w continues>];
+  node5 -> node2 [label=<w continues / R<SUB>w</SUB>>];
 }

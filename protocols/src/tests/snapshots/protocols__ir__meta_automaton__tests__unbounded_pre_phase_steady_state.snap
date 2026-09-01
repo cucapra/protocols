@@ -28,8 +28,8 @@ digraph "driver_meta" {
   node4 -> node6 [label=<WAIT continues / R<SUB>ADD</SUB>, R<SUB>WAIT</SUB>>];
   node5 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ WAIT<SUB>0</SUB><SUP>(1)</SUP> ∧ E<SUP>(2)</SUP>>];
   node5 -> node1 [label=<ADD forks / R<SUB>ADD</SUB><SUP>2</SUP>>];
-  node5 -> node2 [label=<WAIT forks>];
-  node5 -> node3 [label=<WAIT continues>];
+  node5 -> node2 [label=<WAIT forks / R<SUB>WAIT</SUB><SUP>2</SUP>>];
+  node5 -> node3 [label=<WAIT continues / R<SUB>WAIT</SUB><SUP>2</SUP>>];
   node6 [label=<ADD<SUB>0</SUB><SUP>(0)</SUP> ∧ WAIT<SUB>pre[1]</SUB><SUP>(1)</SUP>>];
   node6 -> node2 [label=<WAIT forks / R<SUB>WAIT</SUB>>];
   node6 -> node3 [label=<WAIT continues / R<SUB>WAIT</SUB>>];
