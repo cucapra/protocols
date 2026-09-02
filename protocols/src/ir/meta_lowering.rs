@@ -8,7 +8,7 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::{contract_edges, contract_edges_from};
 use crate::ir::lowering::{Lowerer, lower_ast_to_ir};
 use crate::ir::meta_automaton::{
-    MetaAutomaton, MetaFrontier, MetaOutcome, bounded_driver_meta, steady_driver_meta,
+    MetaAutomaton, MetaOutcome, PrePhase, bounded_driver_meta, steady_driver_meta,
 };
 use crate::ir::meta_timing::analyze_protocol_timing;
 use crate::ir::proto_graph::{
@@ -315,13 +315,13 @@ fn lower_exact_meta_driver_nfa(
     // concrete pre-phase control node for a Pre meta state.
     let mut driver_nodes: FxHashMap<(usize, Option<NodeId>), NodeId> = FxHashMap::default();
     for (meta_id, meta_node) in meta.nodes.iter().enumerate() {
-        match meta_node.state.frontier {
-            Some(MetaFrontier::Pre { protocol, .. }) => {
+        match meta_node.state.pre_phase {
+            Some(PrePhase::Pre { protocol, .. }) => {
                 for &control in &pre_nodes[protocol] {
                     driver_nodes.insert((meta_id, Some(control)), lowerer.ir.n(Node::empty()));
                 }
             }
-            Some(MetaFrontier::Choice { .. }) | None => {
+            Some(PrePhase::Choice { .. }) | None => {
                 driver_nodes.insert((meta_id, None), lowerer.ir.n(Node::empty()));
             }
         }
@@ -335,7 +335,7 @@ fn lower_exact_meta_driver_nfa(
             .collect();
 
         for (control, driver) in variants {
-            for transaction in &meta_node.state.live {
+            for transaction in &meta_node.state.post_phase {
                 let protocol = transaction.protocol;
                 let index = meta.protocols[protocol].post_cycles - 1 - transaction.post_cycle;
                 let substitutions = instance_substitutions(
@@ -352,8 +352,8 @@ fn lower_exact_meta_driver_nfa(
                 lowerer.graft_contracted_entry(driver, copy, lowerer.ir.true_id());
             }
 
-            match (meta_node.state.frontier, control) {
-                (Some(MetaFrontier::Choice { instance }), None) => {
+            match (meta_node.state.pre_phase, control) {
+                (Some(PrePhase::Choice { instance }), None) => {
                     let choices: Vec<_> = protocols
                         .iter()
                         .enumerate()
@@ -378,7 +378,7 @@ fn lower_exact_meta_driver_nfa(
                     lowerer.graft_disjoint_contracted_entries(driver, &choices);
                 }
                 (
-                    Some(MetaFrontier::Pre {
+                    Some(PrePhase::Pre {
                         protocol, instance, ..
                     }),
                     Some(control),
@@ -411,15 +411,15 @@ fn lower_exact_meta_driver_nfa(
             .collect();
 
         for (control, driver) in variants {
-            let frontier = meta_node.state.frontier;
+            let frontier = meta_node.state.pre_phase;
             let (frontier_protocol, instance, source) = match (frontier, control) {
-                (Some(MetaFrontier::Choice { instance }), None) => {
+                (Some(PrePhase::Choice { instance }), None) => {
                     // A Choice node has one concrete source per selected
                     // protocol; the loop below supplies that source.
                     (None, instance, None)
                 }
                 (
-                    Some(MetaFrontier::Pre {
+                    Some(PrePhase::Pre {
                         protocol, instance, ..
                     }),
                     Some(control),
@@ -462,7 +462,7 @@ fn lower_exact_meta_driver_nfa(
                     lowerer.ir.true_id()
                 };
 
-                for transaction in &meta_node.state.live {
+                for transaction in &meta_node.state.post_phase {
                     let live_protocol = transaction.protocol;
                     let index =
                         meta.protocols[live_protocol].post_cycles - 1 - transaction.post_cycle;
@@ -496,11 +496,9 @@ fn lower_exact_meta_driver_nfa(
                         continue;
                     }
 
-                    let target_frontier = meta.nodes[edge.target].state.frontier;
+                    let target_frontier = meta.nodes[edge.target].state.pre_phase;
                     let target_control = match (edge.outcome, target_frontier) {
-                        (MetaOutcome::Continue, Some(MetaFrontier::Pre { .. })) => {
-                            Some(step.target)
-                        }
+                        (MetaOutcome::Continue, Some(PrePhase::Pre { .. })) => Some(step.target),
                         _ => None,
                     };
                     let target = *driver_nodes
@@ -527,7 +525,7 @@ fn lower_exact_meta_driver_nfa(
     let choice_instances: FxHashMap<_, _> = driver_nodes
         .iter()
         .filter_map(|(&(meta_id, control), &node)| {
-            let Some(MetaFrontier::Choice { instance }) = meta.nodes[meta_id].state.frontier else {
+            let Some(PrePhase::Choice { instance }) = meta.nodes[meta_id].state.pre_phase else {
                 return None;
             };
             control.is_none().then_some((node, instance))
