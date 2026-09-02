@@ -81,20 +81,11 @@ pub enum MetaOutcome {
     Continue,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ForkTiming {
-    /// These exact pre-phase lengths all produce the same meta successor.
-    Exact(Vec<usize>),
-    /// Every length at least this value has the same drained context.
-    AtLeast(usize),
-}
-
 // A rotation is how much to rotate the instance numbers to reuse
-// an existing node. This is per-protocol. For a given protocol with N instances/banks,
-// the remapping of every instance number `i` is `i + amount (mod N)`
-// TODO: Standardize on Bank or Instance.
+// an existing node. This is per-protocol. For a given protocol,
+// the remapping of every instance number `i` is `i - amount`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BankRotation {
+pub struct Rotation {
     pub protocol: ProtocolId,
     pub amount: usize,
 }
@@ -107,7 +98,7 @@ pub struct MetaEdge {
     pub outcome: MetaOutcome,
     pub target: MetaNodeId,
     // what rotations are required before transitioning to `target`
-    pub rotations: Vec<BankRotation>,
+    pub rotations: Vec<Rotation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,7 +112,7 @@ pub struct MetaAutomaton {
     // `protocols` and `bank_counts` are parallel arrays.
     // `bank_counts[i]` are the number of banks required for `protocols[i]`
     pub protocols: Vec<ProtocolTiming>,
-    pub bank_counts: Vec<usize>,
+    pub instance_capacity: Vec<usize>,
     pub nodes: Vec<MetaNode>,
     pub entry: MetaNodeId,
 }
@@ -190,12 +181,13 @@ fn fork_successor(
             post_cycle: protocols[protocol].post_cycles - 1,
         });
     }
-    post_phase_txs.sort_by_key(|transaction| (transaction.instance, transaction.protocol));
+    // Existing instances were created by earlier forks, so the new instance
+    // is already last in logical-instance order. Advancing preserves order.
 
     MetaState {
         post_phase: post_phase_txs,
         pre_phase: introduce_next_choice.then(|| PrePhase::Choice {
-            instance: instance.checked_add(1).expect("instance number overflow"),
+            instance: instance + 1,
         }),
     }
 }
@@ -213,22 +205,34 @@ fn successors(
     };
     let mut result = Vec::new();
 
-    let choices: Vec<_> = match pre_phase {
-        // Every protocol is a choice, with the same instance number and 0 cycles have elapsed
-        // (Since we're currently in the first cycle of their life).
-        PrePhase::Choice { instance } => (0..protocols.len())
-            .map(|protocol| (protocol, instance, 0))
-            .collect(),
-        // There is only one protocol in the pre-phase, and it has existing bank and cycles
-        // elapsed data
-        PrePhase::Pre {
-            protocol,
-            instance,
-            elapsed,
-        } => vec![(protocol, instance, elapsed)],
-    };
+    // Advancing the post-phase is independent of which protocol is selected.
+    let advanced: Vec<PostPhaseTransaction> = state
+        .post_phase
+        .iter()
+        .filter_map(|transaction| {
+            if transaction.post_cycle == 0 {
+                None
+            } else {
+                Some(PostPhaseTransaction {
+                    post_cycle: transaction.post_cycle - 1,
+                    ..*transaction
+                })
+            }
+        })
+        .collect();
 
-    for (protocol, instance, elapsed) in choices {
+    for protocol in 0..protocols.len() {
+        let (instance, elapsed) = match pre_phase {
+            // Every protocol is a choice, with the same instance number and 0 cycles elapsed.
+            PrePhase::Choice { instance } => (instance, 0),
+            // A Pre state has exactly one eligible protocol.
+            PrePhase::Pre {
+                protocol: active_protocol,
+                instance,
+                elapsed,
+            } if protocol == active_protocol => (instance, elapsed),
+            PrePhase::Pre { .. } => continue,
+        };
         let next = elapsed + 1;
         let timing = protocols[protocol].pre_cycles.as_deref();
 
@@ -237,24 +241,6 @@ fn successors(
 
         // we can continue if the number of cycles elapsed is less than one of the pre_cycles lengths
         let can_continue = timing.is_none_or(|lengths| lengths.last().copied().unwrap() > next);
-
-        // everything in the post-phase needs to be advanced 1 cycle
-        // TODO: can we do this in place
-        let advanced: Vec<PostPhaseTransaction> = state
-            .post_phase
-            .iter()
-            // drop the transaction if its
-            .filter_map(|transaction| {
-                if transaction.post_cycle == 0 {
-                    None
-                } else {
-                    Some(PostPhaseTransaction {
-                        post_cycle: transaction.post_cycle - 1,
-                        ..*transaction
-                    })
-                }
-            })
-            .collect();
 
         if can_fork {
             result.push(Successor {
@@ -272,7 +258,7 @@ fn successors(
         if can_continue {
             result.push(Successor {
                 state: MetaState {
-                    post_phase: advanced,
+                    post_phase: advanced.clone(),
                     pre_phase: Some(PrePhase::Pre {
                         protocol,
                         instance,
@@ -363,7 +349,7 @@ fn rotations_between(
     source: &MetaState,
     target: &MetaState,
     protocol_count: usize,
-) -> Option<Vec<BankRotation>> {
+) -> Option<Vec<Rotation>> {
     (0..protocol_count)
         .map(|protocol| {
             let shift = shift_between(
@@ -377,7 +363,7 @@ fn rotations_between(
             shifts
                 .into_iter()
                 .filter_map(|(protocol, amount)| {
-                    (amount != 0).then_some(BankRotation { protocol, amount })
+                    (amount != 0).then_some(Rotation { protocol, amount })
                 })
                 .collect()
         })
@@ -418,7 +404,7 @@ fn push_bounded_node(
     id
 }
 
-fn bank_counts(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
+fn instance_capacity(protocol_count: usize, nodes: &[MetaNode]) -> Vec<usize> {
     let mut counts = vec![0; protocol_count];
     for node in nodes {
         let mut state_counts = vec![0; protocol_count];
@@ -450,12 +436,12 @@ pub fn bounded_driver_meta(protocols: Vec<ProtocolTiming>, fork_bound: usize) ->
         pre_phase: Some(PrePhase::Choice { instance: 0 }),
     };
     let entry = push_bounded_node(&mut nodes, &protocols, initial_state, 0, fork_bound);
-    let bank_counts = bank_counts(protocols.len(), &nodes);
+    let instance_capacity = instance_capacity(protocols.len(), &nodes);
     MetaAutomaton {
         protocols,
         nodes,
         entry,
-        bank_counts,
+        instance_capacity,
     }
 }
 
@@ -503,12 +489,12 @@ pub fn steady_driver_meta(protocols: Vec<ProtocolTiming>) -> MetaAutomaton {
         cursor += 1;
     }
 
-    let bank_counts = bank_counts(protocols.len(), &nodes);
+    let instance_capacity = instance_capacity(protocols.len(), &nodes);
     MetaAutomaton {
         protocols,
         nodes,
         entry: 0,
-        bank_counts,
+        instance_capacity,
     }
 }
 
