@@ -1,0 +1,2 @@
+ethmac.* filter=lfs diff=lfs merge=lfs -text
+ethmac_timings.* filter=lfs diff=lfs merge=lfs -text
