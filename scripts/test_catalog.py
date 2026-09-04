@@ -4,6 +4,33 @@
 # TX_CASES are keyed by their .tx path. BI_CASES are keyed by a unique id
 
 TX_CASES = {
+    "examples/apb/ip_apb.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": (
+            "examples/apb/rtl/ip_apb_slave.sv",
+            "examples/apb/rtl/ip_apb_dut.v",
+        ),
+        "top": "ip_apb_dut",
+        "expect": "pass",
+    },
+    "examples/apb/ch_apb_actual.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": (
+            "examples/apb/rtl/ch_apb_slave.sv",
+            "examples/apb/rtl/ch_apb_dut.v",
+        ),
+        "top": "ch_apb_dut",
+        "expect": "pass",
+    },
+    "examples/apb/ch_apb.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": (
+            "examples/apb/rtl/ch_apb_slave.sv",
+            "examples/apb/rtl/ch_apb_dut.v",
+        ),
+        "top": "ch_apb_dut",
+        "expect": "assertion_mismatch",
+    },
     "examples/picorv32/unsigned_mul.tx": {
         "protocol": "examples/picorv32/pcpi_mul.prot",
         "verilog": ("examples/picorv32/picorv32.v",),
@@ -489,6 +516,55 @@ TX_CASES = {
 }
 
 BI_CASES = {
+    "examples.apb.ip_apb_interp_fst": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/ip_apb_0.fst",
+        "instances": ("dut:APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps",),
+    },
+    "examples.apb.spec_fig_3_1": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.1_write_transfer_with_no_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_2": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.2_write_transfer_with_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_4": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.4_read_transfer_with_no_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_5": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.5_read_transfer_with_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_6": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.6_example_failing_write_transfer.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_7": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.7_example_failing_read_transfer.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
     "tests.adders.add_d1": {
         "protocol": "tests/adders/add_d1.prot",
         "wave": "tests/adders/add_d1.fst",
