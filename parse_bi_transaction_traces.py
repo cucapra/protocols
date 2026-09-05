@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""Analyzes the output of the BI and classifies tranasctions 
+as idle, reset, or non-trivial (i.e. not idle and not reset), 
+computing the no. of cycles taken for each type of transactions.
+
+Note:
+- We assume there is only one trace in the BI output
+- We assume that the BI output was produced using `--include-idle` and `--show-waveform-time`
+  (i.e. timing information in ns and idle transactions are included in the BI output)
+"""
+
 import argparse
 import re
 import sys
@@ -8,8 +18,8 @@ TRANSACTION_RE = re.compile(
     r"(?P<transaction>.*?);  // \[time: (?P<start>\d+)ns -> (?P<end>\d+)ns\]"
 )
 
-# Names of idle transactions
-IDLE_TRANSACTIONS = ("idle_no_cycle", "idle_continue_cycle", "idle")
+# Names of idle transactions (this is for `wishbone.prot`)
+IDLE_TRANSACTIONS = ("idle_no_cycle", "idle_continue_cycle")
 
 
 def classify_transaction(transaction):
