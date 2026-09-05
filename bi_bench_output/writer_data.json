@@ -1,0 +1,50 @@
+{
+  "results": [
+    {
+      "command": "./target/release/bi -p examples/wishbone/wishbone.prot -p examples/wishbone/wb_stream.prot --wave ../protocols-evaluation/wishbone/wb_streamer/wb_stream_writer_tb.fst --instances wb_stream_writer_tb.dut:WishboneData",
+      "mean": 1.50021458634,
+      "stddev": 0.016166831718335207,
+      "median": 1.4926601929399999,
+      "user": 1.4806923399999998,
+      "system": 0.01940756,
+      "min": 1.48285589044,
+      "max": 1.52562125044,
+      "times": [
+        1.50782026844,
+        1.52562125044,
+        1.49248637744,
+        1.52148184644,
+        1.49283400844,
+        1.48285589044,
+        1.51696052544,
+        1.4860517474400001,
+        1.48688598444,
+        1.48914796444
+      ],
+      "memory_usage_byte": [
+        21614592,
+        21655552,
+        21655552,
+        21655552,
+        21655552,
+        21663744,
+        21663744,
+        21663744,
+        21663744,
+        21663744
+      ],
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}
