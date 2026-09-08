@@ -92,6 +92,11 @@ struct Cli {
     /// Allow arguments to appear in while/if conditions
     #[arg(long)]
     allow_branch_on_arg: bool,
+
+    /// Sample the wall-clock time every N steps (clock cycles) and print all the `step,elapsed_us`
+    /// measurements to stderr once the BI finishes
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    print_time_every_n_cycles: Option<u32>,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -199,12 +204,20 @@ fn main() {
             sampling_mode,
             cli.force_x_to_zero,
         ) {
-            run_bis(bis.as_mut_slice(), &mut trace)
+            run_bis(
+                bis.as_mut_slice(),
+                &mut trace,
+                cli.print_time_every_n_cycles,
+            )
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
             let mut trace =
                 AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
-            run_bis(bis.as_mut_slice(), &mut trace)
+            run_bis(
+                bis.as_mut_slice(),
+                &mut trace,
+                cli.print_time_every_n_cycles,
+            )
         }
     }
     .unwrap();
@@ -300,8 +313,12 @@ fn main() {
 fn run_bis(
     bis: &mut [BackwardsInterpreter],
     trace: &mut impl SignalTrace,
+    print_time_every_n_cycles: Option<u32>,
 ) -> Result<StepToTime, String> {
-    trace.stream_steps(|_step_id, values| {
+    let start = std::time::Instant::now();
+    let mut samples: Vec<(u32, u128)> = Vec::new();
+    let mut num_cycles_till_snapshot = 0u32;
+    trace.stream_steps(|step_id, values| {
         // step all backwards interpreters that have not failed
         let mut r = CallbackResult::Stop;
         for bi in bis.iter_mut() {
@@ -312,12 +329,26 @@ fn run_bis(
                 }
             }
         }
+        if let Some(n) = print_time_every_n_cycles {
+            if num_cycles_till_snapshot == 0 {
+                samples.push((step_id, start.elapsed().as_micros()));
+                num_cycles_till_snapshot = n;
+            }
+            num_cycles_till_snapshot -= 1;
+        }
         r
     })?;
 
     for bi in bis.iter_mut() {
         if !bi.has_failed() {
             bi.finish();
+        }
+    }
+
+    if print_time_every_n_cycles.is_some() {
+        eprintln!("step,elapsed_us");
+        for (step, elapsed_us) in samples {
+            eprintln!("{step},{elapsed_us}");
         }
     }
 
