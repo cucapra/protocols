@@ -316,8 +316,10 @@ fn run_bis(
     print_time_every_n_cycles: Option<u32>,
 ) -> Result<StepToTime, String> {
     let start = std::time::Instant::now();
-    let mut samples: Vec<(u32, u128)> = Vec::new();
     let mut num_cycles_till_snapshot = 0u32;
+    if print_time_every_n_cycles.is_some() {
+        eprintln!("step,elapsed_us");
+    }
     trace.stream_steps(|step_id, values| {
         // step all backwards interpreters that have not failed
         let mut r = CallbackResult::Stop;
@@ -331,7 +333,7 @@ fn run_bis(
         }
         if let Some(n) = print_time_every_n_cycles {
             if num_cycles_till_snapshot == 0 {
-                samples.push((step_id, start.elapsed().as_micros()));
+                eprintln!("{step_id},{}", start.elapsed().as_micros());
                 num_cycles_till_snapshot = n;
             }
             num_cycles_till_snapshot -= 1;
@@ -342,13 +344,6 @@ fn run_bis(
     for bi in bis.iter_mut() {
         if !bi.has_failed() {
             bi.finish();
-        }
-    }
-
-    if print_time_every_n_cycles.is_some() {
-        eprintln!("step,elapsed_us");
-        for (step, elapsed_us) in samples {
-            eprintln!("{step},{elapsed_us}");
         }
     }
 
