@@ -1,0 +1,19 @@
+// ARGS: --verilog mf8/mf8_reg.v --protocol mf8/mf8_regfile.prot --module mf8_reg
+
+// Arguments are:
+// in rd_addr: u5,  
+// in rr_addr: u5,    (address of a read-only register)
+// in write_en: u1,   (set to 1 if we want to write to `rd_addr`)
+// in write_data: u8,
+// out rd_data: u8,
+// out rr_data: u8
+
+// Example transactions for MF8 dual-port register file
+// Both RAMD and RAMR initialize to 0x00
+// Writes go to both arrays simultaneously at the buffered write address
+
+// Transaction 1: Write 0x42 to address 5
+read_write(5, 0, 1, 0x42, 0, 0);
+
+// Transaction 2: Read back the written value from both ports
+read_write(5, 5, 0, 0, 0x42, 0x42);
