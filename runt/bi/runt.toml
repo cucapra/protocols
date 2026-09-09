@@ -1,6 +1,69 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "bi.examples_apb_apb.3_1_write_transfer_with_no_wait_states_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "3_1_write_transfer_with_no_wait_states.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/3.1_write_transfer_with_no_wait_states.wave --instances :APB --show-steps --include-idle --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_apb_apb.3_2_write_transfer_with_wait_states_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "3_2_write_transfer_with_wait_states.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/3.2_write_transfer_with_wait_states.wave --instances :APB --show-steps --include-idle --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_apb_apb.3_4_read_transfer_with_no_wait_states_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "3_4_read_transfer_with_no_wait_states.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/3.4_read_transfer_with_no_wait_states.wave --instances :APB --show-steps --include-idle --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_apb_apb.3_5_read_transfer_with_wait_states_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "3_5_read_transfer_with_wait_states.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/3.5_read_transfer_with_wait_states.wave --instances :APB --show-steps --include-idle --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_apb_apb.3_6_example_failing_write_transfer_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "3_6_example_failing_write_transfer.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/3.6_example_failing_write_transfer.wave --instances :APB --show-steps --include-idle --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_apb_apb.3_7_example_failing_read_transfer_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "3_7_example_failing_read_transfer.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/3.7_example_failing_read_transfer.wave --instances :APB --show-steps --include-idle --display-hex 2>&1"
+
+[[tests]]
+name = "bi.examples_apb_apb.ip_apb_0_bi"
+paths = [
+  "../../examples/apb/apb.prot",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb_0.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/ip_apb_0.fst --instances dut:APB --show-steps 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.ethmac_first_62us_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",

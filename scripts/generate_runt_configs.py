@@ -74,12 +74,17 @@ def replace_non_alphanumerics(value: object) -> str:
 
 
 def case_stem(case: dict) -> str:
-    # Antmicro & Brave New World test cases for the BI share the same `.prot`
-    # file but have multiple waveforms, so we use the waveform files'
+    # Antmicro, Brave New World & APB test cases for the BI share the same
+    # `.prot` file but have multiple waveforms, so we use the waveform files'
     # names to identify a particular test, otherwise we use the `.prot` file's stem
     # to identify a test
     wave = case.get("wave")
-    if wave and ("antmicro" in wave or "fpga-debugging" in wave or "ethmac" in wave):
+    if wave and (
+        "antmicro" in wave
+        or "fpga-debugging" in wave
+        or "ethmac" in wave
+        or "apb" in wave
+    ):
         return Path(wave).stem
     # for all the .wave bi benchmarks, we use the id
     if wave and (wave.endswith(".wave") or "litex" in wave or "wb_stream" in wave):

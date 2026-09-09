@@ -1,6 +1,24 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "fail.examples_apb_ch_apb.ch_apb_fail.graph"
+paths = [
+  "../../examples/apb/ch_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb.fail.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb.tx --respect-forks --determinize --brief-graph-errors --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "fail.examples_apb_ch_apb.ch_apb_fail.ts"
+paths = [
+  "../../examples/apb/ch_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb.fail.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb.tx --transition-system --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
 name = "fail.tests_adders_adder_d1_add_incorrect.add_incorrect_fail.graph"
 paths = [
   "../../tests/adders/adder_d1/add_incorrect.tx",

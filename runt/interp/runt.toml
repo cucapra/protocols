@@ -1,6 +1,33 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "interp.examples_apb_ch_apb.ch_apb_interp"
+paths = [
+  "../../examples/apb/ch_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ch_apb.tx --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>&1"
+
+[[tests]]
+name = "interp.examples_apb_ch_apb_actual.ch_apb_actual_interp"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ch_apb_actual.tx --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>&1"
+
+[[tests]]
+name = "interp.examples_apb_ip_apb.ip_apb_interp"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ip_apb.tx --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>&1"
+
+[[tests]]
 name = "interp.examples_picorv32_unsigned_mul.unsigned_mul_interp"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",

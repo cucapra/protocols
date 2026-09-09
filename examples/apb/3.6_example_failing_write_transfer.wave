@@ -1,0 +1,25 @@
+// https://support.arm.com/documentation/ihi0024/e/
+// Figure 3-6 "Example failing write transfer" (section 3.4.1)
+
+// Note: we assume that PENABLE and PLSVERR are 0 during idle (i.e. before/after the write transaction),
+// as Appendix A.1 of the APB spec recommends that "signals which are not required to be valid (meaningful)
+// are driven to zero".
+
+
+// The figure in the spec omits the following signals:
+// - PRESETn (this is a write operation, not a reset, so we set it to 1 as it is active-low)
+// - PSTRB (we assume all 4 bytes of PWDATA are valid, so we set this to 0xF)
+// - PPROT (we assume this is a normal data access, so we set this to 0)
+// - PRDATA (this is a write operation, so read data is DontCare)
+
+PRESETn      1   1   1   1 1
+PSEL         0   1   1   1 0
+PENABLE      0   0   1   1 0
+PWRITE       x   1   1   1 x
+PADDR[31:0]  x 0x1 0x1 0x1 x   // "Addr 1"
+PWDATA[31:0] x 0x1 0x1 0x1 x   // "Data 1"
+PSTRB[3:0]   x 0xf 0xf 0xf x
+PPROT[2:0]   x   0   0   0 x
+PRDATA[31:0] x   x   x   x x
+PREADY       x   x   0   1 x
+PSLVERR      0   0   0   1 0

@@ -1,0 +1,17 @@
+// Arguments for read & write transactions: 
+// write(addr, data, strb, pprot, slverr)
+// read (addr, data, pprot, slverr)
+trace {
+    reset();
+    idle();
+    
+    // Write and read to the same address
+    write(0x00, 0xDEADC0DE, 0xF, 0x0, 0x0);
+    read(0x00, 0xDEADC0DE, 0x0, 0x0);
+    
+    // Write & read to another address
+    write(0x08, 0x0000BEEF, 0xF, 0x0, 0x0);
+    read(0x08, 0x0000BEEF, 0x0, 0x0);
+    
+    idle();
+}

@@ -1,6 +1,78 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "waveform.examples_apb_ch_apb_actual.ch_apb_actual_waveform.ast"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ch_apb_actual.tx --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ch_apb_actual.ch_apb_actual_waveform.graph"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --respect-forks --determinize --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ch_apb_actual.ch_apb_actual_waveform.ts"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --transition-system --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ch_apb_actual.ch_apb_actual_waveform.bmc"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --bound 6 --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ip_apb.ip_apb_waveform.ast"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ip_apb.tx --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ip_apb.ip_apb_waveform.graph"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --respect-forks --determinize --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ip_apb.ip_apb_waveform.ts"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --transition-system --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_apb_ip_apb.ip_apb_waveform.bmc"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --bound 7 --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_picorv32_unsigned_mul.unsigned_mul_waveform.ast"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",
