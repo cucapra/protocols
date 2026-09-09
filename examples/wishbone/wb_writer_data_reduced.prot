@@ -1,0 +1,93 @@
+// Wishbone pins for this project from the server (the one servicing requests) perspective
+interface Wishbone {
+    // high active RST pin (the wishbone spec requires all signals to be high active)
+    in RST: u1,
+    // acknowledge (from server)
+    out ACK: u1,
+    // address (from client)
+    in ADR: u32,
+    // cycle output, indicates bus cycle in progress (from client)
+    in CYC: u1,
+    // read data from server
+    out DAT_I: u32,
+    // write data from client
+    in DAT_O: u32,
+    // error from server
+    out ERR: u1,
+    // request to retry from server
+    out RTY: u1,
+    // mask for data in/out from client
+    in SEL: u4,
+    // indicates a valid transfer cycle from client
+    in STB: u1,
+    // write enable (i.e. not read) from client
+    in WE: u1,
+    ///// 4.2 WISHBONE Registered Feedback
+    // burst type extension
+    // used for incrementing bursts
+    // 0: linear burst
+    // 1: 4-beat wrap burst
+    // 2: 8-beat wrap burst
+    // 3: 16-beat wrap burst
+    in BTE: u2,
+    // cycle type identifier
+    // 0: classic cycle
+    // 1: constant address burst cycle
+    // 2: incrementing burst cycle
+    // 3-6: reserved
+    // 7: end of burst
+    in CTI: u3,
+    // no LOCK
+}
+
+prot reset<self: Wishbone>() {
+    self.RST := 1'b1;
+    self.CYC := 1'b0;
+    self.STB := 1'b0;
+    step();
+}
+
+#[idle]
+prot idle_no_cycle<self: Wishbone>() {
+    self.RST := 1'b0;
+    self.CYC := 1'b0;
+    step();
+}
+
+prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data: [u32]++) {
+    assert_eq(mask, 4'b1111); // TODO: support other masks
+
+    // no RST
+    self.RST := 1'b0;
+    // incremental linear burst
+    self.CTI := 3'b010;
+    self.BTE := 2'b00;
+
+    // in our simple version, we always drive cyc and stb together
+    self.CYC := 1'b1;
+    self.STB := 1'b1;
+
+    // we are reading
+    self.WE := 1'b0;
+
+    // apply parameters
+    self.SEL := mask;
+
+    for d in data {
+        self.ADR := start_addr + (iter_count::<u30>() ## 2'b00);
+
+        // indicate end of cycle for last item
+        if is_last() {
+            self.CTI := 3'b111;
+        }
+
+        // wait for ack
+        while self.ACK == 1'b0 {
+            step();
+        }
+
+        // acknowledge is now true for one cycle and we get the data
+        assert_eq(self.DAT_I, d); // TODO: take mask into account
+        step();
+    }
+}
