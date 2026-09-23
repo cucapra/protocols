@@ -12,6 +12,12 @@ members = [
 name = "functional-models"
 version = "0.1.0"
 source = { virtual = "functional-models" }
+dependencies = [
+    { name = "pypatronus" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pypatronus", specifier = "==0.39.4" }]
 
 [[package]]
 name = "protocols"
@@ -30,6 +36,30 @@ dev = [
 dev = [
     { name = "ruff", specifier = ">=0.15.1" },
     { name = "ty", specifier = ">=0.0.17" },
+]
+
+[[package]]
+name = "pypatronus"
+version = "0.39.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/48/247a70b9ea7b07862c31ec169fd6f3ab23521e407a765bc99939f091aa7d/pypatronus-0.39.4.tar.gz", hash = "sha256:774da01f8af5b3b4447054d4b719a4cdd3dd0c8b06541aa38fbf31de4d371015", size = 164797, upload-time = "2026-09-23T15:27:28.082Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/c5/3e9953ed91870eda4387113bb8ecd040ebede477483b8801ff8658f2cbb2/pypatronus-0.39.4-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:9335a6fb15cb0a53b5f29d5e55bb090a0fc1cfc4187b7a85c9e7e3cbb01b787f", size = 1353907, upload-time = "2026-09-23T15:27:23.659Z" },
+    { url = "https://files.pythonhosted.org/packages/94/8f/24e37b42f7a3580e995550ab23c6e92b28f782845a17dcada1743a321576/pypatronus-0.39.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:7e8fd40d25f6d1773a67108401942536230c8751ea56f977617bd1030b4fb288", size = 1304486, upload-time = "2026-09-23T15:27:15.639Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/67/ad4f33c1c1d7a41e9ca5ce55a77e01df954ae702cd5fa2cd52f1ef8760e2/pypatronus-0.39.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:26c5f4f1f9504f0f1994028d538df2352fc1065c597116a725e89260d0876cfe", size = 11389009, upload-time = "2026-09-23T15:26:33.901Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/3a/efa7c4956ed08a5e8adf37d71f0a86ad36c8b69a2e99046f9be5665ae0b5/pypatronus-0.39.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:73c20828fc045278c230c3efb531467036cb1eee8699fb51feadf1531c609823", size = 12820150, upload-time = "2026-09-23T15:26:52.236Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/55/b6da29d5e5854d418bbaa3a81380718831fa0b683ff0c6d997eb68410e79/pypatronus-0.39.4-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:1b0bffd469615b28d8748d65022c60f826a49fa5cd95198b2c048a13a485768a", size = 1355081, upload-time = "2026-09-23T15:27:25.268Z" },
+    { url = "https://files.pythonhosted.org/packages/07/7c/9213a3c4b8a1e84069e3d3c54a1041178c934fb1c0df5a6ab5f0b380f6be/pypatronus-0.39.4-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:829b9bfacb8116c1428ce50cf4ec381fef541d3f6da6bee2a2dfec26f0e7a39a", size = 1304210, upload-time = "2026-09-23T15:27:17.167Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/61/a86235251796315a15998c946ccddb6407dc32f3d43a42fa409f55296cc0/pypatronus-0.39.4-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e4ae9ec45854d57a3e9e28565bf2322b6955c1498daf95ceee2367b0b061df58", size = 11375383, upload-time = "2026-09-23T15:26:36.641Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/e5/ab2e88dbc8356905eff42693ef56ab765fa7acee45219d4dd57a6fd8b32f/pypatronus-0.39.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c71a95c261506f7b1c8c633da1d0c98b0ef5f3f59a85238d9c6792862f9c3c0d", size = 12804551, upload-time = "2026-09-23T15:26:54.943Z" },
+    { url = "https://files.pythonhosted.org/packages/41/58/074783e08da59192c778f2306fe1b4c02206bb71276243964e4a2c24dd0f/pypatronus-0.39.4-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:0908bae1784a557c6988212b5069a70b002f5229ec823f56e6533abba243e7ae", size = 1356758, upload-time = "2026-09-23T15:27:26.723Z" },
+    { url = "https://files.pythonhosted.org/packages/50/cf/5efdd697772bbf1dee3aef2d326765b00029a908b4189e74b0c61995ecff/pypatronus-0.39.4-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:935ef51c47fd9cb3447c9da3aafbe9cf13baf5a7bfaa09b7cdcde0a1cbb09d6b", size = 1304542, upload-time = "2026-09-23T15:27:18.803Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/c9/f5305c838e2ff8df951937f7e3e13b0a730c39b1334a1a15499914a816cf/pypatronus-0.39.4-cp314-cp314-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f1501a66d6b19914054f5e85f0a36fb4c62408d227bc61850752fc5affca4689", size = 11388751, upload-time = "2026-09-23T15:26:39.401Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/e9/ef03f0234bc27d0d467da816e94da53a4240449ab93f4baf25671f5c085d/pypatronus-0.39.4-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9e7d4a1b1a1ea861e77926ff9f61c1ed9185b6fd5aa67ff83877d12139e72029", size = 12819176, upload-time = "2026-09-23T15:26:57.68Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/9e/ca47355de00e1ec1212ff236a1efbb2db963f33c637bbfc3060ef8c59a1e/pypatronus-0.39.4-cp314-cp314t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:281e40fd874ce3f313063c59f12d19b360cdd75e55296cae49fda7532c01edb3", size = 11378886, upload-time = "2026-09-23T15:26:42.026Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/9f/2a9e028c01bce830ae6a1a56670eb30236591b318fcafb02c66f642a1f07/pypatronus-0.39.4-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0ae20e59f9c555a18add4e1d8590f2fe36b43783e3a760f7486e6aab860327d2", size = 12808220, upload-time = "2026-09-23T15:27:00.588Z" },
+    { url = "https://files.pythonhosted.org/packages/05/69/3858448f6e0c04191f736b5be61eca719c3dbdd774f14eb3d081524c8b99/pypatronus-0.39.4-cp315-cp315-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8306db067caf115cf139defa9d515f28fe648ca886e47b418c0ec6e8dbc04428", size = 12818469, upload-time = "2026-09-23T15:27:03.576Z" },
+    { url = "https://files.pythonhosted.org/packages/79/43/c03116e7e9f2060a2c791386ae70dc838061bad20df10987e8c4517beea1/pypatronus-0.39.4-cp315-cp315t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5d6a73801c97b4b2fd18e762a9ca9f0c4af5a60f2065501792deb43c33d4a784", size = 12813180, upload-time = "2026-09-23T15:27:06.684Z" },
 ]
 
 [[package]]
