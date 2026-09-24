@@ -18,7 +18,7 @@ class Method:
     inputs: list = field(default_factory=list)
     outputs: list = field(default_factory=list)
     state_updates: list = field(default_factory=list)
-    # indicates whether the method can be executed based on state and inputs
+    # indicates whether the method can be executed based on the current model state
     guard: Optional[ExprRef] = None
 
 
@@ -35,9 +35,10 @@ def verify_model(m: FunctionalModel):
             )
         # check guard
         if method.guard is not None:
+            allowed_symbols = set(m.states)
             unallowed = method.guard.symbols() - allowed_symbols
             assert len(unallowed) == 0, (
-                f"Guard {method.guard} uses symbols that are neither inputs nor state: {unallowed}"
+                f"Guard {method.guard} uses symbols that are not state: {unallowed}"
             )
 
 
