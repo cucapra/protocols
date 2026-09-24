@@ -29,7 +29,7 @@ struct Cli {
 
     /// Path to a Transactions (.tx) file
     #[arg(short, long, value_name = "TRANSACTIONS_FILE")]
-    transactions: String,
+    transactions: Option<String>,
 
     /// Name of the top-level module (if one exists)
     #[arg(short, long, value_name = "MODULE_NAME")]
@@ -159,16 +159,15 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces = match transaction_frontend(
-        cli.transactions,
-        &st,
-        &module.protos,
-        &mut transactions_handler,
-    ) {
-        Ok(result) => result,
-        Err(error) => {
-            exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
+    let traces = if let Some(t) = cli.transactions.as_deref() {
+        match transaction_frontend(t, &st, &module.protos, &mut transactions_handler) {
+            Ok(result) => Some(result),
+            Err(error) => {
+                exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
+            }
         }
+    } else {
+        None
     };
 
     let mut any_failed = false;
