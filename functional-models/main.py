@@ -3,7 +3,7 @@
 # author: Kevin Laeufer <laeufer@cornell.edu>
 
 from pypatronus import BitVec, SignExt, ZeroExt, Slice
-from fun import FunctionalModel, Transaction, serialize
+from fun import FunctionalModel, Method, serialize
 
 
 def picorv32_pcpi_mul():
@@ -12,19 +12,19 @@ def picorv32_pcpi_mul():
     """
     m = FunctionalModel(name="picorv32_pcpi_mul")
     rs1, rs2 = BitVec("rs1_data", 32), BitVec("rs2_data", 32)
-    m.transactions = [
-        Transaction("pcpi_mul", [rs1, rs2], [("rd_data", rs1 * rs2)]),
-        Transaction(
+    m.methods = [
+        Method("pcpi_mul", [rs1, rs2], [("rd_data", rs1 * rs2)]),
+        Method(
             "pcpi_mulh",
             [rs1, rs2],
             [("rd_data", Slice(63, 32, SignExt(32, rs1) * SignExt(32, rs2)))],
         ),
-        Transaction(
+        Method(
             "pcpi_mulhu",
             [rs1, rs2],
             [("rd_data", Slice(63, 32, ZeroExt(32, rs1) * ZeroExt(32, rs2)))],
         ),
-        Transaction(
+        Method(
             "pcpi_mulhsu",
             [rs1, rs2],
             [("rd_data", Slice(63, 32, SignExt(32, rs1) * ZeroExt(32, rs2)))],

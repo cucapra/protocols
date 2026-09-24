@@ -39,6 +39,10 @@ struct Cli {
     #[arg(short, long, value_name = "WAVEFORM_FILE")]
     fst: Option<String>,
 
+    /// Functional model JSON file. (optional)
+    #[arg(short, long)]
+    functional_model: Vec<String>,
+
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
     verbosity: Verbosity<WarnLevel>,
