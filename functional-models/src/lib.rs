@@ -2,8 +2,8 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
-use baa::{BitVecOps, BitVecValue};
-use patronus::expr::{Context, ExprRef, SerializableIrNode};
+use baa::{BitVecOps, BitVecValue, WidthInt};
+use patronus::expr::{Context, ExprRef, TypeCheck};
 use patronus::sim::{InitKind, Simulator};
 use patronus::system::{Output, TransitionSystem};
 use protocols::Value;
@@ -31,8 +31,15 @@ impl From<MethodId> for usize {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct ParameterId {
     method: MethodId,
-    is_input: bool,
     index: u16,
+    is_input: bool,
+    width: WidthInt,
+}
+
+impl ParameterId {
+    pub fn width(&self) -> WidthInt {
+        self.width
+    }
 }
 
 impl ParameterId {
@@ -47,27 +54,33 @@ pub struct Method {
     name: String,
     guard: ExprRef,
     commit: ExprRef,
-    inputs: Vec<(String, ExprRef)>,
-    outputs: Vec<(String, ExprRef)>,
+    inputs: Vec<(String, WidthInt, ExprRef)>,
+    outputs: Vec<(String, WidthInt, ExprRef)>,
 }
 
 impl Method {
     pub fn parameter_id(&self, name: &str) -> Option<ParameterId> {
-        if let Some(idx) = self.inputs.iter().position(|(n, _)| n == name) {
+        if let Some(idx) = self.inputs.iter().position(|(n, _, _)| n == name) {
             Some(ParameterId {
                 method: self.id,
                 is_input: true,
                 index: idx as u16,
+                width: self.inputs[idx].1,
             })
-        } else if let Some(idx) = self.outputs.iter().position(|(n, _)| n == name) {
+        } else if let Some(idx) = self.outputs.iter().position(|(n, _, _)| n == name) {
             Some(ParameterId {
                 method: self.id,
                 is_input: false,
                 index: idx as u16,
+                width: self.outputs[idx].1,
             })
         } else {
             None
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -75,7 +88,7 @@ impl FunctionalModel {
     pub fn load(ctx: &mut Context, reader: &mut impl std::io::BufRead) -> std::io::Result<Self> {
         let m: FunctionalModelJson = serde_json::from_reader(reader)?;
         let sys = patronus::btor2::parse_str(ctx, &m.sys, Some(&m.info.name)).unwrap();
-        println!("{}", sys.serialize_to_str(ctx));
+
         let methods: Vec<_> = m
             .info
             .methods
@@ -89,7 +102,6 @@ impl FunctionalModel {
                 let commit = sys
                     .lookup_input(ctx, &format!("{name}_commit"))
                     .expect("Failed to find commit input.");
-                println!("COMMIT: {}", commit.serialize_to_str(ctx));
                 let input_prefix = format!("{name}_in_");
                 let inputs = sys
                     .inputs
@@ -97,7 +109,7 @@ impl FunctionalModel {
                     .filter_map(|i| {
                         ctx.get_symbol_name(*i)
                             .and_then(|name| name.strip_prefix(&input_prefix))
-                            .map(|name| (name.to_string(), *i))
+                            .map(|name| (name.to_string(), i.get_bv_type(ctx).unwrap(), *i))
                     })
                     .collect();
                 let output_prefix = format!("{name}_out_");
@@ -105,9 +117,9 @@ impl FunctionalModel {
                     .outputs
                     .iter()
                     .filter_map(|o| {
-                        ctx[o.name]
-                            .strip_prefix(&output_prefix)
-                            .map(|name| (name.to_string(), o.expr))
+                        ctx[o.name].strip_prefix(&output_prefix).map(|name| {
+                            (name.to_string(), o.expr.get_bv_type(ctx).unwrap(), o.expr)
+                        })
                     })
                     .collect();
                 Method {
@@ -217,22 +229,33 @@ impl FunctionalModelSimulator {
 
     pub fn set_input(&mut self, param: ParameterId, value: &Value) {
         assert!(param.is_input());
-        let (_, e) = self.model[param.method].inputs[param.index as usize];
+        let (width, e) = self.param_id_to_width_and_e(param);
         if let Ok(bv) = BitVecValue::try_from(value.clone()) {
+            debug_assert_eq!(width, bv.width());
             self.sim.set(e, &bv);
         } else {
             todo!("Deal with non-scalar values.")
         }
     }
 
-    pub fn get_output(&self, param: ParameterId) -> Value {
-        assert!(!param.is_input());
-        let (_, e) = self.model[param.method].outputs[param.index as usize];
+    /// get the value of an input or output parameter
+    pub fn get(&self, param: ParameterId) -> Value {
+        let (width, e) = self.param_id_to_width_and_e(param);
         if let Ok(bv) = BitVecValue::try_from(self.sim.get(e)) {
+            debug_assert_eq!(width, bv.width());
             bv.into()
         } else {
             todo!()
         }
+    }
+
+    fn param_id_to_width_and_e(&self, param: ParameterId) -> (WidthInt, ExprRef) {
+        let (_, width, e) = if param.is_input() {
+            &self.model[param.method].inputs[param.index as usize]
+        } else {
+            &self.model[param.method].outputs[param.index as usize]
+        };
+        (*width, *e)
     }
 
     pub fn reset(&mut self) {

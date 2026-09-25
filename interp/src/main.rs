@@ -2,17 +2,21 @@
 // released under MIT License
 // author: Ernest Ng <eyn5@cornell.edu>
 
+use baa::BitVecValue;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
-use functional::{FunctionalModel, FunctionalModelSimulator, Method, MethodId, ParameterId};
+use functional::{FunctionalModel, FunctionalModelSimulator, MethodId, ParameterId};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::frontend::{Module, require_single_module};
 use protocols::scheduler::{Invocation, Scheduler};
 use protocols::transactions::Traces;
-use protocols::{PatronusSim, frontend, transaction_frontend};
+use protocols::{PatronusSim, Value, frontend, transaction_frontend};
+use rand::SeedableRng;
+use rand::prelude::StdRng;
+use rand::seq::IndexedRandom;
 
 /// Args for the interpreter CLI
 #[derive(Parser, Debug)]
@@ -167,7 +171,8 @@ fn main() -> anyhow::Result<()> {
         emit_warnings,
         cli.display_hex,
     );
-    let traces = load_traces(&cli, transactions_handler, &st, &module);
+    let mut trace_rng = StdRng::seed_from_u64(0);
+    let traces = load_traces(&cli, transactions_handler, &st, &module, &mut trace_rng);
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {
@@ -224,6 +229,7 @@ fn load_traces(
     mut transactions_handler: DiagnosticHandler,
     st: &SymbolTable,
     module: &Module,
+    rng: &mut impl rand::Rng,
 ) -> Traces {
     let mut traces = if let Some(t) = cli.transactions.as_deref() {
         match transaction_frontend(t, st, &module.protos, &mut transactions_handler) {
@@ -246,7 +252,7 @@ fn load_traces(
         }
 
         // 2) generate a new trace
-        let trace = sample_functional_model(&mut sim, &map, cli.num_random_transactions);
+        let trace = sample_functional_model(&mut sim, &map, cli.num_random_transactions, rng);
         if !trace.is_empty() {
             traces.push(trace);
         }
@@ -264,11 +270,33 @@ fn sample_functional_model(
     sim: &mut FunctionalModelSimulator,
     map: &FunMap,
     num: u32,
+    rng: &mut impl rand::Rng,
 ) -> Vec<Invocation> {
     sim.reset();
-    let out = Vec::with_capacity(num as usize);
+    let mut out = Vec::with_capacity(num as usize);
     for _ in 0..num {
-        todo!()
+        // pick method
+        let available: Vec<_> = map.methods().iter().filter(|m| sim.guard(**m)).collect();
+        assert!(!available.is_empty());
+        if let Some(&&method) = available.choose(rng) {
+            // generate and apply inputs
+            for &p in map.params(method) {
+                if p.is_input() {
+                    let value: Value = BitVecValue::random(rng, p.width()).into();
+                    sim.set_input(p, &value)
+                }
+            }
+            // read all values
+            let args: Vec<Value> = map.params(method).iter().map(|&p| sim.get(p)).collect();
+            // commit
+            sim.commit(method);
+            out.push((sim.model()[method].name().to_string(), args));
+        } else {
+            panic!(
+                "Cannot generate invocation #{}, because none of the methods have active guards.",
+                out.len() + 1
+            );
+        }
     }
     out
 }
@@ -292,7 +320,7 @@ fn verify_trace(
             }
             for (p, a) in params.iter().zip(args.iter()) {
                 if !p.is_input() {
-                    let actual = sim.get_output(*p);
+                    let actual = sim.get(*p);
                     assert_eq!(
                         &actual,
                         a,
@@ -314,13 +342,16 @@ fn verify_trace(
 
 struct FunMap {
     params: Vec<Vec<ParameterId>>,
+    methods: Vec<MethodId>,
 }
 
 impl FunMap {
     fn new(st: &SymbolTable, model: &FunctionalModel, module: &Module) -> Self {
         let mut params = vec![];
+        let mut methods = vec![];
         for proto in &module.protos {
             if let Some(method_id) = model.method_id(&proto.name) {
+                methods.push(method_id);
                 let idx: usize = method_id.into();
                 if idx >= params.len() {
                     params.resize(idx + 1, vec![]);
@@ -352,10 +383,17 @@ impl FunMap {
             }
         }
 
-        Self { params }
+        Self { params, methods }
     }
 
+    /// The parameters of a given method in the same order as the args of the corresponding protocol.
     fn params(&self, method: MethodId) -> &[ParameterId] {
         &self.params[usize::from(method)]
+    }
+
+    /// The methods in the functional model in the same order as the corresponding protocol in the
+    /// module.
+    fn methods(&self) -> &[MethodId] {
+        &self.methods
     }
 }
