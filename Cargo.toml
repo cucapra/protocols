@@ -13,6 +13,7 @@ license = "MIT"
 
 [workspace.dependencies]
 protocols = { path = "protocols" }
+functional = { path = "functional-models" }
 baa = { version = "0.19.3", features = ["rand1"] }
 patronus = { git="https://github.com/Nikil-Shyamsunder/patronus#" }
 rand = "0.10"

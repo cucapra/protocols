@@ -5,10 +5,13 @@
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
+use functional::FunctionalModelSimulator;
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::require_single_module;
-use protocols::scheduler::Scheduler;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::{Module, require_single_module};
+use protocols::scheduler::{Invocation, Scheduler};
+use protocols::transactions::Traces;
 use protocols::{PatronusSim, frontend, transaction_frontend};
 
 /// Args for the interpreter CLI
@@ -41,7 +44,12 @@ struct Cli {
 
     /// Functional model JSON file. (optional)
     #[arg(short, long)]
-    functional_model: Vec<String>,
+    functional_model: Option<String>,
+
+    /// Number of transactions to randomly generate from the functional model.
+    /// These will be appended to any transactions loaded from the transaction file.
+    #[arg(short, long, default_value_t = 0)]
+    num_random_transactions: u32,
 
     /// Users can specify `-v` or `--verbose` to toggle logging
     #[command(flatten)]
@@ -153,22 +161,13 @@ fn main() -> anyhow::Result<()> {
     let module = require_single_module(modules, &cli.protocol)?;
 
     // Create a separate `DiagnosticHandler` when parsing the transactions file
-    let mut transactions_handler = DiagnosticHandler::new(
+    let transactions_handler = DiagnosticHandler::new(
         color_choice,
         cli.no_error_locations,
         emit_warnings,
         cli.display_hex,
     );
-    let traces = if let Some(t) = cli.transactions.as_deref() {
-        match transaction_frontend(t, &st, &module.protos, &mut transactions_handler) {
-            Ok(result) => Some(result),
-            Err(error) => {
-                exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
-            }
-        }
-    } else {
-        None
-    };
+    let traces = load_traces(&cli, transactions_handler, &st, &module);
 
     let mut any_failed = false;
     for (trace_index, todos) in traces.into_iter().enumerate() {
@@ -218,4 +217,54 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(101);
     }
     Ok(())
+}
+
+fn load_traces(
+    cli: &Cli,
+    mut transactions_handler: DiagnosticHandler,
+    st: &SymbolTable,
+    module: &Module,
+) -> Traces {
+    let mut traces = if let Some(t) = cli.transactions.as_deref() {
+        match transaction_frontend(t, st, &module.protos, &mut transactions_handler) {
+            Ok(result) => result,
+            Err(error) => {
+                exit_after_setup_error(error, !transactions_handler.error_string().is_empty())
+            }
+        }
+    } else {
+        vec![]
+    };
+
+    if let Some(fun) = cli.functional_model.as_deref() {
+        let mut sim =
+            FunctionalModelSimulator::from_file(fun).expect("failed to load functional model");
+        // 1) verify existing traces
+        for trace in &traces {
+            verify_trace(&mut sim, trace);
+        }
+
+        // 2) generate a new trace
+        let trace = sample_functional_model(&mut sim, cli.num_random_transactions);
+        if !trace.is_empty() {
+            traces.push(trace);
+        }
+    } else {
+        assert_eq!(
+            cli.num_random_transactions, 0,
+            "cannot generate random transactions without a functional model"
+        );
+    }
+
+    traces
+}
+
+fn sample_functional_model(sim: &mut FunctionalModelSimulator, num: u32) -> Vec<Invocation> {
+    sim.reset();
+    todo!()
+}
+
+fn verify_trace(sim: &mut FunctionalModelSimulator, trace: &[Invocation]) {
+    sim.reset();
+    todo!()
 }

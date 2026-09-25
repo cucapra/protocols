@@ -9,6 +9,7 @@ use patronus::system::{Output, TransitionSystem};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::ops::Index;
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct FunctionalModel {
@@ -119,9 +120,16 @@ pub struct FunctionalModelSimulator {
     sim: patronus::sim::Interpreter,
     tru: BitVecValue,
     fals: BitVecValue,
+    init_snapshot: u32,
 }
 
 impl FunctionalModelSimulator {
+    pub fn from_file(filename: impl AsRef<Path>) -> std::io::Result<Self> {
+        let file = std::fs::File::open(filename)?;
+        let mut reader = std::io::BufReader::new(file);
+        Self::load(&mut reader)
+    }
+
     pub fn load(reader: &mut impl std::io::BufRead) -> std::io::Result<Self> {
         let mut ctx = Context::default();
         let model = FunctionalModel::load(&mut ctx, reader)?;
@@ -129,7 +137,8 @@ impl FunctionalModelSimulator {
     }
 
     pub fn new(ctx: &Context, model: FunctionalModel) -> Self {
-        let sim = patronus::sim::Interpreter::new(ctx, &model.sys);
+        let mut sim = patronus::sim::Interpreter::new(ctx, &model.sys);
+        let init_snapshot = sim.take_snapshot();
         let tru = BitVecValue::from_bool(true);
         let fals = BitVecValue::from_bool(false);
         Self {
@@ -137,6 +146,7 @@ impl FunctionalModelSimulator {
             model,
             tru,
             fals,
+            init_snapshot,
         }
     }
 
@@ -164,6 +174,10 @@ impl FunctionalModelSimulator {
 
     pub fn get_output(&self, method: MethodId) {
         todo!()
+    }
+
+    pub fn reset(&mut self) {
+        self.sim.restore_snapshot(self.init_snapshot);
     }
 }
 
