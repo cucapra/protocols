@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["bi", "interp", "protocols", "cli", "graph-interp"]
+members = ["bi", "functional-models", "interp", "protocols", "cli", "graph-interp"]
 
 
 [workspace.package]
@@ -13,6 +13,7 @@ license = "MIT"
 
 [workspace.dependencies]
 protocols = { path = "protocols" }
+functional = { path = "functional-models" }
 baa = { version = "0.19.3", features = ["rand1"] }
 patronus = { git="https://github.com/Nikil-Shyamsunder/patronus#" }
 rand = "0.10"
