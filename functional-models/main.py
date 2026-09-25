@@ -35,6 +35,12 @@ def picorv32_pcpi_mul():
     return m
 
 
+def fifo(data_width: int, num_elements: int):
+    m = FunctionalModel(name="fifo")
+    # elements = Array(data_width, num_elements)
+    # TODO: update to latest pypatronus for array support
+
+
 def main():
     m = picorv32_pcpi_mul()
     print(m)
