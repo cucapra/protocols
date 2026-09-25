@@ -29,6 +29,8 @@ def picorv32_pcpi_mul():
             [rs1, rs2],
             [("rd_data", Slice(63, 32, SignExt(32, rs1) * ZeroExt(32, rs2)))],
         ),
+        Method("pcpi_mul_reset"),
+        Method("idle"),
     ]
     return m
 

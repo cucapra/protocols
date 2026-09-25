@@ -3,9 +3,10 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
 use baa::{BitVecOps, BitVecValue};
-use patronus::expr::{Context, ExprRef};
-use patronus::sim::Simulator;
+use patronus::expr::{Context, ExprRef, SerializableIrNode};
+use patronus::sim::{InitKind, Simulator};
 use patronus::system::{Output, TransitionSystem};
+use protocols::Value;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::ops::Index;
@@ -21,6 +22,25 @@ pub struct FunctionalModel {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MethodId(u32);
 
+impl From<MethodId> for usize {
+    fn from(value: MethodId) -> Self {
+        value.0 as usize
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct ParameterId {
+    method: MethodId,
+    is_input: bool,
+    index: u16,
+}
+
+impl ParameterId {
+    pub fn is_input(&self) -> bool {
+        self.is_input
+    }
+}
+
 #[derive(Debug)]
 pub struct Method {
     id: MethodId,
@@ -31,10 +51,31 @@ pub struct Method {
     outputs: Vec<(String, ExprRef)>,
 }
 
+impl Method {
+    pub fn parameter_id(&self, name: &str) -> Option<ParameterId> {
+        if let Some(idx) = self.inputs.iter().position(|(n, _)| n == name) {
+            Some(ParameterId {
+                method: self.id,
+                is_input: true,
+                index: idx as u16,
+            })
+        } else if let Some(idx) = self.outputs.iter().position(|(n, _)| n == name) {
+            Some(ParameterId {
+                method: self.id,
+                is_input: false,
+                index: idx as u16,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 impl FunctionalModel {
     pub fn load(ctx: &mut Context, reader: &mut impl std::io::BufRead) -> std::io::Result<Self> {
         let m: FunctionalModelJson = serde_json::from_reader(reader)?;
         let sys = patronus::btor2::parse_str(ctx, &m.sys, Some(&m.info.name)).unwrap();
+        println!("{}", sys.serialize_to_str(ctx));
         let methods: Vec<_> = m
             .info
             .methods
@@ -48,6 +89,7 @@ impl FunctionalModel {
                 let commit = sys
                     .lookup_input(ctx, &format!("{name}_commit"))
                     .expect("Failed to find commit input.");
+                println!("COMMIT: {}", commit.serialize_to_str(ctx));
                 let input_prefix = format!("{name}_in_");
                 let inputs = sys
                     .inputs
@@ -138,6 +180,7 @@ impl FunctionalModelSimulator {
 
     pub fn new(ctx: &Context, model: FunctionalModel) -> Self {
         let mut sim = patronus::sim::Interpreter::new(ctx, &model.sys);
+        sim.init(InitKind::Zero);
         let init_snapshot = sim.take_snapshot();
         let tru = BitVecValue::from_bool(true);
         let fals = BitVecValue::from_bool(false);
@@ -154,6 +197,10 @@ impl FunctionalModelSimulator {
         self.model.name()
     }
 
+    pub fn model(&self) -> &FunctionalModel {
+        &self.model
+    }
+
     pub fn guard(&self, method: MethodId) -> bool {
         let e = self.model[method].guard;
         let bv: BitVecValue = self.sim.get(e).try_into().unwrap();
@@ -168,12 +215,24 @@ impl FunctionalModelSimulator {
         self.sim.set(e, &self.fals);
     }
 
-    pub fn set_input(&mut self, method: MethodId) {
-        todo!()
+    pub fn set_input(&mut self, param: ParameterId, value: &Value) {
+        assert!(param.is_input());
+        let (_, e) = self.model[param.method].inputs[param.index as usize];
+        if let Ok(bv) = BitVecValue::try_from(value.clone()) {
+            self.sim.set(e, &bv);
+        } else {
+            todo!("Deal with non-scalar values.")
+        }
     }
 
-    pub fn get_output(&self, method: MethodId) {
-        todo!()
+    pub fn get_output(&self, param: ParameterId) -> Value {
+        assert!(!param.is_input());
+        let (_, e) = self.model[param.method].outputs[param.index as usize];
+        if let Ok(bv) = BitVecValue::try_from(self.sim.get(e)) {
+            bv.into()
+        } else {
+            todo!()
+        }
     }
 
     pub fn reset(&mut self) {

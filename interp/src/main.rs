@@ -5,7 +5,7 @@
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::log::LevelFilter;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
-use functional::FunctionalModelSimulator;
+use functional::{FunctionalModel, FunctionalModelSimulator, Method, MethodId, ParameterId};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
@@ -43,12 +43,12 @@ struct Cli {
     fst: Option<String>,
 
     /// Functional model JSON file. (optional)
-    #[arg(short, long)]
+    #[arg(long)]
     functional_model: Option<String>,
 
     /// Number of transactions to randomly generate from the functional model.
     /// These will be appended to any transactions loaded from the transaction file.
-    #[arg(short, long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0)]
     num_random_transactions: u32,
 
     /// Users can specify `-v` or `--verbose` to toggle logging
@@ -239,13 +239,14 @@ fn load_traces(
     if let Some(fun) = cli.functional_model.as_deref() {
         let mut sim =
             FunctionalModelSimulator::from_file(fun).expect("failed to load functional model");
+        let map = FunMap::new(st, sim.model(), &module);
         // 1) verify existing traces
         for trace in &traces {
-            verify_trace(&mut sim, trace);
+            verify_trace(&mut sim, &map, trace, cli.display_hex);
         }
 
         // 2) generate a new trace
-        let trace = sample_functional_model(&mut sim, cli.num_random_transactions);
+        let trace = sample_functional_model(&mut sim, &map, cli.num_random_transactions);
         if !trace.is_empty() {
             traces.push(trace);
         }
@@ -259,12 +260,102 @@ fn load_traces(
     traces
 }
 
-fn sample_functional_model(sim: &mut FunctionalModelSimulator, num: u32) -> Vec<Invocation> {
+fn sample_functional_model(
+    sim: &mut FunctionalModelSimulator,
+    map: &FunMap,
+    num: u32,
+) -> Vec<Invocation> {
     sim.reset();
-    todo!()
+    let out = Vec::with_capacity(num as usize);
+    for _ in 0..num {
+        todo!()
+    }
+    out
 }
 
-fn verify_trace(sim: &mut FunctionalModelSimulator, trace: &[Invocation]) {
+fn verify_trace(
+    sim: &mut FunctionalModelSimulator,
+    map: &FunMap,
+    trace: &[Invocation],
+    display_hex: bool,
+) {
     sim.reset();
-    todo!()
+    for (name, args) in trace {
+        if let Some(method) = sim.model().method_id(name) {
+            assert!(sim.guard(method), "Transaction {name} cannot be executed");
+            let params = map.params(method);
+            debug_assert_eq!(params.len(), args.len());
+            for (p, a) in params.iter().zip(args.iter()) {
+                if p.is_input() {
+                    sim.set_input(*p, a);
+                }
+            }
+            for (p, a) in params.iter().zip(args.iter()) {
+                if !p.is_input() {
+                    let actual = sim.get_output(*p);
+                    assert_eq!(
+                        &actual,
+                        a,
+                        "Transaction {name} is supposed to produce {}, but the functional model indicates that is should produce {}",
+                        a.to_string(display_hex),
+                        actual.to_string(display_hex)
+                    );
+                }
+            }
+            sim.commit(method);
+        } else {
+            panic!(
+                "Unknown transaction {name}. Not part of the functional model {}",
+                sim.name()
+            );
+        }
+    }
+}
+
+struct FunMap {
+    params: Vec<Vec<ParameterId>>,
+}
+
+impl FunMap {
+    fn new(st: &SymbolTable, model: &FunctionalModel, module: &Module) -> Self {
+        let mut params = vec![];
+        for proto in &module.protos {
+            if let Some(method_id) = model.method_id(&proto.name) {
+                let idx: usize = method_id.into();
+                if idx >= params.len() {
+                    params.resize(idx + 1, vec![]);
+                }
+                let method = &model[method_id];
+                params[idx] = proto
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        let sym = &st[arg.symbol()];
+                        if let Some(p) = method.parameter_id(sym.name()) {
+                            p
+                        } else {
+                            panic!(
+                                "Method {} is missing parameter `{}`",
+                                proto.name,
+                                sym.name()
+                            );
+                        }
+                    })
+                    .collect();
+            } else {
+                panic!(
+                    "Functional model {} is missing a method for protocol `{}` from {}.",
+                    model.name(),
+                    proto.name,
+                    module.name
+                );
+            }
+        }
+
+        Self { params }
+    }
+
+    fn params(&self, method: MethodId) -> &[ParameterId] {
+        &self.params[usize::from(method)]
+    }
 }
