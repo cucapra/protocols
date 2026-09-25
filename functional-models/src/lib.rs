@@ -67,15 +67,16 @@ impl Method {
                 index: idx as u16,
                 width: self.inputs[idx].1,
             })
-        } else if let Some(idx) = self.outputs.iter().position(|(n, _, _)| n == name) {
-            Some(ParameterId {
-                method: self.id,
-                is_input: false,
-                index: idx as u16,
-                width: self.outputs[idx].1,
-            })
         } else {
-            None
+            self.outputs
+                .iter()
+                .position(|(n, _, _)| n == name)
+                .map(|idx| ParameterId {
+                    method: self.id,
+                    is_input: false,
+                    index: idx as u16,
+                    width: self.outputs[idx].1,
+                })
         }
     }
 
@@ -187,7 +188,7 @@ impl FunctionalModelSimulator {
     pub fn load(reader: &mut impl std::io::BufRead) -> std::io::Result<Self> {
         let mut ctx = Context::default();
         let model = FunctionalModel::load(&mut ctx, reader)?;
-        Ok(Self::new(&mut ctx, model))
+        Ok(Self::new(&ctx, model))
     }
 
     pub fn new(ctx: &Context, model: FunctionalModel) -> Self {
@@ -306,6 +307,6 @@ pub mod tests {
 
     #[test]
     fn test_sim() {
-        let mut sim = FunctionalModelSimulator::load(&mut std::io::Cursor::new(MUL_JSON)).unwrap();
+        let _sim = FunctionalModelSimulator::load(&mut std::io::Cursor::new(MUL_JSON)).unwrap();
     }
 }

@@ -245,7 +245,7 @@ fn load_traces(
     if let Some(fun) = cli.functional_model.as_deref() {
         let mut sim =
             FunctionalModelSimulator::from_file(fun).expect("failed to load functional model");
-        let map = FunMap::new(st, sim.model(), &module);
+        let map = FunMap::new(st, sim.model(), module);
         // 1) verify existing traces
         for trace in &traces {
             verify_trace(&mut sim, &map, trace, cli.display_hex);
