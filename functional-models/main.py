@@ -2,7 +2,7 @@
 # released under MIT License
 # author: Kevin Laeufer <laeufer@cornell.edu>
 
-from pypatronus import BitVec, SignExt, ZeroExt, Slice
+from pypatronus import BitVec, SignExt, ZeroExt, Slice, Update, If, Array, BitVecVal
 from fun import FunctionalModel, Method, serialize
 
 
@@ -35,16 +35,76 @@ def picorv32_pcpi_mul():
     return m
 
 
-def fifo(data_width: int, num_elements: int):
-    m = FunctionalModel(name="fifo")
-    # elements = Array(data_width, num_elements)
-    # TODO: update to latest pypatronus for array support
+def fifo(data_width: int, num_elements: int, push_pop: bool = False):
+    """https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/FifoSpec.scala"""
+    counter_width = 12
+    assert num_elements < ((1 << (counter_width - 1)) - 1)
+    mem = Array("mem", data_width, num_elements)
+    count = BitVec("count", counter_width)
+    read = BitVec("read", counter_width)
+    m = FunctionalModel(name="fifo", states=[mem, count, read])
+    num_elements_bv = BitVecVal(num_elements, counter_width)
+    full = count.equals(num_elements_bv)
+    empty = count.equals(BitVecVal(0, counter_width))
+    input = BitVec("input", data_width)
+
+    non_wrap = count + read
+    write_adr = If(non_wrap < num_elements_bv, non_wrap, non_wrap - num_elements_bv)
+    read_plus_one = read + BitVecVal(1, counter_width)
+    read_incr = If(
+        read_plus_one.equals(num_elements_bv),
+        BitVecVal(0, counter_width),
+        read_plus_one,
+    )
+
+    m.methods = [
+        Method(
+            "push",
+            [input],
+            [],
+            [
+                Update(mem, write_adr, input),  # mem
+                count + BitVecVal(1, counter_width),  # count
+                read,  # read
+            ],
+            ~full,
+        ),
+        Method(
+            "pop",
+            [],
+            [("output", mem[read])],
+            [
+                mem,  # mem
+                count - BitVecVal(1, counter_width),  # count
+                read_incr,  # read
+            ],
+            ~empty,
+        ),
+        Method("reset"),
+        Method("idle"),
+    ]
+    if push_pop:
+        m.methods.append(
+            Method(
+                "push_pop",
+                [input],
+                [("output", mem[read])],
+                [
+                    Update(mem, write_adr, input),  # mem
+                    count,  # count
+                    read_incr,  # read
+                ],
+            ),
+        )
+    return m
 
 
 def main():
-    m = picorv32_pcpi_mul()
-    print(m)
-    serialize(m, "picorv32_pcpi_mul.json")
+    serialize(picorv32_pcpi_mul(), "picorv32_pcpi_mul.json")
+    params = [{"data_width": 32, "num_elements": 5}]
+    for p in params:
+        file_name = "fifo_" + "_".join(f"{k}={v}" for k, v in p.items()) + ".json"
+        serialize(fifo(**p), file_name)
 
 
 if __name__ == "__main__":

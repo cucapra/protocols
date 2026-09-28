@@ -17,7 +17,7 @@ class Method:
     name: str
     inputs: list = field(default_factory=list)
     outputs: list = field(default_factory=list)
-    state_updates: list = field(default_factory=list)
+    nexts: list = field(default_factory=list)
     # indicates whether the method can be executed based on the current model state
     guard: Optional[ExprRef] = None
 
@@ -25,7 +25,7 @@ class Method:
 def verify_model(m: FunctionalModel):
     assert len(m.states) == 0, "TODO: deal with states"
     for method in m.methods:
-        assert len(method.state_updates) == len(m.states)
+        assert len(method.nexts) == len(m.states)
         allowed_symbols = set(m.states) | set(method.inputs)
 
         for out_name, out_expr in method.outputs:
