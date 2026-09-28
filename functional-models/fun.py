@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Optional
 
-from pypatronus import TransitionSystem, BitVec, ExprRef, BitVecVal
+from pypatronus import TransitionSystem, State, BitVec, ExprRef, BitVecVal, If
 
 
 @dataclass
@@ -17,15 +17,13 @@ class Method:
     name: str
     inputs: list = field(default_factory=list)
     outputs: list = field(default_factory=list)
-    nexts: list = field(default_factory=list)
+    nexts: Optional[list] = None
     # indicates whether the method can be executed based on the current model state
     guard: Optional[ExprRef] = None
 
 
 def verify_model(m: FunctionalModel):
-    assert len(m.states) == 0, "TODO: deal with states"
     for method in m.methods:
-        assert len(method.nexts) == len(m.states)
         allowed_symbols = set(m.states) | set(method.inputs)
 
         for out_name, out_expr in method.outputs:
@@ -33,6 +31,20 @@ def verify_model(m: FunctionalModel):
             assert len(unallowed) == 0, (
                 f"Output {out_name}={out_expr} uses symbols that are neither inputs nor state: {unallowed}"
             )
+
+        if method.nexts is not None:
+            assert len(method.nexts) == len(m.states), (
+                f"[{method.name}] {len(method.nexts)} next state assignments, but model has {len(m.states)} states."
+            )
+            for state, next in zip(m.states, method.nexts):
+                assert state.sort() == next.sort(), (
+                    f"[{method.name}] {state} : {state.sort()} = {next} : {next.sort()}"
+                )
+                unallowed = next.symbols() - allowed_symbols
+                assert len(unallowed) == 0, (
+                    f"[{method.name}] State update {state}={next} uses symbols that are neither inputs nor state: {unallowed}"
+                )
+
         # check guard
         if method.guard is not None:
             allowed_symbols = set(m.states)
@@ -43,9 +55,9 @@ def verify_model(m: FunctionalModel):
 
 
 def serialize(m: FunctionalModel, filename):
-    assert len(m.states) == 0, "TODO: deal with states"
     verify_model(m)
     sys = TransitionSystem(name=m.name)
+    next_states = list(m.states)
     for t in m.methods:
         commit_signal = BitVec(f"{t.name}_commit", 1)
         sys.add_input(commit_signal)
@@ -59,6 +71,14 @@ def serialize(m: FunctionalModel, filename):
         for out_name, out_expr in t.outputs:
             out_expr = out_expr.replace(input_map)
             sys.add_output(f"{t.name}_out_{out_name}", out_expr)
+        if t.nexts is not None:
+            for idx, next in enumerate(t.nexts):
+                expr = next.replace(input_map)
+                next_states[idx] = If(commit_signal, expr, next_states[idx])
+    assert len(next_states) == len(m.states)
+    sys.states = [
+        State(sym.name(), next=next) for (sym, next) in zip(m.states, next_states)
+    ]
 
     info = {
         "name": m.name,
