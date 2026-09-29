@@ -83,8 +83,10 @@ def serialize(m: FunctionalModel, filename):
     info = {
         "name": m.name,
         "methods": [t.name for t in m.methods],
-        "states": [s.name for s in m.states],
+        "states": [s.name() for s in m.states],
     }
+
+    print(sys)
 
     with open(filename, "w") as f:
         json.dump({"info": info, "sys": sys.to_btor2_str()}, f)

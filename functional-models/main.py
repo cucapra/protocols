@@ -39,13 +39,14 @@ def fifo(data_width: int, num_elements: int, push_pop: bool = False):
     """https://github.com/ekiwi/paso/blob/ad2bf83f420ca704ff0e76e7a583791a0e80a545/benchmarks/src/benchmarks/fifo/FifoSpec.scala"""
     counter_width = 12
     assert num_elements < ((1 << (counter_width - 1)) - 1)
-    mem = Array("mem", data_width, num_elements)
+    mem = Array("mem", counter_width, data_width)
     count = BitVec("count", counter_width)
     read = BitVec("read", counter_width)
     m = FunctionalModel(name="fifo", states=[mem, count, read])
     num_elements_bv = BitVecVal(num_elements, counter_width)
     full = count.equals(num_elements_bv)
-    empty = count.equals(BitVecVal(0, counter_width))
+    zero = BitVecVal(0, counter_width)
+    empty = count.equals(zero)
     input = BitVec("input", data_width)
 
     non_wrap = count + read
@@ -53,7 +54,7 @@ def fifo(data_width: int, num_elements: int, push_pop: bool = False):
     read_plus_one = read + BitVecVal(1, counter_width)
     read_incr = If(
         read_plus_one.equals(num_elements_bv),
-        BitVecVal(0, counter_width),
+        zero,
         read_plus_one,
     )
 
@@ -80,7 +81,7 @@ def fifo(data_width: int, num_elements: int, push_pop: bool = False):
             ],
             ~empty,
         ),
-        Method("reset"),
+        Method("reset", nexts=[mem, zero, zero]),
         Method("idle"),
     ]
     if push_pop:
