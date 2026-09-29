@@ -1,25 +1,62 @@
 import json
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple
 
-from pypatronus import TransitionSystem, State, BitVec, ExprRef, BitVecVal, If
-
-
-@dataclass
-class FunctionalModel:
-    name: str
-    methods: list = field(default_factory=list)
-    states: list = field(default_factory=list)
+from pypatronus import (
+    TransitionSystem,
+    State,
+    BitVec,
+    ExprRef,
+    BitVecVal,
+    If,
+    Interpreter,
+)
 
 
 @dataclass
 class Method:
     name: str
-    inputs: list = field(default_factory=list)
-    outputs: list = field(default_factory=list)
-    nexts: Optional[list] = None
+    inputs: list[ExprRef] = field(default_factory=list)
+    outputs: list[Tuple[str, ExprRef]] = field(default_factory=list)
+    nexts: Optional[list[ExprRef]] = None
     # indicates whether the method can be executed based on the current model state
     guard: Optional[ExprRef] = None
+
+
+@dataclass
+class FunctionalModel:
+    name: str
+    methods: list[Method] = field(default_factory=list)
+    states: list[ExprRef] = field(default_factory=list)
+
+
+class Sim:
+    def __init__(self, model: FunctionalModel):
+        self.sys = _build_sys(model)
+        self.model = model
+        self.sim = Interpreter(self.sys)
+        for idx, m in enumerate(model.methods):
+            # note: python lambdas capture the context instead of the value of idx be default which is why
+            #       we need the nested lambdas!
+            setattr(
+                self,
+                m.name,
+                (
+                    lambda ii: (
+                        lambda *args, **kwargs: self._exec_method(ii, *args, **kwargs)
+                    )
+                )(idx),
+            )
+
+    def _exec_method(self, idx: int, *args, **kwargs):
+        assert len(kwargs) == 0, "TODO: support keyword args"
+        method = self.model.methods[idx]
+        inputs = list(args)
+        assert len(inputs) == len(method.inputs), (
+            f"Wrong number of inputs {len(inputs)} != {len(method.inputs)}"
+        )
+
+        assert False, f"TODO: exec {method.name} {inputs}"
 
 
 def verify_model(m: FunctionalModel):
@@ -54,7 +91,7 @@ def verify_model(m: FunctionalModel):
             )
 
 
-def serialize(m: FunctionalModel, filename):
+def _build_sys(m: FunctionalModel) -> TransitionSystem:
     verify_model(m)
     sys = TransitionSystem(name=m.name)
     next_states = list(m.states)
@@ -79,6 +116,11 @@ def serialize(m: FunctionalModel, filename):
     sys.states = [
         State(sym.name(), next=next) for (sym, next) in zip(m.states, next_states)
     ]
+    return sys
+
+
+def serialize(m: FunctionalModel, filename):
+    sys = _build_sys(m)
 
     info = {
         "name": m.name,

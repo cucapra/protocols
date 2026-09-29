@@ -3,7 +3,7 @@
 # author: Kevin Laeufer <laeufer@cornell.edu>
 
 from pypatronus import BitVec, SignExt, ZeroExt, Slice, Update, If, Array, BitVecVal
-from fun import FunctionalModel, Method, serialize
+from fun import FunctionalModel, Method, serialize, Sim
 
 
 def picorv32_pcpi_mul():
@@ -100,12 +100,25 @@ def fifo(data_width: int, num_elements: int, push_pop: bool = False):
     return m
 
 
+def test_fifo(m: FunctionalModel, num_elements: int, push_pop: bool = False):
+    sim = Sim(m)
+    # sim.push(123)
+    # assert sim.pop() == 123
+    pass  # TODO: implement simulator for testing
+
+
 def main():
     serialize(picorv32_pcpi_mul(), "picorv32_pcpi_mul.json")
-    params = [{"data_width": 32, "num_elements": 5}]
+    params = [
+        {"data_width": 32, "num_elements": 8},
+        {"data_width": 32, "num_elements": 16},
+        {"data_width": 32, "num_elements": 128},
+    ]
     for p in params:
         file_name = "fifo_" + "_".join(f"{k}={v}" for k, v in p.items()) + ".json"
-        serialize(fifo(**p), file_name)
+        m = fifo(**p)
+        test_fifo(m, num_elements=p["num_elements"])
+        serialize(m, file_name)
 
 
 if __name__ == "__main__":
