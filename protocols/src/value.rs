@@ -9,10 +9,30 @@
 use baa::{BitVecOps, BitVecValue};
 
 /// A concrete value of any type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Value(ValueKind);
 
-#[derive(Debug, Clone)]
+impl Value {
+    pub fn to_string(&self, display_hex: bool) -> String {
+        match &self.0 {
+            ValueKind::Scalar(v) => bv_to_string(v, display_hex),
+            ValueKind::Seq(v) => {
+                let entries: Vec<_> = v.iter().map(|e| bv_to_string(e, display_hex)).collect();
+                format!("[{}]", entries.join(", "))
+            }
+        }
+    }
+}
+
+fn bv_to_string(value: &BitVecValue, display_hex: bool) -> String {
+    if display_hex {
+        format!("0x{}", value.to_hex_str())
+    } else {
+        value.to_dec_str()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum ValueKind {
     Scalar(BitVecValue),
     Seq(Vec<BitVecValue>),
@@ -116,11 +136,7 @@ impl SymBitVecValue {
 
     pub fn to_string(&self, display_hex: bool) -> String {
         if self.known.is_all_ones() {
-            if display_hex {
-                format!("0x{}", self.value.to_hex_str())
-            } else {
-                self.value.to_dec_str()
-            }
+            bv_to_string(&self.value, display_hex)
         } else if self.known.is_zero() {
             // TODO: do we actually want to keep this behavior?
             "X".to_string()
