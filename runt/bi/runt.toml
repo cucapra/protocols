@@ -1,6 +1,24 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "bi.examples_js_axis_packetize_bytestream.axis_packetize_bytestream_bi"
+paths = [
+  "../../examples/js/axis_packetize_bytestream.prot",
+]
+expect_dir = "../../examples/js/expects"
+expect_name = "axis_packetize_bytestream.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/js/axis_packetize_bytestream.prot --wave examples/js/js_axis_bytes_0.fst --instances dut:Axis --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_js_axis_stream_data.axis_stream_data_bi"
+paths = [
+  "../../examples/js/axis_stream_data.prot",
+]
+expect_dir = "../../examples/js/expects"
+expect_name = "axis_stream_data.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/js/axis_stream_data.prot --wave examples/js/js_axis_data_0.fst --instances dut:Axis --show-steps 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.ethmac_first_62us_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
