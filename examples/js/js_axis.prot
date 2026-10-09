@@ -45,7 +45,7 @@ prot stream<DUT: Axis>(data: [u32]+, tkeep_last: u4) {
 
 // Converts a bytestream into an AXI-Stream transfer, 
 // where each transfer has a 32-bit `tdata` payload (4 bytes)
-prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, tkeep_last: u4, end_of_packet: u1) {
+prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
   DUT.aresetn := 1'b1;  // Active-low reset
   DUT.tready := 1'b1;   // No backpressure 
 
@@ -57,7 +57,9 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, tkeep_last: u4, end_of_packet
 
     // Assemble the appropriate byte of `tdata`
     // Note: `iter_count::<u2>()` truncates it to the lowest 4 bits,
-    // which is equivalent to computing `iter_count % 4`
+    // which is equivalent to computing `iter_count % 4`.
+    // AXIS spec (section 2.3.1): lower order bytes of `tdata` correspond
+    // to earlier bytes in the bytestream
     if iter_count::<u2>() == 2'b00 {
       assert_eq(DUT.tdata[7:0], byte);
     } else {
@@ -75,11 +77,36 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, tkeep_last: u4, end_of_packet
     if is_last() {
       // Reached end of the `bytes` sequence
       assert_eq(DUT.tlast, end_of_packet);
-      assert_eq(DUT.tkeep, tkeep_last);
-      assert_eq(DUT.tstrb, 4'b1111);  
+
+      // Compute `tkeep` appropriately based on the result of `iter_count % 4`
+      // AXIS spec (section 2.4): `tkeep[i]` is associated with `tdata[(8*i+7):8*i]`,
+      // and lower order bytes of `tdata` come earlier in the stream. 
+      // For simplicity, we assume `tstrb` is the same as `tkeep` 
+      // (This is permitted per AXIS spec sections 2.4.3 & 3.1.2: 
+      // and is equivalent to assuming that the input byte stream only contains
+      // data bytes and not position bytes.)
+      if iter_count::<u2>() == 2'b00 {
+        assert_eq(DUT.tkeep, 4'b0001);
+        assert_eq(DUT.tstrb, 4'b0001);  
+      } else {
+        if iter_count::<u2>() == 2'b01 {
+          assert_eq(DUT.tkeep, 4'b0011);
+          assert_eq(DUT.tstrb, 4'b0011);   
+        } else {
+          if iter_count::<u2>() == 2'b10 {
+            assert_eq(DUT.tkeep, 4'b0111); 
+            assert_eq(DUT.tstrb, 4'b0111);  
+          } else {
+            assert_eq(DUT.tkeep, 4'b1111);
+            assert_eq(DUT.tstrb, 4'b1111);   
+          }
+        }
+      }
+      // One cycle for the data transfer
       step();
+
     } else {
-      // Only perform data transfer once we've assembled all 4 bytes of `tdata`, 
+      // Only perform data transfer once we've assembled all 4 bytes of `tdata`
       if iter_count::<u2>() == 2'b11 {
         assert_eq(DUT.tlast, 1'b0);
         assert_eq(DUT.tkeep, 4'b1111); 
