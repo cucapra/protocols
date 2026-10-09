@@ -45,7 +45,7 @@ prot stream<DUT: Axis>(data: [u32]+, tkeep_last: u4) {
 
 // Converts a bytestream into an AXI-Stream transfer, 
 // where each transfer has a 32-bit `tdata` payload (4 bytes)
-prot packetize_bytestream<DUT: Axis>(bytes: [u8], tkeep_last: u4, end_of_packet: u1) {
+prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, tkeep_last: u4, end_of_packet: u1) {
   DUT.aresetn := 1'b1;  // Active-low reset
   DUT.tready := 1'b1;   // No backpressure 
 
@@ -56,16 +56,22 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8], tkeep_last: u4, end_of_packet:
     }
 
     // Assemble the appropriate byte of `tdata`
+    // Note: `iter_count::<u2>()` truncates it to the lowest 4 bits,
+    // which is equivalent to computing `iter_count % 4`
     if iter_count::<u2>() == 2'b00 {
       assert_eq(DUT.tdata[7:0], byte);
-    } else if iter_count::<u2>() == 2'b01 {
-      assert_eq(DUT.tdata[15:8], byte);
-    } else if iter_count::<u2>() == 2'b10 {
-      assert_eq(DUT.tdata[23:16], byte);
     } else {
-      assert_eq(DUT.tdata[31:24], byte);
+      if iter_count::<u2>() == 2'b01 {
+        assert_eq(DUT.tdata[15:8], byte);
+      } else {
+        if iter_count::<u2>() == 2'b10 {
+          assert_eq(DUT.tdata[23:16], byte);
+        } else {
+          assert_eq(DUT.tdata[31:24], byte);
+        }
+      }
     }
-
+    
     if is_last() {
       // Reached end of the `bytes` sequence
       assert_eq(DUT.tlast, end_of_packet);
@@ -76,7 +82,8 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8], tkeep_last: u4, end_of_packet:
       // Only perform data transfer once we've assembled all 4 bytes of `tdata`, 
       if iter_count::<u2>() == 2'b11 {
         assert_eq(DUT.tlast, 1'b0);
-        assert_eq(DUT.tkeep, 4'b1111); assert_eq(DUT.tstrb, 4'b1111);
+        assert_eq(DUT.tkeep, 4'b1111); 
+        assert_eq(DUT.tstrb, 4'b1111);
         step();
       }
     }    
