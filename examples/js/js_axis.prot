@@ -12,6 +12,13 @@ struct Axis {
   out tlast: u1, 
 }
 
+prot reset<DUT: Axis>() {
+  // Reset is active-low
+  DUT.aresetn := 1'b0;
+  step();
+}
+
+
 // `tkeep_last` represents "the tkeep for the last beat", 
 // i.e. if `len(data) % 4 != 0`, then `tkeep` would represent what the last beat would be
 // The body of this protocol would set `tkeep` to 1 for all the non-last beats
@@ -47,9 +54,9 @@ struct Axis {
 //   }
 // }
 
-// Converts a bytestream into an AXI-Stream transfer, 
+// Converts a bytestream (non-empty sequence of bytes) into AXI-Stream transfers, 
 // where each transfer has a 32-bit `tdata` payload (4 bytes)
-prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
+prot packetize_bytestream<DUT: Axis>(bytes: [u8]+) {
   DUT.aresetn := 1'b1;  // Active-low reset
   DUT.tready := 1'b1;   // No backpressure 
 
@@ -79,8 +86,9 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
     }
     
     if is_last() {
-      // Reached end of the `bytes` sequence
-      assert_eq(DUT.tlast, end_of_packet);
+      // Reached end of the `bytes` sequence 
+      // (Assume this coincides with the end of a packet, as indicate by setting `tlast = 1`)
+      assert_eq(DUT.tlast, 1'b1);
 
       // Compute `tkeep` appropriately based on the result of `iter_count % 4`
       // AXIS spec (section 2.4): `tkeep[i]` is associated with `tdata[(8*i+7):8*i]`,
@@ -118,17 +126,4 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
     // Note: if `iter_count % 4 != 3`, we just proceed to the next 
     // for-loop iteration without stepping 
   } 
-}
-
-prot reset<DUT: Axis>() {
-  // Reset is active-low
-  DUT.aresetn := 1'b0;
-  step();
-}
-
-#[idle]
-prot idle<DUT: Axis>() {
-  DUT.aresetn := 1'b1;
-  assert_eq(DUT.tvalid, 1'b0);
-  step();
 }
