@@ -12,7 +12,24 @@ struct Axis {
   out tlast: u1, 
 }
 
+prot reset<DUT: Axis>() {
+  // Reset is active-low
+  DUT.aresetn := 1'b0;
+  step();
+}
 
+// No valid data on bus when idle
+#[idle]
+prot idle<DUT: Axis>() {
+  DUT.aresetn := 1'b1;
+  DUT.tready := 1'b0;
+  assert_eq(DUT.tvalid, 1'b0);
+  step();
+}
+
+// Transmits a sequence of `u32` data items via AXI-Stream 
+// (where the end of the sequence represents the end of a packet, i.e. `tlast = 1` 
+// when we reach the end of the sequence).
 // `tkeep_last` represents "the tkeep for the last beat", 
 // i.e. if `len(data) % 4 != 0`, then `tkeep` would represent what the last beat would be
 // The body of this protocol would set `tkeep` to 1 for all the non-last beats

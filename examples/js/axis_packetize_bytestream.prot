@@ -18,6 +18,16 @@ prot reset<DUT: Axis>() {
   step();
 }
 
+// No valid data on bus when idle
+#[idle]
+prot idle<DUT: Axis>() {
+  DUT.aresetn := 1'b1;
+  DUT.tready := 1'b0;
+  assert_eq(DUT.tvalid, 1'b0);
+  step();
+}
+
+
 // Converts a bytestream (non-empty sequence of bytes) into AXI-Stream transfers, 
 // where each transfer has a 32-bit `tdata` payload (4 bytes)
 prot packetize_bytestream<DUT: Axis>(bytes: [u8]+) {
