@@ -15,33 +15,37 @@ struct Axis {
 // `tkeep_last` represents "the tkeep for the last beat", 
 // i.e. if `len(data) % 4 != 0`, then `tkeep` would represent what the last beat would be
 // The body of this protocol would set `tkeep` to 1 for all the non-last beats
-prot stream<DUT: Axis>(data: [u32]+, tkeep_last: u4) {
-  DUT.aresetn := 1'b1;  // Active-low reset
-  DUT.tready := 1'b1;  // Raphaell: No backpressure 
+// prot stream<DUT: Axis>(data: [u32]+, tkeep_last: u4) {
+//   DUT.aresetn := 1'b1;  // Active-low reset
+//   DUT.tready := 1'b1;  // Raphaell: No backpressure 
 
-  for d in data {
-    // Wait till DUT asserts there is valid data
-    while (!(DUT.tvalid == 1'b1)) {
-      step();
-    }
+//   for d in data {
+//     // Wait till DUT asserts there is valid data
+//     while (!(DUT.tvalid == 1'b1)) {
+//       step();
+//     }
 
-    // Transmit tdata & tstrb
-    assert_eq(DUT.tdata, d);
+//     // Transmit tdata & tstrb
+//     assert_eq(DUT.tdata, d);
 
-    // Assume we are only transmitting data bytes (i.e., tstrb is always 1s)
-    assert_eq(DUT.tstrb, 4'b1111);    
 
-    if !is_last() {
-      assert_eq(DUT.tkeep, 4'b1111);
-      assert_eq(DUT.tlast, 1'b0);
-    } else {
-      assert_eq(DUT.tkeep, tkeep_last);
-      assert_eq(DUT.tlast, 1'b1);
-    }
+//     // For simplicity, we assume `tstrb` is the same as `tkeep` 
+//     // (This is permitted per AXIS spec sections 2.4.3 & 3.1.2: 
+//     // and is equivalent to assuming that the input byte stream only contains
+//     // data bytes and not position bytes.)
+//     if !is_last() {
+//       assert_eq(DUT.tkeep, 4'b1111);
+//       assert_eq(DUT.tstrb, 4'b1111);   
+//       assert_eq(DUT.tlast, 1'b0);
+//     } else {
+//       assert_eq(DUT.tkeep, tkeep_last);
+//       assert_eq(DUT.tstrb, tkeep_last);
+//       assert_eq(DUT.tlast, 1'b1);
+//     }
 
-    step();
-  }
-}
+//     step();
+//   }
+// }
 
 // Converts a bytestream into an AXI-Stream transfer, 
 // where each transfer has a 32-bit `tdata` payload (4 bytes)
@@ -56,7 +60,7 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
     }
 
     // Assemble the appropriate byte of `tdata`
-    // Note: `iter_count::<u2>()` truncates it to the lowest 4 bits,
+    // Note: `iter_count::<u2>()` truncates it to the lowest 2 bits,
     // which is equivalent to computing `iter_count % 4`.
     // AXIS spec (section 2.3.1): lower order bytes of `tdata` correspond
     // to earlier bytes in the bytestream
@@ -81,10 +85,7 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
       // Compute `tkeep` appropriately based on the result of `iter_count % 4`
       // AXIS spec (section 2.4): `tkeep[i]` is associated with `tdata[(8*i+7):8*i]`,
       // and lower order bytes of `tdata` come earlier in the stream. 
-      // For simplicity, we assume `tstrb` is the same as `tkeep` 
-      // (This is permitted per AXIS spec sections 2.4.3 & 3.1.2: 
-      // and is equivalent to assuming that the input byte stream only contains
-      // data bytes and not position bytes.)
+      // Like above, we assume that `tkeep` and `tstrb` are the same for now.
       if iter_count::<u2>() == 2'b00 {
         assert_eq(DUT.tkeep, 4'b0001);
         assert_eq(DUT.tstrb, 4'b0001);  
@@ -117,4 +118,17 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+, end_of_packet: u1) {
     // Note: if `iter_count % 4 != 3`, we just proceed to the next 
     // for-loop iteration without stepping 
   } 
+}
+
+prot reset<DUT: Axis>() {
+  // Reset is active-low
+  DUT.aresetn := 1'b0;
+  step();
+}
+
+#[idle]
+prot idle<DUT: Axis>() {
+  DUT.aresetn := 1'b1;
+  assert_eq(DUT.tvalid, 1'b0);
+  step();
 }
