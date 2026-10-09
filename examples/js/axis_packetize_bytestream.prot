@@ -18,42 +18,6 @@ prot reset<DUT: Axis>() {
   step();
 }
 
-
-// `tkeep_last` represents "the tkeep for the last beat", 
-// i.e. if `len(data) % 4 != 0`, then `tkeep` would represent what the last beat would be
-// The body of this protocol would set `tkeep` to 1 for all the non-last beats
-// prot stream<DUT: Axis>(data: [u32]+, tkeep_last: u4) {
-//   DUT.aresetn := 1'b1;  // Active-low reset
-//   DUT.tready := 1'b1;  // Raphaell: No backpressure 
-
-//   for d in data {
-//     // Wait till DUT asserts there is valid data
-//     while (!(DUT.tvalid == 1'b1)) {
-//       step();
-//     }
-
-//     // Transmit tdata & tstrb
-//     assert_eq(DUT.tdata, d);
-
-
-//     // For simplicity, we assume `tstrb` is the same as `tkeep` 
-//     // (This is permitted per AXIS spec sections 2.4.3 & 3.1.2: 
-//     // and is equivalent to assuming that the input byte stream only contains
-//     // data bytes and not position bytes.)
-//     if !is_last() {
-//       assert_eq(DUT.tkeep, 4'b1111);
-//       assert_eq(DUT.tstrb, 4'b1111);   
-//       assert_eq(DUT.tlast, 1'b0);
-//     } else {
-//       assert_eq(DUT.tkeep, tkeep_last);
-//       assert_eq(DUT.tstrb, tkeep_last);
-//       assert_eq(DUT.tlast, 1'b1);
-//     }
-
-//     step();
-//   }
-// }
-
 // Converts a bytestream (non-empty sequence of bytes) into AXI-Stream transfers, 
 // where each transfer has a 32-bit `tdata` payload (4 bytes)
 prot packetize_bytestream<DUT: Axis>(bytes: [u8]+) {
