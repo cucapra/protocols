@@ -1,5 +1,5 @@
 // Wrapper Verilog module for renaming pins
-module js_axis_dut (
+module axis_dut (
     input  wire        clk,
     input  wire        aresetn,
     input  wire        tready,
