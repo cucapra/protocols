@@ -1,6 +1,24 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "interp.examples_axis_packetize_bytestream.packetize_bytestream_interp"
+paths = [
+  "../../examples/axis/packetize_bytestream.tx",
+]
+expect_dir = "../../examples/axis/expects"
+expect_name = "packetize_bytestream.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/axis/packetize_bytestream.tx --verilog examples/axis/axis_dut.v tests/fpga-debugging/axi-stream-s2/s2_fixed.v --protocol examples/axis/axis_packetize_bytestream.prot --module axis_dut 2>&1"
+
+[[tests]]
+name = "interp.examples_axis_stream_data.stream_data_interp"
+paths = [
+  "../../examples/axis/stream_data.tx",
+]
+expect_dir = "../../examples/axis/expects"
+expect_name = "stream_data.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/axis/stream_data.tx --verilog examples/axis/axis_dut.v tests/fpga-debugging/axi-stream-s2/s2_fixed.v --protocol examples/axis/axis_stream_data.prot --module axis_dut 2>&1"
+
+[[tests]]
 name = "interp.examples_picorv32_unsigned_mul.unsigned_mul_interp"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",

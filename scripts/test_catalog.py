@@ -486,6 +486,24 @@ TX_CASES = {
         "top": "reqwalker",
         "expect": "pass",
     },
+    "examples/axis/packetize_bytestream.tx": {
+        "protocol": "examples/axis/axis_packetize_bytestream.prot",
+        "verilog": (
+            "examples/axis/axis_dut.v",
+            "tests/fpga-debugging/axi-stream-s2/s2_fixed.v",
+        ),
+        "top": "axis_dut",
+        "expect": "pass",
+    },
+    "examples/axis/stream_data.tx": {
+        "protocol": "examples/axis/axis_stream_data.prot",
+        "verilog": (
+            "examples/axis/axis_dut.v",
+            "tests/fpga-debugging/axi-stream-s2/s2_fixed.v",
+        ),
+        "top": "axis_dut",
+        "expect": "pass",
+    },
 }
 
 BI_CASES = {
@@ -1075,6 +1093,20 @@ BI_CASES = {
         "expect": "pass",
         # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
         "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
+    },
+    "examples.axis.axis_packetize_bytestream": {
+        "protocol": "examples/axis/axis_packetize_bytestream.prot",
+        "wave": "examples/axis/axis_bytes_0.fst",
+        "instances": ("dut:Axis",),
+        "expect": "pass",
+        "extra_args": ("--show-steps",),
+    },
+    "examples.axis.axis_stream_data": {
+        "protocol": "examples/axis/axis_stream_data.prot",
+        "wave": "examples/axis/axis_data_0.fst",
+        "instances": ("dut:Axis",),
+        "expect": "pass",
+        "extra_args": ("--show-steps",),
     },
 }
 
