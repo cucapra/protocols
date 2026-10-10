@@ -86,7 +86,7 @@ impl Tuple {
     }
 
     pub fn first_type(&self) -> Type {
-        self.0 
+        self.0
     }
 
     pub fn second_type(&self) -> Type {

@@ -364,7 +364,7 @@ fn expr_to_verilog(
         }
         Expr::IsLastIteration => todo!("loops"),
         Expr::IterCount(_) => todo!("loops"),
-        Expr::TupleProj(_, _) => todo!("Handle tuple projections")
+        Expr::TupleProj(_, _) => todo!("Handle tuple projections"),
     }
 }
 

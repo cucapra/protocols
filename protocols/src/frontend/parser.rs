@@ -118,11 +118,20 @@ fn parse_boxed_expr(
                         &primary,
                         "Expected path rule in tuple projection expression",
                     )?;
-                    let mut parsed_expr = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
+                    let mut parsed_expr =
+                        parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
                     // Handle nested tuple projections, e.g. `pair.0.0`, where `pair : ((u8, u8), u8)`
                     for idx_rule in inner_rules {
-                        let idx = idx_rule.as_str().parse::<u32>().expect("Unable to parse tuple projection index");
-                        parsed_expr = BoxedExpr::TupleProj(Box::new(parsed_expr), idx, start, idx_rule.as_span().end());
+                        let idx = idx_rule
+                            .as_str()
+                            .parse::<u32>()
+                            .expect("Unable to parse tuple projection index");
+                        parsed_expr = BoxedExpr::TupleProj(
+                            Box::new(parsed_expr),
+                            idx,
+                            start,
+                            idx_rule.as_span().end(),
+                        );
                     }
                     Ok(parsed_expr)
                 }
@@ -324,7 +333,10 @@ fn parse_type(
                 Ok(Type::Tuple(tuple_id))
             }
             _ => {
-                let msg = format!("Unexpected rule while parsing type: {:?}", inner_type.as_rule());
+                let msg = format!(
+                    "Unexpected rule while parsing type: {:?}",
+                    inner_type.as_rule()
+                );
                 diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
                 Err(msg)
             }
