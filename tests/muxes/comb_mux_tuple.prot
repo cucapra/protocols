@@ -1,0 +1,22 @@
+struct Mux {
+  in a: u8,
+  in b: u8,
+  in sel: u1,
+  out y: u8
+}
+
+prot first<DUT: Mux>(inputs: (u8, u8), y: u8) {
+  DUT.a := inputs.0;
+  DUT.b := inputs.1;
+  DUT.sel := 1'b0;
+  assert_eq(DUT.y, y);
+  step();
+}
+
+prot second<DUT: Mux>(inputs: (u8, u8), y: u8) {
+  DUT.a := inputs.0;
+  DUT.b := inputs.1;
+  DUT.sel := 1'b1;
+  assert_eq(DUT.y, y);
+  step();
+}
