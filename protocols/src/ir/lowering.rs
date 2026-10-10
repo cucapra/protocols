@@ -214,6 +214,9 @@ impl<'a> Lowerer<'a> {
             Expr::IterCount(_) => {
                 panic!("loop expressions are not lowered to Patronus yet")
             }
+            Expr::TupleProj(_, _) => {
+                panic!("Tuple projection expressions are not lowered to Patronus yet")
+            }
         }
     }
 

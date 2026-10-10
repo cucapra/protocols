@@ -181,6 +181,9 @@ fn type_check_expr(
         // evaluates to true or false
         Expr::IsLastIteration => Ok(Type::BitVec(1)),
         Expr::IterCount(width) => Ok(Type::BitVec(*width)),
+        Expr::TupleProj(_, _) => {
+            todo!("Handle tuple projections in typechecker")
+        }
     }
 }
 

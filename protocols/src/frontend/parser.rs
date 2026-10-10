@@ -109,6 +109,23 @@ fn parse_boxed_expr(
                         }
                     }
                 }
+                Rule::tuple_proj => {
+                    let mut inner_rules = primary.clone().into_inner();
+                    let path_rule = expect_rule(
+                        diag,
+                        fileid,
+                        inner_rules.next(),
+                        &primary,
+                        "Expected path rule in tuple projection expression",
+                    )?;
+                    let mut parsed_expr = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
+                    // Handle nested tuple projections, e.g. `pair.0.0`, where `pair : ((u8, u8), u8)`
+                    for idx_rule in inner_rules {
+                        let idx = idx_rule.as_str().parse::<u32>().expect("Unable to parse tuple projection index");
+                        parsed_expr = BoxedExpr::TupleProj(Box::new(parsed_expr), idx, start, idx_rule.as_span().end());
+                    }
+                    Ok(parsed_expr)
+                }
                 Rule::dont_care => Ok(BoxedExpr::DontCare(start, end)),
                 Rule::slice => {
                     let mut inner_rules = primary.clone().into_inner();
@@ -222,6 +239,12 @@ fn boxed_expr_to_expr_id(
         BoxedExpr::Slice(expr, idx1, idx2, start, end) => {
             let sym_id = boxed_expr_to_expr_id(ctx, fileid, *expr)?;
             let expr_id = ctx.e(Expr::Slice(sym_id, idx1, idx2));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::TupleProj(expr, idx, start, end) => {
+            let path_id = boxed_expr_to_expr_id(ctx, fileid, *expr)?;
+            let expr_id = ctx.e(Expr::TupleProj(path_id, idx));
             ctx.add_expr_loc(expr_id, start, end, fileid);
             expr_id
         }

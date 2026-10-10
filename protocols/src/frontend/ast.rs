@@ -524,6 +524,8 @@ pub enum Expr {
     /// Inside a loop, this evaluates to the current number of _finished_ iterations.
     /// So in the first iteration, this evaluates to zero.
     IterCount(u32),
+    /// Projecting from a tuple, e.g. `pair.0` or `pair.1`
+    TupleProj(ExprId, u32)
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -541,6 +543,8 @@ pub enum BoxedExpr {
     Unary(UnaryOp, Box<BoxedExpr>, usize, usize),
     // indexing
     Slice(Box<BoxedExpr>, u32, u32, usize, usize),
+    // Projecting from a tuple 
+    TupleProj(Box<BoxedExpr>, u32, usize, usize),
 }
 
 impl BoxedExpr {
@@ -555,6 +559,7 @@ impl BoxedExpr {
             BoxedExpr::Binary(_, _, _, start, _) => *start,
             BoxedExpr::Unary(_, _, start, _) => *start,
             BoxedExpr::Slice(_, _, _, start, _) => *start,
+            BoxedExpr::TupleProj(_, _, start, _) => *start,
         }
     }
 
@@ -569,6 +574,7 @@ impl BoxedExpr {
             BoxedExpr::Binary(_, _, _, _, end) => *end,
             BoxedExpr::Unary(_, _, _, end) => *end,
             BoxedExpr::Slice(_, _, _, _, end) => *end,
+            BoxedExpr::TupleProj(_, _, _, end) => *end, 
         }
     }
 }
@@ -594,7 +600,10 @@ pub fn find_symbols(ctx: &ProtocolContext, e: ExprId) -> FxHashSet<SymbolId> {
                 todo.push(a);
             }
             Expr::IsLastIteration => {}
-            Expr::IterCount(_) => {}
+            Expr::IterCount(_) => {},
+            Expr::TupleProj(e, _) => {
+                todo.push(e)
+            }
         }
     }
     out

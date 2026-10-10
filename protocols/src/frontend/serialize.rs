@@ -200,6 +200,11 @@ where
                 format!("{}[{}:{}]", maybe_parens(e, &exprs[*expr], None), i, j)
             }
         }
+        Expr::TupleProj(expr, idx) => {
+            let e = serialize_expr(exprs, st, expr);
+            let i = idx.to_string();
+            format!("{}.{}", e, i)
+        }
     }
 }
 
@@ -621,6 +626,12 @@ pub mod tests {
     fn display_filename(filename: &str) -> &str {
         filename.strip_prefix("../").unwrap_or(filename)
     }
+
+    #[test]
+    fn test_comb_mux() {
+        test_helper("../tests/muxes/comb_mux_tuple.prot", "comb_mux_tuple");
+    }
+
 
     #[test]
     fn test_add_transaction() {

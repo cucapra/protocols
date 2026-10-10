@@ -29,7 +29,7 @@ iter_count_expr = {"iter_count" ~ "::" ~ "<" ~ bv_tpe ~ ">" ~ "(" ~ ")"}
 // Slicing
 slice = { path_id ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
 
-primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter_count_expr | path_id}
+primary = _{tuple_proj | slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter_count_expr | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     not = { "!" }
@@ -51,6 +51,11 @@ seq_tpe = {"[" ~ tpe ~ "]"}
 seq_plus_tpe = {"[" ~ tpe ~ "]+"}
 seq_plus_plus_tpe = {"[" ~ tpe ~ "]++"}
 tuple_tpe = {"(" ~ tpe ~ "," ~ tpe ~ ")"}
+
+// Projecting from tuples
+proj_idx = @{ ASCII_DIGIT }
+tuple_proj = ${ path_id ~ ("." ~ proj_idx)+ }
+
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
 // cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
 step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}

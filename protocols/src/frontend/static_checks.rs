@@ -181,6 +181,9 @@ pub fn check_condition_wf(
         Expr::Unary(_, inner_expr) | Expr::Slice(inner_expr, _, _) => {
             check_condition_wf(inner_expr, tr, symbol_table, handler, allow_branch_on_arg)
         }
+        Expr::TupleProj(_, _) => {
+            todo!("Handle tuple projections in check_condition_wf")
+        }
     }
 }
 
@@ -233,6 +236,9 @@ pub fn check_assertion_arg_wf(
         }
         Expr::IsLastIteration => todo!(),
         Expr::IterCount(_) => todo!(),
+        Expr::TupleProj(_, _) => {
+            todo!("Handle tuple projections in check_assertion_arg_wf")
+        }
     }
 }
 
@@ -361,6 +367,9 @@ pub fn check_assignment_rhs_wf(
         }
         Expr::IsLastIteration => todo!(),
         Expr::IterCount(_) => Ok(()),
+        Expr::TupleProj(_, _) => {
+            todo!("Handle tuple projections in `check_assignment_rhs_wf`")
+        }
     }
 }
 

@@ -430,6 +430,9 @@ impl Remapper<'_> {
             }
             Expr::IsLastIteration => self.out.e(Expr::IsLastIteration),
             Expr::IterCount(v) => self.out.e(Expr::IterCount(v)),
+            Expr::TupleProj(_, _) => {
+                todo!("Handle tuple projections in Remapper::on_expr")
+            }
         }
     }
 
@@ -460,6 +463,9 @@ impl Remapper<'_> {
             }
             Expr::IsLastIteration => self.out.e(Expr::IsLastIteration),
             Expr::IterCount(v) => self.out.e(Expr::IterCount(v)),
+            Expr::TupleProj(_, _) => {
+                todo!("Handle tuple projections in Remapper::on_remap_expr")
+            }
         }
     }
 }

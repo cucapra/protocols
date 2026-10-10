@@ -599,6 +599,9 @@ impl<'a> Evaluator<'a> {
                     )),
                 }
             }
+            Expr::TupleProj(_, _) => {
+                todo!("Handle tuple projections in interpreter")
+            }
         }
     }
 
