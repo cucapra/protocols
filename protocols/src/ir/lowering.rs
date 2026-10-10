@@ -235,6 +235,7 @@ impl<'a> Lowerer<'a> {
             FrontType::BitVec(width) => self.ir.expr_ctx.bv_symbol(&full_name, width),
             FrontType::Struct(_)
             | FrontType::Seq(_)
+            | FrontType::Tuple(_)
             | FrontType::UnsignedInt
             | FrontType::Unknown => {
                 panic!(

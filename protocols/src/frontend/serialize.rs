@@ -50,6 +50,12 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
             };
             format!("[{}]{suffix}", serialize_type(st, st[seq_id].tpe()))
         }
+        Type::Tuple(tuple_id) => {
+            let tuple = &st[tuple_id];
+            let first_type_str = serialize_type(st, tuple.first_type());
+            let second_type_str = serialize_type(st, tuple.second_type()); 
+            format!("({},{})", first_type_str, second_type_str)
+        }
         Type::Unknown => "unknown".to_string(),
     }
 }

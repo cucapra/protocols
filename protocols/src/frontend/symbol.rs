@@ -8,7 +8,6 @@
 use std::ops::Index;
 
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use rand::seq::index;
 use rustc_hash::FxHashMap;
 
 use crate::frontend::serialize::serialize_type;
@@ -81,9 +80,19 @@ impl Seq {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tuple(Type, Type);
 
+impl Tuple {
+    pub fn new(first_type: Type, second_type: Type) -> Self {
+        Self(first_type, second_type)
+    }
 
+    pub fn first_type(&self) -> Type {
+        self.0 
+    }
 
-
+    pub fn second_type(&self) -> Type {
+        self.1
+    }
+}
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct StructId(u32);
@@ -292,6 +301,7 @@ impl Default for SymbolTable {
             by_name_sym: Default::default(),
             structs: Default::default(),
             seq: Default::default(),
+            tuples: Default::default(),
             by_name_struct: Default::default(),
             scopes,
             active_scope: ROOT_SCOPE,
@@ -540,7 +550,7 @@ impl Index<&TupleId> for SymbolTable {
     type Output = Tuple;
 
     fn index(&self, index: &TupleId) -> &Self::Output {
-        &self.tuples[index]
+        &self.tuples[*index]
     }
 }
 
