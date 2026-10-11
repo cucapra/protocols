@@ -242,6 +242,9 @@ fn parse_arg(
                 return Err(anyhow!(msg));
             }
         }
+        Rule::tuple_arg => {
+            todo!("handle tuples")
+        }
         other => unreachable!("unexpected rule: {:?}", other),
     };
     Ok(value)
