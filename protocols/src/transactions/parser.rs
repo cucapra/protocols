@@ -379,3 +379,117 @@ fn parse_scalar_arg(
         Ok(IntFormat::Decimal.parse_bitvec_value(decimal_str, bitwidth))
     }
 }
+
+/// Tests for transactions parser
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::parser::parse_file_with_name;
+    use clap::ColorChoice;
+    use std::io::Write;
+
+    fn parse_tx(
+        prot_path: &str,
+        prot_display_name: &str,
+        content: &str,
+    ) -> (anyhow::Result<Vec<Vec<Invocation>>>, String) {
+        let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
+        let ast = parse_file_with_name(prot_path, prot_display_name, &mut handler)
+            .expect("failed to parse protocol");
+        let mut tx_file = tempfile::Builder::new().suffix(".tx").tempfile().unwrap();
+        tx_file.write_all(content.as_bytes()).unwrap();
+        let result = parse_transactions_file(tx_file.path(), &mut handler, &ast.st, &ast.protos);
+        (result, handler.error_string().to_string())
+    }
+
+    fn assert_parse_error(
+        prot_path: &str,
+        prot_display_name: &str,
+        content: &str,
+        expected_msg: &str,
+    ) {
+        let (result, errors) = parse_tx(prot_path, prot_display_name, content);
+        assert!(result.is_err(), "expected a parse error for: {content}");
+        assert!(
+            errors.contains(expected_msg),
+            "expected error containing {expected_msg:?}, got:\n{errors}"
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg() {
+        let (result, errors) = parse_tx(
+            "../tests/muxes/comb_mux_tuple.prot",
+            "comb_mux_tuple",
+            "trace { first((1, 2), 1); second((0x3, 0b100), 4); }",
+        );
+        let traces = result.unwrap_or_else(|e| panic!("{e}\n{errors}"));
+        assert_eq!(traces.len(), 1);
+        let trace = &traces[0];
+        assert_eq!(trace.len(), 2);
+
+        let expected = [
+            ("first", Value::from((bv(1, 8), bv(2, 8))), bv(1, 8)),
+            ("second", Value::from((bv(3, 8), bv(4, 8))), bv(4, 8)),
+        ];
+        for ((name, args), (expected_name, expected_tuple, expected_y)) in
+            trace.iter().zip(expected)
+        {
+            assert_eq!(name, expected_name);
+            assert_eq!(args.len(), 2);
+            assert_eq!(format!("{:?}", args[0]), format!("{:?}", expected_tuple));
+            let y: &BitVecValue = (&args[1]).try_into().unwrap();
+            assert_eq!(y, &expected_y);
+        }
+    }
+
+    #[test]
+    fn test_tuple_arg_too_many_components() {
+        assert_parse_error(
+            "../tests/muxes/comb_mux_tuple.prot",
+            "comb_mux_tuple",
+            "trace { first((1, 2, 3), 1); }",
+            "Expected 2 values for a tuple but got 3 values instead",
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg_too_few_components() {
+        assert_parse_error(
+            "../tests/muxes/comb_mux_tuple.prot",
+            "comb_mux_tuple",
+            "trace { first((1,), 1); }",
+            "Expected 2 values for a tuple but got 1 values instead",
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg_component_type_mismatch() {
+        assert_parse_error(
+            "../tests/muxes/comb_mux_tuple.prot",
+            "comb_mux_tuple",
+            "trace { first(([1], 2), 1); }",
+            "Invalid sequence of values for argument of type u8",
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg_for_scalar_param() {
+        assert_parse_error(
+            "../tests/muxes/comb_mux_tuple.prot",
+            "comb_mux_tuple",
+            "trace { first((1, 2), (3, 4)); }",
+            "Invalid value for argument of type u8",
+        );
+    }
+
+    #[test]
+    fn test_scalar_arg_for_tuple_param() {
+        assert_parse_error(
+            "../tests/muxes/comb_mux_tuple.prot",
+            "comb_mux_tuple",
+            "trace { first(1, 2); }",
+            "Unsupported argument type",
+        );
+    }
+}
