@@ -16,6 +16,7 @@ pub struct Value(ValueKind);
 enum ValueKind {
     Scalar(BitVecValue),
     Seq(Vec<BitVecValue>),
+    Tuple(BitVecValue, BitVecValue),
 }
 
 impl TryFrom<Value> for BitVecValue {
@@ -51,6 +52,12 @@ impl TryFrom<Value> for Vec<BitVecValue> {
             Value(ValueKind::Seq(v)) => Ok(v),
             _ => Err(()),
         }
+    }
+}
+
+impl From<(BitVecValue, BitVecValue)> for Value {
+    fn from((fst, snd): (BitVecValue, BitVecValue)) -> Self {
+        Value(ValueKind::Tuple(fst, snd))
     }
 }
 
@@ -225,6 +232,9 @@ impl From<Value> for SymValue {
         match value.0 {
             ValueKind::Scalar(v) => Self(SymValueKind::Scalar(v.into())),
             ValueKind::Seq(v) => Self(SymValueKind::Seq(v.into())),
+            ValueKind::Tuple(_, _) => {
+                todo!("Convert ValueKind::Tuple to a new SymValueKind constructor")
+            }
         }
     }
 }

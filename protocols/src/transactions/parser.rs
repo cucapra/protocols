@@ -243,7 +243,50 @@ fn parse_arg(
             }
         }
         Rule::tuple_arg => {
-            todo!("handle tuples")
+            if let Type::Tuple(tuple_id) = ty {
+                let tuple_ty = &st[tuple_id];
+                let tuple_component_tys = vec![tuple_ty.first_type(), tuple_ty.second_type()];
+                let tuple_components = arg_pair
+                    .clone()
+                    .into_inner()
+                    .next()
+                    .map_or_else(|| vec![], collect_arg_pairs);
+                if tuple_components.len() != tuple_component_tys.len() {
+                    let msg = format!(
+                        "Expected 2 values for a tuple but got {} values instead",
+                        tuple_components.len()
+                    );
+                    handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                    return Err(anyhow!(msg));
+                } else {
+                    let tuple_component_values = tuple_components
+                        .into_iter()
+                        .zip(tuple_component_tys.iter())
+                        .map(|(arg, arg_ty)| parse_arg(st, arg, arg_ty, handler, fileid))
+                        .collect::<anyhow::Result<Vec<Value>>>()?;
+                    let [fst, snd]: [Value; 2] = tuple_component_values
+                        .try_into()
+                        .expect("Expected 2 values for a tuple but got a different no. of values");
+                    match (BitVecValue::try_from(fst), BitVecValue::try_from(snd)) {
+                        (Ok(fst), Ok(snd)) => (fst, snd).into(),
+                        _ => {
+                            let msg = format!(
+                                "At the moment, tuples can only store bit-vector values: {} is not supported",
+                                serialize_type(st, *ty)
+                            );
+                            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                            return Err(anyhow!(msg));
+                        }
+                    }
+                }
+            } else {
+                let msg = format!(
+                    "Invalid value for argument of type {}",
+                    serialize_type(st, *ty)
+                );
+                handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                return Err(anyhow!(msg));
+            }
         }
         other => unreachable!("unexpected rule: {:?}", other),
     };
