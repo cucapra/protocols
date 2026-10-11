@@ -5,6 +5,8 @@ struct Mux {
   out y: u8
 }
 
+// Contrived protocol used to test if tuples parse & typecheck correctly
+// (Technically tuples are not necessary for this protocol)
 prot first<DUT: Mux>(inputs: (u8, u8), y: u8) {
   DUT.a := inputs.0;
   DUT.b := inputs.1;
