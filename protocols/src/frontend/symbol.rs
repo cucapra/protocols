@@ -85,6 +85,17 @@ impl Tuple {
         Self(first_type, second_type)
     }
 
+    /// Indexes into a tuple type (we need this function since Rust doesn't allow indexing into a tuple using a variable)
+    pub fn get(&self, idx: u32) -> Option<Type> {
+        if idx == 0 {
+            Some(self.0)
+        } else if idx == 1 {
+            Some(self.1)
+        } else {
+            None
+        }
+    }
+
     pub fn first_type(&self) -> Type {
         self.0
     }
