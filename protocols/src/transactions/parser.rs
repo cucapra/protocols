@@ -385,7 +385,6 @@ fn parse_scalar_arg(
 mod tests {
     use super::*;
     use crate::frontend::parser::parse_file_with_name;
-    use clap::ColorChoice;
     use std::io::Write;
 
     /// Creates a temporary `.tx` file containing the contents of the `transactions_trace` string,
@@ -396,11 +395,11 @@ mod tests {
         protocol_name: &str,
         transaction_trace: &str,
     ) -> (anyhow::Result<Vec<Vec<Invocation>>>, String) {
-        let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
+        let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, false, false);
         let ast = parse_file_with_name(protocol_file, protocol_name, &mut handler)
             .expect("failed to parse protocol");
-        let mut tx_file = tempfile::Builder::new().suffix(".tx").tempfile().unwrap();
-        tx_file.write_all(transaction_trace.as_bytes()).unwrap();
+        let mut tx_file = tempfile::Builder::new().suffix(".tx").tempfile().expect("Unable to create temp .tx file");
+        tx_file.write_all(transaction_trace.as_bytes()).expect("Unable to write to temp .tx file");
         let result = parse_transactions_file(tx_file.path(), &mut handler, &ast.st, &ast.protos);
         (result, handler.error_string().to_string())
     }
