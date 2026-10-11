@@ -245,12 +245,12 @@ fn parse_arg(
         Rule::tuple_arg => {
             if let Type::Tuple(tuple_id) = ty {
                 let tuple_ty = &st[tuple_id];
-                let tuple_component_tys = vec![tuple_ty.first_type(), tuple_ty.second_type()];
+                let tuple_component_tys = [tuple_ty.first_type(), tuple_ty.second_type()];
                 let tuple_components = arg_pair
                     .clone()
                     .into_inner()
                     .next()
-                    .map_or_else(|| vec![], collect_arg_pairs);
+                    .map_or_else(Vec::new, collect_arg_pairs);
                 if tuple_components.len() != tuple_component_tys.len() {
                     let msg = format!(
                         "Expected 2 values for a tuple but got {} values instead",
@@ -388,31 +388,40 @@ mod tests {
     use clap::ColorChoice;
     use std::io::Write;
 
+    /// Creates a temporary `.tx` file containing the contents of the `transactions_trace` string,
+    /// then parses that `.tx` file alongside the provided `protocol_file`, checking to see
+    /// that the `.tx` file parses correctly
     fn parse_tx(
-        prot_path: &str,
-        prot_display_name: &str,
-        content: &str,
+        protocol_file: &str,
+        protocol_name: &str,
+        transaction_trace: &str,
     ) -> (anyhow::Result<Vec<Vec<Invocation>>>, String) {
         let mut handler = DiagnosticHandler::new(ColorChoice::Never, false, false, false);
-        let ast = parse_file_with_name(prot_path, prot_display_name, &mut handler)
+        let ast = parse_file_with_name(protocol_file, protocol_name, &mut handler)
             .expect("failed to parse protocol");
         let mut tx_file = tempfile::Builder::new().suffix(".tx").tempfile().unwrap();
-        tx_file.write_all(content.as_bytes()).unwrap();
+        tx_file.write_all(transaction_trace.as_bytes()).unwrap();
         let result = parse_transactions_file(tx_file.path(), &mut handler, &ast.st, &ast.protos);
         (result, handler.error_string().to_string())
     }
 
+    /// Asserts that a parse error occured with the `expected_error_msg`
+    /// when trying to parse a `transcation_trace` string
+    /// with the provided `protocol_file`
     fn assert_parse_error(
-        prot_path: &str,
-        prot_display_name: &str,
-        content: &str,
-        expected_msg: &str,
+        protocol_file: &str,
+        protocol_name: &str,
+        transaction_trace: &str,
+        expected_error_msg: &str,
     ) {
-        let (result, errors) = parse_tx(prot_path, prot_display_name, content);
-        assert!(result.is_err(), "expected a parse error for: {content}");
+        let (result, errors) = parse_tx(protocol_file, protocol_name, transaction_trace);
         assert!(
-            errors.contains(expected_msg),
-            "expected error containing {expected_msg:?}, got:\n{errors}"
+            result.is_err(),
+            "expected a parse error for: {transaction_trace}"
+        );
+        assert!(
+            errors.contains(expected_error_msg),
+            "expected error containing {expected_error_msg:?}, got:\n{errors}"
         );
     }
 
