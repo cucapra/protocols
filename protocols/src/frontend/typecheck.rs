@@ -658,12 +658,18 @@ mod tests {
 
     #[test]
     fn test_tuple_index_out_of_bounds() {
-        test_helper("tuple_index_out_of_bounds", "../tests/misc/tuple_index_out_of_bounds.prot");
+        test_helper(
+            "tuple_index_out_of_bounds",
+            "../tests/misc/tuple_index_out_of_bounds.prot",
+        );
     }
 
     #[test]
     fn test_ill_typed_tuple_proj_assignment() {
-        test_helper("ill_typed_tuple_proj_assignment", "../tests/misc/ill_typed_tuple_proj_assignment.prot")
+        test_helper(
+            "ill_typed_tuple_proj_assignment",
+            "../tests/misc/ill_typed_tuple_proj_assignment.prot",
+        )
     }
 
     // Specific Tests
