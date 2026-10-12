@@ -1,0 +1,34 @@
+// This protocol does not correspond to a specific verilog module, as it's never executed.
+
+struct Multiplier {
+  in a: u32,
+  in b: u32,
+  out c: u1,
+  out s: u32
+}
+
+prot mul<dut: Multiplier>(a: u32, b: u32, s: u32) {
+  dut.a := a;
+  dut.b := b;
+  // hold a and b stable for two cycles
+  step(1);
+  step(1);
+  // can apply a new input after two cycles
+  fork();
+  // after, it does not matter what we apply to these ports
+  dut.a := X;
+  dut.b := X;
+  step();
+
+  // stupid conditional test
+  if 4'd8 == 4'd0 {
+    step(1);
+  }
+  else {
+    fork();
+  }
+  assert_eq(dut.c, 1'b1);
+
+  assert_eq(s, dut.s);
+  step();
+}

@@ -1,0 +1,8 @@
+error: b is a function argument, but conditions in if-statements / while-loops cannot mention function arguments
+   ┌─ tests/identities/dual_identity_d1/dual_identity_d1.prot:43:18
+   │
+43 │     if (dut.b == b) {
+   │                  ^ b is a function argument, but conditions in if-statements / while-loops cannot mention function arguments
+
+---CODE---
+1

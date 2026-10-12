@@ -1,0 +1,7 @@
+trace {
+    pcpi_mul_reset_normal();
+    pcpi_mul(1, 1, 1);
+    pcpi_mul(1, 100, 100);
+    pcpi_mul(100, 1, 100);
+    pcpi_mul(33554483, 200, 2415929304);
+}

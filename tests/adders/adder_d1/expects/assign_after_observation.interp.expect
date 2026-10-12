@@ -1,0 +1,13 @@
+Trace 0 executed successfully!
+
+---
+
+error: Cannot assign to forbidden input 'DUT.a' after observing a combinationally dependent output
+   ┌─ tests/adders/adder_d1/add_d1.prot:78:14
+   │
+78 │     DUT.a := 32'b0;
+   │              ^^^^^ Cannot assign to forbidden input 'DUT.a' after observing a combinationally dependent output
+
+Trace 1 execution failed.
+---CODE---
+101

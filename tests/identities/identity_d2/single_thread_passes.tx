@@ -1,0 +1,3 @@
+trace {
+    multiple_assign(1, 1);
+}

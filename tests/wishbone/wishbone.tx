@@ -1,0 +1,50 @@
+trace {
+    // Note: this transaction is designed to closely model the behavior
+    // of the existing off-the-shelf C++ test-bench (reqwalker.cpp)
+
+    // Note: their Verilog DUT ignores write/read addresses,
+    // so we only read/write from address 0 in this trace
+
+    // Initial state is 0
+    read(0, 0);
+
+    // 5 idle cycles (Their TB always sets 5 idle cycles before each write)
+    idle(); idle(); idle(); idle(); idle();
+
+    // Write 1 to the subordinate, this resets the state
+    write(0, 1); // data and address do not matter
+
+    // Read back `o_data` and `o_led` as the LED walks through states.
+    // The `read` protocol advances the state (`data`) by 1
+    // and the write protocol's final step also advances state by 1 (1->2 before
+    // the first read). This means the first value of `data` read is 3.
+    read(0, 2);
+    read(0, 3);
+    read(0, 4);
+    read(0, 5);
+    read(0, 6);
+    read(0, 7);
+    read(0, 8);
+    read(0, 9);
+    read(0, 10);
+    read(0, 11);
+    read(0, 0);
+
+    // Test-bench always sets 5 idle cycles before each write
+    idle(); idle(); idle(); idle(); idle();
+
+    // Second iteration of the outer `for-loop in the `main` function
+    // of `reqwalker.cpp` (identical state machine behaviour)
+    write(0, 1);
+    read(0, 2);
+    read(0, 3);
+    read(0, 4);
+    read(0, 5);
+    read(0, 6);
+    read(0, 7);
+    read(0, 8);
+    read(0, 9);
+    read(0, 10);
+    read(0, 11);
+    read(0, 0);
+}

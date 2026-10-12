@@ -1,0 +1,9 @@
+Trace 0 executed successfully!
+i_data[31:0]  x  x  x  x  x  x  1  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  x  1  x  x  x  x  x  x  x  x  x  x  x  x
+i_addr        0  x  x  x  x  x  0  0  0  0  0  0  0  0  0  0  0  0  x  x  x  x  x  0  0  0  0  0  0  0  0  0  0  0  0  x
+i_we          0  x  x  x  x  x  1  0  0  0  0  0  0  0  0  0  0  0  x  x  x  x  x  1  0  0  0  0  0  0  0  0  0  0  0  x
+i_stb         1  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1  x
+i_cyc         1  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1  x
+o_data[31:0]  0  0  0  0  0  0  0  1  2  3  4  5  6  7  8  9 10 11  0  0  0  0  0  0  1  2  3  4  5  6  7  8  9 10 11  0
+o_ack         0  1  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  1
+o_stall       0  x  x  x  x  x  0  0  0  0  0  0  0  0  0  0  0  0  x  x  x  x  x  0  0  0  0  0  0  0  0  0  0  0  0  x

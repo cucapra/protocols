@@ -1,0 +1,8 @@
+Trace 0 executed successfully!
+result_valid x x 1 0 0
+almfull      x x x 1 1
+finish       x x 1 0 0
+start        x 1 1 1 1
+reset        1 0 0 0 0
+data[31:0]   0 0 0 0 0
+valid        0 0 0 0 0

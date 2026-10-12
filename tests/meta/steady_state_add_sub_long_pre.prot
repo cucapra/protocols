@@ -1,0 +1,34 @@
+struct ALU {
+    in a: u32,
+    in b: u32,
+    in op: u2,
+    out s: u32,
+}
+
+prot add<DUT: ALU>(a: u32, b: u32, s: u32) {
+    DUT.a := a;
+    DUT.op := 2'b00;
+    step();
+    DUT.b := b;
+    step();
+    fork();
+    DUT.a := X;
+    DUT.b := X;
+    DUT.op := X;
+    assert_eq(s, DUT.s);
+    step();
+}
+
+prot sub<DUT: ALU>(a: u32, b: u32, s: u32) {
+    DUT.a := a;
+    DUT.op := 2'b01;
+    step();
+    DUT.b := b;
+    step();
+    fork();
+    DUT.a := X;
+    DUT.b := X;
+    DUT.op := X;
+    assert_eq(s, DUT.s);
+    step();
+}

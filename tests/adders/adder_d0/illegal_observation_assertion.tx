@@ -1,0 +1,3 @@
+trace {
+    add_combinational_illegal_observation_in_assertion(10, 20, 30);
+}

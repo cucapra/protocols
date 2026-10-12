@@ -8,7 +8,6 @@ This document details the well-formedness constraints on `.prot` programs:
 - We also check that assignments, assertions and conditionals (`if` and `while`) 
 abide by the grammars discussed below. These grammars are designed in order to 
 make it tractable to reconstruct transactions from a waveform and `.prot` file
-(which is what the monitor does)
 
 ### Grammar for assignments
 - In assignments `LHS := RHS`, `LHS` & `RHS` must conform to the following grammar:
@@ -32,7 +31,7 @@ LHS, RHS ::= arg_expr
    | arg_expr[i:j]          (bit-slice)
    | arg_expr ++ arg_expr   (where `++` is concatenation)
 
-arg_expr ::= DUT output port | output parameter of a function | constant
+arg_expr ::= DUT output port | DUT input port | output parameter of a function | constant
 ```
 - This grammar is slightly different from the grammar for assignments: assertions refer to *output* parameters / DUT ports,
 whereas assignments refer to *input* parameters / DUT ports 
@@ -48,6 +47,7 @@ cond ::=
 
 cond_expr ::= 
   | DUT output port 
+  | DUT input port
   | constant 
   | cond_expr[i:j]              (bit-slice)
   | cond_expr ++ cond_expr      (concatenation)
@@ -62,7 +62,6 @@ cond_expr ::=
 | We assign to a read-only symbol                                                                                              | `ThreadError::ReadOnlyAssignment`    |
 | A thread attempts to `fork` more than once                                                                                   | `ThreadError::DoubleFork`            |
 | A thread calls `fork` before calling `step`                                                                                  | `ThreadError::ForkBeforeStep`        |
-| A thread finished executing without calling `fork()` (all threads are required to make exactly one call to `fork()`)         | `ThreadError::FinishedWithoutFork`   |
 | The last executed statement in a thread is not `step()` (threads are required to finish their execution by calling `step()`) | `ThreadError::DidntEndWithStep`      |
 | Performing an operation on a `DontCare`                                                                                      | `EvaluationError::DontCareOperation` |
 | A `DontCare` value is used as the guard for a loop / if-statement                                                            | `EvaluationError::DontCare`          |

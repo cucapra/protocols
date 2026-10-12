@@ -1,0 +1,4 @@
+[alias]
+interp = "run --quiet --offline --package protocols-interp --"
+bi = "run --quiet --package bi --"
+parse = "run --quiet --package protocols-cli -- -p"

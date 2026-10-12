@@ -1,49 +1,16 @@
-# Run all Turnt tests for the interpreter
-# (Output is piped through Faucet to clearly distinguish passing/failing tests)
-interp:
-  turnt --env interp $(find . -type f -name '*.tx') | faucet
+# Runs the Runt snapshot suites that together cover every test
+runt:
+  cargo build --offline --package protocols-interp --package graph-interp --package bi
+  runt --max-futures 1 runt/interp
+  runt --max-futures 1 runt/bi
+  runt --max-futures 1 runt/graph_interp
+  runt --max-futures 1 runt/waveform
+  runt --max-futures 1 runt/fail
 
-# Run all Turnt tests for the monitor
-monitor:
-  turnt --env monitor $(find . -type f -name '*.prot') | faucet
-
-# Only test the monitor on the AXI streaming example (from WAL)
-axis:
-  turnt --env monitor $(find monitor/tests/wal/advanced -type f -name '*.prot') | faucet 
-
-# Only run interpreter tests for the adder examples
-adders:
-  turnt --env interp $(find protocols/tests/adders -type f -name '*.tx') | faucet
-
-# Only run interpreter tests for the ALU examples
-alus:
-  turnt --env interp $(find protocols/tests/alus -type f -name '*.tx') | faucet
-
-# Only test the `identities` examples
-identities:
-  turnt --env interp $(find protocols/tests/identities -type f -name '*.tx') | faucet 
-
-# Only test the `multi` examples
-multi:
-  turnt --env interp $(find protocols/tests/multi -type f -name '*.tx') | faucet 
-
-# Only test the Brave New World examples
-brave:
-  turnt --env interp $(find protocols/tests/brave_new_world -type f -name '*.tx') | faucet 
-
-# Only test the `picorv` examples
-picorv:
-  turnt --env interp $(find examples/picorv32 -type f -name '*.tx') | faucet 
-
-# Runs all Turnt tests for both the interpreter & monitor
-turnt:
-  @just interp  
-  @just monitor
-
-# Runs all unit tests (via Cargo) & snapshot tests (via Turnt)
+# Runs all unit tests (via Cargo) & snapshot tests (via Runt)
 test:
-  cargo test 
-  @just turnt
+  cargo test
+  @just runt
 
 # Builds HTML documentation by running `cargo doc`
 doc:

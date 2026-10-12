@@ -5,15 +5,19 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-pub mod diagnostic;
+pub mod ascii_waveform;
+pub mod backends;
+mod dut;
 pub mod errors;
+pub mod frontend;
 pub mod interpreter;
 pub mod ir;
-pub mod parser;
 pub mod scheduler;
-pub mod serialize;
-pub mod setup;
-pub mod static_checks;
-pub mod transactions_parser;
-pub mod typecheck;
+pub mod transactions;
+mod value;
 mod yosys;
+
+pub use dut::{PatronusSim, PortId};
+pub use frontend::frontend;
+pub use transactions::transaction_frontend;
+pub use value::{SymBitVecValue, SymValue, Value};

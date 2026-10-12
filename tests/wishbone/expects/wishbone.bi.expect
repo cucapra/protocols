@@ -1,0 +1,18 @@
+// trace 0
+trace {
+    read(0, 0);
+    write(0, 0);
+    read(0, 3);
+    read(0, 5);
+    read(0, 7);
+    read(0, 9);
+    read(0, 11);
+    read(0, 0);
+    write(0, 0);
+    read(0, 3);
+    read(0, 5);
+    read(0, 7);
+    read(0, 9);
+    read(0, 11);
+    read(0, 0);
+}

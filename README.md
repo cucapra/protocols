@@ -1,35 +1,105 @@
 # Protocols
-**Protocols** is a DSL for specifying & testing hardware designs at the cycle-level RTL level.
-A protocol is described using an `fn` definition containing a list of imperative statements:
+**Protocols** is a DSL for specifying & testing hardware communication protocols at the cycle-level register-transfer level (RTL).
+A protocol is described using an `prot` definition containing a sequence of statements:
 - `symbol := RHS` assigns the value of the `RHS` expression to the DUT input port `symbol`. The right-hand side expression may be an arbitrary value, represented by `X` ("don't care").
-- `step(n)`  advances the clock by `n` cycles.
+- `step(n)`  advances the clock by `n` cycles (`n > 0`)
 - `fork()`  allows for concurrent protocol execution.
 - `assert_eq(e1, e2)` tests equality between `e1` and `e2`.
 - `while` and `if/else` blocks allow for control flow
+- `repeat num_iters iterations { ... }` is a loop that executes for `num_iters` iterations exactly, where `num_iters` must be 
+  an input parameter supplied to the `prot`
 
-**Installing dependencies**
-- Run `brew install yosys` to install [Yosys](https://yosyshq.readthedocs.io/projects/yosys/en/latest/)
+This repository contains:
+- An *interpreter* for the DSL
+- A *backwards interpreter* (BI) tool, which given a specification of a hardware module's communication behavior (written in our DSL)
+  and a `.fst` waveform file, infers a transaction-level trace that is consistent with the waveform data 
+- Common infrastructure shared between the interpreter & the BI, such as a parser, type-checker and pretty-printer for our DSL
+These tools are all implemented in Rust, with some auxiliary benchmarking scripts written in Python.
+
+## Installation + Build Instructions
+
+**Installation script:**
+Run `./install.sh` to install all dependencies required for macOS / Linux.
+If you want, you can also manually install dependencies, as described below.
+
+**Manually installing dependencies**:
+Note: the instructions below assume a macOS environment.
+- Ensure you have Homebrew and `uv` installed
+  - If not, follow these instructions to install [Homebrew](https://brew.sh) and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- (Optional) Run `brew install hyperfine` to install [Hyperfine](https://github.com/sharkdp/hyperfine), a command-line benchmarking tool 
 - Run `brew install just` to install [Just](https://github.com/casey/just), a command runner
-- Run `uv tool install turnt` to install [Turnt](https://github.com/cucapra/turnt/tree/main), which we use for [snapshot testing](https://www.cs.cornell.edu/~asampson/blog/turnt.html)
-  - Note: this presumes you already have `uv` installed (if not, [follow these instructions](https://docs.astral.sh/uv/getting-started/installation/#pypi))
-- Run `npm install -g faucet` to install [Faucet](https://github.com/tape-testing/faucet), which summarizes test outputs from Turnt in a human-readable manner
+- Run `cargo install --git https://github.com/Nikil-Shyamsunder/runt.git` to install our fork of [Runt](https://github.com/rachitnigam/runt), a command-line tool we use for snapshot tests. Runt compares the output of our tools to expected outputs stored in dedicated files. 
+- Run `uv sync` to install the Python dependencies specified in `pyproject.toml` 
+- Some of the benchmarks correspond to real-world bugs taken from the [artifact for *Debugging in the Brave New World of Reconfigurable Hardware* (Ma et al. ASPLOS '22)](https://github.com/efeslab/asplos22-hardware-debugging-artifact) -- these can be found in the `tests/fpga-debugging` sub-directory 
+  (more details in the `README` of the sub-directories corresponding to each bug)
 
-**Building / testing**:
-- Run `cargo build` to build
-- Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Turnt)
-- Run `just turnt` to only run Turnt snapshot tests
+**Interpreter-specific dependencies**:
+- Run `brew install yosys` to install [Yosys](https://yosyshq.readthedocs.io/projects/yosys/en/latest/)
+
+**Building the source code**:
+- Run `cargo build` to build the Rust code
+- Run `just test` to execute all unit tests (`cargo test`) + snapshot tests (via Runt)
 - To generate HTML documentation, run `just doc` (this opens Cargo-generated docs in your browser)
 
-**CLI**:
-The interpreter has a CLI, which can be invoked as follows:
-```bash
-$ cargo run --package protocols-interp -- --help
+## Backwards Interpreter CLI
+The CLI for the BI can be used as follows:
+```bash 
+$ cargo bi --help
+analyze signal traces to extract transactions
 
-Usage: protocols-interp [OPTIONS] --verilog <VERILOG_FILE> --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
+Usage: bi [OPTIONS] --wave <WAVE_FILE>
 
 Options:
-      --verilog <VERILOG_FILE>
-          Path to a Verilog (.v) file
+  -p, --protocol <PROTOCOLS_FILE>
+          One or several protocol files.
+  -w, --wave <WAVE_FILE>
+          Path to a waveform trace (.fst, .vcd, .ghw) file
+  -i, --instances <INSTANCES>...
+          A mapping of DUT struct in the protocol file to an instance in the signal trace. Can be used multiple times. Format is: `${instance_name}:${dut_struct_name}
+  -v, --verbose...
+          Increase logging verbosity
+  -q, --quiet...
+          Decrease logging verbosity
+      --sample-posedge <SIGNAL_TO_SAMPLE_ON_RISING_EDGE>
+          Optional argument which specifies the name of the signal to sample on a rising edge (posedge). If enabled, this flag acts as the "clock" signal for the monitor. Note: the full path to the signal should be passed as this argument, e.g. `uut_rx.clk`, where `uut_rx` is an instance in the signal trace
+      --include-idle
+          Optional flag: if enabled, always prints out idle transcations regardless of whether the protocol has been annotated with `#[idle]`
+      --show-steps
+          If enabled, displays the start & end step for each inferred transaction
+      --include-in-progress
+          This flag will make the bi append any in-progress transactions to the trace
+      --show-waveform-time
+
+      --time-unit <TIME_UNIT>
+
+      --max-traces <MAX_TRACES>
+          Limit the number of traces written to stdout
+      --color <COLOR_CHOICE>
+          To suppress colors in error messages, pass in `--color never`. Otherwise, by default, error messages are displayed with colors [default: auto] [possible values: auto, always, never]
+  -d, --display-hex
+          If enabled, displays integer literals using hexadecimal notation
+  -r, --rename <RENAME>...
+          Rename pins of the DUT. &{field name in the struct} = ${verilog name}
+  -h, --help
+          Print help
+```
+
+Example usage:
+```bash
+$ cd tests
+$ cargo bi -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
+```
+
+## Interpreter CLI
+The interpreter has a CLI, which can be invoked as follows:
+```bash
+$ cargo interp --help
+
+Usage: protocols-interp [OPTIONS] --protocol <PROTOCOLS_FILE> --transactions <TRANSACTIONS_FILE>
+
+Options:
+      --verilog <VERILOG_FILES>...
+          Paths to one or more Verilog (.v) files
   -p, --protocol <PROTOCOLS_FILE>
           Path to a Protocol (.prot) file
   -t, --transactions <TRANSACTIONS_FILE>
@@ -39,7 +109,15 @@ Options:
   -f, --fst <WAVEFORM_FILE>
           (Optional) Name of the waveform file (.fst) in which to save results
   -v, --verbose...
-          Prints logs / debugging information to stdout
+          Increase logging verbosity
+  -q, --quiet...
+          Decrease logging verbosity
+      --color <COLOR_CHOICE>
+          Pass in `--color never` to suppress colored error messages. (By default, error messages are displayed w/ ANSI colors.) [default: auto] [possible values: auto, always, never]
+  -n, --no-error-locations
+          Whether to suppress location info (source file and label) in error messages
+      --max-steps <MAX_STEPS>
+          Stop the interpreter if it ever reaches the maximum number of cycles specified with this option
   -h, --help
           Print help
 ```
@@ -47,21 +125,29 @@ Options:
 Example usage:
 
 ```bash
-$ cargo run --package protocols-interp -- --verilog protocols/tests/adders/adder_d1/add_d1.v \
-        --protocol protocols/tests/adders/adder_d1/add_d1.prot \
-        -t protocols/tests/adders/adder_d1/both_threads_pass.tx \
+$ cargo interp --verilog tests/adders/adder_d1/add_d1.v \
+        --protocol tests/adders/adder_d1/add_d1.prot \
+        -t tests/adders/adder_d1/both_threads_pass.tx \
         --verbose
 ```
 
-### Syntax highlighting
-This repo contains a basic VS Code extension which provides syntax highlighting for `.prot` and `.tx` files.
+## Syntax highlighting
+This repository contains a TextMate Bundle, which provides syntax highlighting for `.prot` and `.tx` files 
+(the `.tx` file format is used to supply a list of transactions to be executed for the interpreter).
 
-**Installation**:
-Add a link to the Protocols VSCode extension directory to your VSCode extensions directory as follows:
+**VS Code Installation**:
+Add a link to the Protocols VS Code extension directory to your VS Code extensions directory as follows:
 
 ```bash
-cd $HOME/.vscode/extensions
-ln -s <path to protocols root directory>/tools/vscode protocols.protocols-0.0.1
+$ cd $HOME/.vscode/extensions
+$ ln -s <path to protocols root directory>/tools/protocols-textmate protocols.protocols-0.0.1
 ```
 
-Then, restart VSCode.
+Then, restart VS Code.
+
+**RustRover Installation:**
+Go to `Settings` -> `Editor` -> `TextMate Bundles`. Click the `+` and navigate to `<path to protocols root directory>/tools/protocols-textmate` in your file explorer. 
+
+One confirmed, `protocols` should appear as an entry in the `TextMate Bundles` table.
+
+If the syntax highlighting does not immediately load, restart RustRover.

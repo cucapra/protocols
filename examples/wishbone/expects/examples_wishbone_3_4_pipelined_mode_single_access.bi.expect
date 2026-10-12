@@ -1,0 +1,4 @@
+// trace 0
+trace {
+    read(0xf, 0x00001234, 0x0000ffff); [1 .. 2]
+}

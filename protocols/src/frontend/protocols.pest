@@ -1,0 +1,103 @@
+// Copyright 2024 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
+
+WHITESPACE = _{ " " | NEWLINE }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
+
+// Literals
+integer = ${ width ~ "'" ~ (bin ~ bin_integer | oct ~ oct_integer | hex ~ hex_integer | dec ~ dec_integer) }
+    bin = ${ ("b" | "B") }
+    oct = ${ ("o" | "O") }
+    hex = ${ ("x" | "X") }
+    dec = ${ ("d" | "D") }
+    bin_integer = ${ ("_"? ~ ASCII_BIN_DIGIT)+ }
+    oct_integer = ${ ("_"? ~ ASCII_OCT_DIGIT)+ }
+    hex_integer = ${ ("_"? ~ ASCII_HEX_DIGIT)+ }
+    dec_integer = ${ ("_"? ~ ASCII_DIGIT)+ }
+    width = { ASCII_DIGIT ~ ("_"? ~ ASCII_DIGIT)* }
+
+dont_care = { "X" }
+
+is_last_expr = {"is_last" ~ "(" ~ ")"}
+iter_count_expr = {"iter_count" ~ "::" ~ "<" ~ bv_tpe ~ ">" ~ "(" ~ ")"}
+
+// Expressions
+
+// Slicing
+slice = { path_id ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
+
+primary = _{slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter_count_expr | path_id}
+atom = _{primary | unary_op? ~ primary}
+unary_op = _ { not }
+    not = { "!" }
+bin_op = _{ eq | concat | add }
+    eq = { "==" }
+    concat = { "##" }
+    add = { "+" }
+
+// handle binary operations and indexing operations
+expr = { atom ~ (bin_op ~ atom)*}
+
+id = _{ ASCII_ALPHA  ~ (ASCII_ALPHANUMERIC | "_" )* }
+path_id = @{ id ~ ("." ~ id)* }
+non_path_id = @{ id }
+tpe = { seq_plus_plus_tpe | seq_plus_tpe | seq_tpe | uint_tpe | bv_tpe }
+uint_tpe = { "uint" }
+bv_tpe = { "u" ~ dec_integer }
+seq_tpe = {"[" ~ tpe ~ "]"}
+seq_plus_tpe = {"[" ~ tpe ~ "]+"}
+seq_plus_plus_tpe = {"[" ~ tpe ~ "]++"}
+assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }
+// cmd = { path_id ~ "(" ~ expr? ~ ")" ~ ";"}
+step = { "step" ~ "(" ~ dec_integer? ~ ")" ~ ";"}
+fork = { "fork" ~ "()" ~ ";"}
+stmt = _{ (assign | step | fork | while_loop | bounded_loop | for_in_loop | cond | assert_eq ) }
+dir = { "in" | "out" }
+arg = { path_id ~ ":" ~ tpe }
+arglist = { (arg ~ "," ~ arglist) | arg ~ ","? }
+type_param = { "<" ~ path_id ~ ":" ~ path_id ~ ">" }
+
+// While loop
+while_loop = { "while" ~ expr ~ "{" ~ stmt* ~ "}" }
+
+// Bounded loop (fixed no. of iterations)
+// Concrete syntax is `repeat num_iterations iterations { ... }`
+bounded_loop = { "repeat" ~ expr ~ "iterations" ~ "{" ~ stmt* ~ "}" }
+
+// TODO: why does path_id work, but not path_id?
+for_in_loop = { "for" ~ path_id ~ "in" ~ expr ~ "{" ~ stmt* ~ "}" }
+
+// Assertions
+assert_eq = { "assert_eq" ~ "(" ~ expr ~ "," ~ expr ~ ")" ~ ";" }
+
+// Conditionals
+if = { "if" ~ expr ~ "{" ~ stmt* ~ "}" }
+else = { "else" ~ "{" ~ stmt* ~ "}" }
+cond = { if ~ else? }
+
+// Annotations on top of functions (only `idle` is supported right now)
+annotation = { "#[" ~ annotation_name ~ "]" }
+annotation_name = { "idle" }
+
+// Structs
+field = {dir ~ path_id ~ ":" ~ tpe }
+field_list = { (field ~ "," ~ field_list) | field ~ ","? }
+struct_def = { ("struct" | "interface") ~ path_id ~ "{" ~ field_list? ~ "}" }
+
+// modules
+module_impl_list = { (non_path_id ~ "+" ~ module_impl_list) | non_path_id }
+clock_tpe = { "clock" ~ "@posedge" }
+clock_edge = {"@posedge" | "@negedge"}
+clock_entry = {"in" ~ path_id ~ ":" ~ "clock" ~ clock_edge }
+pin_remap_constraint = {"with" ~ expr}
+remap_entry = {dir ~ path_id ~ ":" ~ tpe ~ "=" ~ expr ~ pin_remap_constraint?}
+const_entry = {"const" ~ path_id ~ "=" ~ integer }
+module_entry = { (clock_entry | remap_entry | const_entry) }
+module_entries = { (module_entry ~ "," ~ module_entries) | module_entry ~ ","? }
+module_def = { "module" ~ non_path_id ~ ":" ~ module_impl_list ~ "{" ~ module_entries ~ "}"}
+
+fun = { annotation? ~ "prot" ~ path_id ~ type_param ~ "(" ~ arglist? ~ ")" ~ "{" ~ stmt* ~ "}" }
+file = { SOI ~ (fun | struct_def | module_def)* ~ EOI }

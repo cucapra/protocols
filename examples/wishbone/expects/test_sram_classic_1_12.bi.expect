@@ -1,0 +1,11 @@
+// trace 0
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+    read(0xf, 0x1000000c, 0xeb39ef52); [11 .. 12]
+    reset(); [17]
+    reset(); [18]
+    reset(); [19]
+    write(0xf, 0x1000000c, 0xa6b3aac2); [24 .. 25]
+}

@@ -1,18 +1,24 @@
 [workspace]
 resolver = "3"
-members = ["interp", "monitor", "protocols"]
+members = ["bi", "interp", "protocols", "cli", "graph-interp"]
 
 
 [workspace.package]
 authors = ["Nikil Shyamsunder", "Francis Pham", "Ernest Ng", "Kevin Laeufer"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 repository = "https://github.com/cucapra/protocols"
 readme = "README.md"
 license = "MIT"
 
 [workspace.dependencies]
 protocols = { path = "protocols" }
-baa = { version = "0.17.1", features = ["rand1"] }
-patronus = "0.34.1"
-rustc-hash = "2.1.1"
+baa = { version = "0.19.3", features = ["rand1"] }
+patronus = { git="https://github.com/Nikil-Shyamsunder/patronus#" }
+rand = "0.10"
+rustc-hash = "2.1.3"
+wellen = "0.25.5"
+anyhow = "1.0.102"
+clap = { version = "4.5.45", features = ["derive"] }
+smallvec = "1.15.2"
+log = "0.4.28"

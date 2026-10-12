@@ -1,0 +1,1084 @@
+// Copyright 2025 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
+
+use std::vec;
+
+use baa::{BitVecValue, WidthInt};
+use pest::Parser;
+use pest::error::InputLocation;
+use pest::iterators::Pairs;
+use pest::pratt_parser::PrattParser;
+use pest_derive::Parser;
+
+use crate::frontend::ast::{Stmt, *};
+use crate::frontend::diagnostic::*;
+use crate::frontend::symbol::*;
+
+#[derive(Parser)]
+#[grammar = "frontend/protocols.pest"]
+struct ProtocolParser;
+
+lazy_static::lazy_static! {
+    static ref PRATT_PARSER: PrattParser<Rule> = {
+        use pest::pratt_parser::{Assoc::*, Op};
+        use Rule::*;
+
+        // Precedence is defined lowest to highest
+        PrattParser::new()
+            .op(Op::infix(eq, Left))
+            .op(Op::infix(add, Left))
+            .op(Op::infix(concat, Left))
+            .op(Op::prefix(not))
+    };
+}
+
+fn parse_expr(
+    st: &SymbolTable,
+    diag: &mut DiagnosticHandler,
+    fileid: usize,
+    ctx: &mut ProtocolContext,
+    pairs: Pairs<Rule>,
+) -> Result<ExprId, String> {
+    let boxed_expr = parse_boxed_expr(st, diag, fileid, pairs)?;
+    let expr_id = boxed_expr_to_expr_id(ctx, fileid, boxed_expr)?;
+    Ok(expr_id)
+}
+// Helper method for expected rule errors
+fn expect_rule<T>(
+    diag: &mut DiagnosticHandler,
+    fileid: usize,
+    option: Option<T>,
+    context_pair: &pest::iterators::Pair<Rule>,
+    message: &str,
+) -> Result<T, String> {
+    option.ok_or_else(|| {
+        let msg = message.to_string();
+        diag.emit_diagnostic_parsing(&msg, fileid, context_pair, Level::Error);
+        msg
+    })
+}
+
+fn parse_integer_expr(pair: Pair) -> Result<BitVecValue, String> {
+    assert_eq!(pair.as_rule(), Rule::integer);
+    // unwrap into width, radix, and then value
+    let mut inner = pair.clone().into_inner();
+    let width: u32 = inner.next().unwrap().as_str().parse::<u32>().unwrap();
+    let radix = inner.next().unwrap().as_rule();
+    let value_str = inner.next().unwrap().as_str();
+
+    let value = match radix {
+        Rule::bin => u64::from_str_radix(value_str, 2),
+        Rule::oct => u64::from_str_radix(value_str, 8),
+        Rule::hex => u64::from_str_radix(value_str, 16),
+        Rule::dec => value_str.parse::<u64>(),
+        _ => unreachable!("Unexpected radix rule: {:?}", radix),
+    };
+
+    Ok(BitVecValue::from_u64(value.unwrap(), width))
+}
+
+fn parse_boxed_expr(
+    st: &SymbolTable,
+    diag: &mut DiagnosticHandler,
+    fileid: usize,
+    pairs: Pairs<Rule>,
+) -> Result<BoxedExpr, String> {
+    PRATT_PARSER
+        .map_primary(|primary| {
+            let start = primary.as_span().start();
+            let end = primary.as_span().end();
+
+            match primary.as_rule() {
+                Rule::integer => {
+                    let bvv = parse_integer_expr(primary)?;
+                    Ok(BoxedExpr::Const(bvv, start, end))
+                }
+                Rule::path_id => {
+                    let path_id = primary.as_str();
+                    let symbol_id = st.symbol_id_from_name_in_active_scope(path_id);
+                    match symbol_id {
+                        Some(id) => Ok(BoxedExpr::Sym(id, start, end)),
+                        None => {
+                            let msg = format!("Referencing undefined symbol: {}", path_id);
+                            diag.emit_diagnostic_parsing(&msg, fileid, &primary, Level::Error);
+                            Err(msg)
+                        }
+                    }
+                }
+                Rule::dont_care => Ok(BoxedExpr::DontCare(start, end)),
+                Rule::slice => {
+                    let mut inner_rules = primary.clone().into_inner();
+                    let path_rule = expect_rule(
+                        diag,
+                        fileid,
+                        inner_rules.next(),
+                        &primary,
+                        "Expected path rule in slice expression",
+                    )?;
+                    let path_id = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
+                    let idx1_rule = inner_rules.next().unwrap();
+                    let idx1 = idx1_rule.as_str().parse::<u32>().unwrap();
+                    let idx2_rule = inner_rules.next();
+                    let idx2 = match idx2_rule {
+                        Some(rule) => rule.as_str().parse::<u32>().unwrap(),
+                        None => idx1,
+                    };
+                    Ok(BoxedExpr::Slice(Box::new(path_id), idx1, idx2, start, end))
+                }
+                Rule::expr => parse_boxed_expr(st, diag, fileid, primary.into_inner()),
+                Rule::is_last_expr => Ok(BoxedExpr::IsLastIteration(start, end)),
+                Rule::iter_count_expr => {
+                    let mut inner = primary.clone().into_inner();
+                    if let Some(width_str) = inner.next().unwrap().as_str().strip_prefix('u') {
+                        let width: WidthInt = width_str.parse().unwrap();
+                        Ok(BoxedExpr::IterCount(width, start, end))
+                    } else {
+                        unreachable!("width should always start with u")
+                    }
+                }
+                rule => unreachable!("Expr::parse expected atom, found {:?}", rule),
+            }
+        })
+        .map_infix(|lhs, op, rhs| {
+            let lhs_unwrap = lhs?;
+            let rhs_unwrap = rhs?;
+            let start = lhs_unwrap.start();
+            let end = lhs_unwrap.end();
+            let op = match op.as_rule() {
+                Rule::eq => BinOp::Equal,
+                Rule::concat => BinOp::Concat,
+                Rule::add => BinOp::Add,
+                rule => unreachable!("Expr::parse expected infix operation, found {:?}", rule),
+            };
+            Ok(BoxedExpr::Binary(
+                op,
+                Box::new(lhs_unwrap),
+                Box::new(rhs_unwrap),
+                start,
+                end,
+            ))
+        })
+        .map_prefix(|op, arg| {
+            let arg_unwrapped = arg?;
+            let start = op.as_span().start();
+            let end = arg_unwrapped.end();
+            let op = match op.as_rule() {
+                Rule::not => UnaryOp::Not,
+                rule => unreachable!("Expr::parse expected prefix operation, found {:?}", rule),
+            };
+            Ok(BoxedExpr::Unary(op, Box::new(arg_unwrapped), start, end))
+        })
+        .parse(pairs)
+}
+
+fn boxed_expr_to_expr_id(
+    ctx: &mut ProtocolContext,
+    fileid: usize,
+    expr: BoxedExpr,
+) -> Result<ExprId, String> {
+    let expr_id = match expr {
+        BoxedExpr::Const(value, start, end) => {
+            let expr_id = ctx.e(Expr::Const(value));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::Sym(symbol_id, start, end) => {
+            let expr_id = ctx.e(Expr::Sym(symbol_id));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::DontCare(start, end) => {
+            let expr_id = ctx.dont_care_id();
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::IsLastIteration(start, end) => {
+            let expr_id = ctx.e(Expr::IsLastIteration);
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::IterCount(width, start, end) => {
+            let expr_id = ctx.e(Expr::IterCount(width));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::Binary(op, lhs, rhs, start, end) => {
+            let lhs_id = boxed_expr_to_expr_id(ctx, fileid, *lhs)?;
+            let rhs_id = boxed_expr_to_expr_id(ctx, fileid, *rhs)?;
+            let expr_id = ctx.e(Expr::Binary(op, lhs_id, rhs_id));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::Unary(op, arg, start, end) => {
+            let arg_id = boxed_expr_to_expr_id(ctx, fileid, *arg)?;
+            let expr_id = ctx.e(Expr::Unary(op, arg_id));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+        BoxedExpr::Slice(expr, idx1, idx2, start, end) => {
+            let sym_id = boxed_expr_to_expr_id(ctx, fileid, *expr)?;
+            let expr_id = ctx.e(Expr::Slice(sym_id, idx1, idx2));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
+    };
+    Ok(expr_id)
+}
+
+fn parse_dir(diag: &mut DiagnosticHandler, fileid: usize, pair: Pair) -> Result<Dir, String> {
+    match pair.as_rule() {
+        Rule::dir => {
+            let dir_str = pair.as_str();
+            match dir_str {
+                "in" => Ok(Dir::In),
+                "out" => Ok(Dir::Out),
+                _ => {
+                    let msg = format!("Unexpected direction string: {:?}", dir_str);
+                    diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
+                    Err(msg)
+                }
+            }
+        }
+        _ => {
+            let msg = format!(
+                "Unexpected rule while parsing direction: {:?}",
+                pair.as_rule()
+            );
+            diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
+            Err(msg)
+        }
+    }
+}
+
+fn parse_type(
+    diag: &mut DiagnosticHandler,
+    fileid: usize,
+    st: &mut SymbolTable,
+    pair: Pair,
+) -> Result<Type, String> {
+    if pair.as_rule() == Rule::tpe {
+        let inner_type = expect_rule(
+            diag,
+            fileid,
+            pair.clone().into_inner().next(),
+            &pair,
+            "Expected type",
+        )?;
+        match inner_type.as_rule() {
+            Rule::bv_tpe => {
+                let width_str = inner_type.into_inner().next().unwrap().as_str();
+                let size = width_str.parse::<u32>().unwrap();
+                Ok(Type::BitVec(size))
+            }
+            Rule::uint_tpe => Ok(Type::UnsignedInt),
+            Rule::seq_tpe => {
+                let inner_tpe =
+                    parse_type(diag, fileid, st, inner_type.into_inner().next().unwrap())?;
+                let seq_id = st.add_seq(inner_tpe, 0);
+                Ok(Type::Seq(seq_id))
+            }
+            Rule::seq_plus_tpe => {
+                let inner_tpe =
+                    parse_type(diag, fileid, st, inner_type.into_inner().next().unwrap())?;
+                let seq_id = st.add_seq(inner_tpe, 1);
+                Ok(Type::Seq(seq_id))
+            }
+            Rule::seq_plus_plus_tpe => {
+                let inner_tpe =
+                    parse_type(diag, fileid, st, inner_type.into_inner().next().unwrap())?;
+                let seq_id = st.add_seq(inner_tpe, 2);
+                Ok(Type::Seq(seq_id))
+            }
+            _ => {
+                let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
+                diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
+                Err(msg)
+            }
+        }
+    } else {
+        let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
+        diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
+        Err(msg)
+    }
+}
+
+fn declare_struct_instance(st: &mut SymbolTable, struct_id: StructId, name: &str) -> SymbolId {
+    let sym_id = st.add_without_parent(name.to_string(), Type::Struct(struct_id), SymbolKind::Dut);
+    let pins = st[struct_id].pins().clone();
+    for pin in pins {
+        let pin_name = pin.name().to_string();
+        st.add_with_parent(pin_name, sym_id);
+    }
+    sym_id
+}
+
+pub struct ParserContext<'a> {
+    pub st: &'a mut SymbolTable,
+    pub fileid: usize,
+    pub proto: Protocol,
+    pub diag: &'a mut DiagnosticHandler,
+}
+
+impl ParserContext<'_> {
+    // Helper method for expected rule errors
+    fn expect_rule<T>(
+        &mut self,
+        option: Option<T>,
+        context_pair: &pest::iterators::Pair<Rule>,
+        message: &str,
+    ) -> Result<T, String> {
+        expect_rule(self.diag, self.fileid, option, context_pair, message)
+    }
+
+    // Helper for getting symbol id from name with error handling
+    fn get_symbol_id(
+        &mut self,
+        name: &str,
+        context_pair: &pest::iterators::Pair<Rule>,
+        message: &str,
+    ) -> Result<SymbolId, String> {
+        self.st
+            .symbol_id_from_name_in_active_scope(name)
+            .ok_or_else(|| {
+                let msg = format!("{}: {}", message, name);
+                self.diag
+                    .emit_diagnostic_parsing(&msg, self.fileid, context_pair, Level::Error);
+                msg
+            })
+    }
+
+    fn parse_struct(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<StructId, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let struct_name = self
+            .expect_rule(inner_rules.next(), &pair, "Expected struct name")?
+            .as_str();
+        let next_rule = self.expect_rule(inner_rules.next(), &pair, "Expected fields in struct")?;
+        let (pins, _symbols) = self.parse_fields(next_rule)?;
+        let struct_id = self.st.add_struct(struct_name.to_string(), pins);
+        Ok(struct_id)
+    }
+
+    fn parse_transaction(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<(), String> {
+        match pair.as_rule() {
+            Rule::fun => {
+                let mut inner_rules = pair.clone().into_inner();
+
+                // Check for optional annotation
+                let first_rule = self.expect_rule(
+                    inner_rules.next(),
+                    &pair,
+                    "Expected function identifier or annotation",
+                )?;
+                let id_pair = if first_rule.as_rule() == Rule::annotation {
+                    // Parse annotation - currently we only support #[idle]
+                    self.proto.is_idle = true;
+                    self.expect_rule(
+                        inner_rules.next(),
+                        &pair,
+                        "Expected function identifier after annotation",
+                    )?
+                } else {
+                    first_rule
+                };
+
+                let id = id_pair.as_str();
+                self.proto.name = id.to_string();
+
+                if let Some(inner_pair) = inner_rules.next() {
+                    match inner_pair.as_rule() {
+                        Rule::type_param => {
+                            let mut type_param_rules = inner_pair.into_inner();
+                            let path_id_1 = type_param_rules.next().unwrap().as_str();
+                            let path_id_2 = type_param_rules.next().unwrap().as_str();
+                            let struct_id = self
+                                .st
+                                .struct_id_from_name(path_id_2)
+                                .ok_or_else(|| format!("Undefined struct: {}", path_id_2))?;
+                            let dut_struct = self.st[struct_id].clone();
+                            // now that we know the DUT parameter name, we can construct the scope
+                            let scope_name = format!("{}::{}", dut_struct.name(), self.proto.name);
+                            self.proto.ctx.scope = self.st.enter_scope(&scope_name);
+                            let dut_symbol_id =
+                                declare_struct_instance(self.st, struct_id, path_id_1);
+                            self.proto.dut_sym = dut_symbol_id;
+                        }
+                        _ => {
+                            let msg = format!(
+                                "Attempted to parse DUT type param. Unexpected rule: {:?}",
+                                inner_pair.as_rule()
+                            );
+                            self.diag.emit_diagnostic_parsing(
+                                &msg,
+                                self.fileid,
+                                &inner_pair,
+                                Level::Error,
+                            );
+                            return Err(msg);
+                        }
+                    }
+                } else {
+                    // create scope without DUT struct prefix
+                    self.proto.ctx.scope = self.st.enter_scope(&self.proto.name);
+                }
+
+                if let Some(arglist_pair) = inner_rules.peek() {
+                    if arglist_pair.as_rule() == Rule::arglist {
+                        let arg_rules = self.expect_rule(
+                            inner_rules.next(),
+                            &arglist_pair,
+                            "Expected argument list",
+                        )?;
+                        let raw_args = self.parse_arglist(arg_rules)?;
+
+                        // add raw arguments to symbol table
+                        self.proto.args = raw_args
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, (name, tpe))| {
+                                let symbol_id = self.st.add_without_parent(
+                                    name,
+                                    tpe,
+                                    SymbolKind::Arg(index as u16),
+                                );
+                                Arg::new(symbol_id)
+                            })
+                            .collect();
+                    } else {
+                        self.proto.args = Vec::new();
+                    }
+                } else {
+                    self.proto.args = Vec::new();
+                }
+
+                self.proto.body = self.parse_stmt_block(inner_rules)?;
+                self.st.exit_scope();
+                Ok(())
+            }
+            _ => {
+                let msg = format!(
+                    "Unexpected rule while parsing transaction: {:?}",
+                    pair.as_rule()
+                );
+                self.diag
+                    .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+                Err(msg)
+            }
+        }
+    }
+
+    fn parse_expr(&mut self, pairs: Pairs<Rule>) -> Result<ExprId, String> {
+        parse_expr(self.st, self.diag, self.fileid, &mut self.proto.ctx, pairs)
+    }
+
+    fn parse_stmt_block(&mut self, stmt_pairs: Pairs<Rule>) -> Result<StmtId, String> {
+        let mut stmts = Vec::new();
+        for inner_pair in stmt_pairs {
+            let start = inner_pair.as_span().start();
+            let end = inner_pair.as_span().end();
+
+            // special case for step() --  will return a vector of statements
+            if inner_pair.as_rule() == Rule::step {
+                let step_stmt = self.parse_step(inner_pair)?;
+
+                // push each step statement into the transaction
+                for step in step_stmt {
+                    let step_id = self.proto.s(step);
+                    self.proto.add_stmt_loc(step_id, start, end, self.fileid);
+                    stmts.push(step_id);
+                }
+
+                continue;
+            }
+
+            // Handle other statement types
+            let stmt = match inner_pair.as_rule() {
+                Rule::assign => self.parse_assign(inner_pair)?,
+                Rule::fork => self.parse_fork(inner_pair)?,
+                Rule::while_loop => self.parse_while(inner_pair)?,
+                Rule::bounded_loop => self.parse_bounded_loop(inner_pair)?,
+                Rule::for_in_loop => self.parse_for_in_loop(inner_pair)?,
+                Rule::cond => self.parse_cond(inner_pair)?,
+                Rule::assert_eq => self.parse_assert_eq(inner_pair)?,
+                _ => {
+                    let msg = format!(
+                        "Unexpected rule while parsing statement block: {:?}",
+                        inner_pair.as_rule()
+                    );
+                    self.diag
+                        .emit_diagnostic_parsing(&msg, self.fileid, &inner_pair, Level::Error);
+                    return Err(msg);
+                }
+            };
+
+            let stmt_id = self.proto.s(stmt);
+            self.proto.add_stmt_loc(stmt_id, start, end, self.fileid);
+            stmts.push(stmt_id);
+        }
+        Ok(self.proto.s(Stmt::Block(stmts)))
+    }
+
+    fn parse_assign(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let path_id_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected path identifier in assignment",
+        )?;
+        let expr_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected expression in assignment",
+        )?;
+
+        let path_id: &str = path_id_rule.as_str();
+        let symbol_id =
+            self.get_symbol_id(path_id, &path_id_rule, "Assigning to undeclared symbol")?;
+        let expr_id = self.parse_expr(expr_rule.into_inner())?;
+
+        Ok(Stmt::Assign(symbol_id, expr_id))
+    }
+
+    fn parse_step(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Vec<Stmt>, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let integer_rule = inner_rules.next();
+        let num_steps = match integer_rule {
+            Some(rule) => rule.as_str().parse::<u64>().unwrap(),
+            None => 1, // Implicit 1 if no integer is passed
+        };
+
+        // error if num_steps is 0 (note that the integer_rule is already unsigned, preventing negatives)
+        if num_steps == 0 {
+            let msg = format!(
+                "Step call expected single positive integer as argument, got {}.",
+                num_steps
+            );
+            self.diag
+                .emit_diagnostic_parsing(&msg, self.fileid, &pair, Level::Error);
+            return Err(msg);
+        }
+
+        // return a vector of steps based on num_steps
+        let mut steps = Vec::new();
+        for _ in 0..num_steps {
+            let step_stmt = Stmt::Step;
+            steps.push(step_stmt);
+        }
+
+        Ok(steps)
+    }
+
+    fn parse_fork(&mut self, _pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        // Fork is a special case, it doesn't have any arguments (enforced by the grammar)
+        Ok(Stmt::Fork)
+    }
+
+    fn parse_while(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let expr_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected expression in while loop",
+        )?;
+        let guard = self.parse_expr(expr_rule.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::While(guard, body))
+    }
+
+    /// Parses a bounded loop (loop with a fixed no. of iterations)
+    fn parse_bounded_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let expr_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected expression in bounded loop",
+        )?;
+        let num_iterations = self.parse_expr(expr_rule.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::RepeatLoop(num_iterations, body))
+    }
+
+    fn parse_for_in_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let id_rule =
+            self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
+        let id_name = id_rule.as_str().to_string();
+        let sym = self
+            .st
+            .add_without_parent(id_name, Type::Unknown, SymbolKind::LoopVar);
+        let seq_expr =
+            self.expect_rule(inner_rules.next(), &pair, "Expected expression in for loop")?;
+        let seq = self.parse_expr(seq_expr.into_inner())?;
+        let body = self.parse_stmt_block(inner_rules)?;
+        Ok(Stmt::ForInLoop(sym, seq, body))
+    }
+
+    fn parse_assert_eq(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let lhs_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected left-hand side expression in assert_eq",
+        )?;
+        let rhs_rule = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected right-hand side expression in assert_eq",
+        )?;
+        let lhs_id = self.parse_expr(lhs_rule.into_inner())?;
+        let rhs_id = self.parse_expr(rhs_rule.into_inner())?;
+        Ok(Stmt::AssertEq(lhs_id, rhs_id))
+    }
+
+    fn parse_cond(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let if_rule = self.expect_rule(inner_rules.next(), &pair, "Expected if condition")?;
+        let mut inner_if = if_rule.into_inner();
+        let expr_rule = self.expect_rule(
+            inner_if.next(),
+            &pair,
+            "Expected expression in if condition",
+        )?;
+        let expr_id = self.parse_expr(expr_rule.into_inner())?;
+        let if_block = self.parse_stmt_block(inner_if)?;
+
+        // Parse the optional else block
+        let else_block = inner_rules
+            .next()
+            .map(|else_rule| self.parse_stmt_block(else_rule.into_inner()))
+            .transpose()?
+            .unwrap_or_else(|| self.proto.s(Stmt::Block(vec![])));
+
+        Ok(Stmt::IfElse(expr_id, if_block, else_block))
+    }
+
+    fn parse_arglist(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<Vec<(String, Type)>, String> {
+        let mut args = Vec::new();
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::arg => {
+                    let mut arg_inner = inner_pair.clone().into_inner();
+                    let id_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected identifier in argument",
+                    )?;
+                    let tpe_pair = self.expect_rule(
+                        arg_inner.next(),
+                        &inner_pair,
+                        "Expected type in argument",
+                    )?;
+                    let id = id_pair.as_str().to_string();
+                    let tpe = self.parse_type(tpe_pair)?;
+                    args.push((id, tpe));
+                }
+                Rule::arglist => {
+                    let mut nested_args = self.parse_arglist(inner_pair)?;
+                    args.append(&mut nested_args);
+                }
+                _ => {
+                    let msg = format!(
+                        "Received unexpected rule while parsing arglist: {:?}",
+                        inner_pair.as_rule()
+                    );
+                    self.diag
+                        .emit_diagnostic_parsing(&msg, self.fileid, &inner_pair, Level::Error);
+                    return Err(msg);
+                }
+            }
+        }
+        Ok(args)
+    }
+
+    fn parse_fields(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<(Vec<Field>, Vec<String>), String> {
+        let mut fields = Vec::new();
+        let mut symbols = Vec::new();
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::field => {
+                    let mut field_inner = inner_pair.clone().into_inner();
+                    let dir_pair = self.expect_rule(
+                        field_inner.next(),
+                        &inner_pair,
+                        "Expected direction in field",
+                    )?;
+                    let id_pair = self.expect_rule(
+                        field_inner.next(),
+                        &inner_pair,
+                        "Expected identifier in field",
+                    )?;
+                    let tpe_pair = self.expect_rule(
+                        field_inner.next(),
+                        &inner_pair,
+                        "Expected type in field",
+                    )?;
+                    let dir = parse_dir(self.diag, self.fileid, dir_pair)?;
+                    let id = id_pair.as_str();
+                    let tpe = self.parse_type(tpe_pair)?;
+                    let field = Field::new(id.to_string(), dir, tpe);
+                    fields.push(field);
+                    symbols.push(id.to_string());
+                }
+                Rule::field_list => {
+                    let (nested_fields, nested_symbols) = self.parse_fields(inner_pair)?;
+                    fields.extend(nested_fields);
+                    symbols.extend(nested_symbols);
+                }
+                _ => {
+                    let msg = format!(
+                        "Unexpected rule while parsing fields: {:?}",
+                        inner_pair.as_rule()
+                    );
+                    self.diag
+                        .emit_diagnostic_parsing(&msg, self.fileid, &inner_pair, Level::Error);
+                    return Err(msg);
+                }
+            }
+        }
+        Ok((fields, symbols))
+    }
+
+    fn parse_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Type, String> {
+        parse_type(self.diag, self.fileid, self.st, pair)
+    }
+}
+
+struct ModuleCtx<'a> {
+    st: &'a mut SymbolTable,
+    fileid: usize,
+    diag: &'a mut DiagnosticHandler,
+    m: RemapModule,
+}
+
+type Pair<'a> = pest::iterators::Pair<'a, Rule>;
+
+impl ModuleCtx<'_> {
+    // Helper method for expected rule errors
+    fn expect_rule<T>(
+        &mut self,
+        option: Option<T>,
+        context_pair: &Pair,
+        message: &str,
+    ) -> Result<T, String> {
+        expect_rule(self.diag, self.fileid, option, context_pair, message)
+    }
+
+    fn on_module_impl_list(pair: Pair, out: &mut Vec<String>) -> Result<(), String> {
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::non_path_id => out.push(inner_pair.as_str().to_string()),
+                Rule::module_impl_list => Self::on_module_impl_list(inner_pair, out)?,
+                other => unreachable!("Unexpected rule: {:?}", other),
+            }
+        }
+        Ok(())
+    }
+
+    fn on_module_entries(&mut self, pair: Pair) -> Result<(), String> {
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::module_entry => self.on_module_entry(inner_pair)?,
+                Rule::module_entries => self.on_module_entries(inner_pair)?,
+                other => unreachable!("Unexpected rule: {:?}", other),
+            }
+        }
+        Ok(())
+    }
+
+    fn on_module_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::module_entry);
+        let entry = pair.into_inner().next().unwrap();
+        match entry.as_rule() {
+            Rule::clock_entry => self.on_clock_entry(entry),
+            Rule::remap_entry => self.on_remap_entry(entry),
+            Rule::const_entry => self.on_const_entry(entry),
+            other => todo!("Unexpected rule: {:?}", other),
+        }
+    }
+
+    fn on_clock_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::clock_entry);
+        let mut field_inner = pair.clone().into_inner();
+        let id_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let edge_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let id = id_pair.as_str();
+        if matches!(self.m.clock, Clock::None) {
+            self.m.clock = match edge_pair.as_str() {
+                "@posedge" => Clock::PosEdge(id.to_string()),
+                "@negedge" => Clock::NegEdge(id.to_string()),
+                other => todo!("deal with clock edge `{other}`"),
+            };
+            Ok(())
+        } else {
+            let msg = format!(
+                "Module {} already has a clock declared: {:?}",
+                self.m.name, self.m.clock
+            );
+            self.err(msg, &pair)
+        }
+    }
+
+    fn on_remap_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::remap_entry);
+
+        let mut field_inner = pair.clone().into_inner();
+        let dir_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected direction in mapping")?;
+        let id_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let tpe_pair = self.expect_rule(field_inner.next(), &pair, "Expected type in mapping")?;
+        let dir = parse_dir(self.diag, self.fileid, dir_pair)?;
+        let name = id_pair.as_str().to_string();
+        let tpe = parse_type(self.diag, self.fileid, self.st, tpe_pair)?;
+
+        let expr_rule = self.expect_rule(
+            field_inner.next(),
+            &pair,
+            "pin remaps require an expression",
+        )?;
+        let rhs = parse_expr(
+            self.st,
+            self.diag,
+            self.fileid,
+            &mut self.m.ctx,
+            expr_rule.into_inner(),
+        )?;
+        let cond = if let Some(cond_rule) = field_inner.next() {
+            parse_expr(
+                self.st,
+                self.diag,
+                self.fileid,
+                &mut self.m.ctx,
+                cond_rule.into_inner(),
+            )?
+        } else {
+            self.m.ctx.expr_true()
+        };
+        self.m.mappings.push(Mapping {
+            name,
+            dir,
+            tpe,
+            rhs,
+            cond,
+        });
+
+        Ok(())
+    }
+
+    fn on_const_entry(&mut self, pair: Pair) -> Result<(), String> {
+        assert_eq!(pair.as_rule(), Rule::const_entry);
+        let mut field_inner = pair.clone().into_inner();
+        let id_pair =
+            self.expect_rule(field_inner.next(), &pair, "Expected identifier in mapping")?;
+        let expr_rule = self.expect_rule(
+            field_inner.next(),
+            &pair,
+            "const pins require an expression",
+        )?;
+        let path_id = id_pair.as_str();
+        let pin = self
+            .st
+            .symbol_id_from_name_in_active_scope(path_id)
+            .unwrap();
+
+        let value = parse_integer_expr(expr_rule)?;
+
+        let cc = ConstMapping { pin, value };
+        self.m.consts.push(cc);
+        Ok(())
+    }
+
+    fn err(&mut self, msg: String, pair: &Pair) -> Result<(), String> {
+        self.diag
+            .emit_diagnostic_parsing(&msg, self.fileid, pair, Level::Error);
+        Err(msg)
+    }
+
+    fn on_module_def(&mut self, pair: Pair) -> Result<(), String> {
+        let mut inner_rules = pair.clone().into_inner();
+        let name = self
+            .expect_rule(inner_rules.next(), &pair, "Expected struct name")?
+            .as_str();
+        self.m.name = name.to_string();
+        self.m.ctx.name = name.to_string();
+        self.m.ctx.scope = self.st.enter_scope(name);
+
+        // interfaces / structs implemented
+        let impl_lst = self.expect_rule(
+            inner_rules.next(),
+            &pair,
+            "Expected list of implemented interfaces/structs",
+        )?;
+        let mut impl_struct_names = vec![];
+        Self::on_module_impl_list(impl_lst, &mut impl_struct_names)?;
+        self.m.implements = impl_struct_names
+            .iter()
+            .map(|name| {
+                self.st
+                    .struct_id_from_name(name)
+                    .ok_or_else(|| format!("Undefined struct: {}", name))
+            })
+            .collect::<Result<_, _>>()?;
+        // declare interface pins so that they can be used in the body
+        for &struct_id in &self.m.implements {
+            let instance_name = self.st[struct_id].name().to_string();
+            declare_struct_instance(self.st, struct_id, &instance_name);
+        }
+
+        // body
+        if let Some(body) = inner_rules.next() {
+            self.on_module_entries(body)?;
+        }
+        self.st.exit_scope();
+        Ok(())
+    }
+}
+
+pub(crate) fn parse_files(
+    filenames: &[impl AsRef<std::path::Path>],
+    handler: &mut DiagnosticHandler,
+) -> Result<Ast, String> {
+    parse_files_with_names(filenames, filenames, handler)
+}
+
+pub(crate) fn parse_files_with_names(
+    filenames: &[impl AsRef<std::path::Path>],
+    display_names: &[impl AsRef<std::path::Path>],
+    handler: &mut DiagnosticHandler,
+) -> Result<Ast, String> {
+    let mut st = SymbolTable::default();
+    let mut protos = vec![];
+    let mut remaps = vec![];
+    for (filename, display_name) in filenames.iter().zip(display_names.iter()) {
+        let display_name = display_name.as_ref().to_str().unwrap();
+        let input =
+            std::fs::read_to_string(filename).map_err(|e| format!("failed to load: {}", e))?;
+        parse_file_internal(
+            &input,
+            display_name,
+            &mut st,
+            &mut protos,
+            &mut remaps,
+            handler,
+        )?;
+    }
+    Ok(Ast { st, protos, remaps })
+}
+
+#[cfg(test)]
+pub(crate) fn parse_file_with_name(
+    filename: impl AsRef<std::path::Path>,
+    display_name: impl AsRef<std::path::Path>,
+    handler: &mut DiagnosticHandler,
+) -> Result<Ast, String> {
+    parse_files_with_names(&[filename], &[display_name], handler)
+}
+
+#[cfg(test)]
+pub(crate) fn parse_string(content: &str, handler: &mut DiagnosticHandler) -> Result<Ast, String> {
+    let mut st = SymbolTable::default();
+    let mut protos = vec![];
+    let mut remaps = vec![];
+    parse_file_internal(
+        content,
+        "<string>",
+        &mut st,
+        &mut protos,
+        &mut remaps,
+        handler,
+    )?;
+    Ok(Ast { st, protos, remaps })
+}
+
+fn parse_file_internal(
+    input: &str,
+    display_name: &str,
+    st: &mut SymbolTable,
+    protos: &mut Vec<Protocol>,
+    remaps: &mut Vec<RemapModule>,
+    diag: &mut DiagnosticHandler,
+) -> Result<(), String> {
+    let fileid = diag.add_file(display_name.into(), input.to_string());
+
+    let res = ProtocolParser::parse(Rule::file, input);
+    match res {
+        Ok(_parsed) => (),
+        Err(err) => {
+            let (start, end) = match err.location {
+                InputLocation::Pos(start) => (start, start),
+                InputLocation::Span(span) => span,
+            };
+            let msg: String = format!("Lexing failed: {}", err.variant.message());
+            diag.emit_diagnostic_lexing(&msg, fileid, start, end, Level::Error);
+            return Err(msg);
+        }
+    }
+
+    let pairs = ProtocolParser::parse(Rule::file, input).unwrap();
+    let inner = pairs.clone().next().unwrap().into_inner();
+
+    for pair in inner {
+        match pair.as_rule() {
+            Rule::struct_def => {
+                // dummy context to set up the symbol table with the struct; the transaction here is irrelevant
+                let mut context = ParserContext {
+                    st,
+                    fileid,
+                    proto: Protocol::new("".to_string(), ROOT_SCOPE),
+                    diag,
+                };
+                context.parse_struct(pair)?;
+            }
+            Rule::fun => {
+                // set up an base symbol table containing the struct, and an empty transaction for the parser to parse into
+                let mut context = ParserContext {
+                    st,
+                    fileid,
+                    proto: Protocol::new("".to_string(), ROOT_SCOPE),
+                    diag,
+                };
+                context.parse_transaction(pair)?;
+                let proto = context.proto;
+                assert!(!proto.name.is_empty());
+                assert_ne!(proto.ctx.scope, ROOT_SCOPE);
+                protos.push(proto);
+            }
+            Rule::module_def => {
+                let m = RemapModule {
+                    ctx: ProtocolContext::new("".to_string(), ROOT_SCOPE),
+                    name: "".to_string(),
+                    clock: Default::default(),
+                    implements: vec![],
+                    mappings: vec![],
+                    consts: vec![],
+                };
+                let mut ctx = ModuleCtx {
+                    st,
+                    fileid,
+                    diag,
+                    m,
+                };
+                ctx.on_module_def(pair)?;
+                let m = ctx.m;
+                assert!(!m.name.is_empty());
+                assert_ne!(m.ctx.scope, ROOT_SCOPE);
+                remaps.push(m);
+            }
+            Rule::EOI => {} // OK
+            other => todo!("Add support for {other:?}"),
+        }
+    }
+
+    Ok(())
+}

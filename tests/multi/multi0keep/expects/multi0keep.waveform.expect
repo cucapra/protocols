@@ -1,0 +1,5 @@
+Trace 0 executed successfully!
+inp[31:0] 10  x
+start      1  0
+out[31:0]  0 10
+done       0  1

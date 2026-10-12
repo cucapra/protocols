@@ -1,0 +1,18 @@
+struct Calyx {
+  in ii: u32,
+  in go: u32,
+  out done: u1,
+  out oo: u32,
+}
+
+prot calyx_go_done<dut: Calyx>(ii: u32, oo: u32) {
+  dut.ii := ii;
+  dut.go := 32'b1;
+  while !(dut.done == 1'b1) {
+    step(1);
+  }
+  dut.go := 32'b0;
+  dut.ii := X;
+  assert_eq(dut.oo, oo);
+  step();
+}

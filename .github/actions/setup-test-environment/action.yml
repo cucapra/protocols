@@ -1,0 +1,17 @@
+name: 'Setup Test Environment'
+description: 'Setup Python, YosysHQ, uv, and Runt for testing'
+inputs:
+  github_token:
+    description: 'Your GITHUB_TOKEN'
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: YosysHQ/setup-oss-cad-suite@v3
+      with:
+        version: '2024-05-07'
+        github-token: ${{ inputs.github_token }}
+    - uses: ./.github/actions/setup-uv
+    - name: Install Runt
+      shell: bash
+      run: cargo install --git https://github.com/Nikil-Shyamsunder/runt.git

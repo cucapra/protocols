@@ -1,0 +1,11 @@
+Trace 0 executed successfully!
+b[31:0] 2 5 x
+a[31:0] 1 4 x
+s[31:0] 0 3 9
+
+---
+
+Trace 1 executed successfully!
+b[31:0] 2 5 x
+a[31:0] 1 4 x
+s[31:0] 0 3 9

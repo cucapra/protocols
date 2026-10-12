@@ -1,0 +1,3 @@
+trace {
+    failure_to_update_sha();
+}

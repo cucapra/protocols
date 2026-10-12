@@ -1,0 +1,11 @@
+// trace 0
+trace {
+}
+error: [idle@0] executing step 0 of the transaction: 1 != 0
+   ┌─ tests/wal/advanced/axis_failing.prot:11:5
+   │
+11 │     D.m_axis_tvalid := 1'b0;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^ [idle@0] executing step 0 of the transaction: 1 != 0
+
+---CODE---
+1

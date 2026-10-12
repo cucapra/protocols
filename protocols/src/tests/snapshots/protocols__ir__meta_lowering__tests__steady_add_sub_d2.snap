@@ -1,0 +1,31 @@
+---
+source: protocols/src/ir/meta_lowering.rs
+expression: dot
+---
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a#0_add if not(node_choice); a#0_sub if node_choice\n[1] DUT.b := b#0_add if not(node_choice); b#0_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice"];
+  node0 -> node1 [label="not(node_choice) / step"];
+  node0 -> node2 [label="node_choice / step"];
+  node1 [label="[1] fork\n[1] DUT.a := a#1_add if not(node_choice); a#1_sub if node_choice\n[1] DUT.b := b#1_add if not(node_choice); b#1_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice"];
+  node1 -> node3 [label="not(node_choice) / step"];
+  node1 -> node4 [label="node_choice / step"];
+  node2 [label="[1] fork\n[1] DUT.a := a#1_add if not(node_choice); a#1_sub if node_choice\n[1] DUT.b := b#1_add if not(node_choice); b#1_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice"];
+  node2 -> node5 [label="not(node_choice) / step"];
+  node2 -> node6 [label="node_choice / step"];
+  node3 [label="[1] DUT.a := a#2_add if not(node_choice); a#2_sub if node_choice\n[1] DUT.b := b#2_add if not(node_choice); b#2_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice\n[1] assert_eq(s#0_add, DUT.s)\n[1] fork"];
+  node3 -> node3 [label="not(node_choice) / step / R_add"];
+  node3 -> node4 [label="node_choice / step / R_add, R_sub"];
+  node4 [label="[1] DUT.a := a#2_add if not(node_choice); a#2_sub if node_choice\n[1] DUT.b := b#2_add if not(node_choice); b#2_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice\n[1] assert_eq(s#0_add, DUT.s)\n[1] fork"];
+  node4 -> node5 [label="not(node_choice) / step / R_add, R_sub"];
+  node4 -> node6 [label="node_choice / step / R_sub"];
+  node5 [label="[1] DUT.a := a#2_add if not(node_choice); a#2_sub if node_choice\n[1] DUT.b := b#2_add if not(node_choice); b#2_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice\n[1] assert_eq(s#0_sub, DUT.s)\n[1] fork"];
+  node5 -> node3 [label="not(node_choice) / step / R_add"];
+  node5 -> node4 [label="node_choice / step / R_add, R_sub"];
+  node6 [label="[1] DUT.a := a#2_add if not(node_choice); a#2_sub if node_choice\n[1] DUT.b := b#2_add if not(node_choice); b#2_sub if node_choice\n[1] DUT.op := 0 if not(node_choice); 1 if node_choice\n[1] assert_eq(s#0_sub, DUT.s)\n[1] fork"];
+  node6 -> node5 [label="not(node_choice) / step / R_add, R_sub"];
+  node6 -> node6 [label="node_choice / step / R_sub"];
+}

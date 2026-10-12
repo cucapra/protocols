@@ -1,0 +1,11 @@
+// trace 0
+trace {
+}
+error: [write_burst@95] executing step 67 of the transaction: 0 != 1
+   ┌─ tests/fpga-debugging/axi-burst-s4/s4_buggy.prot:63:5
+   │
+63 │     DUT.m_wlast := 1'b1;
+   │     ^^^^^^^^^^^^^^^^^^^^ [write_burst@95] executing step 67 of the transaction: 0 != 1
+
+---CODE---
+1

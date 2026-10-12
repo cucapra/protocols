@@ -1,0 +1,4 @@
+Trace 0 executed successfully!
+inp[63:0] 10  x  x  x  x
+start      1  0  0  0  0
+out[63:0]  0 10 10 10 10

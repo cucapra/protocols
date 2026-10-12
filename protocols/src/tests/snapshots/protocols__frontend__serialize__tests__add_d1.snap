@@ -1,0 +1,105 @@
+---
+source: protocols/src/frontend/serialize.rs
+expression: content
+---
+struct Adder {
+  in a: u32,
+  in b: u32,
+  out s: u32,
+}
+
+prot add<DUT: Adder>(a: u32, b: u32, s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot add_fork_early<DUT: Adder>(a: u32, b: u32, s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  fork();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  step();
+}
+
+prot add_incorrect<DUT: Adder>(a: u32, b: u32, s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  DUT.a := a;
+  DUT.b := b;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot add_incorrect_implicit<DUT: Adder>(a: u32, b: u32, s: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot wait_and_add<DUT: Adder>(a: u32, b: u32, s: u32) {
+  step();
+  fork();
+  step();
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  assert_eq(s, DUT.s);
+  step();
+}
+
+prot assign_after_observation<DUT: Adder>(a: u32, b: u32, s: u32) {
+  DUT.a := a;
+  if DUT.a == 32'd2 {
+    DUT.a := 32'd0;
+  } else {
+  }
+  DUT.b := b;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(s, DUT.s);
+  fork();
+  step();
+}
+
+prot better_if_else<DUT: Adder>(a: u32, b: u32) {
+  DUT.a := a;
+  DUT.b := b;
+  step();
+  if DUT.s == 32'd0 {
+    DUT.a := X;
+  } else {
+    DUT.a := 32'd5;
+  }
+  fork();
+  step();
+}
+
+prot if_else<DUT: Adder>(a1: u32, a2: u32) {
+  if 1'd1 {
+    DUT.a := a1;
+  } else {
+    DUT.a := a2;
+  }
+  DUT.b := 32'd0;
+  step();
+  DUT.a := X;
+  DUT.b := X;
+  assert_eq(a1, DUT.s);
+  fork();
+  step();
+}

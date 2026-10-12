@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+
 use thiserror::Error;
 
 #[allow(dead_code)]
@@ -81,7 +82,7 @@ where
     let mut cmd = std::process::Command::new("yosys");
     cmd.arg("-p").arg(&cmd_str).current_dir(&env.working_dir);
 
-    let res = cmd.output().unwrap();
+    let res = cmd.output()?;
     let out = String::from_utf8_lossy(&res.stdout).to_string();
     if res.status.success() {
         Ok(out)
@@ -131,27 +132,20 @@ fn read_sources(project: &ProjectConf) -> Vec<String> {
 pub fn yosys_to_btor(
     env: &YosysEnv,
     project: &ProjectConf,
-    btor_name: Option<&Path>,
+    btor_path: &PathBuf,
 ) -> Result<PathBuf> {
-    // auto-generate a btor_name if it was not given
-    let btor_name = match (btor_name, &project.top) {
-        (Some(name), _) => name.to_path_buf(),
-        (None, Some(top)) => PathBuf::from(format!("{top}.btor")),
-        _ => project.sources.first().unwrap().with_extension("btor"),
-    };
-
+    // let path_buf = btor_path.to_path_buf();
     let mut cmd = read_sources(project);
     cmd.extend(MINIMAL_BTOR_CONVERSION.iter().map(|s| s.to_string()));
-    cmd.push(format!("write_btor -x {}", btor_name.to_string_lossy()));
+    cmd.push(format!("write_btor -x {}", btor_path.to_string_lossy()));
     run_yosys(env, &cmd)?;
-    let btor_full = if btor_name.is_absolute() {
-        fs::canonicalize(btor_name).unwrap()
+    let btor_full = if btor_path.is_absolute() {
+        fs::canonicalize(btor_path)?
     } else {
         fs::canonicalize(PathBuf::from_iter([
             env.working_dir.as_path(),
-            btor_name.as_path(),
-        ]))
-        .unwrap()
+            btor_path.as_path(),
+        ]))?
     };
     if btor_full.exists() {
         Ok(btor_full)
@@ -238,7 +232,7 @@ mod tests {
     #[test]
     fn test_run_yosys_load_existing_verilog_file() {
         // read existing file
-        let cmds = ["read_verilog tests/adders/adder_d1/add_d1.v"];
+        let cmds = ["read_verilog ../tests/adders/adder_d1/add_d1.v"];
         let res = run_yosys(&YosysEnv::default(), &cmds).unwrap();
         assert!(res.contains("Successfully finished Verilog frontend"));
     }
@@ -254,7 +248,7 @@ mod tests {
     #[test]
     fn test_yosys_to_btor() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("tests/adders/adder_d2/add_d2.v");
+        let inp = PathBuf::from("../tests/adders/adder_d2/add_d2.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()
@@ -262,7 +256,7 @@ mod tests {
         let btor_file = yosys_to_btor(
             &env,
             &proj,
-            Some(&PathBuf::from("tests/adders/adder_d2/add_d2.btor")),
+            &PathBuf::from("../tests/adders/adder_d2/add_d2.btor"),
         )
         .unwrap();
         assert!(
@@ -278,12 +272,17 @@ mod tests {
     #[test]
     fn test_yosys_to_btor_auto_name() {
         let env = YosysEnv::default();
-        let inp = PathBuf::from("tests/counters/counter.v");
+        let inp = PathBuf::from("../tests/counters/counter.v");
         let proj = ProjectConf {
             sources: vec![inp],
             ..Default::default()
         };
-        let btor_file = yosys_to_btor(&env, &proj, None).unwrap();
+        let btor_file = yosys_to_btor(
+            &env,
+            &proj,
+            &PathBuf::from("../tests/counters/counter.btor"),
+        )
+        .unwrap();
         // derived from sources
         assert!(
             btor_file

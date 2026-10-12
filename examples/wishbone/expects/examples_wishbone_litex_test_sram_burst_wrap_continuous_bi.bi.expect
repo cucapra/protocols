@@ -1,0 +1,24 @@
+// trace 0
+trace {
+}
+error: [write_burst_increment_wrap_4@1] executing step 2 of the transaction: 00000000 != 00000002
+    ┌─ examples/wishbone/wishbone.prot:372:9
+    │
+372 │         self.ADR := start_addr[31:4] ## (start_addr[3:2] + iter_count::<u2>()) ## start_addr[1:0];
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@1] executing step 2 of the transaction: 00000000 != 00000002
+
+
+error: [write_burst_increment_wrap_4@1L] executing step 2 of the transaction: 2 != 7
+    ┌─ examples/wishbone/wishbone.prot:377:13
+    │
+377 │             self.CTI := 3'b111;
+    │             ^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@1L] executing step 2 of the transaction: 2 != 7
+
+error: [write_burst_increment_wrap_4@1L] executing step 2 of the transaction: 00000000 != 00000002
+    ┌─ examples/wishbone/wishbone.prot:372:9
+    │
+372 │         self.ADR := start_addr[31:4] ## (start_addr[3:2] + iter_count::<u2>()) ## start_addr[1:0];
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@1L] executing step 2 of the transaction: 00000000 != 00000002
+
+---CODE---
+1

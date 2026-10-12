@@ -1,0 +1,19 @@
+---
+source: protocols/src/frontend/serialize.rs
+expression: content
+---
+struct Counter {
+  in a: u64,
+  out s: u64,
+}
+
+prot simple_while<dut: Counter>(a: u64, b: u64, s: u64) {
+  dut.a := a;
+  while !(dut.s == 64'd1) {
+    step();
+  }
+  step();
+  step();
+  assert_eq(dut.s, s);
+  step();
+}

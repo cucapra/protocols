@@ -1,0 +1,5 @@
+Trace 0 executed successfully!
+input_data[31:0] x 6 6 6
+request          0 1 1 1
+final_resp_valid 0 0 0 1
+final_resp[31:0] 0 0 0 7

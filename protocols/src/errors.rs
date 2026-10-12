@@ -5,11 +5,15 @@
 // author: Francis Pham <fdp25@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::diagnostic::{DiagnosticHandler, Level};
-use crate::ir::{ExprId, StmtId, SymbolId, SymbolTable, Transaction};
-use crate::serialize::{serialize_bitvec, serialize_expr};
-use baa::BitVecValue;
 use std::fmt;
+
+use baa::BitVecValue;
+
+use crate::Value;
+use crate::frontend::ast::{ExprId, Protocol, StmtId};
+use crate::frontend::diagnostic::{DiagnosticHandler, Level};
+use crate::frontend::serialize::{serialize_bitvec, serialize_expr};
+use crate::frontend::symbol::{SymbolId, SymbolTable};
 
 /// Main error type for the scheduler and evaluator system
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +50,15 @@ pub enum EvaluationError {
         stmt_type: String, // "if" or "while"
         expr_id: ExprId,
     },
+    /// Attempted to assign to an input port after observing a dependent output
+    ForbiddenInputAssignment { input_name: String, expr_id: ExprId },
+    /// Attempted to read a port that is forbidden (input with DontCare, or output with dependent DontCare input)
+    ForbiddenPortRead {
+        port_name: String,
+        /// (input_name, stmt_id) for each DontCare input that caused the forbidden read
+        unassigned_inputs: Vec<(String, Option<StmtId>)>,
+        expr_id: ExprId,
+    },
     /// Invalid slice operation.
     /// self.width() >= msb >= lsb >= 0
     InvalidSlice {
@@ -62,7 +75,7 @@ pub enum EvaluationError {
         start: u32,
         end: u32,
     },
-    /// (For monitor only) When the value of an expression on the RHS
+    /// (For bi only) When the value of an expression on the RHS
     /// of an assignment disagreess with the actual observed trace value
     ValueDisagreesWithTrace {
         expr_id: ExprId,
@@ -72,7 +85,7 @@ pub enum EvaluationError {
         symbol_name: String,
         cycle_count: u32,
     },
-    /// (For monitor only) When a constraint established by an assignment
+    /// (For bi only) When a constraint established by an assignment
     /// no longer holds after stepping to a new cycle
     ConstraintViolation {
         symbol_id: SymbolId,
@@ -101,12 +114,13 @@ pub enum ThreadError {
     },
     /// Multiple threads trying to assign to same input
     ConflictingAssignment {
-        symbol_id: SymbolId,
         symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_idx: usize,
+        transaction_name: String,
         stmt_id: StmtId,
+        step_count: u32,
     },
     /// Thread execution limit exceeded (for infinite loop protection)
     ExecutionLimitExceeded { max_steps: usize },
@@ -219,6 +233,43 @@ impl fmt::Display for EvaluationError {
                     stmt_type, expr_id
                 )
             }
+            EvaluationError::ForbiddenInputAssignment { input_name, .. } => {
+                write!(
+                    f,
+                    "Cannot assign to input '{}' after observing a dependent output",
+                    input_name
+                )
+            }
+            EvaluationError::ForbiddenPortRead {
+                port_name,
+                unassigned_inputs,
+                ..
+            } => {
+                let input_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                let implicit_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .filter(|(_, stmt_id)| stmt_id.is_none())
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                let implicit_note = if implicit_names.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " ({} initialized to DontCare and were never assigned a concrete value)",
+                        implicit_names.join(", ")
+                    )
+                };
+                write!(
+                    f,
+                    "Port '{}' depends on input(s) {} which do not have assigned values{}",
+                    port_name,
+                    input_names.join(", "),
+                    implicit_note
+                )
+            }
             EvaluationError::InvalidSlice {
                 expr_id,
                 start,
@@ -293,12 +344,16 @@ impl fmt::Display for ThreadError {
                 current_value,
                 new_value,
                 thread_idx,
+                transaction_name,
+                step_count,
                 ..
             } => {
                 write!(
                     f,
-                    "Thread {} attempted conflicting assignment to '{}': current={}, new={}",
+                    "@{} Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
+                    step_count,
                     thread_idx,
+                    transaction_name,
                     symbol_name,
                     serialize_bitvec(current_value, false),
                     serialize_bitvec(new_value, false)
@@ -361,7 +416,12 @@ impl fmt::Display for AssertionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AssertionError::EqualityFailed { value1, value2, .. } => {
-                write!(f, "Assertion failed: {:?} != {:?}", value1, value2)
+                write!(
+                    f,
+                    "Assertion failed: {} != {}",
+                    serialize_bitvec(value1, false),
+                    serialize_bitvec(value2, false)
+                )
             }
             AssertionError::DontCareAssertion { .. } => {
                 write!(
@@ -451,20 +511,22 @@ impl ExecutionError {
     }
 
     pub fn conflicting_assignment(
-        symbol_id: SymbolId,
         symbol_name: String,
         current_value: BitVecValue,
         new_value: BitVecValue,
         thread_idx: usize,
+        transaction_name: String,
         stmt_id: StmtId,
+        step_count: u32,
     ) -> Self {
         ExecutionError::Thread(ThreadError::ConflictingAssignment {
-            symbol_id,
             symbol_name,
             current_value,
             new_value,
             thread_idx,
+            transaction_name,
             stmt_id,
+            step_count,
         })
     }
 
@@ -486,6 +548,25 @@ impl ExecutionError {
         ExecutionError::Evaluation(EvaluationError::DontCareOperation {
             operation,
             context,
+            expr_id,
+        })
+    }
+
+    pub fn forbidden_input_assignment(input_name: String, expr_id: ExprId) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ForbiddenInputAssignment {
+            input_name,
+            expr_id,
+        })
+    }
+
+    pub fn forbidden_port_read(
+        port_name: String,
+        unassigned_inputs: Vec<(String, Option<StmtId>)>,
+        expr_id: ExprId,
+    ) -> Self {
+        ExecutionError::Evaluation(EvaluationError::ForbiddenPortRead {
+            port_name,
+            unassigned_inputs,
             expr_id,
         })
     }
@@ -563,11 +644,20 @@ pub type ExecutionResult<T> = Result<T, ExecutionError>;
 pub struct DiagnosticEmitter;
 
 impl DiagnosticEmitter {
+    /// Emits an error message that corresponds to a failure when
+    /// executing a protocol. Arguments are:
+    /// - The `DiagnosticHandler`
+    /// - The actual error
+    /// - The transaction which contained the error
+    /// - The relevant `SymbolTable` (for resolving variable names)
+    /// - The arguments (`todo_args`) supplied to the transaction
+    ///   (for extra info in the error message)
     pub fn emit_execution_error(
         handler: &mut DiagnosticHandler,
         error: &ExecutionError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         symbol_table: &SymbolTable,
+        todo_args: &[Value],
     ) {
         match error {
             ExecutionError::Evaluation(eval_err) => {
@@ -580,7 +670,13 @@ impl DiagnosticEmitter {
                 Self::emit_symbol_error(handler, symbol_err, transaction, symbol_table);
             }
             ExecutionError::Assertion(assert_err) => {
-                Self::emit_assertion_error(handler, assert_err, transaction, symbol_table);
+                Self::emit_assertion_error(
+                    handler,
+                    assert_err,
+                    transaction,
+                    symbol_table,
+                    todo_args,
+                );
             }
             ExecutionError::MaxStepsReached(_) => {
                 handler.emit_general_message(&format!("{error}"), Level::Error);
@@ -591,7 +687,7 @@ impl DiagnosticEmitter {
     pub fn emit_evaluation_error(
         handler: &mut DiagnosticHandler,
         error: &EvaluationError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         symbol_table: &SymbolTable,
     ) {
         match error {
@@ -627,6 +723,64 @@ impl DiagnosticEmitter {
                     transaction,
                     expr_id,
                     &format!("Cannot evaluate {} condition: value is DontCare", stmt_type),
+                    Level::Error,
+                );
+            }
+            EvaluationError::ForbiddenInputAssignment {
+                input_name,
+                expr_id,
+            } => {
+                handler.emit_diagnostic_expr(
+                    transaction,
+                    expr_id,
+                    &format!(
+                        "Cannot assign to forbidden input '{}' after observing a combinationally dependent output",
+                        input_name
+                    ),
+                    Level::Error,
+                );
+            }
+            EvaluationError::ForbiddenPortRead {
+                port_name,
+                unassigned_inputs,
+                expr_id,
+            } => {
+                let input_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                // Inputs with no stmt_id were never explicitly assigned (implicit DontCare at initialization)
+                let implicit_names: Vec<_> = unassigned_inputs
+                    .iter()
+                    .filter(|(_, stmt_id)| stmt_id.is_none())
+                    .map(|(name, _)| format!("'{}'", name))
+                    .collect();
+                let implicit_note = if implicit_names.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " ({} initialized to DontCare and were never assigned a concrete value)",
+                        implicit_names.join(", ")
+                    )
+                };
+                let main_message = format!(
+                    "Port '{}' depends on input(s) {} which do not have assigned values{}",
+                    port_name,
+                    input_names.join(", "),
+                    implicit_note
+                );
+                let stmt_labels: Vec<_> = unassigned_inputs
+                    .iter()
+                    .filter_map(|(name, stmt_id)| {
+                        stmt_id.map(|sid| (sid, format!("'{}' assigned DontCare here", name)))
+                    })
+                    .collect();
+                handler.emit_diagnostic_expr_with_stmts(
+                    transaction,
+                    expr_id,
+                    &main_message,
+                    &stmt_labels,
+                    &main_message,
                     Level::Error,
                 );
             }
@@ -674,8 +828,8 @@ impl DiagnosticEmitter {
                     "Expected {} ({}) to have value {}, but the trace value {} at cycle {} is different",
                     symbol_name,
                     symbol_id,
-                    serialize_bitvec(value, false),
-                    serialize_bitvec(trace_value, false),
+                    serialize_bitvec(value, handler.display_hex),
+                    serialize_bitvec(trace_value, handler.display_hex),
                     cycle_count
                 );
                 handler.emit_diagnostic_expr(transaction, expr_id, &message, Level::Error);
@@ -691,8 +845,8 @@ impl DiagnosticEmitter {
                     "Constraint violation: {} (symbol_id {}) expected value {} but trace has {} at {}",
                     symbol_name,
                     symbol_id,
-                    serialize_bitvec(expected_value, false),
-                    serialize_bitvec(trace_value, false),
+                    serialize_bitvec(expected_value, handler.display_hex),
+                    serialize_bitvec(trace_value, handler.display_hex),
                     error_time
                 );
                 handler.emit_general_message(&message, Level::Error);
@@ -703,7 +857,7 @@ impl DiagnosticEmitter {
     pub fn emit_thread_error(
         handler: &mut DiagnosticHandler,
         error: &ThreadError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         _symbol_table: &SymbolTable,
     ) {
         match error {
@@ -744,15 +898,22 @@ impl DiagnosticEmitter {
                 current_value,
                 new_value,
                 thread_idx,
+                transaction_name,
                 stmt_id,
+                step_count,
                 ..
             } => {
                 handler.emit_diagnostic_stmt(
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} attempted conflicting assignment to '{}': current={:?}, new={:?}",
-                        thread_idx, symbol_name, current_value, new_value
+                        "@{} Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
+                        step_count,
+                        thread_idx,
+                        transaction_name,
+                        symbol_name,
+                        serialize_bitvec(current_value, handler.display_hex),
+                        serialize_bitvec(new_value, handler.display_hex)
                     ),
                     Level::Error,
                 );
@@ -801,7 +962,7 @@ impl DiagnosticEmitter {
     pub fn emit_symbol_error(
         handler: &mut DiagnosticHandler,
         error: &SymbolError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         _symbol_table: &SymbolTable,
     ) {
         match error {
@@ -840,8 +1001,9 @@ impl DiagnosticEmitter {
     pub fn emit_assertion_error(
         handler: &mut DiagnosticHandler,
         error: &AssertionError,
-        transaction: &Transaction,
+        transaction: &Protocol,
         _symbol_table: &SymbolTable,
+        todo_args: &[Value],
     ) {
         match error {
             AssertionError::EqualityFailed {
@@ -850,7 +1012,14 @@ impl DiagnosticEmitter {
                 value1,
                 value2,
             } => {
-                handler.emit_diagnostic_assertion(transaction, expr1_id, expr2_id, value1, value2);
+                handler.emit_diagnostic_assertion(
+                    transaction,
+                    expr1_id,
+                    expr2_id,
+                    value1,
+                    value2,
+                    todo_args,
+                );
             }
             AssertionError::DontCareAssertion { stmt_id } => {
                 handler.emit_diagnostic_stmt(

@@ -1,0 +1,6 @@
+trace {
+
+    reset();
+    push(2);
+    pop(3); // this line should fail, since 3 isn't in the FIFO
+}

@@ -1,0 +1,15 @@
+// trace 0
+trace {
+    send_data(0);  // [time: 804ns -> 812ns]
+    send_data(1);  // [time: 1508ns -> 1516ns]
+    send_data(2);  // [time: 2212ns -> 2220ns]
+    send_data(3);  // [time: 2916ns -> 2924ns]
+}
+error: [send_data@453] executing step 88 of the transaction: 05 != 04
+   ┌─ tests/wal/advanced/axis.prot:10:5
+   │
+10 │     D.m_axis_tdata := data;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ [send_data@453] executing step 88 of the transaction: 05 != 04
+
+---CODE---
+1

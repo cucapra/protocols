@@ -1,0 +1,19 @@
+// corresponds to tests/brave_new_world/use_without_valid/use_without_valid_bug.v
+// and tests/brave_new_world/use_without_valid/use_without_valid_fix.v
+
+struct UseWithoutValid {
+    in data: u32,
+    in data_val: u1,
+    out sum: u32,
+}
+
+prot use_without_valid<dut: UseWithoutValid>(data: u32, data_out: u32) {
+    dut.data := data;
+    dut.data_val := 1'b0;
+    step(2);
+    dut.data_val := 1'b1;
+    step(1);
+    assert_eq(data_out, dut.sum);
+    fork();
+    step(1);
+}

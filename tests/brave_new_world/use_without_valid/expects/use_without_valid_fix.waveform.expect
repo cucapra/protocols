@@ -1,0 +1,4 @@
+Trace 0 executed successfully!
+data_val   0 0 1 1
+data[31:0] 5 5 5 5
+sum[31:0]  0 0 0 5

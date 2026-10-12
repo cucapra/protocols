@@ -1,0 +1,4 @@
+trace {
+    add_fork_before_step(1, 2, 3);
+    add_fork_before_step(4, 5, 9);
+}

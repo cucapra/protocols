@@ -1,0 +1,166 @@
+// From https://github.com/ngernest/rtl-repair/blob/asplos24/benchmarks/fpga-debugging/axis-frame-fifo-d11/axis_frame_fifo_bug_d11.v
+
+/*
+
+Copyright (c) 2014 Alex Forencich
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+*/
+
+// Language: Verilog 2001
+
+`timescale 1ns / 1ps
+
+/*
+ * AXI4-Stream frame FIFO
+ */
+module axis_frame_fifo #
+(
+    parameter ADDR_WIDTH = 2,
+    parameter DATA_WIDTH = 8,
+    parameter DROP_WHEN_FULL = 1
+)
+(
+    input  wire                   clk,
+    input  wire                   rst,
+    
+    /*
+     * AXI input
+     */
+    input  wire [DATA_WIDTH-1:0]  input_axis_tdata,
+    input  wire                   input_axis_tvalid,
+    output wire                   input_axis_tready,
+    input  wire                   input_axis_tlast,
+    input  wire                   input_axis_tuser,
+    
+    /*
+     * AXI output
+     */
+    output wire [DATA_WIDTH-1:0]  output_axis_tdata,
+    output wire                   output_axis_tvalid,
+    input  wire                   output_axis_tready,
+    output wire                   output_axis_tlast,
+    output reg                    drop_frame
+);
+
+reg [ADDR_WIDTH:0] wr_ptr = {ADDR_WIDTH+1{1'b0}};
+reg [ADDR_WIDTH:0] wr_ptr_cur = {ADDR_WIDTH+1{1'b0}};
+reg [ADDR_WIDTH:0] rd_ptr = {ADDR_WIDTH+1{1'b0}};
+
+
+
+reg [DATA_WIDTH+2-1:0] data_out_reg = {1'b0, {DATA_WIDTH{1'b0}}};
+
+//(* RAM_STYLE="BLOCK" *)
+reg [DATA_WIDTH+2-1:0] mem[(2**ADDR_WIDTH)-1:0];
+
+reg output_read = 1'b0;
+
+reg output_axis_tvalid_reg = 1'b0;
+
+wire [DATA_WIDTH+2-1:0] data_in = {input_axis_tlast, input_axis_tdata};
+
+// full when first MSB different but rest same
+wire full = ((wr_ptr[ADDR_WIDTH] != rd_ptr[ADDR_WIDTH]) &&
+             (wr_ptr[ADDR_WIDTH-1:0] == rd_ptr[ADDR_WIDTH-1:0]));
+// empty when pointers match exactly
+wire empty = wr_ptr == rd_ptr;
+// overflow in single packet
+wire full_cur = ((wr_ptr[ADDR_WIDTH] != wr_ptr_cur[ADDR_WIDTH]) &&
+                 (wr_ptr[ADDR_WIDTH-1:0] == wr_ptr_cur[ADDR_WIDTH-1:0]));
+
+wire write = input_axis_tvalid & (~full | DROP_WHEN_FULL);
+wire read = (output_axis_tready | ~output_axis_tvalid_reg) & ~empty;
+
+assign {output_axis_tlast, output_axis_tdata} = data_out_reg;
+
+assign input_axis_tready = (~full | DROP_WHEN_FULL);
+assign output_axis_tvalid = output_axis_tvalid_reg;
+
+// write
+always @(posedge clk) begin
+    if (rst) begin
+        // Bug: Only wr_ptr is reset, whereas wr_ptr_cur and drop_frame aren't reset
+        // This causes 2 problems:
+        //
+        // 1. Outdated wr_ptr_cur value:
+        //    - Before reset: wr_ptr_cur may have advanced while writing an incomplete frame
+        //    - After reset: wr_ptr=0 (reset), but wr_ptr_cur retains old value (e.g., 3)
+        //    - Result: full_cur = ((wr_ptr[MSB] != wr_ptr_cur[MSB]) && (wr_ptr[...] == wr_ptr_cur[...]))
+        //              may incorrectly evaluate to true, falsely indicating buffer is full
+        //
+        // 2. Outdated drop_frame flag:
+        //    - Before reset: drop_frame=1 if buffer filled up during incomplete frame write
+        //    - After reset: wr_ptr=0 (reset), but drop_frame=1 (still set)
+        //    - Result: Line 102 condition (full | full_cur | drop_frame) is true
+        //              → FIFO immediately enters drop mode even though buffer is empty
+        //              → input_axis_tready stays low, blocking all new writes
+        //
+        // Consequence: After reset, FIFO cannot accept any new data (no push transactions)
+        // because it incorrectly thinks it's in drop mode or full state
+        wr_ptr <= 0;
+        // wr_ptr_cur <= 0;  // MISSING! Should be here
+        // drop_frame <= 0;  // MISSING! Should be here
+    end else if (write) begin
+        if (full | full_cur | drop_frame) begin
+            // buffer full, hold current pointer, drop packet at end
+            drop_frame <= 1;
+            if (input_axis_tlast) begin
+                wr_ptr_cur <= wr_ptr;
+                drop_frame <= 0;
+            end
+        end else begin
+            mem[wr_ptr_cur[ADDR_WIDTH-1:0]] <= data_in;
+            wr_ptr_cur <= wr_ptr_cur + 1;
+            if (input_axis_tlast) begin
+                if (input_axis_tuser) begin
+                    // bad packet, reset write pointer
+                    wr_ptr_cur <= wr_ptr;
+                end else begin
+                    // good packet, push new write pointer
+                    wr_ptr <= wr_ptr_cur + 1;
+                end
+            end
+        end
+    end
+end
+
+// read
+always @(posedge clk) begin
+    if (rst) begin
+        rd_ptr <= 0;
+    end else if (read) begin
+        data_out_reg <= mem[rd_ptr[ADDR_WIDTH-1:0]];
+        rd_ptr <= rd_ptr + 1;
+    end
+end
+
+// source ready output
+always @(posedge clk) begin
+    if (rst) begin
+        output_axis_tvalid_reg <= 1'b0;
+    end else if (output_axis_tready | ~output_axis_tvalid_reg) begin
+        output_axis_tvalid_reg <= ~empty;
+    end else begin
+        output_axis_tvalid_reg <= output_axis_tvalid_reg;
+    end
+end
+
+endmodule

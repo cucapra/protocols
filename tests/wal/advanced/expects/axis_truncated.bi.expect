@@ -1,0 +1,11 @@
+// trace 0
+trace {
+}
+error: [send_data@0] executing step 88 of the transaction: 0f != 0e
+   ┌─ tests/wal/advanced/axis_truncated.prot:10:5
+   │
+10 │     D.m_axis_tdata := data;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^ [send_data@0] executing step 88 of the transaction: 0f != 0e
+
+---CODE---
+1

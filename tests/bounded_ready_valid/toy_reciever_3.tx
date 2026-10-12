@@ -1,0 +1,3 @@
+trace {
+    send_data(5);
+}

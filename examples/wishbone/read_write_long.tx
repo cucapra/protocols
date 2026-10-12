@@ -1,0 +1,27 @@
+trace {
+    reset();
+    idle_no_cycle();
+    idle_continue_cycle();
+    write(0b1111, 0, 0x1111);
+    read(0b1111, 0, 0);
+    write(0b1111, 4, 0x2222);
+    read(0b1111, 4, 0);
+    idle_no_cycle();
+    reset();
+    idle_continue_cycle();
+    write(0b1111, 8, 0x3333);
+    read(0b1111, 8, 0);
+    write(0b1111, 12, 0x4444);
+    read(0b1111, 12, 0);
+    idle_no_cycle();
+    reset();
+    idle_no_cycle();
+    write(0b1111, 16, 0x5555);
+    read(0b1111, 16, 0);
+    write(0b1111, 20, 0x6666);
+    read(0b1111, 20, 0);
+    idle_continue_cycle();
+    write(0b1111, 24, 0x7777);
+    read(0b1111, 24, 0);
+    write(0b1111, 28, 0x8888);
+}

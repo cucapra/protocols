@@ -1,0 +1,3 @@
+trace {
+    use_without_valid(5, 5);
+}

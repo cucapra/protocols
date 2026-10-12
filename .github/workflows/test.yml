@@ -2,8 +2,6 @@ name: Protocols Tests
 
 on:
   push:
-    branches:
-      - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -14,7 +12,6 @@ jobs:
   tests:
     name: Unit Tests
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.draft == false
     strategy:
       matrix:
         toolchain:
@@ -26,29 +23,53 @@ jobs:
     - name: Update Rust to ${{ matrix.toolchain }}
       run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
     - uses: actions/checkout@v4
-    - uses: actions/setup-python@v4
+    - uses: ./.github/actions/setup-test-environment
       with:
-        python-version: '3.13'
-    - uses: YosysHQ/setup-oss-cad-suite@v3
-      with:
-        version: '2024-05-07'
+        github_token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build
       run: cargo build --verbose
     - name: Run unit tests (Debug)
       run: cargo test --verbose
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-    - name: Install Turnt 
-      run: uv tool install turnt
-    - name: Run Turnt tests for interpreter
-      run: turnt --env interp $(find . -type f -name '*.tx') 
-    - name: Run Turnt tests for monitor 
-      run: turnt --env monitor $(find . -type f -name '*.prot')
+    - name: Run Runt tests for interpreter
+      run: runt runt/interp
+    - name: Run Runt tests for graph-interpreter
+      run: runt runt/graph_interp
+    - name: Run Runt tests for bi
+      run: runt runt/bi
+    - name: Run Runt tests for waveform
+      run: runt runt/waveform
+    - name: Run Runt tests for fail
+      run: runt runt/fail
+
+  test-freshness:
+    name: Check Generated Runt Configs are Fresh
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - name: Update Rust to ${{ matrix.toolchain }}
+        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-environment
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: cargo build --verbose
+      # Regenerate the runt configs from the catalog to check freshness
+      - name: Check Runt configs are up to date
+        run: |
+          python3 scripts/generate_runt_configs.py
+          if [ -n "$(git status --porcelain -- runt)" ]; then
+            echo "::error::runt configs are out of date. Run 'python3 scripts/generate_runt_configs.py' and commit the result."
+            git --no-pager diff -- runt
+            exit 1
+          fi
 
   msrv:
     name: Check Minimum Rust Version for protocols library
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/cache-cargo-install-action@v2
@@ -62,7 +83,6 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    if: github.event.pull_request.draft == false
 
     steps:
       - uses: actions/checkout@v4
@@ -72,10 +92,9 @@ jobs:
     name: Clippy Lints
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    if: github.event.pull_request.draft == false
     env:
       # Pin Rust version to prevent new Clippy lints from breaking CI
-      RUST_VERSION: "1.91.0"
+      RUST_VERSION: "1.95.0"
 
     steps:
       - uses: actions/checkout@v4
@@ -83,8 +102,52 @@ jobs:
         run: |
           rustup toolchain install ${{ env.RUST_VERSION }} --component clippy
           rustup default ${{ env.RUST_VERSION }}
-      - uses: YosysHQ/setup-oss-cad-suite@v3
-        with:
-          version: '2024-05-07'
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+  python-checks:
+    name: Type-check, lint & format Python files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-uv
+      - name: Use ty to typecheck python files
+        run: uv run --group dev ty check
+      - name: Use ruff to lint Python files
+        run: uv run --group dev ruff check
+      - name: Use ruff (via uv) to format Python files
+        # We pass in `--preview-features format` to suppress 
+        # uv's warning messages about the formatter being experimental
+        run: uv format --check --preview-features format
+
+
+  verilog:
+    name: Verilog Backend Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+    steps:
+      - name: Update Rust to ${{ matrix.toolchain }}
+        run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-environment
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Icarus Verilog Version
+        # we intentionally ignore the fact that `iverilog -v` returns a non-zero exit code
+        run: iverilog -v || which iverilog
+      - name: Build
+        run: cargo build --bin protocols-cli
+      - name: Run Verilog Testbench for AES128
+        run: cargo run --bin protocols-cli -- -p=examples/tinyaes128/aes128.prot run-verilog --transactions=examples/tinyaes128/aes128.tx --verilog=examples/tinyaes128/aes_128.v --clock=clk run_dir/tinyaes128
+      - name: Rerun testbench manually to catch a bad exit code
+        run: iverilog -g2012 run_dir/tinyaes128/tb.v examples/tinyaes128/aes_128.v && ./a.out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tinyaes128.vcd
+          path: run_dir/tinyaes128/dump.vcd

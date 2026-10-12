@@ -1,0 +1,249 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Kevin Laeufer <laeufer@cornell.edu>
+
+use std::path::Path;
+
+use clap::*;
+use protocols::backends::{PinAnnotation, to_verilog};
+use protocols::frontend::ast::Protocol;
+use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::serialize::serialize_modules;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::{Module, require_single_module};
+use protocols::{Value, frontend, transaction_frontend};
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(
+        short,
+        long,
+        value_name = "PROTOCOLS_FILE",
+        help = "One or several protocol files."
+    )]
+    protocol: Vec<String>,
+
+    /// Allow arguments to appear in while/if conditions
+    #[arg(long)]
+    allow_branch_on_arg: bool,
+
+    #[command(subcommand)]
+    command: Option<Cmds>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Cmds {
+    /// Print out all the constructs used in each protocol
+    Constructs,
+    /// Prints out the protocols after the frontend processing
+    Show {
+        #[arg(long, help = "only include these modules")]
+        include: Vec<String>,
+    },
+    Verilog {
+        verilog_tb: String,
+        #[arg(long)]
+        transactions: Option<String>,
+        #[arg(long)]
+        vcd_out: Option<String>,
+        #[arg(long)]
+        clock: Option<String>,
+    },
+    RunVerilog {
+        run_dir: String,
+        #[arg(long)]
+        transactions: Option<String>,
+        #[arg(long)]
+        clock: Option<String>,
+        /// Paths to one or more Verilog (.v) files
+        #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
+        verilog: Vec<String>,
+    },
+}
+
+fn load_trace(
+    st: &SymbolTable,
+    protos: &[Protocol],
+    transactions: Option<&str>,
+) -> Vec<(String, Vec<Value>)> {
+    if let Some(filename) = transactions {
+        let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+        let traces = transaction_frontend(filename, st, protos, &mut d).unwrap();
+        if !traces.is_empty() {
+            if traces.len() > 1 {
+                log::warn!("More than 1 trace in {filename}. Picking first one.");
+            }
+            traces.into_iter().next().unwrap()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    }
+}
+
+fn make_verilog_tb(
+    st: &SymbolTable,
+    module: &Module,
+    verilog_tb: String,
+    transactions: Option<String>,
+    vcd_out: Option<String>,
+    clock: Option<String>,
+) {
+    let trace = load_trace(st, &module.protos, transactions.as_deref());
+    let mut pins = vec![];
+    if let Some(clock) = clock {
+        pins.push((clock, PinAnnotation::Clock));
+    }
+    let out_file = std::fs::File::create(&verilog_tb).unwrap();
+    let mut out_writer = std::io::BufWriter::new(out_file);
+    let tb_name = "tb";
+    to_verilog(
+        tb_name,
+        st,
+        module,
+        &pins,
+        vcd_out.as_deref(),
+        &trace,
+        &mut out_writer,
+    )
+    .unwrap();
+}
+
+fn run_verilog_tb(
+    st: &SymbolTable,
+    module: &Module,
+    run_dir: String,
+    transactions: Option<String>,
+    clock: Option<String>,
+    verilog: Vec<String>,
+) {
+    // check whether iverilog is available
+    let _ = std::process::Command::new("iverilog")
+        .arg("-v")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("Could not launch Icarus Verilog (iverilog!)")
+        .wait()
+        .unwrap();
+
+    // ensure that the run_dir exists
+    let cwd = Path::new(&run_dir);
+    if !cwd.exists() {
+        std::fs::create_dir_all(cwd).unwrap();
+    }
+
+    // generate the testbench file
+    let abs_cwd = cwd.canonicalize().unwrap();
+    let verilog_tb = "tb.v";
+    let verilog_tb_str = abs_cwd.join(verilog_tb).to_str().unwrap().to_string();
+    let vcd_out_rel = "dump.vcd";
+    make_verilog_tb(
+        st,
+        module,
+        verilog_tb_str,
+        transactions,
+        Some(vcd_out_rel.to_string()),
+        clock,
+    );
+
+    // check verilog files
+    let mut filenames = vec![];
+    for filename in verilog.iter() {
+        let path = Path::new(filename);
+        if !path.exists() {
+            panic!("cannot find verilog file {filename}");
+        } else {
+            let abs_path = path.canonicalize().unwrap();
+            filenames.push(abs_path.to_str().unwrap().to_string());
+        }
+    }
+
+    // run icarus
+    let a_out = cwd.join("a.out");
+    if a_out.exists() {
+        std::fs::remove_file(&a_out).unwrap();
+    }
+    let _ = std::process::Command::new("iverilog")
+        .arg("-g2012")
+        .arg(verilog_tb)
+        .args(filenames)
+        .current_dir(cwd)
+        .spawn()
+        .expect("Failed to compile testbench with icarus.")
+        .wait()
+        .unwrap();
+    if !a_out.exists() {
+        panic!("Icarus did not produce the expected a.out!");
+    }
+
+    // run tb
+    let _ = std::process::Command::new("./a.out")
+        .current_dir(cwd)
+        .spawn()
+        .expect("Failed to start testbench.")
+        .wait()
+        .unwrap();
+}
+
+fn show(st: &SymbolTable, modules: &[Module], include: &[String]) {
+    if include.is_empty() {
+        serialize_modules(&mut std::io::stdout(), st, modules).unwrap();
+    } else {
+        let modules: Vec<_> = modules
+            .iter()
+            .filter(|m| include.contains(&m.name))
+            .cloned()
+            .collect();
+        serialize_modules(&mut std::io::stdout(), st, &modules).unwrap();
+    }
+}
+
+fn main() {
+    // Parse CLI args
+    let args = Args::parse();
+
+    // we always parse and type check the protocol file
+    let skip_static_step_fork_checks = false;
+    let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
+    let (st, modules) = frontend(
+        &args.protocol,
+        &mut d,
+        skip_static_step_fork_checks,
+        args.allow_branch_on_arg,
+    )
+    .unwrap();
+
+    match args.command {
+        None => {}
+        Some(Cmds::Constructs) => {
+            for m in &modules {
+                for p in &m.protos {
+                    println!("{}: {}", p.name, p.used_constructs());
+                }
+            }
+        }
+        Some(Cmds::Show { include }) => {
+            show(&st, &modules, &include);
+        }
+        Some(Cmds::Verilog {
+            verilog_tb,
+            transactions,
+            vcd_out,
+            clock,
+        }) => {
+            let module = require_single_module(modules, &args.protocol).unwrap();
+            make_verilog_tb(&st, &module, verilog_tb, transactions, vcd_out, clock);
+        }
+        Some(Cmds::RunVerilog {
+            run_dir,
+            transactions,
+            clock,
+            verilog,
+        }) => {
+            let module = require_single_module(modules, &args.protocol).unwrap();
+            run_verilog_tb(&st, &module, run_dir, transactions, clock, verilog);
+        }
+    }
+}

@@ -1,0 +1,675 @@
+// Copyright 2024-2026 Cornell University
+// released under MIT License
+// author: Nikil Shyamunder <nvs26@cornell.edu>
+// author: Kevin Laeufer <laeufer@cornell.edu>
+// author: Francis Pham <fdp25@cornell.edu>
+// author: Ernest Ng <eyn5@cornell.edu>
+
+use crate::frontend::ast::*;
+use crate::frontend::diagnostic::*;
+use crate::frontend::serialize::*;
+use crate::frontend::static_checks::{check_assertion_wf, check_assignment_wf, check_condition_wf};
+use crate::frontend::symbol::*;
+use anyhow::{Context, anyhow, bail};
+use baa::BitVecOps;
+use rustc_hash::FxHashSet;
+
+/// Helper function for emitting error messages related to invalid bit-slices
+fn emit_bitslice_type_error(
+    start_idx: u32,
+    end_idx: u32,
+    expr_width: u32,
+    handler: &mut DiagnosticHandler,
+    tr: &ProtocolContext,
+    expr_id: &ExprId,
+) -> anyhow::Result<Type> {
+    let error_msg = format!(
+        "Invalid slice operation: [{}:{}] on width {}",
+        start_idx, end_idx, expr_width
+    );
+    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+    Err(anyhow!(error_msg))
+}
+
+/// Typechecks an expression (identified by its `ExprId`) with respect to
+/// `Transaction` `tr`, `SymbolTable` `st` & the associated `DiagnosticHandler`
+fn type_check_expr(
+    tr: &ProtocolContext,
+    st: &SymbolTable,
+    handler: &mut DiagnosticHandler,
+    expr_id: &ExprId,
+) -> anyhow::Result<Type> {
+    match &tr[expr_id] {
+        Expr::Const(bitvec) => {
+            // Constants have bit-vector types whose length correspond
+            // to the bit-width of the value
+            Ok(Type::BitVec(bitvec.width()))
+        }
+        Expr::Sym(symid) => Ok(st[symid].tpe()),
+        Expr::DontCare => Ok(Type::Unknown),
+        Expr::Slice(sym_expr, msb, lsb) => {
+            // To type-check `e[i:j]`, first typecheck `e` and make sure
+            // it is a actually a bit-vector
+            let ty = type_check_expr(tr, st, handler, sym_expr)?;
+            if let Type::BitVec(expr_width) = ty {
+                if msb >= lsb {
+                    if *msb < expr_width {
+                        let width = msb - lsb + 1;
+                        Ok(Type::BitVec(width))
+                    } else {
+                        emit_bitslice_type_error(*msb, *lsb, expr_width, handler, tr, expr_id)
+                    }
+                } else {
+                    let error_msg =
+                        format!("Invalid slice operation: msb ({msb}) is smaller than lsb ({lsb})");
+                    handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            } else {
+                let error_msg = format!(
+                    "Invalid slice operation: can't take bit-slices of {}",
+                    serialize_type(st, ty)
+                );
+                handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Expr::Unary(UnaryOp::Not, not_exprid) => {
+            let inner_type = type_check_expr(tr, st, handler, not_exprid)?;
+            if let Type::BitVec(1) = inner_type {
+                Ok(inner_type)
+            } else {
+                handler.emit_diagnostic_expr(
+                    tr,
+                    expr_id,
+                    &format!(
+                        "Invalid type for 'Not' expression {}",
+                        serialize_type(st, inner_type)
+                    ),
+                    Level::Error,
+                );
+                Ok(inner_type)
+            }
+        }
+        Expr::Binary(op, lhs, rhs) => {
+            let lhs_type = type_check_expr(tr, st, handler, lhs)?;
+            let rhs_type = type_check_expr(tr, st, handler, rhs)?;
+            match op {
+                BinOp::Equal => {
+                    if lhs_type.is_equivalent(&rhs_type) {
+                        Ok(Type::BitVec(1))
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!(
+                                "Type mismatch in binary operation: {} and {}",
+                                lhs_type_str, rhs_type_str
+                            ),
+                            Level::Error,
+                        );
+                        Ok(Type::BitVec(1))
+                    }
+                }
+                BinOp::Concat => {
+                    if let (Type::BitVec(msb_w), Type::BitVec(lsb_w)) = (lhs_type, rhs_type) {
+                        Ok(Type::BitVec(msb_w + lsb_w))
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!("Cannot concatenate: {} and {}", lhs_type_str, rhs_type_str),
+                            Level::Error,
+                        );
+                        // TODO: error!
+                        Ok(Type::BitVec(1))
+                    }
+                }
+                BinOp::And => {
+                    if lhs_type.is_equivalent(&rhs_type) {
+                        Ok(lhs_type)
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!(
+                                "Type mismatch in binary operation: {} and {}",
+                                lhs_type_str, rhs_type_str
+                            ),
+                            Level::Error,
+                        );
+                        Ok(lhs_type)
+                    }
+                }
+                BinOp::Add => {
+                    if let (Type::BitVec(aw), Type::BitVec(bw)) = (lhs_type, rhs_type) {
+                        if aw == bw {
+                            Ok(Type::BitVec(aw))
+                        } else {
+                            let lhs_type_str = serialize_type(st, lhs_type);
+                            let rhs_type_str = serialize_type(st, rhs_type);
+                            handler.emit_diagnostic_expr(
+                                tr,
+                                expr_id,
+                                &format!("Cannot add: {} and {}", lhs_type_str, rhs_type_str),
+                                Level::Error,
+                            );
+                            // TODO: error!
+                            Ok(Type::BitVec(1))
+                        }
+                    } else {
+                        let lhs_type_str = serialize_type(st, lhs_type);
+                        let rhs_type_str = serialize_type(st, rhs_type);
+                        handler.emit_diagnostic_expr(
+                            tr,
+                            expr_id,
+                            &format!("Cannot add: {} and {}", lhs_type_str, rhs_type_str),
+                            Level::Error,
+                        );
+                        // TODO: error!
+                        Ok(Type::BitVec(1))
+                    }
+                }
+            }
+        }
+        // evaluates to true or false
+        Expr::IsLastIteration => Ok(Type::BitVec(1)),
+        Expr::IterCount(width) => Ok(Type::BitVec(*width)),
+    }
+}
+
+fn type_check_stmt(
+    tr: &Protocol,
+    st: &mut SymbolTable,
+    handler: &mut DiagnosticHandler,
+    stmt_id: &StmtId,
+    allow_branch_on_arg: bool,
+) -> anyhow::Result<()> {
+    match &tr[stmt_id] {
+        Stmt::Fork => Ok(()),
+        Stmt::Step => Ok(()),
+        Stmt::Assign(lhs, rhs) => {
+            // First, make sure the assignment itself is well-formed
+            check_assignment_wf(lhs, rhs, stmt_id, tr, st, handler, allow_branch_on_arg)?;
+
+            // Then, type-check the two sides of the assignment
+            let lhs_type = st[lhs].tpe();
+            let mut rhs_type = type_check_expr(tr, st, handler, rhs)?;
+            // If the RHS type is `Unknown`, we infer it to be
+            // the same type as the LHS
+            if rhs_type == Type::Unknown {
+                rhs_type = lhs_type;
+                let rhs_is_dont_care = matches!(tr[rhs], Expr::DontCare);
+                if !rhs_is_dont_care {
+                    handler.emit_diagnostic_stmt(
+                        tr,
+                        stmt_id,
+                        &format!(
+                            "Inferred RHS type as {} from LHS type {}.",
+                            serialize_type(st, rhs_type),
+                            serialize_type(st, lhs_type)
+                        ),
+                        Level::Warning,
+                    );
+                }
+            }
+            // Check whether the LHS & RHS have equivalent types
+            if lhs_type.is_equivalent(&rhs_type) {
+                Ok(())
+            } else {
+                let expr_name = serialize_expr(tr, st, rhs);
+                let error_msg = format!(
+                    "Type mismatch in assignment: {} : {} and {} : {}.",
+                    st[lhs].full_name(st),
+                    serialize_type(st, lhs_type),
+                    expr_name,
+                    serialize_type(st, rhs_type)
+                );
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Stmt::While(cond, bodyid) => {
+            // Guards for while-loops must have type `BitVec(1)`
+            let cond_type = type_check_expr(tr, st, handler, cond)?;
+            if let Type::BitVec(1) = cond_type {
+                // If the loop guard typechecks, make sure it is well-formed
+                check_condition_wf(cond, tr, st, handler, allow_branch_on_arg)?;
+
+                // Then, type-check the body of the while-loop
+                type_check_stmt(tr, st, handler, bodyid, allow_branch_on_arg)
+            } else {
+                let error_msg = format!(
+                    "Invalid type for [while] condition: {}",
+                    serialize_type(st, cond_type)
+                );
+                handler.emit_diagnostic_expr(tr, cond, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Stmt::RepeatLoop(count_expr, bodyid) => {
+            // Typecheck the no. of iterations (which must be a uint type)
+            let num_iterations_type = type_check_expr(tr, st, handler, count_expr)?;
+            // Temporarily allow the argument to repeat loops to have type `u8`
+            // (For the purposes of the protocol for the Brave New World `axi-burst-s4` bug)
+            if matches!(num_iterations_type, Type::UnsignedInt | Type::BitVec(8)) {
+                // Then, type-check the loop body
+                type_check_stmt(tr, st, handler, bodyid, allow_branch_on_arg)
+            } else {
+                let error_msg = format!(
+                    "Invalid type for no. of iterations in bounded loop: expected unsigned integer but got {} instead",
+                    serialize_type(st, num_iterations_type)
+                );
+                handler.emit_diagnostic_expr(tr, count_expr, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Stmt::ForInLoop(id_symbol, seq_expr, bodyid) => {
+            let seq_expr_tpe = type_check_expr(tr, st, handler, seq_expr)?;
+            if let Type::Seq(seq_id) = seq_expr_tpe {
+                let inner = st[seq_id].tpe();
+                if let Type::BitVec(_) = inner {
+                    // update type of id_expr to be the inner type
+                    st.update_type(*id_symbol, inner);
+                    // check body
+                    type_check_stmt(tr, st, handler, bodyid, allow_branch_on_arg)
+                } else {
+                    let error_msg = format!(
+                        "Only bit-vector sequences are currently supported in loops, not {}.",
+                        serialize_type(st, seq_expr_tpe)
+                    );
+                    handler.emit_diagnostic_expr(tr, seq_expr, &error_msg, Level::Error);
+                    Err(anyhow!(error_msg))
+                }
+            } else {
+                let error_msg = format!(
+                    "Must be a sequence expression, not {}.",
+                    serialize_type(st, seq_expr_tpe)
+                );
+                handler.emit_diagnostic_expr(tr, seq_expr, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Stmt::IfElse(cond, ifbody, elsebody) => {
+            // Conditions for if-statement must have type `BitVec(1)`
+            let cond_type = type_check_expr(tr, st, handler, cond)?;
+            if let Type::BitVec(1) = cond_type {
+                // If the condition typechecks, make sure it is well-formed
+                check_condition_wf(cond, tr, st, handler, allow_branch_on_arg)?;
+
+                // Then, type-check the bodies of the `then` & `else` branches
+                type_check_stmt(tr, st, handler, ifbody, allow_branch_on_arg)?;
+                type_check_stmt(tr, st, handler, elsebody, allow_branch_on_arg)
+            } else {
+                let error_msg = format!(
+                    "Type mismatch in If/Else condition: {}",
+                    serialize_type(st, cond_type)
+                );
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Stmt::AssertEq(exprid1, exprid2) => {
+            // First, type-check the two arguments to `assert_eq` separately
+            let expr1_type = type_check_expr(tr, st, handler, exprid1)?;
+            let expr2_type = type_check_expr(tr, st, handler, exprid2)?;
+
+            // Check that the types of both arguments are equivalent
+            if expr1_type.is_equivalent(&expr2_type) {
+                // Then, check that the assertion itself is well-formed
+                check_assertion_wf(exprid1, exprid2, tr, st, handler, allow_branch_on_arg)
+                    .context("Ill-formed assert_eq statement")?;
+
+                // If all the above checks pass, then the assertion both
+                // type-checks and is well-formed, so it is `Ok`
+                Ok(())
+            } else {
+                // Arguments to `assert_eq` are ill-typed, so report an error
+                let expr1_name = serialize_expr(tr, st, exprid1);
+                let expr2_name = serialize_expr(tr, st, exprid2);
+                let error_msg = format!(
+                    "Type mismatch in assert_eq: {} : {} and {} : {}.",
+                    expr1_name,
+                    serialize_type(st, expr1_type),
+                    expr2_name,
+                    serialize_type(st, expr2_type),
+                );
+                handler.emit_diagnostic_stmt(tr, stmt_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Stmt::Block(stmts) => {
+            for stmtid in stmts {
+                type_check_stmt(tr, st, handler, stmtid, allow_branch_on_arg)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// For input pins,
+fn is_input_map_rhs_ok(
+    ctx: &ProtocolContext,
+    st: &SymbolTable,
+    diag: &mut DiagnosticHandler,
+    name: &str,
+    rhs: ExprId,
+    cond: ExprId,
+) -> Option<SymbolId> {
+    let rhs_syms: Vec<_> = find_symbols(ctx, rhs).into_iter().collect();
+    let cond_syms: Vec<_> = find_symbols(ctx, cond).into_iter().collect();
+
+    if let &[other] = rhs_syms.as_slice()
+        && st[other].is_in_port()
+    {
+        if cond_syms.is_empty() || cond_syms == rhs_syms {
+            Some(other)
+        } else {
+            let msg = format!(
+                "The condition for the mapping of input pin `{name}` can only depend on the same pin as the mapping."
+            );
+            diag.emit_diagnostic_expr(ctx, &cond, &msg, Level::Error);
+            None
+        }
+    } else {
+        let msg = format!("Input pin `{name}` must be mapped to a single other pin.");
+        diag.emit_diagnostic_expr(ctx, &rhs, &msg, Level::Error);
+        None
+    }
+}
+
+/// For output pins, only a direct equivalence to another output pin is allowed.
+fn is_output_map_rhs_ok(
+    ctx: &ProtocolContext,
+    st: &SymbolTable,
+    diag: &mut DiagnosticHandler,
+    name: &str,
+    rhs: ExprId,
+    cond: ExprId,
+) -> Option<SymbolId> {
+    if let Expr::Sym(sym_id) = ctx[rhs]
+        && st[sym_id].is_out_port()
+    {
+        if cond == ctx.expr_true() {
+            Some(sym_id)
+        } else {
+            let msg = format!("Output pins are not allowed to have a `with` condition ({name}).");
+            diag.emit_diagnostic_expr(ctx, &cond, &msg, Level::Error);
+            None
+        }
+    } else {
+        let msg = format!("Output pin `{name}` can only be mapped directly to another output pin.");
+        diag.emit_diagnostic_expr(ctx, &rhs, &msg, Level::Error);
+        None
+    }
+}
+
+/// Typechecks every function contained in the argument `Vec`
+/// of `(Transaction, SymbolTable)` pairs
+pub(crate) fn type_check(
+    ast: &mut Ast,
+    diag: &mut DiagnosticHandler,
+    allow_branch_on_arg: bool,
+) -> anyhow::Result<()> {
+    for proto in &ast.protos {
+        // debug sanity check to make sure the symbol table and the argument list are in sync
+        for (index, arg) in proto.args.iter().enumerate() {
+            debug_assert_eq!(
+                ast.st[arg].as_arg_index(),
+                Some(index),
+                "{}",
+                ast.st[arg].name()
+            );
+        }
+
+        type_check_stmt(proto, &mut ast.st, diag, &proto.body, allow_branch_on_arg)?;
+    }
+
+    for remap in &ast.remaps {
+        let mut found_err = false;
+        let ctx = &remap.ctx;
+        let mut defined_struct_pins = FxHashSet::default();
+        for m in &remap.mappings {
+            // check that the rhs is of the correct type
+            let rhs_tpe = type_check_expr(ctx, &ast.st, diag, &m.rhs)?;
+            if !rhs_tpe.is_equivalent(&m.tpe) {
+                let error_msg = format!(
+                    "Pin remapping has incompatible type: {} : {} vs. {} : {}",
+                    m.name,
+                    serialize_type(&ast.st, m.tpe),
+                    serialize_expr(ctx, &ast.st, &m.rhs),
+                    serialize_type(&ast.st, rhs_tpe)
+                );
+                diag.emit_diagnostic_expr(&remap.ctx, &m.rhs, &error_msg, Level::Error);
+                found_err = true;
+            }
+
+            // the condition must be boolean
+            let cond_type = type_check_expr(ctx, &ast.st, diag, &m.cond)?;
+            if !cond_type.is_equivalent(&Type::BitVec(1)) {
+                let error_msg = format!(
+                    "Pin remapping condition for {} does not have bv<1> type: {} : {}",
+                    m.name,
+                    serialize_expr(ctx, &ast.st, &m.cond),
+                    serialize_type(&ast.st, cond_type)
+                );
+                diag.emit_diagnostic_expr(&remap.ctx, &m.cond, &error_msg, Level::Error);
+                found_err = true;
+            }
+
+            let rhs_symbol = match m.dir {
+                Dir::In => is_input_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
+                Dir::Out => is_output_map_rhs_ok(ctx, &ast.st, diag, &m.name, m.rhs, m.cond),
+            };
+            if let Some(rhs_symbol) = rhs_symbol {
+                let full_name = ast.st[rhs_symbol].full_name(&ast.st);
+                if !defined_struct_pins.insert(full_name.clone()) {
+                    let error_msg =
+                        format!("Pin {full_name} has already been remapped in {}", m.name,);
+                    diag.emit_diagnostic_expr(&remap.ctx, &m.rhs, &error_msg, Level::Error);
+                    found_err = true;
+                };
+            } else {
+                found_err = true;
+            }
+        }
+
+        for cc in &remap.consts {
+            let full_name = ast.st[cc.pin].full_name(&ast.st);
+            if !defined_struct_pins.insert(full_name.clone()) {
+                let error_msg = format!("Pin {full_name} has already been remapped.",);
+                diag.emit_general_message(&error_msg, Level::Error);
+                found_err = true;
+            };
+        }
+
+        // check to see if there are any pins that we have not remapped
+        let missing_remaps: Vec<_> = remap
+            .implements
+            .iter()
+            .flat_map(|remap| {
+                ast.st[*remap].pins().iter().flat_map(|pin| {
+                    let full_name = format!("{}.{}", ast.st[*remap].name(), pin.name());
+                    if defined_struct_pins.contains(&full_name) {
+                        None
+                    } else {
+                        Some(full_name)
+                    }
+                })
+            })
+            .collect();
+        if !missing_remaps.is_empty() {
+            let error_msg = format!(
+                "[{}] module does not define remaps for all pins. Missing: {}",
+                remap.name,
+                missing_remaps.join(", ")
+            );
+            diag.emit_general_message(&error_msg, Level::Error);
+            found_err = true;
+        }
+
+        if found_err {
+            bail!("Type error in {}", remap.name);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+    use crate::frontend::parser::parse_file_with_name;
+    use baa::BitVecValue;
+    use insta::Settings;
+    use strip_ansi_escapes::strip_str;
+
+    fn snap(name: &str, content: String) {
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| {
+            insta::assert_snapshot!(name, content);
+        });
+    }
+
+    fn test_helper(test_name: &str, file_name: &str) {
+        let mut handler = DiagnosticHandler::default();
+        let result = parse_file_with_name(file_name, display_filename(file_name), &mut handler);
+        let content = match result {
+            Ok(mut ast) => {
+                let _ = type_check(&mut ast, &mut handler, false);
+                strip_str(handler.error_string())
+            }
+            Err(_) => strip_str(handler.error_string()),
+        };
+        snap(test_name, content);
+    }
+
+    fn display_filename(filename: &str) -> &str {
+        filename.strip_prefix("../").unwrap_or(filename)
+    }
+
+    #[test]
+    fn test_add_transaction() {
+        test_helper("add_d1", "../tests/adders/adder_d1/add_d1.prot")
+    }
+
+    #[test]
+    fn test_invalid_step_arg_transaction() {
+        test_helper("invalid_step_arg", "../tests/misc/invalid_step_arg.prot");
+    }
+
+    #[test]
+    fn typecheck_aes128_transaction() {
+        test_helper("aes128", "examples/tinyaes128/aes128.prot");
+    }
+
+    #[test]
+    fn typecheck_aes128_expand_key_transaction() {
+        test_helper(
+            "aes128_expand_key",
+            "examples/tinyaes128/aes128_expand_key.prot",
+        );
+    }
+
+    #[test]
+    fn typecheck_aes128_round_transaction() {
+        test_helper("aes128_round", "examples/tinyaes128/aes128_round.prot");
+    }
+
+    #[test]
+    fn typecheck_mul_invalid_transaction() {
+        test_helper("mul_invalid", "../tests/multipliers/mul_invalid.prot");
+    }
+
+    #[test]
+    fn test_mul_prot() {
+        test_helper("mul", "../tests/multipliers/mul.prot");
+    }
+
+    #[test]
+    fn typecheck_cond_transaction() {
+        test_helper("cond", "../tests/multipliers/mult_cond.prot");
+    }
+
+    #[test]
+    fn test_calyx_go_done_transaction() {
+        test_helper(
+            "calyx_go_done_struct",
+            "../tests/calyx_go_done/calyx_go_done_struct.prot",
+        );
+    }
+
+    #[test]
+    fn test_simple_if_transaction() {
+        test_helper("simple_if", "../tests/counters/simple_if.prot");
+    }
+
+    #[test]
+    fn test_simple_while_transaction() {
+        test_helper("simple_while", "../tests/counters/simple_while.prot");
+    }
+
+    #[test]
+    fn test_simple_bounded_loop_transaction() {
+        test_helper(
+            "simple_bounded_loop",
+            "../tests/counters/simple_bounded_loop.prot",
+        );
+    }
+
+    // Specific Tests
+    #[test]
+    fn function_argument_test() {
+        let mut handler = DiagnosticHandler::default();
+        let mut symbols = SymbolTable::default();
+        let scope = symbols.enter_scope("func_arg_invalid");
+        let a = symbols.add_without_parent("a".to_string(), Type::BitVec(1), SymbolKind::Arg(0));
+        let b: SymbolId =
+            symbols.add_without_parent("b".to_string(), Type::BitVec(1), SymbolKind::Arg(1));
+        let c: SymbolId =
+            symbols.add_without_parent("c".to_string(), Type::BitVec(1), SymbolKind::InPort);
+        let s = symbols.add_without_parent("s".to_string(), Type::BitVec(1), SymbolKind::Arg(2));
+        assert_eq!(symbols["s"], symbols[s]);
+        let input =
+            std::fs::read_to_string("../tests/misc/func_arg_invalid.prot").expect("failed to load");
+        let fileid = handler.add_file("func_arg_invalid.prot".to_string(), input);
+        let mut prot = Protocol::new("func_arg_invalid".to_string(), scope);
+        prot.args = vec![Arg::new(a), Arg::new(b), Arg::new(s)];
+
+        let b_expr = prot.e(Expr::Sym(b));
+        prot.add_expr_loc(b_expr, 62, 63, fileid);
+        let b_expr2 = prot.e(Expr::Sym(b));
+        prot.add_expr_loc(b_expr2, 84, 85, fileid);
+        let zero_expr = prot.e(Expr::Const(BitVecValue::from_u64(0, 1)));
+        prot.add_expr_loc(zero_expr, 106, 107, fileid);
+        let a_assign = prot.s(Stmt::Assign(a, b_expr));
+        let one_expr = prot.e(Expr::Const(BitVecValue::from_u64(1, 1)));
+        prot.add_expr_loc(one_expr, 1, 1, fileid); // random location
+        prot.add_stmt_loc(a_assign, 57, 64, fileid);
+        let fork = prot.s(Stmt::Fork);
+        prot.add_stmt_loc(fork, 68, 75, fileid);
+        let c_assign = prot.s(Stmt::Assign(c, b_expr));
+        prot.add_stmt_loc(c_assign, 79, 86, fileid);
+        let step = prot.s(Stmt::Step);
+        prot.add_stmt_loc(step, 90, 97, fileid);
+        let s_assign = prot.s(Stmt::Assign(s, zero_expr));
+        prot.add_stmt_loc(s_assign, 101, 108, fileid);
+        let body = vec![a_assign, fork, c_assign, step, s_assign];
+        prot.body = prot.s(Stmt::Block(body));
+        symbols.exit_scope();
+        let mut ast = Ast {
+            st: symbols,
+            protos: vec![prot],
+            remaps: vec![],
+        };
+        let _ = type_check(&mut ast, &mut handler, false);
+    }
+}

@@ -1,0 +1,17 @@
+[tasks]
+cvr
+prf
+
+[options]
+cvr: mode cover
+prf: mode prove
+
+[engines]
+smtbmc
+
+[script]
+read -formal reqwalker.v
+prep -top reqwalker
+
+[files]
+reqwalker.v

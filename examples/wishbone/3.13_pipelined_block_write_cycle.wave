@@ -1,0 +1,26 @@
+// https://cdn.opencores.org/downloads/wbspec_b4.pdf
+// Illustration 3-13
+ADR[31:0]    X 0x1111 0x2222 0x2222      X X
+DAT_I[31:0]  X      X      X      X      X X
+DAT_O[31:0]  X 0xffff 0xaaaa 0xaaaa      X X
+// Note: it is unclear whether WE actually needs to be 1 during the last ack here.
+//       The manual says (2.2.3):
+//       > The write enable output [WE_O] indicates whether the current local bus cycle
+//       > is a READ or WRITE
+//       Which would support this waveform, i.e., WE has to be held at 1 or 0
+//       while CYC is asserted. However, in Illustration 3-14 (RMW cycle),
+//       WE_O does change while CYC is asserted.
+//       On the other hand (Rule 3.60):
+//       > [client] interfaces MUST qualify the following signals with [STB_O]: [ADR_O],
+//       > [DAT_O()], [SEL_O()], [WE_O], and [TAGN_O].
+//       Which seems to imply that if STB is low, the value of WE does not matter.
+WE           X      1      1      1      X X
+SEL[3:0]     X    0xf    0xf    0xf      X X
+STB          0      1      1      1      0 0
+ACK          0      0      1      0      1 0
+CYC          0      1      1      1      1 0
+STALL        0      0      1      0      0 0
+// extra pins not included in the original illustration
+RST          0      0      0      0      0 0
+ERR          0      0      0      0      0 0
+RTY          0      0      0      0      0 0

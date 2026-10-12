@@ -1,0 +1,16 @@
+[package]
+name = "protocols-cli"
+version = "0.1.0"
+description = "command line interface to protocols"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+protocols.workspace = true
+clap.workspace = true
+baa.workspace = true
+patronus.workspace = true
+rustc-hash.workspace = true
+log.workspace = true

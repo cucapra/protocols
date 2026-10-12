@@ -1,0 +1,4 @@
+trace {
+    add_fork_early(1, 2, 5);
+    add_fork_early(4, 5, 10);
+}

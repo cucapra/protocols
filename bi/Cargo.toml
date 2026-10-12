@@ -1,0 +1,18 @@
+[package]
+name = "bi"
+version = "0.1.0"
+description = "analyze signal traces to extract transactions"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+protocols.workspace = true
+clap-verbosity-flag = "3.0.4"
+clap.workspace = true
+smallvec.workspace = true
+baa.workspace = true
+wellen.workspace = true
+rustc-hash.workspace = true
+rand.workspace = true

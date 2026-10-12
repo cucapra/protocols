@@ -1,0 +1,15 @@
+[package]
+name = "graph-interp"
+version = "0.1.0"
+description = "graph interpreter for protocols"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+protocols.workspace = true
+clap.workspace = true
+baa.workspace = true
+patronus.workspace = true
+rustc-hash.workspace = true
