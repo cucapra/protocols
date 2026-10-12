@@ -93,7 +93,7 @@ TX_CASES = {
         "protocol": "tests/adders/adder_d1/add_d1_tuple.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
-    }, 
+    },
     "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
