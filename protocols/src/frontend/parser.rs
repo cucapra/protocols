@@ -118,22 +118,19 @@ fn parse_boxed_expr(
                         &primary,
                         "Expected path rule in tuple projection expression",
                     )?;
-                    let mut parsed_expr =
-                        parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
-                    // Handle nested tuple projections, e.g. `pair.0.0`, where `pair : ((u8, u8), u8)`
-                    for idx_rule in inner_rules {
-                        let idx = idx_rule
-                            .as_str()
-                            .parse::<u32>()
-                            .expect("Unable to parse tuple projection index");
-                        parsed_expr = BoxedExpr::TupleProj(
-                            Box::new(parsed_expr),
-                            idx,
-                            start,
-                            idx_rule.as_span().end(),
-                        );
-                    }
-                    Ok(parsed_expr)
+                    let idx_rule = expect_rule(
+                        diag,
+                        fileid,
+                        inner_rules.next(),
+                        &primary,
+                        "Expected index in tuple projection expression",
+                    )?;
+                    let idx = idx_rule
+                        .as_str()
+                        .parse::<u32>()
+                        .expect("Unable to parse tuple projection index");
+                    let parsed_expr = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
+                    Ok(BoxedExpr::TupleProj(Box::new(parsed_expr), idx, start, end))
                 }
                 Rule::dont_care => Ok(BoxedExpr::DontCare(start, end)),
                 Rule::slice => {
