@@ -27,9 +27,9 @@ iter_count_expr = {"iter_count" ~ "::" ~ "<" ~ bv_tpe ~ ">" ~ "(" ~ ")"}
 // Expressions
 
 // Slicing
-slice = { path_id ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
+slice = { (tuple_proj | path_id) ~ "[" ~ dec_integer ~ (":" ~ dec_integer)? ~ "]" }
 
-primary = _{tuple_proj | slice | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter_count_expr | path_id}
+primary = _{slice | tuple_proj | integer | "(" ~ expr ~ ")" | dont_care | is_last_expr | iter_count_expr | path_id}
 atom = _{primary | unary_op? ~ primary}
 unary_op = _ { not }
     not = { "!" }

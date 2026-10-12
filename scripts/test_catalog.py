@@ -509,6 +509,12 @@ TX_CASES = {
         "top": "comb_mux",
         "expect": "fail",
     },
+    "tests/muxes/comb_mux_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/comb_mux_tuple_bitslice.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "pass",
+    },
 }
 
 BI_CASES = {

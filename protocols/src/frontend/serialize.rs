@@ -641,6 +641,14 @@ pub mod tests {
     }
 
     #[test]
+    fn test_comb_mux_bitslice() {
+        test_helper(
+            "../tests/muxes/comb_mux_tuple_bitslice.prot",
+            "comb_mux_tuple_bitslice",
+        );
+    }
+
+    #[test]
     fn test_serialize_tuple_value() {
         let tuple: Value = (BitVecValue::from_u64(1, 8), BitVecValue::from_u64(255, 8)).into();
         assert_eq!(serialize_value(&tuple, false), "(1, 255)");

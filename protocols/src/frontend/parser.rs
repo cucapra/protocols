@@ -140,7 +140,7 @@ fn parse_boxed_expr(
                         fileid,
                         inner_rules.next(),
                         &primary,
-                        "Expected path rule in slice expression",
+                        "Expected path rule or tuple projection in slice expression",
                     )?;
                     let path_id = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
                     let idx1_rule = inner_rules.next().unwrap();
