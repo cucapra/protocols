@@ -856,6 +856,33 @@ expect_name = "both_threads_pass.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_graph_interp"
+paths = [
+  "../../tests/muxes/comb_mux_tuple.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "comb_mux_tuple.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_graph_interp.contract_edges"
+paths = [
+  "../../tests/muxes/comb_mux_tuple.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "comb_mux_tuple.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux --contract-edges 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_graph_interp.respect_forks"
+paths = [
+  "../../tests/muxes/comb_mux_tuple.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "comb_mux_tuple.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp.respect_forks"
 paths = [
   "../../tests/wishbone/wishbone.tx",

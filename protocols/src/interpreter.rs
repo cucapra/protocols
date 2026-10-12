@@ -602,7 +602,7 @@ impl<'a> Evaluator<'a> {
             Expr::TupleProj(expr_id, idx) => {
                 let Expr::Sym(symbol_id) = &self.tr[expr_id] else {
                     unreachable!(
-                        "Typechecker already rejects ill-typed exprs where a tuple projection is called on a non-tuple-typed argument"
+                        "In the concrete syntax, we only allow tuple projections on protocol arguments, i.e. the expression being projected from is an identifier"
                     )
                 };
                 let tuple_component = self.args_mapping[symbol_id]

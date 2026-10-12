@@ -486,6 +486,18 @@ TX_CASES = {
         "top": "reqwalker",
         "expect": "pass",
     },
+    "tests/muxes/comb_mux_tuple.tx": {
+        "protocol": "tests/muxes/comb_mux_tuple.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "pass"
+    },
+    "tests/muxes/comb_mux_tuple_fail.tx": {
+        "protocol": "tests/muxes/comb_mux_tuple.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "fail"
+    }
 }
 
 BI_CASES = {

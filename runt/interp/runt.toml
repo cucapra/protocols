@@ -685,6 +685,24 @@ expect_name = "second_thread_fails.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/multipliers/mult_d2/second_thread_fails.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>&1"
 
 [[tests]]
+name = "interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_interp"
+paths = [
+  "../../tests/muxes/comb_mux_tuple.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "comb_mux_tuple.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_comb_mux_tuple_fail.comb_mux_tuple_fail_interp"
+paths = [
+  "../../tests/muxes/comb_mux_tuple_fail.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "comb_mux_tuple_fail.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/comb_mux_tuple_fail.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>&1"
+
+[[tests]]
 name = "interp.tests_picorv32_unsigned_mul_no_reset.unsigned_mul_no_reset_interp"
 paths = [
   "../../tests/picorv32/unsigned_mul_no_reset.tx",
