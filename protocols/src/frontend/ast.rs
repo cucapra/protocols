@@ -9,6 +9,7 @@ use std::ops::{Deref, DerefMut, Index};
 
 use baa::BitVecValue;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
+use itertools::{FoldWhile, Itertools};
 use rustc_hash::{FxHashMap, FxHashSet};
 use strum::IntoEnumIterator;
 
@@ -281,21 +282,39 @@ impl Protocol {
     }
 
     /// comma separated string of all constructs used
-    pub fn used_constructs(&self) -> String {
+    pub fn used_constructs(&self, st: &SymbolTable) -> String {
         let used: FxHashSet<_> = self
             .stmts
             .iter()
             .map(|(_, stmt)| StmtDiscriminants::from(stmt))
             .collect();
 
-        // print out all the Stmt types used (except for block, because every protocol has a block
+        // Iterate over all the protocol's argument types to see if any are tuples
+        // (If yes, we immediately stop iterating with `true`)
+        let arg_types = self.get_arg_types(st);
+        let contains_tuple_args = arg_types
+            .iter()
+            .fold_while(false, |acc, ty| {
+                if matches!(ty, Type::Tuple(_)) {
+                    FoldWhile::Done(true)
+                } else {
+                    FoldWhile::Continue(acc)
+                }
+            })
+            .into_inner();
+
+        // print out all the Stmt kinds used (except for block, because every protocol has a block
         // and it's a purely internal-facing construct)
-        StmtDiscriminants::iter()
+        let mut stmt_kinds_used = StmtDiscriminants::iter()
             .filter(|construct| *construct != StmtDiscriminants::Block)
             .filter(|construct| used.contains(construct))
             .map(|construct| construct.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
+            .collect::<Vec<String>>();
+
+        if contains_tuple_args {
+            stmt_kinds_used.push("tuples".to_string());
+        }
+        stmt_kinds_used.join(", ")
     }
 
     fn next_stmt_mapping_helper(
@@ -671,7 +690,7 @@ mod tests {
             add.s(Stmt::Assign(s, dut_s_expr)),
         ];
         add.body = add.s(Stmt::Block(body));
-        assert_eq!(add.used_constructs(), "assign, step, fork");
+        assert_eq!(add.used_constructs(&symbols), "assign, step, fork");
         symbols.exit_scope();
     }
 
@@ -739,7 +758,10 @@ mod tests {
         ];
 
         calyx_go_done.body = calyx_go_done.s(Stmt::Block(body));
-        assert_eq!(calyx_go_done.used_constructs(), "assign, step, while");
+        assert_eq!(
+            calyx_go_done.used_constructs(&symbols),
+            "assign, step, while"
+        );
         symbols.exit_scope();
     }
 }

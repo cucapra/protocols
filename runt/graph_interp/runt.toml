@@ -109,33 +109,6 @@ expect_name = "add_combinational.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d0/add_combinational.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_graph_interp"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_d1_tuple.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_graph_interp.contract_edges"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_d1_tuple.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot --contract-edges 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_graph_interp.respect_forks"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_d1_tuple.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot --respect-forks --determinize 2>/dev/null"
-
-[[tests]]
 name = "graph_interp.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_graph_interp"
 paths = [
   "../../tests/adders/adder_d1/add_multitrace_successful.tx",
@@ -215,33 +188,6 @@ paths = [
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "wait_and_add_correct.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/wait_and_add_correct.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot --respect-forks --determinize 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_graph_interp"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/add_d2_tuple.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_graph_interp.contract_edges"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/add_d2_tuple.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot --contract-edges 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_graph_interp.respect_forks"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/add_d2_tuple.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_adders_adder_d2_both_threads_pass.both_threads_pass_graph_interp"
@@ -908,33 +854,6 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_pass.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot --respect-forks --determinize 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_graph_interp"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_graph_interp.contract_edges"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux --contract-edges 2>/dev/null"
-
-[[tests]]
-name = "graph_interp.tests_muxes_comb_mux_tuple.comb_mux_tuple_graph_interp.respect_forks"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp.respect_forks"

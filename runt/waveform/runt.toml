@@ -136,42 +136,6 @@ expect_name = "add_combinational.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d0/add_combinational.tx --bound 2 --ascii-waveform --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
 
 [[tests]]
-name = "waveform.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_waveform.ast"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/add_d1_tuple.tx --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_waveform.graph"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_d1_tuple.tx --respect-forks --determinize --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_waveform.ts"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_d1_tuple.tx --transition-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_waveform.bmc"
-paths = [
-  "../../tests/adders/adder_d1/add_d1_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d1/expects"
-expect_name = "add_d1_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_d1_tuple.tx --bound 2 --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot 2>/dev/null"
-
-[[tests]]
 name = "waveform.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_waveform.ast"
 paths = [
   "../../tests/adders/adder_d1/add_multitrace_successful.tx",
@@ -242,42 +206,6 @@ paths = [
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_pass.tx --bound 2 --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_waveform.ast"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d2/add_d2_tuple.tx --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot --max-steps 4 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_waveform.graph"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/add_d2_tuple.tx --respect-forks --determinize --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_waveform.ts"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/add_d2_tuple.tx --transition-system --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_waveform.bmc"
-paths = [
-  "../../tests/adders/adder_d2/add_d2_tuple.tx",
-]
-expect_dir = "../../tests/adders/adder_d2/expects"
-expect_name = "add_d2_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/add_d2_tuple.tx --bound 2 --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_adders_adder_d2_both_threads_pass.both_threads_pass_waveform.ast"
@@ -1133,39 +1061,3 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --bound 2 --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_muxes_comb_mux_tuple.comb_mux_tuple_waveform.ast"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/comb_mux_tuple.tx --ascii-waveform --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_muxes_comb_mux_tuple.comb_mux_tuple_waveform.graph"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --respect-forks --determinize --ascii-waveform --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_muxes_comb_mux_tuple.comb_mux_tuple_waveform.ts"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --transition-system --ascii-waveform --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>/dev/null"
-
-[[tests]]
-name = "waveform.tests_muxes_comb_mux_tuple.comb_mux_tuple_waveform.bmc"
-paths = [
-  "../../tests/muxes/comb_mux_tuple.tx",
-]
-expect_dir = "../../tests/muxes/expects"
-expect_name = "comb_mux_tuple.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions tests/muxes/comb_mux_tuple.tx --bound 2 --ascii-waveform --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>/dev/null"
