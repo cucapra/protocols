@@ -712,6 +712,15 @@ expect_name = "comb_mux_tuple.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/comb_mux_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple.prot --module comb_mux 2>&1"
 
 [[tests]]
+name = "interp.tests_muxes_comb_mux_tuple_bitslice.comb_mux_tuple_bitslice_interp"
+paths = [
+  "../../tests/muxes/comb_mux_tuple_bitslice.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "comb_mux_tuple_bitslice.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/comb_mux_tuple_bitslice.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/comb_mux_tuple_bitslice.prot --module comb_mux 2>&1"
+
+[[tests]]
 name = "interp.tests_muxes_comb_mux_tuple_fail.comb_mux_tuple_fail_interp"
 paths = [
   "../../tests/muxes/comb_mux_tuple_fail.tx",
