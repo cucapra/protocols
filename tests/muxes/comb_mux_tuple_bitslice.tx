@@ -1,4 +1,4 @@
 trace {
-  first((0xFF, 2), 8);
-  second((1, 0xFF), 8);
+  first((0xFF, 2), 255);
+  second((1, 0xFF), 255);
 }

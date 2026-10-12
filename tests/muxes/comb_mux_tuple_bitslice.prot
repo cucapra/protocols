@@ -6,7 +6,7 @@ struct Mux {
 }
 
 // Contrived protocol used to test if tuple projection & bit-slicing interact properly
-prot first<DUT: Mux>(inputs: (u32, u64), y: u8) {
+prot first<DUT: Mux>(inputs: (u16, u32), y: u8) {
   DUT.a := inputs.0[7:0];
   DUT.b := inputs.1[7:0];
   DUT.sel := 1'b0;
@@ -14,7 +14,7 @@ prot first<DUT: Mux>(inputs: (u32, u64), y: u8) {
   step();
 }
 
-prot second<DUT: Mux>(inputs: (u32, u64), y: u8) {
+prot second<DUT: Mux>(inputs: (u32, u16), y: u8) {
   DUT.a := inputs.0[7:0];
   DUT.b := inputs.1[7:0];
   DUT.sel := 1'b1;

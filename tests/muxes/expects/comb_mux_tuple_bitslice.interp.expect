@@ -1,9 +1,1 @@
-error: The two expressions did not evaluate to the same value (in transaction `first((255, 2), 8)`)
-   ┌─ tests/muxes/comb_mux_tuple_bitslice.prot:13:13
-   │
-13 │   assert_eq(DUT.y, y);
-   │             ^^^^^^^^ LHS Value: 255, RHS Value: 8
-
-Trace 0 execution failed.
----CODE---
-101
+Trace 0 executed successfully!
