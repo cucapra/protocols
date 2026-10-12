@@ -19,6 +19,19 @@ enum ValueKind {
     Tuple(BitVecValue, BitVecValue),
 }
 
+impl Value {
+    /// Returns an `Option` containing the `idx`-th component of a tuple value,
+    /// otherwise returns `None` (e.g. if `idx` is out of bounds or this method
+    /// is called on a non-tuple value)
+    pub fn project_tuple_component(&self, idx: u32) -> Option<&BitVecValue> {
+        match &self.0 {
+            ValueKind::Tuple(fst, _) if idx == 0 => Some(fst),
+            ValueKind::Tuple(_, snd) if idx == 1 => Some(snd),
+            _ => None,
+        }
+    }
+}
+
 impl TryFrom<Value> for BitVecValue {
     type Error = ();
     fn try_from(value: Value) -> Result<Self, Self::Error> {

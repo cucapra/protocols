@@ -599,8 +599,16 @@ impl<'a> Evaluator<'a> {
                     )),
                 }
             }
-            Expr::TupleProj(_, _) => {
-                todo!("Handle tuple projections in interpreter")
+            Expr::TupleProj(expr_id, idx) => {
+                let Expr::Sym(symbol_id) = &self.tr[expr_id] else {
+                    unreachable!(
+                        "Typechecker already rejects ill-typed exprs where a tuple projection is called on a non-tuple-typed argument"
+                    )
+                };
+                let tuple_component = self.args_mapping[symbol_id]
+                    .project_tuple_component(idx)
+                    .expect("Typechecker ensures that we only project from a tuple-typed argument");
+                Ok(ExprValue::Concrete(tuple_component.clone()))
             }
         }
     }
