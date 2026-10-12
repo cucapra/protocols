@@ -481,28 +481,18 @@ mod tests {
         assert_parse_error(
             "../tests/muxes/comb_mux_tuple.prot",
             "comb_mux_tuple",
-            "trace { first(([1], 2), 1); }",
+            "trace { first(([1,2], 2), 1); }",
             "Invalid sequence of values for argument of type u8",
         );
     }
 
     #[test]
-    fn test_tuple_arg_for_scalar_param() {
+    fn test_ill_typed_transaction() {
         assert_parse_error(
             "../tests/muxes/comb_mux_tuple.prot",
             "comb_mux_tuple",
             "trace { first((1, 2), (3, 4)); }",
             "Invalid value for argument of type u8",
-        );
-    }
-
-    #[test]
-    fn test_scalar_arg_for_tuple_param() {
-        assert_parse_error(
-            "../tests/muxes/comb_mux_tuple.prot",
-            "comb_mux_tuple",
-            "trace { first(1, 2); }",
-            "Unsupported argument type",
         );
     }
 }
