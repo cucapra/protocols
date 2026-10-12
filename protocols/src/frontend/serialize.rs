@@ -125,6 +125,14 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
 pub fn serialize_value(value: &Value, display_hex: bool) -> String {
     if let Ok(bv) = value.try_into() {
         serialize_bitvec(bv, display_hex)
+    } else if let Some(fst) = value.project_tuple_component(0)
+        && let Some(snd) = value.project_tuple_component(1)
+    {
+        format!(
+            "({}, {})",
+            serialize_bitvec(fst, display_hex),
+            serialize_bitvec(snd, display_hex)
+        )
     } else {
         let seq: &[BitVecValue] = value.try_into().unwrap();
         let elements: Vec<_> = seq
@@ -630,6 +638,13 @@ pub mod tests {
     #[test]
     fn test_comb_mux() {
         test_helper("../tests/muxes/comb_mux_tuple.prot", "comb_mux_tuple");
+    }
+
+    #[test]
+    fn test_serialize_tuple_value() {
+        let tuple: Value = (BitVecValue::from_u64(1, 8), BitVecValue::from_u64(255, 8)).into();
+        assert_eq!(serialize_value(&tuple, false), "(1, 255)");
+        assert_eq!(serialize_value(&tuple, true), "(0x01, 0xff)");
     }
 
     #[test]
