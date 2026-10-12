@@ -486,6 +486,12 @@ TX_CASES = {
         "top": "reqwalker",
         "expect": "pass",
     },
+    "examples/mf8/mf8_regfile.tx": {
+        "protocol": "examples/mf8/mf8_regfile.prot",
+        "verilog": ("examples/mf8/mf8_reg.v",),
+        "top": "mf8_reg",
+        "expect": "pass"
+    }
 }
 
 BI_CASES = {

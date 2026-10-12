@@ -1,6 +1,33 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "graph_interp.examples_mf8_mf8_regfile.mf8_regfile_graph_interp"
+paths = [
+  "../../examples/mf8/mf8_regfile.tx",
+]
+expect_dir = "../../examples/mf8/expects"
+expect_name = "mf8_regfile.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.examples_mf8_mf8_regfile.mf8_regfile_graph_interp.contract_edges"
+paths = [
+  "../../examples/mf8/mf8_regfile.tx",
+]
+expect_dir = "../../examples/mf8/expects"
+expect_name = "mf8_regfile.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg --contract-edges 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.examples_mf8_mf8_regfile.mf8_regfile_graph_interp.respect_forks"
+paths = [
+  "../../examples/mf8/mf8_regfile.tx",
+]
+expect_dir = "../../examples/mf8/expects"
+expect_name = "mf8_regfile.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg --respect-forks --determinize 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.examples_picorv32_unsigned_mul.unsigned_mul_graph_interp"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",
