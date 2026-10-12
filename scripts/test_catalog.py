@@ -490,14 +490,14 @@ TX_CASES = {
         "protocol": "tests/muxes/comb_mux_tuple.prot",
         "verilog": ("tests/muxes/comb_mux.v",),
         "top": "comb_mux",
-        "expect": "pass"
+        "expect": "pass",
     },
     "tests/muxes/comb_mux_tuple_fail.tx": {
         "protocol": "tests/muxes/comb_mux_tuple.prot",
         "verilog": ("tests/muxes/comb_mux.v",),
         "top": "comb_mux",
-        "expect": "fail"
-    }
+        "expect": "fail",
+    },
 }
 
 BI_CASES = {
