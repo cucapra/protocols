@@ -327,10 +327,29 @@ fn parse_type(
             }
             Rule::tuple_tpe => {
                 let mut inner = inner_type.into_inner();
-                let first_type = parse_type(diag, fileid, st, inner.next().unwrap())?;
-                let second_type = parse_type(diag, fileid, st, inner.next().unwrap())?;
-                let tuple_id = st.add_tuple(Tuple::new(first_type, second_type));
-                Ok(Type::Tuple(tuple_id))
+                let first_pair = inner.next().unwrap();
+                let first_type = parse_type(diag, fileid, st, first_pair.clone())?;
+                let second_pair = inner.next().unwrap();
+                let second_type = parse_type(diag, fileid, st, second_pair.clone())?;
+                match (first_type, second_type) {
+                    (Type::BitVec(_), Type::BitVec(_)) => {
+                        let tuple_id = st.add_tuple(Tuple::new(first_type, second_type));
+                        Ok(Type::Tuple(tuple_id))
+                    }
+                    (_, _) => {
+                        let violating_rule = if let Type::BitVec(_) = first_type {
+                            second_pair.as_rule()
+                        } else {
+                            first_pair.as_rule()
+                        };
+                        let msg = format!(
+                            "Tuple components must be bit-vectors, but {:?} is not a bit-vector type",
+                            violating_rule
+                        );
+                        diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
+                        Err(msg)
+                    }
+                }
             }
             _ => {
                 let msg = format!(
