@@ -1,4 +1,12 @@
----CODE---
-134
----STDERR---
-sh: line 1: 77598 Abort trap: 6           target/debug/graph-interp --transactions examples/apb/ip_apb.tx --bound 7 --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2> /dev/null
+Trace 0 executed successfully!
+PPROT[2:0]            x          x          0          0          0          0          0          0          0          0          0          0          x
+PSTRB[3:0]            x          x         15         15          0          0          0         15         15          0          0          0          x
+PWDATA[31:0]          x          x 3735929054 3735929054          x          x          x      48879      48879          x          x          x          x
+PADDR[31:0]           x          x          0          0          0          0          0          8          8          8          8          8          x
+PWRITE                x          x          1          1          0          0          0          1          1          0          0          0          x
+PENABLE               0          0          0          1          0          1          1          0          1          0          1          1          0
+PSEL                  0          0          1          1          1          1          1          1          1          1          1          1          0
+PRESETn               0          1          1          1          1          1          1          1          1          1          1          1          1
+PSLVERR               0          0          0          0          0          0          0          0          0          0          0          0          0
+PREADY                0          0          0          1          0          0          1          0          1          0          0          1          0
+PRDATA[31:0]          0          0          0          0          0          0 3735929054 3735929054 3735929054 3735929054 3735929054      48879      48879
