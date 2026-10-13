@@ -27,10 +27,12 @@ impl Value {
         self.0.clone()
     }
 
-    /// Creates a new `Value` of kind `ValueKind::Tuple`
+    /// Creates a new `Value` of kind `ValueKind::Tuple` containing the specified `values`.
+    /// If `values.len() < 2`, this function panics (tuples must contain at least 2 values).
     /// (Note: we need a new method for creating tuple values, since we already have an existing trait implementation
     /// of `TryFrom<Vec<BitVecValue>>` for `Value`, but that trait impl creates a `ValueKind::Seq` instead.)
     pub fn new_tuple(values: Vec<BitVecValue>) -> Self {
+        assert!(values.len() >= 2);
         Value(ValueKind::Tuple(values))
     }
 
