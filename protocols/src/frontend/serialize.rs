@@ -52,9 +52,13 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
         }
         Type::Tuple(tuple_id) => {
             let tuple = &st[tuple_id];
-            let first_type_str = serialize_type(st, tuple.first_type());
-            let second_type_str = serialize_type(st, tuple.second_type());
-            format!("({},{})", first_type_str, second_type_str)
+            let serialized_types = tuple
+                .types()
+                .iter()
+                .map(|ty| serialize_type(st, *ty))
+                .collect::<Vec<String>>()
+                .join(",");
+            format!("({})", serialized_types)
         }
         Type::Unknown => "unknown".to_string(),
     }

@@ -76,32 +76,27 @@ impl Seq {
     }
 }
 
-/// For simplicity, we only allow pairs for now
+/// We allow n-ary tuples (but maintain the invariant that the `Vec<Type>` must have at least length 2)
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Tuple(Type, Type);
+pub struct Tuple(Vec<Type>);
 
 impl Tuple {
-    pub fn new(first_type: Type, second_type: Type) -> Self {
-        Self(first_type, second_type)
+    /// Creates a new tuple type with the specified `types`.
+    /// If `types.len() < 2`, this function panics (it only makes sense to have tuple containing >= 2)
+    pub fn new(types: Vec<Type>) -> Self {
+        assert!(types.len() >= 2);
+        Self(types)
     }
 
-    /// Indexes into a tuple type (we need this function since Rust doesn't allow indexing into a tuple using a variable)
-    pub fn get(&self, idx: u32) -> Option<Type> {
-        if idx == 0 {
-            Some(self.0)
-        } else if idx == 1 {
-            Some(self.1)
-        } else {
-            None
-        }
+    /// Indexes into a tuple type (we need this function since Rust doesn't allow indexing into a tuple using a variable).
+    /// Returns `None` if the index is out of bounds.
+    pub fn get(&self, idx: u32) -> Option<&Type> {
+        self.0.get(idx as usize)
     }
 
-    pub fn first_type(&self) -> Type {
-        self.0
-    }
-
-    pub fn second_type(&self) -> Type {
-        self.1
+    /// Extracts the components of the tuple type as a `Vec<Type>`
+    pub fn types(&self) -> Vec<Type> {
+        self.0.clone()
     }
 }
 

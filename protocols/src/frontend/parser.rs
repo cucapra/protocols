@@ -330,7 +330,7 @@ fn parse_type(
                 let second_type = parse_type(diag, fileid, st, second_pair.clone())?;
                 match (first_type, second_type) {
                     (Type::BitVec(_), Type::BitVec(_)) => {
-                        let tuple_id = st.add_tuple(Tuple::new(first_type, second_type));
+                        let tuple_id = st.add_tuple(Tuple::new(vec![first_type, second_type]));
                         Ok(Type::Tuple(tuple_id))
                     }
                     (_, _) => {

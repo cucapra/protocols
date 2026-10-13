@@ -195,7 +195,7 @@ fn type_check_expr(
                         handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
                         Err(anyhow!(error_msg))
                     }
-                    Some(ty) => Ok(ty),
+                    Some(ty) => Ok(*ty),
                 }
             } else {
                 let error_msg = format!(

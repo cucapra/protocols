@@ -245,7 +245,7 @@ fn parse_arg(
         Rule::tuple_arg => {
             if let Type::Tuple(tuple_id) = ty {
                 let tuple_ty = &st[tuple_id];
-                let tuple_component_tys = [tuple_ty.first_type(), tuple_ty.second_type()];
+                let tuple_component_tys = tuple_ty.types();
                 let tuple_components = arg_pair
                     .clone()
                     .into_inner()
@@ -253,23 +253,26 @@ fn parse_arg(
                     .map_or_else(Vec::new, collect_arg_pairs);
                 if tuple_components.len() != tuple_component_tys.len() {
                     let msg = format!(
-                        "Expected 2 values for a tuple but got {} values instead",
+                        "Expected {} values for tuple type {} but got {} values instead",
+                        tuple_component_tys.len(),
+                        serialize_type(st, *ty),
                         tuple_components.len()
                     );
                     handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
                     return Err(anyhow!(msg));
                 } else {
-                    let tuple_component_values = tuple_components
+                    let tuple_component_values: Vec<Value> = tuple_components
                         .into_iter()
                         .zip(tuple_component_tys.iter())
                         .map(|(arg, arg_ty)| parse_arg(st, arg, arg_ty, handler, fileid))
                         .collect::<anyhow::Result<Vec<Value>>>()?;
-                    let [fst, snd]: [Value; 2] = tuple_component_values
-                        .try_into()
-                        .expect("Expected 2 values for a tuple but got a different no. of values");
-                    match (BitVecValue::try_from(fst), BitVecValue::try_from(snd)) {
-                        (Ok(fst), Ok(snd)) => (fst, snd).into(),
-                        _ => {
+                    // Convert each `Value` into a `BitVecValue`, short-circuiting if any of them
+                    // aren't convertible to `BitVecValue`s
+                    let mut bvvs = vec![];
+                    for value in tuple_component_values {
+                        if let Ok(bvv) = BitVecValue::try_from(value) {
+                            bvvs.push(bvv);
+                        } else {
                             let msg = format!(
                                 "At the moment, tuples can only store bit-vector values: {} is not supported",
                                 serialize_type(st, *ty)
@@ -278,6 +281,7 @@ fn parse_arg(
                             return Err(anyhow!(msg));
                         }
                     }
+                    bvvs.into()
                 }
             } else {
                 let msg = format!(
