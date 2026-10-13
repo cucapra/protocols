@@ -7,8 +7,9 @@ use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::propagate_assigns::propagate_assignments;
-use protocols::ir::proto_graph::ProtoGraph;
+use protocols::ir::proto_graph::{Node, Op, ProtoGraph};
 use protocols::ir::reaching_defs::reaching_definitions;
+use std::any::Any;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -47,6 +48,11 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         .iter()
         .find(|p| p.is_reset)
         .map(|p| lower_single_protocol(st, p));
+    let idle: Option<_> = m
+        .protos
+        .iter()
+        .find(|p| p.is_idle)
+        .map(|p| lower_single_protocol(st, p));
 }
 
 fn lower_single_protocol(st: &SymbolTable, proto: &Protocol) -> ProtoGraph {
@@ -57,12 +63,22 @@ fn lower_single_protocol(st: &SymbolTable, proto: &Protocol) -> ProtoGraph {
     pg
 }
 
-fn get_single_cycle(pg: &ProtoGraph) -> Option<()> {
+fn get_single_cycle(pg: &ProtoGraph) -> Option<&Node> {
     let start = &pg[pg.entry];
     // check to make sure that the start node is the only node
-    if let [next] = start.transitions.as_slice() && next.consumes_step && next.guard == pg.true_id() {
+    if let [next] = start.transitions.as_slice()
+        && next.consumes_step
+        && next.guard == pg.true_id()
+    {
         let end = &pg[next.target];
-        if end.transitions.is_empty() && let done = end.actions.iter().find(|a| a.op)
+        if end.transitions.is_empty()
+            && let Some(done) = end.actions.iter().find(|a| pg[a.op] == Op::Done)
+            && done.guard == pg.true_id()
+        {
+            Some(start)
+        } else {
+            None
+        }
     } else {
         None
     }
