@@ -109,6 +109,29 @@ fn parse_boxed_expr(
                         }
                     }
                 }
+                Rule::tuple_proj => {
+                    let mut inner_rules = primary.clone().into_inner();
+                    let path_rule = expect_rule(
+                        diag,
+                        fileid,
+                        inner_rules.next(),
+                        &primary,
+                        "Expected path rule in tuple projection expression",
+                    )?;
+                    let idx_rule = expect_rule(
+                        diag,
+                        fileid,
+                        inner_rules.next(),
+                        &primary,
+                        "Expected index in tuple projection expression",
+                    )?;
+                    let idx = idx_rule
+                        .as_str()
+                        .parse::<u32>()
+                        .expect("Unable to parse tuple projection index");
+                    let parsed_expr = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
+                    Ok(BoxedExpr::TupleProj(Box::new(parsed_expr), idx, start, end))
+                }
                 Rule::dont_care => Ok(BoxedExpr::DontCare(start, end)),
                 Rule::slice => {
                     let mut inner_rules = primary.clone().into_inner();
@@ -117,7 +140,7 @@ fn parse_boxed_expr(
                         fileid,
                         inner_rules.next(),
                         &primary,
-                        "Expected path rule in slice expression",
+                        "Expected path rule or tuple projection in slice expression",
                     )?;
                     let path_id = parse_boxed_expr(st, diag, fileid, Pairs::single(path_rule))?;
                     let idx1_rule = inner_rules.next().unwrap();
@@ -225,6 +248,12 @@ fn boxed_expr_to_expr_id(
             ctx.add_expr_loc(expr_id, start, end, fileid);
             expr_id
         }
+        BoxedExpr::TupleProj(expr, idx, start, end) => {
+            let path_id = boxed_expr_to_expr_id(ctx, fileid, *expr)?;
+            let expr_id = ctx.e(Expr::TupleProj(path_id, idx));
+            ctx.add_expr_loc(expr_id, start, end, fileid);
+            expr_id
+        }
     };
     Ok(expr_id)
 }
@@ -293,8 +322,29 @@ fn parse_type(
                 let seq_id = st.add_seq(inner_tpe, 2);
                 Ok(Type::Seq(seq_id))
             }
+            Rule::tuple_tpe => {
+                let mut component_tys = vec![];
+                for component_pair in inner_type.into_inner() {
+                    let component_ty = parse_type(diag, fileid, st, component_pair.clone())?;
+                    if let Type::BitVec(_) = component_ty {
+                        component_tys.push(component_ty);
+                    } else {
+                        let msg = format!(
+                            "Tuple components must be bit-vectors, but {} is not a bit-vector type",
+                            component_pair.as_str()
+                        );
+                        diag.emit_diagnostic_parsing(&msg, fileid, &component_pair, Level::Error);
+                        return Err(msg);
+                    }
+                }
+                let tuple_id = st.add_tuple(Tuple::new(component_tys));
+                Ok(Type::Tuple(tuple_id))
+            }
             _ => {
-                let msg = format!("Unexpected rule while parsing type: {:?}", pair.as_rule());
+                let msg = format!(
+                    "Unexpected rule while parsing type: {:?}",
+                    inner_type.as_rule()
+                );
                 diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
                 Err(msg)
             }

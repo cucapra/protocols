@@ -14,7 +14,11 @@ fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: Symb
     let full_name = entry.full_name(symbols);
     let expr = match entry.tpe() {
         FrontType::BitVec(width) => protocol.expr_ctx.bv_symbol(&full_name, width),
-        FrontType::Struct(_) | FrontType::Seq(_) | FrontType::UnsignedInt | FrontType::Unknown => {
+        FrontType::Struct(_)
+        | FrontType::Seq(_)
+        | FrontType::Tuple(_)
+        | FrontType::UnsignedInt
+        | FrontType::Unknown => {
             panic!(
                 "unsupported symbol type {} for {}",
                 crate::frontend::serialize::serialize_type(symbols, entry.tpe()),

@@ -13,9 +13,38 @@ use baa::{BitVecOps, BitVecValue};
 pub struct Value(ValueKind);
 
 #[derive(Debug, Clone)]
-enum ValueKind {
+pub enum ValueKind {
     Scalar(BitVecValue),
     Seq(Vec<BitVecValue>),
+    /// Tuples are allowed to be n-ary (for n >= 2)
+    Tuple(Vec<BitVecValue>),
+}
+
+impl Value {
+    /// Extracts the `ValueKind` inside a `Value`. (This method is needed so that we can implement
+    /// `serialize_value` in `serialize.rs` using pattern-matching on `ValueKind`s.)
+    pub fn get_value_kind(&self) -> ValueKind {
+        self.0.clone()
+    }
+
+    /// Creates a new `Value` of kind `ValueKind::Tuple` containing the specified `values`.
+    /// If `values.len() < 2`, this function panics (tuples must contain at least 2 values).
+    /// (Note: we need a new method for creating tuple values, since we already have an existing trait implementation
+    /// of `TryFrom<Vec<BitVecValue>>` for `Value`, but that trait impl creates a `ValueKind::Seq` instead.)
+    pub fn new_tuple(values: Vec<BitVecValue>) -> Self {
+        assert!(values.len() >= 2);
+        Value(ValueKind::Tuple(values))
+    }
+
+    /// Returns an `Option` containing the `idx`-th component of a tuple value,
+    /// otherwise returns `None` (e.g. if `idx` is out of bounds or this method
+    /// is called on a non-tuple value)
+    pub fn project_tuple_component(&self, idx: u32) -> Option<&BitVecValue> {
+        match &self.0 {
+            ValueKind::Tuple(values) => values.get(idx as usize),
+            _ => None,
+        }
+    }
 }
 
 impl TryFrom<Value> for BitVecValue {
@@ -225,6 +254,9 @@ impl From<Value> for SymValue {
         match value.0 {
             ValueKind::Scalar(v) => Self(SymValueKind::Scalar(v.into())),
             ValueKind::Seq(v) => Self(SymValueKind::Seq(v.into())),
+            ValueKind::Tuple(_) => {
+                todo!("Convert ValueKind::Tuple to a new SymValueKind constructor")
+            }
         }
     }
 }

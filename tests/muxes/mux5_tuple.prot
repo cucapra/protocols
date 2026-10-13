@@ -1,0 +1,66 @@
+struct Mux5 {
+  in in0: u8,
+  in in1: u8,
+  in in2: u8,
+  in in3: u8,
+  in in4: u8,
+  in sel: u3,
+  out y: u8
+}
+
+// Contrived protocol used to test if tuples parse & typecheck correctly
+// (Technically tuples are not necessary for this protocol)
+prot zeroth<DUT: Mux5>(inputs: (u8, u8, u8, u8, u8), y: u8) {
+  DUT.in0 := inputs.0;
+  DUT.in1 := inputs.1;
+  DUT.in2 := inputs.2;
+  DUT.in3 := inputs.3;
+  DUT.in4 := inputs.4;
+  DUT.sel := 3'd0;
+  assert_eq(DUT.y, y);
+  step();
+}
+
+prot first<DUT: Mux5>(inputs: (u8, u8, u8, u8, u8), y: u8) {
+  DUT.in0 := inputs.0;
+  DUT.in1 := inputs.1;
+  DUT.in2 := inputs.2;
+  DUT.in3 := inputs.3;
+  DUT.in4 := inputs.4;
+  DUT.sel := 3'd1;
+  assert_eq(DUT.y, y);
+  step();
+}
+
+prot second<DUT: Mux5>(inputs: (u8, u8, u8, u8, u8), y: u8) {
+  DUT.in0 := inputs.0;
+  DUT.in1 := inputs.1;
+  DUT.in2 := inputs.2;
+  DUT.in3 := inputs.3;
+  DUT.in4 := inputs.4;
+  DUT.sel := 3'd2;
+  assert_eq(DUT.y, y);
+  step();
+}
+
+prot third<DUT: Mux5>(inputs: (u8, u8, u8, u8, u8), y: u8) {
+  DUT.in0 := inputs.0;
+  DUT.in1 := inputs.1;
+  DUT.in2 := inputs.2;
+  DUT.in3 := inputs.3;
+  DUT.in4 := inputs.4;
+  DUT.sel := 3'd3;
+  assert_eq(DUT.y, y);
+  step();
+}
+
+prot fourth<DUT: Mux5>(inputs: (u8, u8, u8, u8, u8), y: u8) {
+  DUT.in0 := inputs.0;
+  DUT.in1 := inputs.1;
+  DUT.in2 := inputs.2;
+  DUT.in3 := inputs.3;
+  DUT.in4 := inputs.4;
+  DUT.sel := 3'd4;
+  assert_eq(DUT.y, y);
+  step();
+}
