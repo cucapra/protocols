@@ -57,6 +57,17 @@ fn lower_single_protocol(st: &SymbolTable, proto: &Protocol) -> ProtoGraph {
     pg
 }
 
+fn get_single_cycle(pg: &ProtoGraph) -> Option<()> {
+    let start = &pg[pg.entry];
+    // check to make sure that the start node is the only node
+    if let [next] = start.transitions.as_slice() && next.consumes_step && next.guard == pg.true_id() {
+        let end = &pg[next.target];
+        if end.transitions.is_empty() && let done = end.actions.iter().find(|a| a.op)
+    } else {
+        None
+    }
+}
+
 fn main() {
     // Parse CLI args
     let args = Args::parse();
