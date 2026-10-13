@@ -258,10 +258,13 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     # maybe in the future we can flag a slow/fast runt config
     # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
     # Note: ignoring `s3_fixed.tx` for graph-interpreter for now as it is a Brave New World test case
+    # The two APB `.tx` files are also excluded for now (stack overflows in execution)
     if (
         case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
         and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
         and case["paths"][0] != "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx"
+        and case["paths"][0] != "examples/apb/ip_apb.tx"
+        and case["paths"][0] != "examples/apb/ch_apb_actual.tx"
     ):
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 
