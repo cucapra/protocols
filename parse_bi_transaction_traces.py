@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Analyzes the output of the BI and classifies tranasctions 
-as idle, reset, or non-trivial (i.e. not idle and not reset), 
+"""Analyzes the output of the BI and classifies tranasctions
+as idle, reset, or non-trivial (i.e. not idle and not reset),
 computing the no. of cycles taken for each type of transactions.
 
 Note:
