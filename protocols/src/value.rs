@@ -16,17 +16,24 @@ pub struct Value(ValueKind);
 enum ValueKind {
     Scalar(BitVecValue),
     Seq(Vec<BitVecValue>),
-    Tuple(BitVecValue, BitVecValue),
+    /// Tuples are allowed to be n-ary (for n >= 2)
+    Tuple(Vec<BitVecValue>),
 }
 
 impl Value {
+    /// Creates a new `Value` of kind `ValueKind::Tuple`
+    /// (Note: we need a new method for creating tuple values, since we already have an existing trait implementation
+    /// of `TryFrom<Vec<BitVecValue>>` for `Value`, but that trait impl creates a `ValueKind::Seq` instead.)
+    pub fn new_tuple(values: Vec<BitVecValue>) -> Self {
+        Value(ValueKind::Tuple(values))
+    }
+
     /// Returns an `Option` containing the `idx`-th component of a tuple value,
     /// otherwise returns `None` (e.g. if `idx` is out of bounds or this method
     /// is called on a non-tuple value)
     pub fn project_tuple_component(&self, idx: u32) -> Option<&BitVecValue> {
         match &self.0 {
-            ValueKind::Tuple(fst, _) if idx == 0 => Some(fst),
-            ValueKind::Tuple(_, snd) if idx == 1 => Some(snd),
+            ValueKind::Tuple(values) => values.get(idx as usize),
             _ => None,
         }
     }
@@ -65,12 +72,6 @@ impl TryFrom<Value> for Vec<BitVecValue> {
             Value(ValueKind::Seq(v)) => Ok(v),
             _ => Err(()),
         }
-    }
-}
-
-impl From<(BitVecValue, BitVecValue)> for Value {
-    fn from((fst, snd): (BitVecValue, BitVecValue)) -> Self {
-        Value(ValueKind::Tuple(fst, snd))
     }
 }
 
@@ -245,7 +246,7 @@ impl From<Value> for SymValue {
         match value.0 {
             ValueKind::Scalar(v) => Self(SymValueKind::Scalar(v.into())),
             ValueKind::Seq(v) => Self(SymValueKind::Seq(v.into())),
-            ValueKind::Tuple(_, _) => {
+            ValueKind::Tuple(_) => {
                 todo!("Convert ValueKind::Tuple to a new SymValueKind constructor")
             }
         }

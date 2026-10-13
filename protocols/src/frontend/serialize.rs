@@ -654,9 +654,13 @@ pub mod tests {
 
     #[test]
     fn test_serialize_tuple_value() {
-        let tuple: Value = (BitVecValue::from_u64(1, 8), BitVecValue::from_u64(255, 8)).into();
-        assert_eq!(serialize_value(&tuple, false), "(1, 255)");
-        assert_eq!(serialize_value(&tuple, true), "(0x01, 0xff)");
+        let tuple: Value = Value::new_tuple(vec![
+            BitVecValue::from_u64(1, 8),
+            BitVecValue::from_u64(255, 8),
+            BitVecValue::from_u64(5, 8),
+        ]);
+        assert_eq!(serialize_value(&tuple, false), "(1, 255, 5)");
+        assert_eq!(serialize_value(&tuple, true), "(0x01, 0xff, 0x05)");
     }
 
     #[test]

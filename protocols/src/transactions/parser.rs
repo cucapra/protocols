@@ -446,8 +446,16 @@ mod tests {
         assert_eq!(trace.len(), 2);
 
         let expected = [
-            ("first", Value::from((bv(1, 8), bv(2, 8))), bv(1, 8)),
-            ("second", Value::from((bv(3, 8), bv(4, 8))), bv(4, 8)),
+            (
+                "first",
+                Value::new_tuple(vec![bv(1, 8), bv(2, 8)]),
+                bv(1, 8),
+            ),
+            (
+                "second",
+                Value::new_tuple(vec![bv(3, 8), bv(4, 8)]),
+                bv(4, 8),
+            ),
         ];
         for ((name, args), (expected_name, expected_tuple, expected_y)) in
             trace.iter().zip(expected)
