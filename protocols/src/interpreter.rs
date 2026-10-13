@@ -599,6 +599,17 @@ impl<'a> Evaluator<'a> {
                     )),
                 }
             }
+            Expr::TupleProj(expr_id, idx) => {
+                let Expr::Sym(symbol_id) = &self.tr[expr_id] else {
+                    unreachable!(
+                        "In the concrete syntax, we only allow tuple projections on protocol arguments, i.e. the expression being projected from is an identifier"
+                    )
+                };
+                let tuple_component = self.args_mapping[symbol_id]
+                    .project_tuple_component(idx)
+                    .expect("Typechecker ensures that we only project from a tuple-typed argument");
+                Ok(ExprValue::Concrete(tuple_component.clone()))
+            }
         }
     }
 

@@ -89,6 +89,11 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
     },
+    "tests/adders/adder_d1/add_d1_tuple.tx": {
+        "protocol": "tests/adders/adder_d1/add_d1_tuple.prot",
+        "verilog": ("tests/adders/adder_d1/add_d1.v",),
+        "expect": "pass",
+    },
     "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
@@ -147,6 +152,12 @@ TX_CASES = {
         "protocol": "tests/adders/adder_d2/no_dontcare_conflict.prot",
         "verilog": ("tests/adders/adder_d2/add_d2.v",),
         "expect": "assignment_conflict",
+    },
+    "tests/adders/adder_d2/add_d2_tuple.tx": {
+        "protocol": "tests/adders/adder_d2/add_d2_tuple.prot",
+        "verilog": ("tests/adders/adder_d2/add_d2.v",),
+        "expect": "pass",
+        "max_steps": 4,
     },
     "tests/alus/alu_d1.tx": {
         "protocol": "tests/alus/alu_d1.prot",
@@ -484,6 +495,42 @@ TX_CASES = {
         "protocol": "tests/wishbone/wishbone.prot",
         "verilog": ("tests/wishbone/reqwalker.v",),
         "top": "reqwalker",
+        "expect": "pass",
+    },
+    "tests/muxes/mux2_tuple.tx": {
+        "protocol": "tests/muxes/mux2_tuple.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "pass",
+    },
+    "tests/muxes/mux2_tuple_fail.tx": {
+        "protocol": "tests/muxes/mux2_tuple.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "fail",
+    },
+    "tests/muxes/mux2_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/mux2_tuple_bitslice.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "pass",
+    },
+    "tests/muxes/mux5_tuple.tx": {
+        "protocol": "tests/muxes/mux5_tuple.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
+        "expect": "pass",
+    },
+    "tests/muxes/mux5_tuple_fail.tx": {
+        "protocol": "tests/muxes/mux5_tuple.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
+        "expect": "fail",
+    },
+    "tests/muxes/mux5_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/mux5_tuple_bitslice.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
         "expect": "pass",
     },
     "examples/axis/packetize_bytestream.tx": {

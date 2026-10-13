@@ -1,0 +1,8 @@
+struct Dummy {
+  in a : u1,
+}
+
+prot ill_typed_tuple_projection<DUT: Dummy>(pair: (u2, u8)) {
+  DUT.a := pair.1;  // Bit-widths don't match
+  step();
+}

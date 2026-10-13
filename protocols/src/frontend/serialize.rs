@@ -16,6 +16,7 @@ use crate::frontend::Module;
 use crate::frontend::ast::*;
 use crate::frontend::symbol::*;
 use crate::interpreter::ExprValue;
+use crate::value::ValueKind;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
 pub fn serialize_ast_to_string(ast: &Ast) -> std::io::Result<String> {
@@ -49,6 +50,16 @@ pub fn serialize_type(st: &SymbolTable, tpe: Type) -> String {
                 other => unreachable!("unexpected min length of {other}"),
             };
             format!("[{}]{suffix}", serialize_type(st, st[seq_id].tpe()))
+        }
+        Type::Tuple(tuple_id) => {
+            let tuple = &st[tuple_id];
+            let serialized_types = tuple
+                .types()
+                .iter()
+                .map(|ty| serialize_type(st, *ty))
+                .collect::<Vec<String>>()
+                .join(",");
+            format!("({})", serialized_types)
         }
         Type::Unknown => "unknown".to_string(),
     }
@@ -117,15 +128,21 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
 }
 
 pub fn serialize_value(value: &Value, display_hex: bool) -> String {
-    if let Ok(bv) = value.try_into() {
-        serialize_bitvec(bv, display_hex)
-    } else {
-        let seq: &[BitVecValue] = value.try_into().unwrap();
-        let elements: Vec<_> = seq
-            .iter()
-            .map(|bv| serialize_bitvec(bv, display_hex))
-            .collect();
-        format!("[{}]", elements.join(","))
+    let value_kind = value.get_value_kind();
+    match value_kind {
+        ValueKind::Scalar(bv) => serialize_bitvec(&bv, display_hex),
+        ValueKind::Seq(ref values) | ValueKind::Tuple(ref values) => {
+            let elements = values
+                .iter()
+                .map(|bv| serialize_bitvec(bv, display_hex))
+                .collect::<Vec<String>>()
+                .join(",");
+            if matches!(value_kind, ValueKind::Seq(_)) {
+                format!("[{}]", elements)
+            } else {
+                format!("({})", elements)
+            }
+        }
     }
 }
 
@@ -193,6 +210,11 @@ where
                 let j = idx2.to_string();
                 format!("{}[{}:{}]", maybe_parens(e, &exprs[*expr], None), i, j)
             }
+        }
+        Expr::TupleProj(expr, idx) => {
+            let e = serialize_expr(exprs, st, expr);
+            let i = idx.to_string();
+            format!("{}.{}", e, i)
         }
     }
 }
@@ -614,6 +636,30 @@ pub mod tests {
 
     fn display_filename(filename: &str) -> &str {
         filename.strip_prefix("../").unwrap_or(filename)
+    }
+
+    #[test]
+    fn test_comb_mux() {
+        test_helper("../tests/muxes/mux2_tuple.prot", "mux2_tuple");
+    }
+
+    #[test]
+    fn test_comb_mux_bitslice() {
+        test_helper(
+            "../tests/muxes/mux2_tuple_bitslice.prot",
+            "mux2_tuple_bitslice",
+        );
+    }
+
+    #[test]
+    fn test_serialize_tuple_value() {
+        let tuple: Value = Value::new_tuple(vec![
+            BitVecValue::from_u64(1, 8),
+            BitVecValue::from_u64(255, 8),
+            BitVecValue::from_u64(5, 8),
+        ]);
+        assert_eq!(serialize_value(&tuple, false), "(1,255,5)");
+        assert_eq!(serialize_value(&tuple, true), "(0x01,0xff,0x05)");
     }
 
     #[test]

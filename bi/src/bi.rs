@@ -1029,6 +1029,9 @@ impl Thread {
                 let value = BitVecValue::from_u64(*iter_count & mask, *width);
                 ExprValue::Known(value)
             }
+            Expr::TupleProj(_, _) => {
+                todo!("handle tuple projections in Thread::eval_expr")
+            }
         }
     }
 }

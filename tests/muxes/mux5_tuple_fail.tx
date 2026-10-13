@@ -1,0 +1,6 @@
+trace {
+  zeroth((0, 1, 2, 3, 4), 0);
+
+  // This will fail since we're projecting from the wrong component
+  second((0, 1, 2, 3, 4), 4);
+}
