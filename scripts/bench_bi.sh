@@ -1,6 +1,9 @@
-#!/usr/bin/env bash
-set -uo pipefail
+#!/usr/bin/env bash 
 
+set -uo pipefail   # Set exit code to non-zero if any command fails
+
+# Use first argument (if provided) as the output directory in which to save the benchmark results
+# If not provided, default to `./bi_bench_output`
 OUTDIR="${1:-./bi_bench_output}"
 mkdir -p "$OUTDIR"
 
@@ -18,7 +21,7 @@ commands=(
   "./target/release/bi -p examples/wishbone/wishbone.prot -p examples/wishbone/ethmac.prot --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --display-hex --show-waveform-time --wave ../protocols-evaluation/wishbone/ethmac/ethmac.fst --include-idle"
 )
 
-echo "Capturing single-run output for inspection into $OUTDIR ..."
+echo "Capturing output in $OUTDIR ..."
 for i in "${!names[@]}"; do
   name="${names[$i]}"
   cmd="${commands[$i]}"
