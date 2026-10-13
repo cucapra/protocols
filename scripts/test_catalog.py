@@ -497,22 +497,40 @@ TX_CASES = {
         "top": "reqwalker",
         "expect": "pass",
     },
-    "tests/muxes/comb_mux_tuple.tx": {
-        "protocol": "tests/muxes/comb_mux_tuple.prot",
+    "tests/muxes/mux2_tuple.tx": {
+        "protocol": "tests/muxes/mux2_tuple.prot",
         "verilog": ("tests/muxes/comb_mux.v",),
         "top": "comb_mux",
         "expect": "pass",
     },
-    "tests/muxes/comb_mux_tuple_fail.tx": {
-        "protocol": "tests/muxes/comb_mux_tuple.prot",
+    "tests/muxes/mux2_tuple_fail.tx": {
+        "protocol": "tests/muxes/mux2_tuple.prot",
         "verilog": ("tests/muxes/comb_mux.v",),
         "top": "comb_mux",
         "expect": "fail",
     },
-    "tests/muxes/comb_mux_tuple_bitslice.tx": {
-        "protocol": "tests/muxes/comb_mux_tuple_bitslice.prot",
+    "tests/muxes/mux2_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/mux2_tuple_bitslice.prot",
         "verilog": ("tests/muxes/comb_mux.v",),
         "top": "comb_mux",
+        "expect": "pass",
+    },
+    "tests/muxes/mux5_tuple.tx": {
+        "protocol": "tests/muxes/mux5_tuple.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
+        "expect": "pass",
+    },
+    "tests/muxes/mux5_tuple_fail.tx": {
+        "protocol": "tests/muxes/mux5_tuple.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
+        "expect": "fail",
+    },
+    "tests/muxes/mux5_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/mux5_tuple_bitslice.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
         "expect": "pass",
     },
 }
