@@ -4,7 +4,7 @@ use crate::ir::reaching_defs::{ReachingDefs, assignment_is_total};
 use cranelift_entity::EntitySet;
 use rustc_hash::FxHashMap;
 
-// BFS from the entry
+// BFS from the entry, following only possible transitions.
 pub fn reachable_node_ids(pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
     let mut visited: EntitySet<NodeId> = EntitySet::default();
     let mut nodes = Vec::new();
@@ -20,6 +20,7 @@ pub fn reachable_node_ids(pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
             pg[nid]
                 .transitions
                 .iter()
+                .filter(|transition| transition.guard != pg.false_id())
                 .map(|t| t.target)
                 .filter(|target| !visited.contains(*target)),
         );

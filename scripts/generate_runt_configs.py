@@ -22,14 +22,14 @@ import test_catalog
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNT_VERSION = "0.4.1"
 
-# The first joint-driver implementation preserves the existing meta-driver
-# restrictions: one reachable fork node and a straight-line post-phase.
+# don't satisfy one reachable fork node and a straight-line post-phase
 JOINT_DRIVER_UNSUPPORTED = {
     "tests/brave_new_world/signal_asynchrony/signal_async.prot",
     "tests/identities/identity_d0/identity_d0.prot",
     "tests/multi/multi_data/multi_data.prot",
 }
 
+# Bounded lowering is prohibitively expensive
 BOUNDED_DRIVER_EXCLUDED = {
     "examples/apb/ch_apb_actual.tx",
     "examples/apb/ip_apb.tx",
@@ -213,19 +213,17 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*binary_prefix("graph-interp"), "--transactions", " ".join(case["paths"])]
     _tx_tail(cmd, case, with_max_steps=False)
 
-    # wishbone and fifo only work with --respect-forks
+    # Wishbone and FIFO require whole-trace fork semantics.
     if case["paths"][0].startswith("tests/fifo/") or case["paths"][0].startswith(
         "tests/wishbone/"
     ):
-        flag_sets = [("respect_forks", ["--respect-forks", "--determinize"])]
+        flows = [("trace_graph", ["--flow", "trace-graph"])]
     else:
-        # baseline and --contract-edges runs share one golden
-        flag_sets = [
-            ("", []),
-            ("contract_edges", ["--contract-edges"]),
-            ("respect_forks", ["--respect-forks", "--determinize"]),
+        flows = [
+            ("sequential", ["--flow", "sequential"]),
+            ("trace_graph", ["--flow", "trace-graph"]),
         ]
-    return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
+    return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flows]
 
 
 def bi_runt_command(case: dict) -> list[tuple[str, str]]:
@@ -259,8 +257,8 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--respect-forks",
-        "--determinize",
+        "--flow",
+        "trace-graph",
         "--ascii-waveform",
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
@@ -269,7 +267,8 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--transition-system",
+        "--flow",
+        "trace-system",
         "--ascii-waveform",
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
@@ -278,20 +277,23 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         case["paths"][0],
+        "--flow",
+        "bounded-driver",
         "--bound",
         str(tx_max_trace_protocols(case["paths"][0])),
         "--ascii-waveform",
     ]
     _tx_tail(bounded_cmd, case, with_max_steps=False)
 
-    joint_cmd = [
+    unbounded_cmd = [
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--meta-transition-system",
+        "--flow",
+        "unbounded-driver",
         "--ascii-waveform",
     ]
-    _tx_tail(joint_cmd, case, with_max_steps=False)
+    _tx_tail(unbounded_cmd, case, with_max_steps=False)
 
     path = case["paths"][0]
     variants: list[tuple[str, str]] = [
@@ -305,13 +307,9 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
             ]
         )
     if case["protocol_path"] not in JOINT_DRIVER_UNSUPPORTED:
-        variants.append(("joint", repo_root_command(joint_cmd, stderr="discard")))
+        variants.append(("joint", repo_root_command(unbounded_cmd, stderr="discard")))
 
-    # I manually checked this one is correct, but it takes too long in debug mode
-    # (and still 1 min in release mode) to be worth running every time.
-    # maybe in the future we can flag a slow/fast runt config
-    # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
-    # Note: ignoring `s3_fixed.tx` for graph-interpreter for now as it is a Brave New World test case
+    # Expensive or unsupported bounded cases are centralized in the generator.
     if path not in BOUNDED_DRIVER_EXCLUDED:
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 
@@ -323,8 +321,8 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--respect-forks",
-        "--determinize",
+        "--flow",
+        "trace-graph",
         "--brief-graph-errors",
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
@@ -333,7 +331,8 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--transition-system",
+        "--flow",
+        "trace-system",
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
@@ -438,9 +437,7 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
     ]
 
     regular = [
-        case
-        for case in graph_interp_cases(cases)
-        if case["paths"][0] not in xfailed
+        case for case in graph_interp_cases(cases) if case["paths"][0] not in xfailed
     ]
     joint = [
         case
@@ -516,9 +513,8 @@ def generate_runt_configs() -> None:
         "fail": ("fail", fail_cases(tx)),
     }
 
-    # A golden may be shared by several variants of the same test (e.g. the
-    # graph_interp baseline and --contract-edges runs), but two *different* tests
-    # sharing one golden is an accidental name collision.
+    # A golden may be shared by several flows of the same test, but two
+    # different tests sharing one golden is an accidental name collision.
     expect_owner: dict[str, str] = {}
     for suite_name, (runner, cases) in suite_specs.items():
         config_dir = REPO_ROOT / "runt" / suite_name
