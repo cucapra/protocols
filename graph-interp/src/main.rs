@@ -4,7 +4,7 @@ use patronus::expr::{ExprRef, TypeCheck};
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::bmc_transition_system::into_bmc_transition_system;
-use protocols::backends::meta_transition_system::into_meta_transition_system;
+use protocols::backends::joint_transition_system::into_joint_transition_system;
 use protocols::backends::transition_system::into_transition_system;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
@@ -17,6 +17,7 @@ use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter;
 use protocols::ir::graph_interpreter::{GraphInterpretFailure, GraphInterpretFailureKind};
 use protocols::ir::graphviz::to_dot_string;
+use protocols::ir::joint_automaton::build_joint_driver_automaton;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::ProtoGraph;
@@ -83,7 +84,7 @@ struct Cli {
     #[arg(long)]
     transition_system: bool,
 
-    /// Build a steady-state meta driver transition system with banked arguments.
+    /// Build an unbounded joint driver transition system with banked arguments.
     #[arg(long)]
     meta_transition_system: bool,
 
@@ -361,7 +362,7 @@ fn run_transition_system(
     }
 }
 
-fn run_meta_transition_system(
+fn run_joint_transition_system(
     cli: &Cli,
     st: &SymbolTable,
     module: &Module,
@@ -393,13 +394,17 @@ fn run_meta_transition_system(
             sim.ios()
                 .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
         );
-        let res = into_meta_transition_system(
-            protocols,
+        let driver = build_joint_driver_automaton(protocols, st, sim.ctx.clone())
+            .unwrap_or_else(|error| panic!("failed to build joint driver: {error}"));
+        if cli.graphout {
+            println!("{}", to_dot_string(&driver.graph, st));
+        }
+        let res = into_joint_transition_system(
+            driver,
             st,
             sim.sys.clone(),
             sim.port_map.clone(),
             port_expr_refs,
-            sim.ctx.clone(),
         );
 
         let mut transition_sim = Interpreter::new(&res.ctx, &res.ts);
@@ -407,34 +412,20 @@ fn run_meta_transition_system(
         let mut waveform = FxHashMap::default();
         let mut transaction_idx = 0;
         let mut cycle = 0;
-        let mut fork_ready = true;
 
         loop {
-            if fork_ready {
-                if transaction_idx == trace.len() {
-                    record_transition_waveform(
-                        &mut waveform,
-                        &transition_sim,
-                        &sim,
-                        &res.port_to_expr,
-                        &res.is_dont_care,
-                    );
+            let ready = transition_sim
+                .get(res.transaction_ready)
+                .try_into_u64()
+                .expect("transaction ready was not a bit-vector")
+                == 1;
+            let has_transaction = transaction_idx < trace.len();
+            transition_sim.set(
+                res.transaction_valid,
+                &BitVecValue::from_u64(u64::from(ready && has_transaction), 1),
+            );
 
-                    // Assertions on the same control node as the final fork
-                    // are checked by the transition out of that node.
-                    transition_sim.step();
-                    let state = transition_sim.get(res.node_symbol);
-                    if state == transition_sim.get(res.external_assert_state) {
-                        println!("Assertion failure in cycle {}.", cycle);
-                        break;
-                    } else if state == transition_sim.get(res.internal_assert_state) {
-                        println!("Internal assertion failure in cycle {}.", cycle);
-                        break;
-                    }
-                    print_trace_success(trace_index);
-                    break;
-                }
-
+            if ready && has_transaction {
                 let (proto_name, values) = &trace[transaction_idx];
                 let protocol_id = protocol_indices[proto_name.as_str()];
                 let protocol = protos_by_name[proto_name.as_str()];
@@ -445,10 +436,10 @@ fn run_meta_transition_system(
                     transition_sim.set(input, &bvv);
                 }
                 transition_sim.set(
-                    res.node_choice,
+                    res.protocol_choice,
                     &BitVecValue::from_u64(
                         protocol_id as u64,
-                        res.node_choice.get_bv_type(&res.ctx).unwrap(),
+                        res.protocol_choice.get_bv_type(&res.ctx).unwrap(),
                     ),
                 );
                 transaction_idx += 1;
@@ -462,14 +453,15 @@ fn run_meta_transition_system(
                 &res.is_dont_care,
             );
             transition_sim.step();
-            fork_ready = transition_sim
-                .get(res.fork_ready)
-                .try_into_u64()
-                .expect("fork ready failed")
-                == 1;
 
             let state = transition_sim.get(res.node_symbol);
-            if state == transition_sim.get(res.external_assert_state) {
+            if state == transition_sim.get(res.done_state) {
+                for values in waveform.values_mut() {
+                    values.pop();
+                }
+                print_trace_success(trace_index);
+                break;
+            } else if state == transition_sim.get(res.external_assert_state) {
                 println!("Assertion failure in cycle {}.", cycle);
                 break;
             } else if state == transition_sim.get(res.internal_assert_state) {
@@ -650,7 +642,7 @@ fn main() {
         if cli.bound > 0 {
             run_bmc(&cli, &st, &module, &traces);
         } else if cli.meta_transition_system {
-            run_meta_transition_system(&cli, &st, &module, &traces);
+            run_joint_transition_system(&cli, &st, &module, &traces);
         } else if cli.transition_system {
             run_transition_system(&cli, &st, &module, &traces);
         } else if cli.respect_forks {

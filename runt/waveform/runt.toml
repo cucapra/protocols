@@ -28,6 +28,15 @@ expect_name = "ch_apb_actual.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --transition-system --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
 
 [[tests]]
+name = "waveform.examples_apb_ch_apb_actual.ch_apb_actual_waveform.joint"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ch_apb_actual.tx --meta-transition-system --ascii-waveform --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_apb_ip_apb.ip_apb_waveform.ast"
 paths = [
   "../../examples/apb/ip_apb.tx",
@@ -55,6 +64,15 @@ expect_name = "ip_apb.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --transition-system --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
 
 [[tests]]
+name = "waveform.examples_apb_ip_apb.ip_apb_waveform.joint"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/apb/ip_apb.tx --meta-transition-system --ascii-waveform --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.ast"
 paths = [
   "../../examples/enginev/enginev_regfile.tx",
@@ -80,6 +98,15 @@ paths = [
 expect_dir = "../../examples/enginev/expects"
 expect_name = "enginev_regfile.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --transition-system --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.joint"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --meta-transition-system --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
 name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.bmc"
@@ -118,6 +145,15 @@ expect_name = "unsigned_mul.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/picorv32/unsigned_mul.tx --transition-system --ascii-waveform --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
 
 [[tests]]
+name = "waveform.examples_picorv32_unsigned_mul.unsigned_mul_waveform.joint"
+paths = [
+  "../../examples/picorv32/unsigned_mul.tx",
+]
+expect_dir = "../../examples/picorv32/expects"
+expect_name = "unsigned_mul.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/picorv32/unsigned_mul.tx --meta-transition-system --ascii-waveform --verilog examples/picorv32/picorv32.v --protocol examples/picorv32/pcpi_mul.prot --module picorv32_pcpi_mul 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_serv_serv_regfile.serv_regfile_waveform.ast"
 paths = [
   "../../examples/serv/serv_regfile.tx",
@@ -143,6 +179,15 @@ paths = [
 expect_dir = "../../examples/serv/expects"
 expect_name = "serv_regfile.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/serv/serv_regfile.tx --transition-system --ascii-waveform --verilog examples/serv/rtl/serv_regfile.v --protocol examples/serv/serv_regfile.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_serv_serv_regfile.serv_regfile_waveform.joint"
+paths = [
+  "../../examples/serv/serv_regfile.tx",
+]
+expect_dir = "../../examples/serv/expects"
+expect_name = "serv_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/serv/serv_regfile.tx --meta-transition-system --ascii-waveform --verilog examples/serv/rtl/serv_regfile.v --protocol examples/serv/serv_regfile.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.examples_serv_serv_regfile.serv_regfile_waveform.bmc"
@@ -181,6 +226,15 @@ expect_name = "aes128.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/tinyaes128/aes128.tx --transition-system --ascii-waveform --verilog examples/tinyaes128/aes_128.v --protocol examples/tinyaes128/aes128.prot --module aes_128 2>/dev/null"
 
 [[tests]]
+name = "waveform.examples_tinyaes128_aes128.aes128_waveform.joint"
+paths = [
+  "../../examples/tinyaes128/aes128.tx",
+]
+expect_dir = "../../examples/tinyaes128/expects"
+expect_name = "aes128.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/tinyaes128/aes128.tx --meta-transition-system --ascii-waveform --verilog examples/tinyaes128/aes_128.v --protocol examples/tinyaes128/aes128.prot --module aes_128 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_tinyaes128_aes128.aes128_waveform.bmc"
 paths = [
   "../../examples/tinyaes128/aes128.tx",
@@ -188,6 +242,24 @@ paths = [
 expect_dir = "../../examples/tinyaes128/expects"
 expect_name = "aes128.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/tinyaes128/aes128.tx --bound 2 --ascii-waveform --verilog examples/tinyaes128/aes_128.v --protocol examples/tinyaes128/aes128.prot --module aes_128 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_wishbone_joint_read_write_long.joint_read_write_long_waveform.ast"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/wishbone/joint_read_write_long.tx --ascii-waveform --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_wishbone_joint_read_write_long.joint_read_write_long_waveform.joint"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/wishbone/joint_read_write_long.tx --meta-transition-system --ascii-waveform --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_adders_adder_d0_add_combinational.add_combinational_waveform.ast"
@@ -215,6 +287,15 @@ paths = [
 expect_dir = "../../tests/adders/adder_d0/expects"
 expect_name = "add_combinational.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d0/add_combinational.tx --transition-system --ascii-waveform --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d0_add_combinational.add_combinational_waveform.joint"
+paths = [
+  "../../tests/adders/adder_d0/add_combinational.tx",
+]
+expect_dir = "../../tests/adders/adder_d0/expects"
+expect_name = "add_combinational.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d0/add_combinational.tx --meta-transition-system --ascii-waveform --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_adders_adder_d0_add_combinational.add_combinational_waveform.bmc"
@@ -253,6 +334,15 @@ expect_name = "add_multitrace_successful.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace_successful.tx --transition-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_waveform.joint"
+paths = [
+  "../../tests/adders/adder_d1/add_multitrace_successful.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "add_multitrace_successful.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/add_multitrace_successful.tx --meta-transition-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_adders_adder_d1_add_multitrace_successful.add_multitrace_successful_waveform.bmc"
 paths = [
   "../../tests/adders/adder_d1/add_multitrace_successful.tx",
@@ -289,6 +379,15 @@ expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_pass.tx --transition-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_adders_adder_d1_both_threads_pass.both_threads_pass_waveform.joint"
+paths = [
+  "../../tests/adders/adder_d1/both_threads_pass.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "both_threads_pass.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_pass.tx --meta-transition-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_adders_adder_d1_both_threads_pass.both_threads_pass_waveform.bmc"
 paths = [
   "../../tests/adders/adder_d1/both_threads_pass.tx",
@@ -296,6 +395,24 @@ paths = [
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_pass.tx --bound 2 --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_waveform.ast"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/joint_add_d1_long.tx --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_waveform.joint"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/joint_add_d1_long.tx --meta-transition-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_adders_adder_d2_both_threads_pass.both_threads_pass_waveform.ast"
@@ -325,6 +442,15 @@ expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/both_threads_pass.tx --transition-system --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_adders_adder_d2_both_threads_pass.both_threads_pass_waveform.joint"
+paths = [
+  "../../tests/adders/adder_d2/both_threads_pass.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "both_threads_pass.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/both_threads_pass.tx --meta-transition-system --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_adders_adder_d2_both_threads_pass.both_threads_pass_waveform.bmc"
 paths = [
   "../../tests/adders/adder_d2/both_threads_pass.tx",
@@ -332,6 +458,24 @@ paths = [
 expect_dir = "../../tests/adders/adder_d2/expects"
 expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/both_threads_pass.tx --bound 2 --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_waveform.ast"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d2/joint_add_d2_long.tx --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_waveform.joint"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/joint_add_d2_long.tx --meta-transition-system --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_alus_alu_d1.alu_d1_waveform.ast"
@@ -359,6 +503,15 @@ paths = [
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d1.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/alu_d1.tx --transition-system --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_alu_d1.alu_d1_waveform.joint"
+paths = [
+  "../../tests/alus/alu_d1.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "alu_d1.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/alu_d1.tx --meta-transition-system --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_alus_alu_d1.alu_d1_waveform.bmc"
@@ -397,6 +550,15 @@ expect_name = "alu_d2.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/alu_d2.tx --transition-system --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_alus_alu_d2.alu_d2_waveform.joint"
+paths = [
+  "../../tests/alus/alu_d2.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "alu_d2.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/alu_d2.tx --meta-transition-system --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_alus_alu_d2.alu_d2_waveform.bmc"
 paths = [
   "../../tests/alus/alu_d2.tx",
@@ -404,6 +566,42 @@ paths = [
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d2.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/alu_d2.tx --bound 5 --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d1_long.joint_alu_d1_long_waveform.ast"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/joint_alu_d1_long.tx --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d1_long.joint_alu_d1_long_waveform.joint"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d1_long.tx --meta-transition-system --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d2_long.joint_alu_d2_long_waveform.ast"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/joint_alu_d2_long.tx --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d2_long.joint_alu_d2_long_waveform.joint"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d2_long.tx --meta-transition-system --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_waveform.ast"
@@ -431,6 +629,15 @@ paths = [
 expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_0.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_0.tx --transition-system --ascii-waveform --verilog tests/bounded_ready_valid/toy_receiver_0.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_waveform.joint"
+paths = [
+  "../../tests/bounded_ready_valid/toy_reciever_0.tx",
+]
+expect_dir = "../../tests/bounded_ready_valid/expects"
+expect_name = "toy_reciever_0.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_0.tx --meta-transition-system --ascii-waveform --verilog tests/bounded_ready_valid/toy_receiver_0.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_waveform.bmc"
@@ -469,6 +676,15 @@ expect_name = "toy_reciever_1.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_1.tx --transition-system --ascii-waveform --verilog tests/bounded_ready_valid/toy_receiver_1.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_bounded_ready_valid_toy_reciever_1.toy_reciever_1_waveform.joint"
+paths = [
+  "../../tests/bounded_ready_valid/toy_reciever_1.tx",
+]
+expect_dir = "../../tests/bounded_ready_valid/expects"
+expect_name = "toy_reciever_1.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_1.tx --meta-transition-system --ascii-waveform --verilog tests/bounded_ready_valid/toy_receiver_1.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_bounded_ready_valid_toy_reciever_1.toy_reciever_1_waveform.bmc"
 paths = [
   "../../tests/bounded_ready_valid/toy_reciever_1.tx",
@@ -503,6 +719,15 @@ paths = [
 expect_dir = "../../tests/bounded_ready_valid/expects"
 expect_name = "toy_reciever_2.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_2.tx --transition-system --ascii-waveform --verilog tests/bounded_ready_valid/toy_receiver_2.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_bounded_ready_valid_toy_reciever_2.toy_reciever_2_waveform.joint"
+paths = [
+  "../../tests/bounded_ready_valid/toy_reciever_2.tx",
+]
+expect_dir = "../../tests/bounded_ready_valid/expects"
+expect_name = "toy_reciever_2.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/bounded_ready_valid/toy_reciever_2.tx --meta-transition-system --ascii-waveform --verilog tests/bounded_ready_valid/toy_receiver_2.v --protocol tests/bounded_ready_valid/bounded_rv.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_bounded_ready_valid_toy_reciever_2.toy_reciever_2_waveform.bmc"
@@ -541,6 +766,15 @@ expect_name = "bit_truncation_fft_fix.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_fft_fix.tx --transition-system --ascii-waveform --verilog tests/brave_new_world/bit_truncation/bit_truncation_fft_fix.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_fft.prot --module round11_rne_unsigned_fixed 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_brave_new_world_bit_truncation_bit_truncation_fft_fix.bit_truncation_fft_fix_waveform.joint"
+paths = [
+  "../../tests/brave_new_world/bit_truncation/bit_truncation_fft_fix.tx",
+]
+expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
+expect_name = "bit_truncation_fft_fix.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_fft_fix.tx --meta-transition-system --ascii-waveform --verilog tests/brave_new_world/bit_truncation/bit_truncation_fft_fix.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_fft.prot --module round11_rne_unsigned_fixed 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_brave_new_world_bit_truncation_bit_truncation_fft_fix.bit_truncation_fft_fix_waveform.bmc"
 paths = [
   "../../tests/brave_new_world/bit_truncation/bit_truncation_fft_fix.tx",
@@ -575,6 +809,15 @@ paths = [
 expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
 expect_name = "bit_truncation_sha_fix.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.tx --transition-system --ascii-waveform --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_fixed 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_brave_new_world_bit_truncation_bit_truncation_sha_fix.bit_truncation_sha_fix_waveform.joint"
+paths = [
+  "../../tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.tx",
+]
+expect_dir = "../../tests/brave_new_world/bit_truncation/expects"
+expect_name = "bit_truncation_sha_fix.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.tx --meta-transition-system --ascii-waveform --verilog tests/brave_new_world/bit_truncation/bit_truncation_sha_fix.v --protocol tests/brave_new_world/bit_truncation/bit_truncation_sha.prot --module bit_truncation_sha_fixed 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_brave_new_world_bit_truncation_bit_truncation_sha_fix.bit_truncation_sha_fix_waveform.bmc"
@@ -649,6 +892,15 @@ expect_name = "use_without_valid_fix.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/use_without_valid/use_without_valid_fix.tx --transition-system --ascii-waveform --verilog tests/brave_new_world/use_without_valid/use_without_valid_fix.v --protocol tests/brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_fix 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_brave_new_world_use_without_valid_use_without_valid_fix.use_without_valid_fix_waveform.joint"
+paths = [
+  "../../tests/brave_new_world/use_without_valid/use_without_valid_fix.tx",
+]
+expect_dir = "../../tests/brave_new_world/use_without_valid/expects"
+expect_name = "use_without_valid_fix.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/brave_new_world/use_without_valid/use_without_valid_fix.tx --meta-transition-system --ascii-waveform --verilog tests/brave_new_world/use_without_valid/use_without_valid_fix.v --protocol tests/brave_new_world/use_without_valid/use_without_valid.prot --module use_without_valid_fix 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_brave_new_world_use_without_valid_use_without_valid_fix.use_without_valid_fix_waveform.bmc"
 paths = [
   "../../tests/brave_new_world/use_without_valid/use_without_valid_fix.tx",
@@ -683,6 +935,15 @@ paths = [
 expect_dir = "../../tests/counters/expects"
 expect_name = "counter.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/counters/counter.tx --transition-system --ascii-waveform --verilog tests/counters/counter.v --protocol tests/counters/counter.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_counters_counter.counter_waveform.joint"
+paths = [
+  "../../tests/counters/counter.tx",
+]
+expect_dir = "../../tests/counters/expects"
+expect_name = "counter.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/counters/counter.tx --meta-transition-system --ascii-waveform --verilog tests/counters/counter.v --protocol tests/counters/counter.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_counters_counter.counter_waveform.bmc"
@@ -721,6 +982,15 @@ expect_name = "fifo.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/fifo.tx --transition-system --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_fifo_fifo.fifo_waveform.joint"
+paths = [
+  "../../tests/fifo/fifo.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "fifo.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/fifo.tx --meta-transition-system --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_fifo_fifo.fifo_waveform.bmc"
 paths = [
   "../../tests/fifo/fifo.tx",
@@ -757,6 +1027,15 @@ expect_name = "push_pop_identity_ok.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_identity_ok.tx --transition-system --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_fifo_push_pop_identity_ok.push_pop_identity_ok_waveform.joint"
+paths = [
+  "../../tests/fifo/push_pop_identity_ok.tx",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "push_pop_identity_ok.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fifo/push_pop_identity_ok.tx --meta-transition-system --ascii-waveform --verilog tests/fifo/bsg_mem_1rw_sync.v tests/fifo/bsg_mem_1rw_sync_synth.v tests/fifo/bsg_circular_ptr.v tests/fifo/bsg_fifo_1rw_large.v tests/fifo/fifo_wrapper.v --protocol tests/fifo/fifo.prot --module fifo_wrapper 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_fifo_push_pop_identity_ok.push_pop_identity_ok_waveform.bmc"
 paths = [
   "../../tests/fifo/push_pop_identity_ok.tx",
@@ -791,6 +1070,15 @@ paths = [
 expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
 expect_name = "c4_fixed.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx --transition-system --ascii-waveform --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_fpga_debugging_axis_async_fifo_c4_c4_fixed.c4_fixed_waveform.joint"
+paths = [
+  "../../tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+]
+expect_dir = "../../tests/fpga-debugging/axis-async-fifo-c4/expects"
+expect_name = "c4_fixed.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx --meta-transition-system --ascii-waveform --verilog tests/fpga-debugging/axis-async-fifo-c4/c4_dut.v tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.v --protocol tests/fpga-debugging/axis-async-fifo-c4/c4.prot --module c4_dut 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_identities_identity_d0_passthrough_combdep.passthrough_combdep_waveform.ast"
@@ -856,6 +1144,15 @@ expect_name = "slicing_ok.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d1/slicing_ok.tx --transition-system --ascii-waveform --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_identities_identity_d1_slicing_ok.slicing_ok_waveform.joint"
+paths = [
+  "../../tests/identities/identity_d1/slicing_ok.tx",
+]
+expect_dir = "../../tests/identities/identity_d1/expects"
+expect_name = "slicing_ok.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d1/slicing_ok.tx --meta-transition-system --ascii-waveform --verilog tests/identities/identity_d1/identity_d1.v --protocol tests/identities/identity_d1/identity_d1.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_identities_identity_d1_slicing_ok.slicing_ok_waveform.bmc"
 paths = [
   "../../tests/identities/identity_d1/slicing_ok.tx",
@@ -890,6 +1187,15 @@ paths = [
 expect_dir = "../../tests/identities/identity_d2/expects"
 expect_name = "single_thread_passes.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d2/single_thread_passes.tx --transition-system --ascii-waveform --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_identities_identity_d2_single_thread_passes.single_thread_passes_waveform.joint"
+paths = [
+  "../../tests/identities/identity_d2/single_thread_passes.tx",
+]
+expect_dir = "../../tests/identities/identity_d2/expects"
+expect_name = "single_thread_passes.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/identities/identity_d2/single_thread_passes.tx --meta-transition-system --ascii-waveform --verilog tests/identities/identity_d2/identity_d2.v --protocol tests/identities/identity_d2/identity_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_identities_identity_d2_single_thread_passes.single_thread_passes_waveform.bmc"
@@ -928,6 +1234,15 @@ expect_name = "multi0.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi0/multi0.tx --transition-system --ascii-waveform --verilog tests/multi/multi0/multi0.v --protocol tests/multi/multi0/multi0.prot --module multi0 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_multi_multi0_multi0.multi0_waveform.joint"
+paths = [
+  "../../tests/multi/multi0/multi0.tx",
+]
+expect_dir = "../../tests/multi/multi0/expects"
+expect_name = "multi0.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi0/multi0.tx --meta-transition-system --ascii-waveform --verilog tests/multi/multi0/multi0.v --protocol tests/multi/multi0/multi0.prot --module multi0 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_multi_multi0_multi0.multi0_waveform.bmc"
 paths = [
   "../../tests/multi/multi0/multi0.tx",
@@ -962,6 +1277,15 @@ paths = [
 expect_dir = "../../tests/multi/multi0keep/expects"
 expect_name = "multi0keep.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi0keep/multi0keep.tx --transition-system --ascii-waveform --verilog tests/multi/multi0keep/multi0keep.v --protocol tests/multi/multi0keep/multi0keep.prot --module multi0keep 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_multi_multi0keep_multi0keep.multi0keep_waveform.joint"
+paths = [
+  "../../tests/multi/multi0keep/multi0keep.tx",
+]
+expect_dir = "../../tests/multi/multi0keep/expects"
+expect_name = "multi0keep.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi0keep/multi0keep.tx --meta-transition-system --ascii-waveform --verilog tests/multi/multi0keep/multi0keep.v --protocol tests/multi/multi0keep/multi0keep.prot --module multi0keep 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_multi_multi0keep_multi0keep.multi0keep_waveform.bmc"
@@ -1000,6 +1324,15 @@ expect_name = "multi0keep2const.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi0keep2const/multi0keep2const.tx --transition-system --ascii-waveform --verilog tests/multi/multi0keep2const/multi0keep2const.v tests/multi/multi0keep/multi0keep.v --protocol tests/multi/multi0keep2const/multi0keep2const.prot --module multi0keep2const 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_multi_multi0keep2const_multi0keep2const.multi0keep2const_waveform.joint"
+paths = [
+  "../../tests/multi/multi0keep2const/multi0keep2const.tx",
+]
+expect_dir = "../../tests/multi/multi0keep2const/expects"
+expect_name = "multi0keep2const.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi0keep2const/multi0keep2const.tx --meta-transition-system --ascii-waveform --verilog tests/multi/multi0keep2const/multi0keep2const.v tests/multi/multi0keep/multi0keep.v --protocol tests/multi/multi0keep2const/multi0keep2const.prot --module multi0keep2const 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_multi_multi0keep2const_multi0keep2const.multi0keep2const_waveform.bmc"
 paths = [
   "../../tests/multi/multi0keep2const/multi0keep2const.tx",
@@ -1036,6 +1369,15 @@ expect_name = "multi2const.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi2const/multi2const.tx --transition-system --ascii-waveform --verilog tests/multi/multi2const/multi2const.v tests/multi/multi0/multi0.v --protocol tests/multi/multi2const/multi2const.prot --module multi2const 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_multi_multi2const_multi2const.multi2const_waveform.joint"
+paths = [
+  "../../tests/multi/multi2const/multi2const.tx",
+]
+expect_dir = "../../tests/multi/multi2const/expects"
+expect_name = "multi2const.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi2const/multi2const.tx --meta-transition-system --ascii-waveform --verilog tests/multi/multi2const/multi2const.v tests/multi/multi0/multi0.v --protocol tests/multi/multi2const/multi2const.prot --module multi2const 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_multi_multi2const_multi2const.multi2const_waveform.bmc"
 paths = [
   "../../tests/multi/multi2const/multi2const.tx",
@@ -1070,6 +1412,15 @@ paths = [
 expect_dir = "../../tests/multi/multi2multi/expects"
 expect_name = "multi2multi.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi2multi/multi2multi.tx --transition-system --ascii-waveform --verilog tests/multi/multi2multi/multi2multi.v tests/multi/multi0/multi0.v --protocol tests/multi/multi2multi/multi2multi.prot --module multi2multi 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_multi_multi2multi_multi2multi.multi2multi_waveform.joint"
+paths = [
+  "../../tests/multi/multi2multi/multi2multi.tx",
+]
+expect_dir = "../../tests/multi/multi2multi/expects"
+expect_name = "multi2multi.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multi/multi2multi/multi2multi.tx --meta-transition-system --ascii-waveform --verilog tests/multi/multi2multi/multi2multi.v tests/multi/multi0/multi0.v --protocol tests/multi/multi2multi/multi2multi.prot --module multi2multi 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_multi_multi2multi_multi2multi.multi2multi_waveform.bmc"
@@ -1144,6 +1495,15 @@ expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --transition-system --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_multipliers_mult_d2_both_threads_pass.both_threads_pass_waveform.joint"
+paths = [
+  "../../tests/multipliers/mult_d2/both_threads_pass.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "both_threads_pass.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --meta-transition-system --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_multipliers_mult_d2_both_threads_pass.both_threads_pass_waveform.bmc"
 paths = [
   "../../tests/multipliers/mult_d2/both_threads_pass.tx",
@@ -1151,3 +1511,21 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_pass.waveform.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --bound 2 --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_waveform.ast"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_waveform.joint"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --meta-transition-system --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"

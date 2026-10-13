@@ -5,29 +5,22 @@ use rustc_hash::FxHashSet;
 use crate::ir::meta_automaton::{MetaAutomaton, ProtocolTiming, steady_driver_meta};
 use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
 
-#[derive(Clone, Copy)]
-enum Marker {
-    Fork,
-    Done,
-}
-
 // TODO: This assumes that we don't have unreachable nodes hanging around that haven't
 // been pruned yet.
-fn marker_nodes(graph: &ProtoGraph, marker: Marker) -> Vec<NodeId> {
-    let mut found = Vec::new();
+fn fork_and_done_nodes(graph: &ProtoGraph) -> (Vec<NodeId>, Vec<NodeId>) {
+    let mut forks = Vec::new();
+    let mut dones = Vec::new();
     for (node_id, node) in graph.nodes() {
         for action in &node.actions {
-            let matches = match marker {
-                Marker::Fork => matches!(graph[action.op], Op::Fork),
-                Marker::Done => matches!(graph[action.op], Op::Done),
-            };
-            if matches {
-                found.push(node_id);
+            match graph[action.op] {
+                Op::Fork => forks.push(node_id),
+                Op::Done => dones.push(node_id),
+                _ => {}
             }
         }
     }
 
-    found
+    (forks, dones)
 }
 
 // Returns None when a cycle occurs before the target.
@@ -77,13 +70,12 @@ fn path_lengths(graph: &ProtoGraph, start: NodeId, target: NodeId) -> Option<BTr
 /// - every fork-to-done path is acyclic and has the same positive length;
 /// - if there is an entry-to-fork cycle, we assume the pre-phase unbounded.
 pub fn analyze_protocol_timing(graph: &ProtoGraph) -> ProtocolTiming {
-    let forks = marker_nodes(graph, Marker::Fork);
+    let (forks, done_nodes) = fork_and_done_nodes(graph);
     assert!(
         forks.len() <= 1,
         "protocol {} cannot contain more than one fork",
         graph.name
     );
-    let done_nodes = marker_nodes(graph, Marker::Done);
     assert_eq!(
         done_nodes.len(),
         1,

@@ -4,6 +4,7 @@ pub mod edge_contract;
 pub mod fork_reach;
 pub mod graph_interpreter;
 pub mod graphviz;
+pub mod joint_automaton;
 pub mod lowering;
 pub mod meta_automaton;
 pub mod meta_graphviz;

@@ -91,6 +91,15 @@ expect_name = "4_incremental_address_burst_wrap.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions 'examples/wishbone/4.?_incremental_address_burst_wrap.tx' --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>&1"
 
 [[tests]]
+name = "interp.examples_wishbone_joint_read_write_long.joint_read_write_long_interp"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/wishbone/joint_read_write_long.tx --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>&1"
+
+[[tests]]
 name = "interp.tests_adders_adder_d0_add_combinational.add_combinational_interp"
 paths = [
   "../../tests/adders/adder_d0/add_combinational.tx",

@@ -22,6 +22,43 @@ import test_catalog
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNT_VERSION = "0.4.1"
 
+# The first joint-driver implementation preserves the existing meta-driver
+# restrictions: one reachable fork node and a straight-line post-phase.
+JOINT_DRIVER_UNSUPPORTED = {
+    "tests/brave_new_world/signal_asynchrony/signal_async.prot",
+    "tests/identities/identity_d0/identity_d0.prot",
+    "tests/multi/multi_data/multi_data.prot",
+}
+
+BOUNDED_DRIVER_EXCLUDED = {
+    "examples/apb/ch_apb_actual.tx",
+    "examples/apb/ip_apb.tx",
+    "examples/picorv32/unsigned_mul.tx",
+    "examples/wishbone/joint_read_write_long.tx",
+    "tests/adders/adder_d1/joint_add_d1_long.tx",
+    "tests/adders/adder_d2/joint_add_d2_long.tx",
+    "tests/alus/joint_alu_d1_long.tx",
+    "tests/alus/joint_alu_d2_long.tx",
+    "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+    "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx",
+    "tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+}
+
+# These stress traces are compared only between the AST and joint drivers.
+JOINT_WAVEFORM_CASES = {
+    "examples/wishbone/joint_read_write_long.tx",
+    "tests/adders/adder_d1/joint_add_d1_long.tx",
+    "tests/adders/adder_d2/joint_add_d2_long.tx",
+    "tests/alus/joint_alu_d1_long.tx",
+    "tests/alus/joint_alu_d2_long.tx",
+    "tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+}
+
+# The wishbone stress trace also remains useful in the regular interpreter suite.
+INTERP_EXCLUDED = JOINT_WAVEFORM_CASES - {
+    "examples/wishbone/joint_read_write_long.tx",
+}
+
 
 def load_tx_cases() -> list[dict]:
     """Expand the compact catalog rows into the internal field shape.
@@ -247,25 +284,35 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(bounded_cmd, case, with_max_steps=False)
 
+    joint_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        " ".join(case["paths"]),
+        "--meta-transition-system",
+        "--ascii-waveform",
+    ]
+    _tx_tail(joint_cmd, case, with_max_steps=False)
+
+    path = case["paths"][0]
     variants: list[tuple[str, str]] = [
         ("ast", repo_root_command(ast_cmd, stderr="discard")),
-        ("graph", repo_root_command(graph_cmd, stderr="discard")),
-        ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
+    if path not in JOINT_WAVEFORM_CASES:
+        variants.extend(
+            [
+                ("graph", repo_root_command(graph_cmd, stderr="discard")),
+                ("ts", repo_root_command(ts_cmd, stderr="discard")),
+            ]
+        )
+    if case["protocol_path"] not in JOINT_DRIVER_UNSUPPORTED:
+        variants.append(("joint", repo_root_command(joint_cmd, stderr="discard")))
 
     # I manually checked this one is correct, but it takes too long in debug mode
     # (and still 1 min in release mode) to be worth running every time.
     # maybe in the future we can flag a slow/fast runt config
     # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
     # Note: ignoring `s3_fixed.tx` for graph-interpreter for now as it is a Brave New World test case
-    # The two APB `.tx` files are also excluded for now (stack overflows in execution)
-    if (
-        case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
-        and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
-        and case["paths"][0] != "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx"
-        and case["paths"][0] != "examples/apb/ip_apb.tx"
-        and case["paths"][0] != "examples/apb/ch_apb_actual.tx"
-    ):
+    if path not in BOUNDED_DRIVER_EXCLUDED:
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 
     return variants
@@ -366,6 +413,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         c
         for c in cases
         if c["expected"] == "pass"
+        and c["paths"][0] not in JOINT_WAVEFORM_CASES
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
     # exclude s3 from graph_interp cases
@@ -376,7 +424,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
 
 
 def waveform_cases(cases: list[dict]) -> list[dict]:
-    """All the graph_interp_cases, except with some extra exclusions"""
+    """Short graph-interpreter cases suitable for cycle-exact comparison."""
     # these cases are correct, but our ASCII diffing isn't good enough
     # for us to know they are the same
     xfailed = [
@@ -389,9 +437,17 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
         "tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
     ]
 
-    return list(
-        filter(lambda c: c["paths"][0] not in xfailed, graph_interp_cases(cases))
-    )
+    regular = [
+        case
+        for case in graph_interp_cases(cases)
+        if case["paths"][0] not in xfailed
+    ]
+    joint = [
+        case
+        for case in cases
+        if case["paths"][0] in JOINT_WAVEFORM_CASES and case not in regular
+    ]
+    return regular + joint
 
 
 def fail_cases(cases: list[dict]) -> list[dict]:
@@ -450,7 +506,10 @@ def generate_runt_configs() -> None:
     # Each suite maps a name to (runner, cases). interp + graph_interp
     # together cover every test.
     suite_specs = {
-        "interp": ("interp", tx),
+        "interp": (
+            "interp",
+            [case for case in tx if case["paths"][0] not in INTERP_EXCLUDED],
+        ),
         "bi": ("bi", bi),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),

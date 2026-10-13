@@ -20,8 +20,9 @@ struct ProtocolShape {
     done: NodeId,
 }
 
-fn reachable_markers(graph: &ProtoGraph, entry: NodeId, fork: bool) -> Vec<NodeId> {
-    let mut found = Vec::new();
+fn reachable_forks_and_dones(graph: &ProtoGraph, entry: NodeId) -> (Vec<NodeId>, Vec<NodeId>) {
+    let mut forks = Vec::new();
+    let mut dones = Vec::new();
     let mut seen = FxHashSet::default();
     let mut queue = VecDeque::from([entry]);
     while let Some(node_id) = queue.pop_front() {
@@ -29,13 +30,10 @@ fn reachable_markers(graph: &ProtoGraph, entry: NodeId, fork: bool) -> Vec<NodeI
             continue;
         }
         for action in &graph[node_id].actions {
-            let matches = if fork {
-                matches!(graph[action.op], Op::Fork)
-            } else {
-                matches!(graph[action.op], Op::Done)
-            };
-            if matches {
-                found.push(node_id);
+            match graph[action.op] {
+                Op::Fork => forks.push(node_id),
+                Op::Done => dones.push(node_id),
+                _ => {}
             }
         }
         for transition in &graph[node_id].transitions {
@@ -44,7 +42,7 @@ fn reachable_markers(graph: &ProtoGraph, entry: NodeId, fork: bool) -> Vec<NodeI
             }
         }
     }
-    found
+    (forks, dones)
 }
 
 fn only_step(graph: &ProtoGraph, node: NodeId) -> &Transition {
@@ -120,9 +118,8 @@ fn boundary_guard(
 }
 
 fn protocol_shape(graph: &ProtoGraph, entry: NodeId, post_cycles: usize) -> ProtocolShape {
-    let forks = reachable_markers(graph, entry, true);
+    let (forks, done) = reachable_forks_and_dones(graph, entry);
     assert!(forks.len() <= 1, "only one fork per protocol is supported");
-    let done = reachable_markers(graph, entry, false);
     assert_eq!(done.len(), 1, "each protocol must have exactly one done");
     let boundary = forks.first().copied().unwrap_or(done[0]);
 
@@ -249,8 +246,8 @@ fn reachable_pre_nodes(graph: &ProtoGraph, entry: NodeId) -> Vec<NodeId> {
         if !seen.insert(node) {
             continue;
         }
-        // The fork node starts the post-phase and the done node is only a
-        // terminal marker. Neither is a concrete pre-phase frontier.
+        // The fork starts the post-phase and done ends the protocol. Neither
+        // is a concrete pre-phase frontier.
         let stops = graph[node]
             .actions
             .iter()
