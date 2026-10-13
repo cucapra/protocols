@@ -13,7 +13,7 @@ use baa::{BitVecOps, BitVecValue};
 pub struct Value(ValueKind);
 
 #[derive(Debug, Clone)]
-enum ValueKind {
+pub enum ValueKind {
     Scalar(BitVecValue),
     Seq(Vec<BitVecValue>),
     /// Tuples are allowed to be n-ary (for n >= 2)
@@ -21,6 +21,12 @@ enum ValueKind {
 }
 
 impl Value {
+    /// Extracts the `ValueKind` inside a `Value`. (This method is needed so that we can implement
+    /// `serialize_value` in `serialize.rs` using pattern-matching on `ValueKind`s.)
+    pub fn get_value_kind(&self) -> ValueKind {
+        self.0.clone()
+    }
+
     /// Creates a new `Value` of kind `ValueKind::Tuple`
     /// (Note: we need a new method for creating tuple values, since we already have an existing trait implementation
     /// of `TryFrom<Vec<BitVecValue>>` for `Value`, but that trait impl creates a `ValueKind::Seq` instead.)

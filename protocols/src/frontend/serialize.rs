@@ -16,6 +16,7 @@ use crate::frontend::Module;
 use crate::frontend::ast::*;
 use crate::frontend::symbol::*;
 use crate::interpreter::ExprValue;
+use crate::value::ValueKind;
 
 /// Serializes a `Vec` of `(Transaction, SymbolTable)` pairs to a `String`
 pub fn serialize_ast_to_string(ast: &Ast) -> std::io::Result<String> {
@@ -127,23 +128,21 @@ pub fn serialize_bitvec(bv: &BitVecValue, display_hex: bool) -> String {
 }
 
 pub fn serialize_value(value: &Value, display_hex: bool) -> String {
-    if let Ok(bv) = value.try_into() {
-        serialize_bitvec(bv, display_hex)
-    } else if let Some(fst) = value.project_tuple_component(0)
-        && let Some(snd) = value.project_tuple_component(1)
-    {
-        format!(
-            "({}, {})",
-            serialize_bitvec(fst, display_hex),
-            serialize_bitvec(snd, display_hex)
-        )
-    } else {
-        let seq: &[BitVecValue] = value.try_into().unwrap();
-        let elements: Vec<_> = seq
-            .iter()
-            .map(|bv| serialize_bitvec(bv, display_hex))
-            .collect();
-        format!("[{}]", elements.join(","))
+    let value_kind = value.get_value_kind();
+    match value_kind {
+        ValueKind::Scalar(bv) => serialize_bitvec(&bv, display_hex),
+        ValueKind::Seq(ref values) | ValueKind::Tuple(ref values) => {
+            let elements = values
+                .iter()
+                .map(|bv| serialize_bitvec(bv, display_hex))
+                .collect::<Vec<String>>()
+                .join(",");
+            if matches!(value_kind, ValueKind::Seq(_)) {
+                format!("[{}]", elements)
+            } else {
+                format!("({})", elements)
+            }
+        }
     }
 }
 
