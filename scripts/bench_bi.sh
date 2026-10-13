@@ -1,5 +1,8 @@
 #!/usr/bin/env bash 
 
+# This shell script uses Hyperfine to measure the wall-clock time of the BI 
+# on some large Wishbone waveforms, averaged over 10 runs.
+
 set -uo pipefail   # Set exit code to non-zero if any command fails
 
 # Use first argument (if provided) as the output directory in which to save the benchmark results
