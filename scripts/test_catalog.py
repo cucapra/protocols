@@ -1129,6 +1129,12 @@ BI_CASES = {
         # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
         "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
     },
+    "examples.mf8.mf8_regfile.bi": {
+        "protocol": "examples/mf8/mf8_regfile.prot",
+        "wave": "examples/mf8/mf8_regfile.fst",
+        "instances": ("dut:Mf8RegFile",),
+        "expect": "pass",
+    },
 }
 
 # Small Wishbone transactions from the Wishbone specification
