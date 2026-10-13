@@ -501,7 +501,7 @@ TX_CASES = {
         "protocol": "examples/mf8/mf8_regfile.prot",
         "verilog": ("examples/mf8/mf8_reg.v",),
         "top": "mf8_reg",
-        "expect": "pass"
+        "expect": "pass",
     },
     "tests/muxes/mux2_tuple.tx": {
         "protocol": "tests/muxes/mux2_tuple.prot",
