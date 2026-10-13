@@ -43,6 +43,7 @@ prot pop<DUT: Fifo>(output: u32) {
     step();
 }
 
+#[idle]
 prot idle<DUT: Fifo>() {
     DUT.v_i := 1'b0;
     DUT.reset_i := 1'b0;
@@ -51,6 +52,7 @@ prot idle<DUT: Fifo>() {
 
 // Sets the `reset` bit to 1 and the `valid` bit to 0
 // (Data is no longer valid after reset)
+#[reset]
 prot reset<DUT: Fifo>() {
     DUT.reset_i := 1'b1;
     DUT.v_i := 1'b0;
