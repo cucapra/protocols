@@ -242,6 +242,56 @@ fn parse_arg(
                 return Err(anyhow!(msg));
             }
         }
+        Rule::tuple_arg => {
+            if let Type::Tuple(tuple_id) = ty {
+                let tuple_ty = &st[tuple_id];
+                let tuple_component_tys = tuple_ty.types();
+                let tuple_components = arg_pair
+                    .clone()
+                    .into_inner()
+                    .next()
+                    .map_or_else(Vec::new, collect_arg_pairs);
+                if tuple_components.len() != tuple_component_tys.len() {
+                    let msg = format!(
+                        "Expected {} values for tuple type {} but got {} values instead",
+                        tuple_component_tys.len(),
+                        serialize_type(st, *ty),
+                        tuple_components.len()
+                    );
+                    handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                    return Err(anyhow!(msg));
+                } else {
+                    let tuple_component_values: Vec<Value> = tuple_components
+                        .into_iter()
+                        .zip(tuple_component_tys.iter())
+                        .map(|(arg, arg_ty)| parse_arg(st, arg, arg_ty, handler, fileid))
+                        .collect::<anyhow::Result<Vec<Value>>>()?;
+                    // Convert each `Value` into a `BitVecValue`, short-circuiting if any of them
+                    // aren't convertible to `BitVecValue`s
+                    let mut bvvs = vec![];
+                    for value in tuple_component_values {
+                        if let Ok(bvv) = BitVecValue::try_from(value) {
+                            bvvs.push(bvv);
+                        } else {
+                            let msg = format!(
+                                "At the moment, tuples can only store bit-vector values: {} is not supported",
+                                serialize_type(st, *ty)
+                            );
+                            handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                            return Err(anyhow!(msg));
+                        }
+                    }
+                    Value::new_tuple(bvvs)
+                }
+            } else {
+                let msg = format!(
+                    "Invalid value for argument of type {}",
+                    serialize_type(st, *ty)
+                );
+                handler.emit_diagnostic_parsing(&msg, fileid, &arg_pair, Level::Error);
+                return Err(anyhow!(msg));
+            }
+        }
         other => unreachable!("unexpected rule: {:?}", other),
     };
     Ok(value)
@@ -331,5 +381,140 @@ fn parse_scalar_arg(
             return Err(anyhow!(msg));
         }
         Ok(IntFormat::Decimal.parse_bitvec_value(decimal_str, bitwidth))
+    }
+}
+
+/// Tests for transactions parser
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::parser::parse_file_with_name;
+    use std::io::Write;
+
+    /// Creates a temporary `.tx` file containing the contents of the `transactions_trace` string,
+    /// then parses that `.tx` file alongside the provided `protocol_file`, checking to see
+    /// that the `.tx` file parses correctly
+    fn parse_tx(
+        protocol_file: &str,
+        protocol_name: &str,
+        transaction_trace: &str,
+    ) -> (anyhow::Result<Vec<Vec<Invocation>>>, String) {
+        let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, false, false);
+        let ast = parse_file_with_name(protocol_file, protocol_name, &mut handler)
+            .expect("failed to parse protocol");
+        let mut tx_file = tempfile::Builder::new()
+            .suffix(".tx")
+            .tempfile()
+            .expect("Unable to create temp .tx file");
+        tx_file
+            .write_all(transaction_trace.as_bytes())
+            .expect("Unable to write to temp .tx file");
+        let result = parse_transactions_file(tx_file.path(), &mut handler, &ast.st, &ast.protos);
+        (result, handler.error_string().to_string())
+    }
+
+    /// Asserts that a parse error occured with the `expected_error_msg`
+    /// when trying to parse a `transcation_trace` string
+    /// with the provided `protocol_file`
+    fn assert_parse_error(
+        protocol_file: &str,
+        protocol_name: &str,
+        transaction_trace: &str,
+        expected_error_msg: &str,
+    ) {
+        let (result, errors) = parse_tx(protocol_file, protocol_name, transaction_trace);
+        assert!(
+            result.is_err(),
+            "expected a parse error for: {transaction_trace}"
+        );
+        assert!(
+            errors.contains(expected_error_msg),
+            "expected error containing {expected_error_msg:?}, got:\n{errors}"
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg() {
+        let (result, errors) = parse_tx(
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
+            "trace { first((1, 2), 1); second((0x3, 0b100), 4); }",
+        );
+        let traces = result.unwrap_or_else(|e| panic!("{e}\n{errors}"));
+        assert_eq!(traces.len(), 1);
+        let trace = &traces[0];
+        assert_eq!(trace.len(), 2);
+
+        let expected = [
+            (
+                "first",
+                Value::new_tuple(vec![bv(1, 8), bv(2, 8)]),
+                bv(1, 8),
+            ),
+            (
+                "second",
+                Value::new_tuple(vec![bv(3, 8), bv(4, 8)]),
+                bv(4, 8),
+            ),
+        ];
+        for ((name, args), (expected_name, expected_tuple, expected_y)) in
+            trace.iter().zip(expected)
+        {
+            assert_eq!(name, expected_name);
+            assert_eq!(args.len(), 2);
+            assert_eq!(format!("{:?}", args[0]), format!("{:?}", expected_tuple));
+            let y: &BitVecValue = (&args[1]).try_into().unwrap();
+            assert_eq!(y, &expected_y);
+        }
+    }
+
+    #[test]
+    fn test_tuple_arg_too_many_components() {
+        assert_parse_error(
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
+            "trace { first((1, 2, 3), 1); }",
+            "Expected 2 values for tuple type (u8,u8) but got 3 values instead",
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg_too_few_components() {
+        assert_parse_error(
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
+            "trace { first((1,), 1); }",
+            "Expected 2 values for tuple type (u8,u8) but got 1 values instead",
+        );
+    }
+
+    #[test]
+    fn test_tuple_arg_component_type_mismatch() {
+        assert_parse_error(
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
+            "trace { first(([1,2], 2), 1); }",
+            "Invalid sequence of values for argument of type u8",
+        );
+    }
+
+    #[test]
+    fn test_ill_typed_transaction() {
+        assert_parse_error(
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
+            "trace { first((1, 2), (3, 4)); }",
+            "Invalid value for argument of type u8",
+        );
+    }
+
+    #[test]
+    fn test_5ary_tuple_too_many_values() {
+        assert_parse_error(
+            "../tests/muxes/mux5_tuple.prot",
+            "mux5_tuple",
+            "trace { zeroth((0, 1, 2, 3, 4, 5, 6), 1); }",
+            "Expected 5 values for tuple type (u8,u8,u8,u8,u8) but got 7 values instead",
+        );
     }
 }

@@ -351,8 +351,8 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
 
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
-    # Loop constructs the graph interpreter cannot handle (AST construct names).
-    graph_interp_unsupported = {"for_in_loop", "repeat_loop"}
+    # Loop constructs & tuples the graph interpreter cannot handle (AST construct names).
+    graph_interp_unsupported = {"for_in_loop", "repeat_loop", "tuples"}
 
     selected = [
         c

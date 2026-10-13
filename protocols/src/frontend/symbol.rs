@@ -59,6 +59,10 @@ pub enum SymbolKind {
 pub struct SeqId(u32);
 entity_impl!(SeqId, "seq");
 
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub struct TupleId(u32);
+entity_impl!(TupleId, "tuple");
+
 /// A silly little bit of indirection to work around the fact that we do not have TypeId.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Seq(Type, u64);
@@ -69,6 +73,30 @@ impl Seq {
     }
     pub fn min_len(&self) -> u64 {
         self.1
+    }
+}
+
+/// We allow n-ary tuples (but maintain the invariant that the `Vec<Type>` must have at least length 2)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tuple(Vec<Type>);
+
+impl Tuple {
+    /// Creates a new tuple type with the specified `types`.
+    /// If `types.len() < 2`, this function panics (it only makes sense to have tuple containing >= 2)
+    pub fn new(types: Vec<Type>) -> Self {
+        assert!(types.len() >= 2);
+        Self(types)
+    }
+
+    /// Indexes into a tuple type (we need this function since Rust doesn't allow indexing into a tuple using a variable).
+    /// Returns `None` if the index is out of bounds.
+    pub fn get(&self, idx: u32) -> Option<&Type> {
+        self.0.get(idx as usize)
+    }
+
+    /// Extracts the components of the tuple type as a `Vec<Type>`
+    pub fn types(&self) -> Vec<Type> {
+        self.0.clone()
     }
 }
 
@@ -151,6 +179,7 @@ pub enum Type {
     BitVec(u32),
     Struct(StructId),
     Seq(SeqId),
+    Tuple(TupleId),
     /// Type taken on when we do not know the actual type yet
     Unknown,
 }
@@ -178,6 +207,7 @@ impl Type {
             Type::BitVec(width) => *width,
             Type::Struct(_) => panic!("Unable to compute bitwidth for a struct type"),
             Type::Seq(_) => panic!("Unable to compute bitwidth for a `[..]`, seq type"),
+            Type::Tuple(_) => panic!("Unable to compute bitwidth for a `(..,..)` tuple type"),
             Type::UnsignedInt => panic!("Unable to compute bitwidth for a uint"),
             Type::Unknown => panic!("Unable to compute bitwidth for Type::Unknown"),
         }
@@ -196,6 +226,7 @@ pub struct SymbolTable {
     by_name_sym: SecondaryMap<ScopeId, FxHashMap<String, SymbolId>>,
     structs: PrimaryMap<StructId, Struct>,
     seq: PrimaryMap<SeqId, Seq>,
+    tuples: PrimaryMap<TupleId, Tuple>,
     by_name_struct: FxHashMap<String, StructId>,
     scopes: PrimaryMap<ScopeId, Scope>,
     active_scope: ScopeId,
@@ -276,6 +307,7 @@ impl Default for SymbolTable {
             by_name_sym: Default::default(),
             structs: Default::default(),
             seq: Default::default(),
+            tuples: Default::default(),
             by_name_struct: Default::default(),
             scopes,
             active_scope: ROOT_SCOPE,
@@ -413,6 +445,11 @@ impl SymbolTable {
         self.seq.push(Seq(inner, min_size))
     }
 
+    /// Adds a tuple to the `tuples` map in the `SymbolTable`
+    pub fn add_tuple(&mut self, tuple: Tuple) -> TupleId {
+        self.tuples.push(tuple)
+    }
+
     pub fn add_struct(&mut self, name: String, pins: Vec<Field>) -> StructId {
         let s = Struct {
             name: name.to_string(),
@@ -504,6 +541,22 @@ impl Index<&SeqId> for SymbolTable {
 
     fn index(&self, index: &SeqId) -> &Self::Output {
         &self.seq[*index]
+    }
+}
+
+impl Index<TupleId> for SymbolTable {
+    type Output = Tuple;
+
+    fn index(&self, index: TupleId) -> &Self::Output {
+        &self.tuples[index]
+    }
+}
+
+impl Index<&TupleId> for SymbolTable {
+    type Output = Tuple;
+
+    fn index(&self, index: &TupleId) -> &Self::Output {
+        &self.tuples[*index]
     }
 }
 

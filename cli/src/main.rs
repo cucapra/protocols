@@ -220,7 +220,7 @@ fn main() {
         Some(Cmds::Constructs) => {
             for m in &modules {
                 for p in &m.protos {
-                    println!("{}: {}", p.name, p.used_constructs());
+                    println!("{}: {}", p.name, p.used_constructs(&st));
                 }
             }
         }

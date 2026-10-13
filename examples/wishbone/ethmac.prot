@@ -1,6 +1,39 @@
+// --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --wave wishbone/ethmac/ethmac.fst
+// this one is verified to work!
+module Tb_ethernetWb_masterWbm_low_level : Wishbone {
+  // sampling at posedge gets some signal values wrong
+  in CLK_I : clock @negedge,
+  in RST_I : u1 = Wishbone.RST,
+  in ADR_O : u32 = Wishbone.ADR,
+  out DAT_I : u32 = Wishbone.DAT_I,
+  in DAT_O : u32 = Wishbone.DAT_O,
+  in WE_O : u1 = Wishbone.WE,
+  in STB_O : u1 = Wishbone.STB,
+  in CYC_O : u1 = Wishbone.CYC,
+  out ACK_I : u1 = Wishbone.ACK,
+  in SEL_O : u4 = Wishbone.SEL,
+  out ERR_I : u1 = Wishbone.ERR,
+  out RTY_I : u1 = Wishbone.RTY,
+  // no bursts
+  const Wishbone.BTE = 2'd0,
+  const Wishbone.CTI = 3'd0,
+}
+
+
 // --instances tb_ethernet.eth_top.wishbone:Tb_ethernetEth_topWishboneMWb --wave wishbone/ethmac/ethmac.fst
+// TODO: fails with potentially invalid burst read a little after 241.755ms
+// error: [read_burst_increment_linear@8060465] executing step 1 of the transaction: 00000800 != 00000801
+//       ┌─ examples/wishbone/wishbone.prot:332:9
+//       │
+//   332 │         self.ADR := start_addr + (iter_count::<u30>() ## 2'b00);
+//       │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_linear@8060465] executing step 1 of the transaction: 00000800 != 00000801
+// What happens is that in the first cycle (as CYC and STB are asserted) an ACK comes already in and thus a transfer
+// technically takes place. However the address is not incremented until the second ACK comes in.
+// This is probably a glitch. The first ACK only persists from a rising edge until right after a falling edge.
+// So while it is high for both edges, it weirdly returns to zero before the next rising edge instead of with the next
+// rising edge as all other ACKS do.
 module Tb_ethernetEth_topWishboneMWb : Wishbone {
-  in WB_CLK_I : clock @posedge,
+  in WB_CLK_I : clock @negedge,
   in Reset : u1 = Wishbone.RST,
   in m_wb_adr_o : u30 = Wishbone.ADR[31:2] with Wishbone.ADR[1:0] == 2'd0,
   out m_wb_dat_i : u32 = Wishbone.DAT_I,
@@ -34,25 +67,7 @@ module Tb_ethernetEth_topMWb : Wishbone {
   const Wishbone.RTY = 1'b0, // no retry
 }
 
-// --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --wave wishbone/ethmac/ethmac.fst
-module Tb_ethernetWb_masterWbm_low_level : Wishbone {
-  // sampling at posedge gets some signal values wrong
-  in CLK_I : clock @negedge,
-  in RST_I : u1 = Wishbone.RST,
-  in ADR_O : u32 = Wishbone.ADR,
-  out DAT_I : u32 = Wishbone.DAT_I,
-  in DAT_O : u32 = Wishbone.DAT_O,
-  in WE_O : u1 = Wishbone.WE,
-  in STB_O : u1 = Wishbone.STB,
-  in CYC_O : u1 = Wishbone.CYC,
-  out ACK_I : u1 = Wishbone.ACK,
-  in SEL_O : u4 = Wishbone.SEL,
-  out ERR_I : u1 = Wishbone.ERR,
-  out RTY_I : u1 = Wishbone.RTY,
-  // no bursts
-  const Wishbone.BTE = 2'd0,
-  const Wishbone.CTI = 3'd0,
-}
+
 
 // --instances tb_ethernet.wb_master:Tb_ethernetWb_master --wave wishbone/ethmac/ethmac.fst
 module Tb_ethernetWb_master : Wishbone {
