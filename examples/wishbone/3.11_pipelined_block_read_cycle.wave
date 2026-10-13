@@ -1,0 +1,15 @@
+// https://cdn.opencores.org/downloads/wbspec_b4.pdf
+// Illustration 3-11
+ADR[31:0]    X 0x1111 0x2222 0x2222      X X
+DAT_I[31:0]  X      X 0x9876      X 0x5432 X
+DAT_O[31:0]  X      X      X      X      X X
+WE           X      0      0      0      X X
+SEL[3:0]     X    0xf    0xf    0xf      X X
+STB          0      1      1      1      0 0
+ACK          0      0      1      0      1 0
+CYC          0      1      1      1      1 0
+STALL        0      0      1      0      0 0
+// extra pins not included in the original illustration
+RST          0      0      0      0      0 0
+ERR          0      0      0      0      0 0
+RTY          0      0      0      0      0 0

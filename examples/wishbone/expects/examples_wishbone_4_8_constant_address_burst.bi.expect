@@ -2,25 +2,22 @@
 trace {
 }
 error: [write_burst_const@1] executing step 2 of the transaction: 0 != 1
-    ┌─ examples/wishbone/wishbone.prot:209:5
+    ┌─ examples/wishbone/wishbone.prot:210:5
     │
-209 │     self.STB := 1'b1;
+210 │     self.STB := 1'b1;
     │     ^^^^^^^^^^^^^^^^^ [write_burst_const@1] executing step 2 of the transaction: 0 != 1
 
 
-// trace 1
-trace {
-}
 error: [write_burst_const@1L] executing step 2 of the transaction: 1 != 7
-    ┌─ examples/wishbone/wishbone.prot:223:13
+    ┌─ examples/wishbone/wishbone.prot:224:13
     │
-223 │             self.CTI := 3'b111;
+224 │             self.CTI := 3'b111;
     │             ^^^^^^^^^^^^^^^^^^^ [write_burst_const@1L] executing step 2 of the transaction: 1 != 7
 
 error: [write_burst_const@1L] executing step 2 of the transaction: 0 != 1
-    ┌─ examples/wishbone/wishbone.prot:209:5
+    ┌─ examples/wishbone/wishbone.prot:210:5
     │
-209 │     self.STB := 1'b1;
+210 │     self.STB := 1'b1;
     │     ^^^^^^^^^^^^^^^^^ [write_burst_const@1L] executing step 2 of the transaction: 0 != 1
 
 ---CODE---

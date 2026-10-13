@@ -8,12 +8,12 @@ digraph "driver_meta" {
   entry [shape=plain,label="ENTRY"];
   entry -> node0;
   node0 [label=<E<SUP>(0)</SUP>>];
-  node0 -> node1 [label=<A forks after 1>];
-  node0 -> node2 [label=<S forks after 1>];
+  node0 -> node1 [label=<A forks>];
+  node0 -> node2 [label=<S forks>];
   node1 [label=<A<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
-  node1 -> node1 [label=<A forks after 1 / R<SUB>A</SUB>>];
-  node1 -> node2 [label=<S forks after 1 / R<SUB>S</SUB>>];
+  node1 -> node1 [label=<A forks / R<SUB>A</SUB>>];
+  node1 -> node2 [label=<S forks / R<SUB>S</SUB>>];
   node2 [label=<S<SUB>0</SUB><SUP>(0)</SUP> ∧ E<SUP>(1)</SUP>>];
-  node2 -> node1 [label=<A forks after 1 / R<SUB>A</SUB>>];
-  node2 -> node2 [label=<S forks after 1 / R<SUB>S</SUB>>];
+  node2 -> node1 [label=<A forks / R<SUB>A</SUB>>];
+  node2 -> node2 [label=<S forks / R<SUB>S</SUB>>];
 }

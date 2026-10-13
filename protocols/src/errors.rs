@@ -120,6 +120,7 @@ pub enum ThreadError {
         thread_idx: usize,
         transaction_name: String,
         stmt_id: StmtId,
+        step_count: u32,
     },
     /// Thread execution limit exceeded (for infinite loop protection)
     ExecutionLimitExceeded { max_steps: usize },
@@ -344,11 +345,13 @@ impl fmt::Display for ThreadError {
                 new_value,
                 thread_idx,
                 transaction_name,
+                step_count,
                 ..
             } => {
                 write!(
                     f,
-                    "Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
+                    "@{} Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
+                    step_count,
                     thread_idx,
                     transaction_name,
                     symbol_name,
@@ -514,6 +517,7 @@ impl ExecutionError {
         thread_idx: usize,
         transaction_name: String,
         stmt_id: StmtId,
+        step_count: u32,
     ) -> Self {
         ExecutionError::Thread(ThreadError::ConflictingAssignment {
             symbol_name,
@@ -522,6 +526,7 @@ impl ExecutionError {
             thread_idx,
             transaction_name,
             stmt_id,
+            step_count,
         })
     }
 
@@ -895,13 +900,15 @@ impl DiagnosticEmitter {
                 thread_idx,
                 transaction_name,
                 stmt_id,
+                step_count,
                 ..
             } => {
                 handler.emit_diagnostic_stmt(
                     transaction,
                     stmt_id,
                     &format!(
-                        "Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
+                        "@{} Thread {} (`{}`) attempted conflicting assignment to '{}': current={}, new={}",
+                        step_count,
                         thread_idx,
                         transaction_name,
                         symbol_name,

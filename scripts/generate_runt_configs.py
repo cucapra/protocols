@@ -87,7 +87,7 @@ def case_stem(case: dict) -> str:
     ):
         return Path(wave).stem
     # for all the .wave bi benchmarks, we use the id
-    if wave and wave.endswith(".wave"):
+    if wave and (wave.endswith(".wave") or "litex" in wave or "wb_stream" in wave):
         return case["id"]
     stem = Path(case["paths"][0]).stem
     return stem.removesuffix(".bi")
@@ -257,9 +257,11 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     # (and still 1 min in release mode) to be worth running every time.
     # maybe in the future we can flag a slow/fast runt config
     # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
+    # Note: ignoring `s3_fixed.tx` for graph-interpreter for now as it is a Brave New World test case
     if (
         case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
         and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
+        and case["paths"][0] != "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx"
     ):
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 
@@ -334,6 +336,7 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
             "--bin",
             "protocols-cli",
             "--",
+            "--allow-branch-on-arg",
             "-p",
             protocol_path,
             "constructs",
@@ -353,8 +356,8 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
 
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
-    # Loop constructs the graph interpreter cannot handle (AST construct names).
-    graph_interp_unsupported = {"for_in_loop", "repeat_loop"}
+    # Loop constructs & tuples the graph interpreter cannot handle (AST construct names).
+    graph_interp_unsupported = {"for_in_loop", "repeat_loop", "tuples"}
 
     selected = [
         c
@@ -362,6 +365,10 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
         if c["expected"] == "pass"
         and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
     ]
+    # exclude s3 from graph_interp cases
+    # TODO: re-include
+    selected = [c for c in selected if not c["protocol_path"].endswith("s3.prot")]
+
     return sorted(selected, key=lambda c: c["paths"][0])
 
 

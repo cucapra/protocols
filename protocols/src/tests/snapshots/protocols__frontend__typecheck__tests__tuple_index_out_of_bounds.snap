@@ -1,0 +1,9 @@
+---
+source: protocols/src/frontend/typecheck.rs
+expression: content
+---
+error: Can't project index 2 from tuple type (u8,u8) (index out of bounds)
+  ┌─ tests/misc/tuple_index_out_of_bounds.prot:7:12
+  │
+7 │   DUT.a := pair.2; 
+  │            ^^^^ Can't project index 2 from tuple type (u8,u8) (index out of bounds)

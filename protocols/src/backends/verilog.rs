@@ -364,6 +364,7 @@ fn expr_to_verilog(
         }
         Expr::IsLastIteration => todo!("loops"),
         Expr::IterCount(_) => todo!("loops"),
+        Expr::TupleProj(_, _) => todo!("Handle tuple projections"),
     }
 }
 
@@ -418,6 +419,7 @@ pub mod tests {
         let (st, modules) = frontend(
             &["../tests/alus/alu_d1.prot"],
             &mut DiagnosticHandler::default(),
+            false,
             false,
         )
         .unwrap();

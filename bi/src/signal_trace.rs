@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::io::BufReader;
 use wellen::stream::StreamError;
-use wellen::{Hierarchy, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
+use wellen::{Hierarchy, ItemRef, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
 
 /// Handle to all signal values at a point in time.
 /// Used in `stream_time_steps`.
@@ -95,6 +95,8 @@ pub struct WaveSignalTrace {
 
     /// Maps a logical step to time.
     logical_step_to_time: Vec<Time>,
+
+    force_x_to_zero: bool,
 }
 
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
@@ -122,6 +124,7 @@ impl WaveSignalTrace {
         modules: &[Module],
         instances: &[Instance],
         sampling_mode: WaveSamplingMode,
+        force_x_to_zero: bool,
     ) -> Result<Self, wellen::WellenError> {
         let opts = wellen::LoadOptions::default();
         let wave = wellen::stream::read_from_file(filename, &opts)?;
@@ -189,6 +192,7 @@ impl WaveSignalTrace {
             time_step: 0,
             logical_step_to_time: vec![],
             names,
+            force_x_to_zero,
         })
     }
 }
@@ -203,111 +207,100 @@ fn find_instances(
 ) -> (FxHashMap<PortKey, SignalRef>, SamplingMode) {
     let mut port_map = FxHashMap::default();
 
-    let mut samp_mode_out = SamplingMode::Direct(vec![]);
+    // find clock signal
+    let samp_mode_out = match &sampling_mode {
+        WaveSamplingMode::RisingEdge(signal_name) | WaveSamplingMode::FallingEdge(signal_name) => {
+            let signal_ref = if let Some(item) = hierachy.lookup_item_by_name(signal_name) {
+                if let ItemRef::Var(var) = item {
+                    hierachy[var].signal_ref()
+                } else {
+                    panic!("Clock `{signal_name}` is a scope, not a particular signal!")
+                }
+            } else {
+                panic!("Failed to find clock signal {signal_name}");
+            };
+            if matches!(sampling_mode, WaveSamplingMode::RisingEdge(_)) {
+                SamplingMode::RisingEdge(signal_ref)
+            } else {
+                SamplingMode::FallingEdge(signal_ref)
+            }
+        }
+        WaveSamplingMode::Direct => SamplingMode::Direct(vec![]),
+    };
 
+    // find instance pins
     for (inst_id, inst) in instances.iter().enumerate() {
         let module = &modules[inst.module_id];
 
-        let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
-        if let Some(instance_scope) = hierachy.lookup_scope(&inst_name_parts) {
-            let instance_scope = &hierachy[instance_scope];
-
-            // for every pin designed in our struct, we have to find the correct
-            // variable that corresponds to it
-            for (field_idx, field) in module.pins.iter().enumerate() {
-                let pin_name = field.name().to_string();
-                // find a variable that has a matching name
-                if let Some(var) = instance_scope
-                    .vars(hierachy)
-                    .find(|v| hierachy[*v].name(hierachy) == pin_name)
-                {
-                    let waveform_bits = hierachy[var].length(hierachy).expect("not a bit vector");
-
-                    // Set up `sample_posedge` to
-                    // refer to the clock signal (if one is specified)
-                    match &sampling_mode {
-                        WaveSamplingMode::RisingEdge(signal_name)
-                        | WaveSamplingMode::FallingEdge(signal_name) => {
-                            let clock_signal_parts: Vec<&str> = signal_name.split('.').collect();
-
-                            // The clock signal should be in the same scope as the instance
-                            // So we look it up directly in the instance_scope
-                            let signal_ref = match clock_signal_parts.last() {
-                                Some(var_name) => {
-                                    if let Some(var) = instance_scope
-                                        .vars(hierachy)
-                                        .find(|v| hierachy[*v].name(hierachy) == *var_name)
-                                    {
-                                        hierachy[var].signal_ref()
-                                    } else {
-                                        // If not found in instance scope, use `lookup_var`
-                                        match hierachy.lookup_var(
-                                            &clock_signal_parts[0..clock_signal_parts.len() - 1],
-                                            var_name,
-                                        ) {
-                                            Some(var_ref) => hierachy[var_ref].signal_ref(),
-                                            None => {
-                                                panic!(
-                                                    "Unable to find signal {var_name} in waveform"
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                None => panic!("Malformed signal {signal_name}"),
-                            };
-                            samp_mode_out = match sampling_mode {
-                                WaveSamplingMode::RisingEdge(_) => {
-                                    SamplingMode::RisingEdge(signal_ref)
-                                }
-                                WaveSamplingMode::FallingEdge(_) => {
-                                    SamplingMode::FallingEdge(signal_ref)
-                                }
-                                WaveSamplingMode::Direct => SamplingMode::Direct(vec![]),
-                            };
-                        }
-                        WaveSamplingMode::Direct => {}
-                    }
-
-                    // Check that bit widths match
-                    assert_eq!(
-                        waveform_bits,
-                        field.bitwidth(),
-                        "The bit-width of the waveform value is {}, which doesn't match expected width of {}, which is {}",
-                        waveform_bits,
-                        pin_name,
-                        field.bitwidth()
-                    );
-
-                    // store a mapping from any SymbolId that refers to this pin
-                    let value = hierachy[var].signal_ref();
-                    for syms in &module.proto_pin_map {
-                        let key = PortKey {
-                            instance_id: inst_id as u32,
-                            pin_id: syms[field_idx],
-                        };
-                        port_map.insert(key, value);
-                    }
-                } else {
-                    // unable to find a variable whose name matches a pin
-                    let available_vars: Vec<&str> = instance_scope
-                        .vars(hierachy)
-                        .map(|v| hierachy[v].name(hierachy))
-                        .collect();
-                    panic!(
-                        "Failed to find pin {}. Available pins in waveform for instance {} are {}",
-                        field.name(),
-                        inst.name,
-                        available_vars.join(",\n")
-                    );
-                }
+        // check to make sure the instance scope actually exists
+        let inst_scope = if !inst.name.is_empty() {
+            let inst_name_parts: Vec<&str> = inst.name.split('.').collect();
+            if let Some(scope) = hierachy.lookup_scope(&inst_name_parts) {
+                Some(scope)
+            } else {
+                panic!(
+                    "Failed to find instance {}. First scope: {:#?}",
+                    inst.name,
+                    hierachy.first_scope().map(|s| s.full_name(hierachy))
+                );
             }
         } else {
-            panic!(
-                "Failed to find instance {}. First scope: {:#?}",
-                inst.name,
-                hierachy.first_scope().unwrap().full_name(hierachy)
-            );
+            None
+        };
+
+        // for every pin designed in our struct, we have to find the correct
+        // variable that corresponds to it
+        for (field_idx, field) in module.pins.iter().enumerate() {
+            let pin_name = field.name().to_string();
+            let full_name = if inst.name.is_empty() {
+                pin_name.clone()
+            } else {
+                format!("{}.{pin_name}", inst.name)
+            };
+            // find a variable that has a matching name
+            if let Some(ItemRef::Var(var)) = hierachy.lookup_item_by_name(&full_name) {
+                let waveform_bits = hierachy[var].length(hierachy).expect("not a bit vector");
+
+                // Check that bit widths match
+                assert_eq!(
+                    waveform_bits,
+                    field.bitwidth(),
+                    "The bit-width of the waveform signal `{full_name}` does not match the width of the pin `{pin_name}` in `{}`",
+                    module.name,
+                );
+
+                // store a mapping from any SymbolId that refers to this pin
+                let value = hierachy[var].signal_ref();
+                for syms in &module.proto_pin_map {
+                    let key = PortKey {
+                        instance_id: inst_id as u32,
+                        pin_id: syms[field_idx],
+                    };
+                    port_map.insert(key, value);
+                }
+            } else {
+                // unable to find a variable whose name matches a pin
+                let available_vars: Vec<&str> = inst_scope
+                    .map(|s| {
+                        hierachy[s]
+                            .vars(hierachy)
+                            .map(|v| hierachy[v].name(hierachy))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| {
+                        hierachy
+                            .vars()
+                            .map(|v| hierachy[v].name(hierachy))
+                            .collect()
+                    });
+
+                panic!(
+                    "Failed to find pin {}. Available pins in waveform for instance {} are {}",
+                    field.name(),
+                    inst.name,
+                    available_vars.join(",\n")
+                );
+            }
         }
     }
     (port_map, samp_mode_out)
@@ -334,7 +327,13 @@ impl SignalTrace for WaveSignalTrace {
             .collect();
         let mut bv_values: Vec<_> = widths
             .iter()
-            .map(|&width| BitVecValue::random(rng.get_mut(), width))
+            .map(|&width| {
+                if self.force_x_to_zero {
+                    BitVecValue::zero(width)
+                } else {
+                    BitVecValue::random(rng.get_mut(), width)
+                }
+            })
             .collect();
         let mut times = vec![];
         let filter = wellen::stream::Filter::include_signals(&signals);
@@ -398,14 +397,19 @@ impl SignalTrace for WaveSignalTrace {
                             bv_values[idx].assign_from_bytes_be(value_be_bytes);
                         } else {
                             // there are X or Z values
-                            debug_assert!(
-                                value.bit_string().chars().all(|c| c == 'x' || c == 'z'),
-                                "{}",
-                                value.bit_string()
-                            );
+                            let all_x_or_z =
+                                value.bit_string().chars().all(|c| c == 'x' || c == 'z');
+                            if !all_x_or_z {
+                                println!("WARN: encountered a mixed value. Randomizing all bits.");
+                                println!("{}@{step_id}={}", self.names[idx], value.bit_string());
+                            }
                             // randomize
                             let width = widths[idx];
-                            let random_value = BitVecValue::random(rng.get_mut(), width);
+                            let random_value = if self.force_x_to_zero {
+                                BitVecValue::zero(width)
+                            } else {
+                                BitVecValue::random(rng.get_mut(), width)
+                            };
                             bv_values[idx].assign(&random_value);
                         }
                     } else {
@@ -520,10 +524,11 @@ impl AsciWaveTrace {
         filename: impl AsRef<std::path::Path>,
         modules: &[Module],
         instances: &[Instance],
+        force_x_to_zero: bool,
     ) -> std::io::Result<Self> {
         let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
         let content = std::fs::read_to_string(filename)?;
-        let mut trace = Self::parse(&content, &mut rnd);
+        let mut trace = Self::parse(&content, &mut rnd, force_x_to_zero);
 
         // populate pin map
         for (inst_id, inst) in instances.iter().enumerate() {
@@ -560,7 +565,7 @@ impl AsciWaveTrace {
         Ok(trace)
     }
 
-    pub fn parse(content: &str, rnd: &mut impl Rng) -> Self {
+    pub fn parse(content: &str, rnd: &mut impl Rng, force_x_to_zero: bool) -> Self {
         let mut out = Self {
             values: vec![],
             pins: vec![],
@@ -580,7 +585,7 @@ impl AsciWaveTrace {
                 continue;
             }
             // parse signal
-            let (name, width, mut values) = parse_signal_line(line, rnd);
+            let (name, width, mut values) = parse_signal_line(line, rnd, force_x_to_zero);
             if let Some(existing_id) = pin_ids.get(&name) {
                 out.values[*existing_id].append(&mut values);
             } else {
@@ -608,14 +613,18 @@ impl AsciWaveTrace {
     }
 }
 
-fn parse_signal_line(line: &str, rnd: &mut impl Rng) -> (String, WidthInt, Vec<BitVecValue>) {
+fn parse_signal_line(
+    line: &str,
+    rnd: &mut impl Rng,
+    force_x_to_zero: bool,
+) -> (String, WidthInt, Vec<BitVecValue>) {
     let tokens = tokenize(line);
     assert!(!tokens.is_empty());
     let (name, width) = parse_name_and_width(tokens[0]);
     let values = tokens
         .into_iter()
         .skip(1)
-        .map(|t| parse_value(t, width, rnd))
+        .map(|t| parse_value(t, width, rnd, force_x_to_zero))
         .collect();
     (name, width, values)
 }
@@ -641,21 +650,99 @@ fn parse_name_and_width(value: &str) -> (String, WidthInt) {
     }
 }
 
-fn parse_value(value: &str, width: WidthInt, rnd: &mut impl rand::Rng) -> BitVecValue {
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum ValuePrefix {
+    None,
+    Hex,
+    Bin,
+}
+
+fn parse_value(
+    value: &str,
+    width: WidthInt,
+    rnd: &mut impl rand::Rng,
+    force_x_to_zero: bool,
+) -> BitVecValue {
     let value = value.to_lowercase();
-    let r = if value == "x" {
-        BitVecValue::random(rnd, width)
-    } else if let Some(v) = value.strip_prefix("0x") {
-        BitVecValue::from_hex_str(v).unwrap()
+    let (prefix, value) = if let Some(v) = value.strip_prefix("0x") {
+        (ValuePrefix::Hex, v.to_string())
     } else if let Some(v) = value.strip_prefix("0b") {
-        BitVecValue::from_bit_str(v).unwrap()
+        (ValuePrefix::Bin, v.to_string())
     } else {
-        BitVecValue::from_str_radix(&value, 10, width).unwrap()
+        (ValuePrefix::None, value)
+    };
+
+    if value.contains('x') {
+        let x_value = if force_x_to_zero {
+            BitVecValue::zero(width)
+        } else {
+            BitVecValue::random(rnd, width)
+        };
+        let x_mask = get_x_mask(prefix, &value, width);
+        if x_mask.is_all_ones() {
+            x_value
+        } else {
+            let non_x_value_str = value.replace('x', "0");
+            let non_x_value = parse_non_x_value(prefix, &non_x_value_str, width);
+            x_value.and(&x_mask).or(&non_x_value)
+        }
+    } else {
+        parse_non_x_value(prefix, &value, width)
+    }
+}
+
+fn parse_non_x_value(prefix: ValuePrefix, value: &str, width: u32) -> BitVecValue {
+    assert!(!value.contains('x'), "Invalid {width}-bit number: {value}");
+    let r = match prefix {
+        ValuePrefix::None => BitVecValue::from_str_radix(value, 10, width)
+            .unwrap_or_else(|_| panic!("Invalid {width}-bit number: {value}")),
+        ValuePrefix::Hex => BitVecValue::from_hex_str(value).unwrap(),
+        ValuePrefix::Bin => BitVecValue::from_bit_str(value).unwrap(),
     };
     if r.width() < width {
         r.zero_extend(width - r.width())
     } else {
         r
+    }
+}
+
+fn get_x_mask(prefix: ValuePrefix, value: &str, width: u32) -> BitVecValue {
+    if value == "x" {
+        BitVecValue::ones(width)
+    } else if !value.contains('x') {
+        BitVecValue::zero(width)
+    } else {
+        match prefix {
+            ValuePrefix::None => {
+                // mixed x in decimal number is not supported
+                panic!("Invalid {width}-bit number: {value}");
+            }
+            ValuePrefix::Hex => {
+                let mut out = BitVecValue::zero(width);
+                for (ii, hex) in value.chars().rev().enumerate() {
+                    if hex == 'x' {
+                        let lsb = ii as u32 * 4;
+                        for pos in lsb..(lsb + 4) {
+                            out.set_bit(pos);
+                        }
+                    } else {
+                        debug_assert!(hex.is_ascii_hexdigit(), "{hex} at {ii} in {value}");
+                    }
+                }
+                out
+            }
+            ValuePrefix::Bin => {
+                let mut out = BitVecValue::zero(width);
+                for (ii, bit) in value.chars().rev().enumerate() {
+                    if bit == 'x' {
+                        out.set_bit(ii as u32);
+                    } else {
+                        debug_assert!(bit == '0' || bit == '1', "{bit} at {ii} in {value}");
+                    }
+                }
+                out
+            }
+        }
     }
 }
 
@@ -718,7 +805,7 @@ CYC_O        0      1       1 0
         "#;
 
         let mut rnd = rand::rngs::SmallRng::seed_from_u64(0);
-        let trace = AsciWaveTrace::parse(content, &mut rnd);
+        let trace = AsciWaveTrace::parse(content, &mut rnd, false);
         let expected_pins = [
             ("ADR_O", 32u32),
             ("DAT_I", 32),

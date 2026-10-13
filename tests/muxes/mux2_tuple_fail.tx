@@ -1,0 +1,6 @@
+trace {
+  first((1, 2), 1);
+
+  // This will fail since we're projecting from the wrong component
+  second((1, 2), 1);
+}

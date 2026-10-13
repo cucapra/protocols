@@ -214,6 +214,9 @@ impl<'a> Lowerer<'a> {
             Expr::IterCount(_) => {
                 panic!("loop expressions are not lowered to Patronus yet")
             }
+            Expr::TupleProj(_, _) => {
+                panic!("Tuple projection expressions are not lowered to Patronus yet")
+            }
         }
     }
 
@@ -235,6 +238,7 @@ impl<'a> Lowerer<'a> {
             FrontType::BitVec(width) => self.ir.expr_ctx.bv_symbol(&full_name, width),
             FrontType::Struct(_)
             | FrontType::Seq(_)
+            | FrontType::Tuple(_)
             | FrontType::UnsignedInt
             | FrontType::Unknown => {
                 panic!(

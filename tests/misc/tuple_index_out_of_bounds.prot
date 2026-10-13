@@ -1,0 +1,9 @@
+struct Dummy {
+  in a : u8,
+}
+
+prot tuple_index_out_of_bounds<DUT: Dummy>(pair: (u8, u8)) {
+  // Index out of bounds
+  DUT.a := pair.2; 
+  step();
+}

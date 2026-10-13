@@ -448,6 +448,7 @@ impl<'a> Scheduler<'a> {
                                 *first_idx,
                                 first_transaction_name,
                                 first_stmt_id.expect("Concrete values should have stmt_id"),
+                                self.step_count,
                             ),
                         ));
 
@@ -461,6 +462,7 @@ impl<'a> Scheduler<'a> {
                                 *second_idx,
                                 second_transaction_name,
                                 second_stmt_id.expect("Concrete values should have stmt_id"),
+                                self.step_count,
                             ),
                         ));
 

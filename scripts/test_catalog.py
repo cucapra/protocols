@@ -116,6 +116,11 @@ TX_CASES = {
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
     },
+    "tests/adders/adder_d1/add_d1_tuple.tx": {
+        "protocol": "tests/adders/adder_d1/add_d1_tuple.prot",
+        "verilog": ("tests/adders/adder_d1/add_d1.v",),
+        "expect": "pass",
+    },
     "tests/adders/adder_d1/assign_after_observation.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
@@ -174,6 +179,12 @@ TX_CASES = {
         "protocol": "tests/adders/adder_d2/no_dontcare_conflict.prot",
         "verilog": ("tests/adders/adder_d2/add_d2.v",),
         "expect": "assignment_conflict",
+    },
+    "tests/adders/adder_d2/add_d2_tuple.tx": {
+        "protocol": "tests/adders/adder_d2/add_d2_tuple.prot",
+        "verilog": ("tests/adders/adder_d2/add_d2.v",),
+        "expect": "pass",
+        "max_steps": 4,
     },
     "tests/alus/alu_d1.tx": {
         "protocol": "tests/alus/alu_d1.prot",
@@ -330,6 +341,19 @@ TX_CASES = {
             "tests/fifo/fifo_wrapper.v",
         ),
         "top": "fifo_wrapper",
+        "expect": "pass",
+    },
+    "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
+        "verilog": ("tests/fpga-debugging/axis-adapter-s3/s3_fixed.v",),
+        "top": "axis_adapter",
+        "expect": "pass",
+        "extra_args": ("--allow-branch-on-arg",),
+    },
+    "tests/fpga-debugging/axi-stream-s2/s2_fixed.tx": {
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
+        "verilog": ("tests/fpga-debugging/axi-stream-s2/s2_fixed.v",),
+        "top": "xlnxstream_2018_3",
         "expect": "pass",
     },
     "tests/fpga-debugging/axis-async-fifo-c4/c4_buggy.tx": {
@@ -498,6 +522,42 @@ TX_CASES = {
         "protocol": "tests/wishbone/wishbone.prot",
         "verilog": ("tests/wishbone/reqwalker.v",),
         "top": "reqwalker",
+        "expect": "pass",
+    },
+    "tests/muxes/mux2_tuple.tx": {
+        "protocol": "tests/muxes/mux2_tuple.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "pass",
+    },
+    "tests/muxes/mux2_tuple_fail.tx": {
+        "protocol": "tests/muxes/mux2_tuple.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "fail",
+    },
+    "tests/muxes/mux2_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/mux2_tuple_bitslice.prot",
+        "verilog": ("tests/muxes/comb_mux.v",),
+        "top": "comb_mux",
+        "expect": "pass",
+    },
+    "tests/muxes/mux5_tuple.tx": {
+        "protocol": "tests/muxes/mux5_tuple.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
+        "expect": "pass",
+    },
+    "tests/muxes/mux5_tuple_fail.tx": {
+        "protocol": "tests/muxes/mux5_tuple.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
+        "expect": "fail",
+    },
+    "tests/muxes/mux5_tuple_bitslice.tx": {
+        "protocol": "tests/muxes/mux5_tuple_bitslice.prot",
+        "verilog": ("tests/muxes/mux5.v",),
+        "top": "comb_mux5",
         "expect": "pass",
     },
 }
@@ -743,55 +803,73 @@ BI_CASES = {
         ),
     },
     "tests.fpga-debugging.axi-stream-s2.s2_buggy": {
-        "protocol": "tests/fpga-debugging/axi-stream-s2/s2_buggy.prot",
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_buggy.fst",
-        "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
+        "instances": ("TOP.testbench.UUT:AXISManager",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
-            "TOP.testbench.UUT.axi_stream_check.i_aclk",
+            "TOP.testbench.UUT.M_AXIS_ACLK",
             "--show-waveform-time",
             "--time-unit",
             "ns",
         ),
     },
     "tests.fpga-debugging.axi-stream-s2.s2_fixed": {
-        "protocol": "tests/fpga-debugging/axi-stream-s2/s2_fixed.prot",
+        "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_fixed.fst",
-        "instances": ("TOP.testbench.UUT.axi_stream_check:AXISManager",),
+        "instances": ("TOP.testbench.UUT:AXISManager",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
-            "TOP.testbench.UUT.axi_stream_check.i_aclk",
+            "TOP.testbench.UUT.M_AXIS_ACLK",
             "--show-waveform-time",
             "--time-unit",
             "ns",
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_buggy": {
-        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3_buggy.prot",
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
         "wave": "tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst",
-        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXISManager",),
+        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXIS",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
             "TOP.test_axis_adapter_64_8.UUT.clk",
             "--show-waveform-time",
+            "--include-idle",
             "--time-unit",
             "ns",
+            "--display-hex",
+            "--allow-branch-on-arg",
         ),
     },
     "tests.fpga-debugging.axis-adapter-s3.s3_fixed": {
-        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3_fixed.prot",
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
         "wave": "tests/fpga-debugging/axis-adapter-s3/s3_fixed.fst",
-        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXISManager",),
+        "instances": ("TOP.test_axis_adapter_64_8.UUT:AXIS",),
         "expect": "pass",
         "extra_args": (
             "--sample-posedge",
             "TOP.test_axis_adapter_64_8.UUT.clk",
             "--show-waveform-time",
+            "--include-idle",
             "--time-unit",
             "ns",
+            "--display-hex",
+            "--allow-branch-on-arg",
+        ),
+    },
+    "tests.fpga-debugging.axis-adapter-s3.s3_fixed.on_test_trace": {
+        "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
+        "wave": "tests/fpga-debugging/axis-adapter-s3/s3_fixed_tx.fst",
+        "instances": ("dut:AXIS",),
+        "expect": "pass",
+        "extra_args": (
+            "--show-steps",
+            "--include-idle",
+            "--display-hex",
+            "--allow-branch-on-arg",
         ),
     },
     "tests.fpga-debugging.axis-async-fifo-c4.c4_buggy": {
@@ -1081,13 +1159,58 @@ BI_CASES = {
         "expect": "pass",
         "extra_args": ("--display-hex", "--show-steps"),
     },
+    # wishbone protocol on a litex unittest that is wrong
+    "examples.wishbone.litex_test_sram_burst_wrap_continuous.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/litex_unittest.prot",
+        ],
+        "wave": "examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd",
+        "instances": (":LitexWishbone",),
+        "expect": "pass",
+        "extra_args": ("--display-hex", "--show-steps"),
+    },
+    # wishbone protocol on shortened wb_stream testbench
+    "examples.wishbone.wb_stream_reader.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/wb_stream.prot",
+        ],
+        "wave": "examples/wishbone/wb_stream_reader_tb_shortened.fst",
+        "instances": (
+            "wb_stream_reader_tb.dut:WishboneData",
+            "wb_stream_reader_tb.dut:WishboneControl",
+        ),
+        "expect": "pass",
+        # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
+        "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
+    },
+    "examples.wishbone.wb_stream_writer.bi": {
+        "protocols": [
+            "examples/wishbone/wishbone.prot",
+            "examples/wishbone/wb_stream.prot",
+        ],
+        "wave": "examples/wishbone/wb_stream_writer_tb_shortened.fst",
+        "instances": (
+            "wb_stream_writer_tb.dut:WishboneData",
+            "wb_stream_writer_tb.dut:WishboneControl",
+        ),
+        "expect": "pass",
+        # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
+        "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
+    },
 }
 
 # Small Wishbone transactions from the Wishbone specification
 WISHBONE_SPEC_BI = [
+    "3.4_pipelined_mode_single_access.wave",
     "3.5_classic_standard_single_read_cycle.wave",
+    "3.6_classic_pipelined_single_read_cycle.wave",
     "3.7_standard_single_write_cycle.wave",
+    "3.8_pipelined_single_write_cycle.wave",
     "3.10_standard_block_read_cycle.wave",
+    "3.11_pipelined_block_read_cycle.wave",
+    "3.13_pipelined_block_write_cycle.wave",
     "3.14_rmw_cycle.wave",
     "4.8_constant_address_burst.wave",
     "4.8_constant_address_burst_no_stb_rate_limit.wave",
@@ -1096,8 +1219,9 @@ WISHBONE_SPEC_BI = [
 for wave in WISHBONE_SPEC_BI:
     name = wave[: -len(".wave")].replace(".", "_")
     name = f"examples.wishbone.{name}"
+    protocol = "wishbone_pipelined.prot" if "pipelined" in wave else "wishbone.prot"
     BI_CASES[name] = {
-        "protocol": "examples/wishbone/wishbone.prot",
+        "protocol": f"examples/wishbone/{protocol}",
         "wave": f"examples/wishbone/{wave}",
         "instances": (":Wishbone",),
         "expect": "pass",

@@ -1,8 +1,8 @@
-use crate::ir::meta_automaton::{ForkTiming, MetaAutomaton, MetaFrontier, MetaOutcome, MetaState};
+use crate::ir::meta_automaton::{MetaAutomaton, MetaOutcome, MetaState, PrePhase};
 
 fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
     let mut parts: Vec<String> = state
-        .live
+        .post_phase
         .iter()
         .map(|transaction| {
             format!(
@@ -14,10 +14,10 @@ fn format_state(graph: &MetaAutomaton, state: &MetaState) -> String {
         })
         .collect();
 
-    if let Some(frontier) = state.frontier {
+    if let Some(frontier) = state.pre_phase {
         parts.push(match frontier {
-            MetaFrontier::Choice { instance } => format!("E<SUP>({instance})</SUP>"),
-            MetaFrontier::Pre {
+            PrePhase::Choice { instance } => format!("E<SUP>({instance})</SUP>"),
+            PrePhase::Pre {
                 protocol,
                 instance,
                 elapsed,
@@ -60,39 +60,7 @@ pub fn to_dot(graph: &MetaAutomaton) -> String {
             let name = escape_html(&graph.protocols[edge.protocol].name);
             let mut label = match edge.outcome {
                 MetaOutcome::Continue => format!("{name} continues"),
-                MetaOutcome::Fork => match edge.fork_timing.as_ref().unwrap() {
-                    ForkTiming::Exact(lengths) if lengths.len() == 1 => {
-                        let verb = if graph.protocols[edge.protocol].post_cycles == 0 {
-                            "finishes"
-                        } else {
-                            "forks"
-                        };
-                        format!("{name} {verb} after {}", lengths[0])
-                    }
-                    ForkTiming::Exact(lengths) => {
-                        let verb = if graph.protocols[edge.protocol].post_cycles == 0 {
-                            "finishes"
-                        } else {
-                            "forks"
-                        };
-                        format!(
-                            "{name} {verb} after {{{}}}",
-                            lengths
-                                .iter()
-                                .map(usize::to_string)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    }
-                    ForkTiming::AtLeast(length) => {
-                        let verb = if graph.protocols[edge.protocol].post_cycles == 0 {
-                            "finishes"
-                        } else {
-                            "forks"
-                        };
-                        format!("{name} {verb} after ≥{length}")
-                    }
-                },
+                MetaOutcome::Fork => format!("{name} forks"),
             };
             if !edge.rotations.is_empty() {
                 let rotations = edge

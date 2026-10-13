@@ -20,4 +20,4 @@ mod yosys;
 pub use dut::{PatronusSim, PortId};
 pub use frontend::frontend;
 pub use transactions::transaction_frontend;
-pub use value::Value;
+pub use value::{SymBitVecValue, SymValue, Value};

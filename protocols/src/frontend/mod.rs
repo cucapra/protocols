@@ -1,6 +1,5 @@
-use anyhow::anyhow;
-
 use crate::frontend::diagnostic::DiagnosticHandler;
+use anyhow::anyhow;
 
 pub mod ast;
 pub mod diagnostic;
@@ -20,6 +19,7 @@ pub fn frontend(
     filenames: &[impl AsRef<std::path::Path>],
     diag: &mut DiagnosticHandler,
     skip_static_step_fork_checks: bool,
+    allow_branch_on_arg: bool,
 ) -> anyhow::Result<(SymbolTable, Vec<Module>)> {
     // Parse protocols file
     let err = |e: String| {
@@ -36,7 +36,7 @@ pub fn frontend(
     let mut ast = parser::parse_files(filenames, diag).map_err(err)?;
 
     // Type-check the parsed transactions
-    typecheck::type_check(&mut ast, diag)?;
+    typecheck::type_check(&mut ast, diag, allow_branch_on_arg)?;
 
     // check for fork and step errors
     let error_count = if skip_static_step_fork_checks {

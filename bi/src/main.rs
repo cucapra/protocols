@@ -18,7 +18,7 @@ use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::Clock;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Args for the monitor CLI
 #[derive(Parser, Debug)]
@@ -84,6 +84,22 @@ struct Cli {
     /// If enabled, displays integer literals using hexadecimal notation
     #[arg(short, long, value_name = "DISPLAY_IN_HEX")]
     display_hex: bool,
+
+    /// Instead of randomizing x/z signals, just use zero
+    #[arg(long)]
+    force_x_to_zero: bool,
+
+    /// Allow arguments to appear in while/if conditions
+    #[arg(long)]
+    allow_branch_on_arg: bool,
+}
+
+fn add_inst_name(i: &Instance, name: &str) -> String {
+    if i.name.is_empty() {
+        name.to_string()
+    } else {
+        format!("{}.{name}", i.name)
+    }
 }
 
 fn get_clock(
@@ -91,17 +107,15 @@ fn get_clock(
     instances: &[Instance],
     cli_sample_posedge: Option<String>,
 ) -> WaveSamplingMode {
-    let mut used_modules: Vec<_> = instances.iter().map(|i| i.module_id).collect();
-    used_modules.sort();
-    used_modules.dedup();
-
-    let mut clocks: Vec<_> = used_modules
+    let mut clocks: Vec<Clock> = instances
         .iter()
-        .flat_map(|&m_id| match &modules[m_id].clock {
+        .flat_map(|i| match &modules[i.module_id].clock {
             Clock::None => None,
-            other => Some(other.clone()),
+            Clock::PosEdge(name) => Some(Clock::PosEdge(add_inst_name(i, name))),
+            Clock::NegEdge(name) => Some(Clock::NegEdge(add_inst_name(i, name))),
         })
         .collect();
+
     if let Some(name) = cli_sample_posedge {
         clocks.push(Clock::PosEdge(name));
     }
@@ -138,7 +152,13 @@ fn main() {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
-    let (st, modules) = frontend(&cli.protocol, &mut d, skip_static_step_fork_checks).unwrap();
+    let (st, modules) = frontend(
+        &cli.protocol,
+        &mut d,
+        skip_static_step_fork_checks,
+        cli.allow_branch_on_arg,
+    )
+    .unwrap();
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
@@ -171,13 +191,19 @@ fn main() {
 
     let step_to_time = {
         // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) =
-            WaveSignalTrace::open(&cli.wave, &st, &modules, &instances, sampling_mode)
-        {
+        if let Ok(mut trace) = WaveSignalTrace::open(
+            &cli.wave,
+            &st,
+            &modules,
+            &instances,
+            sampling_mode,
+            cli.force_x_to_zero,
+        ) {
             run_bis(bis.as_mut_slice(), &mut trace)
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace = AsciWaveTrace::open(&cli.wave, &modules, &instances).unwrap();
+            let mut trace =
+                AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
             run_bis(bis.as_mut_slice(), &mut trace)
         }
     }
@@ -197,11 +223,19 @@ fn main() {
         };
 
         if let Some(failures) = bi.failures() {
-            for (ii, (trace_id, fails)) in failures.iter().enumerate() {
-                if ii > 0 {
-                    println!();
-                }
-                let mut proto_trace = bi.protocol_traces().get_trace(*trace_id);
+            // group failures by unique trace
+            let mut failures_by_trace: FxHashMap<Option<u32>, Vec<usize>> = FxHashMap::default();
+            for (ii, (trace_id, _)) in failures.iter().enumerate() {
+                let tail = bi.protocol_traces().get_tail(*trace_id);
+                failures_by_trace.entry(tail).or_default().push(ii);
+            }
+            let mut grouped_failures: Vec<_> = failures_by_trace.into_values().collect();
+            grouped_failures.sort();
+
+            let mut ii = 0;
+            for fail_indices in grouped_failures {
+                let trace_id = failures[fail_indices[0]].0;
+                let mut proto_trace = bi.protocol_traces().get_trace(trace_id);
                 proto_trace.retain(|ProtoCall { name, .. }| !exclude_from_trace.contains(name));
                 print_trace(
                     ii,
@@ -212,18 +246,24 @@ fn main() {
                     |step| step_to_time.step_to_ns(step),
                 );
 
-                assert!(!fails.is_empty(), "TODO: better failures");
-
-                for fail in fails {
-                    let proto = &protos[fail.proto_id];
-                    let msg = format!(
-                        "[{}] executing step {} of the transaction: {} != {}",
-                        fail.thread_name,
-                        fail.thread_local_step,
-                        fail.a.to_hex_str(),
-                        fail.b.to_hex_str()
-                    );
-                    d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+                for fail_idx in fail_indices {
+                    if ii > 0 {
+                        println!();
+                    }
+                    ii += 1;
+                    let fails = &failures[fail_idx].1;
+                    assert!(!fails.is_empty(), "TODO: better failures");
+                    for fail in fails {
+                        let proto = &protos[fail.proto_id];
+                        let msg = format!(
+                            "[{}] executing step {} of the transaction: {} != {}",
+                            fail.thread_name,
+                            fail.thread_local_step,
+                            fail.a.to_hex_str(),
+                            fail.b.to_hex_str()
+                        );
+                        d.emit_diagnostic_stmt(proto, &fail.stmt, &msg, Level::Error);
+                    }
                 }
             }
         } else {
@@ -307,15 +347,7 @@ fn print_trace(
             if !is_first {
                 print!(", ");
             }
-            if let Some(v) = arg {
-                if display_hex {
-                    print!("0x{}", v.to_hex_str());
-                } else {
-                    print!("{}", v.to_dec_str());
-                }
-            } else {
-                print!("X");
-            }
+            print!("{}", arg.to_string(display_hex));
         }
         print!(");");
         if show_steps {

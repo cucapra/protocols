@@ -130,7 +130,7 @@ fn lower_meta_core(
     let mut protocol_inputs = FxHashMap::default();
     let mut heads = Vec::new();
     let mut bank_states = Vec::new();
-    let mut bank_counts = meta.bank_counts.clone();
+    let mut bank_counts = meta.instance_capacity.clone();
     for count in &mut bank_counts {
         *count = (*count).max(1);
     }
@@ -350,6 +350,7 @@ mod tests {
         let (symbols, modules) = frontend(
             &["../tests/adders/adder_d1/add_d1.prot"],
             &mut handler,
+            false,
             false,
         )
         .unwrap();

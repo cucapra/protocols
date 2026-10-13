@@ -145,7 +145,7 @@ mod tests {
 
     fn contracted_protocols(filename: &str) -> Vec<ProtoGraph> {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false).unwrap();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
 
         module
@@ -201,6 +201,10 @@ mod tests {
         }
 
         let meta = steady_driver_meta_from_protocols(&graphs);
-        assert!(meta.nodes.iter().all(|node| node.state.live.is_empty()));
+        assert!(
+            meta.nodes
+                .iter()
+                .all(|node| node.state.post_phase.is_empty())
+        );
     }
 }
