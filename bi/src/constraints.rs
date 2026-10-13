@@ -30,6 +30,7 @@ impl ArgValue {
                     )
                 }
             }
+            Type::Tuple(_) => todo!("Handle tuples in BI constraints"),
             Type::Struct(_) => unreachable!("args cannot be structs"),
             Type::Unknown => unreachable!("arg types are always known"),
         }

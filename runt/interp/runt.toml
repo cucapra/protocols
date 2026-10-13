@@ -100,6 +100,15 @@ expect_name = "illegal_observation_conditional.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d0/illegal_observation_conditional.tx --verilog tests/adders/adder_d0/add_d0.v --protocol tests/adders/adder_d0/add_d0.prot 2>&1"
 
 [[tests]]
+name = "interp.tests_adders_adder_d1_add_d1_tuple.add_d1_tuple_interp"
+paths = [
+  "../../tests/adders/adder_d1/add_d1_tuple.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "add_d1_tuple.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/add_d1_tuple.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1_tuple.prot 2>&1"
+
+[[tests]]
 name = "interp.tests_adders_adder_d1_add_incorrect.add_incorrect_interp"
 paths = [
   "../../tests/adders/adder_d1/add_incorrect.tx",
@@ -233,6 +242,15 @@ paths = [
 expect_dir = "../../tests/adders/adder_d1/expects"
 expect_name = "wait_and_add_incorrect_implicit.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/wait_and_add_incorrect_implicit.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>&1"
+
+[[tests]]
+name = "interp.tests_adders_adder_d2_add_d2_tuple.add_d2_tuple_interp"
+paths = [
+  "../../tests/adders/adder_d2/add_d2_tuple.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "add_d2_tuple.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d2/add_d2_tuple.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2_tuple.prot --max-steps 4 2>&1"
 
 [[tests]]
 name = "interp.tests_adders_adder_d2_both_threads_pass.both_threads_pass_interp"
@@ -692,6 +710,60 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "second_thread_fails.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/multipliers/mult_d2/second_thread_fails.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_mux2_tuple.mux2_tuple_interp"
+paths = [
+  "../../tests/muxes/mux2_tuple.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "mux2_tuple.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/mux2_tuple.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/mux2_tuple.prot --module comb_mux 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_mux2_tuple_bitslice.mux2_tuple_bitslice_interp"
+paths = [
+  "../../tests/muxes/mux2_tuple_bitslice.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "mux2_tuple_bitslice.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/mux2_tuple_bitslice.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/mux2_tuple_bitslice.prot --module comb_mux 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_mux2_tuple_fail.mux2_tuple_fail_interp"
+paths = [
+  "../../tests/muxes/mux2_tuple_fail.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "mux2_tuple_fail.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/mux2_tuple_fail.tx --verilog tests/muxes/comb_mux.v --protocol tests/muxes/mux2_tuple.prot --module comb_mux 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_mux5_tuple.mux5_tuple_interp"
+paths = [
+  "../../tests/muxes/mux5_tuple.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "mux5_tuple.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/mux5_tuple.tx --verilog tests/muxes/mux5.v --protocol tests/muxes/mux5_tuple.prot --module comb_mux5 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_mux5_tuple_bitslice.mux5_tuple_bitslice_interp"
+paths = [
+  "../../tests/muxes/mux5_tuple_bitslice.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "mux5_tuple_bitslice.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/mux5_tuple_bitslice.tx --verilog tests/muxes/mux5.v --protocol tests/muxes/mux5_tuple_bitslice.prot --module comb_mux5 2>&1"
+
+[[tests]]
+name = "interp.tests_muxes_mux5_tuple_fail.mux5_tuple_fail_interp"
+paths = [
+  "../../tests/muxes/mux5_tuple_fail.tx",
+]
+expect_dir = "../../tests/muxes/expects"
+expect_name = "mux5_tuple_fail.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/muxes/mux5_tuple_fail.tx --verilog tests/muxes/mux5.v --protocol tests/muxes/mux5_tuple.prot --module comb_mux5 2>&1"
 
 [[tests]]
 name = "interp.tests_picorv32_unsigned_mul_no_reset.unsigned_mul_no_reset_interp"

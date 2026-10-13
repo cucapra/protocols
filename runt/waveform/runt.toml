@@ -34,7 +34,7 @@ paths = [
 ]
 expect_dir = "../../examples/mf8/expects"
 expect_name = "mf8_regfile.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --bound None --ascii-waveform --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --bound 2 --ascii-waveform --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
 name = "waveform.examples_picorv32_unsigned_mul.unsigned_mul_waveform.ast"

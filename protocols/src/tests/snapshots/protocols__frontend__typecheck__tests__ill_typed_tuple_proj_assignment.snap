@@ -1,0 +1,9 @@
+---
+source: protocols/src/frontend/typecheck.rs
+expression: content
+---
+error: Type mismatch in assignment: DUT.a : u1 and pair.1 : u8.
+  ┌─ tests/misc/ill_typed_tuple_proj_assignment.prot:6:3
+  │
+6 │   DUT.a := pair.1;  // Bit-widths don't match
+  │   ^^^^^^^^^^^^^^^^ Type mismatch in assignment: DUT.a : u1 and pair.1 : u8.

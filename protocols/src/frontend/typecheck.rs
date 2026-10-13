@@ -181,6 +181,32 @@ fn type_check_expr(
         // evaluates to true or false
         Expr::IsLastIteration => Ok(Type::BitVec(1)),
         Expr::IterCount(width) => Ok(Type::BitVec(*width)),
+        Expr::TupleProj(expr_id, idx) => {
+            let expr_ty = type_check_expr(tr, st, handler, expr_id)?;
+            if let Type::Tuple(tuple_id) = expr_ty {
+                let tuple_ty = &st[tuple_id];
+                match tuple_ty.get(*idx) {
+                    None => {
+                        let error_msg = format!(
+                            "Can't project index {} from tuple type {} (index out of bounds)",
+                            idx,
+                            serialize_type(st, expr_ty)
+                        );
+                        handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                        Err(anyhow!(error_msg))
+                    }
+                    Some(ty) => Ok(*ty),
+                }
+            } else {
+                let error_msg = format!(
+                    "Attempted to project index {} from a non-tuple type {}",
+                    idx,
+                    serialize_type(st, expr_ty)
+                );
+                handler.emit_diagnostic_expr(tr, expr_id, &error_msg, Level::Error);
+                Err(anyhow!(error_msg))
+            }
+        }
     }
 }
 
@@ -623,6 +649,27 @@ mod tests {
             "simple_bounded_loop",
             "../tests/counters/simple_bounded_loop.prot",
         );
+    }
+
+    #[test]
+    fn test_mux2_tuple() {
+        test_helper("mux2_tuple", "../tests/muxes/mux2_tuple.prot");
+    }
+
+    #[test]
+    fn test_tuple_index_out_of_bounds() {
+        test_helper(
+            "tuple_index_out_of_bounds",
+            "../tests/misc/tuple_index_out_of_bounds.prot",
+        );
+    }
+
+    #[test]
+    fn test_ill_typed_tuple_proj_assignment() {
+        test_helper(
+            "ill_typed_tuple_proj_assignment",
+            "../tests/misc/ill_typed_tuple_proj_assignment.prot",
+        )
     }
 
     // Specific Tests
