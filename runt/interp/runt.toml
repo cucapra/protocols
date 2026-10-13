@@ -1,13 +1,13 @@
 ver = "0.4.1"
 
 [[tests]]
-name = "interp.examples_mf8_mf8_regfile.mf8_regfile_interp"
+name = "interp.examples_enginev_enginev_regfile.enginev_regfile_interp"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.interp.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>&1"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/enginev/enginev_regfile.tx --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>&1"
 
 [[tests]]
 name = "interp.examples_picorv32_unsigned_mul.unsigned_mul_interp"

@@ -1,13 +1,13 @@
 ver = "0.4.1"
 
 [[tests]]
-name = "bi.examples_mf8_mf8_regfile.mf8_regfile_bi"
+name = "bi.examples_enginev_enginev_regfile.enginev_regfile_bi"
 paths = [
-  "../../examples/mf8/mf8_regfile.prot",
+  "../../examples/enginev/enginev_regfile.prot",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/mf8/mf8_regfile.prot --wave examples/mf8/mf8_regfile.fst --instances dut:Mf8RegFile 2>&1"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/enginev/enginev_regfile.prot --wave examples/enginev/enginev_regfile.fst --instances dut:Mf8RegFile 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone.ethmac_first_62us_bi"

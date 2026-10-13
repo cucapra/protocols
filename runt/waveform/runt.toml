@@ -1,40 +1,40 @@
 ver = "0.4.1"
 
 [[tests]]
-name = "waveform.examples_mf8_mf8_regfile.mf8_regfile_waveform.ast"
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.ast"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.waveform.expect"
-cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/mf8/mf8_regfile.tx --ascii-waveform --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/enginev/enginev_regfile.tx --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
-name = "waveform.examples_mf8_mf8_regfile.mf8_regfile_waveform.graph"
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.graph"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --respect-forks --determinize --ascii-waveform --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --respect-forks --determinize --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
-name = "waveform.examples_mf8_mf8_regfile.mf8_regfile_waveform.ts"
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.ts"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --transition-system --ascii-waveform --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --transition-system --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
-name = "waveform.examples_mf8_mf8_regfile.mf8_regfile_waveform.bmc"
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.bmc"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.waveform.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --bound 3 --ascii-waveform --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --bound 3 --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
 name = "waveform.examples_picorv32_unsigned_mul.unsigned_mul_waveform.ast"

@@ -1,31 +1,31 @@
 ver = "0.4.1"
 
 [[tests]]
-name = "graph_interp.examples_mf8_mf8_regfile.mf8_regfile_graph_interp"
+name = "graph_interp.examples_enginev_enginev_regfile.enginev_regfile_graph_interp"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.examples_mf8_mf8_regfile.mf8_regfile_graph_interp.contract_edges"
+name = "graph_interp.examples_enginev_enginev_regfile.enginev_regfile_graph_interp.contract_edges"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg --contract-edges 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg --contract-edges 2>/dev/null"
 
 [[tests]]
-name = "graph_interp.examples_mf8_mf8_regfile.mf8_regfile_graph_interp.respect_forks"
+name = "graph_interp.examples_enginev_enginev_regfile.enginev_regfile_graph_interp.respect_forks"
 paths = [
-  "../../examples/mf8/mf8_regfile.tx",
+  "../../examples/enginev/enginev_regfile.tx",
 ]
-expect_dir = "../../examples/mf8/expects"
-expect_name = "mf8_regfile.graph_interp.expect"
-cmd = "cd ../.. && target/debug/graph-interp --transactions examples/mf8/mf8_regfile.tx --verilog examples/mf8/mf8_reg.v --protocol examples/mf8/mf8_regfile.prot --module mf8_reg --respect-forks --determinize 2>/dev/null"
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg --respect-forks --determinize 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.examples_picorv32_unsigned_mul.unsigned_mul_graph_interp"

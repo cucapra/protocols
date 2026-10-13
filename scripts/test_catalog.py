@@ -497,9 +497,9 @@ TX_CASES = {
         "top": "reqwalker",
         "expect": "pass",
     },
-    "examples/mf8/mf8_regfile.tx": {
-        "protocol": "examples/mf8/mf8_regfile.prot",
-        "verilog": ("examples/mf8/mf8_reg.v",),
+    "examples/enginev/enginev_regfile.tx": {
+        "protocol": "examples/enginev/enginev_regfile.prot",
+        "verilog": ("examples/enginev/enginev_reg.v",),
         "top": "mf8_reg",
         "expect": "pass",
     },
@@ -1129,9 +1129,9 @@ BI_CASES = {
         # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
         "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
     },
-    "examples.mf8.mf8_regfile.bi": {
-        "protocol": "examples/mf8/mf8_regfile.prot",
-        "wave": "examples/mf8/mf8_regfile.fst",
+    "examples.enginev.enginev_regfile.bi": {
+        "protocol": "examples/enginev/enginev_regfile.prot",
+        "wave": "examples/enginev/enginev_regfile.fst",
         "instances": ("dut:Mf8RegFile",),
         "expect": "pass",
     },
