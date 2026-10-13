@@ -281,7 +281,7 @@ fn parse_arg(
                             return Err(anyhow!(msg));
                         }
                     }
-                    bvvs.into()
+                    Value::new_tuple(bvvs)
                 }
             } else {
                 let msg = format!(
