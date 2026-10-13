@@ -50,10 +50,12 @@ bv_tpe = { "u" ~ dec_integer }
 seq_tpe = {"[" ~ tpe ~ "]"}
 seq_plus_tpe = {"[" ~ tpe ~ "]+"}
 seq_plus_plus_tpe = {"[" ~ tpe ~ "]++"}
-tuple_tpe = {"(" ~ tpe ~ "," ~ tpe ~ ")"}
+
+tpelist = _{ tpe ~ ("," ~ tpe)+ ~ ","? }
+tuple_tpe = {"(" ~ tpelist ~ ")"}
 
 // Projecting from tuples
-proj_idx = @{ ASCII_DIGIT }
+proj_idx = @{ ASCII_DIGIT+ }
 tuple_proj = ${ path_id ~ ("." ~ proj_idx)+ }
 
 assign = {path_id ~ ":=" ~ (expr | path_id) ~ ";" }

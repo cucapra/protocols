@@ -652,8 +652,8 @@ mod tests {
     }
 
     #[test]
-    fn test_comb_mux_tuple() {
-        test_helper("comb_mux_tuple", "../tests/muxes/comb_mux_tuple.prot");
+    fn test_mux2_tuple() {
+        test_helper("mux2_tuple", "../tests/muxes/mux2_tuple.prot");
     }
 
     #[test]

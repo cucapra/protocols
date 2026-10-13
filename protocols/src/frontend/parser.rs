@@ -323,30 +323,22 @@ fn parse_type(
                 Ok(Type::Seq(seq_id))
             }
             Rule::tuple_tpe => {
-                let mut inner = inner_type.into_inner();
-                let first_pair = inner.next().unwrap();
-                let first_type = parse_type(diag, fileid, st, first_pair.clone())?;
-                let second_pair = inner.next().unwrap();
-                let second_type = parse_type(diag, fileid, st, second_pair.clone())?;
-                match (first_type, second_type) {
-                    (Type::BitVec(_), Type::BitVec(_)) => {
-                        let tuple_id = st.add_tuple(Tuple::new(vec![first_type, second_type]));
-                        Ok(Type::Tuple(tuple_id))
-                    }
-                    (_, _) => {
-                        let violating_rule = if let Type::BitVec(_) = first_type {
-                            second_pair.as_rule()
-                        } else {
-                            first_pair.as_rule()
-                        };
+                let mut component_tys = vec![];
+                for component_pair in inner_type.into_inner() {
+                    let component_ty = parse_type(diag, fileid, st, component_pair.clone())?;
+                    if let Type::BitVec(_) = component_ty {
+                        component_tys.push(component_ty);
+                    } else {
                         let msg = format!(
-                            "Tuple components must be bit-vectors, but {:?} is not a bit-vector type",
-                            violating_rule
+                            "Tuple components must be bit-vectors, but {} is not a bit-vector type",
+                            component_pair.as_str()
                         );
-                        diag.emit_diagnostic_parsing(&msg, fileid, &pair, Level::Error);
-                        Err(msg)
+                        diag.emit_diagnostic_parsing(&msg, fileid, &component_pair, Level::Error);
+                        return Err(msg);
                     }
                 }
+                let tuple_id = st.add_tuple(Tuple::new(component_tys));
+                Ok(Type::Tuple(tuple_id))
             }
             _ => {
                 let msg = format!(

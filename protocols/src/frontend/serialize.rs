@@ -640,14 +640,14 @@ pub mod tests {
 
     #[test]
     fn test_comb_mux() {
-        test_helper("../tests/muxes/comb_mux_tuple.prot", "comb_mux_tuple");
+        test_helper("../tests/muxes/mux2_tuple.prot", "mux2_tuple");
     }
 
     #[test]
     fn test_comb_mux_bitslice() {
         test_helper(
-            "../tests/muxes/comb_mux_tuple_bitslice.prot",
-            "comb_mux_tuple_bitslice",
+            "../tests/muxes/mux2_tuple_bitslice.prot",
+            "mux2_tuple_bitslice",
         );
     }
 
@@ -658,8 +658,8 @@ pub mod tests {
             BitVecValue::from_u64(255, 8),
             BitVecValue::from_u64(5, 8),
         ]);
-        assert_eq!(serialize_value(&tuple, false), "(1, 255, 5)");
-        assert_eq!(serialize_value(&tuple, true), "(0x01, 0xff, 0x05)");
+        assert_eq!(serialize_value(&tuple, false), "(1,255,5)");
+        assert_eq!(serialize_value(&tuple, true), "(0x01,0xff,0x05)");
     }
 
     #[test]

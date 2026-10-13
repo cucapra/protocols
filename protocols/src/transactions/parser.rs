@@ -436,8 +436,8 @@ mod tests {
     #[test]
     fn test_tuple_arg() {
         let (result, errors) = parse_tx(
-            "../tests/muxes/comb_mux_tuple.prot",
-            "comb_mux_tuple",
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
             "trace { first((1, 2), 1); second((0x3, 0b100), 4); }",
         );
         let traces = result.unwrap_or_else(|e| panic!("{e}\n{errors}"));
@@ -471,28 +471,28 @@ mod tests {
     #[test]
     fn test_tuple_arg_too_many_components() {
         assert_parse_error(
-            "../tests/muxes/comb_mux_tuple.prot",
-            "comb_mux_tuple",
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
             "trace { first((1, 2, 3), 1); }",
-            "Expected 2 values for a tuple but got 3 values instead",
+            "Expected 2 values for tuple type (u8,u8) but got 3 values instead",
         );
     }
 
     #[test]
     fn test_tuple_arg_too_few_components() {
         assert_parse_error(
-            "../tests/muxes/comb_mux_tuple.prot",
-            "comb_mux_tuple",
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
             "trace { first((1,), 1); }",
-            "Expected 2 values for a tuple but got 1 values instead",
+            "Expected 2 values for tuple type (u8,u8) but got 1 values instead",
         );
     }
 
     #[test]
     fn test_tuple_arg_component_type_mismatch() {
         assert_parse_error(
-            "../tests/muxes/comb_mux_tuple.prot",
-            "comb_mux_tuple",
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
             "trace { first(([1,2], 2), 1); }",
             "Invalid sequence of values for argument of type u8",
         );
@@ -501,10 +501,20 @@ mod tests {
     #[test]
     fn test_ill_typed_transaction() {
         assert_parse_error(
-            "../tests/muxes/comb_mux_tuple.prot",
-            "comb_mux_tuple",
+            "../tests/muxes/mux2_tuple.prot",
+            "mux2_tuple",
             "trace { first((1, 2), (3, 4)); }",
             "Invalid value for argument of type u8",
+        );
+    }
+
+    #[test]
+    fn test_5ary_tuple_too_many_values() {
+        assert_parse_error(
+            "../tests/muxes/mux5_tuple.prot",
+            "mux5_tuple",
+            "trace { zeroth((0, 1, 2, 3, 4, 5, 6), 1); }",
+            "Expected 5 values for tuple type (u8,u8,u8,u8,u8) but got 7 values instead",
         );
     }
 }
