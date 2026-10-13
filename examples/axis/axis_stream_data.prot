@@ -35,7 +35,7 @@ prot idle<DUT: Axis>() {
 // The body of this protocol would set `tkeep` to 1 for all the non-last beats
 prot stream<DUT: Axis>(data: [u32]+, tkeep_last: u4) {
   DUT.aresetn := 1'b1;  // Active-low reset
-  DUT.tready := 1'b1;  // Raphaell: No backpressure 
+  DUT.tready := 1'b1;  // Raphael: No backpressure 
 
   for d in data {
     // Wait till DUT asserts there is valid data
