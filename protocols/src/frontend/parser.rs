@@ -425,7 +425,23 @@ impl ParserContext<'_> {
                 )?;
                 let id_pair = if first_rule.as_rule() == Rule::annotation {
                     // Parse annotation - currently we only support #[idle]
-                    self.proto.is_idle = true;
+                    let inner_rule = first_rule.into_inner().next().unwrap();
+                    let name = inner_rule.as_str();
+                    match name {
+                        "idle" => self.proto.is_idle = true,
+                        "reset" => self.proto.is_reset = true,
+                        other => {
+                            let msg = format!("Unknown attribute: {other}");
+                            self.diag.emit_diagnostic_parsing(
+                                &msg,
+                                self.fileid,
+                                &inner_rule,
+                                Level::Error,
+                            );
+                            return Err(msg);
+                        }
+                    };
+
                     self.expect_rule(
                         inner_rules.next(),
                         &pair,
