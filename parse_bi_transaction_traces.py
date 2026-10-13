@@ -106,7 +106,7 @@ def main():
         lines = parse_bi_output(bi_output_filepath)
         if not lines:
             print(
-                f"Error: Missing '// [time: ...]' lines in BI output, rerun using --show-waveform-time and --include-idle",
+                "Error: Missing '// [time: ...]' lines in BI output, rerun using --show-waveform-time and --include-idle",
                 file=sys.stderr,
             )
             exit(1)
