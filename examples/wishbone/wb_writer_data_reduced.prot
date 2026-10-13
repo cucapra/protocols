@@ -1,3 +1,8 @@
+// This file is the same as `wishbone.prot`, but only contains the protocol definitions
+// that actually appear in the transaction trace output by the BI on the wb_writer waveform.
+// (This file is used to measure how the no. of protocol definitions affects the 
+// wall-clock time of the BI on long waveforms.)
+
 // Wishbone pins for this project from the server (the one servicing requests) perspective
 interface Wishbone {
     // high active RST pin (the wishbone spec requires all signals to be high active)
