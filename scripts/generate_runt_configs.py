@@ -29,7 +29,11 @@ JOINT_DRIVER_UNSUPPORTED = {
     "tests/multi/multi_data/multi_data.prot",
 }
 
+GRAPH_INTERP_UNSUPPORTED = {"for_in_loop", "repeat_loop", "tuples"}
+
 # Bounded lowering is prohibitively expensive
+# TODO: maybe this should become a dynamically determined
+# TODO: property based on trace length/ # of prootocols.
 BOUNDED_DRIVER_EXCLUDED = {
     "examples/apb/ch_apb_actual.tx",
     "examples/apb/ip_apb.tx",
@@ -42,21 +46,6 @@ BOUNDED_DRIVER_EXCLUDED = {
     "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
     "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx",
     "tests/multipliers/mult_d2/joint_mul_d2_long.tx",
-}
-
-# These stress traces are compared only between the AST and joint drivers.
-JOINT_WAVEFORM_CASES = {
-    "examples/wishbone/joint_read_write_long.tx",
-    "tests/adders/adder_d1/joint_add_d1_long.tx",
-    "tests/adders/adder_d2/joint_add_d2_long.tx",
-    "tests/alus/joint_alu_d1_long.tx",
-    "tests/alus/joint_alu_d2_long.tx",
-    "tests/multipliers/mult_d2/joint_mul_d2_long.tx",
-}
-
-# The wishbone stress trace also remains useful in the regular interpreter suite.
-INTERP_EXCLUDED = JOINT_WAVEFORM_CASES - {
-    "examples/wishbone/joint_read_write_long.tx",
 }
 
 
@@ -213,9 +202,12 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*binary_prefix("graph-interp"), "--transactions", " ".join(case["paths"])]
     _tx_tail(cmd, case, with_max_steps=False)
 
-    # Wishbone and FIFO require whole-trace fork semantics.
-    if case["paths"][0].startswith("tests/fifo/") or case["paths"][0].startswith(
-        "tests/wishbone/"
+    # These flows lower every protocol in the file, not only the trace's calls.
+    if (
+        GRAPH_INTERP_UNSUPPORTED & protocol_constructs(case["protocol_path"])
+        # Wishbone and FIFO require whole-trace fork semantics.
+        or case["paths"][0].startswith("tests/fifo/")
+        or case["paths"][0].startswith("tests/wishbone/")
     ):
         flows = [("trace_graph", ["--flow", "trace-graph"])]
     else:
@@ -295,22 +287,16 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ]
     _tx_tail(unbounded_cmd, case, with_max_steps=False)
 
-    path = case["paths"][0]
     variants: list[tuple[str, str]] = [
         ("ast", repo_root_command(ast_cmd, stderr="discard")),
+        ("graph", repo_root_command(graph_cmd, stderr="discard")),
+        ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
-    if path not in JOINT_WAVEFORM_CASES:
-        variants.extend(
-            [
-                ("graph", repo_root_command(graph_cmd, stderr="discard")),
-                ("ts", repo_root_command(ts_cmd, stderr="discard")),
-            ]
-        )
     if case["protocol_path"] not in JOINT_DRIVER_UNSUPPORTED:
         variants.append(("joint", repo_root_command(unbounded_cmd, stderr="discard")))
 
     # Expensive or unsupported bounded cases are centralized in the generator.
-    if path not in BOUNDED_DRIVER_EXCLUDED:
+    if case["paths"][0] not in BOUNDED_DRIVER_EXCLUDED:
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 
     return variants
@@ -373,23 +359,28 @@ RUNT_BUILDERS = {
 
 
 @lru_cache(maxsize=None)
-def protocol_constructs(protocol_path: str) -> frozenset[str]:
+def protocol_constructs(
+    protocol_path: str, transaction_path: str | None = None
+) -> frozenset[str]:
     """
     Constructs used anywhere in a .prot file, via `protocols-cli constructs`.
     """
+    command = [
+        "cargo",
+        "run",
+        "-q",
+        "--bin",
+        "protocols-cli",
+        "--",
+        "--allow-branch-on-arg",
+        "-p",
+        protocol_path,
+        "constructs",
+    ]
+    if transaction_path is not None:
+        command.extend(["--transactions", transaction_path])
     result = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "-q",
-            "--bin",
-            "protocols-cli",
-            "--",
-            "--allow-branch-on-arg",
-            "-p",
-            protocol_path,
-            "constructs",
-        ],
+        command,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -405,15 +396,12 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
 
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
-    # Loop constructs & tuples the graph interpreter cannot handle (AST construct names).
-    graph_interp_unsupported = {"for_in_loop", "repeat_loop", "tuples"}
-
     selected = [
         c
         for c in cases
         if c["expected"] == "pass"
-        and c["paths"][0] not in JOINT_WAVEFORM_CASES
-        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+        and not GRAPH_INTERP_UNSUPPORTED
+        & protocol_constructs(c["protocol_path"], c["paths"][0])
     ]
     # exclude s3 from graph_interp cases
     # TODO: re-include
@@ -423,7 +411,7 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
 
 
 def waveform_cases(cases: list[dict]) -> list[dict]:
-    """Short graph-interpreter cases suitable for cycle-exact comparison."""
+    """Graph-interpreter cases suitable for cycle-exact comparison."""
     # these cases are correct, but our ASCII diffing isn't good enough
     # for us to know they are the same
     xfailed = [
@@ -436,15 +424,9 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
         "tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
     ]
 
-    regular = [
+    return [
         case for case in graph_interp_cases(cases) if case["paths"][0] not in xfailed
     ]
-    joint = [
-        case
-        for case in cases
-        if case["paths"][0] in JOINT_WAVEFORM_CASES and case not in regular
-    ]
-    return regular + joint
 
 
 def fail_cases(cases: list[dict]) -> list[dict]:
@@ -503,10 +485,7 @@ def generate_runt_configs() -> None:
     # Each suite maps a name to (runner, cases). interp + graph_interp
     # together cover every test.
     suite_specs = {
-        "interp": (
-            "interp",
-            [case for case in tx if case["paths"][0] not in INTERP_EXCLUDED],
-        ),
+        "interp": ("interp", tx),
         "bi": ("bi", bi),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),

@@ -109,6 +109,15 @@ expect_name = "aes128.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions examples/tinyaes128/aes128.tx --verilog examples/tinyaes128/aes_128.v --protocol examples/tinyaes128/aes128.prot --module aes_128 --flow trace-graph 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.examples_wishbone_joint_read_write_long.joint_read_write_long_graph_interp.trace_graph"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/wishbone/joint_read_write_long.tx --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb --flow trace-graph 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_adders_adder_d0_add_combinational.add_combinational_graph_interp.sequential"
 paths = [
   "../../tests/adders/adder_d0/add_combinational.tx",
@@ -163,6 +172,24 @@ expect_name = "both_threads_pass.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/both_threads_pass.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot --flow trace-graph 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_graph_interp.sequential"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/joint_add_d1_long.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot --flow sequential 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_graph_interp.trace_graph"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/joint_add_d1_long.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot --flow trace-graph 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_adders_adder_d1_wait_and_add_correct.wait_and_add_correct_graph_interp.sequential"
 paths = [
   "../../tests/adders/adder_d1/wait_and_add_correct.tx",
@@ -199,6 +226,24 @@ expect_name = "both_threads_pass.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/both_threads_pass.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot --flow trace-graph 2>/dev/null"
 
 [[tests]]
+name = "graph_interp.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_graph_interp.sequential"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/joint_add_d2_long.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot --flow sequential 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_graph_interp.trace_graph"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/joint_add_d2_long.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot --flow trace-graph 2>/dev/null"
+
+[[tests]]
 name = "graph_interp.tests_alus_alu_d1.alu_d1_graph_interp.sequential"
 paths = [
   "../../tests/alus/alu_d1.tx",
@@ -233,6 +278,42 @@ paths = [
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d2.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/alu_d2.tx --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 --flow trace-graph 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_alus_joint_alu_d1_long.joint_alu_d1_long_graph_interp.sequential"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d1_long.tx --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 --flow sequential 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_alus_joint_alu_d1_long.joint_alu_d1_long_graph_interp.trace_graph"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d1_long.tx --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 --flow trace-graph 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_alus_joint_alu_d2_long.joint_alu_d2_long_graph_interp.sequential"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d2_long.tx --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 --flow sequential 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_alus_joint_alu_d2_long.joint_alu_d2_long_graph_interp.trace_graph"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d2_long.tx --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 --flow trace-graph 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_graph_interp.sequential"
@@ -629,6 +710,24 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "both_threads_pass.graph_interp.expect"
 cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/both_threads_pass.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot --flow trace-graph 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_graph_interp.sequential"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot --flow sequential 2>/dev/null"
+
+[[tests]]
+name = "graph_interp.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_graph_interp.trace_graph"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.graph_interp.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot --flow trace-graph 2>/dev/null"
 
 [[tests]]
 name = "graph_interp.tests_wishbone_wishbone.wishbone_graph_interp.trace_graph"

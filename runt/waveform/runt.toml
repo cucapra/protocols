@@ -253,6 +253,24 @@ expect_name = "joint_read_write_long.waveform.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/wishbone/joint_read_write_long.tx --ascii-waveform --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>/dev/null"
 
 [[tests]]
+name = "waveform.examples_wishbone_joint_read_write_long.joint_read_write_long_waveform.graph"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/wishbone/joint_read_write_long.tx --flow trace-graph --ascii-waveform --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_wishbone_joint_read_write_long.joint_read_write_long_waveform.ts"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/wishbone/joint_read_write_long.tx --flow trace-system --ascii-waveform --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_wishbone_joint_read_write_long.joint_read_write_long_waveform.joint"
 paths = [
   "../../examples/wishbone/joint_read_write_long.tx",
@@ -406,6 +424,24 @@ expect_name = "joint_add_d1_long.waveform.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/joint_add_d1_long.tx --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_waveform.graph"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/joint_add_d1_long.tx --flow trace-graph --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_waveform.ts"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d1/joint_add_d1_long.tx --flow trace-system --ascii-waveform --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_waveform.joint"
 paths = [
   "../../tests/adders/adder_d1/joint_add_d1_long.tx",
@@ -467,6 +503,24 @@ paths = [
 expect_dir = "../../tests/adders/adder_d2/expects"
 expect_name = "joint_add_d2_long.waveform.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d2/joint_add_d2_long.tx --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_waveform.graph"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/joint_add_d2_long.tx --flow trace-graph --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_waveform.ts"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/adders/adder_d2/joint_add_d2_long.tx --flow trace-system --ascii-waveform --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_waveform.joint"
@@ -577,6 +631,24 @@ expect_name = "joint_alu_d1_long.waveform.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/joint_alu_d1_long.tx --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
 
 [[tests]]
+name = "waveform.tests_alus_joint_alu_d1_long.joint_alu_d1_long_waveform.graph"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d1_long.tx --flow trace-graph --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d1_long.joint_alu_d1_long_waveform.ts"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d1_long.tx --flow trace-system --ascii-waveform --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>/dev/null"
+
+[[tests]]
 name = "waveform.tests_alus_joint_alu_d1_long.joint_alu_d1_long_waveform.joint"
 paths = [
   "../../tests/alus/joint_alu_d1_long.tx",
@@ -593,6 +665,24 @@ paths = [
 expect_dir = "../../tests/alus/expects"
 expect_name = "joint_alu_d2_long.waveform.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/joint_alu_d2_long.tx --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d2_long.joint_alu_d2_long_waveform.graph"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d2_long.tx --flow trace-graph --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_alus_joint_alu_d2_long.joint_alu_d2_long_waveform.ts"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/alus/joint_alu_d2_long.tx --flow trace-system --ascii-waveform --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_alus_joint_alu_d2_long.joint_alu_d2_long_waveform.joint"
@@ -1520,6 +1610,24 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "joint_mul_d2_long.waveform.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_waveform.graph"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --flow trace-graph --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
+
+[[tests]]
+name = "waveform.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_waveform.ts"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --flow trace-system --ascii-waveform --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>/dev/null"
 
 [[tests]]
 name = "waveform.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_waveform.joint"

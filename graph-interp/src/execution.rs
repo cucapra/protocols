@@ -218,6 +218,8 @@ fn record_transition_waveform(
 
 /// Simulates a transition system while invoking a per-cycle input-driving callback.
 /// TODO: the amount of arguments to this function is super ugly.
+/// TODO: I tried to stick these arguments into a struct,
+/// TODO: but that just made the code even uglier.
 #[allow(clippy::too_many_arguments)]
 fn simulate_transition_system(
     cli: &Cli,
