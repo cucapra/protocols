@@ -1,0 +1,6 @@
+
+thread 'main' (14916314) panicked at /Users/eyn5/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wellen-0.25.6/src/viewers.rs:157:52:
+failed to open input file!: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+---CODE---
+101

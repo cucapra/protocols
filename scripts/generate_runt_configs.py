@@ -74,12 +74,17 @@ def replace_non_alphanumerics(value: object) -> str:
 
 
 def case_stem(case: dict) -> str:
-    # Antmicro & Brave New World test cases for the BI share the same `.prot`
-    # file but have multiple waveforms, so we use the waveform files'
+    # Antmicro, Brave New World & APB test cases for the BI share the same
+    # `.prot` file but have multiple waveforms, so we use the waveform files'
     # names to identify a particular test, otherwise we use the `.prot` file's stem
     # to identify a test
     wave = case.get("wave")
-    if wave and ("antmicro" in wave or "fpga-debugging" in wave or "ethmac" in wave):
+    if wave and (
+        "antmicro" in wave
+        or "fpga-debugging" in wave
+        or "ethmac" in wave
+        or "apb" in wave
+    ):
         return Path(wave).stem
     # for all the .wave bi benchmarks, we use the id
     if wave and (wave.endswith(".wave") or "litex" in wave or "wb_stream" in wave):
@@ -253,10 +258,13 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     # maybe in the future we can flag a slow/fast runt config
     # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
     # Note: ignoring `s3_fixed.tx` for graph-interpreter for now as it is a Brave New World test case
+    # The two APB `.tx` files are also excluded for now (stack overflows in execution)
     if (
         case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
         and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
         and case["paths"][0] != "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx"
+        and case["paths"][0] != "examples/apb/ip_apb.tx"
+        and case["paths"][0] != "examples/apb/ch_apb_actual.tx"
     ):
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 

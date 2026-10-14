@@ -1,0 +1,14 @@
+// Same as ch_apb.tx, but with an extra `read` transaction in the middle to show 
+
+// Arguments for read & write transactions:
+// write(addr, data, strb, pprot, slverr)
+// read (addr, data, pprot, slverr)
+trace {
+    reset();
+    idle();
+    write(0x00, 0x12345678, 0xF, 0x0, 0x0);
+    read(0x00, 0x00000000, 0x0, 0x0);   // We add this extra "buggy" transaction here to show that `PRDATA` doesn't contain `0x12345678  
+    read(0x00, 0x12345678, 0x0, 0x0);   // Read data arrives one cycle too late
+    idle();
+}
+
