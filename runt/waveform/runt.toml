@@ -1,6 +1,42 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.ast"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/enginev/enginev_regfile.tx --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.graph"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --respect-forks --determinize --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.ts"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --transition-system --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
+
+[[tests]]
+name = "waveform.examples_enginev_enginev_regfile.enginev_regfile_waveform.bmc"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.waveform.expect"
+cmd = "cd ../.. && target/debug/graph-interp --transactions examples/enginev/enginev_regfile.tx --bound 3 --ascii-waveform --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>/dev/null"
+
+[[tests]]
 name = "waveform.examples_picorv32_unsigned_mul.unsigned_mul_waveform.ast"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",

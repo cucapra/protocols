@@ -1,0 +1,7 @@
+Trace 0 executed successfully!
+Data_In[7:0]  x 42  x 43  x  0
+Rr_Addr[4:0]  0  0  0  0  6  6
+Rd_Addr[4:0]  5  5  6  6  5  5
+Wr            0  1  0  1  0  0
+Rr_Data[7:0]  0  0  0  0  0 43
+Rd_Data[7:0]  0  0 42  0 43 42

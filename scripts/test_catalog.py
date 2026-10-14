@@ -497,6 +497,12 @@ TX_CASES = {
         "top": "reqwalker",
         "expect": "pass",
     },
+    "examples/enginev/enginev_regfile.tx": {
+        "protocol": "examples/enginev/enginev_regfile.prot",
+        "verilog": ("examples/enginev/enginev_reg.v",),
+        "top": "mf8_reg",
+        "expect": "pass",
+    },
     "tests/muxes/mux2_tuple.tx": {
         "protocol": "tests/muxes/mux2_tuple.prot",
         "verilog": ("tests/muxes/comb_mux.v",),
@@ -1122,6 +1128,12 @@ BI_CASES = {
         "expect": "pass",
         # note: we need the force-x-to-zero flag because of an X issue on STB/CYC right after reset for the control bus
         "extra_args": ("--display-hex", "--show-steps", "--force-x-to-zero"),
+    },
+    "examples.enginev.enginev_regfile.bi": {
+        "protocol": "examples/enginev/enginev_regfile.prot",
+        "wave": "examples/enginev/enginev_regfile.fst",
+        "instances": ("dut:Mf8RegFile",),
+        "expect": "pass",
     },
 }
 
