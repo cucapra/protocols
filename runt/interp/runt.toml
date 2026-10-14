@@ -28,6 +28,15 @@ expect_name = "ip_apb.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ip_apb.tx --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>&1"
 
 [[tests]]
+name = "interp.examples_enginev_enginev_regfile.enginev_regfile_interp"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/enginev/enginev_regfile.tx --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>&1"
+
+[[tests]]
 name = "interp.examples_picorv32_unsigned_mul.unsigned_mul_interp"
 paths = [
   "../../examples/picorv32/unsigned_mul.tx",

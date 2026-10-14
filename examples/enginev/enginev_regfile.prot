@@ -1,0 +1,34 @@
+struct Mf8RegFile {
+    in Rd_Addr: u5,
+    in Rr_Addr: u5, 
+    in Wr: u1,
+    in Data_In: u8,
+
+    out Rd_Data: u8,
+    out Rr_Data: u8,
+}
+
+// Adapted from https://github.com/ekiwi/transactional-verification-with-protocols/blob/039fb8d5beafb3c4a464e5dac3dc8a3e00b69f04/enginev/check_mf8_reg.py#L28
+prot read_write<DUT: Mf8RegFile>(
+    rd_addr: u5,     // Address for ports that supports both reads and writes
+    rr_addr: u5,     // Address for another read-only port
+    write_en: u1,    // Write-enable 
+    write_data: u8,  // The actual value to be written
+    rd_data: u8,     // Data in `rd` before any write operations take place
+    rr_data: u8      // Data in `rr` before any write operations take place
+) {
+    // Not writing in the first cycle when we're still driving the read addresses
+    DUT.Wr := 1'b0;
+    DUT.Rd_Addr := rd_addr;
+    DUT.Rr_Addr := rr_addr;
+    
+    step();
+
+    // Write happens
+    DUT.Wr := write_en;
+    DUT.Data_In := write_data;
+    assert_eq(DUT.Rd_Data, rd_data);
+    assert_eq(DUT.Rr_Data, rr_data);
+    
+    step();    
+}

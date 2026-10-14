@@ -64,6 +64,15 @@ expect_name = "ip_apb_0.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/ip_apb_0.fst --instances dut:APB --show-steps 2>&1"
 
 [[tests]]
+name = "bi.examples_enginev_enginev_regfile.enginev_regfile_bi"
+paths = [
+  "../../examples/enginev/enginev_regfile.prot",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/enginev/enginev_regfile.prot --wave examples/enginev/enginev_regfile.fst --instances dut:Mf8RegFile 2>&1"
+
+[[tests]]
 name = "bi.examples_wishbone_wishbone.ethmac_first_62us_bi"
 paths = [
   "../../examples/wishbone/wishbone.prot",
