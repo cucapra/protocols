@@ -9,6 +9,7 @@ use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer, lower_ast_to_ir};
 use protocols::ir::propagate_assigns::propagate_assignments;
 use protocols::ir::proto_graph::{Node, NodeId, Op, ProtoGraph};
 use protocols::ir::reaching_defs::reaching_definitions;
+use rustc_hash::FxHashSet;
 use std::any::Any;
 
 #[derive(Parser, Debug)]
@@ -37,7 +38,7 @@ struct Args {
 fn gen_driver(st: &SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
-    let (pg, lowered) = lower_protocols(st, m);
+    let (mut pg, lowered) = lower_protocols(st, m);
     debug_assert_eq!(lowered.len(), m.protos.len());
     let methods: Vec<_> = m
         .protos
@@ -59,8 +60,39 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         .find(|(p, _)| p.is_idle)
         .map(|(_, l)| get_single_cycle(&pg, l).expect("idle should be single cycle"));
 
+    // pad methods with idle
+    for (graph, method) in methods.iter().zip(m.protos.iter()) {
+        remove_fork(&mut pg, graph, method, idle);
+    }
+
     println!("Reset: {reset:?}");
     println!("Idle: {idle:?}");
+}
+
+fn remove_fork(
+    pg: &mut ProtoGraph,
+    graph: &LoweredFragmentInfo,
+    method: &Protocol,
+    idle: Option<NodeId>,
+) {
+    println!("{}", method.name);
+    let mut todo = vec![(false, graph.entry)];
+    let mut visited = FxHashSet::default();
+    while let Some((has_forked, node_id)) = todo.pop() {
+        if !visited.contains(&node_id) {
+            for action in &pg[node_id].actions {
+                println!("{action:?}, {:?}", pg[action.op]);
+            }
+            for tran in &pg[node_id].transitions {
+                if tran.guard != pg.false_id() {
+                    assert!(tran.consumes_step);
+                    todo.push((has_forked, tran.target));
+                }
+            }
+            println!();
+            visited.insert(node_id);
+        }
+    }
 }
 
 fn lower_protocols(st: &SymbolTable, m: &Module) -> (ProtoGraph, Vec<LoweredFragmentInfo>) {
