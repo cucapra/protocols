@@ -6,7 +6,7 @@ use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
-use patronus::expr::{Context, Expr, ExprRef};
+use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
@@ -157,6 +157,14 @@ fn format_expr_node(ctx: &Context, protocol: &ProtoGraph, expr_ref: ExprRef) -> 
             }
         }
         Expr::BVNot(e, _) => format!("not({})", format_expr(ctx, protocol, *e)),
+        Expr::BVZeroExt { e, by, .. } => {
+            format!("zero_extend({}, {by})", format_expr(ctx, protocol, *e))
+        }
+        Expr::BVShiftLeft(a, b, _) => format!(
+            "shl({}, {})",
+            format_expr(ctx, protocol, *a),
+            format_expr(ctx, protocol, *b)
+        ),
         Expr::BVEqual(a, b) => format!(
             "eq({}, {})",
             format_expr(ctx, protocol, *a),
@@ -201,10 +209,7 @@ fn format_expr_node(ctx: &Context, protocol: &ProtoGraph, expr_ref: ExprRef) -> 
             format_expr(ctx, protocol, *a),
             format_expr(ctx, protocol, *b)
         ),
-        _ => panic!(
-            "unsupported expression in graphviz formatter: {:?}",
-            ctx[expr_ref]
-        ),
+        _ => ctx[expr_ref].serialize_to_str(ctx),
     }
 }
 
@@ -221,6 +226,7 @@ mod tests {
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::require_single_module;
+    use crate::ir::driver_to_monitor::convert_driver_to_monitor;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
@@ -229,37 +235,43 @@ mod tests {
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let mut content = String::new();
         let module = require_single_module(modules, &[filename]).unwrap();
-        let st = &symbols;
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let mut ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, st);
+            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &symbols);
             content += "== pre-contract ==\n";
-            content += &to_dot_string(&ctx, &ir, st);
+            content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
-            // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut ctx, &mut contracted_ir, st);
+            contract_edges(&mut ctx, &mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
-            content += &to_dot_string(&ctx, &contracted_ir, st);
+            content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
             // run the reaching definitions analysis
-            let reaching_defs = reaching_definitions(&mut ctx, &mut ir, st);
+            let reaching_defs = reaching_definitions(&mut ctx, &mut contracted_ir, &symbols);
 
             // print post-propagation of assignments
-            propagate_assignments(&mut ctx, &mut contracted_ir, st, &reaching_defs);
+            propagate_assignments(&mut ctx, &mut contracted_ir, &symbols, &reaching_defs);
             content += "== post-propagation ==\n";
-            content += &to_dot_string(&ctx, &ir, st);
+            content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();
-            normalize_assignments(&mut ctx, &mut assignment_normalized_ir, st);
+            normalize_assignments(&mut ctx, &mut assignment_normalized_ir, &symbols);
             content += "== post-normalize ==\n";
-            content += &to_dot_string(&ctx, &assignment_normalized_ir, st);
+            content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
+            content += "\n";
+
+            // convert to monitor
+            let monitor =
+                convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
+                    .unwrap();
+            content += "== to-monitor ==\n";
+            content += &monitor.to_dot_string(&ctx, &symbols);
             content += "\n";
         }
 

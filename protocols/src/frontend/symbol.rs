@@ -53,6 +53,8 @@ pub enum SymbolKind {
     OutPort,
     Arg(u16),
     LoopVar,
+    /// State introduced by an IR conversion, with ownership recorded by that conversion.
+    AutomatonState,
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]

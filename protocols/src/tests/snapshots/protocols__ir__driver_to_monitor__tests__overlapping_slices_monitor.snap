@@ -1,0 +1,13 @@
+---
+source: protocols/src/ir/driver_to_monitor/tests.rs
+expression: dot
+---
+digraph "overlapping_slices" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] assert_eq(and($monitor_p_value, and($monitor_p_known, shl(zero_extend(7, 2), 1))), and(shl(zero_extend(dut.a, 2), 1), and($monitor_p_known, shl(zero_extend(7, 2), 1))))\n[1] assert_eq(and(ite(1, or(and($monitor_p_value, not(and(shl(zero_extend(7, 2), 1), not($monitor_p_known)))), and(shl(zero_extend(dut.a, 2), 1), and(shl(zero_extend(7, 2), 1), not($monitor_p_known)))), $monitor_p_value), and(ite(1, or($monitor_p_known, shl(zero_extend(7, 2), 1)), $monitor_p_known), shl(zero_extend(7, 2), 2))), and(shl(zero_extend(dut.b, 2), 2), and(ite(1, or($monitor_p_known, shl(zero_extend(7, 2), 1)), $monitor_p_known), shl(zero_extend(7, 2), 2))))\n[1] $monitor_p_value := ite(1, or(and(ite(1, or(and($monitor_p_value, not(and(shl(zero_extend(7, 2), 1), not($monitor_p_known)))), and(shl(zero_extend(dut.a, 2), 1), and(shl(zero_extend(7, 2), 1), not($monitor_p_known)))), $monitor_p_value), not(and(shl(zero_extend(7, 2), 2), not(ite(1, or($monitor_p_known, shl(zero_extend(7, 2), 1)), $monitor_p_known))))), and(shl(zero_extend(dut.b, 2), 2), and(shl(zero_extend(7, 2), 2), not(ite(1, or($monitor_p_known, shl(zero_extend(7, 2), 1)), $monitor_p_known))))), ite(1, or(and($monitor_p_value, not(and(shl(zero_extend(7, 2), 1), not($monitor_p_known)))), and(shl(zero_extend(dut.a, 2), 1), and(shl(zero_extend(7, 2), 1), not($monitor_p_known)))), $monitor_p_value)) if 1\n[1] $monitor_p_known := ite(1, or(ite(1, or($monitor_p_known, shl(zero_extend(7, 2), 1)), $monitor_p_known), shl(zero_extend(7, 2), 2)), ite(1, or($monitor_p_known, shl(zero_extend(7, 2), 1)), $monitor_p_known)) if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] $monitor_p_value := $monitor_p_value if 1\n[1] $monitor_p_known := $monitor_p_known if 1"];
+}
