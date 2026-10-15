@@ -12,6 +12,7 @@ use protocols::frontend::serialize::serialize_modules;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::frontend::{Module, require_single_module};
 use protocols::{Value, frontend, transaction_frontend};
+use rustc_hash::FxHashSet;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -33,8 +34,11 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Cmds {
-    /// Print out all the constructs used in each protocol
-    Constructs,
+    /// Print out the constructs used in each protocol or transaction trace
+    Constructs {
+        #[arg(long)]
+        transactions: Option<String>,
+    },
     /// Prints out the protocols after the frontend processing
     Show {
         #[arg(long, help = "only include these modules")]
@@ -217,10 +221,20 @@ fn main() {
 
     match args.command {
         None => {}
-        Some(Cmds::Constructs) => {
+        Some(Cmds::Constructs { transactions }) => {
+            let invoked: Option<FxHashSet<_>> = transactions.as_deref().map(|filename| {
+                transaction_frontend(filename, &st, &modules[0].protos, &mut d)
+                    .unwrap()
+                    .into_iter()
+                    .flatten()
+                    .map(|(name, _)| name)
+                    .collect()
+            });
             for m in &modules {
                 for p in &m.protos {
-                    println!("{}: {}", p.name, p.used_constructs(&st));
+                    if invoked.as_ref().is_none_or(|names| names.contains(&p.name)) {
+                        println!("{}: {}", p.name, p.used_constructs(&st));
+                    }
                 }
             }
         }

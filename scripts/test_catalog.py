@@ -66,6 +66,12 @@ TX_CASES = {
         "top": "tb",
         "expect": "pass",
     },
+    "examples/wishbone/joint_read_write_long.tx": {
+        "protocol": "examples/wishbone/wishbone.prot",
+        "verilog": ("examples/wishbone/rtl/dut.v", "examples/wishbone/rtl/tb.v"),
+        "top": "tb",
+        "expect": "pass",
+    },
     "tests/adders/adder_d0/add_combinational.tx": {
         "protocol": "tests/adders/adder_d0/add_d0.prot",
         "verilog": ("tests/adders/adder_d0/add_d0.v",),
@@ -102,6 +108,11 @@ TX_CASES = {
         "expect": "assertion_mismatch",
     },
     "tests/adders/adder_d1/add_multitrace_successful.tx": {
+        "protocol": "tests/adders/adder_d1/add_d1.prot",
+        "verilog": ("tests/adders/adder_d1/add_d1.v",),
+        "expect": "pass",
+    },
+    "tests/adders/adder_d1/joint_add_d1_long.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
@@ -175,6 +186,11 @@ TX_CASES = {
         "expect": "pass",
         "max_steps": 4,
     },
+    "tests/adders/adder_d2/joint_add_d2_long.tx": {
+        "protocol": "tests/adders/adder_d2/add_d2.prot",
+        "verilog": ("tests/adders/adder_d2/add_d2.v",),
+        "expect": "pass",
+    },
     "tests/adders/adder_d2/no_dontcare_conflict.tx": {
         "protocol": "tests/adders/adder_d2/no_dontcare_conflict.prot",
         "verilog": ("tests/adders/adder_d2/add_d2.v",),
@@ -192,7 +208,19 @@ TX_CASES = {
         "top": "alu_d1",
         "expect": "pass",
     },
+    "tests/alus/joint_alu_d1_long.tx": {
+        "protocol": "tests/alus/alu_d1.prot",
+        "verilog": ("tests/alus/alu_d1.v",),
+        "top": "alu_d1",
+        "expect": "pass",
+    },
     "tests/alus/alu_d2.tx": {
+        "protocol": "tests/alus/alu_d2.prot",
+        "verilog": ("tests/alus/alu_d2.v",),
+        "top": "alu_d2",
+        "expect": "pass",
+    },
+    "tests/alus/joint_alu_d2_long.tx": {
         "protocol": "tests/alus/alu_d2.prot",
         "verilog": ("tests/alus/alu_d2.v",),
         "top": "alu_d2",
@@ -490,6 +518,11 @@ TX_CASES = {
         "expect": "assertion_mismatch",
     },
     "tests/multipliers/mult_d2/both_threads_pass.tx": {
+        "protocol": "tests/multipliers/mult_d2/mult_d2.prot",
+        "verilog": ("tests/multipliers/mult_d2/mult_d2.v",),
+        "expect": "pass",
+    },
+    "tests/multipliers/mult_d2/joint_mul_d2_long.tx": {
         "protocol": "tests/multipliers/mult_d2/mult_d2.prot",
         "verilog": ("tests/multipliers/mult_d2/mult_d2.v",),
         "expect": "pass",

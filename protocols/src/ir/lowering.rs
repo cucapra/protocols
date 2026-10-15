@@ -383,7 +383,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn add_input_dont_care_assignments(&mut self, ast: &Protocol, node_id: NodeId) {
+    pub fn add_input_dont_care_assignments(&mut self, ast: &Protocol, node_id: NodeId) {
         let dut = ast.ctx.dut_sym;
 
         for input in self
@@ -447,7 +447,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn remap_expr(
+    pub fn remap_expr(
         &mut self,
         expr: ExprRef,
         substitutions: &FxHashMap<ExprRef, ExprRef>,
@@ -481,6 +481,32 @@ impl<'a> Lowerer<'a> {
             ),
             other => other,
         }
+    }
+
+    /// Copy only the actions from a contracted node, remapping every expression.
+    /// Fork and done actions are optional because combined graphs provide their
+    /// own fork and done control instead of executing the source actions directly.
+    pub fn copy_node_actions(
+        &mut self,
+        source: NodeId,
+        substitutions: &FxHashMap<ExprRef, ExprRef>,
+        keep_fork_and_done: bool,
+    ) -> NodeId {
+        let source_node = self.ir[source].clone();
+        let mut actions = Vec::with_capacity(source_node.actions.len());
+        for action in source_node.actions {
+            if !keep_fork_and_done && matches!(self.ir[action.op], Op::Fork | Op::Done) {
+                continue;
+            }
+            let op = self.remap_op(self.ir[action.op].clone(), substitutions);
+            let op = self.ir.o(op);
+            let guard = self.remap_expr(action.guard, substitutions);
+            actions.push(Action::new(guard, op));
+        }
+        self.ir.n(Node {
+            actions,
+            transitions: Vec::new(),
+        })
     }
 
     pub fn copy_protocol_fragment(
@@ -524,7 +550,7 @@ impl<'a> Lowerer<'a> {
 
             old_to_new_nodes.insert(current_old_id, new_node_id);
 
-            // Update entry and exit markers
+            // Update the copied entry and exit nodes
             if current_old_id == frag.entry {
                 entry = new_node_id;
             }

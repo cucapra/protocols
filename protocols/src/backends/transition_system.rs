@@ -62,7 +62,12 @@ fn assignment_is_triggered(a: &Assignment, ctx: &mut Context) -> ExprRef {
         .fold(a.dont_care, |acc, (guard, _)| ctx.or(acc, *guard))
 }
 
-fn replace_expr(ctx: &mut Context, expr: ExprRef, old_expr: ExprRef, new_expr: ExprRef) -> ExprRef {
+pub fn replace_expr(
+    ctx: &mut Context,
+    expr: ExprRef,
+    old_expr: ExprRef,
+    new_expr: ExprRef,
+) -> ExprRef {
     simple_transform_expr(ctx, expr, |_ctx, candidate, _children| {
         (candidate == old_expr).then_some(new_expr)
     })

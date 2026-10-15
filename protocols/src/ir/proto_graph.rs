@@ -329,7 +329,9 @@ impl ProtoGraph {
             }
             reachable_old_nodes.push(node_id);
             for transition in &self.nodes[node_id].transitions {
-                q.push_back(transition.target);
+                if transition.guard != self.false_id() {
+                    q.push_back(transition.target);
+                }
             }
         }
 
@@ -338,6 +340,11 @@ impl ProtoGraph {
         for old_node_id in &reachable_old_nodes {
             let new_node_id = new_nodes.push(self.nodes[*old_node_id].clone());
             node_map.insert(*old_node_id, new_node_id);
+        }
+
+        for (_, node) in new_nodes.iter_mut() {
+            node.transitions
+                .retain(|transition| transition.guard != self.false_id());
         }
 
         let mut reachable_old_ops = Vec::new();
