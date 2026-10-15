@@ -1,4 +1,5 @@
 use clap::{ColorChoice, Parser};
+use patronus::expr::SerializableIrNode;
 use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
@@ -38,7 +39,7 @@ struct Args {
 fn gen_driver(st: &SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
-    let (mut pg, lowered) = lower_protocols(st, m);
+    let (mut lowerer, lowered) = lower_protocols(st, m);
     debug_assert_eq!(lowered.len(), m.protos.len());
     let methods: Vec<_> = m
         .protos
@@ -52,17 +53,17 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         .iter()
         .zip(lowered.iter())
         .find(|(p, _)| p.is_reset)
-        .map(|(_, l)| get_single_cycle(&pg, l).expect("reset should be single cycle"));
+        .map(|(_, l)| get_single_cycle(&lowerer.ir, l).expect("reset should be single cycle"));
     let idle: Option<_> = m
         .protos
         .iter()
         .zip(lowered.iter())
         .find(|(p, _)| p.is_idle)
-        .map(|(_, l)| get_single_cycle(&pg, l).expect("idle should be single cycle"));
+        .map(|(_, l)| get_single_cycle(&lowerer.ir, l).expect("idle should be single cycle"));
 
     // pad methods with idle
     for (graph, method) in methods.iter().zip(m.protos.iter()) {
-        remove_fork(&mut pg, graph, method, idle);
+        remove_fork(&mut lowerer, graph, method, idle);
     }
 
     println!("Reset: {reset:?}");
@@ -70,39 +71,48 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
 }
 
 fn remove_fork(
-    pg: &mut ProtoGraph,
+    lowerer: &mut Lowerer,
     graph: &LoweredFragmentInfo,
     method: &Protocol,
     idle: Option<NodeId>,
 ) {
     println!("{}", method.name);
-    let mut todo = vec![(false, graph.entry)];
-    let mut visited = FxHashSet::default();
-    while let Some((has_forked, node_id)) = todo.pop() {
-        if !visited.contains(&node_id) {
-            for action in &pg[node_id].actions {
-                println!("{action:?}, {:?}", pg[action.op]);
-            }
-            for tran in &pg[node_id].transitions {
-                if tran.guard != pg.false_id() {
-                    assert!(tran.consumes_step);
-                    todo.push((has_forked, tran.target));
-                }
-            }
-            println!();
-            visited.insert(node_id);
-        }
+
+    let graft_points = lowerer.graft_points(graph);
+    for (node_id, expr) in graft_points {
+        println!(
+            "{node_id:?} {}",
+            expr.serialize_to_str(&lowerer.ir.expr_ctx)
+        );
     }
+
+    // let mut todo = vec![(false, graph.entry)];
+    // let mut visited = FxHashSet::default();
+    // while let Some((has_forked, node_id)) = todo.pop() {
+    //     if !visited.contains(&node_id) {
+    //         for action in &pg[node_id].actions {
+    //             println!("{action:?}, {:?}", pg[action.op]);
+    //         }
+    //         for tran in &pg[node_id].transitions {
+    //             if tran.guard != pg.false_id() {
+    //                 assert!(tran.consumes_step);
+    //                 todo.push((has_forked, tran.target));
+    //             }
+    //         }
+    //         println!();
+    //         visited.insert(node_id);
+    //     }
+    // }
 }
 
-fn lower_protocols(st: &SymbolTable, m: &Module) -> (ProtoGraph, Vec<LoweredFragmentInfo>) {
+fn lower_protocols<'a>(st: &'a SymbolTable, m: &Module) -> (Lowerer<'a>, Vec<LoweredFragmentInfo>) {
     let mut lowerer = Lowerer::new(m.protos.first().unwrap().ctx.clone(), st);
     let lowered: Vec<_> = m
         .protos
         .iter()
         .map(|p| lowerer.lower_protocol_fragment(p, true, true))
         .collect();
-    (lowerer.ir, lowered)
+    (lowerer, lowered)
 }
 
 fn get_single_cycle(pg: &ProtoGraph, low: &LoweredFragmentInfo) -> Option<NodeId> {
