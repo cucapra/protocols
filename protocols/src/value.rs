@@ -191,6 +191,27 @@ impl SymBitVecValue {
 }
 
 #[derive(Debug, Clone)]
+pub struct SymTupleValue {
+    components: Vec<SymBitVecValue>,
+}
+
+impl SymTupleValue {
+    pub fn new(components: Vec<SymBitVecValue>) -> Self {
+        Self { components }
+    }
+
+    fn to_string(&self, display_hex: bool) -> String {
+        let components_str = self
+            .components
+            .iter()
+            .map(|e| e.to_string(display_hex))
+            .collect::<Vec<String>>()
+            .join(", ");
+        format!("({})", components_str)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SymSeqValue {
     entries: Vec<SymBitVecValue>,
     /// indicates that there is a constraint that enforces the length to be exactly what
@@ -247,6 +268,7 @@ pub struct SymValue(SymValueKind);
 enum SymValueKind {
     Scalar(SymBitVecValue),
     Seq(SymSeqValue),
+    Tuple(SymTupleValue),
 }
 
 impl From<Value> for SymValue {
@@ -272,10 +294,16 @@ impl SymValue {
         Self(SymValueKind::Seq(s))
     }
 
+    pub fn new_tuple(components: Vec<SymBitVecValue>) -> Self {
+        let tuple = SymTupleValue::new(components);
+        Self(SymValueKind::Tuple(tuple))
+    }
+
     pub fn to_string(&self, display_hex: bool) -> String {
         match &self.0 {
             SymValueKind::Scalar(v) => v.to_string(display_hex),
             SymValueKind::Seq(v) => v.to_string(display_hex),
+            SymValueKind::Tuple(v) => v.to_string(display_hex),
         }
     }
 }

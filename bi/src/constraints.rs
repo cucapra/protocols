@@ -12,6 +12,7 @@ use std::fmt::{Display, Formatter};
 pub enum ArgValue {
     Seq(SeqValue),
     Data(DataValue),
+    Tuple(TupleValue),
 }
 
 impl ArgValue {
@@ -40,6 +41,7 @@ impl ArgValue {
         match self {
             ArgValue::Seq(s) => s.get_known().map(|v| v.into()),
             ArgValue::Data(d) => d.get_known().map(|v| v.into()),
+            ArgValue::Tuple(t) => t.get_known().map(|v| v.into()),
         }
     }
 
@@ -162,6 +164,17 @@ impl Display for DataValue {
 }
 
 #[derive(Debug, Clone)]
+pub struct TupleValue {
+    components: Vec<DataValue>,
+}
+
+impl TupleValue {
+    pub fn get_known(&self) -> Option<BitVecValue> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SeqValue {
     width: WidthInt,
     /// indicates that there is a constraint that enforces the length to be exactly what
@@ -243,6 +256,10 @@ impl From<ArgValue> for SymValue {
                 SymValue::new_seq(entries, v.len_is_known)
             }
             ArgValue::Data(v) => v.into(),
+            ArgValue::Tuple(t) => {
+                let components = t.components.into_iter().map(|v| v.into()).collect();
+                SymValue::new_tuple(components)
+            }
         }
     }
 }
