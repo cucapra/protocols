@@ -44,12 +44,13 @@ pub struct PatronusSim {
 /// Prototype of our generic (non-patronus specific) dut simulator  interface
 impl PatronusSim {
     pub fn new<P: AsRef<std::path::Path>>(
+        ctx: &mut patronus::expr::Context,
         verilog_paths: &[P],
         top_module: Option<&str>,
         design: &Module,
         waveform_file: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let (ctx, sys) = create_sim_context(verilog_paths, top_module);
+        let sys = create_sim_context(ctx, verilog_paths, top_module);
 
         let mut sim = if let Some(waveform_file) = waveform_file {
             Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
@@ -147,7 +148,7 @@ impl PatronusSim {
         }
 
         Ok(Self {
-            ctx,
+            ctx: ctx.clone(),
             sys,
             sim,
             port_map,
@@ -269,9 +270,10 @@ impl PatronusSim {
 /// Takes a vec of paths to Verilog files and the name of a top-level module,
 /// and returns a (Patronus `Context`, Patronus `TransitionSystem` pair)
 fn create_sim_context<P: AsRef<std::path::Path>>(
+    ctx: &mut patronus::expr::Context,
     verilog_paths: &[P],
     top_module: Option<&str>,
-) -> (patronus::expr::Context, TransitionSystem) {
+) -> TransitionSystem {
     let env = YosysEnv::with_temp_dir().unwrap();
     let sources: Vec<PathBuf> = verilog_paths
         .iter()
@@ -299,10 +301,12 @@ fn create_sim_context<P: AsRef<std::path::Path>>(
         panic!("BTOR file is empty - likely synthesis failed. Check Yosys output for errors.");
     }
 
-    patronus::btor2::parse_file(btor_file.as_path().as_os_str()).unwrap_or_else(|| {
-        panic!(
-            "Failed to parse BTOR file - possibly malformed: {}",
-            btor_file.display()
-        )
-    })
+    patronus::btor2::parse_file_with_ctx(btor_file.as_path().as_os_str(), ctx).unwrap_or_else(
+        || {
+            panic!(
+                "Failed to parse BTOR file - possibly malformed: {}",
+                btor_file.display()
+            )
+        },
+    )
 }

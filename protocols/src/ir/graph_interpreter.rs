@@ -1,9 +1,10 @@
-use std::convert::TryInto;
-
 use baa::{BitVecOps, BitVecValue, Value as BaaValue};
-use patronus::expr::{ExprRef, SerializableIrNode, SymbolValueStore, TypeCheck, eval_expr};
+use patronus::expr::{
+    Context, ExprRef, SerializableIrNode, SymbolValueStore, TypeCheck, eval_expr,
+};
 use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::convert::TryInto;
 
 use crate::Value as ArgValue;
 use crate::dut::{PatronusSim, PortId};
@@ -74,7 +75,7 @@ fn build_bindings(
 }
 
 fn build_value_store(
-    protocol: &ProtoGraph,
+    ctx: &Context,
     bindings: &FxHashMap<ExprRef, GraphBinding>,
     sim: &PatronusSim,
     rng: &mut impl rand::Rng,
@@ -95,12 +96,12 @@ fn build_value_store(
                 store.define_bv(*expr_ref, &bvv);
             }
             GraphBinding::DontCare => {
-                let expr = &protocol.expr_ctx[*expr_ref];
-                if let Some(width) = expr.get_bv_type(&protocol.expr_ctx) {
+                let expr = &ctx[*expr_ref];
+                if let Some(width) = expr.get_bv_type(ctx) {
                     let value = BitVecValue::random(rng, width);
                     store.define_bv(*expr_ref, &value);
                 } else {
-                    let tpe = expr.get_array_type(&protocol.expr_ctx).unwrap_or_else(|| {
+                    let tpe = expr.get_array_type(ctx).unwrap_or_else(|| {
                         panic!("dont-care symbol {expr_ref:?} has unsupported type")
                     });
                     store.define_array(
@@ -129,8 +130,8 @@ fn read_sim_values(
 }
 
 fn update_value_store(
+    ctx: &Context,
     store: &mut SymbolValueStore,
-    protocol: &ProtoGraph,
     bindings: &FxHashMap<ExprRef, GraphBinding>,
     sim: &PatronusSim,
     rng: &mut impl rand::Rng,
@@ -139,12 +140,12 @@ fn update_value_store(
     read_sim_values(store, bindings, sim);
     for (expr_ref, binding) in bindings {
         if matches!(binding, GraphBinding::DontCare) {
-            let expr = &protocol.expr_ctx[*expr_ref];
-            if let Some(width) = expr.get_bv_type(&protocol.expr_ctx) {
+            let expr = &ctx[*expr_ref];
+            if let Some(width) = expr.get_bv_type(ctx) {
                 let value = BitVecValue::random(rng, width);
                 store.update(*expr_ref, value.into());
             } else {
-                let tpe = expr.get_array_type(&protocol.expr_ctx).unwrap_or_else(|| {
+                let tpe = expr.get_array_type(ctx).unwrap_or_else(|| {
                     panic!("dont-care symbol {expr_ref:?} has unsupported type")
                 });
                 store.update(
@@ -156,18 +157,24 @@ fn update_value_store(
     }
 }
 
-fn evaluate_guard(protocol: &ProtoGraph, store: &SymbolValueStore, expr_ref: ExprRef) -> bool {
+fn evaluate_guard(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    store: &SymbolValueStore,
+    expr_ref: ExprRef,
+) -> bool {
     if protocol.dont_cares.contains(&expr_ref) {
         panic!("guard evaluated to DontCare");
     }
 
-    match eval_expr(&protocol.expr_ctx, store, expr_ref).try_into() {
+    match eval_expr(ctx, store, expr_ref).try_into() {
         Ok::<BitVecValue, _>(bvv) => !bvv.is_zero(),
         Err(_) => panic!("guard did not evaluate to a bit-vector"),
     }
 }
 
 fn evaluate_input_value(
+    ctx: &Context,
     protocol: &ProtoGraph,
     store: &SymbolValueStore,
     expr_ref: ExprRef,
@@ -176,24 +183,25 @@ fn evaluate_input_value(
         return InputValue::DontCare;
     }
 
-    match eval_expr(&protocol.expr_ctx, store, expr_ref).try_into() {
+    match eval_expr(&ctx, store, expr_ref).try_into() {
         Ok::<BitVecValue, _>(bvv) => InputValue::Concrete(bvv),
         Err(_) => panic!("assignment rhs did not evaluate to a bit-vector"),
     }
 }
 
 fn evaluate_assignment(
+    ctx: &Context,
     protocol: &ProtoGraph,
     store: &SymbolValueStore,
     assignment: &Assignment,
 ) -> InputValue {
-    if evaluate_guard(protocol, store, assignment.dont_care) {
+    if evaluate_guard(ctx, protocol, store, assignment.dont_care) {
         return InputValue::DontCare;
     }
 
     for (guard, rhs) in &assignment.concretes {
-        if evaluate_guard(protocol, store, *guard) {
-            return evaluate_input_value(protocol, store, *rhs);
+        if evaluate_guard(ctx, protocol, store, *guard) {
+            return evaluate_input_value(ctx, protocol, store, *rhs);
         }
     }
 
@@ -203,6 +211,7 @@ fn evaluate_assignment(
 }
 
 fn evaluate_assert_equal(
+    ctx: &Context,
     protocol: &ProtoGraph,
     store: &SymbolValueStore,
     lhs: ExprRef,
@@ -212,8 +221,8 @@ fn evaluate_assert_equal(
         return Err("assert_eq on DontCare".to_string());
     }
 
-    let lhs = eval_expr(&protocol.expr_ctx, store, lhs);
-    let rhs = eval_expr(&protocol.expr_ctx, store, rhs);
+    let lhs = eval_expr(&ctx, store, lhs);
+    let rhs = eval_expr(&ctx, store, rhs);
     match (lhs, rhs) {
         (BaaValue::BitVec(lhs), BaaValue::BitVec(rhs)) => {
             assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");
@@ -275,6 +284,7 @@ fn record_waveform(
 
 /// interpret a `ProtoGraph` using Patronus expressions directly.
 pub fn interpret(
+    ctx: &Context,
     pg: &ProtoGraph,
     st: &SymbolTable,
     args: FxHashMap<&str, ArgValue>,
@@ -286,7 +296,7 @@ pub fn interpret(
 
     let bindings = build_bindings(pg, st, &args, sim);
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    let mut store = build_value_store(pg, &bindings, sim, &mut rng);
+    let mut store = build_value_store(ctx, &bindings, sim, &mut rng);
 
     let mut curr = pg.entry;
     let mut cycle = 0;
@@ -303,7 +313,7 @@ pub fn interpret(
             if let Op::Assign(symbol_id, _) = &pg[action.op] {
                 assert_eq!(
                     action.guard,
-                    pg.true_id(),
+                    ctx.get_true(),
                     "assignment action guards must be 1; path conditions belong in Assignment"
                 );
                 if !assigned_inputs.insert(*symbol_id) {
@@ -317,10 +327,10 @@ pub fn interpret(
                 if let Op::Assign(symbol_id, assignment) = &pg[action.op] {
                     assert_eq!(
                         action.guard,
-                        pg.true_id(),
+                        ctx.get_true(),
                         "assignment action guards must be 1; path conditions belong in Assignment"
                     );
-                    let value = evaluate_assignment(pg, &store, assignment);
+                    let value = evaluate_assignment(ctx, pg, &store, assignment);
 
                     pending_inputs.insert(*symbol_id, value);
                 }
@@ -348,15 +358,15 @@ pub fn interpret(
             }
         }
 
-        update_value_store(&mut store, pg, &bindings, sim, &mut rng);
+        update_value_store(ctx, &mut store, &bindings, sim, &mut rng);
 
         let mut done_triggered = false;
         for action in &node.actions {
-            if evaluate_guard(pg, &store, action.guard) {
+            if evaluate_guard(ctx, pg, &store, action.guard) {
                 match &pg[action.op] {
                     Op::Assign(_, _) => {}
                     Op::AssertEq(lhs, rhs) => {
-                        if let Err(message) = evaluate_assert_equal(pg, &store, *lhs, *rhs) {
+                        if let Err(message) = evaluate_assert_equal(ctx, pg, &store, *lhs, *rhs) {
                             return GraphInterpretResult {
                                 waveform,
                                 failure: Some(GraphInterpretFailure {
@@ -376,7 +386,7 @@ pub fn interpret(
                                 cycle,
                                 message: format!(
                                     "internal assertion failed at graph node {curr}: guard {} evaluated true",
-                                    pg.expr_ctx[action.guard].serialize_to_str(&pg.expr_ctx)
+                                    ctx[action.guard].serialize_to_str(ctx)
                                 ),
                             }),
                         };
@@ -389,7 +399,7 @@ pub fn interpret(
         let satisfied_transitions: Vec<_> = node
             .transitions
             .iter()
-            .filter(|transition| evaluate_guard(pg, &store, transition.guard))
+            .filter(|transition| evaluate_guard(ctx, pg, &store, transition.guard))
             .collect();
 
         if done_triggered {
@@ -412,7 +422,7 @@ pub fn interpret(
             Some(t) => {
                 if t.consumes_step {
                     record_waveform(&mut waveform, sim, &current_inputs, &mut rng);
-                    update_value_store(&mut store, pg, &bindings, sim, &mut rng);
+                    update_value_store(ctx, &mut store, &bindings, sim, &mut rng);
                     // println!("stepping");
                     sim.step();
                     cycle += 1;

@@ -6,11 +6,11 @@ use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
-use patronus::expr::{Expr, ExprRef};
+use patronus::expr::{Context, Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
-pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
+pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "digraph \"{}\" {{\n",
@@ -33,8 +33,8 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         for action in &node.actions {
             label_parts.push(format!(
                 "[{}] {}",
-                format_expr(protocol, action.guard),
-                format_op(protocol, symbols, action.op)
+                format_expr(ctx, protocol, action.guard),
+                format_op(ctx, protocol, symbols, action.op)
             ));
         }
 
@@ -48,13 +48,13 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
         // emit graph edges
         for transition in &node.transitions {
             // pruning heuristic: skip dead (false-guarded) transitions
-            if transition.guard == protocol.false_id() {
+            if transition.guard == ctx.get_false() {
                 continue;
             }
             let mut edge_label = if transition.consumes_step {
-                format!("{} / step", format_expr(protocol, transition.guard))
+                format!("{} / step", format_expr(ctx, protocol, transition.guard))
             } else {
-                format_expr(protocol, transition.guard)
+                format_expr(ctx, protocol, transition.guard)
             };
             if !transition.rotations.is_empty() {
                 let rotations = transition
@@ -89,6 +89,7 @@ pub fn to_dot_string(protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
 
 /// simple serialization for ops. expressions are serialized using existing `serializer.rs` in the frontend
 fn format_op(
+    ctx: &Context,
     protocol: &ProtoGraph,
     symbols: &SymbolTable,
     op_id: crate::ir::proto_graph::OpId,
@@ -97,12 +98,12 @@ fn format_op(
         Op::Assign(symbol_id, assignment) => format!(
             "{} := {}",
             symbols.full_name_from_symbol_id(symbol_id),
-            format_assignment(protocol, assignment)
+            format_assignment(ctx, protocol, assignment)
         ),
         Op::AssertEq(lhs, rhs) => format!(
             "assert_eq({}, {})",
-            format_expr(protocol, *lhs),
-            format_expr(protocol, *rhs)
+            format_expr(ctx, protocol, *lhs),
+            format_expr(ctx, protocol, *rhs)
         ),
         Op::Fork => "fork".to_string(),
         Op::InternalAssertFalse => "internal_assert_false".to_string(),
@@ -110,19 +111,19 @@ fn format_op(
     }
 }
 
-fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
+fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignment) -> String {
     let mut parts = Vec::new();
-    if assignment.dont_care != protocol.false_id() {
+    if assignment.dont_care != ctx.get_false() {
         parts.push(format!(
             "X if {}",
-            format_expr(protocol, assignment.dont_care)
+            format_expr(ctx, protocol, assignment.dont_care)
         ));
     }
     for (guard, rhs) in &assignment.concretes {
         parts.push(format!(
             "{} if {}",
-            format_expr(protocol, *rhs),
-            format_expr(protocol, *guard)
+            format_expr(ctx, protocol, *rhs),
+            format_expr(ctx, protocol, *guard)
         ));
     }
     if parts.is_empty() {
@@ -132,77 +133,77 @@ fn format_assignment(protocol: &ProtoGraph, assignment: &Assignment) -> String {
     }
 }
 
-pub fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+pub fn format_expr(ctx: &Context, protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
     if protocol.dont_cares.contains(&expr_ref) {
         "X".to_string()
     } else {
-        format_expr_node(protocol, expr_ref)
+        format_expr_node(ctx, protocol, expr_ref)
     }
 }
 
-fn format_expr_node(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
-    match &protocol.expr_ctx[expr_ref] {
-        Expr::BVSymbol { name, .. } => protocol.expr_ctx[*name].to_string(),
+fn format_expr_node(ctx: &Context, protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+    match &ctx[expr_ref] {
+        Expr::BVSymbol { name, .. } => ctx[*name].to_string(),
         Expr::BVLiteral(value) => {
-            let value = BitVecValue::from(value.get(&protocol.expr_ctx));
+            let value = BitVecValue::from(value.get(&ctx));
             serialize_bitvec(&value, false)
         }
         Expr::BVSlice { e, hi, lo, .. } => {
-            let inner = format_expr(protocol, *e);
+            let inner = format_expr(ctx, protocol, *e);
             if hi == lo {
                 format!("{inner}[{hi}]")
             } else {
                 format!("{inner}[{hi}:{lo}]")
             }
         }
-        Expr::BVNot(e, _) => format!("not({})", format_expr(protocol, *e)),
+        Expr::BVNot(e, _) => format!("not({})", format_expr(ctx, protocol, *e)),
         Expr::BVEqual(a, b) => format!(
             "eq({}, {})",
-            format_expr(protocol, *a),
-            format_expr(protocol, *b)
+            format_expr(ctx, protocol, *a),
+            format_expr(ctx, protocol, *b)
         ),
         Expr::BVConcat(a, b, _) => {
             format!(
                 "concat({}, {})",
-                format_expr(protocol, *a),
-                format_expr(protocol, *b)
+                format_expr(ctx, protocol, *a),
+                format_expr(ctx, protocol, *b)
             )
         }
         Expr::BVAnd(a, b, _) => {
             format!(
                 "and({}, {})",
-                format_expr(protocol, *a),
-                format_expr(protocol, *b)
+                format_expr(ctx, protocol, *a),
+                format_expr(ctx, protocol, *b)
             )
         }
         Expr::BVOr(a, b, _) => {
             format!(
                 "or({}, {})",
-                format_expr(protocol, *a),
-                format_expr(protocol, *b)
+                format_expr(ctx, protocol, *a),
+                format_expr(ctx, protocol, *b)
             )
         }
         Expr::BVAdd(a, b, _) => format!(
             "add({}, {})",
-            format_expr(protocol, *a),
-            format_expr(protocol, *b)
+            format_expr(ctx, protocol, *a),
+            format_expr(ctx, protocol, *b)
         ),
         Expr::BVIte { cond, tru, fals } => {
             format!(
                 "ite({}, {}, {})",
-                format_expr(protocol, *cond),
-                format_expr(protocol, *tru),
-                format_expr(protocol, *fals)
+                format_expr(ctx, protocol, *cond),
+                format_expr(ctx, protocol, *tru),
+                format_expr(ctx, protocol, *fals)
             )
         }
         Expr::BVGreaterEqual(a, b) => format!(
             "ge({}, {})",
-            format_expr(protocol, *a),
-            format_expr(protocol, *b)
+            format_expr(ctx, protocol, *a),
+            format_expr(ctx, protocol, *b)
         ),
         _ => panic!(
             "unsupported expression in graphviz formatter: {:?}",
-            protocol.expr_ctx[expr_ref]
+            ctx[expr_ref]
         ),
     }
 }

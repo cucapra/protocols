@@ -3,7 +3,7 @@ use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
 use crate::ir::reaching_defs::{predecessors, restrict_branch_to_edge, simplify_guard};
 use itertools::Itertools;
-use patronus::expr::ExprRef;
+use patronus::expr::{Context, ExprRef};
 use rustc_hash::FxHashMap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,50 +29,53 @@ struct ForkFact {
 }
 
 impl ForkFact {
-    fn bottom(pg: &ProtoGraph) -> Self {
+    fn bottom(ctx: &Context) -> Self {
         Self {
-            no_fork_guard: pg.false_id(),
-            fork_guard: pg.false_id(),
+            no_fork_guard: ctx.get_false(),
+            fork_guard: ctx.get_false(),
         }
     }
 
-    fn initial(pg: &ProtoGraph) -> Self {
+    fn initial(ctx: &Context) -> Self {
         Self {
             // initially, we know there is a path where no fork was triggered (the trivial path)
-            no_fork_guard: pg.true_id(),
-            fork_guard: pg.false_id(),
+            no_fork_guard: ctx.get_true(),
+            fork_guard: ctx.get_false(),
         }
     }
 
-    fn merge(pg: &mut ProtoGraph, lhs: Self, rhs: Self) -> Self {
+    fn merge(ctx: &mut Context, pg: &mut ProtoGraph, lhs: Self, rhs: Self) -> Self {
         // merge all the paths where no fork was taken with OR, likewise for the fork taken paths
-        let no_fork_guard = pg.or_guard(lhs.no_fork_guard, rhs.no_fork_guard);
-        let fork_guard = pg.or_guard(lhs.fork_guard, rhs.fork_guard);
+        let no_fork_guard = pg.or_guard(ctx, lhs.no_fork_guard, rhs.no_fork_guard);
+        let fork_guard = pg.or_guard(ctx, lhs.fork_guard, rhs.fork_guard);
         Self {
-            no_fork_guard: simplify_guard(pg, no_fork_guard),
-            fork_guard: simplify_guard(pg, fork_guard),
+            no_fork_guard: simplify_guard(ctx, pg, no_fork_guard),
+            fork_guard: simplify_guard(ctx, pg, fork_guard),
         }
     }
 
-    fn transfer(self, pg: &mut ProtoGraph, local_fork_guard: ExprRef) -> Self {
+    fn transfer(self, ctx: &mut Context, pg: &mut ProtoGraph, local_fork_guard: ExprRef) -> Self {
         // no fork is taken *out of* this node if into this path, the no_fork_guard is true AND the fork in this node was not triggered
-        let not_local_fork = pg.not_guard(local_fork_guard);
-        let no_fork_guard = pg.and_guard(self.no_fork_guard, not_local_fork);
+        let not_local_fork = pg.not_guard(ctx, local_fork_guard);
+        let no_fork_guard = pg.and_guard(ctx, self.no_fork_guard, not_local_fork);
 
         // a fork was taken if there are paths that already forked OR this fork triggered
-        let fork_guard = pg.or_guard(self.fork_guard, local_fork_guard);
+        let fork_guard = pg.or_guard(ctx, self.fork_guard, local_fork_guard);
         Self {
-            no_fork_guard: simplify_guard(pg, no_fork_guard),
-            fork_guard: simplify_guard(pg, fork_guard),
+            no_fork_guard: simplify_guard(ctx, pg, no_fork_guard),
+            fork_guard: simplify_guard(ctx, pg, fork_guard),
         }
     }
 
     /// converts information about the guards into a statement about whether a fork might've occurred so far
-    fn reachability(self, pg: &mut ProtoGraph) -> ForkReachability {
-        let no_fork_guard = simplify_guard(pg, self.no_fork_guard);
-        let fork_guard = simplify_guard(pg, self.fork_guard);
+    fn reachability(self, ctx: &mut Context, pg: &mut ProtoGraph) -> ForkReachability {
+        let no_fork_guard = simplify_guard(ctx, pg, self.no_fork_guard);
+        let fork_guard = simplify_guard(ctx, pg, self.fork_guard);
 
-        match (check_sat(pg, no_fork_guard), check_sat(pg, fork_guard)) {
+        match (
+            check_sat(ctx, pg, no_fork_guard),
+            check_sat(ctx, pg, fork_guard),
+        ) {
             // if both a fork happening and not happening is unsat, this is the bottom which would only happen for totally unreachable nodes?
             (SatResult::DefinitelyUnsat, SatResult::DefinitelyUnsat) => {
                 ForkReachability::Unreachable
@@ -90,38 +93,39 @@ impl ForkFact {
     }
 }
 
-pub fn reaching_forks_from(pg: &mut ProtoGraph, start: NodeId) -> ForkReach {
+pub fn reaching_forks_from(ctx: &mut Context, pg: &mut ProtoGraph, start: NodeId) -> ForkReach {
     // let reachable = reachable_node_ids(pg, start);
     let preds = predecessors(pg, start);
     let mut in_facts: FxHashMap<NodeId, ForkFact> = FxHashMap::default();
     let mut out: FxHashMap<NodeId, ForkFact> = FxHashMap::default();
-    let node_ids: Vec<NodeId> = reachable_node_ids(pg, start);
+    let node_ids: Vec<NodeId> = reachable_node_ids(ctx, pg, start);
     let mut worklist = node_ids.clone();
 
     while let Some(id) = worklist.pop() {
         // initialize the in_fact
         let mut in_fact = if id == start {
-            ForkFact::initial(pg)
+            ForkFact::initial(ctx)
         } else {
-            ForkFact::bottom(pg)
+            ForkFact::bottom(ctx)
         };
 
         // compute the in fact by merging across all predecessors, simplifying guards given
         // we know the edges taken
         for (pred_id, transition_guard) in preds.get(&id).into_iter().flatten() {
-            let pred_fact = out.get(pred_id).copied().unwrap_or(ForkFact::bottom(pg));
+            let pred_fact = out.get(pred_id).copied().unwrap_or(ForkFact::bottom(ctx));
 
             let edge_no_fork_guard =
-                restrict_branch_to_edge(pg, pred_fact.no_fork_guard, *transition_guard)
-                    .unwrap_or_else(|| pg.false_id());
+                restrict_branch_to_edge(ctx, pg, pred_fact.no_fork_guard, *transition_guard)
+                    .unwrap_or_else(|| ctx.get_false());
             let edge_fork_guard =
-                restrict_branch_to_edge(pg, pred_fact.fork_guard, *transition_guard)
-                    .unwrap_or_else(|| pg.false_id());
-            if edge_no_fork_guard == pg.false_id() && edge_fork_guard == pg.false_id() {
+                restrict_branch_to_edge(ctx, pg, pred_fact.fork_guard, *transition_guard)
+                    .unwrap_or_else(|| ctx.get_false());
+            if edge_no_fork_guard == ctx.get_false() && edge_fork_guard == ctx.get_false() {
                 continue;
             }
 
             in_fact = ForkFact::merge(
+                ctx,
                 pg,
                 in_fact,
                 ForkFact {
@@ -139,14 +143,16 @@ pub fn reaching_forks_from(pg: &mut ProtoGraph, start: NodeId) -> ForkReach {
             .filter_map(|action| matches!(pg[action.op], Op::Fork).then_some(action.guard))
             .collect_vec();
 
-        let guard = guards.into_iter().fold(pg.false_id(), |guard, fork_guard| {
-            pg.or_guard(guard, fork_guard)
-        });
-        let fork_guard = simplify_guard(pg, guard);
+        let guard = guards
+            .into_iter()
+            .fold(ctx.get_false(), |guard, fork_guard| {
+                pg.or_guard(ctx, guard, fork_guard)
+            });
+        let fork_guard = simplify_guard(ctx, pg, guard);
 
         // compute the transfer, update the facts map, and re-enqueue successors
         // if things have changed
-        let new_out = in_fact.transfer(pg, fork_guard);
+        let new_out = in_fact.transfer(ctx, pg, fork_guard);
         if in_facts.get(&id) != Some(&in_fact) || out.get(&id) != Some(&new_out) {
             in_facts.insert(id, in_fact);
             out.insert(id, new_out);
@@ -159,10 +165,10 @@ pub fn reaching_forks_from(pg: &mut ProtoGraph, start: NodeId) -> ForkReach {
     let mut out_reach = FxHashMap::default();
 
     for id in node_ids {
-        let in_fact = in_facts.get(&id).copied().unwrap_or(ForkFact::bottom(pg));
-        let out_fact = out.get(&id).copied().unwrap_or(ForkFact::bottom(pg));
-        in_reach.insert(id, in_fact.reachability(pg));
-        out_reach.insert(id, out_fact.reachability(pg));
+        let in_fact = in_facts.get(&id).copied().unwrap_or(ForkFact::bottom(ctx));
+        let out_fact = out.get(&id).copied().unwrap_or(ForkFact::bottom(ctx));
+        in_reach.insert(id, in_fact.reachability(ctx, pg));
+        out_reach.insert(id, out_fact.reachability(ctx, pg));
     }
 
     ForkReach {
@@ -184,7 +190,7 @@ mod tests {
 
     fn push_fork(pg: &mut ProtoGraph, node_id: NodeId) {
         let fork = pg.o(Op::Fork);
-        pg.push_action(node_id, Action::new(pg.true_id(), fork));
+        pg.push_action(node_id, Action::new(ctx.get_true(), fork));
     }
 
     fn push_guarded_fork(pg: &mut ProtoGraph, node_id: NodeId, guard: ExprRef) {
@@ -208,7 +214,7 @@ mod tests {
         let exit = pg.n(Node::empty());
 
         push_fork(&mut pg, fork);
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, fork, false));
         pg.push_transition(fork, Transition::new(true_id, exit, false));
 
@@ -227,7 +233,7 @@ mod tests {
         let p = pg.expr_ctx.bv_symbol("p", 1);
 
         push_guarded_fork(&mut pg, fork, p);
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, fork, false));
         pg.push_transition(fork, Transition::new(true_id, exit, false));
 
@@ -243,7 +249,7 @@ mod tests {
         let mut pg = test_graph();
         let exit = pg.n(Node::empty());
 
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, exit, false));
 
         assert_eq!(
@@ -263,7 +269,7 @@ mod tests {
         // entry -> node without fork -> join
 
         push_fork(&mut pg, fork);
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, fork, false));
         pg.push_transition(pg.entry, Transition::new(true_id, no_fork, false));
         pg.push_transition(fork, Transition::new(true_id, join, false));
@@ -288,7 +294,7 @@ mod tests {
         // entry -> [p] fork [!p]-> not-forked_exit
 
         push_guarded_fork(&mut pg, fork, p);
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, fork, false));
         pg.push_transition(fork, Transition::new(p, forked_exit, false));
         pg.push_transition(fork, Transition::new(not_p, not_forked_exit, false));

@@ -5,7 +5,7 @@
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use patronus::expr::{Context as ExprContext, ExprRef, Simplifier, SparseExprMap};
+use patronus::expr::{Context, ExprRef, Simplifier, SparseExprMap};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut, Index};
@@ -142,9 +142,6 @@ pub struct ProtoGraph {
     /// The entrypoint of the `Protocol`
     pub entry: NodeId,
 
-    /// Patronus expression context
-    pub expr_ctx: ExprContext,
-
     /// Patronus simplifier
     pub simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
 
@@ -167,7 +164,6 @@ impl Clone for ProtoGraph {
         Self {
             proto_ctx: self.proto_ctx.clone(),
             entry: self.entry,
-            expr_ctx: self.expr_ctx.clone(),
             // we can just make a fresh simplifier
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
@@ -181,10 +177,6 @@ impl Clone for ProtoGraph {
 
 impl ProtoGraph {
     pub fn new(proto_ctx: ProtocolContext) -> Self {
-        Self::with_expr_ctx(proto_ctx, ExprContext::default())
-    }
-
-    pub fn with_expr_ctx(proto_ctx: ProtocolContext, expr_ctx: ExprContext) -> Self {
         let mut nodes = PrimaryMap::new();
         let entry = Node::empty();
         let entry_id: NodeId = nodes.push(entry);
@@ -195,7 +187,6 @@ impl ProtoGraph {
         Self {
             proto_ctx,
             entry: entry_id,
-            expr_ctx,
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
@@ -203,14 +194,6 @@ impl ProtoGraph {
             ops,
             op_loc,
         }
-    }
-
-    pub fn true_id(&self) -> ExprRef {
-        self.expr_ctx.get_true()
-    }
-
-    pub fn false_id(&self) -> ExprRef {
-        self.expr_ctx.get_false()
     }
 
     pub fn symbol_expr(&self, symbol_id: SymbolId) -> Option<ExprRef> {
@@ -223,45 +206,43 @@ impl ProtoGraph {
 
     /// convenience methods for construction simplified
     /// (p AND q) or (p OR q) expressions
-    pub fn and_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
-        let expr = self.expr_ctx.and(lhs, rhs);
-        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    pub fn and_guard(&mut self, ctx: &mut Context, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = ctx.and(lhs, rhs);
+        self.simplifier.simplify(ctx, expr)
     }
 
-    pub fn or_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
-        let expr = self.expr_ctx.or(lhs, rhs);
-        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    pub fn or_guard(&mut self, ctx: &mut Context, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = ctx.or(lhs, rhs);
+        self.simplifier.simplify(ctx, expr)
     }
 
-    pub fn not_guard(&mut self, guard: ExprRef) -> ExprRef {
-        let expr = self.expr_ctx.not(guard);
-        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    pub fn not_guard(&mut self, ctx: &mut Context, guard: ExprRef) -> ExprRef {
+        let expr = ctx.not(guard);
+        self.simplifier.simplify(ctx, expr)
     }
 
-    pub fn simplify_all_exprs(&mut self) {
-        let (expr_ctx, simplifier) = (&mut self.expr_ctx, &mut self.simplifier);
-
+    pub fn simplify_all_exprs(&mut self, ctx: &mut Context) {
         for (_, node) in self.nodes.iter_mut() {
             for action in &mut node.actions {
-                action.guard = simplifier.simplify(expr_ctx, action.guard);
+                action.guard = self.simplifier.simplify(ctx, action.guard);
             }
             for transition in &mut node.transitions {
-                transition.guard = simplifier.simplify(expr_ctx, transition.guard);
+                transition.guard = self.simplifier.simplify(ctx, transition.guard);
             }
         }
 
         for (_, op) in self.ops.iter_mut() {
             match op {
                 Op::Assign(_, assignment) => {
-                    assignment.dont_care = simplifier.simplify(expr_ctx, assignment.dont_care);
+                    assignment.dont_care = self.simplifier.simplify(ctx, assignment.dont_care);
                     for (guard, rhs) in &mut assignment.concretes {
-                        *guard = simplifier.simplify(expr_ctx, *guard);
-                        *rhs = simplifier.simplify(expr_ctx, *rhs);
+                        *guard = self.simplifier.simplify(ctx, *guard);
+                        *rhs = self.simplifier.simplify(ctx, *rhs);
                     }
                 }
                 Op::AssertEq(lhs, rhs) => {
-                    *lhs = simplifier.simplify(expr_ctx, *lhs);
-                    *rhs = simplifier.simplify(expr_ctx, *rhs);
+                    *lhs = self.simplifier.simplify(ctx, *lhs);
+                    *rhs = self.simplifier.simplify(ctx, *rhs);
                 }
                 Op::Fork | Op::InternalAssertFalse | Op::Done => {}
             }
@@ -318,7 +299,7 @@ impl ProtoGraph {
 
     /// Rebuild the graph from the subgraph reachable from `entry`.
     /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(&mut self) -> FxHashMap<NodeId, NodeId> {
+    pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
         let mut reachable_old_nodes = Vec::new();
         let mut seen = FxHashSet::default();
         let mut q = VecDeque::from([self.entry]);
@@ -329,7 +310,7 @@ impl ProtoGraph {
             }
             reachable_old_nodes.push(node_id);
             for transition in &self.nodes[node_id].transitions {
-                if transition.guard != self.false_id() {
+                if transition.guard != ctx.get_false() {
                     q.push_back(transition.target);
                 }
             }
@@ -344,7 +325,7 @@ impl ProtoGraph {
 
         for (_, node) in new_nodes.iter_mut() {
             node.transitions
-                .retain(|transition| transition.guard != self.false_id());
+                .retain(|transition| transition.guard != ctx.get_false());
         }
 
         let mut reachable_old_ops = Vec::new();

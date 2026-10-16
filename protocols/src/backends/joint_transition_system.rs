@@ -15,7 +15,6 @@ use crate::ir::joint_automaton::{JointDriverAutomaton, ProtocolId};
 use crate::ir::proto_graph::NodeId;
 
 pub struct JointTransitionSystemResult {
-    pub ctx: Context,
     pub ts: TransitionSystem,
     pub port_to_expr: FxHashMap<PortId, ExprRef>,
     pub protocol_inputs: FxHashMap<(ProtocolId, SymbolId), ExprRef>,
@@ -82,6 +81,7 @@ fn choice_ready(
 
 /// Add the argument-bank state and transaction handshake to a joint driver.
 pub fn into_joint_transition_system(
+    ctx: &mut Context,
     driver: JointDriverAutomaton,
     symbols: &SymbolTable,
     ts: TransitionSystem,
@@ -89,23 +89,23 @@ pub fn into_joint_transition_system(
     port_to_expr: FxHashMap<PortId, ExprRef>,
 ) -> JointTransitionSystemResult {
     let JointDriverAutomaton {
-        mut graph,
+        graph,
         protocols,
         transaction_valid,
         protocol_choice,
         choice_slots,
         bank_counts,
     } = driver;
-    let ctx = std::mem::take(&mut graph.expr_ctx);
     let core = lower_proto_graph_to_transition_system(
-        graph,
         ctx,
+        graph,
         ts,
         symbol_to_port,
         port_to_expr,
         symbols,
     );
     lower_joint_core(
+        ctx,
         core,
         JointMetadata {
             protocols,
@@ -119,16 +119,16 @@ pub fn into_joint_transition_system(
 }
 
 fn lower_joint_core(
+    ctx: &mut Context,
     core: CoreLoweredSystem,
     driver: JointMetadata,
     symbols: &SymbolTable,
 ) -> JointTransitionSystemResult {
-    let mut ctx = core.ctx.clone();
     let choice_nodes = driver.choice_slots.keys().copied().collect::<Vec<_>>();
-    let ready = choice_ready(&mut ctx, &core, &choice_nodes);
+    let ready = choice_ready(ctx, &core, &choice_nodes);
     let mut ts = core.ts;
-    ts.add_input(&ctx, driver.transaction_valid);
-    ts.add_input(&ctx, driver.protocol_choice);
+    ts.add_input(ctx, driver.transaction_valid);
+    ts.add_input(ctx, driver.protocol_choice);
 
     let valid_one = ctx.bit_vec_val(1, 1);
     let valid = ctx.equal(driver.transaction_valid, valid_one);
@@ -187,7 +187,7 @@ fn lower_joint_core(
 
     for protocol_id in 0..driver.protocols.len() {
         let selected = selector_guard(
-            &mut ctx,
+            ctx,
             driver.protocol_choice,
             protocol_id,
             driver.protocols.len(),
@@ -201,7 +201,7 @@ fn lower_joint_core(
             let node_guard = ctx.equal(core.node_symbol, node_value);
             let launch = ctx.and(node_guard, selected_valid);
             let physical = mod_add(
-                &mut ctx,
+                ctx,
                 heads[protocol_id],
                 slot,
                 driver.bank_counts[protocol_id],
@@ -264,7 +264,7 @@ fn lower_joint_core(
                 };
                 let transition_guard = ctx.and(node_guard, transition.guard);
                 let next = mod_add(
-                    &mut ctx,
+                    ctx,
                     heads[protocol_id],
                     amount,
                     driver.bank_counts[protocol_id],
@@ -288,7 +288,7 @@ fn lower_joint_core(
                 let next = ctx.ite(capture[protocol_id][bank], input, *state_arg);
                 let init = ctx.zero(state_arg.get_bv_type(&ctx).unwrap());
                 ts.add_state(
-                    &ctx,
+                    ctx,
                     State {
                         symbol: *state_arg,
                         init: Some(init),
@@ -300,13 +300,13 @@ fn lower_joint_core(
     }
 
     for (old, new) in &replacements {
-        ts.update_expressions(|expr| Some(replace_expr(&mut ctx, expr, *old, *new)));
+        ts.update_expressions(|expr| Some(replace_expr(ctx, expr, *old, *new)));
     }
 
-    ts.add_output(&mut ctx, Cow::from("transaction_ready"), ready);
+    ts.add_output(ctx, Cow::from("transaction_ready"), ready);
     for (protocol, bank) in driver.protocols.iter().zip(&transaction_banks) {
         ts.add_output(
-            &mut ctx,
+            ctx,
             Cow::from(format!("transaction_bank_{}", protocol.name)),
             *bank,
         );
@@ -315,12 +315,11 @@ fn lower_joint_core(
     let mut port_to_expr = core.port_to_expr;
     for expr in port_to_expr.values_mut() {
         for (old, new) in &replacements {
-            *expr = replace_expr(&mut ctx, *expr, *old, *new);
+            *expr = replace_expr(ctx, *expr, *old, *new);
         }
     }
 
     JointTransitionSystemResult {
-        ctx,
         ts,
         port_to_expr,
         protocol_inputs,

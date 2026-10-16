@@ -44,8 +44,8 @@ pub fn run(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) 
 }
 
 /// Creates a simulator for the DUT described by the command-line arguments.
-fn build_dut(cli: &Cli, module: &Module) -> PatronusSim {
-    PatronusSim::new(&cli.verilog, cli.module.as_deref(), module, None).unwrap()
+fn build_dut(ctx: &mut Context, cli: &Cli, module: &Module) -> PatronusSim {
+    PatronusSim::new(ctx, &cli.verilog, cli.module.as_deref(), module, None).unwrap()
 }
 
 /// Maps every DUT port to its transition-system expression.
@@ -89,44 +89,45 @@ fn print_graph_failure(failure: &GraphInterpretFailure, brief: bool) {
 
 /// Lowers and prepares one trace graph for interpretation or transition-system lowering.
 fn prepare_trace_graph(
+    ctx: &mut Context,
     cli: &Cli,
     symbols: &SymbolTable,
     protocols: &FxHashMap<&str, &Protocol>,
     trace: &Trace,
     trace_index: usize,
-    context: Context,
 ) -> ProtoGraph {
-    let mut graph = lower_trace_to_ir(trace, protocols, symbols, context);
-    graph = determinized(graph, symbols);
-    let reaching = reaching_definitions(&mut graph, symbols);
+    let mut graph = lower_trace_to_ir(ctx, trace, protocols, symbols);
+    graph = determinized(ctx, graph, symbols);
+    let reaching = reaching_definitions(ctx, &mut graph, symbols);
     if cli.reaching_definitions {
         println!("// reaching definitions for trace {trace_index}");
-        println!("{}", format_reaching_defs(&graph, symbols, &reaching));
+        println!("{}", format_reaching_defs(ctx, &graph, symbols, &reaching));
     }
-    propagate_assignments(&mut graph, symbols, &reaching);
+    propagate_assignments(ctx, &mut graph, symbols, &reaching);
     if cli.graphout {
         println!("// final trace graph for trace {trace_index}");
-        println!("{}", to_dot_string(&graph, symbols));
+        println!("{}", to_dot_string(ctx, &graph, symbols));
     }
     graph
 }
 
 /// Executes each protocol instance in a trace sequentially on the DUT.
 fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+    let mut ctx = Context::default();
     let graphs: Vec<(String, ProtoGraph)> = module
         .protos
         .iter()
         .map(|protocol| {
             (
                 protocol.name.clone(),
-                lower_ast_to_ir(protocol.clone(), symbols),
+                lower_ast_to_ir(&mut ctx, protocol.clone(), symbols),
             )
         })
         .collect();
 
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
-        let mut dut = build_dut(cli, module);
+        let mut dut = build_dut(&mut ctx, cli, module);
         let mut failed = false;
         for (name, values) in trace {
             let (_, template) = graphs
@@ -134,11 +135,11 @@ fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[T
                 .find(|(protocol_name, _)| protocol_name == name)
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
             let mut graph = template.clone();
-            let reaching = reaching_definitions(&mut graph, symbols);
-            propagate_assignments(&mut graph, symbols, &reaching);
+            let reaching = reaching_definitions(&mut ctx, &mut graph, symbols);
+            propagate_assignments(&mut ctx, &mut graph, symbols, &reaching);
             if cli.graphout {
                 println!("// final graph for protocol {name}");
-                println!("{}", to_dot_string(&graph, symbols));
+                println!("{}", to_dot_string(&ctx, &graph, symbols));
             }
             let args: FxHashMap<&str, Value> = graph
                 .args
@@ -147,7 +148,7 @@ fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[T
                 .map(|(arg, value)| (symbols[arg.symbol()].name(), value.clone()))
                 .collect();
 
-            let result = graph_interpreter::interpret(&graph, symbols, args, &mut dut);
+            let result = graph_interpreter::interpret(&mut ctx, &graph, symbols, args, &mut dut);
             if let Some(failure) = result.failure {
                 print_graph_failure(&failure, cli.brief_graph_errors);
                 failed = true;
@@ -163,18 +164,13 @@ fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[T
 /// Lowers each trace to a graph and interprets that graph directly.
 fn run_trace_graph(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
+    let mut ctx = Context::default();
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
-        let mut dut = build_dut(cli, module);
-        let graph = prepare_trace_graph(
-            cli,
-            symbols,
-            &protocols,
-            trace,
-            trace_index,
-            dut.ctx.clone(),
-        );
-        let result = graph_interpreter::interpret(&graph, symbols, FxHashMap::default(), &mut dut);
+        let mut dut = build_dut(&mut ctx, cli, module);
+        let graph = prepare_trace_graph(&mut ctx, cli, symbols, &protocols, trace, trace_index);
+        let result =
+            graph_interpreter::interpret(&mut ctx, &graph, symbols, FxHashMap::default(), &mut dut);
         if let Some(failure) = result.failure {
             print_graph_failure(&failure, cli.brief_graph_errors);
         } else {
@@ -222,10 +218,10 @@ fn record_transition_waveform(
 /// TODO: but that just made the code even uglier.
 #[allow(clippy::too_many_arguments)]
 fn simulate_transition_system(
+    ctx: &Context,
     cli: &Cli,
     trace_index: usize,
     dut: &PatronusSim,
-    context: Context,
     system: TransitionSystem,
     port_to_expr: FxHashMap<PortId, ExprRef>,
     node_symbol: ExprRef,
@@ -235,7 +231,7 @@ fn simulate_transition_system(
     is_dont_care: FxHashMap<PortId, ExprRef>,
     mut drive_inputs: impl FnMut(&mut Interpreter, usize),
 ) {
-    let mut simulator = Interpreter::new(&context, &system);
+    let mut simulator = Interpreter::new(ctx, &system);
     simulator.init(InitKind::Zero);
     let mut waveform = FxHashMap::default();
     let mut cycle = 0usize;
@@ -275,18 +271,13 @@ fn simulate_transition_system(
 /// Lowers each trace graph to a transition system and simulates it without extra inputs.
 fn run_trace_system(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
+    let mut ctx = Context::default();
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
-        let dut = build_dut(cli, module);
-        let graph = prepare_trace_graph(
-            cli,
-            symbols,
-            &protocols,
-            trace,
-            trace_index,
-            dut.ctx.clone(),
-        );
+        let dut = build_dut(&mut ctx, cli, module);
+        let graph = prepare_trace_graph(&mut ctx, cli, symbols, &protocols, trace, trace_index);
         let result = into_transition_system(
+            &mut ctx,
             graph,
             dut.sys.clone(),
             dut.port_map.clone(),
@@ -294,10 +285,10 @@ fn run_trace_system(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &
             symbols,
         );
         simulate_transition_system(
+            &ctx,
             cli,
             trace_index,
             &dut,
-            result.ctx,
             result.ts,
             result.port_to_expr,
             result.node_symbol,
@@ -319,6 +310,7 @@ fn run_bounded_driver(
     traces: &[Trace],
     bound: usize,
 ) {
+    let mut ctx = Context::default();
     let protocols = protocol_map(module);
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
@@ -355,14 +347,15 @@ fn run_bounded_driver(
             usize::BITS - (used_names.len() - 1).leading_zeros()
         };
 
-        let dut = build_dut(cli, module);
-        let (mut graph, choices) = lower_bmc(used_protocols, symbols, dut.ctx.clone(), bound);
-        graph.garbage_collect_unreachable();
-        graph = determinized(graph, symbols);
+        let dut = build_dut(&mut ctx, cli, module);
+        let (mut graph, choices) = lower_bmc(&mut ctx, used_protocols, symbols, bound);
+        graph.garbage_collect_unreachable(&ctx);
+        graph = determinized(&mut ctx, graph, symbols);
         if cli.graphout {
-            println!("{}", to_dot_string(&graph, symbols));
+            println!("{}", to_dot_string(&mut ctx, &graph, symbols));
         }
         let result = into_bmc_transition_system(
+            &mut ctx,
             graph,
             dut.sys.clone(),
             choices,
@@ -374,10 +367,10 @@ fn run_bounded_driver(
         let protocol_inputs = result.protocol_inputs;
         let protocol_choices = result.protocol_choices;
         simulate_transition_system(
+            &mut ctx,
             cli,
             trace_index,
             &dut,
-            result.ctx,
             result.ts,
             result.port_to_expr,
             result.node_symbol,
@@ -415,6 +408,7 @@ fn run_bounded_driver(
 /// we drive transaction-valid, protocol-choice, and arguments when transaction-ready is asserted (in the same cycle)
 fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
+    let mut ctx = Context::default();
     for (trace_index, trace) in traces.iter().enumerate() {
         print_trace_separator(trace_index);
         let mut used_names = Vec::new();
@@ -433,30 +427,31 @@ fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, trace
             .map(|(index, name)| (*name, index))
             .collect();
 
-        let dut = build_dut(cli, module);
-        let driver = build_joint_driver_automaton(used_protocols, symbols, dut.ctx.clone())
+        let dut = build_dut(&mut ctx, cli, module);
+        let driver = build_joint_driver_automaton(&mut ctx, used_protocols, symbols)
             .unwrap_or_else(|error| panic!("failed to build joint driver: {error}"));
         if cli.graphout {
-            println!("{}", to_dot_string(&driver.graph, symbols));
+            println!("{}", to_dot_string(&mut ctx, &driver.graph, symbols));
         }
         let result = into_joint_transition_system(
+            &mut ctx,
             driver,
             symbols,
             dut.sys.clone(),
             dut.port_map.clone(),
             dut_port_exprs(&dut),
         );
-        let choice_width = result.protocol_choice.get_bv_type(&result.ctx).unwrap();
+        let choice_width = result.protocol_choice.get_bv_type(&ctx).unwrap();
         let protocol_inputs = result.protocol_inputs;
         let transaction_valid = result.transaction_valid;
         let protocol_choice = result.protocol_choice;
         let transaction_ready = result.transaction_ready;
         let mut transaction_index = 0;
         simulate_transition_system(
+            &mut ctx,
             cli,
             trace_index,
             &dut,
-            result.ctx,
             result.ts,
             result.port_to_expr,
             result.node_symbol,
