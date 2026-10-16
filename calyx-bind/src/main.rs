@@ -4,7 +4,6 @@ use patronus::system::TransitionSystem;
 use protocols::backends::transition_system::lower_proto_graph_to_transition_system;
 use protocols::frontend;
 use protocols::frontend::Module;
-use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::graphviz::to_dot_string_from_entry;
@@ -12,7 +11,7 @@ use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
 use protocols::ir::proto_graph::{NodeId, Op, ProtoGraph};
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -40,7 +39,8 @@ struct Args {
 fn gen_driver(st: &SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
-    let (mut lowerer, lowered) = lower_protocols(st, m);
+    let mut ctx = Context::default();
+    let (mut lowerer, lowered) = lower_protocols(&mut ctx, st, m);
     debug_assert_eq!(lowered.len(), m.protos.len());
     let methods: Vec<_> = m
         .protos
@@ -54,27 +54,31 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         .iter()
         .zip(lowered.iter())
         .find(|(p, _)| p.is_reset)
-        .map(|(_, l)| get_single_cycle(&mut lowerer.ir, l).expect("reset should be single cycle"));
+        .map(|(_, l)| {
+            get_single_cycle(&mut ctx, &mut lowerer.ir, l).expect("reset should be single cycle")
+        });
     let idle: Option<_> = m
         .protos
         .iter()
         .zip(lowered.iter())
         .find(|(p, _)| p.is_idle)
-        .map(|(_, l)| get_single_cycle(&mut lowerer.ir, l).expect("idle should be single cycle"));
+        .map(|(_, l)| {
+            get_single_cycle(&mut ctx, &mut lowerer.ir, l).expect("idle should be single cycle")
+        });
 
     // pad methods with idle to remove any forks in the protocol
     for (graph, method) in methods.iter().zip(m.protos.iter()) {
-        remove_fork(&mut lowerer, graph, method, idle);
+        remove_fork(&mut ctx, &mut lowerer, graph, idle);
         // make sure it worked
         assert!(
             lowerer
-                .graft_points(graph)
+                .graft_points(&mut ctx, graph)
                 .iter()
                 .all(|(p, _)| *p == graph.exit)
         );
 
         // check shape
-        let shape = analyze_shape(&lowerer.ir, method, (*graph).clone()).unwrap();
+        let shape = analyze_shape(&mut ctx, &lowerer.ir, method, (*graph).clone()).unwrap();
         assert!(
             shape.fork.is_none(),
             "we should have removed all forks at this point!"
@@ -95,34 +99,34 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         println!("{}", method.name);
         println!(
             "{}\n",
-            to_dot_string_from_entry(&lowerer.ir, st, graph.entry)
+            to_dot_string_from_entry(&ctx, &lowerer.ir, st, graph.entry)
         );
     }
 }
 
-fn add_guard(pg: &mut ProtoGraph, node_id: NodeId, guard: ExprRef) {
+fn add_guard(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId, guard: ExprRef) {
     let node = &mut pg[node_id];
     for tran in node.transitions.iter_mut() {
-        tran.guard = pg.expr_ctx.and(tran.guard, guard);
+        tran.guard = ctx.and(tran.guard, guard);
     }
 }
 
 fn to_transition_system(
+    ctx: &mut Context,
     module: &Module,
-    mut pg: ProtoGraph,
+    pg: ProtoGraph,
     st: &SymbolTable,
-) -> (Context, TransitionSystem) {
-    let ctx = std::mem::take(&mut pg.expr_ctx);
+) -> TransitionSystem {
     let sys = TransitionSystem::new(module.name.clone());
     let symbol_to_port = FxHashMap::default();
     let port_to_expr = FxHashMap::default();
     let lowered =
-        lower_proto_graph_to_transition_system(pg, ctx, sys, symbol_to_port, port_to_expr, st);
-    (lowered.ctx, lowered.ts)
+        lower_proto_graph_to_transition_system(ctx, pg, sys, symbol_to_port, port_to_expr, st);
+    lowered.ts
 }
 
 /// returns the condition under which we will be done in the next step
-fn next_state_is_done(pg: &mut ProtoGraph, node_id: NodeId) -> ExprRef {
+fn next_state_is_done(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId) -> ExprRef {
     let dones: SmallVec<[_; 2]> = pg[node_id]
         .transitions
         .iter()
@@ -136,51 +140,55 @@ fn next_state_is_done(pg: &mut ProtoGraph, node_id: NodeId) -> ExprRef {
             (t.guard, dones)
         })
         .collect();
-    dones.into_iter().fold(pg.false_id(), |a, (guard, inner)| {
-        let inner = reduce_or(pg, inner.into_iter());
-        let inner = and(pg, guard, inner);
-        or(pg, a, inner)
-    })
+    dones
+        .into_iter()
+        .fold(ctx.get_false(), |a, (guard, inner)| {
+            let inner = reduce_or(ctx, inner.into_iter());
+            let inner = and(ctx, guard, inner);
+            or(ctx, a, inner)
+        })
 }
 
-fn reduce_or(pg: &mut ProtoGraph, items: impl Iterator<Item = ExprRef>) -> ExprRef {
-    items.into_iter().fold(pg.false_id(), |a, b| or(pg, a, b))
+fn reduce_or(ctx: &mut Context, items: impl Iterator<Item = ExprRef>) -> ExprRef {
+    items
+        .into_iter()
+        .fold(ctx.get_false(), |a, b| or(ctx, a, b))
 }
 
 /// optimizing or
-fn or(pg: &mut ProtoGraph, a: ExprRef, b: ExprRef) -> ExprRef {
-    if a == pg.true_id() || b == pg.true_id() {
-        pg.true_id()
-    } else if b == pg.false_id() {
+fn or(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
+    if a == ctx.get_true() || b == ctx.get_true() {
+        ctx.get_true()
+    } else if b == ctx.get_false() {
         a
-    } else if a == pg.false_id() {
+    } else if a == ctx.get_false() {
         b
     } else if a == b {
         a
     } else {
-        pg.expr_ctx.or(a, b)
+        ctx.or(a, b)
     }
 }
 
 /// optimizing and
-fn and(pg: &mut ProtoGraph, a: ExprRef, b: ExprRef) -> ExprRef {
-    if a == pg.false_id() || b == pg.false_id() {
-        pg.false_id()
-    } else if b == pg.true_id() {
+fn and(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
+    if a == ctx.get_false() || b == ctx.get_false() {
+        ctx.get_false()
+    } else if b == ctx.get_true() {
         a
-    } else if a == pg.true_id() {
+    } else if a == ctx.get_true() {
         b
     } else if a == b {
         a
     } else {
-        pg.expr_ctx.and(a, b)
+        ctx.and(a, b)
     }
 }
 
 fn remove_fork(
+    ctx: &mut Context,
     lowerer: &mut Lowerer,
     graph: &LoweredFragmentInfo,
-    method: &Protocol,
     idle: Option<NodeId>,
 ) {
     let mut todo = vec![(false, graph.entry)];
@@ -199,17 +207,17 @@ fn remove_fork(
             }
 
             // check if this node forks
-            let node_forks = try_remove_fork(&mut lowerer.ir, node_id);
+            let node_forks = try_remove_fork(ctx, &mut lowerer.ir, node_id);
             assert!(!(has_forked && node_forks), "Cannot fork twice");
             has_forked = has_forked | node_forks;
             if has_forked {
                 let idle = idle.expect("an idle transaction is required because a protocol forks!");
                 // parallel merge idle into state
-                lowerer.graft_contracted_entry(node_id, idle, lowerer.ir.true_id());
+                lowerer.graft_contracted_entry(ctx, node_id, idle, ctx.get_true());
             }
 
             for tran in &lowerer.ir[node_id].transitions {
-                if tran.guard != lowerer.ir.false_id() && !visited.contains(&tran.target) {
+                if tran.guard != ctx.get_false() && !visited.contains(&tran.target) {
                     assert!(tran.consumes_step);
                     todo.push((has_forked, tran.target));
                 }
@@ -219,12 +227,12 @@ fn remove_fork(
     }
 }
 
-fn try_remove_fork(pg: &mut ProtoGraph, node_id: NodeId) -> bool {
+fn try_remove_fork(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId) -> bool {
     let mut removed_fork = false;
     let mut actions = std::mem::take(&mut pg[node_id].actions);
     actions.retain(|a| {
         if matches!(pg[a.op], Op::Fork) {
-            assert_eq!(a.guard, pg.true_id(), "guarded forks are not supported");
+            assert_eq!(a.guard, ctx.get_true(), "guarded forks are not supported");
             assert!(!removed_fork, "double forks should have been merged");
             removed_fork = true;
             false
@@ -236,20 +244,28 @@ fn try_remove_fork(pg: &mut ProtoGraph, node_id: NodeId) -> bool {
     removed_fork
 }
 
-fn lower_protocols<'a>(st: &'a SymbolTable, m: &Module) -> (Lowerer<'a>, Vec<LoweredFragmentInfo>) {
+fn lower_protocols<'a>(
+    ctx: &mut Context,
+    st: &'a SymbolTable,
+    m: &Module,
+) -> (Lowerer<'a>, Vec<LoweredFragmentInfo>) {
     let mut lowerer = Lowerer::new(m.protos.first().unwrap().ctx.clone(), st);
     let lowered: Vec<_> = m
         .protos
         .iter()
-        .map(|p| lowerer.lower_protocol_fragment(p, true, true))
+        .map(|p| lowerer.lower_protocol_fragment(ctx, p, true, true))
         .collect();
     (lowerer, lowered)
 }
 
-fn get_single_cycle(pg: &mut ProtoGraph, low: &LoweredFragmentInfo) -> Option<NodeId> {
+fn get_single_cycle(
+    ctx: &mut Context,
+    pg: &mut ProtoGraph,
+    low: &LoweredFragmentInfo,
+) -> Option<NodeId> {
     // check to make sure that the start node is the only node
-    let next_state_is_done = next_state_is_done(pg, low.entry);
-    if next_state_is_done == pg.true_id() {
+    let next_state_is_done = next_state_is_done(ctx, pg, low.entry);
+    if next_state_is_done == ctx.get_true() {
         // make a copy to remove the done state
         let mut st = pg[low.entry].clone();
         st.transitions.clear();

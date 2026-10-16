@@ -126,14 +126,17 @@ fn format_op(
 
 fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignment) -> String {
     let mut parts = Vec::new();
-    if assignment.dont_care != protocol.false_id() {
-        parts.push(format!("X{}", format_guard(protocol, assignment.dont_care)));
+    if assignment.dont_care != ctx.get_false() {
+        parts.push(format!(
+            "X{}",
+            format_guard(ctx, protocol, assignment.dont_care)
+        ));
     }
     for (guard, rhs) in &assignment.concretes {
         parts.push(format!(
             "{}{}",
-            format_expr(protocol, *rhs),
-            format_guard(protocol, *guard)
+            format_expr(ctx, protocol, *rhs),
+            format_guard(ctx, protocol, *guard)
         ));
     }
     if parts.is_empty() {
@@ -143,15 +146,15 @@ fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignme
     }
 }
 
-fn format_guard(protocol: &ProtoGraph, guard: ExprRef) -> String {
-    if guard == protocol.true_id() {
+fn format_guard(ctx: &Context, protocol: &ProtoGraph, guard: ExprRef) -> String {
+    if guard == ctx.get_true() {
         "".to_string()
     } else {
-        format!(" if {}", format_expr(protocol, guard))
+        format!(" if {}", format_expr(ctx, protocol, guard))
     }
 }
 
-pub fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+pub fn format_expr(ctx: &Context, protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
     if protocol.dont_cares.contains(&expr_ref) {
         "X".to_string()
     } else {
