@@ -1,0 +1,13 @@
+---
+source: protocols/src/ir/simplify_monitor/tests.rs
+expression: dot
+---
+digraph "overlapping_slices" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] assert_eq(dut.a[2:1], dut.b[1:0])\n[1] $monitor_p_value := or(concat(0, or(concat(0, $monitor_p_value[0]), concat(dut.a, 0))), concat(dut.b[2], 0)) if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] done"];
+}

@@ -83,6 +83,19 @@ digraph "add" {
   node2 [label="[1] done\n[1] $monitor_a_value := $monitor_a_value if 1\n[1] $monitor_a_known := $monitor_a_known if 1\n[1] $monitor_b_value := $monitor_b_value if 1\n[1] $monitor_b_known := $monitor_b_known if 1\n[1] $monitor_s_value := $monitor_s_value if 1\n[1] $monitor_s_known := $monitor_s_known if 1"];
 }
 
+== simplified-monitor ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value := DUT.a if 1\n[1] $monitor_b_value := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] $monitor_s_value := DUT.s if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
 == pre-contract ==
 digraph "add_fork_early" {
   rankdir=LR;
@@ -162,6 +175,19 @@ digraph "add_fork_early" {
   node1 [label="[1] fork\n[1] assert_eq(and($monitor_s_value_1, and($monitor_s_known_1, shl(4294967295, 0))), and(shl(DUT.s, 0), and($monitor_s_known_1, shl(4294967295, 0))))\n[1] $monitor_a_value_1 := $monitor_a_value_1 if 1\n[1] $monitor_a_known_1 := $monitor_a_known_1 if 1\n[1] $monitor_b_value_1 := $monitor_b_value_1 if 1\n[1] $monitor_b_known_1 := $monitor_b_known_1 if 1\n[1] $monitor_s_value_1 := ite(1, or(and($monitor_s_value_1, not(and(shl(4294967295, 0), not($monitor_s_known_1)))), and(shl(DUT.s, 0), and(shl(4294967295, 0), not($monitor_s_known_1)))), $monitor_s_value_1) if 1\n[1] $monitor_s_known_1 := ite(1, or($monitor_s_known_1, shl(4294967295, 0)), $monitor_s_known_1) if 1"];
   node1 -> node2 [label="1 / step"];
   node2 [label="[1] done\n[1] $monitor_a_value_1 := $monitor_a_value_1 if 1\n[1] $monitor_a_known_1 := $monitor_a_known_1 if 1\n[1] $monitor_b_value_1 := $monitor_b_value_1 if 1\n[1] $monitor_b_known_1 := $monitor_b_known_1 if 1\n[1] $monitor_s_value_1 := $monitor_s_value_1 if 1\n[1] $monitor_s_known_1 := $monitor_s_known_1 if 1"];
+}
+
+== simplified-monitor ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value_1 := DUT.a if 1\n[1] $monitor_b_value_1 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] $monitor_s_value_1 := DUT.s if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
 }
 
 == pre-contract ==
@@ -245,6 +271,19 @@ digraph "add_incorrect" {
   node2 [label="[1] done\n[1] $monitor_a_value_2 := $monitor_a_value_2 if 1\n[1] $monitor_a_known_2 := $monitor_a_known_2 if 1\n[1] $monitor_b_value_2 := $monitor_b_value_2 if 1\n[1] $monitor_b_known_2 := $monitor_b_known_2 if 1\n[1] $monitor_s_value_2 := $monitor_s_value_2 if 1\n[1] $monitor_s_known_2 := $monitor_s_known_2 if 1"];
 }
 
+== simplified-monitor ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value_2 := DUT.a if 1\n[1] $monitor_b_value_2 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value_2, DUT.a)\n[1] assert_eq($monitor_b_value_2, DUT.b)\n[1] $monitor_s_value_2 := DUT.s if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
 == pre-contract ==
 digraph "add_incorrect_implicit" {
   rankdir=LR;
@@ -320,6 +359,19 @@ digraph "add_incorrect_implicit" {
   node1 [label="[1] assert_eq(and($monitor_s_value_3, and($monitor_s_known_3, shl(4294967295, 0))), and(shl(DUT.s, 0), and($monitor_s_known_3, shl(4294967295, 0))))\n[1] fork\n[1] assert_eq(and($monitor_a_value_3, and($monitor_a_known_3, shl(4294967295, 0))), and(shl(DUT.a, 0), and($monitor_a_known_3, shl(4294967295, 0))))\n[1] assert_eq(and($monitor_b_value_3, and($monitor_b_known_3, shl(4294967295, 0))), and(shl(DUT.b, 0), and($monitor_b_known_3, shl(4294967295, 0))))\n[1] $monitor_a_value_3 := ite(1, or(and($monitor_a_value_3, not(and(shl(4294967295, 0), not($monitor_a_known_3)))), and(shl(DUT.a, 0), and(shl(4294967295, 0), not($monitor_a_known_3)))), $monitor_a_value_3) if 1\n[1] $monitor_a_known_3 := ite(1, or($monitor_a_known_3, shl(4294967295, 0)), $monitor_a_known_3) if 1\n[1] $monitor_b_value_3 := ite(1, or(and($monitor_b_value_3, not(and(shl(4294967295, 0), not($monitor_b_known_3)))), and(shl(DUT.b, 0), and(shl(4294967295, 0), not($monitor_b_known_3)))), $monitor_b_value_3) if 1\n[1] $monitor_b_known_3 := ite(1, or($monitor_b_known_3, shl(4294967295, 0)), $monitor_b_known_3) if 1\n[1] $monitor_s_value_3 := ite(1, or(and($monitor_s_value_3, not(and(shl(4294967295, 0), not($monitor_s_known_3)))), and(shl(DUT.s, 0), and(shl(4294967295, 0), not($monitor_s_known_3)))), $monitor_s_value_3) if 1\n[1] $monitor_s_known_3 := ite(1, or($monitor_s_known_3, shl(4294967295, 0)), $monitor_s_known_3) if 1"];
   node1 -> node2 [label="1 / step"];
   node2 [label="[1] done\n[1] $monitor_a_value_3 := $monitor_a_value_3 if 1\n[1] $monitor_a_known_3 := $monitor_a_known_3 if 1\n[1] $monitor_b_value_3 := $monitor_b_value_3 if 1\n[1] $monitor_b_known_3 := $monitor_b_known_3 if 1\n[1] $monitor_s_value_3 := $monitor_s_value_3 if 1\n[1] $monitor_s_known_3 := $monitor_s_known_3 if 1"];
+}
+
+== simplified-monitor ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value_3 := DUT.a if 1\n[1] $monitor_b_value_3 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value_3, DUT.a)\n[1] assert_eq($monitor_b_value_3, DUT.b)\n[1] $monitor_s_value_3 := DUT.s if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
 }
 
 == pre-contract ==
@@ -419,6 +471,23 @@ digraph "wait_and_add" {
   node4 [label="[1] done\n[1] $monitor_a_value_4 := $monitor_a_value_4 if 1\n[1] $monitor_a_known_4 := $monitor_a_known_4 if 1\n[1] $monitor_b_value_4 := $monitor_b_value_4 if 1\n[1] $monitor_b_known_4 := $monitor_b_known_4 if 1\n[1] $monitor_s_value_4 := $monitor_s_value_4 if 1\n[1] $monitor_s_known_4 := $monitor_s_known_4 if 1"];
 }
 
+== simplified-monitor ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] $monitor_a_value_4 := DUT.a if 1\n[1] $monitor_b_value_4 := DUT.b if 1"];
+  node2 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq($monitor_a_value_4, DUT.a)\n[1] assert_eq($monitor_b_value_4, DUT.b)\n[1] $monitor_s_value_4 := DUT.s if 1"];
+  node3 -> node4 [label="1 / step"];
+  node4 [label="[1] done"];
+}
+
 == pre-contract ==
 digraph "assign_after_observation" {
   rankdir=LR;
@@ -513,6 +582,20 @@ digraph "assign_after_observation" {
   node2 [label="[1] done\n[1] $monitor_a_value_5 := $monitor_a_value_5 if 1\n[1] $monitor_a_known_5 := $monitor_a_known_5 if 1\n[1] $monitor_b_value_5 := $monitor_b_value_5 if 1\n[1] $monitor_b_known_5 := $monitor_b_known_5 if 1\n[1] $monitor_s_value_5 := $monitor_s_value_5 if 1\n[1] $monitor_s_known_5 := $monitor_s_known_5 if 1"];
 }
 
+== simplified-monitor ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[eq(DUT.a, 2)] assert_eq(DUT.a, 0)\n[1] $monitor_a_value_5 := ite(not(eq(DUT.a, 2)), DUT.a, $monitor_a_value_5) if 1\n[1] $monitor_a_known_5_bool := not(eq(DUT.a, 2)) if 1\n[1] $monitor_b_value_5 := DUT.b if 1"];
+  node0 -> node1 [label="eq(DUT.a, 2) / step"];
+  node0 -> node1 [label="not(eq(DUT.a, 2)) / step"];
+  node1 [label="[1] fork\n[1] $monitor_s_value_5 := DUT.s if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
 == pre-contract ==
 digraph "better_if_else" {
   rankdir=LR;
@@ -601,6 +684,20 @@ digraph "better_if_else" {
   node2 [label="[1] done\n[1] $monitor_a_value_6 := $monitor_a_value_6 if 1\n[1] $monitor_a_known_6 := $monitor_a_known_6 if 1\n[1] $monitor_b_value_6 := $monitor_b_value_6 if 1\n[1] $monitor_b_known_6 := $monitor_b_known_6 if 1"];
 }
 
+== simplified-monitor ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value_6 := DUT.a if 1\n[1] $monitor_b_value_6 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[not(eq(DUT.s, 0))] assert_eq(DUT.a, 5)\n[1] assert_eq($monitor_b_value_6, DUT.b)"];
+  node1 -> node2 [label="not(eq(DUT.s, 0)) / step"];
+  node1 -> node2 [label="eq(DUT.s, 0) / step"];
+  node2 [label="[1] done"];
+}
+
 == pre-contract ==
 digraph "if_else" {
   rankdir=LR;
@@ -684,4 +781,17 @@ digraph "if_else" {
   node1 [label="[1] assert_eq(and($monitor_a1_value, and($monitor_a1_known, shl(4294967295, 0))), and(shl(DUT.s, 0), and($monitor_a1_known, shl(4294967295, 0))))\n[1] fork\n[1] $monitor_a1_value := ite(1, or(and($monitor_a1_value, not(and(shl(4294967295, 0), not($monitor_a1_known)))), and(shl(DUT.s, 0), and(shl(4294967295, 0), not($monitor_a1_known)))), $monitor_a1_value) if 1\n[1] $monitor_a1_known := ite(1, or($monitor_a1_known, shl(4294967295, 0)), $monitor_a1_known) if 1\n[1] $monitor_a2_value := $monitor_a2_value if 1\n[1] $monitor_a2_known := $monitor_a2_known if 1"];
   node1 -> node2 [label="1 / step"];
   node2 [label="[1] done\n[1] $monitor_a1_value := $monitor_a1_value if 1\n[1] $monitor_a1_known := $monitor_a1_known if 1\n[1] $monitor_a2_value := $monitor_a2_value if 1\n[1] $monitor_a2_known := $monitor_a2_known if 1"];
+}
+
+== simplified-monitor ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] assert_eq(DUT.b, 0)\n[1] $monitor_a1_value := DUT.a if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] assert_eq($monitor_a1_value, DUT.s)\n[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
 }

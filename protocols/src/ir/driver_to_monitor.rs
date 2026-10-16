@@ -23,12 +23,16 @@ pub struct MonitorAutomaton {
     pub graph: ProtoGraph,
     /// Original argument -> generated value register.
     pub value_registers: FxHashMap<SymbolId, SymbolId>,
-    /// Original argument -> generated full-width knownness register.
+    /// Original argument -> physical knownness register. Simplification can
+    /// remove an entry or replace its full-width mask with a Boolean register.
     /// Together these maps record ownership without relying on register names.
     pub knownness_registers: FxHashMap<SymbolId, SymbolId>,
     /// Generated register -> initial-value expression, including liveness.
     /// Register expression references are cached in `graph.symbol_expr`.
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
+    /// Logical full-width knownness masks at each node entry, keyed by argument.
+    /// These remain available even when physical mask registers disappear.
+    pub knownness_outputs: FxHashMap<NodeId, FxHashMap<SymbolId, ExprRef>>,
     /// Initialized to true. Candidate survival is interpreted by a later backend;
     /// conversion itself only emits equality constraints and parameter updates.
     pub live_register: SymbolId,
@@ -139,11 +143,20 @@ pub fn convert_driver_to_monitor(
     }
     // Drop obsolete driver operations, without optimizing monitor expressions.
     graph.garbage_collect_unreachable(ctx);
+    let masks = knownness_registers
+        .iter()
+        .map(|(&argument, &register)| (argument, graph.symbol_expr(register).unwrap()))
+        .collect::<FxHashMap<_, _>>();
+    let knownness_outputs = graph
+        .nodes()
+        .map(|(node, _)| (node, masks.clone()))
+        .collect();
     Ok(MonitorAutomaton {
         graph,
         value_registers,
         knownness_registers,
         register_inits,
+        knownness_outputs,
         live_register,
     })
 }

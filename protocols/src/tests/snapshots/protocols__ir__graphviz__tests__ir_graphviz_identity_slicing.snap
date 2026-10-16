@@ -1,0 +1,91 @@
+---
+source: protocols/src/ir/graphviz.rs
+expression: content
+---
+== pre-contract ==
+digraph "slicing_ok" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if 1"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.a := a if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s[31:15], DUT.s[31:15])"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork"];
+  node3 -> node2 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1"];
+}
+
+== post-contract ==
+digraph "slicing_ok" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s[31:15], DUT.s[31:15])\n[1] fork"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1"];
+}
+
+== post-propagation ==
+digraph "slicing_ok" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s[31:15], DUT.s[31:15])\n[1] fork\n[1] DUT.a := a if 1"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1"];
+}
+
+== post-normalize ==
+digraph "slicing_ok" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s[31:15], DUT.s[31:15])\n[1] fork\n[1] DUT.a := a if 1"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1"];
+}
+
+== to-monitor ==
+digraph "slicing_ok" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] assert_eq(and($monitor_a_value, and($monitor_a_known, shl(4294967295, 0))), and(shl(DUT.a, 0), and($monitor_a_known, shl(4294967295, 0))))\n[1] $monitor_a_value := ite(1, or(and($monitor_a_value, not(and(shl(4294967295, 0), not($monitor_a_known)))), and(shl(DUT.a, 0), and(shl(4294967295, 0), not($monitor_a_known)))), $monitor_a_value) if 1\n[1] $monitor_a_known := ite(1, or($monitor_a_known, shl(4294967295, 0)), $monitor_a_known) if 1\n[1] $monitor_s_value := $monitor_s_value if 1\n[1] $monitor_s_known := $monitor_s_known if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] assert_eq(and($monitor_s_value, and($monitor_s_known, shl(zero_extend(131071, 15), 15))), and(shl(zero_extend(DUT.s[31:15], 15), 15), and($monitor_s_known, shl(zero_extend(131071, 15), 15))))\n[1] fork\n[1] assert_eq(and($monitor_a_value, and($monitor_a_known, shl(4294967295, 0))), and(shl(DUT.a, 0), and($monitor_a_known, shl(4294967295, 0))))\n[1] $monitor_a_value := ite(1, or(and($monitor_a_value, not(and(shl(4294967295, 0), not($monitor_a_known)))), and(shl(DUT.a, 0), and(shl(4294967295, 0), not($monitor_a_known)))), $monitor_a_value) if 1\n[1] $monitor_a_known := ite(1, or($monitor_a_known, shl(4294967295, 0)), $monitor_a_known) if 1\n[1] $monitor_s_value := ite(1, or(and($monitor_s_value, not(and(shl(zero_extend(131071, 15), 15), not($monitor_s_known)))), and(shl(zero_extend(DUT.s[31:15], 15), 15), and(shl(zero_extend(131071, 15), 15), not($monitor_s_known)))), $monitor_s_value) if 1\n[1] $monitor_s_known := ite(1, or($monitor_s_known, shl(zero_extend(131071, 15), 15)), $monitor_s_known) if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done\n[1] $monitor_a_value := $monitor_a_value if 1\n[1] $monitor_a_known := $monitor_a_known if 1\n[1] $monitor_s_value := $monitor_s_value if 1\n[1] $monitor_s_known := $monitor_s_known if 1"];
+}
+
+== simplified-monitor ==
+digraph "slicing_ok" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value := DUT.a if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value, DUT.a)\n[1] $monitor_s_value := or(concat(0, $monitor_s_value[14:0]), concat(DUT.s[31:15], 0)) if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}

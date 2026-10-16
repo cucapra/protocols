@@ -100,6 +100,23 @@ digraph "count_up" {
   node3 [label="[1] done\n[1] $monitor_a_value := $monitor_a_value if 1\n[1] $monitor_a_known := $monitor_a_known if 1"];
 }
 
+== simplified-monitor ==
+digraph "count_up" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value := dut.a if 1"];
+  node0 -> node1 [label="not(eq(dut.s, dut.a)) / step"];
+  node0 -> node2 [label="eq(dut.s, dut.a) / step"];
+  node1 [label="[1] assert_eq($monitor_a_value, dut.a)"];
+  node1 -> node2 [label="eq(dut.s, dut.a) / step"];
+  node1 -> node1 [label="not(eq(dut.s, dut.a)) / step"];
+  node2 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] assert_eq($monitor_a_value, dut.a)"];
+  node2 -> node3 [label="1 / step"];
+  node3 [label="[1] done"];
+}
+
 == pre-contract ==
 digraph "count_up_extra_assertion" {
   rankdir=LR;
@@ -198,4 +215,21 @@ digraph "count_up_extra_assertion" {
   node2 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] assert_eq(and($monitor_a_value_1, and($monitor_a_known_1, shl(18446744073709551615, 0))), and(shl(dut.a, 0), and($monitor_a_known_1, shl(18446744073709551615, 0))))\n[1] $monitor_a_value_1 := ite(1, or(and($monitor_a_value_1, not(and(shl(18446744073709551615, 0), not($monitor_a_known_1)))), and(shl(dut.a, 0), and(shl(18446744073709551615, 0), not($monitor_a_known_1)))), $monitor_a_value_1) if 1\n[1] $monitor_a_known_1 := ite(1, or($monitor_a_known_1, shl(18446744073709551615, 0)), $monitor_a_known_1) if 1"];
   node2 -> node3 [label="1 / step"];
   node3 [label="[1] done\n[1] $monitor_a_value_1 := $monitor_a_value_1 if 1\n[1] $monitor_a_known_1 := $monitor_a_known_1 if 1"];
+}
+
+== simplified-monitor ==
+digraph "count_up_extra_assertion" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] assert_eq(and(ite(eq(dut.s, dut.a), dut.s, $monitor_a_value_1), ite(eq(dut.s, dut.a), 18446744073709551615, 0)), and(dut.a, ite(eq(dut.s, dut.a), 18446744073709551615, 0)))\n[1] $monitor_a_value_1 := or(and(ite(eq(dut.s, dut.a), dut.s, $monitor_a_value_1), ite(eq(dut.s, dut.a), 18446744073709551615, 0)), and(dut.a, not(ite(eq(dut.s, dut.a), 18446744073709551615, 0)))) if 1"];
+  node0 -> node1 [label="not(eq(dut.s, dut.a)) / step"];
+  node0 -> node2 [label="eq(dut.s, dut.a) / step"];
+  node1 [label="[eq(dut.s, dut.a)] assert_eq($monitor_a_value_1, dut.s)\n[1] assert_eq($monitor_a_value_1, dut.a)"];
+  node1 -> node2 [label="eq(dut.s, dut.a) / step"];
+  node1 -> node1 [label="not(eq(dut.s, dut.a)) / step"];
+  node2 [label="[1] assert_eq(dut.s, 0)\n[1] fork\n[1] assert_eq($monitor_a_value_1, dut.a)"];
+  node2 -> node3 [label="1 / step"];
+  node3 [label="[1] done"];
 }

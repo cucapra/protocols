@@ -231,6 +231,7 @@ mod tests {
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
     use crate::ir::reaching_defs::reaching_definitions;
+    use crate::ir::simplify_monitor::simplify_monitor;
     use insta::Settings;
 
     fn snap(name: &str, filename: &str) {
@@ -273,6 +274,11 @@ mod tests {
             content += "== to-monitor ==\n";
             content += &monitor.to_dot_string(&ctx, &symbols);
             content += "\n";
+
+            let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
+            content += "== simplified-monitor ==\n";
+            content += &monitor.to_dot_string(&ctx, &symbols);
+            content += "\n";
         }
 
         let mut settings = Settings::clone_current();
@@ -309,6 +315,22 @@ mod tests {
         snap(
             "ir_graphviz_bounded_ready_valid",
             "../tests/bounded_ready_valid/bounded_rv.prot",
+        );
+    }
+
+    #[test]
+    fn test_identity_slicing_snapshot() {
+        snap(
+            "ir_graphviz_identity_slicing",
+            "../tests/identities/identity_d1.prot",
+        );
+    }
+
+    #[test]
+    fn test_serv_regfile_snapshot() {
+        snap(
+            "ir_graphviz_serv_regfile",
+            "../examples/serv/serv_regfile.prot",
         );
     }
 }
