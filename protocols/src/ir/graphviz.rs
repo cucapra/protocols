@@ -9,8 +9,16 @@ use baa::BitVecValue;
 use patronus::expr::{Context, Expr, ExprRef};
 use std::collections::{BTreeSet, VecDeque};
 
-/// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
+    to_dot_string_from_entry(ctx, protocol, symbols, protocol.entry)
+}
+
+/// generate a DOT file for graphviz from the IR
+pub fn to_dot_string_from_entry(ctx: &Context, 
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    entry: NodeId,
+) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "digraph \"{}\" {{\n",
@@ -19,11 +27,11 @@ pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable
     out.push_str("  rankdir=LR;\n");
     out.push_str("  node [shape=box];\n");
     out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
-    out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
+    out.push_str(&format!("  entry_marker -> {};\n", entry));
 
     let mut seen: BTreeSet<NodeId> = BTreeSet::new();
-    seen.insert(protocol.entry);
-    let mut q = VecDeque::from([protocol.entry]);
+    seen.insert(entry);
+    let mut q = VecDeque::from([entry]);
     while let Some(node_id) = q.pop_front() {
         let node = protocol[node_id].clone();
 
@@ -113,17 +121,14 @@ fn format_op(
 
 fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignment) -> String {
     let mut parts = Vec::new();
-    if assignment.dont_care != ctx.get_false() {
-        parts.push(format!(
-            "X if {}",
-            format_expr(ctx, protocol, assignment.dont_care)
-        ));
+    if assignment.dont_care != protocol.false_id() {
+        parts.push(format!("X{}", format_guard(protocol, assignment.dont_care)));
     }
     for (guard, rhs) in &assignment.concretes {
         parts.push(format!(
-            "{} if {}",
-            format_expr(ctx, protocol, *rhs),
-            format_expr(ctx, protocol, *guard)
+            "{}{}",
+            format_expr(protocol, *rhs),
+            format_guard(protocol, *guard)
         ));
     }
     if parts.is_empty() {
@@ -133,7 +138,15 @@ fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignme
     }
 }
 
-pub fn format_expr(ctx: &Context, protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
+fn format_guard(protocol: &ProtoGraph, guard: ExprRef) -> String {
+    if guard == protocol.true_id() {
+        "".to_string()
+    } else {
+        format!(" if {}", format_expr(protocol, guard))
+    }
+}
+
+pub fn format_expr(protocol: &ProtoGraph, expr_ref: ExprRef) -> String {
     if protocol.dont_cares.contains(&expr_ref) {
         "X".to_string()
     } else {
