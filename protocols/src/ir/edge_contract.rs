@@ -711,10 +711,7 @@ mod tests {
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
-        let concrete_op = protocol.o(Op::Assign(
-            symbol_id,
-            concrete_assignment(&ctx, concrete),
-        ));
+        let concrete_op = protocol.o(Op::Assign(symbol_id, concrete_assignment(&ctx, concrete)));
         let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&ctx)));
         let mut actions = vec![Action::new(ctx.get_true(), concrete_op)];
         let mut internal_assert_guard = None;

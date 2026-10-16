@@ -37,6 +37,7 @@ pub struct LoweredSystemResult {
     pub is_dont_care: FxHashMap<PortId, ExprRef>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn into_bmc_transition_system(
     expr_ctx: &mut Context,
     graph: ProtoGraph,
