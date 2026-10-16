@@ -1,4 +1,5 @@
 use clap::{ColorChoice, Parser};
+use patronus::expr::ExprRef;
 use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
@@ -57,10 +58,24 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         .find(|(p, _)| p.is_idle)
         .map(|(_, l)| get_single_cycle(&mut lowerer.ir, l).expect("idle should be single cycle"));
 
-    // pad methods with idle
+    // pad methods with idle to remove any forks in the protocol
     for (graph, method) in methods.iter().zip(m.protos.iter()) {
         remove_fork(&mut lowerer, graph, method, idle);
+        // make sure it worked
+        assert!(
+            lowerer
+                .graft_points(graph)
+                .iter()
+                .all(|(p, _)| *p == graph.exit)
+        );
     }
+
+    // generate unbounded driver
+    let op_width = if methods.len() <= 1 {
+        1
+    } else {
+        usize::BITS - (methods.len() - 1).leading_zeros()
+    };
 
     for (graph, method) in methods.iter().zip(m.protos.iter()) {
         println!("{}", method.name);
@@ -69,6 +84,23 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
             to_dot_string_from_entry(&lowerer.ir, st, graph.entry)
         );
     }
+}
+
+/// returns the condition under which we will be done in the next step
+fn next_state_is_done(pg: &mut ProtoGraph, node_id: NodeId) -> ExprRef {
+    pg[node_id]
+        .transitions
+        .iter()
+        .map(|t| {
+            let done = pg[t.target]
+                .actions
+                .iter()
+                .filter(|a| matches!(pg[a.op], Op::Done))
+                .map(|a| a.guard)
+                .fold(pg.false_id(), |a, b| pg.expr_ctx.or(a, b));
+            pg.expr_ctx.and(done, t.guard)
+        })
+        .fold(pg.false_id(), |a, b| pg.expr_ctx.or(a, b))
 }
 
 fn remove_fork(
