@@ -58,12 +58,12 @@ pub struct JointControlAutomaton {
 
 #[derive(Clone)]
 struct ProtocolShape {
-    entry: NodeId,
+    pub entry: NodeId,
     /// if there is a fork, the *unique* location of the forking node
-    fork: Option<NodeId>,
-    done: NodeId,
+    pub fork: Option<NodeId>,
+    pub done: NodeId,
     /// the straight-line post-phase.
-    post: Vec<NodeId>,
+    pub post: Vec<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -105,7 +105,7 @@ fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointAutomaton
     }
 }
 
-fn analyze_shape(
+pub fn analyze_shape(
     ctx: &Context,
     graph: &ProtoGraph,
     protocol: &Protocol,
