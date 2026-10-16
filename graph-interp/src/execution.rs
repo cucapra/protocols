@@ -45,14 +45,7 @@ pub fn run(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) 
 
 /// Creates a simulator for the DUT described by the command-line arguments.
 fn build_dut(ctx: &mut Context, cli: &Cli, module: &Module) -> PatronusSim {
-    PatronusSim::new_with_context(
-        ctx.clone(),
-        &cli.verilog,
-        cli.module.as_deref(),
-        module,
-        None,
-    )
-    .unwrap()
+    PatronusSim::new_with_context(ctx, &cli.verilog, cli.module.as_deref(), module, None).unwrap()
 }
 
 /// Maps every DUT port to its transition-system expression.

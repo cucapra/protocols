@@ -49,18 +49,18 @@ impl PatronusSim {
         design: &Module,
         waveform_file: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let ctx = patronus::expr::Context::default();
-        Self::new_with_context(ctx, verilog_paths, top_module, design, waveform_file)
+        let mut ctx = patronus::expr::Context::default();
+        Self::new_with_context(&mut ctx, verilog_paths, top_module, design, waveform_file)
     }
 
     pub fn new_with_context<P: AsRef<std::path::Path>>(
-        mut ctx: patronus::expr::Context,
+        ctx: &mut patronus::expr::Context,
         verilog_paths: &[P],
         top_module: Option<&str>,
         design: &Module,
         waveform_file: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let sys = create_sim_context(&mut ctx, verilog_paths, top_module);
+        let sys = create_sim_context(ctx, verilog_paths, top_module);
 
         let mut sim = if let Some(waveform_file) = waveform_file {
             Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
@@ -158,7 +158,7 @@ impl PatronusSim {
         }
 
         Ok(Self {
-            ctx,
+            ctx: ctx.clone(),
             sys,
             sim,
             port_map,

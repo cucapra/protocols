@@ -5,7 +5,7 @@
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use patronus::expr::{Context, ExprRef, Simplifier, SparseExprMap};
+use patronus::expr::{Context, ExprRef, Simplifier, SparseExprMap, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut, Index};
@@ -243,6 +243,7 @@ impl ProtoGraph {
                 Op::AssertEq(lhs, rhs) => {
                     *lhs = self.simplifier.simplify(ctx, *lhs);
                     *rhs = self.simplifier.simplify(ctx, *rhs);
+                    debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
                 Op::Fork | Op::InternalAssertFalse | Op::Done => {}
             }

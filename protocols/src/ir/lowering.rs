@@ -3,7 +3,8 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use patronus::expr::{
-    Context as ExprContext, Context, ExprRef, Type as PatronusType, simple_transform_expr,
+    Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck,
+    simple_transform_expr,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
@@ -317,6 +318,7 @@ impl<'a> Lowerer<'a> {
                 let node_id = self.n(Node::empty());
                 let lhs_ref = self.lower_expr(ctx, ast, lhs, None);
                 let rhs_ref = self.lower_expr(ctx, ast, rhs, None);
+                debug_assert_eq!(lhs_ref.get_type(ctx), rhs_ref.get_type(ctx));
                 let op_id = self.ir.o(Op::AssertEq(lhs_ref, rhs_ref));
                 let true_id = ctx.get_true();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
@@ -489,10 +491,12 @@ impl<'a> Lowerer<'a> {
                         .collect(),
                 },
             ),
-            Op::AssertEq(lhs, rhs) => Op::AssertEq(
-                self.remap_expr(ctx, lhs, substitutions),
-                self.remap_expr(ctx, rhs, substitutions),
-            ),
+            Op::AssertEq(lhs, rhs) => {
+                let lhs = self.remap_expr(ctx, lhs, substitutions);
+                let rhs = self.remap_expr(ctx, rhs, substitutions);
+                debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
+                Op::AssertEq(lhs, rhs)
+            }
             other => other,
         }
     }

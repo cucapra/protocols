@@ -4,7 +4,9 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
-use patronus::expr::{Context, ExprRef, Type, simple_transform_expr};
+use patronus::expr::{
+    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr,
+};
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
@@ -265,6 +267,15 @@ pub fn lower_proto_graph_to_transition_system(
         for action in &pg[id].actions {
             match pg[action.op].clone() {
                 Op::AssertEq(lhs, rhs) => {
+                    if lhs.get_type(ctx) != rhs.get_type(ctx) {
+                        println!(
+                            "{}:{} != {}:{}",
+                            lhs.serialize_to_str(ctx),
+                            lhs.get_type(ctx),
+                            rhs.serialize_to_str(ctx),
+                            rhs.get_type(ctx)
+                        );
+                    }
                     let eq = ctx.equal(lhs, rhs);
                     let assertion_failed = ctx.not(eq);
                     let action_guard = ctx.and(action.guard, assertion_failed);
