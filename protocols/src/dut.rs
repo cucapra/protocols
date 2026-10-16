@@ -63,9 +63,9 @@ impl PatronusSim {
         let sys = create_sim_context(ctx, verilog_paths, top_module);
 
         let mut sim = if let Some(waveform_file) = waveform_file {
-            Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
+            Interpreter::new_with_wavedump(ctx, &sys, waveform_file)
         } else {
-            Interpreter::new(&ctx, &sys)
+            Interpreter::new(ctx, &sys)
         };
         sim.init(InitKind::Zero); // TODO: change to random initialization
 
@@ -114,7 +114,7 @@ impl PatronusSim {
                 }
             }
             let width = expr
-                .get_bv_type(&ctx)
+                .get_bv_type(ctx)
                 .context("ports must be of bit-vector and not of array type")?;
             if width != pin.bitwidth() {
                 bail!(
@@ -138,7 +138,7 @@ impl PatronusSim {
             // is this output part of the outputs declared in the struct?
             if let Some(port_out) = out_expr_to_port.get(&out.expr).cloned() {
                 let input_exprs =
-                    patronus::system::analysis::cone_of_influence_comb(&ctx, &sys, out.expr);
+                    patronus::system::analysis::cone_of_influence_comb(ctx, &sys, out.expr);
                 for input_expr in input_exprs {
                     // is this an input that is also declared in the protocol struct?
                     if let Some(port_in) = in_expr_to_port.get(&input_expr).cloned() {
