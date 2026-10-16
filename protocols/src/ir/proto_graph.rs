@@ -5,7 +5,7 @@
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use patronus::expr::{Context as ExprContext, ExprRef, Simplifier, SparseExprMap};
+use patronus::expr::{Context, ExprRef, Simplifier, SparseExprMap, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut, Index};
@@ -142,9 +142,6 @@ pub struct ProtoGraph {
     /// The entrypoint of the `Protocol`
     pub entry: NodeId,
 
-    /// Patronus expression context
-    pub expr_ctx: ExprContext,
-
     /// Patronus simplifier
     pub simplifier: Simplifier<SparseExprMap<Option<ExprRef>>>,
 
@@ -167,7 +164,6 @@ impl Clone for ProtoGraph {
         Self {
             proto_ctx: self.proto_ctx.clone(),
             entry: self.entry,
-            expr_ctx: self.expr_ctx.clone(),
             // we can just make a fresh simplifier
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
@@ -181,10 +177,6 @@ impl Clone for ProtoGraph {
 
 impl ProtoGraph {
     pub fn new(proto_ctx: ProtocolContext) -> Self {
-        Self::with_expr_ctx(proto_ctx, ExprContext::default())
-    }
-
-    pub fn with_expr_ctx(proto_ctx: ProtocolContext, expr_ctx: ExprContext) -> Self {
         let mut nodes = PrimaryMap::new();
         let entry = Node::empty();
         let entry_id: NodeId = nodes.push(entry);
@@ -195,7 +187,6 @@ impl ProtoGraph {
         Self {
             proto_ctx,
             entry: entry_id,
-            expr_ctx,
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
@@ -203,14 +194,6 @@ impl ProtoGraph {
             ops,
             op_loc,
         }
-    }
-
-    pub fn true_id(&self) -> ExprRef {
-        self.expr_ctx.get_true()
-    }
-
-    pub fn false_id(&self) -> ExprRef {
-        self.expr_ctx.get_false()
     }
 
     pub fn symbol_expr(&self, symbol_id: SymbolId) -> Option<ExprRef> {
@@ -223,45 +206,44 @@ impl ProtoGraph {
 
     /// convenience methods for construction simplified
     /// (p AND q) or (p OR q) expressions
-    pub fn and_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
-        let expr = self.expr_ctx.and(lhs, rhs);
-        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    pub fn and_guard(&mut self, ctx: &mut Context, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = ctx.and(lhs, rhs);
+        self.simplifier.simplify(ctx, expr)
     }
 
-    pub fn or_guard(&mut self, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
-        let expr = self.expr_ctx.or(lhs, rhs);
-        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    pub fn or_guard(&mut self, ctx: &mut Context, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
+        let expr = ctx.or(lhs, rhs);
+        self.simplifier.simplify(ctx, expr)
     }
 
-    pub fn not_guard(&mut self, guard: ExprRef) -> ExprRef {
-        let expr = self.expr_ctx.not(guard);
-        self.simplifier.simplify(&mut self.expr_ctx, expr)
+    pub fn not_guard(&mut self, ctx: &mut Context, guard: ExprRef) -> ExprRef {
+        let expr = ctx.not(guard);
+        self.simplifier.simplify(ctx, expr)
     }
 
-    pub fn simplify_all_exprs(&mut self) {
-        let (expr_ctx, simplifier) = (&mut self.expr_ctx, &mut self.simplifier);
-
+    pub fn simplify_all_exprs(&mut self, ctx: &mut Context) {
         for (_, node) in self.nodes.iter_mut() {
             for action in &mut node.actions {
-                action.guard = simplifier.simplify(expr_ctx, action.guard);
+                action.guard = self.simplifier.simplify(ctx, action.guard);
             }
             for transition in &mut node.transitions {
-                transition.guard = simplifier.simplify(expr_ctx, transition.guard);
+                transition.guard = self.simplifier.simplify(ctx, transition.guard);
             }
         }
 
         for (_, op) in self.ops.iter_mut() {
             match op {
                 Op::Assign(_, assignment) => {
-                    assignment.dont_care = simplifier.simplify(expr_ctx, assignment.dont_care);
+                    assignment.dont_care = self.simplifier.simplify(ctx, assignment.dont_care);
                     for (guard, rhs) in &mut assignment.concretes {
-                        *guard = simplifier.simplify(expr_ctx, *guard);
-                        *rhs = simplifier.simplify(expr_ctx, *rhs);
+                        *guard = self.simplifier.simplify(ctx, *guard);
+                        *rhs = self.simplifier.simplify(ctx, *rhs);
                     }
                 }
                 Op::AssertEq(lhs, rhs) => {
-                    *lhs = simplifier.simplify(expr_ctx, *lhs);
-                    *rhs = simplifier.simplify(expr_ctx, *rhs);
+                    *lhs = self.simplifier.simplify(ctx, *lhs);
+                    *rhs = self.simplifier.simplify(ctx, *rhs);
+                    debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
                 Op::Fork | Op::InternalAssertFalse | Op::Done => {}
             }
@@ -318,7 +300,7 @@ impl ProtoGraph {
 
     /// Rebuild the graph from the subgraph reachable from `entry`.
     /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(&mut self) -> FxHashMap<NodeId, NodeId> {
+    pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
         let mut reachable_old_nodes = Vec::new();
         let mut seen = FxHashSet::default();
         let mut q = VecDeque::from([self.entry]);
@@ -329,7 +311,7 @@ impl ProtoGraph {
             }
             reachable_old_nodes.push(node_id);
             for transition in &self.nodes[node_id].transitions {
-                if transition.guard != self.false_id() {
+                if transition.guard != ctx.get_false() {
                     q.push_back(transition.target);
                 }
             }
@@ -344,7 +326,7 @@ impl ProtoGraph {
 
         for (_, node) in new_nodes.iter_mut() {
             node.transitions
-                .retain(|transition| transition.guard != self.false_id());
+                .retain(|transition| transition.guard != ctx.get_false());
         }
 
         let mut reachable_old_ops = Vec::new();
@@ -442,14 +424,17 @@ mod tests {
     use std::path::Path;
     use tempfile::NamedTempFile;
 
-    fn parse_and_lower(source: &str) -> ProtoGraph {
+    fn parse_and_lower(source: &str) -> (Context, ProtoGraph) {
         let file = NamedTempFile::new().unwrap();
         std::fs::write(file.path(), source).unwrap();
 
         parse_and_lower_file(file.path(), None)
     }
 
-    fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
+    fn parse_and_lower_file(
+        path: impl AsRef<Path>,
+        protocol_name: Option<&str>,
+    ) -> (Context, ProtoGraph) {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
         let (st, modules) =
@@ -466,12 +451,14 @@ mod tests {
                 module.protos.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(proto, &st)
+        let mut ctx = Context::default();
+        let graph = lower_ast_to_ir(&mut ctx, proto, &st);
+        (ctx, graph)
     }
 
     #[test]
     fn lowers_straight_line_protocol_into_distinct_ir_nodes() {
-        let ir = parse_and_lower(
+        let (ctx, ir) = parse_and_lower(
             r#"
             struct Dummy {
               in a: u32,
@@ -497,7 +484,7 @@ mod tests {
         assert_eq!(
             entry.transitions[0],
             Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(5),
                 consumes_step: false,
                 rotations: vec![],
@@ -506,12 +493,12 @@ mod tests {
 
         let init = &ir.nodes[NodeId(5)];
         assert_eq!(init.actions.len(), 1);
-        assert_eq!(init.actions[0].guard, ir.true_id());
+        assert_eq!(init.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
         assert_eq!(
             init.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(4),
                 consumes_step: false,
                 rotations: vec![],
@@ -520,12 +507,12 @@ mod tests {
 
         let assign = &ir.nodes[NodeId(4)];
         assert_eq!(assign.actions.len(), 1);
-        assert_eq!(assign.actions[0].guard, ir.true_id());
+        assert_eq!(assign.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[assign.actions[0].op], Op::Assign(_, _)));
         assert_eq!(
             assign.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(3),
                 consumes_step: false,
                 rotations: vec![],
@@ -537,7 +524,7 @@ mod tests {
         assert_eq!(
             step.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(2),
                 consumes_step: true,
                 rotations: vec![],
@@ -546,7 +533,7 @@ mod tests {
 
         let assert_node = &ir.nodes[NodeId(2)];
         assert_eq!(assert_node.actions.len(), 1);
-        assert_eq!(assert_node.actions[0].guard, ir.true_id());
+        assert_eq!(assert_node.actions[0].guard, ctx.get_true());
         assert!(matches!(
             ir.ops[assert_node.actions[0].op],
             Op::AssertEq(_, _)
@@ -554,7 +541,7 @@ mod tests {
         assert_eq!(
             assert_node.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(1),
                 consumes_step: false,
                 rotations: vec![],
@@ -563,7 +550,7 @@ mod tests {
 
         let exit = &ir.nodes[NodeId(1)];
         assert_eq!(exit.actions.len(), 2);
-        assert_eq!(exit.actions[0].guard, ir.true_id());
+        assert_eq!(exit.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
         assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
         assert!(exit.transitions.is_empty());
@@ -571,7 +558,7 @@ mod tests {
 
     #[test]
     fn lowers_fork_into_action_and_non_step_transition() {
-        let ir = parse_and_lower(
+        let (ctx, ir) = parse_and_lower(
             r#"
             struct Dummy {
               in a: u32,
@@ -593,7 +580,7 @@ mod tests {
         assert_eq!(
             init.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(2),
                 consumes_step: false,
                 rotations: vec![],
@@ -606,7 +593,7 @@ mod tests {
         assert_eq!(
             fork.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(1),
                 consumes_step: false,
                 rotations: vec![],
@@ -622,7 +609,7 @@ mod tests {
 
     #[test]
     fn lowers_add_d1_fixture_via_parser_and_lowering() {
-        let ir = parse_and_lower_file("../tests/adders/adder_d1/add_d1.prot", Some("add"));
+        let (ctx, ir) = parse_and_lower_file("../tests/adders/adder_d1/add_d1.prot", Some("add"));
 
         assert_eq!(ir.name, "add");
         assert_eq!(ir.args.len(), 3);
@@ -634,7 +621,7 @@ mod tests {
         assert_eq!(
             entry.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(10),
                 consumes_step: false,
                 rotations: vec![],
@@ -648,7 +635,7 @@ mod tests {
         assert_eq!(
             init.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(9),
                 consumes_step: false,
                 rotations: vec![],
@@ -660,7 +647,7 @@ mod tests {
         assert_eq!(
             step.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(6),
                 consumes_step: true,
                 rotations: vec![],
@@ -673,7 +660,7 @@ mod tests {
         assert_eq!(
             fork.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(2),
                 consumes_step: false,
                 rotations: vec![],
@@ -685,7 +672,7 @@ mod tests {
         assert_eq!(
             last_step.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(1),
                 consumes_step: true,
                 rotations: vec![],
@@ -706,13 +693,14 @@ mod tests {
             "test".into(),
             crate::frontend::symbol::ROOT_SCOPE,
         ));
+        let ctx = Context::default();
         let reachable = pg.n(Node::empty());
         let unreachable = pg.n(Node::empty());
 
         let fork = pg.o(Op::Fork);
         let done = pg.o(Op::Done);
 
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_action(reachable, Action::new(true_id, fork));
         pg.push_action(unreachable, Action::new(true_id, done));
         pg.push_transition(pg.entry, Transition::new(true_id, reachable, false));
@@ -720,7 +708,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable();
+        pg.garbage_collect_unreachable(&ctx);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);

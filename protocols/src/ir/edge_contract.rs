@@ -3,9 +3,14 @@ use std::collections::{BTreeSet, VecDeque};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
-use patronus::expr::ExprRef;
+use patronus::expr::{Context, ExprRef};
 
-fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: SymbolId) -> ExprRef {
+fn symbol_expr(
+    ctx: &mut Context,
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    symbol_id: SymbolId,
+) -> ExprRef {
     if let Some(expr) = protocol.symbol_expr(symbol_id) {
         return expr;
     }
@@ -13,7 +18,7 @@ fn symbol_expr(protocol: &mut ProtoGraph, symbols: &SymbolTable, symbol_id: Symb
     let entry = &symbols[symbol_id];
     let full_name = entry.full_name(symbols);
     let expr = match entry.tpe() {
-        FrontType::BitVec(width) => protocol.expr_ctx.bv_symbol(&full_name, width),
+        FrontType::BitVec(width) => ctx.bv_symbol(&full_name, width),
         FrontType::Struct(_)
         | FrontType::Seq(_)
         | FrontType::Tuple(_)
@@ -36,28 +41,30 @@ pub fn same_assignment_target(symbols: &SymbolTable, lhs: SymbolId, rhs: SymbolI
 }
 
 fn record_internal_assert(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     internal_assert_guard: &mut Option<ExprRef>,
     guard: ExprRef,
 ) {
     *internal_assert_guard = Some(match internal_assert_guard.take() {
-        Some(existing_guard) => protocol.or_guard(existing_guard, guard),
+        Some(existing_guard) => protocol.or_guard(ctx, existing_guard, guard),
         None => guard,
     });
 }
 
 pub fn guard_assignment(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     assignment: Assignment,
     guard: ExprRef,
 ) -> Assignment {
-    let dont_care = protocol.and_guard(guard, assignment.dont_care);
+    let dont_care = protocol.and_guard(ctx, guard, assignment.dont_care);
     let concretes = assignment
         .concretes
         .into_iter()
         .filter_map(|(branch_guard, rhs)| {
-            let guarded = protocol.and_guard(guard, branch_guard);
-            (guarded != protocol.false_id()).then_some((guarded, rhs))
+            let guarded = protocol.and_guard(ctx, guard, branch_guard);
+            (guarded != ctx.get_false()).then_some((guarded, rhs))
         })
         .collect();
 
@@ -68,19 +75,20 @@ pub fn guard_assignment(
 }
 
 pub fn guard_disjoint_assignment(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     assignment: Assignment,
     guard: ExprRef,
 ) -> Assignment {
-    let not_dont_care = protocol.not_guard(assignment.dont_care);
-    let dont_care = protocol.and_guard(guard, assignment.dont_care);
+    let not_dont_care = protocol.not_guard(ctx, assignment.dont_care);
+    let dont_care = protocol.and_guard(ctx, guard, assignment.dont_care);
     let concretes = assignment
         .concretes
         .into_iter()
         .filter_map(|(branch_guard, rhs)| {
-            let branch_guard = protocol.and_guard(not_dont_care, branch_guard);
-            let guarded = protocol.and_guard(guard, branch_guard);
-            (guarded != protocol.false_id()).then_some((guarded, rhs))
+            let branch_guard = protocol.and_guard(ctx, not_dont_care, branch_guard);
+            let guarded = protocol.and_guard(ctx, guard, branch_guard);
+            (guarded != ctx.get_false()).then_some((guarded, rhs))
         })
         .collect();
 
@@ -90,18 +98,23 @@ pub fn guard_disjoint_assignment(
     }
 }
 
-pub fn concrete_coverage(protocol: &mut ProtoGraph, assignment: &Assignment) -> ExprRef {
+pub fn concrete_coverage(
+    ctx: &mut Context,
+    protocol: &mut ProtoGraph,
+    assignment: &Assignment,
+) -> ExprRef {
     let raw_coverage = assignment
         .concretes
         .iter()
-        .fold(protocol.false_id(), |guard, (concrete_guard, _)| {
-            protocol.or_guard(guard, *concrete_guard)
+        .fold(ctx.get_false(), |guard, (concrete_guard, _)| {
+            protocol.or_guard(ctx, guard, *concrete_guard)
         });
-    let not_dont_care = protocol.not_guard(assignment.dont_care);
-    protocol.and_guard(not_dont_care, raw_coverage)
+    let not_dont_care = protocol.not_guard(ctx, assignment.dont_care);
+    protocol.and_guard(ctx, not_dont_care, raw_coverage)
 }
 
 fn effective_concretes(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     assignment: &Assignment,
 ) -> Vec<(ExprRef, ExprRef)> {
@@ -109,18 +122,19 @@ fn effective_concretes(
     let mut effective = Vec::with_capacity(assignment.concretes.len());
 
     for (guard, rhs) in &assignment.concretes {
-        let not_prior = protocol.not_guard(prior);
-        let effective_guard = protocol.and_guard(not_prior, *guard);
-        if effective_guard != protocol.false_id() {
+        let not_prior = protocol.not_guard(ctx, prior);
+        let effective_guard = protocol.and_guard(ctx, not_prior, *guard);
+        if effective_guard != ctx.get_false() {
             effective.push((effective_guard, *rhs));
         }
-        prior = protocol.or_guard(prior, *guard);
+        prior = protocol.or_guard(ctx, prior, *guard);
     }
 
     effective
 }
 
 fn coalesce_concretes(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     concretes: Vec<(ExprRef, ExprRef)>,
 ) -> Vec<(ExprRef, ExprRef)> {
@@ -129,7 +143,7 @@ fn coalesce_concretes(
         if let Some((existing_guard, existing_rhs)) = coalesced.last_mut()
             && *existing_rhs == rhs
         {
-            *existing_guard = protocol.or_guard(*existing_guard, guard);
+            *existing_guard = protocol.or_guard(ctx, *existing_guard, guard);
         } else {
             coalesced.push((guard, rhs));
         }
@@ -138,31 +152,33 @@ fn coalesce_concretes(
 }
 
 fn concretes_without_dont_care(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     assignment: &Assignment,
 ) -> Vec<(ExprRef, ExprRef)> {
-    let not_dont_care = protocol.not_guard(assignment.dont_care);
+    let not_dont_care = protocol.not_guard(ctx, assignment.dont_care);
     assignment
         .concretes
         .iter()
         .filter_map(|(guard, rhs)| {
-            let guard = protocol.and_guard(not_dont_care, *guard);
-            (guard != protocol.false_id()).then_some((guard, *rhs))
+            let guard = protocol.and_guard(ctx, not_dont_care, *guard);
+            (guard != ctx.get_false()).then_some((guard, *rhs))
         })
         .collect()
 }
 
 pub fn merge_ordered_assignment(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     existing: Assignment,
     new: Assignment,
 ) -> Assignment {
     // Ordered contraction preserves source order: the later action wins over
     // the earlier action. Therefore the new summary's preferences come first.
-    let new_concretes = concrete_coverage(protocol, &new);
-    let not_new_concretes = protocol.not_guard(new_concretes);
-    let old_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
-    let dont_care = protocol.or_guard(new.dont_care, old_dont_care);
+    let new_concretes = concrete_coverage(ctx, protocol, &new);
+    let not_new_concretes = protocol.not_guard(ctx, new_concretes);
+    let old_dont_care = protocol.and_guard(ctx, not_new_concretes, existing.dont_care);
+    let dont_care = protocol.or_guard(ctx, new.dont_care, old_dont_care);
 
     let mut concretes = new.concretes;
     concretes.extend(existing.concretes);
@@ -174,6 +190,7 @@ pub fn merge_ordered_assignment(
 }
 
 pub fn merge_unordered_assignment(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     internal_assert_guard: &mut Option<ExprRef>,
     existing: Assignment,
@@ -184,45 +201,41 @@ pub fn merge_unordered_assignment(
     // precedence through their order.
     let mut prior_existing = existing.dont_care;
     for (existing_guard, existing_rhs) in &existing.concretes {
-        let not_prior_existing = protocol.not_guard(prior_existing);
-        let existing_effective = protocol.and_guard(not_prior_existing, *existing_guard);
+        let not_prior_existing = protocol.not_guard(ctx, prior_existing);
+        let existing_effective = protocol.and_guard(ctx, not_prior_existing, *existing_guard);
         let mut prior_new = new.dont_care;
 
         for (new_guard, new_rhs) in &new.concretes {
-            let not_prior_new = protocol.not_guard(prior_new);
-            let new_effective = protocol.and_guard(not_prior_new, *new_guard);
+            let not_prior_new = protocol.not_guard(ctx, prior_new);
+            let new_effective = protocol.and_guard(ctx, not_prior_new, *new_guard);
 
             if existing_rhs != new_rhs {
-                let overlap = protocol.and_guard(existing_effective, new_effective);
-                if overlap != protocol.false_id() {
-                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                let overlap = protocol.and_guard(ctx, existing_effective, new_effective);
+                if overlap != ctx.get_false() {
+                    record_internal_assert(ctx, protocol, internal_assert_guard, overlap);
                 }
             }
 
-            prior_new = protocol.or_guard(prior_new, *new_guard);
+            prior_new = protocol.or_guard(ctx, prior_new, *new_guard);
         }
 
-        prior_existing = protocol.or_guard(prior_existing, *existing_guard);
+        prior_existing = protocol.or_guard(ctx, prior_existing, *existing_guard);
     }
 
-    let mut existing_concretes = concrete_coverage(protocol, &existing);
-    existing_concretes = protocol
-        .simplifier
-        .simplify(&mut protocol.expr_ctx, existing_concretes);
-    let mut new_concretes = concrete_coverage(protocol, &new);
-    new_concretes = protocol
-        .simplifier
-        .simplify(&mut protocol.expr_ctx, new_concretes);
+    let mut existing_concretes = concrete_coverage(ctx, protocol, &existing);
+    existing_concretes = protocol.simplifier.simplify(ctx, existing_concretes);
+    let mut new_concretes = concrete_coverage(ctx, protocol, &new);
+    new_concretes = protocol.simplifier.simplify(ctx, new_concretes);
 
-    let not_new_concretes = protocol.not_guard(new_concretes);
-    let existing_dont_care = protocol.and_guard(not_new_concretes, existing.dont_care);
-    let not_existing_concretes = protocol.not_guard(existing_concretes);
-    let new_dont_care = protocol.and_guard(not_existing_concretes, new.dont_care);
-    let dont_care = protocol.or_guard(existing_dont_care, new_dont_care);
+    let not_new_concretes = protocol.not_guard(ctx, new_concretes);
+    let existing_dont_care = protocol.and_guard(ctx, not_new_concretes, existing.dont_care);
+    let not_existing_concretes = protocol.not_guard(ctx, existing_concretes);
+    let new_dont_care = protocol.and_guard(ctx, not_existing_concretes, new.dont_care);
+    let dont_care = protocol.or_guard(ctx, existing_dont_care, new_dont_care);
 
-    let mut concretes = concretes_without_dont_care(protocol, &existing);
-    concretes.extend(concretes_without_dont_care(protocol, &new));
-    let concretes = coalesce_concretes(protocol, concretes);
+    let mut concretes = concretes_without_dont_care(ctx, protocol, &existing);
+    concretes.extend(concretes_without_dont_care(ctx, protocol, &new));
+    let concretes = coalesce_concretes(ctx, protocol, concretes);
 
     Assignment {
         dont_care,
@@ -231,15 +244,16 @@ pub fn merge_unordered_assignment(
 }
 
 pub fn merge_disjoint_assignments(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     assignments: Vec<Assignment>,
 ) -> Assignment {
-    let mut dont_care = protocol.false_id();
+    let mut dont_care = ctx.get_false();
     let mut concretes = Vec::new();
 
     for assignment in assignments {
-        dont_care = protocol.or_guard(dont_care, assignment.dont_care);
-        let group = coalesce_concretes(protocol, assignment.concretes);
+        dont_care = protocol.or_guard(ctx, dont_care, assignment.dont_care);
+        let group = coalesce_concretes(ctx, protocol, assignment.concretes);
         let prior_groups_end = concretes.len();
 
         for (guard, rhs) in group {
@@ -247,7 +261,7 @@ pub fn merge_disjoint_assignments(
                 .iter()
                 .position(|(_, existing_rhs)| *existing_rhs == rhs);
             if let Some(index) = existing {
-                concretes[index].0 = protocol.or_guard(concretes[index].0, guard);
+                concretes[index].0 = protocol.or_guard(ctx, concretes[index].0, guard);
             } else {
                 concretes.push((guard, rhs));
             }
@@ -261,26 +275,27 @@ pub fn merge_disjoint_assignments(
 }
 
 pub fn merge_disjoint_guarded_assignments(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     groups: Vec<(ExprRef, Assignment)>,
 ) -> (Assignment, ExprRef) {
-    let mut dont_care = protocol.false_id();
-    let mut coverage = protocol.false_id();
+    let mut dont_care = ctx.get_false();
+    let mut coverage = ctx.get_false();
     let mut concretes = Vec::new();
 
     for (guard, assignment) in groups {
-        let local_coverage = concrete_coverage(protocol, &assignment);
-        let guarded_coverage = protocol.and_guard(guard, local_coverage);
-        coverage = protocol.or_guard(coverage, guarded_coverage);
-        let guarded_dont_care = protocol.and_guard(guard, assignment.dont_care);
-        dont_care = protocol.or_guard(dont_care, guarded_dont_care);
+        let local_coverage = concrete_coverage(ctx, protocol, &assignment);
+        let guarded_coverage = protocol.and_guard(ctx, guard, local_coverage);
+        coverage = protocol.or_guard(ctx, coverage, guarded_coverage);
+        let guarded_dont_care = protocol.and_guard(ctx, guard, assignment.dont_care);
+        dont_care = protocol.or_guard(ctx, dont_care, guarded_dont_care);
 
-        let unclipped = concretes_without_dont_care(protocol, &assignment);
+        let unclipped = concretes_without_dont_care(ctx, protocol, &assignment);
         let guarded = unclipped
             .into_iter()
-            .map(|(branch, rhs)| (protocol.and_guard(guard, branch), rhs))
+            .map(|(branch, rhs)| (protocol.and_guard(ctx, guard, branch), rhs))
             .collect();
-        let group = coalesce_concretes(protocol, guarded);
+        let group = coalesce_concretes(ctx, protocol, guarded);
         let prior_groups_end = concretes.len();
 
         for (branch, rhs) in group {
@@ -288,7 +303,7 @@ pub fn merge_disjoint_guarded_assignments(
                 .iter()
                 .position(|(_, existing_rhs)| *existing_rhs == rhs);
             if let Some(index) = existing {
-                concretes[index].0 = protocol.or_guard(concretes[index].0, branch);
+                concretes[index].0 = protocol.or_guard(ctx, concretes[index].0, branch);
             } else {
                 concretes.push((branch, rhs));
             }
@@ -305,60 +320,63 @@ pub fn merge_disjoint_guarded_assignments(
 }
 
 pub fn merge_unordered_assignment_with_disjoint_batch(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     internal_assert_guard: &mut Option<ExprRef>,
     existing: Assignment,
     groups: Vec<(ExprRef, Assignment)>,
 ) -> Assignment {
-    let existing_effective = effective_concretes(protocol, &existing);
+    let existing_effective = effective_concretes(ctx, protocol, &existing);
     for (group_guard, group) in &groups {
         for (existing_guard, existing_rhs) in &existing_effective {
-            for (branch_guard, group_rhs) in effective_concretes(protocol, group) {
+            for (branch_guard, group_rhs) in effective_concretes(ctx, protocol, group) {
                 if existing_rhs == &group_rhs {
                     continue;
                 }
-                let guarded_branch = protocol.and_guard(*group_guard, branch_guard);
-                let overlap = protocol.and_guard(*existing_guard, guarded_branch);
-                if overlap != protocol.false_id() {
-                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                let guarded_branch = protocol.and_guard(ctx, *group_guard, branch_guard);
+                let overlap = protocol.and_guard(ctx, *existing_guard, guarded_branch);
+                if overlap != ctx.get_false() {
+                    record_internal_assert(ctx, protocol, internal_assert_guard, overlap);
                 }
             }
         }
     }
 
-    let (batch, batch_coverage) = merge_disjoint_guarded_assignments(protocol, groups);
-    if existing.dont_care == protocol.true_id() && existing.concretes.is_empty() {
-        let dont_care = protocol.not_guard(batch_coverage);
+    let (batch, batch_coverage) = merge_disjoint_guarded_assignments(ctx, protocol, groups);
+    if existing.dont_care == ctx.get_true() && existing.concretes.is_empty() {
+        let dont_care = protocol.not_guard(ctx, batch_coverage);
         return Assignment {
             dont_care,
             concretes: batch.concretes,
         };
     }
 
-    let existing_coverage = concrete_coverage(protocol, &existing);
-    let not_batch_coverage = protocol.not_guard(batch_coverage);
-    let existing_dont_care = protocol.and_guard(not_batch_coverage, existing.dont_care);
-    let not_existing_coverage = protocol.not_guard(existing_coverage);
-    let batch_dont_care = protocol.and_guard(not_existing_coverage, batch.dont_care);
+    let existing_coverage = concrete_coverage(ctx, protocol, &existing);
+    let not_batch_coverage = protocol.not_guard(ctx, batch_coverage);
+    let existing_dont_care = protocol.and_guard(ctx, not_batch_coverage, existing.dont_care);
+    let not_existing_coverage = protocol.not_guard(ctx, existing_coverage);
+    let batch_dont_care = protocol.and_guard(ctx, not_existing_coverage, batch.dont_care);
 
-    let mut concretes = concretes_without_dont_care(protocol, &existing);
+    let mut concretes = concretes_without_dont_care(ctx, protocol, &existing);
     concretes.extend(batch.concretes);
 
     Assignment {
-        dont_care: protocol.or_guard(existing_dont_care, batch_dont_care),
-        concretes: coalesce_concretes(protocol, concretes),
+        dont_care: protocol.or_guard(ctx, existing_dont_care, batch_dont_care),
+        concretes: coalesce_concretes(ctx, protocol, concretes),
     }
 }
 
 fn merge_disjoint_assignment(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     existing: Assignment,
     new: Assignment,
 ) -> Assignment {
-    merge_disjoint_assignments(protocol, vec![existing, new])
+    merge_disjoint_assignments(ctx, protocol, vec![existing, new])
 }
 
 pub fn append_action(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
     actions: &mut Vec<Action>,
@@ -367,6 +385,7 @@ pub fn append_action(
     ordered: bool,
 ) {
     append_action_with_mode(
+        ctx,
         protocol,
         symbols,
         actions,
@@ -381,12 +400,14 @@ pub fn append_action(
 }
 
 pub fn append_action_disjoint(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
     actions: &mut Vec<Action>,
     action: Action,
 ) {
     append_action_with_mode(
+        ctx,
         protocol,
         symbols,
         actions,
@@ -403,6 +424,7 @@ enum ActionMergeMode {
 }
 
 fn append_action_with_mode(
+    ctx: &mut Context,
     protocol: &mut ProtoGraph,
     symbols: &SymbolTable,
     actions: &mut Vec<Action>,
@@ -414,7 +436,7 @@ fn append_action_with_mode(
         Op::Assign(symbol_id, assignment) => {
             assert_eq!(
                 action.guard,
-                protocol.true_id(),
+                ctx.get_true(),
                 "assignment action guards must be 1; path conditions belong in Assignment"
             );
 
@@ -432,7 +454,7 @@ fn append_action_with_mode(
 
             assert_eq!(
                 actions[idx].guard,
-                protocol.true_id(),
+                ctx.get_true(),
                 "assignment action guards must be 1; path conditions belong in Assignment"
             );
             let existing_assignment = match protocol[actions[idx].op].clone() {
@@ -442,21 +464,22 @@ fn append_action_with_mode(
 
             let merged_assignment = match mode {
                 ActionMergeMode::Ordered => {
-                    merge_ordered_assignment(protocol, existing_assignment, assignment)
+                    merge_ordered_assignment(ctx, protocol, existing_assignment, assignment)
                 }
                 ActionMergeMode::Unordered => merge_unordered_assignment(
+                    ctx,
                     protocol,
                     internal_assert_guard,
                     existing_assignment,
                     assignment,
                 ),
                 ActionMergeMode::Disjoint => {
-                    merge_disjoint_assignment(protocol, existing_assignment, assignment)
+                    merge_disjoint_assignment(ctx, protocol, existing_assignment, assignment)
                 }
             };
 
             let new_op = protocol.o(Op::Assign(symbol_id, merged_assignment));
-            actions[idx].guard = protocol.true_id();
+            actions[idx].guard = ctx.get_true();
             actions[idx].op = new_op;
         }
         Op::Fork => {
@@ -465,10 +488,10 @@ fn append_action_with_mode(
                 .find(|prior_action| matches!(protocol[prior_action.op], Op::Fork))
             {
                 if !matches!(mode, ActionMergeMode::Disjoint) {
-                    let overlap = protocol.and_guard(existing_action.guard, action.guard);
-                    record_internal_assert(protocol, internal_assert_guard, overlap);
+                    let overlap = protocol.and_guard(ctx, existing_action.guard, action.guard);
+                    record_internal_assert(ctx, protocol, internal_assert_guard, overlap);
                 }
-                existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
+                existing_action.guard = protocol.or_guard(ctx, existing_action.guard, action.guard);
             } else {
                 actions.push(action);
             }
@@ -478,7 +501,7 @@ fn append_action_with_mode(
                 .iter_mut()
                 .find(|prior_action| matches!(protocol[prior_action.op], Op::Done))
             {
-                existing_action.guard = protocol.or_guard(existing_action.guard, action.guard);
+                existing_action.guard = protocol.or_guard(ctx, existing_action.guard, action.guard);
             } else {
                 actions.push(action);
             }
@@ -492,19 +515,25 @@ fn append_action_with_mode(
     }
 }
 
-pub fn contract_edges(pg: &mut ProtoGraph, symbols: &SymbolTable) {
-    contract_edges_from(pg, symbols, pg.entry);
+pub fn contract_edges(ctx: &mut Context, pg: &mut ProtoGraph, symbols: &SymbolTable) {
+    contract_edges_from(ctx, pg, symbols, pg.entry);
 }
 
 /// returns `protocol` with semantic behavior preserved, but no non-step edges
-pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, start: NodeId) {
-    let node_ids = reachable_node_ids(protocol, start);
+pub fn contract_edges_from(
+    ctx: &mut Context,
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    start: NodeId,
+) {
+    let node_ids = reachable_node_ids(ctx, protocol, start);
 
     for source_node_id in node_ids.into_iter().rev() {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
         let mut internal_assert_guard = None;
         for action in protocol[source_node_id].actions.clone() {
             append_action(
+                ctx,
                 protocol,
                 symbols,
                 &mut contracted_actions,
@@ -539,7 +568,9 @@ pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, sta
             let target_node_id = transition.target;
             if path.contains(&target_node_id) {
                 internal_assert_guard = Some(match internal_assert_guard.take() {
-                    Some(existing_guard) => protocol.or_guard(existing_guard, transition.guard),
+                    Some(existing_guard) => {
+                        protocol.or_guard(ctx, existing_guard, transition.guard)
+                    }
                     None => transition.guard,
                 });
                 continue;
@@ -556,20 +587,21 @@ pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, sta
                     Op::Assign(symbol_id, assignment) => {
                         assert_eq!(
                             action.guard,
-                            protocol.true_id(),
+                            ctx.get_true(),
                             "assignment action guards must be 1; path conditions belong in Assignment"
                         );
                         let guarded_assignment =
-                            guard_assignment(protocol, assignment, incoming_guard);
+                            guard_assignment(ctx, protocol, assignment, incoming_guard);
                         let guarded_op = protocol.o(Op::Assign(symbol_id, guarded_assignment));
-                        Action::new(protocol.true_id(), guarded_op)
+                        Action::new(ctx.get_true(), guarded_op)
                     }
                     _ => Action::with_guard(
                         &action,
-                        protocol.and_guard(incoming_guard, action.guard),
+                        protocol.and_guard(ctx, incoming_guard, action.guard),
                     ),
                 };
                 append_action(
+                    ctx,
                     protocol,
                     symbols,
                     &mut contracted_actions,
@@ -582,7 +614,7 @@ pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, sta
             for target_transition in target_transitions.into_iter().rev() {
                 let contracted_transition = Transition::with_guard(
                     &target_transition,
-                    protocol.and_guard(incoming_guard, target_transition.guard),
+                    protocol.and_guard(ctx, incoming_guard, target_transition.guard),
                 );
                 if contracted_transition.consumes_step {
                     step_transitions.push(contracted_transition);
@@ -611,7 +643,7 @@ pub fn contract_edges_from(protocol: &mut ProtoGraph, symbols: &SymbolTable, sta
 
 /// returns `protocol` with explicit assignments to every port
 /// if a port `DUT.in` is not already assigned, we simply generate `[1] DUT.in := DUT.in;`
-pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
+pub fn normalize_assignments(ctx: &mut Context, protocol: &mut ProtoGraph, symbols: &SymbolTable) {
     let dut = protocol.dut_sym;
     let input_ports: Vec<SymbolId> = symbols
         .get_children(&dut)
@@ -640,11 +672,10 @@ pub fn normalize_assignments(protocol: &mut ProtoGraph, symbols: &SymbolTable) {
 
         for symbol_id in unassigned_inputs {
             // assign the symbol to its current expression (old value)
-            let symbol_expr = symbol_expr(protocol, symbols, symbol_id);
-            let assignment =
-                Assignment::concrete(protocol.false_id(), protocol.true_id(), symbol_expr);
+            let symbol_expr = symbol_expr(ctx, protocol, symbols, symbol_id);
+            let assignment = Assignment::concrete(ctx.get_false(), ctx.get_true(), symbol_expr);
             let op = protocol.o(Op::Assign(symbol_id, assignment));
-            protocol.push_action(node_id, Action::new(protocol.true_id(), op))
+            protocol.push_action(node_id, Action::new(ctx.get_true(), op))
         }
     }
 }
@@ -657,37 +688,36 @@ mod tests {
     use cranelift_entity::EntityRef;
     use patronus::expr::SerializableIrNode;
 
-    fn concrete_assignment(protocol: &ProtoGraph, rhs: ExprRef) -> Assignment {
-        Assignment::concrete(protocol.false_id(), protocol.true_id(), rhs)
+    fn concrete_assignment(ctx: &Context, rhs: ExprRef) -> Assignment {
+        Assignment::concrete(ctx.get_false(), ctx.get_true(), rhs)
     }
 
-    fn dont_care_assignment(protocol: &ProtoGraph) -> Assignment {
-        Assignment::dont_care(protocol.true_id())
+    fn dont_care_assignment(ctx: &Context) -> Assignment {
+        Assignment::dont_care(ctx.get_true())
     }
 
-    fn expr_str(protocol: &ProtoGraph, expr: ExprRef) -> String {
-        protocol.expr_ctx[expr].serialize_to_str(&protocol.expr_ctx)
+    fn expr_str(ctx: &Context, expr: ExprRef) -> String {
+        expr.serialize_to_str(ctx)
     }
 
     #[test]
     fn allows_overlapping_dont_care_and_concrete_assignments() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("signal", 1);
-        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
-        let concrete = protocol.expr_ctx.bv_symbol("concrete", 1);
+        let symbol = ctx.bv_symbol("signal", 1);
+        let dont_care = ctx.bv_symbol("dont_care", 1);
+        let concrete = ctx.bv_symbol("concrete", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
-        let concrete_op = protocol.o(Op::Assign(
-            symbol_id,
-            concrete_assignment(&protocol, concrete),
-        ));
-        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&protocol)));
-        let mut actions = vec![Action::new(protocol.true_id(), concrete_op)];
+        let concrete_op = protocol.o(Op::Assign(symbol_id, concrete_assignment(&ctx, concrete)));
+        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&ctx)));
+        let mut actions = vec![Action::new(ctx.get_true(), concrete_op)];
         let mut internal_assert_guard = None;
-        let true_id = protocol.true_id();
+        let true_id = ctx.get_true();
         append_action(
+            &mut ctx,
             &mut protocol,
             &SymbolTable::default(),
             &mut actions,
@@ -705,34 +735,36 @@ mod tests {
         let Op::Assign(_, assignment) = protocol[actions[0].op].clone() else {
             panic!("expected assignment");
         };
-        assert_eq!(expr_str(&protocol, assignment.dont_care), "1'b1");
-        assert_eq!(assignment.concretes, vec![(protocol.true_id(), concrete)]);
+        assert_eq!(expr_str(&ctx, assignment.dont_care), "1'b1");
+        assert_eq!(assignment.concretes, vec![(ctx.get_true(), concrete)]);
     }
 
     #[test]
     fn synthesizes_internal_assert_for_overlapping_unordered_assignments() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("signal", 1);
+        let symbol = ctx.bv_symbol("signal", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
 
         // Node A: [p] DUT.a := 1
         // Node B: [q] DUT.a := 2
         // Node C: [r] DUT.a := 3
-        let p = protocol.expr_ctx.bv_symbol("p", 1);
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
-        let one = protocol.expr_ctx.bv_symbol("one", 1);
-        let two = protocol.expr_ctx.bv_symbol("two", 1);
-        let three = protocol.expr_ctx.bv_symbol("three", 1);
+        let p = ctx.bv_symbol("p", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
+        let one = ctx.bv_symbol("one", 1);
+        let two = ctx.bv_symbol("two", 1);
+        let three = ctx.bv_symbol("three", 1);
 
         let mut actions = Vec::new();
         let mut internal_assert_guard = None;
         for (guard, rhs) in [(p, one), (q, two), (r, three)] {
-            let assignment = Assignment::concrete(protocol.false_id(), guard, rhs);
+            let assignment = Assignment::concrete(ctx.get_false(), guard, rhs);
             let op = protocol.o(Op::Assign(symbol_id, assignment));
-            let true_id = protocol.true_id();
+            let true_id = ctx.get_true();
             append_action(
+                &mut ctx,
                 &mut protocol,
                 &SymbolTable::default(),
                 &mut actions,
@@ -743,11 +775,11 @@ mod tests {
         }
 
         assert_eq!(actions.len(), 1);
-        assert_ne!(actions[0].guard, protocol.false_id());
+        assert_ne!(actions[0].guard, ctx.get_false());
 
         // assert any two guards being run together. (p and q) or (p and r)
         assert_eq!(
-            expr_str(&protocol, internal_assert_guard.unwrap()),
+            expr_str(&ctx, internal_assert_guard.unwrap()),
             "or(or(and(p, q), and(p, r)), and(and(not(p), q), r))"
         );
     }
@@ -755,22 +787,23 @@ mod tests {
     #[test]
     fn unordered_assignment_merge_preserves_ordered_ite_precedence() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("DUT.a", 1);
-        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
-        let three = protocol.expr_ctx.bv_symbol("three", 1);
-        let four = protocol.expr_ctx.bv_symbol("four", 1);
+        let symbol = ctx.bv_symbol("DUT.a", 1);
+        let dont_care = ctx.bv_symbol("dont_care", 1);
+        let three = ctx.bv_symbol("three", 1);
+        let four = ctx.bv_symbol("four", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
-        let s = protocol.expr_ctx.bv_symbol("s", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
+        let s = ctx.bv_symbol("s", 1);
 
         // Node A: [1] DUT.a := { X if s; 3 if q }
         // Node B: [1] DUT.a := { 4 if r }
 
-        let true_id = protocol.true_id();
+        let true_id = ctx.get_true();
         let node_a_op = protocol.o(Op::Assign(
             symbol_id,
             Assignment {
@@ -781,7 +814,7 @@ mod tests {
         let node_b_op = protocol.o(Op::Assign(
             symbol_id,
             Assignment {
-                dont_care: protocol.false_id(),
+                dont_care: ctx.get_false(),
                 concretes: vec![(r, four)],
             },
         ));
@@ -790,6 +823,7 @@ mod tests {
         let mut internal_assert_guard = None;
 
         append_action(
+            &mut ctx,
             &mut protocol,
             &SymbolTable::default(),
             &mut actions,
@@ -799,16 +833,16 @@ mod tests {
         );
 
         assert_eq!(actions.len(), 1);
-        assert_ne!(actions[0].guard, protocol.false_id());
+        assert_ne!(actions[0].guard, ctx.get_false());
 
         // q and r are our concrete assignments to 3 and 4. assignment to 3 only triggers if
         // not s , so there is only a conflicting assignment under ((not s) and q and r)
         assert_eq!(
-            expr_str(&protocol, internal_assert_guard.unwrap()),
+            expr_str(&ctx, internal_assert_guard.unwrap()),
             "and(and(not(s), q), r)"
         );
 
-        protocol.simplify_all_exprs();
+        protocol.simplify_all_exprs(&mut ctx);
 
         let Op::Assign(_, assignment) = protocol[actions[0].op].clone() else {
             panic!("expected assignment");
@@ -816,27 +850,28 @@ mod tests {
 
         // Concrete branches from both unordered sides are preferred over DontCare, but the
         // original node-local DontCare still suppresses node A's own concrete branch.
-        assert_eq!(expr_str(&protocol, assignment.dont_care), "and(not(r), s)");
-        let not_s = protocol.not_guard(s);
-        let effective_q = protocol.and_guard(not_s, q);
+        assert_eq!(expr_str(&ctx, assignment.dont_care), "and(not(r), s)");
+        let not_s = protocol.not_guard(&mut ctx, s);
+        let effective_q = protocol.and_guard(&mut ctx, not_s, q);
         assert_eq!(assignment.concretes, vec![(effective_q, three), (r, four)]);
     }
 
     #[test]
     fn unordered_assignment_merge_allows_overlapping_equal_concretes() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("DUT.a", 1);
-        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
-        let three = protocol.expr_ctx.bv_symbol("three", 1);
+        let symbol = ctx.bv_symbol("DUT.a", 1);
+        let dont_care = ctx.bv_symbol("dont_care", 1);
+        let three = ctx.bv_symbol("three", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
-        let p = protocol.expr_ctx.bv_symbol("p", 1);
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
+        let p = ctx.bv_symbol("p", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
 
-        let true_id = protocol.true_id();
+        let true_id = ctx.get_true();
         let node_a_op = protocol.o(Op::Assign(
             symbol_id,
             Assignment {
@@ -847,7 +882,7 @@ mod tests {
         let node_b_op = protocol.o(Op::Assign(
             symbol_id,
             Assignment {
-                dont_care: protocol.false_id(),
+                dont_care: ctx.get_false(),
                 concretes: vec![(r, three)],
             },
         ));
@@ -856,6 +891,7 @@ mod tests {
         let mut internal_assert_guard = None;
 
         append_action(
+            &mut ctx,
             &mut protocol,
             &SymbolTable::default(),
             &mut actions,
@@ -870,9 +906,10 @@ mod tests {
     #[test]
     fn synthesizes_internal_assert_for_overlapping_forks() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
-        let p = protocol.expr_ctx.bv_symbol("p", 1);
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
+        let mut ctx = Context::default();
+        let p = ctx.bv_symbol("p", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
 
         let fork1 = protocol.o(Op::Fork);
         let fork2 = protocol.o(Op::Fork);
@@ -883,16 +920,15 @@ mod tests {
             Action::new(r, fork3),
         ];
 
-        contract_edges(&mut protocol, &SymbolTable::default());
+        contract_edges(&mut ctx, &mut protocol, &SymbolTable::default());
 
         let actions = &protocol[protocol.entry].actions;
         assert_eq!(actions.len(), 2);
         assert!(matches!(protocol[actions[0].op], Op::Fork));
         assert!(matches!(protocol[actions[1].op], Op::InternalAssertFalse));
 
-        let fork_guard = protocol.expr_ctx[actions[0].guard].serialize_to_str(&protocol.expr_ctx);
-        let internal_guard =
-            protocol.expr_ctx[actions[1].guard].serialize_to_str(&protocol.expr_ctx);
+        let fork_guard = ctx[actions[0].guard].serialize_to_str(&ctx);
+        let internal_guard = ctx[actions[1].guard].serialize_to_str(&ctx);
 
         // any of the forks can trigger: (p or q or r)
         assert_eq!(fork_guard, "or(or(p, q), r)");

@@ -26,7 +26,6 @@ fn symbol_bitvec_expr(
 }
 
 pub struct LoweredSystemResult {
-    pub ctx: Context,
     pub ts: TransitionSystem,
     pub port_to_expr: FxHashMap<PortId, ExprRef>,
     pub protocol_inputs: FxHashMap<(usize, SymbolId), ExprRef>,
@@ -38,8 +37,10 @@ pub struct LoweredSystemResult {
     pub is_dont_care: FxHashMap<PortId, ExprRef>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn into_bmc_transition_system(
-    mut graph: ProtoGraph,
+    expr_ctx: &mut Context,
+    graph: ProtoGraph,
     mut system: TransitionSystem,
     protocol_choices: Vec<ExprRef>,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
@@ -47,25 +48,23 @@ pub fn into_bmc_transition_system(
     protocol_arg_symbols: &[SymbolId],
     symbols: &SymbolTable,
 ) -> LoweredSystemResult {
-    let mut context = std::mem::take(&mut graph.expr_ctx);
-
     let mut protocol_inputs = FxHashMap::default();
     let mut added_protocol_inputs = FxHashSet::default();
     for (instance, protocol_choice) in protocol_choices.iter().enumerate() {
-        system.add_input(&context, *protocol_choice);
+        system.add_input(expr_ctx, *protocol_choice);
         for &symbol in protocol_arg_symbols {
             debug_assert!(matches!(symbols[symbol].kind(), SymbolKind::Arg(_)));
-            let input = symbol_bitvec_expr(&mut context, symbols, symbol, instance);
+            let input = symbol_bitvec_expr(expr_ctx, symbols, symbol, instance);
             if added_protocol_inputs.insert(input) {
-                system.add_input(&context, input);
+                system.add_input(expr_ctx, input);
             }
             protocol_inputs.insert((instance, symbol), input);
         }
     }
 
     let core = lower_proto_graph_to_transition_system(
+        expr_ctx,
         graph,
-        context,
         system,
         symbol_to_port,
         port_to_expr,
@@ -73,7 +72,6 @@ pub fn into_bmc_transition_system(
     );
 
     LoweredSystemResult {
-        ctx: core.ctx,
         ts: core.ts,
         port_to_expr: core.port_to_expr,
         protocol_inputs,

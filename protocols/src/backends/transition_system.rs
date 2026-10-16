@@ -4,7 +4,9 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
-use patronus::expr::{Context, ExprRef, Type, simple_transform_expr};
+use patronus::expr::{
+    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr,
+};
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
@@ -146,8 +148,8 @@ fn replace_proto_graph_exprs(
 /// swap out all the ports in the ProtoGraph with their equivalents
 /// in the DUT
 fn bind_proto_graph_ports_to_dut(
-    pg: &mut ProtoGraph,
     ctx: &mut Context,
+    pg: &mut ProtoGraph,
     symbol_to_port: &FxHashMap<SymbolId, PortId>,
     port_to_expr: &FxHashMap<PortId, ExprRef>,
 ) {
@@ -168,7 +170,6 @@ fn bind_proto_graph_ports_to_dut(
 }
 
 pub struct LoweredSystemResult {
-    pub ctx: Context,
     pub ts: TransitionSystem,
     pub port_to_expr: FxHashMap<PortId, ExprRef>,
     pub node_symbol: ExprRef,
@@ -179,7 +180,6 @@ pub struct LoweredSystemResult {
 }
 
 pub struct CoreLoweredSystem {
-    pub ctx: Context,
     pub ts: TransitionSystem,
     pub pg: ProtoGraph,
     pub port_to_expr: FxHashMap<PortId, ExprRef>,
@@ -193,8 +193,8 @@ pub struct CoreLoweredSystem {
 }
 
 pub fn lower_proto_graph_to_transition_system(
+    ctx: &mut Context,
     mut pg: ProtoGraph,
-    mut ctx: Context,
     mut ts: TransitionSystem,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
     mut port_to_expr: FxHashMap<PortId, ExprRef>,
@@ -202,9 +202,9 @@ pub fn lower_proto_graph_to_transition_system(
 ) -> CoreLoweredSystem {
     let mut is_dont_care = FxHashMap::default();
     for &dont_care in &pg.dont_cares {
-        ts.add_input(&ctx, dont_care);
+        ts.add_input(ctx, dont_care);
     }
-    bind_proto_graph_ports_to_dut(&mut pg, &mut ctx, &symbol_to_port, &port_to_expr);
+    bind_proto_graph_ports_to_dut(ctx, &mut pg, &symbol_to_port, &port_to_expr);
 
     let node_count = pg.nodes().try_len().unwrap() as u64 + 3;
     let node_id_width = u64::from(u64::BITS - node_count.leading_zeros());
@@ -267,6 +267,15 @@ pub fn lower_proto_graph_to_transition_system(
         for action in &pg[id].actions {
             match pg[action.op].clone() {
                 Op::AssertEq(lhs, rhs) => {
+                    if lhs.get_type(ctx) != rhs.get_type(ctx) {
+                        println!(
+                            "{}:{} != {}:{}",
+                            lhs.serialize_to_str(ctx),
+                            lhs.get_type(ctx),
+                            rhs.serialize_to_str(ctx),
+                            rhs.get_type(ctx)
+                        );
+                    }
                     let eq = ctx.equal(lhs, rhs);
                     let assertion_failed = ctx.not(eq);
                     let action_guard = ctx.and(action.guard, assertion_failed);
@@ -306,7 +315,7 @@ pub fn lower_proto_graph_to_transition_system(
 
     // if no transition is satisfied, we go to the internal bad state
     // the final done state self-loops, so it won't trigger this
-    let mut transition_ite = if_thens_to_ite(transitions, &mut ctx, internal_bad_state_id);
+    let mut transition_ite = if_thens_to_ite(transitions, ctx, internal_bad_state_id);
 
     // set up ITE expressions based on what node state we're in for each port,
     // and replace the inputs with the ITEs everywhere
@@ -323,7 +332,7 @@ pub fn lower_proto_graph_to_transition_system(
 
         let dont_care_name = format!("dont_care.{}", st.full_name_from_symbol_id(&input));
         let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
-        ts.add_input(&ctx, input_dont_care);
+        ts.add_input(ctx, input_dont_care);
 
         let input_port = *symbol_to_port.get(&input).unwrap();
         let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
@@ -358,7 +367,7 @@ pub fn lower_proto_graph_to_transition_system(
                 .next()
                 .unwrap();
 
-            let assignment_is_triggered = assignment_is_triggered(&assignment, &mut ctx);
+            let assignment_is_triggered = assignment_is_triggered(&assignment, ctx);
             let assignment_not_triggered = ctx.not(assignment_is_triggered);
 
             // if an assignment isn't triggered, go to the bad state
@@ -387,7 +396,7 @@ pub fn lower_proto_graph_to_transition_system(
             let assignment_is_dont_care = assignment.dont_care;
             let assignment_ite = assignment_to_ite(
                 assignment,
-                &mut ctx,
+                ctx,
                 driver.input_dont_care,
                 driver.input_expr_ref,
             );
@@ -403,15 +412,10 @@ pub fn lower_proto_graph_to_transition_system(
 
     // replace the input ExprRef with the input_ite everywhere
     for (_, driver) in input_drivers {
-        replace_expr_uses(&mut ts, &mut ctx, driver.input_expr_ref, driver.input_ite);
-        transition_ite = replace_expr(
-            &mut ctx,
-            transition_ite,
-            driver.input_expr_ref,
-            driver.input_ite,
-        );
+        replace_expr_uses(&mut ts, ctx, driver.input_expr_ref, driver.input_ite);
+        transition_ite = replace_expr(ctx, transition_ite, driver.input_expr_ref, driver.input_ite);
         for expr in port_to_expr.values_mut() {
-            *expr = replace_expr(&mut ctx, *expr, driver.input_expr_ref, driver.input_ite);
+            *expr = replace_expr(ctx, *expr, driver.input_expr_ref, driver.input_ite);
         }
         is_dont_care.insert(driver.port, driver.input_is_dont_care);
     }
@@ -427,10 +431,9 @@ pub fn lower_proto_graph_to_transition_system(
         .push(ctx.equal(node_sym, external_bad_state_id));
     ts.bad_states
         .push(ctx.equal(node_sym, internal_bad_state_id));
-    ts.add_state(&ctx, node_state);
+    ts.add_state(ctx, node_state);
 
     CoreLoweredSystem {
-        ctx,
         ts,
         pg,
         port_to_expr,
@@ -445,18 +448,17 @@ pub fn lower_proto_graph_to_transition_system(
 }
 
 pub fn into_transition_system(
-    mut pg: ProtoGraph,
+    ctx: &mut Context,
+    pg: ProtoGraph,
     ts: TransitionSystem,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
     port_to_expr: FxHashMap<PortId, ExprRef>,
     st: &SymbolTable,
 ) -> LoweredSystemResult {
-    let ctx = std::mem::take(&mut pg.expr_ctx);
     let core =
-        lower_proto_graph_to_transition_system(pg, ctx, ts, symbol_to_port, port_to_expr, st);
+        lower_proto_graph_to_transition_system(ctx, pg, ts, symbol_to_port, port_to_expr, st);
 
     LoweredSystemResult {
-        ctx: core.ctx,
         ts: core.ts,
         port_to_expr: core.port_to_expr,
         node_symbol: core.node_symbol,
