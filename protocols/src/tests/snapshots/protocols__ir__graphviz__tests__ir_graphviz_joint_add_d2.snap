@@ -1,0 +1,41 @@
+---
+source: protocols/src/ir/graphviz.rs
+expression: content
+---
+== unbounded-driver ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[not(transaction_valid)] done\n[1] DUT.a := X if not(transaction_valid); joint.a#0_add if transaction_valid\n[1] DUT.b := X if not(transaction_valid); joint.b#0_add if transaction_valid"];
+  node0 -> node1 [label="transaction_valid / step"];
+  node1 [label="[1] DUT.a := X if not(transaction_valid); joint.a#1_add if transaction_valid\n[1] DUT.b := X if not(transaction_valid); joint.b#1_add if transaction_valid"];
+  node1 -> node2 [label="not(transaction_valid) / step"];
+  node1 -> node3 [label="transaction_valid / step"];
+  node2 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1\n[1] assert_eq(joint.s#0_add, DUT.s)"];
+  node2 -> node4 [label="1 / step / R_add"];
+  node3 [label="[1] DUT.a := X if not(transaction_valid); joint.a#2_add if transaction_valid\n[1] DUT.b := X if not(transaction_valid); joint.b#2_add if transaction_valid\n[1] assert_eq(joint.s#0_add, DUT.s)"];
+  node3 -> node2 [label="not(transaction_valid) / step / R_add"];
+  node3 -> node3 [label="transaction_valid / step / R_add"];
+  node4 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== unbounded-monitor ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[not(transaction_valid)] done\n[1] $monitor_a_value#0_add := DUT.a if transaction_valid\n[1] $monitor_b_value#0_add := DUT.b if transaction_valid\n[1] $monitor_s_value#0_add := 0 if transaction_valid\n[1] $monitor_live#0_add := 1 if transaction_valid"];
+  node0 -> node1 [label="transaction_valid / step"];
+  node1 [label="[1] $monitor_a_value#1_add := DUT.a if transaction_valid\n[1] $monitor_b_value#1_add := DUT.b if transaction_valid\n[1] $monitor_s_value#1_add := 0 if transaction_valid\n[1] $monitor_live#1_add := 1 if transaction_valid"];
+  node1 -> node2 [label="not(transaction_valid) / step"];
+  node1 -> node3 [label="transaction_valid / step"];
+  node2 [label="[1] $monitor_s_value#0_add := DUT.s if 1"];
+  node2 -> node4 [label="1 / step / R_add"];
+  node3 [label="[1] $monitor_s_value#0_add := DUT.s if 1\n[1] $monitor_a_value#2_add := DUT.a if transaction_valid\n[1] $monitor_b_value#2_add := DUT.b if transaction_valid\n[1] $monitor_s_value#2_add := 0 if transaction_valid\n[1] $monitor_live#2_add := 1 if transaction_valid"];
+  node3 -> node2 [label="not(transaction_valid) / step / R_add"];
+  node3 -> node3 [label="transaction_valid / step / R_add"];
+  node4 [label="[1] done"];
+}

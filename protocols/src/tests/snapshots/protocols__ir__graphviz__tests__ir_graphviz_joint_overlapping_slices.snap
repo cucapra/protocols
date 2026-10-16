@@ -1,0 +1,23 @@
+---
+source: protocols/src/ir/graphviz.rs
+expression: content
+---
+== unbounded-driver ==
+digraph "overlapping_slices" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[not(transaction_valid)] done\n[1] dut.a := X if not(transaction_valid); joint.p#0_overlapping_slices[3:1] if transaction_valid\n[1] dut.b := X if not(transaction_valid); joint.p#0_overlapping_slices[4:2] if transaction_valid"];
+  node0 -> node0 [label="transaction_valid / step / R_overlapping_slices"];
+}
+
+== unbounded-monitor ==
+digraph "overlapping_slices" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[not(transaction_valid)] done\n[transaction_valid] assert_eq(dut.a[2:1], dut.b[1:0])\n[1] $monitor_p_value#0_overlapping_slices := or(concat(0, concat(dut.a, 0)), concat(dut.b[2], 0)) if transaction_valid\n[1] $monitor_live#0_overlapping_slices := 1 if transaction_valid"];
+  node0 -> node0 [label="transaction_valid / step / R_overlapping_slices"];
+}

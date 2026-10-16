@@ -228,6 +228,8 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::driver_to_monitor::convert_driver_to_monitor;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
+    use crate::ir::joint_automaton::build_joint_driver_automaton;
+    use crate::ir::joint_monitor::build_joint_monitor_automaton;
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
     use crate::ir::reaching_defs::reaching_definitions;
@@ -331,6 +333,87 @@ mod tests {
         snap(
             "ir_graphviz_serv_regfile",
             "../examples/serv/serv_regfile.prot",
+        );
+    }
+
+    fn joint_snap(name: &str, filename: &str, selected: &[&str]) {
+        let mut handler = DiagnosticHandler::default();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let protocols = module
+            .protos
+            .into_iter()
+            .filter(|protocol| selected.contains(&protocol.name.as_str()))
+            .collect::<Vec<_>>();
+        let mut ctx = Context::default();
+        let driver = build_joint_driver_automaton(&mut ctx, protocols.clone(), &symbols).unwrap();
+        let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
+        let driver_dot = to_dot_string(&ctx, &driver.graph, &symbols);
+        let monitor_dot = monitor.to_dot_string(&ctx, &symbols);
+        if let Some(directory) = std::env::var_os("PROTOCOLS_JOINT_MONITOR_DOT_DIR") {
+            let directory = std::path::PathBuf::from(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(directory.join(format!("{name}_driver.dot")), &driver_dot).unwrap();
+            std::fs::write(directory.join(format!("{name}_monitor.dot")), &monitor_dot).unwrap();
+        }
+        let content =
+            format!("== unbounded-driver ==\n{driver_dot}\n== unbounded-monitor ==\n{monitor_dot}");
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| insta::assert_snapshot!(name, content));
+    }
+
+    #[test]
+    fn test_joint_add_d1_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_add_d1",
+            "../tests/adders/adder_d1/add_d1.prot",
+            &["add"],
+        );
+    }
+
+    #[test]
+    fn test_joint_add_d2_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_add_d2",
+            "../tests/adders/adder_d2/add_d2.prot",
+            &["add"],
+        );
+    }
+
+    #[test]
+    fn test_joint_alu_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_alu",
+            "../tests/alus/alu_d1.prot",
+            &["add", "sub", "and", "or"],
+        );
+    }
+
+    #[test]
+    fn test_joint_unbounded_pre_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_unbounded_pre",
+            "../tests/meta/unbounded_pre_phase_steady_state_simple.prot",
+            &["id", "w"],
+        );
+    }
+
+    #[test]
+    fn test_joint_overlapping_slices_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_overlapping_slices",
+            "src/ir/driver_to_monitor/fixtures/overlapping_slices.prot",
+            &["overlapping_slices"],
+        );
+    }
+
+    #[test]
+    fn test_joint_serv_regfile_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_serv_regfile",
+            "../examples/serv/serv_regfile.prot",
+            &["read_write", "idle"],
         );
     }
 }

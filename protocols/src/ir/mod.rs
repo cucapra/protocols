@@ -6,6 +6,7 @@ pub mod fork_reach;
 pub mod graph_interpreter;
 pub mod graphviz;
 pub mod joint_automaton;
+pub mod joint_monitor;
 pub mod known_bit;
 pub mod lowering;
 pub mod meta_automaton;
