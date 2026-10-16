@@ -21,7 +21,7 @@ use crate::ir::reaching_defs::reaching_definitions_from;
 pub type TraceArgSubst = FxHashMap<SymbolId, ExprRef>;
 
 /// Information about the result of lowering an AST to a graph fragment.
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LoweredFragmentInfo {
     /// Nodes allocated for this fragment.
     pub nodes: Vec<NodeId>,

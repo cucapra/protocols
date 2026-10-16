@@ -32,11 +32,11 @@ pub struct JointDriverAutomaton {
 }
 
 #[derive(Clone)]
-struct ProtocolShape {
-    fragment: LoweredFragmentInfo,
-    fork: Option<NodeId>,
-    done: NodeId,
-    post: Vec<NodeId>,
+pub struct ProtocolShape {
+    pub fragment: LoweredFragmentInfo,
+    pub fork: Option<NodeId>,
+    pub done: NodeId,
+    pub post: Vec<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -75,7 +75,7 @@ fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointDriverErr
     }
 }
 
-fn analyze_shape(
+pub fn analyze_shape(
     ctx: &Context,
     graph: &ProtoGraph, // assumes the graph is contracted and unreachable edges are pruned
     protocol: &Protocol,

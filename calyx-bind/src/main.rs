@@ -1,14 +1,17 @@
 use clap::{ColorChoice, Parser};
-use patronus::expr::ExprRef;
+use patronus::expr::{Context, ExprRef};
+use patronus::system::TransitionSystem;
+use protocols::backends::transition_system::lower_proto_graph_to_transition_system;
 use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::ir::graphviz::to_dot_string_from_entry;
+use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
 use protocols::ir::proto_graph::{NodeId, Op, ProtoGraph};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
 
 #[derive(Parser, Debug)]
@@ -69,6 +72,16 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
                 .iter()
                 .all(|(p, _)| *p == graph.exit)
         );
+
+        // check shape
+        let shape = analyze_shape(&lowerer.ir, method, (*graph).clone()).unwrap();
+        assert!(
+            shape.fork.is_none(),
+            "we should have removed all forks at this point!"
+        );
+        assert!(shape.post.is_empty());
+        assert_eq!(shape.done, graph.exit);
+        assert_eq!(&shape.fragment, *graph);
     }
 
     // generate unbounded driver
@@ -85,6 +98,27 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
             to_dot_string_from_entry(&lowerer.ir, st, graph.entry)
         );
     }
+}
+
+fn add_guard(pg: &mut ProtoGraph, node_id: NodeId, guard: ExprRef) {
+    let node = &mut pg[node_id];
+    for tran in node.transitions.iter_mut() {
+        tran.guard = pg.expr_ctx.and(tran.guard, guard);
+    }
+}
+
+fn to_transition_system(
+    module: &Module,
+    mut pg: ProtoGraph,
+    st: &SymbolTable,
+) -> (Context, TransitionSystem) {
+    let ctx = std::mem::take(&mut pg.expr_ctx);
+    let sys = TransitionSystem::new(module.name.clone());
+    let symbol_to_port = FxHashMap::default();
+    let port_to_expr = FxHashMap::default();
+    let lowered =
+        lower_proto_graph_to_transition_system(pg, ctx, sys, symbol_to_port, port_to_expr, st);
+    (lowered.ctx, lowered.ts)
 }
 
 /// returns the condition under which we will be done in the next step
