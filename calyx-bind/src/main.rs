@@ -9,6 +9,7 @@ use protocols::ir::graphviz::to_dot_string_from_entry;
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
 use protocols::ir::proto_graph::{NodeId, Op, ProtoGraph};
 use rustc_hash::FxHashSet;
+use smallvec::{SmallVec, smallvec};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -88,19 +89,58 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
 
 /// returns the condition under which we will be done in the next step
 fn next_state_is_done(pg: &mut ProtoGraph, node_id: NodeId) -> ExprRef {
-    pg[node_id]
+    let dones: SmallVec<[_; 2]> = pg[node_id]
         .transitions
         .iter()
         .map(|t| {
-            let done = pg[t.target]
+            let dones: SmallVec<[_; 2]> = pg[t.target]
                 .actions
                 .iter()
                 .filter(|a| matches!(pg[a.op], Op::Done))
                 .map(|a| a.guard)
-                .fold(pg.false_id(), |a, b| pg.expr_ctx.or(a, b));
-            pg.expr_ctx.and(done, t.guard)
+                .collect();
+            (t.guard, dones)
         })
-        .fold(pg.false_id(), |a, b| pg.expr_ctx.or(a, b))
+        .collect();
+    dones.into_iter().fold(pg.false_id(), |a, (guard, inner)| {
+        let inner = reduce_or(pg, inner.into_iter());
+        let inner = and(pg, guard, inner);
+        or(pg, a, inner)
+    })
+}
+
+fn reduce_or(pg: &mut ProtoGraph, items: impl Iterator<Item = ExprRef>) -> ExprRef {
+    items.into_iter().fold(pg.false_id(), |a, b| or(pg, a, b))
+}
+
+/// optimizing or
+fn or(pg: &mut ProtoGraph, a: ExprRef, b: ExprRef) -> ExprRef {
+    if a == pg.true_id() || b == pg.true_id() {
+        pg.true_id()
+    } else if b == pg.false_id() {
+        a
+    } else if a == pg.false_id() {
+        b
+    } else if a == b {
+        a
+    } else {
+        pg.expr_ctx.or(a, b)
+    }
+}
+
+/// optimizing and
+fn and(pg: &mut ProtoGraph, a: ExprRef, b: ExprRef) -> ExprRef {
+    if a == pg.false_id() || b == pg.false_id() {
+        pg.false_id()
+    } else if b == pg.true_id() {
+        a
+    } else if a == pg.true_id() {
+        b
+    } else if a == b {
+        a
+    } else {
+        pg.expr_ctx.and(a, b)
+    }
 }
 
 fn remove_fork(
@@ -173,27 +213,13 @@ fn lower_protocols<'a>(st: &'a SymbolTable, m: &Module) -> (Lowerer<'a>, Vec<Low
 }
 
 fn get_single_cycle(pg: &mut ProtoGraph, low: &LoweredFragmentInfo) -> Option<NodeId> {
-    let start_id = low.entry;
-    let end_id = low.exit;
-    let start = &pg[start_id];
     // check to make sure that the start node is the only node
-    if let [next] = start.transitions.as_slice()
-        && next.consumes_step
-        && next.guard == pg.true_id()
-        && next.target == end_id
-    {
-        let end = &pg[next.target];
-        if end.transitions.is_empty()
-            && let Some(done) = end.actions.iter().find(|a| pg[a.op] == Op::Done)
-            && done.guard == pg.true_id()
-        {
-            // make a copy to remove the done state
-            let mut st = pg[start_id].clone();
-            st.transitions.clear();
-            Some(pg.n(st))
-        } else {
-            None
-        }
+    let next_state_is_done = next_state_is_done(pg, low.entry);
+    if next_state_is_done == pg.true_id() {
+        // make a copy to remove the done state
+        let mut st = pg[low.entry].clone();
+        st.transitions.clear();
+        Some(pg.n(st))
     } else {
         None
     }
