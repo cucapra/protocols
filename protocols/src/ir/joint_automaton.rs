@@ -655,23 +655,26 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::graphviz::to_dot_string;
 
-    fn build_selected(filename: &str, selected: &[&str]) -> (JointDriverAutomaton, SymbolTable) {
+    fn build_selected(
+        filename: &str,
+        selected: &[&str],
+    ) -> (JointDriverAutomaton, SymbolTable, Context) {
         let mut handler = DiagnosticHandler::default();
         let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
+        let mut ctx = Context::default();
         let protocols = module
             .protos
             .into_iter()
             .filter(|protocol| selected.contains(&protocol.name.as_str()))
             .collect();
-        let driver =
-            build_joint_driver_automaton(protocols, &symbols, ExprContext::default()).unwrap();
-        (driver, symbols)
+        let driver = build_joint_driver_automaton(&mut ctx, protocols, &symbols).unwrap();
+        (driver, symbols, ctx)
     }
 
     #[test]
     fn joint_d1_uses_two_banks_and_is_cyclic() {
-        let (driver, _) = build_selected("../tests/adders/adder_d1/add_d1.prot", &["add"]);
+        let (driver, _, _) = build_selected("../tests/adders/adder_d1/add_d1.prot", &["add"]);
         assert_eq!(driver.bank_counts, vec![2]);
         assert!(driver.graph.nodes().count() <= 5);
         assert!(
@@ -685,29 +688,29 @@ mod tests {
 
     #[test]
     fn joint_d2_uses_three_banks() {
-        let (driver, _) = build_selected("../tests/adders/adder_d2/add_d2.prot", &["add"]);
+        let (driver, _, _) = build_selected("../tests/adders/adder_d2/add_d2.prot", &["add"]);
         assert_eq!(driver.bank_counts, vec![3]);
         assert!(driver.graph.nodes().count() <= 8);
     }
 
     #[test]
     fn joint_unbounded_pre_control_is_finite() {
-        let (driver, symbols) = build_selected(
+        let (driver, symbols, ctx) = build_selected(
             "../tests/meta/unbounded_pre_phase_steady_state_simple.prot",
             &["id", "w"],
         );
         assert!(driver.graph.nodes().count() <= 16);
-        let dot = to_dot_string(&driver.graph, &symbols);
+        let dot = to_dot_string(&ctx, &driver.graph, &symbols);
         assert!(dot.contains("DUT.ready"));
         assert!(dot.contains("transaction_valid"));
     }
 
     #[test]
     fn joint_choice_has_guarded_done_for_empty_stop() {
-        let (driver, _) = build_selected("../tests/adders/adder_d1/add_d1.prot", &["add"]);
+        let (driver, _, ctx) = build_selected("../tests/adders/adder_d1/add_d1.prot", &["add"]);
         let entry = driver.graph.entry;
         assert!(driver.graph[entry].actions.iter().any(|action| {
-            matches!(driver.graph[action.op], Op::Done) && action.guard != driver.graph.true_id()
+            matches!(driver.graph[action.op], Op::Done) && action.guard != ctx.get_true()
         }));
     }
 }

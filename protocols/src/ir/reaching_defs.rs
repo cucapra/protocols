@@ -406,16 +406,16 @@ mod tests {
         let mut pg = test_graph();
         let mut ctx = Context::default();
         let p = ctx.bv_symbol("p", 1);
-        let not_p = pg.not_guard(p);
+        let not_p = pg.not_guard(&mut ctx, p);
         let one = ctx.bv_symbol("one", 1);
         let zero = ctx.bv_symbol("zero", 1);
 
         let from_a = concrete_assignment(&ctx, p, one);
         let from_b = concrete_assignment(&ctx, not_p, zero);
 
-        let merged = merge_assignment(&mut pg, from_a, from_b);
+        let merged = merge_assignment(&mut ctx, &mut pg, from_a, from_b);
 
-        assert!(has_multiple_outcomes(&mut pg, &merged));
+        assert!(has_multiple_outcomes(&mut ctx, &mut pg, &merged));
         assert_eq!(merged.dont_care, ctx.get_false());
         assert_eq!(merged.concretes.len(), 2);
     }
@@ -432,9 +432,9 @@ mod tests {
         let from_a = concrete_assignment(&ctx, p, one);
         let from_b = concrete_assignment(&ctx, q, zero);
 
-        let merged = merge_assignment(&mut pg, from_a, from_b);
+        let merged = merge_assignment(&mut ctx, &mut pg, from_a, from_b);
 
-        assert!(has_multiple_outcomes(&mut pg, &merged));
+        assert!(has_multiple_outcomes(&mut ctx, &mut pg, &merged));
         assert_eq!(merged.dont_care, ctx.get_false());
         assert_eq!(merged.concretes.len(), 2);
     }
@@ -449,14 +449,14 @@ mod tests {
         let zero = ctx.bv_symbol("zero", 1);
         let two = ctx.bv_symbol("two", 1);
 
-        let from_a = concrete_assignment(&pg, p, one);
-        let from_b = concrete_assignment(&pg, q, zero);
-        let conflicted = merge_assignment(&mut pg, from_a, from_b);
-        assert!(has_multiple_outcomes(&mut pg, &conflicted));
+        let from_a = concrete_assignment(&ctx, p, one);
+        let from_b = concrete_assignment(&ctx, q, zero);
+        let conflicted = merge_assignment(&mut ctx, &mut pg, from_a, from_b);
+        assert!(has_multiple_outcomes(&mut ctx, &mut pg, &conflicted));
 
-        let reassignment = concrete_assignment(&pg, ctx.get_true(), two);
-        let transferred = transfer_assignment(&mut pg, conflicted, reassignment);
+        let reassignment = concrete_assignment(&ctx, ctx.get_true(), two);
+        let transferred = transfer_assignment(&mut ctx, &mut pg, conflicted, reassignment);
 
-        assert!(assignment_is_total(ctx, &mut pg, &transferred));
+        assert!(assignment_is_total(&mut ctx, &mut pg, &transferred));
     }
 }

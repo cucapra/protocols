@@ -143,25 +143,31 @@ mod tests {
     use crate::ir::edge_contract::contract_edges;
     use crate::ir::lowering::lower_ast_to_ir;
 
-    fn contracted_protocols(filename: &str) -> Vec<ProtoGraph> {
+    fn contracted_protocols(filename: &str) -> (Vec<ProtoGraph>, Context) {
         let mut handler = DiagnosticHandler::default();
         let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
-
-        module
+        let mut ctx = Context::default();
+        let graphs = module
             .protos
             .into_iter()
             .map(|protocol| {
-                let mut graph = lower_ast_to_ir(protocol, &symbols);
-                contract_edges(&mut graph, &symbols);
-                graph.garbage_collect_unreachable();
+                let mut graph = lower_ast_to_ir(&mut ctx, protocol, &symbols);
+                contract_edges(&mut ctx, &mut graph, &symbols);
+                graph.garbage_collect_unreachable(&mut ctx);
                 graph
             })
-            .collect()
+            .collect();
+        (graphs, ctx)
     }
 
-    fn assert_timing(graph: &ProtoGraph, pre_cycles: Option<Vec<usize>>, post_cycles: usize) {
-        let timing = analyze_protocol_timing(graph);
+    fn assert_timing(
+        ctx: &mut Context,
+        graph: &ProtoGraph,
+        pre_cycles: Option<Vec<usize>>,
+        post_cycles: usize,
+    ) {
+        let timing = analyze_protocol_timing(ctx, graph);
         assert_eq!(timing.name, graph.name);
         assert_eq!(timing.pre_cycles, pre_cycles);
         assert_eq!(timing.post_cycles, post_cycles);
@@ -169,38 +175,38 @@ mod tests {
 
     #[test]
     fn extracts_add_d1_timing() {
-        let graphs = contracted_protocols("../tests/adders/add_d1.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/adders/add_d1.prot");
         assert_eq!(graphs.len(), 1);
-        assert_timing(&graphs[0], Some(vec![1]), 1);
+        assert_timing(&mut ctx, &graphs[0], Some(vec![1]), 1);
     }
 
     #[test]
     fn extracts_counter_timing() {
-        let graphs = contracted_protocols("../tests/counters/counter.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/counters/counter.prot");
         assert_eq!(graphs.len(), 2);
         for graph in &graphs {
-            assert_timing(graph, None, 1);
+            assert_timing(&mut ctx, graph, None, 1);
         }
     }
 
     #[test]
     fn extracts_alu_d1_timings() {
-        let graphs = contracted_protocols("../tests/alus/alu_d1.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/alus/alu_d1.prot");
         assert_eq!(graphs.len(), 4);
         for graph in &graphs {
-            assert_timing(graph, Some(vec![1]), 1);
+            assert_timing(&mut ctx, graph, Some(vec![1]), 1);
         }
     }
 
     #[test]
     fn extracts_add_d0_timings() {
-        let graphs = contracted_protocols("../tests/adders/adder_d0/add_d0.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/adders/adder_d0/add_d0.prot");
         assert_eq!(graphs.len(), 4);
         for graph in &graphs {
-            assert_timing(graph, Some(vec![1]), 0);
+            assert_timing(&mut ctx, graph, Some(vec![1]), 0);
         }
 
-        let meta = steady_driver_meta_from_protocols(&graphs);
+        let meta = steady_driver_meta_from_protocols(&mut ctx, &graphs);
         assert!(
             meta.nodes
                 .iter()

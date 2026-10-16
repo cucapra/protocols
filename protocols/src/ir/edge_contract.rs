@@ -688,37 +688,39 @@ mod tests {
     use cranelift_entity::EntityRef;
     use patronus::expr::SerializableIrNode;
 
-    fn concrete_assignment(protocol: &ProtoGraph, rhs: ExprRef) -> Assignment {
+    fn concrete_assignment(ctx: &Context, rhs: ExprRef) -> Assignment {
         Assignment::concrete(ctx.get_false(), ctx.get_true(), rhs)
     }
 
-    fn dont_care_assignment(protocol: &ProtoGraph) -> Assignment {
+    fn dont_care_assignment(ctx: &Context) -> Assignment {
         Assignment::dont_care(ctx.get_true())
     }
 
-    fn expr_str(protocol: &ProtoGraph, expr: ExprRef) -> String {
-        protocol.expr_ctx[expr].serialize_to_str(&protocol.expr_ctx)
+    fn expr_str(ctx: &Context, expr: ExprRef) -> String {
+        expr.serialize_to_str(&ctx)
     }
 
     #[test]
     fn allows_overlapping_dont_care_and_concrete_assignments() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("signal", 1);
-        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
-        let concrete = protocol.expr_ctx.bv_symbol("concrete", 1);
+        let symbol = ctx.bv_symbol("signal", 1);
+        let dont_care = ctx.bv_symbol("dont_care", 1);
+        let concrete = ctx.bv_symbol("concrete", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
         let concrete_op = protocol.o(Op::Assign(
             symbol_id,
-            concrete_assignment(&protocol, concrete),
+            concrete_assignment(&mut ctx, concrete),
         ));
-        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&protocol)));
+        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&mut ctx)));
         let mut actions = vec![Action::new(ctx.get_true(), concrete_op)];
         let mut internal_assert_guard = None;
         let true_id = ctx.get_true();
         append_action(
+            &mut ctx,
             &mut protocol,
             &SymbolTable::default(),
             &mut actions,
@@ -736,26 +738,27 @@ mod tests {
         let Op::Assign(_, assignment) = protocol[actions[0].op].clone() else {
             panic!("expected assignment");
         };
-        assert_eq!(expr_str(&protocol, assignment.dont_care), "1'b1");
+        assert_eq!(expr_str(&mut ctx, assignment.dont_care), "1'b1");
         assert_eq!(assignment.concretes, vec![(ctx.get_true(), concrete)]);
     }
 
     #[test]
     fn synthesizes_internal_assert_for_overlapping_unordered_assignments() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("signal", 1);
+        let symbol = ctx.bv_symbol("signal", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
 
         // Node A: [p] DUT.a := 1
         // Node B: [q] DUT.a := 2
         // Node C: [r] DUT.a := 3
-        let p = protocol.expr_ctx.bv_symbol("p", 1);
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
-        let one = protocol.expr_ctx.bv_symbol("one", 1);
-        let two = protocol.expr_ctx.bv_symbol("two", 1);
-        let three = protocol.expr_ctx.bv_symbol("three", 1);
+        let p = ctx.bv_symbol("p", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
+        let one = ctx.bv_symbol("one", 1);
+        let two = ctx.bv_symbol("two", 1);
+        let three = ctx.bv_symbol("three", 1);
 
         let mut actions = Vec::new();
         let mut internal_assert_guard = None;
@@ -764,6 +767,7 @@ mod tests {
             let op = protocol.o(Op::Assign(symbol_id, assignment));
             let true_id = ctx.get_true();
             append_action(
+                &mut ctx,
                 &mut protocol,
                 &SymbolTable::default(),
                 &mut actions,
@@ -778,7 +782,7 @@ mod tests {
 
         // assert any two guards being run together. (p and q) or (p and r)
         assert_eq!(
-            expr_str(&protocol, internal_assert_guard.unwrap()),
+            expr_str(&ctx, internal_assert_guard.unwrap()),
             "or(or(and(p, q), and(p, r)), and(and(not(p), q), r))"
         );
     }
@@ -786,17 +790,18 @@ mod tests {
     #[test]
     fn unordered_assignment_merge_preserves_ordered_ite_precedence() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("DUT.a", 1);
-        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
-        let three = protocol.expr_ctx.bv_symbol("three", 1);
-        let four = protocol.expr_ctx.bv_symbol("four", 1);
+        let symbol = ctx.bv_symbol("DUT.a", 1);
+        let dont_care = ctx.bv_symbol("dont_care", 1);
+        let three = ctx.bv_symbol("three", 1);
+        let four = ctx.bv_symbol("four", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
-        let s = protocol.expr_ctx.bv_symbol("s", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
+        let s = ctx.bv_symbol("s", 1);
 
         // Node A: [1] DUT.a := { X if s; 3 if q }
         // Node B: [1] DUT.a := { 4 if r }
@@ -821,6 +826,7 @@ mod tests {
         let mut internal_assert_guard = None;
 
         append_action(
+            &mut ctx,
             &mut protocol,
             &SymbolTable::default(),
             &mut actions,
@@ -835,11 +841,11 @@ mod tests {
         // q and r are our concrete assignments to 3 and 4. assignment to 3 only triggers if
         // not s , so there is only a conflicting assignment under ((not s) and q and r)
         assert_eq!(
-            expr_str(&protocol, internal_assert_guard.unwrap()),
+            expr_str(&ctx, internal_assert_guard.unwrap()),
             "and(and(not(s), q), r)"
         );
 
-        protocol.simplify_all_exprs();
+        protocol.simplify_all_exprs(&mut ctx);
 
         let Op::Assign(_, assignment) = protocol[actions[0].op].clone() else {
             panic!("expected assignment");
@@ -847,25 +853,26 @@ mod tests {
 
         // Concrete branches from both unordered sides are preferred over DontCare, but the
         // original node-local DontCare still suppresses node A's own concrete branch.
-        assert_eq!(expr_str(&protocol, assignment.dont_care), "and(not(r), s)");
-        let not_s = protocol.not_guard(s);
-        let effective_q = protocol.and_guard(not_s, q);
+        assert_eq!(expr_str(&ctx, assignment.dont_care), "and(not(r), s)");
+        let not_s = protocol.not_guard(&mut ctx, s);
+        let effective_q = protocol.and_guard(&mut ctx, not_s, q);
         assert_eq!(assignment.concretes, vec![(effective_q, three), (r, four)]);
     }
 
     #[test]
     fn unordered_assignment_merge_allows_overlapping_equal_concretes() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
         let symbol_id = SymbolId::new(0);
-        let symbol = protocol.expr_ctx.bv_symbol("DUT.a", 1);
-        let dont_care = protocol.expr_ctx.bv_symbol("dont_care", 1);
-        let three = protocol.expr_ctx.bv_symbol("three", 1);
+        let symbol = ctx.bv_symbol("DUT.a", 1);
+        let dont_care = ctx.bv_symbol("dont_care", 1);
+        let three = ctx.bv_symbol("three", 1);
         protocol.cache_symbol_expr(symbol_id, symbol);
         protocol.dont_cares.insert(dont_care);
 
-        let p = protocol.expr_ctx.bv_symbol("p", 1);
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
+        let p = ctx.bv_symbol("p", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
 
         let true_id = ctx.get_true();
         let node_a_op = protocol.o(Op::Assign(
@@ -887,6 +894,7 @@ mod tests {
         let mut internal_assert_guard = None;
 
         append_action(
+            &mut ctx,
             &mut protocol,
             &SymbolTable::default(),
             &mut actions,
@@ -901,9 +909,10 @@ mod tests {
     #[test]
     fn synthesizes_internal_assert_for_overlapping_forks() {
         let mut protocol = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
-        let p = protocol.expr_ctx.bv_symbol("p", 1);
-        let q = protocol.expr_ctx.bv_symbol("q", 1);
-        let r = protocol.expr_ctx.bv_symbol("r", 1);
+        let mut ctx = Context::default();
+        let p = ctx.bv_symbol("p", 1);
+        let q = ctx.bv_symbol("q", 1);
+        let r = ctx.bv_symbol("r", 1);
 
         let fork1 = protocol.o(Op::Fork);
         let fork2 = protocol.o(Op::Fork);
@@ -914,16 +923,15 @@ mod tests {
             Action::new(r, fork3),
         ];
 
-        contract_edges(&mut protocol, &SymbolTable::default());
+        contract_edges(&mut ctx, &mut protocol, &SymbolTable::default());
 
         let actions = &protocol[protocol.entry].actions;
         assert_eq!(actions.len(), 2);
         assert!(matches!(protocol[actions[0].op], Op::Fork));
         assert!(matches!(protocol[actions[1].op], Op::InternalAssertFalse));
 
-        let fork_guard = protocol.expr_ctx[actions[0].guard].serialize_to_str(&protocol.expr_ctx);
-        let internal_guard =
-            protocol.expr_ctx[actions[1].guard].serialize_to_str(&protocol.expr_ctx);
+        let fork_guard = ctx[actions[0].guard].serialize_to_str(&ctx);
+        let internal_guard = ctx[actions[1].guard].serialize_to_str(&ctx);
 
         // any of the forks can trigger: (p or q or r)
         assert_eq!(fork_guard, "or(or(p, q), r)");

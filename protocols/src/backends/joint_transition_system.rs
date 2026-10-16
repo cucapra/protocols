@@ -364,12 +364,14 @@ mod tests {
             None,
         )
         .unwrap();
+        let mut ctx = sim.ctx.clone();
         let port_expr_refs = FxHashMap::from_iter(
             sim.ios()
                 .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
         );
-        let driver = build_joint_driver_automaton(protocols, &symbols, sim.ctx.clone()).unwrap();
+        let driver = build_joint_driver_automaton(&mut ctx, protocols, &symbols).unwrap();
         let mut result = into_joint_transition_system(
+            &mut ctx,
             driver,
             &symbols,
             sim.sys.clone(),
@@ -377,17 +379,15 @@ mod tests {
             port_expr_refs,
         );
 
-        assert!(result.ts.inputs.iter().all(|input| {
-            !result
-                .ctx
-                .get_symbol_name(*input)
-                .unwrap()
-                .contains("#bank")
-        }));
-        assert!(result.ts.states.iter().any(|state| {
+        assert!(
             result
-                .ctx
-                .get_symbol_name(state.symbol)
+                .ts
+                .inputs
+                .iter()
+                .all(|input| { !ctx.get_symbol_name(*input).unwrap().contains("#bank") })
+        );
+        assert!(result.ts.states.iter().any(|state| {
+            ctx.get_symbol_name(state.symbol)
                 .unwrap()
                 .contains("#bank0_add")
         }));
@@ -401,13 +401,13 @@ mod tests {
         let b = result.protocol_inputs[&(0, add.args[1].symbol())];
         let s = result.protocol_inputs[&(0, add.args[2].symbol())];
         if add_constraint {
-            let sum = result.ctx.add(a, b);
-            result.ts.constraints.push(result.ctx.equal(s, sum));
+            let sum = ctx.add(a, b);
+            result.ts.constraints.push(ctx.equal(s, sum));
         }
 
         assert_eq!(result.ts.bad_states.len(), 2);
         let mut solver = Z3.start(None).unwrap();
-        bmc(&mut result.ctx, &mut solver, &result.ts, true, false, 8).unwrap()
+        bmc(&mut ctx, &mut solver, &result.ts, true, false, 8).unwrap()
     }
 
     #[test]

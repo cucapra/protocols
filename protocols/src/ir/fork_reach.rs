@@ -188,7 +188,7 @@ mod tests {
         ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE))
     }
 
-    fn push_fork(pg: &mut ProtoGraph, node_id: NodeId) {
+    fn push_fork(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId) {
         let fork = pg.o(Op::Fork);
         pg.push_action(node_id, Action::new(ctx.get_true(), fork));
     }
@@ -198,8 +198,12 @@ mod tests {
         pg.push_action(node_id, Action::new(guard, fork));
     }
 
-    fn fork_reachability_at(pg: &mut ProtoGraph, id: NodeId) -> ForkReachability {
-        reaching_forks_from(pg, pg.entry)
+    fn fork_reachability_at(
+        ctx: &mut Context,
+        pg: &mut ProtoGraph,
+        id: NodeId,
+    ) -> ForkReachability {
+        reaching_forks_from(ctx, pg, pg.entry)
             .out_reach
             .get(&id)
             .copied()
@@ -210,16 +214,17 @@ mod tests {
     #[test]
     fn classifies_definitely_forked_after_fork() {
         let mut pg = test_graph();
+        let mut ctx = Context::default();
         let fork = pg.n(Node::empty());
         let exit = pg.n(Node::empty());
 
-        push_fork(&mut pg, fork);
+        push_fork(&mut ctx, &mut pg, fork);
         let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, fork, false));
         pg.push_transition(fork, Transition::new(true_id, exit, false));
 
         assert_eq!(
-            fork_reachability_at(&mut pg, exit),
+            fork_reachability_at(&mut ctx, &mut pg, exit),
             ForkReachability::DefinitelyForked
         );
     }
@@ -228,9 +233,10 @@ mod tests {
     // straight line code with MaybeSat fork gives "DefinitelyForked"
     fn classifies_guarded_fork_as_maybe_forked() {
         let mut pg = test_graph();
+        let mut ctx = Context::default();
         let fork = pg.n(Node::empty());
         let exit = pg.n(Node::empty());
-        let p = pg.expr_ctx.bv_symbol("p", 1);
+        let p = ctx.bv_symbol("p", 1);
 
         push_guarded_fork(&mut pg, fork, p);
         let true_id = ctx.get_true();
@@ -238,7 +244,7 @@ mod tests {
         pg.push_transition(fork, Transition::new(true_id, exit, false));
 
         assert_eq!(
-            fork_reachability_at(&mut pg, exit),
+            fork_reachability_at(&mut ctx, &mut pg, exit),
             ForkReachability::MaybeForked
         );
     }
@@ -247,13 +253,14 @@ mod tests {
     #[test]
     fn classifies_definitely_not_forked_without_fork() {
         let mut pg = test_graph();
+        let mut ctx = Context::default();
         let exit = pg.n(Node::empty());
 
         let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, exit, false));
 
         assert_eq!(
-            fork_reachability_at(&mut pg, exit),
+            fork_reachability_at(&mut ctx, &mut pg, exit),
             ForkReachability::DefinitelyNotForked
         );
     }
@@ -261,6 +268,7 @@ mod tests {
     #[test]
     fn classifies_maybe_forked_at_join() {
         let mut pg = test_graph();
+        let mut ctx = Context::default();
         let fork = pg.n(Node::empty());
         let no_fork = pg.n(Node::empty());
         let join = pg.n(Node::empty());
@@ -268,7 +276,7 @@ mod tests {
         // entry -> node with fork -> join
         // entry -> node without fork -> join
 
-        push_fork(&mut pg, fork);
+        push_fork(&mut ctx, &mut pg, fork);
         let true_id = ctx.get_true();
         pg.push_transition(pg.entry, Transition::new(true_id, fork, false));
         pg.push_transition(pg.entry, Transition::new(true_id, no_fork, false));
@@ -276,7 +284,7 @@ mod tests {
         pg.push_transition(no_fork, Transition::new(true_id, join, false));
 
         assert_eq!(
-            fork_reachability_at(&mut pg, join),
+            fork_reachability_at(&mut ctx, &mut pg, join),
             ForkReachability::MaybeForked
         );
     }
@@ -284,11 +292,12 @@ mod tests {
     #[test]
     fn transition_guard_refines_guarded_fork() {
         let mut pg = test_graph();
+        let mut ctx = Context::default();
         let fork = pg.n(Node::empty());
         let forked_exit = pg.n(Node::empty());
         let not_forked_exit = pg.n(Node::empty());
-        let p = pg.expr_ctx.bv_symbol("p", 1);
-        let not_p = pg.not_guard(p);
+        let p = ctx.bv_symbol("p", 1);
+        let not_p = pg.not_guard(&mut ctx, p);
 
         // entry -> [p] fork [p]-> forked_exit
         // entry -> [p] fork [!p]-> not-forked_exit
@@ -300,11 +309,11 @@ mod tests {
         pg.push_transition(fork, Transition::new(not_p, not_forked_exit, false));
 
         assert_eq!(
-            fork_reachability_at(&mut pg, forked_exit),
+            fork_reachability_at(&mut ctx, &mut pg, forked_exit),
             ForkReachability::DefinitelyForked
         );
         assert_eq!(
-            fork_reachability_at(&mut pg, not_forked_exit),
+            fork_reachability_at(&mut ctx, &mut pg, not_forked_exit),
             ForkReachability::DefinitelyNotForked
         );
     }

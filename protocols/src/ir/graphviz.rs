@@ -233,32 +233,33 @@ mod tests {
         let mut content = String::new();
         let module = require_single_module(modules, &[filename]).unwrap();
         let st = &symbols;
+        let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let mut ir: ProtoGraph = lower_ast_to_ir(proto_ast, st);
+            let mut ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, st);
             content += "== pre-contract ==\n";
-            content += &to_dot_string(&ir, st);
+            content += &to_dot_string(&mut ctx, &ir, st);
             content += "\n";
 
             // println!("post contract");
             let mut contracted_ir = ir.clone();
-            contract_edges(&mut contracted_ir, st);
+            contract_edges(&mut ctx, &mut contracted_ir, st);
             content += "== post-contract ==\n";
-            content += &to_dot_string(&contracted_ir, st);
+            content += &to_dot_string(&mut ctx, &contracted_ir, st);
             content += "\n";
 
             // run the reaching definitions analysis
-            let reaching_defs = reaching_definitions(&mut ir, st);
+            let reaching_defs = reaching_definitions(&mut ctx, &mut ir, st);
 
             // print post-propagation of assignments
-            propagate_assignments(&mut contracted_ir, st, &reaching_defs);
+            propagate_assignments(&mut ctx, &mut contracted_ir, st, &reaching_defs);
             content += "== post-propagation ==\n";
-            content += &to_dot_string(&ir, st);
+            content += &to_dot_string(&mut ctx, &ir, st);
             content += "\n";
 
             let mut assignment_normalized_ir = contracted_ir.clone();
-            normalize_assignments(&mut assignment_normalized_ir, st);
+            normalize_assignments(&mut ctx, &mut assignment_normalized_ir, st);
             content += "== post-normalize ==\n";
-            content += &to_dot_string(&assignment_normalized_ir, st);
+            content += &to_dot_string(&mut ctx, &assignment_normalized_ir, st);
             content += "\n";
         }
 

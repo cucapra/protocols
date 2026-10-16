@@ -423,14 +423,17 @@ mod tests {
     use std::path::Path;
     use tempfile::NamedTempFile;
 
-    fn parse_and_lower(source: &str) -> ProtoGraph {
+    fn parse_and_lower(source: &str) -> (Context, ProtoGraph) {
         let file = NamedTempFile::new().unwrap();
         std::fs::write(file.path(), source).unwrap();
 
         parse_and_lower_file(file.path(), None)
     }
 
-    fn parse_and_lower_file(path: impl AsRef<Path>, protocol_name: Option<&str>) -> ProtoGraph {
+    fn parse_and_lower_file(
+        path: impl AsRef<Path>,
+        protocol_name: Option<&str>,
+    ) -> (Context, ProtoGraph) {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
         let (st, modules) =
@@ -447,12 +450,14 @@ mod tests {
                 module.protos.into_iter().next().unwrap()
             }
         };
-        lower_ast_to_ir(proto, &st)
+        let mut ctx = Context::default();
+        let graph = lower_ast_to_ir(&mut ctx, proto, &st);
+        (ctx, graph)
     }
 
     #[test]
     fn lowers_straight_line_protocol_into_distinct_ir_nodes() {
-        let ir = parse_and_lower(
+        let (ctx, ir) = parse_and_lower(
             r#"
             struct Dummy {
               in a: u32,
@@ -478,7 +483,7 @@ mod tests {
         assert_eq!(
             entry.transitions[0],
             Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(5),
                 consumes_step: false,
                 rotations: vec![],
@@ -487,12 +492,12 @@ mod tests {
 
         let init = &ir.nodes[NodeId(5)];
         assert_eq!(init.actions.len(), 1);
-        assert_eq!(init.actions[0].guard, ir.true_id());
+        assert_eq!(init.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
         assert_eq!(
             init.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(4),
                 consumes_step: false,
                 rotations: vec![],
@@ -501,12 +506,12 @@ mod tests {
 
         let assign = &ir.nodes[NodeId(4)];
         assert_eq!(assign.actions.len(), 1);
-        assert_eq!(assign.actions[0].guard, ir.true_id());
+        assert_eq!(assign.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[assign.actions[0].op], Op::Assign(_, _)));
         assert_eq!(
             assign.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(3),
                 consumes_step: false,
                 rotations: vec![],
@@ -518,7 +523,7 @@ mod tests {
         assert_eq!(
             step.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(2),
                 consumes_step: true,
                 rotations: vec![],
@@ -527,7 +532,7 @@ mod tests {
 
         let assert_node = &ir.nodes[NodeId(2)];
         assert_eq!(assert_node.actions.len(), 1);
-        assert_eq!(assert_node.actions[0].guard, ir.true_id());
+        assert_eq!(assert_node.actions[0].guard, ctx.get_true());
         assert!(matches!(
             ir.ops[assert_node.actions[0].op],
             Op::AssertEq(_, _)
@@ -535,7 +540,7 @@ mod tests {
         assert_eq!(
             assert_node.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(1),
                 consumes_step: false,
                 rotations: vec![],
@@ -544,7 +549,7 @@ mod tests {
 
         let exit = &ir.nodes[NodeId(1)];
         assert_eq!(exit.actions.len(), 2);
-        assert_eq!(exit.actions[0].guard, ir.true_id());
+        assert_eq!(exit.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
         assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
         assert!(exit.transitions.is_empty());
@@ -552,7 +557,7 @@ mod tests {
 
     #[test]
     fn lowers_fork_into_action_and_non_step_transition() {
-        let ir = parse_and_lower(
+        let (ctx, ir) = parse_and_lower(
             r#"
             struct Dummy {
               in a: u32,
@@ -574,7 +579,7 @@ mod tests {
         assert_eq!(
             init.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(2),
                 consumes_step: false,
                 rotations: vec![],
@@ -587,7 +592,7 @@ mod tests {
         assert_eq!(
             fork.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(1),
                 consumes_step: false,
                 rotations: vec![],
@@ -603,7 +608,7 @@ mod tests {
 
     #[test]
     fn lowers_add_d1_fixture_via_parser_and_lowering() {
-        let ir = parse_and_lower_file("../tests/adders/adder_d1/add_d1.prot", Some("add"));
+        let (ctx, ir) = parse_and_lower_file("../tests/adders/adder_d1/add_d1.prot", Some("add"));
 
         assert_eq!(ir.name, "add");
         assert_eq!(ir.args.len(), 3);
@@ -615,7 +620,7 @@ mod tests {
         assert_eq!(
             entry.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(10),
                 consumes_step: false,
                 rotations: vec![],
@@ -629,7 +634,7 @@ mod tests {
         assert_eq!(
             init.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(9),
                 consumes_step: false,
                 rotations: vec![],
@@ -641,7 +646,7 @@ mod tests {
         assert_eq!(
             step.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(6),
                 consumes_step: true,
                 rotations: vec![],
@@ -654,7 +659,7 @@ mod tests {
         assert_eq!(
             fork.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(2),
                 consumes_step: false,
                 rotations: vec![],
@@ -666,7 +671,7 @@ mod tests {
         assert_eq!(
             last_step.transitions,
             vec![Transition {
-                guard: ir.true_id(),
+                guard: ctx.get_true(),
                 target: NodeId(1),
                 consumes_step: true,
                 rotations: vec![],
@@ -687,13 +692,14 @@ mod tests {
             "test".into(),
             crate::frontend::symbol::ROOT_SCOPE,
         ));
+        let mut ctx = Context::default();
         let reachable = pg.n(Node::empty());
         let unreachable = pg.n(Node::empty());
 
         let fork = pg.o(Op::Fork);
         let done = pg.o(Op::Done);
 
-        let true_id = pg.true_id();
+        let true_id = ctx.get_true();
         pg.push_action(reachable, Action::new(true_id, fork));
         pg.push_action(unreachable, Action::new(true_id, done));
         pg.push_transition(pg.entry, Transition::new(true_id, reachable, false));
@@ -701,7 +707,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable();
+        pg.garbage_collect_unreachable(&mut ctx);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);
