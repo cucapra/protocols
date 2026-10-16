@@ -173,7 +173,7 @@ fn lower_joint_core(
                 other => panic!("unsupported joint-driver argument type {other:?}"),
             };
             let input = ctx.bv_symbol(&format!("joint.{name}_{}", protocol.name), width);
-            ts.add_input(&ctx, input);
+            ts.add_input(ctx, input);
             protocol_inputs.insert((protocol_id, symbol), input);
         }
     }
@@ -193,7 +193,7 @@ fn lower_joint_core(
             driver.protocols.len(),
         );
         let selected_valid = ctx.and(valid, selected);
-        let head_width = heads[protocol_id].get_bv_type(&ctx).unwrap();
+        let head_width = heads[protocol_id].get_bv_type(ctx).unwrap();
         let mut selected_bank = ctx.bit_vec_val(0, head_width);
         for (&node, slots) in &driver.choice_slots {
             let slot = slots[protocol_id];
@@ -231,7 +231,7 @@ fn lower_joint_core(
                 };
                 let old = ctx.bv_symbol(&format!("joint.{name}#{slot}_{}", protocol.name), width);
                 let mut read = ctx.zero(width as WidthInt);
-                let head_width = heads[protocol_id].get_bv_type(&ctx).unwrap();
+                let head_width = heads[protocol_id].get_bv_type(ctx).unwrap();
                 for head_value in 0..driver.bank_counts[protocol_id] {
                     let bank = (head_value + slot) % driver.bank_counts[protocol_id];
                     let stored = bank_states[protocol_id][bank][arg_index];
@@ -247,7 +247,7 @@ fn lower_joint_core(
     }
 
     for (protocol_id, banks) in bank_states.iter().enumerate() {
-        let head_width = heads[protocol_id].get_bv_type(&ctx).unwrap();
+        let head_width = heads[protocol_id].get_bv_type(ctx).unwrap();
         let zero = ctx.bit_vec_val(0, head_width);
         let mut head_next = heads[protocol_id];
         for node in &core.reachable_nodes {
@@ -273,7 +273,7 @@ fn lower_joint_core(
             }
         }
         ts.add_state(
-            &ctx,
+            ctx,
             State {
                 symbol: heads[protocol_id],
                 init: Some(zero),
@@ -286,7 +286,7 @@ fn lower_joint_core(
                 let symbol = driver.protocols[protocol_id].args[arg_index].symbol();
                 let input = protocol_inputs[&(protocol_id, symbol)];
                 let next = ctx.ite(capture[protocol_id][bank], input, *state_arg);
-                let init = ctx.zero(state_arg.get_bv_type(&ctx).unwrap());
+                let init = ctx.zero(state_arg.get_bv_type(ctx).unwrap());
                 ts.add_state(
                     ctx,
                     State {

@@ -692,7 +692,7 @@ mod tests {
             "test".into(),
             crate::frontend::symbol::ROOT_SCOPE,
         ));
-        let mut ctx = Context::default();
+        let ctx = Context::default();
         let reachable = pg.n(Node::empty());
         let unreachable = pg.n(Node::empty());
 
@@ -707,7 +707,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable(&mut ctx);
+        pg.garbage_collect_unreachable(&ctx);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);

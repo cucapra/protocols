@@ -155,7 +155,7 @@ fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[T
                 .map(|(arg, value)| (symbols[arg.symbol()].name(), value.clone()))
                 .collect();
 
-            let result = graph_interpreter::interpret(&mut ctx, &graph, symbols, args, &mut dut);
+            let result = graph_interpreter::interpret(&ctx, &graph, symbols, args, &mut dut);
             if let Some(failure) = result.failure {
                 print_graph_failure(&failure, cli.brief_graph_errors);
                 failed = true;
@@ -177,7 +177,7 @@ fn run_trace_graph(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[
         let mut dut = build_dut(&mut ctx, cli, module);
         let graph = prepare_trace_graph(&mut ctx, cli, symbols, &protocols, trace, trace_index);
         let result =
-            graph_interpreter::interpret(&mut ctx, &graph, symbols, FxHashMap::default(), &mut dut);
+            graph_interpreter::interpret(&ctx, &graph, symbols, FxHashMap::default(), &mut dut);
         if let Some(failure) = result.failure {
             print_graph_failure(&failure, cli.brief_graph_errors);
         } else {
@@ -359,7 +359,7 @@ fn run_bounded_driver(
         graph.garbage_collect_unreachable(&ctx);
         graph = determinized(&mut ctx, graph, symbols);
         if cli.graphout {
-            println!("{}", to_dot_string(&mut ctx, &graph, symbols));
+            println!("{}", to_dot_string(&ctx, &graph, symbols));
         }
         let result = into_bmc_transition_system(
             &mut ctx,
@@ -374,7 +374,7 @@ fn run_bounded_driver(
         let protocol_inputs = result.protocol_inputs;
         let protocol_choices = result.protocol_choices;
         simulate_transition_system(
-            &mut ctx,
+            &ctx,
             cli,
             trace_index,
             &dut,
@@ -438,7 +438,7 @@ fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, trace
         let driver = build_joint_driver_automaton(&mut ctx, used_protocols, symbols)
             .unwrap_or_else(|error| panic!("failed to build joint driver: {error}"));
         if cli.graphout {
-            println!("{}", to_dot_string(&mut ctx, &driver.graph, symbols));
+            println!("{}", to_dot_string(&ctx, &driver.graph, symbols));
         }
         let result = into_joint_transition_system(
             &mut ctx,
@@ -455,7 +455,7 @@ fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, trace
         let transaction_ready = result.transaction_ready;
         let mut transaction_index = 0;
         simulate_transition_system(
-            &mut ctx,
+            &ctx,
             cli,
             trace_index,
             &dut,

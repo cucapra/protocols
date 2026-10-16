@@ -154,7 +154,7 @@ mod tests {
             .map(|protocol| {
                 let mut graph = lower_ast_to_ir(&mut ctx, protocol, &symbols);
                 contract_edges(&mut ctx, &mut graph, &symbols);
-                graph.garbage_collect_unreachable(&mut ctx);
+                graph.garbage_collect_unreachable(&ctx);
                 graph
             })
             .collect();
@@ -206,7 +206,7 @@ mod tests {
             assert_timing(&mut ctx, graph, Some(vec![1]), 0);
         }
 
-        let meta = steady_driver_meta_from_protocols(&mut ctx, &graphs);
+        let meta = steady_driver_meta_from_protocols(&ctx, &graphs);
         assert!(
             meta.nodes
                 .iter()

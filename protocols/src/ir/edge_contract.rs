@@ -697,7 +697,7 @@ mod tests {
     }
 
     fn expr_str(ctx: &Context, expr: ExprRef) -> String {
-        expr.serialize_to_str(&ctx)
+        expr.serialize_to_str(ctx)
     }
 
     #[test]
@@ -713,9 +713,9 @@ mod tests {
 
         let concrete_op = protocol.o(Op::Assign(
             symbol_id,
-            concrete_assignment(&mut ctx, concrete),
+            concrete_assignment(&ctx, concrete),
         ));
-        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&mut ctx)));
+        let dont_care_op = protocol.o(Op::Assign(symbol_id, dont_care_assignment(&ctx)));
         let mut actions = vec![Action::new(ctx.get_true(), concrete_op)];
         let mut internal_assert_guard = None;
         let true_id = ctx.get_true();
@@ -738,7 +738,7 @@ mod tests {
         let Op::Assign(_, assignment) = protocol[actions[0].op].clone() else {
             panic!("expected assignment");
         };
-        assert_eq!(expr_str(&mut ctx, assignment.dont_care), "1'b1");
+        assert_eq!(expr_str(&ctx, assignment.dont_care), "1'b1");
         assert_eq!(assignment.concretes, vec![(ctx.get_true(), concrete)]);
     }
 

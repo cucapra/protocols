@@ -200,7 +200,7 @@ pub fn lower_proto_graph_to_transition_system(
 ) -> CoreLoweredSystem {
     let mut is_dont_care = FxHashMap::default();
     for &dont_care in &pg.dont_cares {
-        ts.add_input(&ctx, dont_care);
+        ts.add_input(ctx, dont_care);
     }
     bind_proto_graph_ports_to_dut(ctx, &mut pg, &symbol_to_port, &port_to_expr);
 
@@ -321,7 +321,7 @@ pub fn lower_proto_graph_to_transition_system(
 
         let dont_care_name = format!("dont_care.{}", st.full_name_from_symbol_id(&input));
         let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
-        ts.add_input(&ctx, input_dont_care);
+        ts.add_input(ctx, input_dont_care);
 
         let input_port = *symbol_to_port.get(&input).unwrap();
         let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
@@ -420,7 +420,7 @@ pub fn lower_proto_graph_to_transition_system(
         .push(ctx.equal(node_sym, external_bad_state_id));
     ts.bad_states
         .push(ctx.equal(node_sym, internal_bad_state_id));
-    ts.add_state(&ctx, node_state);
+    ts.add_state(ctx, node_state);
 
     CoreLoweredSystem {
         ts,

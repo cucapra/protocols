@@ -183,7 +183,7 @@ fn evaluate_input_value(
         return InputValue::DontCare;
     }
 
-    match eval_expr(&ctx, store, expr_ref).try_into() {
+    match eval_expr(ctx, store, expr_ref).try_into() {
         Ok::<BitVecValue, _>(bvv) => InputValue::Concrete(bvv),
         Err(_) => panic!("assignment rhs did not evaluate to a bit-vector"),
     }
@@ -221,8 +221,8 @@ fn evaluate_assert_equal(
         return Err("assert_eq on DontCare".to_string());
     }
 
-    let lhs = eval_expr(&ctx, store, lhs);
-    let rhs = eval_expr(&ctx, store, rhs);
+    let lhs = eval_expr(ctx, store, lhs);
+    let rhs = eval_expr(ctx, store, rhs);
     match (lhs, rhs) {
         (BaaValue::BitVec(lhs), BaaValue::BitVec(rhs)) => {
             assert_eq!(lhs.width(), rhs.width(), "assert_eq width mismatch");
