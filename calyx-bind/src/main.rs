@@ -88,12 +88,17 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         assert_eq!(&shape.fragment, *graph);
     }
 
-    // generate unbounded driver
-    let op_width = if methods.len() <= 1 {
-        1
-    } else {
-        usize::BITS - (methods.len() - 1).leading_zeros()
-    };
+    // guard method starts
+    let op_width = std::cmp::max(1, usize::BITS - (methods.len() - 1).leading_ones());
+    let op = ctx.bv_symbol("op", op_width);
+    let go = ctx.bv_symbol("go", 1);
+
+    for (idx, graph) in methods.iter().enumerate() {
+        let idx = ctx.bit_vec_val(idx, op_width);
+        let selected = ctx.equal(op, idx);
+        let selected_and_go = and(&mut ctx, go, selected);
+        add_guard(&mut ctx, &mut lowerer.ir, graph.entry, selected_and_go);
+    }
 
     for (graph, method) in methods.iter().zip(m.protos.iter()) {
         println!("{}", method.name);
@@ -107,7 +112,10 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
 fn add_guard(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId, guard: ExprRef) {
     let node = &mut pg[node_id];
     for tran in node.transitions.iter_mut() {
-        tran.guard = ctx.and(tran.guard, guard);
+        tran.guard = and(ctx, tran.guard, guard);
+    }
+    for act in node.actions.iter_mut() {
+        act.guard = and(ctx, act.guard, guard);
     }
 }
 
