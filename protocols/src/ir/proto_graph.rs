@@ -10,7 +10,7 @@ use patronus::expr::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
-use std::ops::{Deref, DerefMut, Index};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
@@ -436,6 +436,12 @@ impl Index<NodeId> for ProtoGraph {
 
     fn index(&self, index: NodeId) -> &Self::Output {
         &self.nodes[index]
+    }
+}
+
+impl IndexMut<NodeId> for ProtoGraph {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        &mut self.nodes[index]
     }
 }
 
