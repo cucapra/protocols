@@ -226,6 +226,13 @@ impl From<Vec<BitVecValue>> for SymSeqValue {
     }
 }
 
+impl From<Vec<BitVecValue>> for SymTupleValue {
+    fn from(value: Vec<BitVecValue>) -> Self {
+        let components = value.into_iter().map(|e| e.into()).collect();
+        Self::new(components)
+    }
+}
+
 impl TryFrom<SymSeqValue> for Vec<BitVecValue> {
     type Error = ();
 
@@ -276,8 +283,7 @@ impl From<Value> for SymValue {
         match value.0 {
             ValueKind::Scalar(v) => Self(SymValueKind::Scalar(v.into())),
             ValueKind::Seq(v) => Self(SymValueKind::Seq(v.into())),
-            ValueKind::Tuple(_) => {
-                todo!("Convert ValueKind::Tuple to a new SymValueKind constructor")
+            ValueKind::Tuple(v) => {Self(SymValueKind::Tuple(v.into()))
             }
         }
     }

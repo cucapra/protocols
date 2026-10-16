@@ -31,7 +31,9 @@ impl ArgValue {
                     )
                 }
             }
-            Type::Tuple(_) => todo!("Handle tuples in BI constraints"),
+            Type::Tuple(tuple_id) => {
+                todo!("Handle tuples in BI constraints")
+            },
             Type::Struct(_) => unreachable!("args cannot be structs"),
             Type::Unknown => unreachable!("arg types are always known"),
         }
@@ -41,7 +43,7 @@ impl ArgValue {
         match self {
             ArgValue::Seq(s) => s.get_known().map(|v| v.into()),
             ArgValue::Data(d) => d.get_known().map(|v| v.into()),
-            ArgValue::Tuple(t) => t.get_known().map(|v| v.into()),
+            ArgValue::Tuple(t) => t.get_known(),
         }
     }
 
@@ -56,6 +58,14 @@ impl ArgValue {
     pub fn as_seq(&self) -> Option<&SeqValue> {
         if let Self::Seq(v) = self {
             Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_tuple(&self) -> Option<&TupleValue> {
+        if let Self::Tuple(t) = self {
+            Some(t)
         } else {
             None
         }
@@ -169,8 +179,31 @@ pub struct TupleValue {
 }
 
 impl TupleValue {
-    pub fn get_known(&self) -> Option<BitVecValue> {
-        todo!()
+    // Similar to SeqValue::get_known (returns `Some` only when all the components of the tuple are known)
+    pub fn get_known(&self) -> Option<Value> {
+        let known_values = self
+            .components
+            .iter()
+            .map(|v| v.get_known())
+            .collect::<Vec<_>>();
+        if known_values.iter().all(|bvv| bvv.is_some()) {
+            Some(Value::new_tuple(
+                known_values.into_iter().map(|e| e.unwrap()).collect(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Projects out the `i`-th component of a `TupleValue`
+    pub fn project_tuple_component(&self, idx: u32) -> Option<&DataValue> {
+        self.components.get(idx as usize)
+    }
+
+    /// Defines the bits of the value at the `i`-th component of the tuple,
+    /// starting from the `lsb` to the `(value.width - 1)`-th bit
+    pub fn define_bits_at(&mut self, index: u64, value: BitVecValue, lsb: u32) {
+        self.components[index as usize].define_bits(value, lsb);
     }
 }
 

@@ -864,10 +864,24 @@ impl Thread {
             }
             (ExprValue::UnknownArg(arg_id, Some(index), _msb, lsb), ExprValue::Known(value))
             | (ExprValue::Known(value), ExprValue::UnknownArg(arg_id, Some(index), _msb, lsb)) => {
-                self.arg_values[arg_id]
-                    .as_seq_mut()
-                    .expect("assignments/assert_eq must involve data values (bit vectors)!")
-                    .define_bits_at(index, value, lsb);
+                match self.arg_values[arg_id].clone() {
+                    ArgValue::Seq(mut seq_value) => {
+                        seq_value.define_bits_at(index, value, lsb);
+                    }
+                    ArgValue::Tuple(mut tuple_value) => {
+                        tuple_value.define_bits_at(index, value, lsb);
+                    }
+                    ArgValue::Data(_) => {
+                        let arg_name = ti.sym[ti.proto.args[arg_id].symbol()].name();
+                        panic!(
+                            "Expected an equality between a value {} and the {}-th component of some sequence/tuple-typed variable {}, a value, but {} is a scalar and not a seq/tuple",
+                            value.to_bit_str(),
+                            index,
+                            arg_name,
+                            arg_name
+                        )
+                    }
+                }
                 None
             }
             (a, b) => panic!(
@@ -982,6 +996,36 @@ impl Thread {
                 }
                 other => other,
             },
+            Expr::TupleProj(e, idx) => {
+                // We can only project from a protocol argument,
+                // so `e` should be a symbol
+                match &ti.proto[e] {
+                    Expr::Sym(symbol_id) => {
+                        if ti.sym[symbol_id].is_arg() {
+                            let arg_index = sym_as_arg(&ti.proto, *symbol_id).unwrap().0;
+                            let tuple_value = self.arg_values[arg_index]
+                                .as_tuple()
+                                .expect("only tuple-typed arguments should ever be evaluated");
+                            let component_value = tuple_value.project_tuple_component(*idx).expect(
+                                "Tried to project from a tuple with an out-of-bounds index",
+                            );
+                            component_value.get_known().map(ExprValue::Known).unwrap_or(
+                                ExprValue::UnknownArg(
+                                    arg_index,
+                                    None,
+                                    component_value.width() - 1,
+                                    0,
+                                ),
+                            )
+                        } else {
+                            todo!(
+                                "Throw error in BI when we are projecting from a symbol that's not a protocol argument"
+                            )
+                        }
+                    }
+                    _ => todo!("Throw error in BI when we try to project from a non-argument"),
+                }
+            }
             Expr::IsLastIteration => {
                 // The iter_count is the number of _completed_ iterations.
                 // So, on the first iteration: `iter_count == 0`
@@ -1029,16 +1073,6 @@ impl Thread {
                 let value = BitVecValue::from_u64(*iter_count & mask, *width);
                 ExprValue::Known(value)
             }
-            Expr::TupleProj(expr_id, idx) => {
-                // match self.eval_expr(get_value, ti, expr) {
-                //     ExprValue::Known(bit_vec_value) => todo!(),
-                //     ExprValue::DontCare => todo!(),
-                //     ExprValue::Unknown => todo!(),
-                //     ExprValue::UnknownArg(_, _, _, _) => todo!(),
-                //     ExprValue::DependsOnIsLast(stmt_id) => todo!(),
-                // }
-                todo!("handle tuple projections in Thread::eval_expr")
-            }
         }
     }
 }
@@ -1058,7 +1092,7 @@ enum ExprValue {
     Known(BitVecValue),
     DontCare,
     Unknown,
-    /// arg_id, optional index for sequence args, msb, lsb
+    /// arg_id, optional index for sequence/tuple args, msb, lsb
     UnknownArg(usize, Option<u64>, u32, u32),
     DependsOnIsLast(StmtId),
 }
