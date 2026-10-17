@@ -3,10 +3,10 @@
 // author: Kevin Laeufer <laeufer@cornell.edu>
 // author: Ernest Ng <eyn5@cornell.edu>
 
-use crate::frontend::Module;
-use crate::frontend::ast::Clock;
-use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::Instance;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue, BitVecValueRef, WidthInt};
+use protocols::frontend::Module;
+use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -61,124 +61,6 @@ pub enum WaveSamplingMode {
     /// Interpret every time step as a new clock step. This generally only works
     /// for waveforms produced by the Patronus simulator.
     Direct,
-}
-
-/// A waveform hierarchy instance associated with one protocol module.
-#[derive(Debug, Clone)]
-pub struct Instance {
-    pub name: String,
-    pub module_id: usize,
-}
-
-impl Instance {
-    pub fn parse(modules: &[Module], arg: &str) -> Result<Self, String> {
-        let (name, module) = arg
-            .split_once(':')
-            .ok_or_else(|| format!("unexpected instance argument: {arg}"))?;
-        let module_id = modules
-            .iter()
-            .position(|m| m.name == module)
-            .ok_or_else(|| {
-                format!(
-                    "Unknown design {module} for instance {name}. Did you mean {}?",
-                    collects_module_names(modules)
-                )
-            })?;
-        Ok(Self {
-            name: name.to_string(),
-            module_id,
-        })
-    }
-}
-
-pub fn collects_module_names(modules: &[Module]) -> String {
-    let mut names = modules.iter().map(|m| m.name.clone()).collect::<Vec<_>>();
-    names.sort();
-    names.join(", ")
-}
-
-/// Combine protocol clocks with the optional waveform clock override.
-pub fn sampling_mode(
-    modules: &[Module],
-    instances: &[Instance],
-    posedge: Option<String>,
-) -> Result<WaveSamplingMode, String> {
-    let full_name = |instance: &Instance, name: &str| {
-        if instance.name.is_empty() {
-            name.to_string()
-        } else {
-            format!("{}.{name}", instance.name)
-        }
-    };
-    let mut clocks = instances
-        .iter()
-        .filter_map(|instance| match &modules[instance.module_id].clock {
-            Clock::None => None,
-            Clock::PosEdge(name) => Some(Clock::PosEdge(full_name(instance, name))),
-            Clock::NegEdge(name) => Some(Clock::NegEdge(full_name(instance, name))),
-        })
-        .collect::<Vec<_>>();
-    if let Some(name) = posedge {
-        clocks.push(Clock::PosEdge(name));
-    }
-    clocks.sort();
-    clocks.dedup();
-    match clocks.as_slice() {
-        [] => Ok(WaveSamplingMode::Direct),
-        [Clock::PosEdge(name)] => Ok(WaveSamplingMode::RisingEdge(name.clone())),
-        [Clock::NegEdge(name)] => Ok(WaveSamplingMode::FallingEdge(name.clone())),
-        other => Err(format!("Too many clocks: {other:?}")),
-    }
-}
-
-/// Common reader for waveform dumps and the repository's ASCII sample format.
-pub enum WaveformTrace {
-    Dump(Box<WaveSignalTrace>),
-    Ascii(AsciWaveTrace),
-}
-
-impl WaveformTrace {
-    pub fn open(
-        filename: impl AsRef<std::path::Path>,
-        symbols: &SymbolTable,
-        modules: &[Module],
-        instances: &[Instance],
-        sampling: WaveSamplingMode,
-        force_x_to_zero: bool,
-    ) -> Result<Self, String> {
-        match WaveSignalTrace::open(
-            &filename,
-            symbols,
-            modules,
-            instances,
-            sampling,
-            force_x_to_zero,
-        ) {
-            Ok(trace) => Ok(Self::Dump(Box::new(trace))),
-            Err(_) => AsciWaveTrace::open(filename, modules, instances, force_x_to_zero)
-                .map(Self::Ascii)
-                .map_err(|error| error.to_string()),
-        }
-    }
-}
-
-impl SignalTrace for WaveformTrace {
-    fn stream_steps(
-        &mut self,
-        callback: impl FnMut(u32, SignalValues) -> CallbackResult,
-    ) -> Result<(), String> {
-        match self {
-            Self::Dump(trace) => trace.stream_steps(callback),
-            Self::Ascii(trace) => trace.stream_steps(callback),
-        }
-    }
-
-    fn step_to_time(&self) -> StepToTime {
-        match self {
-            Self::Dump(trace) => trace.step_to_time(),
-            Self::Ascii(trace) => trace.step_to_time(),
-        }
-    }
 }
 
 /// A `WaveSamplingMode` with the clock name replaced by its `SignalRef`.
@@ -518,8 +400,8 @@ impl SignalTrace for WaveSignalTrace {
                             let all_x_or_z =
                                 value.bit_string().chars().all(|c| c == 'x' || c == 'z');
                             if !all_x_or_z {
-                                eprintln!("WARN: encountered a mixed value. Randomizing all bits.");
-                                eprintln!("{}@{step_id}={}", self.names[idx], value.bit_string());
+                                println!("WARN: encountered a mixed value. Randomizing all bits.");
+                                println!("{}@{step_id}={}", self.names[idx], value.bit_string());
                             }
                             // randomize
                             let width = widths[idx];

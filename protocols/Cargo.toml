@@ -9,7 +9,6 @@ license.workspace = true
 [dependencies]
 rustc-hash.workspace = true
 rand.workspace = true
-wellen.workspace = true
 log.workspace = true
 baa.workspace = true
 patronus.workspace = true

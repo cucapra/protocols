@@ -246,7 +246,7 @@ impl BackwardsInterpreter {
 
     /// Called after the last step.
     pub fn finish(&mut self) {
-        debug_assert!(matches!(self.state, BIState::Ready | BIState::AtEndOfStep));
+        debug_assert!(matches!(self.state, BIState::AtEndOfStep));
         if self.include_in_progress {
             // at the end of the trace, we add unfinished transactions to the trace
             for path in self.next.iter() {
