@@ -14,6 +14,7 @@ pub mod interpreter;
 pub mod ir;
 pub mod scheduler;
 pub mod transactions;
+pub mod waveform;
 mod value;
 mod yosys;
 

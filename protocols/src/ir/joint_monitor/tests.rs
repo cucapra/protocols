@@ -92,12 +92,17 @@ use baa::{BitVecOps, BitVecValue};
 use patronus::expr::{eval_bv_expr, find_symbols};
 
 fn from_source(source: &str) -> (Vec<Protocol>, SymbolTable) {
+    let (module, symbols) = module_from_source(source);
+    (module.protos, symbols)
+}
+
+fn module_from_source(source: &str) -> (crate::frontend::Module, SymbolTable) {
     let file = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(file.path(), source).unwrap();
     let mut handler = DiagnosticHandler::default();
     let (symbols, modules) = frontend(&[file.path()], &mut handler, true, false).unwrap();
     let module = require_single_module(modules, &[file.path()]).unwrap();
-    (module.protos, symbols)
+    (module, symbols)
 }
 
 struct Execution {
@@ -797,5 +802,432 @@ fn constraints_are_lowered_before_composition_and_overlap_failures_reach_bad_sta
                 assert_eq!(execution.node == monitor.bad_state, !expected);
             }
         }
+    }
+}
+
+#[test]
+fn banked_system_matches_graph_state_through_reuse_and_failures() {
+    use crate::backends::monitor_transition_system::into_monitor_transition_system;
+    use patronus::sim::{InitKind, Interpreter, Simulator};
+
+    let (module, mut symbols) = module_from_source(PARTIAL_PIPELINE);
+    let mut ctx = Context::default();
+    let sources = prepare_joint_protocols(&mut ctx, &module.protos, &symbols).unwrap();
+    let naive = sources
+        .into_iter()
+        .map(|source| convert_driver_to_monitor(&mut ctx, source, &mut symbols).unwrap())
+        .collect();
+    let naive =
+        compose_joint_monitor_automaton(&mut ctx, module.protos.clone(), naive, &mut symbols)
+            .unwrap();
+    let optimized =
+        build_joint_monitor_automaton(&mut ctx, module.protos.clone(), &mut symbols).unwrap();
+    for monitor in [&naive, &optimized] {
+        let lowered = into_monitor_transition_system(&mut ctx, monitor, &module, &symbols);
+        assert_eq!(lowered.ts.inputs.len(), module.pins.len());
+        assert_eq!(monitor.control.bank_counts, vec![3, 1]);
+        let declared = lowered
+            .ts
+            .inputs
+            .iter()
+            .copied()
+            .chain(lowered.ts.states.iter().map(|s| s.symbol))
+            .collect::<FxHashSet<_>>();
+        for state in &lowered.ts.states {
+            for expr in [state.init, state.next].into_iter().flatten() {
+                assert!(
+                    find_symbols(&ctx, expr)
+                        .into_iter()
+                        .all(|s| declared.contains(&s)),
+                    "all state expressions must be bound"
+                );
+            }
+        }
+        // Change either bit of a final observation after repeated head wraparound.
+        // A low-bit change is unconstrained when g was false for that transaction.
+        for mutation in [None, Some(1), Some(2)] {
+            let mut graph = Execution::new(&ctx, monitor);
+            let mut simulator = Interpreter::new(&ctx, &lowered.ts);
+            simulator.init(InitKind::Zero);
+            assert_eq!(
+                simulator.get(lowered.bad),
+                baa::Value::BitVec(BitVecValue::new_false())
+            );
+            for cycle in 0..14 {
+                let g = cycle % 2 == 0;
+                let a = cycle % 4;
+                let b = if cycle == 0 {
+                    0
+                } else {
+                    ((cycle - 1) % 4) >> 1
+                };
+                let mut c = if cycle < 2 { 0 } else { (cycle - 2) % 4 };
+                if cycle == 11 {
+                    c ^= mutation.unwrap_or(0);
+                }
+                let inputs = [
+                    ("start", u64::from(cycle < 12)),
+                    ("g", u64::from(g)),
+                    ("a", a & 1),
+                    ("b", b),
+                    ("c", c),
+                ];
+                for (&pin, &input) in &lowered.pin_inputs {
+                    let value = inputs
+                        .iter()
+                        .find(|(name, _)| *name == symbols[pin].name())
+                        .unwrap()
+                        .1;
+                    simulator.set(
+                        input,
+                        &BitVecValue::from_u64(value, input.get_bv_type(&ctx).unwrap()),
+                    );
+                }
+                let survived = graph.sample(&ctx, monitor, &symbols, &inputs);
+                simulator.step();
+                assert_eq!(
+                    simulator.get(lowered.internal_error),
+                    baa::Value::BitVec(BitVecValue::new_false())
+                );
+                assert_eq!(
+                    simulator.get(lowered.node_symbol),
+                    baa::Value::BitVec(BitVecValue::from_u64(
+                        u64::from(graph.node.as_u32()),
+                        lowered.node_symbol.get_bv_type(&ctx).unwrap()
+                    ))
+                );
+                assert_eq!(
+                    simulator.get(lowered.bad),
+                    baa::Value::BitVec(BitVecValue::from_u64(u64::from(!survived), 1))
+                );
+                if !survived {
+                    continue;
+                }
+                for instance in &monitor.control.instances[&graph.node] {
+                    if instance.starts {
+                        continue;
+                    }
+                    let owner = (instance.protocol, instance.slot);
+                    let registers = monitor
+                        .value_registers
+                        .iter()
+                        .chain(&monitor.knownness_registers)
+                        .filter(|(key, _)| (key.0, key.1) == owner)
+                        .map(|(_, register)| *register)
+                        .chain([monitor.live_registers[&owner]]);
+                    for register in registers {
+                        let expected =
+                            &graph.values[&monitor.control.graph.symbol_expr(register).unwrap()];
+                        assert_eq!(
+                            simulator.get(lowered.register_reads[&register]),
+                            baa::Value::BitVec(expected.clone()),
+                            "register {register} at sample {cycle}"
+                        );
+                    }
+                }
+                for (parameter, &expr) in &monitor.knownness_outputs[&graph.node] {
+                    assert_eq!(
+                        simulator.get(lowered.knownness_outputs[parameter]),
+                        baa::Value::BitVec(eval_bv_expr(&ctx, &graph.values, expr))
+                    );
+                }
+            }
+            // Transaction nine had g=false: bit zero is newly learned, but bit
+            // one must match its earlier observation. No dummy EOF step needed.
+            assert_eq!(graph.node == monitor.bad_state, mutation == Some(2));
+        }
+    }
+}
+
+#[test]
+fn transition_system_preserves_wide_values_and_checks_the_last_sample() {
+    use crate::backends::monitor_transition_system::into_monitor_transition_system;
+    use baa::BitVecMutOps;
+    use patronus::sim::{InitKind, Interpreter, Simulator};
+
+    let (module, mut symbols) = module_from_source(
+        r#"
+        struct Dut { in a: u130, out b: u130, out unused: u1, }
+        prot observe<DUT: Dut>(p: u130) {
+            DUT.a := p; step();
+            DUT.a := X; assert_eq(p, DUT.b); step();
+        }
+    "#,
+    );
+    let mut ctx = Context::default();
+    let monitor =
+        build_joint_monitor_automaton(&mut ctx, module.protos.clone(), &mut symbols).unwrap();
+    let lowered = into_monitor_transition_system(&mut ctx, &monitor, &module, &symbols);
+    assert_eq!(
+        lowered.ts.inputs.len(),
+        3,
+        "include unused pins and both DUT directions"
+    );
+    let input = |name: &str| {
+        lowered
+            .pin_inputs
+            .iter()
+            .find(|(pin, _)| symbols[**pin].name() == name)
+            .unwrap()
+            .1
+    };
+    let mut value = BitVecValue::from_u64(3, 130);
+    value.set_bit(129);
+    for mismatch in [false, true] {
+        let mut sim = Interpreter::new(&ctx, &lowered.ts);
+        sim.init(InitKind::Zero);
+        let is_bad =
+            |sim: &Interpreter| sim.get(lowered.bad) == baa::Value::BitVec(BitVecValue::new_true());
+        assert!(!is_bad(&sim), "empty prefix is admissible");
+        sim.set(*input("a"), &value);
+        sim.step();
+        assert!(!is_bad(&sim), "unfinished prefix is admissible");
+        let observed = if mismatch {
+            BitVecValue::from_u64(3, 130)
+        } else {
+            value.clone()
+        };
+        sim.set(*input("b"), &observed);
+        sim.step();
+        assert_eq!(
+            is_bad(&sim),
+            mismatch,
+            "the last real sample decides failure"
+        );
+        if mismatch {
+            sim.set(*input("b"), &value);
+            sim.step();
+            assert!(is_bad(&sim), "bad state is absorbing");
+        }
+    }
+}
+
+#[test]
+fn transition_system_overlap_checks_match_the_independent_oracle() {
+    use crate::backends::monitor_transition_system::into_monitor_transition_system;
+    use patronus::sim::{InitKind, Interpreter, Simulator};
+
+    let (module, mut symbols) = module_from_source(
+        r#"
+        struct Dut { in a: u3, in b: u3, }
+        prot overlap<DUT: Dut>(p: u5) { DUT.a := p[3:1]; DUT.b := p[4:2]; step(); }
+    "#,
+    );
+    let mut ctx = Context::default();
+    for optimize in [false, true] {
+        let monitor = if optimize {
+            build_joint_monitor_automaton(&mut ctx, module.protos.clone(), &mut symbols).unwrap()
+        } else {
+            let sources = prepare_joint_protocols(&mut ctx, &module.protos, &symbols).unwrap();
+            let monitors = sources
+                .into_iter()
+                .map(|source| convert_driver_to_monitor(&mut ctx, source, &mut symbols).unwrap())
+                .collect();
+            compose_joint_monitor_automaton(&mut ctx, module.protos.clone(), monitors, &mut symbols)
+                .unwrap()
+        };
+        let lowered = into_monitor_transition_system(&mut ctx, &monitor, &module, &symbols);
+        for a in 0..8 {
+            for b in 0..8 {
+                let mut sim = Interpreter::new(&ctx, &lowered.ts);
+                sim.init(InitKind::Zero);
+                for (&pin, &input) in &lowered.pin_inputs {
+                    let value = if symbols[pin].name() == "a" { a } else { b };
+                    sim.set(input, &BitVecValue::from_u64(value, 3));
+                }
+                sim.step();
+                assert_eq!(
+                    sim.get(lowered.bad),
+                    baa::Value::BitVec(BitVecValue::from_u64(u64::from(a >> 1 != b & 3), 1))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn transition_system_internal_errors_are_distinct_from_mismatches() {
+    use crate::backends::monitor_transition_system::into_monitor_transition_system;
+    use patronus::sim::{InitKind, Interpreter, Simulator};
+
+    let (module, mut symbols) =
+        module_from_source("struct Dut { in a: u1, } prot idle<DUT: Dut>() { step(); }");
+    let mut ctx = Context::default();
+    for explicit_error in [false, true] {
+        let mut monitor =
+            build_joint_monitor_automaton(&mut ctx, module.protos.clone(), &mut symbols).unwrap();
+        let entry = monitor.control.graph.entry;
+        if explicit_error {
+            let op = monitor.control.graph.o(Op::InternalAssertFalse);
+            monitor
+                .control
+                .graph
+                .push_action(entry, Action::new(ctx.get_true(), op));
+        } else {
+            monitor.control.graph.node_mut(entry).transitions.clear();
+        }
+        let lowered = into_monitor_transition_system(&mut ctx, &monitor, &module, &symbols);
+        let mut sim = Interpreter::new(&ctx, &lowered.ts);
+        sim.init(InitKind::Zero);
+        for _ in 0..2 {
+            sim.step();
+            assert_eq!(
+                sim.get(lowered.internal_error),
+                baa::Value::BitVec(BitVecValue::new_true())
+            );
+            assert_eq!(
+                sim.get(lowered.bad),
+                baa::Value::BitVec(BitVecValue::new_false())
+            );
+        }
+    }
+}
+
+#[test]
+fn pipelined_wishbone_supports_contracted_fork_paths() {
+    let (protocols, mut symbols) = selected(
+        "../examples/wishbone/wishbone_pipelined.prot",
+        &[
+            "reset",
+            "idle_no_cycle",
+            "idle_continue_cycle",
+            "write",
+            "read",
+        ],
+    );
+    let mut ctx = Context::default();
+    let driver = build_joint_driver_automaton(&mut ctx, protocols.clone(), &symbols).unwrap();
+    let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
+    assert_eq!(driver.choice_guards, monitor.control.choice_guards);
+    assert_eq!(driver.bank_counts, monitor.control.bank_counts);
+    assert!(
+        monitor
+            .control
+            .choice_guards
+            .values()
+            .any(|&guard| guard != ctx.get_true())
+    );
+}
+
+#[test]
+fn unequal_fork_tails_are_rejected_by_driver_and_monitor_before_retirement() {
+    // A long-tail instance could otherwise be overtaken by a later short-tail
+    // instance, causing construction to panic while retiring FIFO bank slots.
+    let (protocols, mut symbols) = from_source(
+        r#"
+        struct Dut { out short: u1, }
+        prot work<DUT: Dut>() {
+            step();
+            if DUT.short {
+                step();
+                fork(); step();
+            } else {
+                step(); step();
+                fork(); step(4);
+            }
+        }
+    "#,
+    );
+    let mut ctx = Context::default();
+    let driver_error = build_joint_driver_automaton(&mut ctx, protocols.clone(), &symbols)
+        .err()
+        .unwrap();
+    let JointAutomatonError::UnsupportedProtocol { protocol, reason } = &driver_error else {
+        panic!("expected a descriptive unsupported-protocol error");
+    };
+    assert_eq!(protocol, "work");
+    assert!(reason.contains("fork tails must have equal lengths"));
+    assert!(reason.contains("1 and 4 cycles") || reason.contains("4 and 1 cycles"));
+    assert!(reason.contains("FIFO retirement"));
+    let monitor_error = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols)
+        .err()
+        .unwrap();
+    assert!(matches!(
+        &monitor_error,
+        JointMonitorError::Control(JointAutomatonError::UnsupportedProtocol { .. })
+    ));
+    assert_eq!(driver_error.to_string(), monitor_error.to_string());
+}
+
+#[test]
+fn equal_fork_tails_can_have_different_actions_and_pre_phase_lengths() {
+    let (protocols, mut symbols) = from_source(
+        r#"
+        struct Dut { out branch: u1, out tag: u1, out payload: u2, }
+        prot work<DUT: Dut>() {
+            step();
+            if DUT.branch {
+                step();
+                fork();
+                assert_eq(DUT.tag, 1'b1); step();
+                assert_eq(DUT.payload, 2'd1); step();
+            } else {
+                step(); step();
+                fork();
+                assert_eq(DUT.tag, 1'b0); step();
+                assert_eq(DUT.payload, 2'd2); step();
+            }
+        }
+    "#,
+    );
+    let mut ctx = Context::default();
+    let driver = build_joint_driver_automaton(&mut ctx, protocols.clone(), &symbols).unwrap();
+    let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
+    assert_eq!(driver.bank_counts, monitor.control.bank_counts);
+    // Alternate both paths, checking their distinct tag/payload constraints and
+    // reusing slots. Each tuple is one real waveform sample.
+    let samples = [
+        (0, 0, 0),
+        (1, 0, 0),
+        (0, 1, 0),
+        (0, 0, 1),
+        (0, 0, 0),
+        (0, 0, 0),
+        (1, 0, 2),
+        (0, 1, 0),
+        (0, 0, 1),
+        (0, 0, 0),
+        (0, 0, 0),
+        (1, 0, 2),
+        (0, 1, 0),
+        (0, 0, 1),
+    ];
+    for mutation in [
+        None,
+        Some((2, "tag")),
+        Some((5, "tag")),
+        Some((6, "payload")),
+    ] {
+        let mut execution = Execution::new(&ctx, &monitor);
+        for (cycle, &(branch, tag, payload)) in samples.iter().enumerate() {
+            let mut inputs = [("branch", branch), ("tag", tag), ("payload", payload)];
+            if let Some((at, pin)) = mutation
+                && cycle == at
+            {
+                inputs.iter_mut().find(|(name, _)| *name == pin).unwrap().1 ^= 1;
+            }
+            let survived = execution.sample(&ctx, &monitor, &symbols, &inputs);
+            assert_eq!(survived, mutation.is_none_or(|(at, _)| cycle < at));
+        }
+    }
+}
+
+#[test]
+fn different_protocols_may_have_different_fork_tail_lengths() {
+    let (protocols, mut symbols) = from_source(
+        r#"
+        struct Dut { out kind: u1, }
+        prot fast<DUT: Dut>() { assert_eq(DUT.kind, 1'b0); step(); fork(); step(); }
+        prot slow<DUT: Dut>() { assert_eq(DUT.kind, 1'b1); step(); fork(); step(3); }
+    "#,
+    );
+    let mut ctx = Context::default();
+    let driver = build_joint_driver_automaton(&mut ctx, protocols.clone(), &symbols).unwrap();
+    let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
+    assert_eq!(driver.bank_counts, vec![2, 4]);
+    assert_eq!(driver.bank_counts, monitor.control.bank_counts);
+    let mut execution = Execution::new(&ctx, &monitor);
+    for kind in [1, 0, 1, 1, 0, 0, 1, 1, 1, 0] {
+        assert!(execution.sample(&ctx, &monitor, &symbols, &[("kind", kind)]));
     }
 }

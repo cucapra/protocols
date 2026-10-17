@@ -6,7 +6,7 @@
 mod bi;
 mod constraints;
 mod proto_trace;
-mod signal_trace;
+use protocols::waveform as signal_trace;
 
 use crate::bi::*;
 use crate::proto_trace::*;
@@ -15,8 +15,6 @@ use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
-use protocols::frontend::Module;
-use protocols::frontend::ast::Clock;
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -93,49 +91,14 @@ struct Cli {
     #[arg(long)]
     allow_branch_on_arg: bool,
 
+    /// Print only Pass or Fail instead of inferred transactions and diagnostics.
+    #[arg(long)]
+    status_only: bool,
+
     /// Sample the wall-clock time every N steps (clock cycles) and print all the `step,elapsed_us`
     /// measurements to stderr once the BI finishes
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     print_time_every_n_cycles: Option<u32>,
-}
-
-fn add_inst_name(i: &Instance, name: &str) -> String {
-    if i.name.is_empty() {
-        name.to_string()
-    } else {
-        format!("{}.{name}", i.name)
-    }
-}
-
-fn get_clock(
-    modules: &[Module],
-    instances: &[Instance],
-    cli_sample_posedge: Option<String>,
-) -> WaveSamplingMode {
-    let mut clocks: Vec<Clock> = instances
-        .iter()
-        .flat_map(|i| match &modules[i.module_id].clock {
-            Clock::None => None,
-            Clock::PosEdge(name) => Some(Clock::PosEdge(add_inst_name(i, name))),
-            Clock::NegEdge(name) => Some(Clock::NegEdge(add_inst_name(i, name))),
-        })
-        .collect();
-
-    if let Some(name) = cli_sample_posedge {
-        clocks.push(Clock::PosEdge(name));
-    }
-    clocks.sort();
-    clocks.dedup();
-    match clocks.as_slice() {
-        [Clock::PosEdge(name)] => WaveSamplingMode::RisingEdge(name.to_string()),
-        [Clock::NegEdge(name)] => WaveSamplingMode::FallingEdge(name.to_string()),
-        [Clock::None] => unreachable!(),
-        [] => WaveSamplingMode::Direct,
-        other => {
-            eprintln!("Too many clocks: {:?}", other);
-            std::process::exit(100);
-        }
-    }
 }
 
 #[allow(unused_variables)]
@@ -150,6 +113,9 @@ fn main() {
             "Only nano seconds are supported (received time unit {}). Exiting...",
             tu
         );
+        if cli.status_only {
+            std::process::exit(2);
+        }
         return;
     }
 
@@ -163,10 +129,17 @@ fn main() {
         skip_static_step_fork_checks,
         cli.allow_branch_on_arg,
     )
-    .unwrap();
+    .unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2)
+    });
 
     // try to find instances that we care about
     if cli.instances.is_empty() {
+        if cli.status_only {
+            eprintln!("--status-only requires --instances");
+            std::process::exit(2);
+        }
         println!("Available DUTs are: {}", collects_module_names(&modules));
         println!("No instances specified. Nothing to monitor. Exiting...");
         return;
@@ -175,10 +148,18 @@ fn main() {
     let instances: Vec<Instance> = cli
         .instances
         .iter()
-        .map(|arg| parse_instance(&modules, arg))
-        .collect();
+        .map(|arg| Instance::parse(&modules, arg))
+        .collect::<Result<_, _>>()
+        .unwrap_or_else(|error| {
+            eprintln!("{error}");
+            std::process::exit(2)
+        });
 
-    let sampling_mode = get_clock(&modules, &instances, cli.sample_posedge);
+    let sampling_mode =
+        sampling_mode(&modules, &instances, cli.sample_posedge).unwrap_or_else(|message| {
+            eprintln!("{message}");
+            std::process::exit(if cli.status_only { 2 } else { 100 })
+        });
 
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
@@ -194,36 +175,41 @@ fn main() {
         })
         .collect();
 
-    let step_to_time = {
-        // try to parse FST, VCD or GHW file
-        if let Ok(mut trace) = WaveSignalTrace::open(
-            &cli.wave,
-            &st,
-            &modules,
-            &instances,
-            sampling_mode,
-            cli.force_x_to_zero,
-        ) {
-            run_bis(
-                bis.as_mut_slice(),
-                &mut trace,
-                cli.print_time_every_n_cycles,
-            )
-        } else {
-            // otherwise, we might be dealing with our own custom ASCI format
-            let mut trace =
-                AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
-            run_bis(
-                bis.as_mut_slice(),
-                &mut trace,
-                cli.print_time_every_n_cycles,
-            )
-        }
-    }
-    .unwrap();
+    let mut trace = WaveformTrace::open(
+        &cli.wave,
+        &st,
+        &modules,
+        &instances,
+        sampling_mode,
+        cli.force_x_to_zero,
+    )
+    .unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2)
+    });
+    let step_to_time = run_bis(
+        bis.as_mut_slice(),
+        &mut trace,
+        cli.print_time_every_n_cycles,
+    )
+    .unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2)
+    });
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
+    if cli.status_only {
+        println!(
+            "{}",
+            if at_least_one_has_failed {
+                "Fail"
+            } else {
+                "Pass"
+            }
+        );
+        std::process::exit(i32::from(at_least_one_has_failed));
+    }
     for (bi, protos) in bis.into_iter().zip(bi_protos) {
         let exclude_from_trace = if cli.include_idle {
             FxHashSet::default()
@@ -398,43 +384,4 @@ fn print_trace(
         }
     }
     println!("}}");
-}
-
-/// Concatenates all the names of `struct`s (`Design`s) into one single string
-fn collects_module_names(duts: &[Module]) -> String {
-    let mut dut_names: Vec<String> = duts.iter().map(|d| d.name.clone()).collect();
-    dut_names.sort();
-    dut_names.join(", ")
-}
-
-struct Instance {
-    name: String,
-    #[allow(dead_code)]
-    module: String,
-    module_id: usize,
-}
-
-/// Takes the contents of the `-i` CLI flag and tries to find
-fn parse_instance(duts: &[Module], arg: &str) -> Instance {
-    let parts: Vec<&str> = arg.split(':').collect();
-    match parts.as_slice() {
-        // `module` is the name of the design
-        // (In Verilog, "modules" are like interfaces and you have "instances"
-        // (concrete instantiations, aka implementations) of the module)
-        [inst, module] => {
-            if let Some(module_id) = duts.iter().position(|d| &d.name == module) {
-                Instance {
-                    name: inst.to_string(),
-                    module: module.to_string(),
-                    module_id,
-                }
-            } else {
-                panic!(
-                    "Unknown design {module} for instance {inst}. Did you mean {}?",
-                    collects_module_names(duts)
-                );
-            }
-        }
-        _ => panic!("unexpected instance argument: {arg}"),
-    }
 }

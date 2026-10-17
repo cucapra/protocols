@@ -1,7 +1,7 @@
-# Checked-in test catalog. Hand-maintained source of truth.
-# Consumed by scripts/generate_runt_configs.py.
+# This file is the source of truth for all snapshots tests.
+# It is consumed by scripts/generate_runt_configs.py.
 #
-# TX_CASES are keyed by their .tx path. BI_CASES are keyed by a unique id
+# TX_CASES are keyed by their .tx path, BI_CASES are keyed by a unique id
 
 TX_CASES = {
     "examples/apb/ip_apb.tx": {

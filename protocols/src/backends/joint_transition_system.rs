@@ -1,18 +1,18 @@
 use std::borrow::Cow;
 
-use baa::WidthInt;
 use patronus::expr::{Context, ExprRef, TypeCheck};
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::FxHashMap;
 
 use crate::PortId;
+use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::backends::transition_system::{
-    CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr,
+    CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr
 };
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::joint_automaton::{JointDriverAutomaton, ProtocolId};
-use crate::ir::proto_graph::NodeId;
+use crate::ir::proto_graph::{NodeId, remap_expr};
 
 pub struct JointTransitionSystemResult {
     pub ts: TransitionSystem,
@@ -35,21 +35,8 @@ struct JointMetadata {
     transaction_valid: ExprRef,
     protocol_choice: ExprRef,
     choice_slots: FxHashMap<NodeId, Vec<usize>>,
+    choice_guards: FxHashMap<NodeId, ExprRef>,
     bank_counts: Vec<usize>,
-}
-
-fn mod_add(ctx: &mut Context, value: ExprRef, amount: usize, modulus: usize) -> ExprRef {
-    if modulus == 1 || amount.is_multiple_of(modulus) {
-        return value;
-    }
-    let width = value.get_bv_type(ctx).unwrap();
-    let amount = amount % modulus;
-    let amount_expr = ctx.bit_vec_val(amount, width);
-    let threshold = ctx.bit_vec_val(modulus - amount, width);
-    let wrapped = ctx.sub(value, threshold);
-    let normal = ctx.add(value, amount_expr);
-    let overflow = ctx.greater_or_equal(value, threshold);
-    ctx.ite(overflow, wrapped, normal)
 }
 
 fn selector_guard(
@@ -70,30 +57,41 @@ fn selector_guard(
 fn choice_ready(
     ctx: &mut Context,
     core: &CoreLoweredSystem,
-    nodes: &[crate::ir::proto_graph::NodeId],
+    guards: &FxHashMap<NodeId, ExprRef>,
 ) -> ExprRef {
-    nodes.iter().fold(ctx.get_false(), |ready, node| {
+    guards.iter().fold(ctx.get_false(), |ready, (node, guard)| {
         let value = ctx.bit_vec_val(node.as_u32(), core.node_id_width);
         let at_node = ctx.equal(core.node_symbol, value);
-        ctx.or(ready, at_node)
+        let enabled = ctx.and(at_node, *guard);
+        ctx.or(ready, enabled)
     })
 }
 
 /// Add the argument-bank state and transaction handshake to a joint driver.
 pub fn into_joint_transition_system(
     ctx: &mut Context,
-    driver: JointDriverAutomaton,
+    mut driver: JointDriverAutomaton,
     symbols: &SymbolTable,
     ts: TransitionSystem,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
     port_to_expr: FxHashMap<PortId, ExprRef>,
 ) -> JointTransitionSystemResult {
+    let pins = driver
+        .graph
+        .symbol_expr
+        .iter()
+        .filter_map(|(symbol, expr)| Some((*expr, *port_to_expr.get(symbol_to_port.get(symbol)?)?)))
+        .collect();
+    for guard in driver.choice_guards.values_mut() {
+        *guard = remap_expr(ctx, *guard, &pins);
+    }
     let JointDriverAutomaton {
         graph,
         protocols,
         transaction_valid,
         protocol_choice,
         choice_slots,
+        choice_guards,
         bank_counts,
     } = driver;
     let core = lower_proto_graph_to_transition_system(
@@ -112,6 +110,7 @@ pub fn into_joint_transition_system(
             transaction_valid,
             protocol_choice,
             choice_slots,
+            choice_guards,
             bank_counts,
         },
         symbols,
@@ -124,8 +123,7 @@ fn lower_joint_core(
     driver: JointMetadata,
     symbols: &SymbolTable,
 ) -> JointTransitionSystemResult {
-    let choice_nodes = driver.choice_slots.keys().copied().collect::<Vec<_>>();
-    let ready = choice_ready(ctx, &core, &choice_nodes);
+    let ready = choice_ready(ctx, &core, &driver.choice_guards);
     let mut ts = core.ts;
     ts.add_input(ctx, driver.transaction_valid);
     ts.add_input(ctx, driver.protocol_choice);
@@ -200,6 +198,7 @@ fn lower_joint_core(
             let node_value = ctx.bit_vec_val(node.as_u32(), core.node_id_width);
             let node_guard = ctx.equal(core.node_symbol, node_value);
             let launch = ctx.and(node_guard, selected_valid);
+            let launch = ctx.and(launch, driver.choice_guards[&node]);
             let physical = mod_add(
                 ctx,
                 heads[protocol_id],
@@ -230,17 +229,13 @@ fn lower_joint_core(
                     _ => panic!("unsupported joint-driver argument type"),
                 };
                 let old = ctx.bv_symbol(&format!("joint.{name}#{slot}_{}", protocol.name), width);
-                let mut read = ctx.zero(width as WidthInt);
-                let head_width = heads[protocol_id].get_bv_type(ctx).unwrap();
-                for head_value in 0..driver.bank_counts[protocol_id] {
-                    let bank = (head_value + slot) % driver.bank_counts[protocol_id];
-                    let stored = bank_states[protocol_id][bank][arg_index];
-                    let input = protocol_inputs[&(protocol_id, symbol)];
-                    let value = ctx.ite(capture[protocol_id][bank], input, stored);
-                    let head_literal = ctx.bit_vec_val(head_value, head_width);
-                    let at_head = ctx.equal(heads[protocol_id], head_literal);
-                    read = ctx.ite(at_head, value, read);
-                }
+                let input = protocol_inputs[&(protocol_id, symbol)];
+                let values = bank_states[protocol_id]
+                    .iter()
+                    .enumerate()
+                    .map(|(bank, args)| ctx.ite(capture[protocol_id][bank], input, args[arg_index]))
+                    .collect::<Vec<_>>();
+                let read = read_bank(ctx, heads[protocol_id], slot, &values);
                 replacements.push((old, read));
             }
         }

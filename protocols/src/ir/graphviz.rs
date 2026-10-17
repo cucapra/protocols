@@ -443,4 +443,19 @@ mod tests {
             &["read_write", "idle"],
         );
     }
+
+    #[test]
+    fn test_joint_wishbone_pipelined_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_wishbone_pipelined",
+            "../examples/wishbone/wishbone_pipelined.prot",
+            &[
+                "reset",
+                "idle_no_cycle",
+                "idle_continue_cycle",
+                "write",
+                "read",
+            ],
+        );
+    }
 }

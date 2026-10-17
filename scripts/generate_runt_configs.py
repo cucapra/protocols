@@ -234,6 +234,40 @@ def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     return [("", repo_root_command(cmd, stderr="stdout"))]
 
 
+def monitor_status_runt_command(case: dict) -> list[tuple[str, str]]:
+    common = []
+    for path in case["paths"]:
+        common += ["--protocol", path]
+    common += ["--wave", case["wave"], "--instances", *case["instances"]]
+    # Display options affect BI's trace formatting, not monitor acceptance.
+    extras = case["extra_args"]
+    if "--sample-posedge" in extras:
+        index = extras.index("--sample-posedge")
+        common += ["--sample-posedge", extras[index + 1]]
+    if "--force-x-to-zero" in extras:
+        common += ["--force-x-to-zero"]
+    return [
+        (
+            "bi",
+            repo_root_command(
+                [*binary_prefix("bi"), "--status-only", *common], stderr="inherit"
+            ),
+        ),
+        (
+            "system",
+            repo_root_command(
+                [
+                    *binary_prefix("graph-interp"),
+                    "--flow",
+                    "unbounded-monitor",
+                    *common,
+                ],
+                stderr="inherit",
+            ),
+        ),
+    ]
+
+
 def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ast_cmd = [
         *binary_prefix("protocols-interp"),
@@ -350,6 +384,7 @@ RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "bi": bi_runt_command,
+    "monitor_status": monitor_status_runt_command,
     "waveform": waveform_runt_command,
     "fail": fail_runt_command,
 }
@@ -408,6 +443,19 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
     selected = [c for c in selected if not c["protocol_path"].endswith("s3.prot")]
 
     return sorted(selected, key=lambda c: c["paths"][0])
+
+
+def monitor_status_cases(cases: list[dict]) -> list[dict]:
+    """The only exclusions are repeat/for-in and parameter-dependent control."""
+    return [
+        case
+        for case in cases
+        if "--allow-branch-on-arg" not in case["extra_args"]
+        and not any(
+            {"for_in_loop", "repeat_loop"} & protocol_constructs(path)
+            for path in case["paths"]
+        )
+    ]
 
 
 def waveform_cases(cases: list[dict]) -> list[dict]:
@@ -487,6 +535,7 @@ def generate_runt_configs() -> None:
     suite_specs = {
         "interp": ("interp", tx),
         "bi": ("bi", bi),
+        "monitor_status": ("monitor_status", monitor_status_cases(bi)),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
         "fail": ("fail", fail_cases(tx)),
