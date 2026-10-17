@@ -91,37 +91,3 @@ digraph "send_data" {
   node5 [label="[1] assert_eq(D.ready, 1)\n[1] D.valid := 1 if 1\n[1] D.data := data if 1"];
   node5 -> node1 [label="1 / step"];
 }
-
-== to-monitor ==
-digraph "send_data" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] assert_eq(D.valid, 1)\n[1] assert_eq(and($monitor_data_value, and($monitor_data_known, shl(255, 0))), and(shl(D.data, 0), and($monitor_data_known, shl(255, 0))))\n[1] $monitor_data_value := ite(1, or(and($monitor_data_value, not(and(shl(255, 0), not($monitor_data_known)))), and(shl(D.data, 0), and(shl(255, 0), not($monitor_data_known)))), $monitor_data_value) if 1\n[1] $monitor_data_known := ite(1, or($monitor_data_known, shl(255, 0)), $monitor_data_known) if 1"];
-  node0 -> node1 [label="D.ready / step"];
-  node0 -> node2 [label="not(D.ready) / step"];
-  node1 [label="[1] done\n[1] $monitor_data_value := $monitor_data_value if 1\n[1] $monitor_data_known := $monitor_data_known if 1"];
-  node2 [label="[1] assert_eq(D.valid, 1)\n[1] assert_eq(and($monitor_data_value, and($monitor_data_known, shl(255, 0))), and(shl(D.data, 0), and($monitor_data_known, shl(255, 0))))\n[1] $monitor_data_value := ite(1, or(and($monitor_data_value, not(and(shl(255, 0), not($monitor_data_known)))), and(shl(D.data, 0), and(shl(255, 0), not($monitor_data_known)))), $monitor_data_value) if 1\n[1] $monitor_data_known := ite(1, or($monitor_data_known, shl(255, 0)), $monitor_data_known) if 1"];
-  node2 -> node1 [label="D.ready / step"];
-  node2 -> node3 [label="not(D.ready) / step"];
-  node3 [label="[1] assert_eq(D.ready, 1)\n[1] assert_eq(D.valid, 1)\n[1] assert_eq(and($monitor_data_value, and($monitor_data_known, shl(255, 0))), and(shl(D.data, 0), and($monitor_data_known, shl(255, 0))))\n[1] $monitor_data_value := ite(1, or(and($monitor_data_value, not(and(shl(255, 0), not($monitor_data_known)))), and(shl(D.data, 0), and(shl(255, 0), not($monitor_data_known)))), $monitor_data_value) if 1\n[1] $monitor_data_known := ite(1, or($monitor_data_known, shl(255, 0)), $monitor_data_known) if 1"];
-  node3 -> node1 [label="1 / step"];
-}
-
-== simplified-monitor ==
-digraph "send_data" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] assert_eq(D.valid, 1)\n[1] $monitor_data_value := D.data if 1"];
-  node0 -> node1 [label="D.ready / step"];
-  node0 -> node2 [label="not(D.ready) / step"];
-  node1 [label="[1] done"];
-  node2 [label="[1] assert_eq(D.valid, 1)\n[1] assert_eq($monitor_data_value, D.data)"];
-  node2 -> node1 [label="D.ready / step"];
-  node2 -> node3 [label="not(D.ready) / step"];
-  node3 [label="[1] assert_eq(D.ready, 1)\n[1] assert_eq(D.valid, 1)\n[1] assert_eq($monitor_data_value, D.data)"];
-  node3 -> node1 [label="1 / step"];
-}

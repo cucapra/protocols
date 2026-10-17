@@ -209,11 +209,6 @@ pub fn compose_joint_monitor_automaton(
             let targets = &instance_targets[&owner];
             let live_register = result.live_registers[&owner];
             let live = result.control.graph.symbol_expr(live_register).unwrap();
-            let activation = if instance.starts {
-                result.control.choice_guards[&node]
-            } else {
-                ctx.get_true()
-            };
             let mut substitutions = instance_exprs[&owner].clone();
             if instance.starts {
                 // Every candidate starts fresh, including slots used before.
@@ -224,8 +219,6 @@ pub fn compose_joint_monitor_automaton(
             }
             for (&argument, &expr) in &monitor.knownness_outputs[&instance.control] {
                 let expr = remap_expr(ctx, expr, &substitutions);
-                let zero = ctx.zero(expr.get_bv_type(ctx).unwrap());
-                let expr = ctx.ite(activation, expr, zero);
                 outputs.insert((instance.protocol, instance.slot, argument), expr);
             }
             let mut assigned = FxHashSet::default();
@@ -233,20 +226,15 @@ pub fn compose_joint_monitor_automaton(
                 if matches!(monitor.graph[action.op], Op::Fork | Op::Done) {
                     continue;
                 }
-                let mut op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
-                let mut guard = remap_expr(ctx, action.guard, &substitutions);
-                if let Op::Assign(register, assignment) = &mut op {
+                let op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
+                let guard = remap_expr(ctx, action.guard, &substitutions);
+                if let Op::Assign(register, _) = &op {
                     assert_eq!(
                         guard,
                         ctx.get_true(),
                         "monitor assignment guards must be true"
                     );
                     assigned.insert(*register);
-                    for (guard, _) in &mut assignment.concretes {
-                        *guard = ctx.and(activation, *guard);
-                    }
-                } else {
-                    guard = ctx.and(activation, guard);
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
@@ -258,7 +246,7 @@ pub fn compose_joint_monitor_automaton(
                 for (&old, &init) in registers {
                     let register = targets[&old];
                     if old != monitor.live_register && !assigned.contains(&register) {
-                        let assignment = Assignment::concrete(ctx.get_false(), activation, init);
+                        let assignment = Assignment::concrete(ctx.get_false(), ctx.get_true(), init);
                         push_owned_action(
                             &mut result,
                             node,
@@ -278,10 +266,8 @@ pub fn compose_joint_monitor_automaton(
                 ongoing = ctx.and(ongoing, live);
             }
         }
-        let required = if let Some(&activation) = result.control.choice_guards.get(&node) {
-            let waiting = ctx.not(activation);
-            let choice_survives = ctx.or(waiting, any_launch);
-            ctx.and(ongoing, choice_survives)
+        let required = if result.control.choice_slots.contains_key(&node) {
+            ctx.and(ongoing, any_launch)
         } else {
             ongoing
         };

@@ -239,19 +239,17 @@ mod tests {
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::require_single_module;
-    use crate::ir::driver_to_monitor::convert_driver_to_monitor;
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::joint_automaton::build_joint_driver_automaton;
     use crate::ir::joint_monitor::build_joint_monitor_automaton;
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
     use crate::ir::reaching_defs::reaching_definitions;
-    use crate::ir::simplify_monitor::simplify_monitor;
     use insta::Settings;
 
     fn snap(name: &str, filename: &str) {
         let mut handler = DiagnosticHandler::default();
-        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let mut content = String::new();
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
@@ -282,18 +280,6 @@ mod tests {
             content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
             content += "\n";
 
-            // convert to monitor
-            let monitor =
-                convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
-                    .unwrap();
-            content += "== to-monitor ==\n";
-            content += &monitor.to_dot_string(&ctx, &symbols);
-            content += "\n";
-
-            let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
-            content += "== simplified-monitor ==\n";
-            content += &monitor.to_dot_string(&ctx, &symbols);
-            content += "\n";
         }
 
         let mut settings = Settings::clone_current();
@@ -333,22 +319,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_identity_slicing_snapshot() {
-        snap(
-            "ir_graphviz_identity_slicing",
-            "../tests/identities/identity_d1.prot",
-        );
-    }
-
-    #[test]
-    fn test_serv_regfile_snapshot() {
-        snap(
-            "ir_graphviz_serv_regfile",
-            "../examples/serv/serv_regfile.prot",
-        );
-    }
-
     fn joint_snap(name: &str, filename: &str, selected: &[&str]) {
         let mut handler = DiagnosticHandler::default();
         let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
@@ -377,24 +347,6 @@ mod tests {
     }
 
     #[test]
-    fn test_joint_add_d1_snapshot() {
-        joint_snap(
-            "ir_graphviz_joint_add_d1",
-            "../tests/adders/adder_d1/add_d1.prot",
-            &["add"],
-        );
-    }
-
-    #[test]
-    fn test_joint_add_d2_snapshot() {
-        joint_snap(
-            "ir_graphviz_joint_add_d2",
-            "../tests/adders/adder_d2/add_d2.prot",
-            &["add"],
-        );
-    }
-
-    #[test]
     fn test_joint_alu_snapshot() {
         joint_snap(
             "ir_graphviz_joint_alu",
@@ -404,58 +356,11 @@ mod tests {
     }
 
     #[test]
-    fn test_joint_axis_ready_valid_snapshot() {
+    fn test_joint_axis_send_data_snapshot() {
         joint_snap(
             "ir_graphviz_joint_axis_send_data",
             "../tests/wal/advanced/axis.prot",
             &["send_data"],
-        );
-        joint_snap(
-            "ir_graphviz_joint_axis_ready_valid",
-            "../tests/wal/advanced/axis.prot",
-            &["send_data", "idle"],
-        );
-    }
-
-    #[test]
-    fn test_joint_unbounded_pre_snapshot() {
-        joint_snap(
-            "ir_graphviz_joint_unbounded_pre",
-            "../tests/meta/unbounded_pre_phase_steady_state_simple.prot",
-            &["id", "w"],
-        );
-    }
-
-    #[test]
-    fn test_joint_overlapping_slices_snapshot() {
-        joint_snap(
-            "ir_graphviz_joint_overlapping_slices",
-            "src/ir/driver_to_monitor/fixtures/overlapping_slices.prot",
-            &["overlapping_slices"],
-        );
-    }
-
-    #[test]
-    fn test_joint_serv_regfile_snapshot() {
-        joint_snap(
-            "ir_graphviz_joint_serv_regfile",
-            "../examples/serv/serv_regfile.prot",
-            &["read_write", "idle"],
-        );
-    }
-
-    #[test]
-    fn test_joint_wishbone_pipelined_snapshot() {
-        joint_snap(
-            "ir_graphviz_joint_wishbone_pipelined",
-            "../examples/wishbone/wishbone_pipelined.prot",
-            &[
-                "reset",
-                "idle_no_cycle",
-                "idle_continue_cycle",
-                "write",
-                "read",
-            ],
         );
     }
 }

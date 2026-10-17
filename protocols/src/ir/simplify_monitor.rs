@@ -498,6 +498,3 @@ fn compress_uniform_masks(
         );
     }
 }
-
-#[cfg(test)]
-mod tests;

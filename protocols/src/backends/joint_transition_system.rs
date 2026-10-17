@@ -12,7 +12,7 @@ use crate::backends::transition_system::{
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::joint_automaton::{JointDriverAutomaton, ProtocolId};
-use crate::ir::proto_graph::{NodeId, remap_expr};
+use crate::ir::proto_graph::NodeId;
 
 pub struct JointTransitionSystemResult {
     pub ts: TransitionSystem,
@@ -35,7 +35,6 @@ struct JointMetadata {
     transaction_valid: ExprRef,
     protocol_choice: ExprRef,
     choice_slots: FxHashMap<NodeId, Vec<usize>>,
-    choice_guards: FxHashMap<NodeId, ExprRef>,
     bank_counts: Vec<usize>,
 }
 
@@ -57,13 +56,12 @@ fn selector_guard(
 fn choice_ready(
     ctx: &mut Context,
     core: &CoreLoweredSystem,
-    guards: &FxHashMap<NodeId, ExprRef>,
+    slots: &FxHashMap<NodeId, Vec<usize>>,
 ) -> ExprRef {
-    guards.iter().fold(ctx.get_false(), |ready, (node, guard)| {
+    slots.keys().fold(ctx.get_false(), |ready, node| {
         let value = ctx.bit_vec_val(node.as_u32(), core.node_id_width);
         let at_node = ctx.equal(core.node_symbol, value);
-        let enabled = ctx.and(at_node, *guard);
-        ctx.or(ready, enabled)
+        ctx.or(ready, at_node)
     })
 }
 
@@ -76,19 +74,12 @@ pub fn into_joint_transition_system(
     symbol_to_port: FxHashMap<SymbolId, PortId>,
     port_to_expr: FxHashMap<PortId, ExprRef>,
 ) -> JointTransitionSystemResult {
-    let pins = driver
-        .graph
-        .symbol_expr
-        .iter()
-        .filter_map(|(symbol, expr)| Some((*expr, *symbol_to_port.get(symbol)?)))
-        .collect::<Vec<_>>();
     let JointDriverAutomaton {
         graph,
         protocols,
         transaction_valid,
         protocol_choice,
         choice_slots,
-        mut choice_guards,
         bank_counts,
     } = driver;
     let core = lower_proto_graph_to_transition_system(
@@ -99,13 +90,6 @@ pub fn into_joint_transition_system(
         port_to_expr,
         symbols,
     );
-    let pins = pins
-        .into_iter()
-        .map(|(expr, port)| (expr, core.port_to_expr[&port]))
-        .collect();
-    for guard in choice_guards.values_mut() {
-        *guard = remap_expr(ctx, *guard, &pins);
-    }
     lower_joint_core(
         ctx,
         core,
@@ -114,7 +98,6 @@ pub fn into_joint_transition_system(
             transaction_valid,
             protocol_choice,
             choice_slots,
-            choice_guards,
             bank_counts,
         },
         symbols,
@@ -127,7 +110,7 @@ fn lower_joint_core(
     driver: JointMetadata,
     symbols: &SymbolTable,
 ) -> JointTransitionSystemResult {
-    let ready = choice_ready(ctx, &core, &driver.choice_guards);
+    let ready = choice_ready(ctx, &core, &driver.choice_slots);
     let mut ts = core.ts;
     ts.add_input(ctx, driver.transaction_valid);
     ts.add_input(ctx, driver.protocol_choice);
@@ -202,7 +185,6 @@ fn lower_joint_core(
             let node_value = ctx.bit_vec_val(node.as_u32(), core.node_id_width);
             let node_guard = ctx.equal(core.node_symbol, node_value);
             let launch = ctx.and(node_guard, selected_valid);
-            let launch = ctx.and(launch, driver.choice_guards[&node]);
             let physical = mod_add(
                 ctx,
                 heads[protocol_id],

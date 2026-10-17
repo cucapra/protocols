@@ -47,8 +47,6 @@ pub enum JointTransitionKind {
 pub struct JointControlAutomaton {
     pub graph: ProtoGraph,
     pub choice_slots: FxHashMap<NodeId, Vec<usize>>,
-    /// A sampled condition can delay a fork and its next launch within a node.
-    pub choice_guards: FxHashMap<NodeId, ExprRef>,
     pub bank_counts: Vec<usize>,
     pub transition_kinds: FxHashMap<(NodeId, usize), JointTransitionKind>,
     pub instances: FxHashMap<NodeId, Vec<JointInstance>>,
@@ -62,24 +60,21 @@ pub struct JointDriverAutomaton {
     pub protocol_choice: ExprRef,
     /// At each choice node, the logical tail slot for every protocol.
     pub choice_slots: FxHashMap<NodeId, Vec<usize>>,
-    /// A sampled condition can delay a fork and its next launch within a node.
-    pub choice_guards: FxHashMap<NodeId, ExprRef>,
     pub bank_counts: Vec<usize>,
 }
 
 #[derive(Clone)]
 struct ProtocolShape {
     entry: NodeId,
-    forks: FxHashSet<NodeId>,
-    conditional_forks: FxHashMap<NodeId, ExprRef>,
+    fork: Option<NodeId>,
     done: NodeId,
-    post: FxHashMap<NodeId, Transition>,
+    post: Vec<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct PostTransaction {
     protocol: ProtocolId,
-    control: NodeId,
+    post_index: usize,
     slot: usize,
 }
 
@@ -113,23 +108,33 @@ fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointAutomaton
 }
 
 fn analyze_shape(
-    ctx: &mut Context,
+    ctx: &Context,
     graph: &ProtoGraph,
     protocol: &Protocol,
 ) -> Result<ProtocolShape, JointAutomatonError> {
-    let mut forks = FxHashMap::default();
+    let mut forks = Vec::new();
     let mut dones = Vec::new();
     for node in reachable_node_ids(ctx, graph, graph.entry) {
         for action in &graph[node].actions {
             match graph[action.op] {
                 Op::Fork => {
-                    let prior = *forks.entry(node).or_insert(ctx.get_false());
-                    forks.insert(node, ctx.or(prior, action.guard));
+                    if action.guard != ctx.get_true() {
+                        return Err(unsupported(
+                            protocol,
+                            "the fork must be unconditional in its node",
+                        ));
+                    }
+                    if !forks.contains(&node) {
+                        forks.push(node);
+                    }
                 }
                 Op::Done if !dones.contains(&node) => dones.push(node),
                 _ => {}
             }
         }
+    }
+    if forks.len() > 1 {
+        return Err(unsupported(protocol, "more than one reachable fork node"));
     }
     if dones.len() != 1 {
         return Err(unsupported(
@@ -138,104 +143,35 @@ fn analyze_shape(
         ));
     }
     let done = dones[0];
-    let mut post = FxHashMap::default();
-    let mut simplifier = patronus::expr::Simplifier::new(patronus::expr::SparseExprMap::default());
-    let mut common_tail: Option<(NodeId, usize)> = None;
-    let mut fork_nodes = forks.keys().copied().collect::<Vec<_>>();
-    fork_nodes.sort_unstable();
-    // Contraction can put the same fork in several nodes, guarded by the
-    // condition that ends a wait. Only follow edges on which that fork executes.
-    for fork in fork_nodes {
-        let fork_guard = forks[&fork];
+    let fork = forks.first().copied();
+    let mut post = Vec::new();
+    if let Some(fork) = fork {
         let mut current = fork;
         let mut seen = FxHashSet::default();
-        let mut tail_steps = 0;
         while current != done {
             if !seen.insert(current) {
                 return Err(unsupported(protocol, "the post-phase contains a cycle"));
             }
-            if current != fork && forks.contains_key(&current) {
-                return Err(unsupported(protocol, "a post-phase reaches another fork"));
-            }
-            let guard = if current == fork {
-                fork_guard
-            } else {
-                ctx.get_true()
-            };
-            let steps = graph[current]
-                .transitions
-                .iter()
-                .filter(|edge| {
-                    let enabled = ctx.and(guard, edge.guard);
-                    simplifier.simplify(ctx, enabled) != ctx.get_false()
-                })
-                .collect::<Vec<_>>();
-            if steps.len() != 1 {
+            post.push(current);
+            let transitions = &graph[current].transitions;
+            if transitions.len() != 1 {
                 return Err(unsupported(protocol, "the post-phase is not straight-line"));
             }
-            tail_steps += usize::from(steps[0].consumes_step);
-            post.insert(current, steps[0].clone());
-            current = steps[0].target;
+            current = transitions[0].target;
         }
-        // Equal durations preserve fork order at retirement, which lets both
-        // drivers and monitors release their circular bank slots in FIFO order.
-        if let Some((previous_fork, previous_steps)) = common_tail {
-            if tail_steps != previous_steps {
-                return Err(unsupported(
-                    protocol,
-                    format!(
-                        "fork tails must have equal lengths for FIFO retirement: found {previous_steps} and {tail_steps} cycles at {previous_fork} and {fork}"
-                    ),
-                ));
-            }
-        } else {
-            common_tail = Some((fork, tail_steps));
+        if post.is_empty() {
+            return Err(unsupported(
+                protocol,
+                "an explicit fork must be followed by at least one cycle",
+            ));
         }
     }
-    let conditional_forks = forks
-        .iter()
-        .filter_map(|(&node, &guard)| (guard != ctx.get_true()).then_some((node, guard)))
-        .collect();
-    let forks = forks
-        .into_iter()
-        .filter_map(|(node, guard)| (guard == ctx.get_true()).then_some(node))
-        .collect();
     Ok(ProtocolShape {
         entry: graph.entry,
-        forks,
-        conditional_forks,
+        fork,
         done,
         post,
     })
-}
-
-fn choice_guard(ctx: &Context, state: &JointState, shapes: &[ProtocolShape]) -> ExprRef {
-    match state.frontier {
-        Frontier::Choice => ctx.get_true(),
-        Frontier::Pre {
-            protocol, control, ..
-        } => shapes[protocol]
-            .conditional_forks
-            .get(&control)
-            .copied()
-            .unwrap_or(ctx.get_false()),
-        Frontier::Draining => ctx.get_false(),
-    }
-}
-
-fn intern_state(
-    graph: &mut ProtoGraph,
-    states: &mut Vec<JointState>,
-    ids: &mut FxHashMap<JointState, NodeId>,
-    successor: JointState,
-) -> NodeId {
-    if let Some(&node) = ids.get(&successor) {
-        return node;
-    }
-    let node = graph.n(Node::empty());
-    ids.insert(successor.clone(), node);
-    states.push(successor);
-    node
 }
 
 // build the guard that selects one protocol at a launch point.
@@ -327,7 +263,7 @@ fn normalize_successor(
     }
     state
         .posts
-        .sort_unstable_by_key(|post| (post.protocol, post.slot, post.control));
+        .sort_unstable_by_key(|post| (post.protocol, post.slot, post.post_index));
     (state, rotations)
 }
 
@@ -380,7 +316,11 @@ fn advance_posts(
     let mut retired = vec![Vec::new(); protocols.len()];
     for transaction in &state.posts {
         let shape = &shapes[transaction.protocol];
-        let step = &shape.post[&transaction.control];
+        let source = shape.post[transaction.post_index];
+        let step = sources[transaction.protocol][source]
+            .transitions
+            .first()
+            .expect("validated post node must have one transition");
         let substitutions = joint_argument_substitutions(
             ctx,
             &sources[transaction.protocol],
@@ -391,11 +331,12 @@ fn advance_posts(
         let step_guard = remap_expr(ctx, step.guard, &substitutions);
         guard = graph.and_guard(ctx, guard, step_guard);
         // mark the transaction for retirement when its last post cycle finishes.
-        if step.target == shape.done {
+        if transaction.post_index + 1 == shape.post.len() {
+            debug_assert_eq!(step.target, shape.done);
             retired[transaction.protocol].push(transaction.slot);
         } else {
             posts.push(PostTransaction {
-                control: step.target,
+                post_index: transaction.post_index + 1,
                 ..*transaction
             });
         }
@@ -418,10 +359,10 @@ fn successor_after_frontier_step(
 ) -> (JointState, Vec<Vec<usize>>) {
     // decide whether the next frontier is another pre cycle, a choice, or retirement.
     let shape = &shapes[protocol];
-    let frontier = if shape.forks.contains(&target) {
+    let frontier = if Some(target) == shape.fork {
         posts.push(PostTransaction {
             protocol,
-            control: target,
+            post_index: 0,
             slot,
         });
         Frontier::Choice
@@ -462,8 +403,8 @@ pub fn prepare_joint_protocols(
 
 /// Construct control independently of whether actions drive or observe pins.
 /// Sources must be contracted, assignment-propagated single-protocol graphs.
-/// Each fork must have a finite, straight-line tail to Done, and all tails
-/// within one protocol must consume the same number of samples.
+/// Each protocol may have one unconditional fork node, followed by a finite,
+/// straight-line tail to Done.
 pub fn build_joint_control_automaton(
     ctx: &mut Context,
     protocols: &[Protocol],
@@ -516,7 +457,7 @@ pub fn build_joint_control_automaton(
             active.push(JointInstance {
                 protocol: transaction.protocol,
                 slot: transaction.slot,
-                control: transaction.control,
+                control: shapes[transaction.protocol].post[transaction.post_index],
                 starts: false,
             });
         }
@@ -542,17 +483,6 @@ pub fn build_joint_control_automaton(
                 }
             }
             Frontier::Draining => {}
-        }
-        let launch_guard = choice_guard(ctx, &state, &shapes);
-        if state.frontier != Frontier::Choice && launch_guard != ctx.get_false() {
-            for (protocol, shape) in shapes.iter().enumerate() {
-                active.push(JointInstance {
-                    protocol,
-                    slot: live_count(&state, protocol),
-                    control: shape.entry,
-                    starts: true,
-                });
-            }
         }
         instances.insert(node, active);
 
@@ -651,82 +581,6 @@ pub fn build_joint_control_automaton(
                 for step in sources[protocol][control].transitions.clone() {
                     let step_guard = remap_expr(ctx, step.guard, &substitutions);
                     let guard = graph.and_guard(ctx, advanced.guard, step_guard);
-                    if launch_guard != ctx.get_false() {
-                        let fork_guard = graph.and_guard(ctx, guard, launch_guard);
-                        let mut posts = advanced.posts.clone();
-                        let mut retired = advanced.retired.clone();
-                        if step.target == shapes[protocol].done {
-                            retired[protocol].push(slot);
-                        } else {
-                            posts.push(PostTransaction {
-                                protocol,
-                                control: step.target,
-                                slot,
-                            });
-                        }
-                        if fork_guard != ctx.get_false() {
-                            let draining = JointState {
-                                posts: posts.clone(),
-                                frontier: Frontier::Draining,
-                            };
-                            let (draining, rotations) =
-                                normalize_successor(draining, retired.clone(), protocols.len());
-                            let target =
-                                intern_state(&mut graph, &mut states, &mut state_ids, draining);
-                            if let Some(index) = add_transition(
-                                ctx, &mut graph, node, fork_guard, target, &rotations, protocols,
-                            ) {
-                                transition_kinds.insert((node, index), JointTransitionKind::Stop);
-                            }
-                            for fresh in 0..protocols.len() {
-                                let fresh_slot = live_count(&state, fresh);
-                                let substitutions = joint_argument_substitutions(
-                                    ctx,
-                                    &sources[fresh],
-                                    &protocols[fresh],
-                                    symbols,
-                                    fresh_slot,
-                                );
-                                for first in &sources[fresh][shapes[fresh].entry].transitions {
-                                    let first_guard = remap_expr(ctx, first.guard, &substitutions);
-                                    let enabled = graph.and_guard(ctx, fork_guard, first_guard);
-                                    if enabled == ctx.get_false() {
-                                        continue;
-                                    }
-                                    let (successor, retired) = successor_after_frontier_step(
-                                        &shapes,
-                                        fresh,
-                                        fresh_slot,
-                                        first.target,
-                                        posts.clone(),
-                                        retired.clone(),
-                                    );
-                                    let (successor, rotations) =
-                                        normalize_successor(successor, retired, protocols.len());
-                                    let target = intern_state(
-                                        &mut graph,
-                                        &mut states,
-                                        &mut state_ids,
-                                        successor,
-                                    );
-                                    if let Some(index) = add_transition(
-                                        ctx, &mut graph, node, enabled, target, &rotations,
-                                        protocols,
-                                    ) {
-                                        transition_kinds.insert(
-                                            (node, index),
-                                            JointTransitionKind::Launch(fresh),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    let waiting = graph.not_guard(ctx, launch_guard);
-                    let guard = graph.and_guard(ctx, guard, waiting);
-                    if guard == ctx.get_false() {
-                        continue;
-                    }
                     let (successor, retired) = successor_after_frontier_step(
                         &shapes,
                         protocol,
@@ -787,16 +641,13 @@ pub fn build_joint_control_automaton(
     // compute how many slots each protocol needs in any reachable state.
     let mut bank_counts = vec![1; protocols.len()];
     let mut choice_slots = FxHashMap::default();
-    let mut choice_guards = FxHashMap::default();
     for state in &states {
-        let launch_guard = choice_guard(ctx, state, &shapes);
         for (protocol, count) in bank_counts.iter_mut().enumerate() {
             let live = live_count(state, protocol);
-            let needed = live + usize::from(launch_guard != ctx.get_false());
+            let needed = live + usize::from(state.frontier == Frontier::Choice);
             *count = (*count).max(needed);
         }
-        if launch_guard != ctx.get_false() {
-            choice_guards.insert(state_ids[state], launch_guard);
+        if state.frontier == Frontier::Choice {
             let slots = (0..protocols.len())
                 .map(|protocol| live_count(state, protocol))
                 .collect();
@@ -811,11 +662,6 @@ pub fn build_joint_control_automaton(
     let choice_slots = choice_slots
         .into_iter()
         .filter_map(|(node, slots)| Some((*node_map.get(&node)?, slots)))
-        .collect();
-
-    let choice_guards = choice_guards
-        .into_iter()
-        .filter_map(|(node, guard)| Some((*node_map.get(&node)?, guard)))
         .collect();
 
     let instances = instances
@@ -834,7 +680,6 @@ pub fn build_joint_control_automaton(
     Ok(JointControlAutomaton {
         graph,
         choice_slots,
-        choice_guards,
         bank_counts,
         instances,
         transition_kinds,
@@ -934,8 +779,7 @@ pub fn build_joint_driver_automaton(
                 transitions: Vec::new(),
             });
             if instance.starts {
-                let enabled = ctx.and(control.choice_guards[&node], launches[instance.protocol]);
-                choices.push((copied, enabled));
+                choices.push((copied, launches[instance.protocol]));
             } else {
                 lowerer.graft_contracted_entry(ctx, node, copied, ctx.get_true());
             }
@@ -952,7 +796,6 @@ pub fn build_joint_driver_automaton(
         transaction_valid,
         protocol_choice,
         choice_slots: control.choice_slots,
-        choice_guards: control.choice_guards,
         bank_counts: control.bank_counts,
     })
 }

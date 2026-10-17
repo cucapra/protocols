@@ -446,11 +446,14 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
 
 
 def monitor_status_cases(cases: list[dict]) -> list[dict]:
-    """The only exclusions are repeat/for-in and parameter-dependent control."""
+    """Exclude unsupported loops, argument guards, and guarded-fork composition."""
     return [
         case
         for case in cases
         if "--allow-branch-on-arg" not in case["extra_args"]
+        # Contraction creates multiple guarded fork nodes in these protocols.
+        # Their parity cases live with the separate guarded-fork implementation.
+        and "examples/wishbone/wishbone_pipelined.prot" not in case["paths"]
         and not any(
             {"for_in_loop", "repeat_loop"} & protocol_constructs(path)
             for path in case["paths"]
