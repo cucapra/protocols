@@ -70,7 +70,7 @@ fn choice_ready(
 /// Add the argument-bank state and transaction handshake to a joint driver.
 pub fn into_joint_transition_system(
     ctx: &mut Context,
-    mut driver: JointDriverAutomaton,
+    driver: JointDriverAutomaton,
     symbols: &SymbolTable,
     ts: TransitionSystem,
     symbol_to_port: FxHashMap<SymbolId, PortId>,
@@ -80,18 +80,15 @@ pub fn into_joint_transition_system(
         .graph
         .symbol_expr
         .iter()
-        .filter_map(|(symbol, expr)| Some((*expr, *port_to_expr.get(symbol_to_port.get(symbol)?)?)))
-        .collect();
-    for guard in driver.choice_guards.values_mut() {
-        *guard = remap_expr(ctx, *guard, &pins);
-    }
+        .filter_map(|(symbol, expr)| Some((*expr, *symbol_to_port.get(symbol)?)))
+        .collect::<Vec<_>>();
     let JointDriverAutomaton {
         graph,
         protocols,
         transaction_valid,
         protocol_choice,
         choice_slots,
-        choice_guards,
+        mut choice_guards,
         bank_counts,
     } = driver;
     let core = lower_proto_graph_to_transition_system(
@@ -102,6 +99,13 @@ pub fn into_joint_transition_system(
         port_to_expr,
         symbols,
     );
+    let pins = pins
+        .into_iter()
+        .map(|(expr, port)| (expr, core.port_to_expr[&port]))
+        .collect();
+    for guard in choice_guards.values_mut() {
+        *guard = remap_expr(ctx, *guard, &pins);
+    }
     lower_joint_core(
         ctx,
         core,
