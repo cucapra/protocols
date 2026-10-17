@@ -2,10 +2,7 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use patronus::expr::{
-    Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck,
-    simple_transform_expr,
-};
+use patronus::expr::{Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 
@@ -463,9 +460,7 @@ impl<'a> Lowerer<'a> {
         expr: ExprRef,
         substitutions: &FxHashMap<ExprRef, ExprRef>,
     ) -> ExprRef {
-        simple_transform_expr(ctx, expr, |_ctx, candidate, _children| {
-            substitutions.get(&candidate).copied()
-        })
+        remap_expr(ctx, expr, substitutions)
     }
 
     fn remap_op(
@@ -474,31 +469,7 @@ impl<'a> Lowerer<'a> {
         op: Op,
         substitutions: &FxHashMap<ExprRef, ExprRef>,
     ) -> Op {
-        match op {
-            Op::Assign(symbol_id, assignment) => Op::Assign(
-                symbol_id,
-                Assignment {
-                    dont_care: self.remap_expr(ctx, assignment.dont_care, substitutions),
-                    concretes: assignment
-                        .concretes
-                        .into_iter()
-                        .map(|(guard, rhs)| {
-                            (
-                                self.remap_expr(ctx, guard, substitutions),
-                                self.remap_expr(ctx, rhs, substitutions),
-                            )
-                        })
-                        .collect(),
-                },
-            ),
-            Op::AssertEq(lhs, rhs) => {
-                let lhs = self.remap_expr(ctx, lhs, substitutions);
-                let rhs = self.remap_expr(ctx, rhs, substitutions);
-                debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
-                Op::AssertEq(lhs, rhs)
-            }
-            other => other,
-        }
+        op.remap(ctx, substitutions, &FxHashMap::default())
     }
 
     /// Copy only the actions from a contracted node, remapping every expression.

@@ -4,20 +4,52 @@ use thiserror::Error;
 
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::lowering::{LoweredFragmentInfo, Lowerer};
+use crate::ir::lowering::Lowerer;
 use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{
-    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation,
+    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr
 };
 
 pub type ProtocolId = usize;
 
 #[derive(Debug, Error)]
-pub enum JointDriverError {
-    #[error("a joint driver needs at least one protocol")]
+pub enum JointAutomatonError {
+    #[error("a joint automaton needs at least one protocol")]
     EmptyProtocolSet,
-    #[error("unsupported joint-driver protocol {protocol}: {reason}")]
+    #[error("unsupported joint protocol {protocol}: {reason}")]
     UnsupportedProtocol { protocol: String, reason: String },
+}
+
+pub use JointAutomatonError as JointDriverError;
+
+/// One transaction contributing actions to a joint control node.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JointInstance {
+    pub protocol: ProtocolId,
+    pub slot: usize,
+    /// Node in this protocol's prepared graph.
+    pub control: NodeId,
+    /// This cycle starts a fresh transaction in the slot.
+    pub starts: bool,
+}
+
+/// Meaning of an edge before driver or monitor selection guards are attached.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum JointTransitionKind {
+    #[default]
+    Continue,
+    Launch(ProtocolId),
+    Stop,
+}
+
+/// Shared launch, pre-phase, post-phase, and draining control. Both driver and
+/// monitor construction use this schedule and its FIFO slot rotations.
+pub struct JointControlAutomaton {
+    pub graph: ProtoGraph,
+    pub choice_slots: FxHashMap<NodeId, Vec<usize>>,
+    pub bank_counts: Vec<usize>,
+    pub transition_kinds: FxHashMap<(NodeId, usize), JointTransitionKind>,
+    pub instances: FxHashMap<NodeId, Vec<JointInstance>>,
 }
 
 /// An unbounded driver graph
@@ -33,7 +65,7 @@ pub struct JointDriverAutomaton {
 
 #[derive(Clone)]
 struct ProtocolShape {
-    fragment: LoweredFragmentInfo,
+    entry: NodeId,
     fork: Option<NodeId>,
     done: NodeId,
     post: Vec<NodeId>,
@@ -68,8 +100,8 @@ struct JointState {
     frontier: Frontier,
 }
 
-fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointDriverError {
-    JointDriverError::UnsupportedProtocol {
+fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointAutomatonError {
+    JointAutomatonError::UnsupportedProtocol {
         protocol: protocol.name.clone(),
         reason: reason.into(),
     }
@@ -77,23 +109,30 @@ fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointDriverErr
 
 fn analyze_shape(
     ctx: &Context,
-    graph: &ProtoGraph, // assumes the graph is contracted and unreachable edges are pruned
+    graph: &ProtoGraph,
     protocol: &Protocol,
-    fragment: LoweredFragmentInfo,
-) -> Result<ProtocolShape, JointDriverError> {
-    // find the fork and done nodes reachable from the protocol entry.
+) -> Result<ProtocolShape, JointAutomatonError> {
     let mut forks = Vec::new();
     let mut dones = Vec::new();
-    for node in reachable_node_ids(ctx, graph, fragment.entry) {
+    for node in reachable_node_ids(ctx, graph, graph.entry) {
         for action in &graph[node].actions {
             match graph[action.op] {
-                Op::Fork if !forks.contains(&node) => forks.push(node),
+                Op::Fork => {
+                    if action.guard != ctx.get_true() {
+                        return Err(unsupported(
+                            protocol,
+                            "the fork must be unconditional in its node",
+                        ));
+                    }
+                    if !forks.contains(&node) {
+                        forks.push(node);
+                    }
+                }
                 Op::Done if !dones.contains(&node) => dones.push(node),
                 _ => {}
             }
         }
     }
-
     if forks.len() > 1 {
         return Err(unsupported(protocol, "more than one reachable fork node"));
     }
@@ -103,8 +142,6 @@ fn analyze_shape(
             format!("expected one reachable done node, found {}", dones.len()),
         ));
     }
-
-    // check that the post-phase is a finite straight line.
     let done = dones[0];
     let fork = forks.first().copied();
     let mut post = Vec::new();
@@ -129,9 +166,8 @@ fn analyze_shape(
             ));
         }
     }
-
     Ok(ProtocolShape {
-        fragment,
+        entry: graph.entry,
         fork,
         done,
         post,
@@ -156,9 +192,9 @@ fn selector_guard(
 
 // arguments need to be renamed for the specific transaction instance to
 // prevent collisions between concurrently running protocols
-fn instance_substitutions(
+fn joint_argument_substitutions(
     ctx: &mut Context,
-    graph: &mut ProtoGraph,
+    graph: &ProtoGraph,
     protocol: &Protocol,
     symbols: &SymbolTable,
     slot: usize,
@@ -240,9 +276,9 @@ fn add_transition(
     target: NodeId,
     rotations: &[usize],
     protocols: &[Protocol],
-) {
+) -> Option<usize> {
     if guard == ctx.get_false() {
-        return;
+        return None;
     }
     let mut transition = Transition::new(guard, target, true);
     transition.rotations = rotations
@@ -254,7 +290,9 @@ fn add_transition(
             amount,
         })
         .collect();
+    let index = graph[source].transitions.len();
     graph.push_transition(source, transition);
+    Some(index)
 }
 
 struct AdvancedPosts {
@@ -265,7 +303,8 @@ struct AdvancedPosts {
 
 fn advance_posts(
     ctx: &mut Context,
-    lowerer: &mut Lowerer<'_>,
+    graph: &mut ProtoGraph,
+    sources: &[ProtoGraph],
     state: &JointState,
     shapes: &[ProtocolShape],
     protocols: &[Protocol],
@@ -278,20 +317,19 @@ fn advance_posts(
     for transaction in &state.posts {
         let shape = &shapes[transaction.protocol];
         let source = shape.post[transaction.post_index];
-        let step = lowerer.ir[source]
+        let step = sources[transaction.protocol][source]
             .transitions
             .first()
-            .cloned()
             .expect("validated post node must have one transition");
-        let substitutions = instance_substitutions(
+        let substitutions = joint_argument_substitutions(
             ctx,
-            &mut lowerer.ir,
+            &sources[transaction.protocol],
             &protocols[transaction.protocol],
             symbols,
             transaction.slot,
         );
-        let step_guard = lowerer.remap_expr(ctx, step.guard, &substitutions);
-        guard = lowerer.ir.and_guard(ctx, guard, step_guard);
+        let step_guard = remap_expr(ctx, step.guard, &substitutions);
+        guard = graph.and_guard(ctx, guard, step_guard);
         // mark the transaction for retirement when its last post cycle finishes.
         if transaction.post_index + 1 == shape.post.len() {
             debug_assert_eq!(step.target, shape.done);
@@ -341,36 +379,62 @@ fn successor_after_frontier_step(
     (JointState { posts, frontier }, retired)
 }
 
-/// Construct one finite automaton that can drive an unbounded, back-to-back
-/// sequence of the supplied protocols.
-pub fn build_joint_driver_automaton(
+/// Prepare each source once, before either driver or monitor composition.
+pub fn prepare_joint_protocols(
     ctx: &mut Context,
-    protocols: Vec<Protocol>,
+    protocols: &[Protocol],
     symbols: &SymbolTable,
-) -> Result<JointDriverAutomaton, JointDriverError> {
-    // reject inputs that cannot be represented by one joint driver.
+) -> Result<Vec<ProtoGraph>, JointAutomatonError> {
     if protocols.is_empty() {
-        return Err(JointDriverError::EmptyProtocolSet);
+        return Err(JointAutomatonError::EmptyProtocolSet);
     }
-    // lower each protocol once and record the shape needed to combine it.
-    let mut lowerer = Lowerer::new(protocols[0].ctx.clone(), symbols);
-    let mut shapes = Vec::with_capacity(protocols.len());
-    for protocol in &protocols {
-        let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
-        lowerer.postprocess_trace_fragment(ctx, &fragment);
-        shapes.push(analyze_shape(ctx, &lowerer.ir, protocol, fragment)?);
+    Ok(protocols
+        .iter()
+        .map(|protocol| {
+            let mut lowerer = Lowerer::new(protocol.ctx.clone(), symbols);
+            let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
+            lowerer.postprocess_trace_fragment(ctx, &fragment);
+            lowerer.ir.entry = fragment.entry;
+            lowerer.ir.garbage_collect_unreachable(ctx);
+            lowerer.ir
+        })
+        .collect())
+}
+
+/// Construct control independently of whether actions drive or observe pins.
+/// Sources must be contracted, assignment-propagated single-protocol graphs.
+/// Each protocol may have one unconditional fork node, followed by a finite,
+/// straight-line tail to Done.
+pub fn build_joint_control_automaton(
+    ctx: &mut Context,
+    protocols: &[Protocol],
+    sources: &[ProtoGraph],
+    symbols: &SymbolTable,
+) -> Result<JointControlAutomaton, JointAutomatonError> {
+    if protocols.is_empty() {
+        return Err(JointAutomatonError::EmptyProtocolSet);
     }
+    assert_eq!(protocols.len(), sources.len());
+    let shapes = protocols
+        .iter()
+        .zip(sources)
+        .map(|(protocol, graph)| analyze_shape(ctx, graph, protocol))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut graph = ProtoGraph::new(protocols[0].ctx.clone());
+    for source in sources {
+        graph.symbol_expr.extend(
+            source
+                .symbol_expr
+                .iter()
+                .map(|(&symbol, &expr)| (symbol, expr)),
+        );
+        graph.dont_cares.extend(source.dont_cares.iter().copied());
+    }
+    let mut instances = FxHashMap::default();
 
-    // create the shared inputs used to start the next transaction.
-    let choice_width = if protocols.len() <= 1 {
-        1
-    } else {
-        usize::BITS - (protocols.len() - 1).leading_zeros()
-    };
-    let transaction_valid = ctx.bv_symbol("transaction_valid", 1);
-    let protocol_choice = ctx.bv_symbol("protocol_choice", choice_width);
+    let mut transition_kinds = FxHashMap::default();
 
-    // start from a state where the driver can choose its first transaction.
+    // Start at a choice between the protocols' first cycles.
     let entry_state = JointState {
         posts: Vec::new(),
         frontier: Frontier::Choice,
@@ -380,7 +444,7 @@ pub fn build_joint_driver_automaton(
     let mut states = vec![entry_state.clone()];
     // canonical graph node for each discovered state, used to merge duplicates.
     let mut state_ids = FxHashMap::default();
-    let entry = lowerer.ir.n(Node::empty());
+    let entry = graph.n(Node::empty());
     state_ids.insert(entry_state, entry);
     let mut cursor = 0;
 
@@ -388,73 +452,50 @@ pub fn build_joint_driver_automaton(
     while cursor < states.len() {
         let state = states[cursor].clone();
         let node = state_ids[&state];
-        lowerer.add_input_dont_care_assignments(ctx, &protocols[0], node);
-
-        // copy the actions of all active post phases into this state.
+        let mut active = Vec::new();
         for transaction in &state.posts {
-            let substitutions = instance_substitutions(
-                ctx,
-                &mut lowerer.ir,
-                &protocols[transaction.protocol],
-                symbols,
-                transaction.slot,
-            );
-            let source = shapes[transaction.protocol].post[transaction.post_index];
-            let actions = lowerer.copy_node_actions(ctx, source, &substitutions, false);
-            lowerer.graft_contracted_entry(ctx, node, actions, ctx.get_true());
+            active.push(JointInstance {
+                protocol: transaction.protocol,
+                slot: transaction.slot,
+                control: shapes[transaction.protocol].post[transaction.post_index],
+                starts: false,
+            });
         }
-
-        // copy the active pre phase or the next choice into this state.
         match state.frontier {
             Frontier::Pre {
                 protocol,
                 control,
                 slot,
-            } => {
-                let substitutions = instance_substitutions(
-                    ctx,
-                    &mut lowerer.ir,
-                    &protocols[protocol],
-                    symbols,
-                    slot,
-                );
-                let actions = lowerer.copy_node_actions(ctx, control, &substitutions, false);
-                lowerer.graft_contracted_entry(ctx, node, actions, ctx.get_true());
-            }
+            } => active.push(JointInstance {
+                protocol,
+                control,
+                slot,
+                starts: false,
+            }),
             Frontier::Choice => {
-                let choices = protocols
-                    .iter()
-                    .enumerate()
-                    .map(|(protocol, ast)| {
-                        let slot = live_count(&state, protocol);
-                        let substitutions =
-                            instance_substitutions(ctx, &mut lowerer.ir, ast, symbols, slot);
-                        let actions = lowerer.copy_node_actions(
-                            ctx,
-                            shapes[protocol].fragment.entry,
-                            &substitutions,
-                            false,
-                        );
-                        let selected =
-                            selector_guard(ctx, protocol_choice, protocol, protocols.len());
-                        let guard = lowerer.ir.and_guard(ctx, transaction_valid, selected);
-                        (actions, guard)
-                    })
-                    .collect::<Vec<_>>();
-                lowerer.graft_disjoint_contracted_entries(ctx, node, &choices);
+                for (protocol, shape) in shapes.iter().enumerate() {
+                    active.push(JointInstance {
+                        protocol,
+                        slot: live_count(&state, protocol),
+                        control: shape.entry,
+                        starts: true,
+                    });
+                }
             }
             Frontier::Draining => {}
         }
+        instances.insert(node, active);
 
         // compute the common post-phase step used by every outgoing transition.
-        let advanced = advance_posts(ctx, &mut lowerer, &state, &shapes, &protocols, symbols);
+        let advanced = advance_posts(
+            ctx, &mut graph, sources, &state, &shapes, protocols, symbols,
+        );
         match state.frontier {
             Frontier::Choice => {
-                // allow the driver to stop when no transaction is being launched.
-                let not_valid = lowerer.ir.not_guard(ctx, transaction_valid);
+                // Stop launching and drain the remaining transactions.
                 if state.posts.is_empty() {
-                    let done = lowerer.ir.o(Op::Done);
-                    lowerer.ir.push_action(node, Action::new(not_valid, done));
+                    let done = graph.o(Op::Done);
+                    graph.push_action(node, Action::new(ctx.get_true(), done));
                 } else {
                     let successor = JointState {
                         posts: advanced.posts.clone(),
@@ -465,40 +506,38 @@ pub fn build_joint_driver_automaton(
                     let target = if let Some(&target) = state_ids.get(&successor) {
                         target
                     } else {
-                        let target = lowerer.ir.n(Node::empty());
+                        let target = graph.n(Node::empty());
                         state_ids.insert(successor.clone(), target);
                         states.push(successor);
                         target
                     };
-                    let guard = lowerer.ir.and_guard(ctx, advanced.guard, not_valid);
-                    add_transition(
+                    if let Some(index) = add_transition(
                         ctx,
-                        &mut lowerer.ir,
+                        &mut graph,
                         node,
-                        guard,
+                        advanced.guard,
                         target,
                         &rotations,
-                        &protocols,
-                    );
+                        protocols,
+                    ) {
+                        transition_kinds.insert((node, index), JointTransitionKind::Stop);
+                    }
                 }
 
                 // add one guarded transition for each possible protocol launch.
                 for protocol in 0..protocols.len() {
                     let slot = live_count(&state, protocol);
-                    let substitutions = instance_substitutions(
+                    let substitutions = joint_argument_substitutions(
                         ctx,
-                        &mut lowerer.ir,
+                        &sources[protocol],
                         &protocols[protocol],
                         symbols,
                         slot,
                     );
-                    let selected = selector_guard(ctx, protocol_choice, protocol, protocols.len());
-                    let launch = lowerer.ir.and_guard(ctx, transaction_valid, selected);
-                    let source = shapes[protocol].fragment.entry;
-                    for step in lowerer.ir[source].transitions.clone() {
-                        let step_guard = lowerer.remap_expr(ctx, step.guard, &substitutions);
-                        let guard = lowerer.ir.and_guard(ctx, advanced.guard, launch);
-                        let guard = lowerer.ir.and_guard(ctx, guard, step_guard);
+                    let source = shapes[protocol].entry;
+                    for step in sources[protocol][source].transitions.clone() {
+                        let step_guard = remap_expr(ctx, step.guard, &substitutions);
+                        let guard = graph.and_guard(ctx, advanced.guard, step_guard);
                         let (successor, retired) = successor_after_frontier_step(
                             &shapes,
                             protocol,
@@ -512,20 +551,17 @@ pub fn build_joint_driver_automaton(
                         let target = if let Some(&target) = state_ids.get(&successor) {
                             target
                         } else {
-                            let target = lowerer.ir.n(Node::empty());
+                            let target = graph.n(Node::empty());
                             state_ids.insert(successor.clone(), target);
                             states.push(successor);
                             target
                         };
-                        add_transition(
-                            ctx,
-                            &mut lowerer.ir,
-                            node,
-                            guard,
-                            target,
-                            &rotations,
-                            &protocols,
-                        );
+                        if let Some(index) = add_transition(
+                            ctx, &mut graph, node, guard, target, &rotations, protocols,
+                        ) {
+                            transition_kinds
+                                .insert((node, index), JointTransitionKind::Launch(protocol));
+                        }
                     }
                 }
             }
@@ -535,16 +571,16 @@ pub fn build_joint_driver_automaton(
                 slot,
             } => {
                 // follow the active protocol's pre-phase control flow.
-                let substitutions = instance_substitutions(
+                let substitutions = joint_argument_substitutions(
                     ctx,
-                    &mut lowerer.ir,
+                    &sources[protocol],
                     &protocols[protocol],
                     symbols,
                     slot,
                 );
-                for step in lowerer.ir[control].transitions.clone() {
-                    let step_guard = lowerer.remap_expr(ctx, step.guard, &substitutions);
-                    let guard = lowerer.ir.and_guard(ctx, advanced.guard, step_guard);
+                for step in sources[protocol][control].transitions.clone() {
+                    let step_guard = remap_expr(ctx, step.guard, &substitutions);
+                    let guard = graph.and_guard(ctx, advanced.guard, step_guard);
                     let (successor, retired) = successor_after_frontier_step(
                         &shapes,
                         protocol,
@@ -558,29 +594,20 @@ pub fn build_joint_driver_automaton(
                     let target = if let Some(&target) = state_ids.get(&successor) {
                         target
                     } else {
-                        let target = lowerer.ir.n(Node::empty());
+                        let target = graph.n(Node::empty());
                         state_ids.insert(successor.clone(), target);
                         states.push(successor);
                         target
                     };
-                    add_transition(
-                        ctx,
-                        &mut lowerer.ir,
-                        node,
-                        guard,
-                        target,
-                        &rotations,
-                        &protocols,
-                    );
+                    let _ =
+                        add_transition(ctx, &mut graph, node, guard, target, &rotations, protocols);
                 }
             }
             Frontier::Draining => {
                 // after the final launch, keep stepping until all posts retire.
                 if state.posts.is_empty() {
-                    let done = lowerer.ir.o(Op::Done);
-                    lowerer
-                        .ir
-                        .push_action(node, Action::new(ctx.get_true(), done));
+                    let done = graph.o(Op::Done);
+                    graph.push_action(node, Action::new(ctx.get_true(), done));
                 } else {
                     let successor = JointState {
                         posts: advanced.posts,
@@ -591,19 +618,19 @@ pub fn build_joint_driver_automaton(
                     let target = if let Some(&target) = state_ids.get(&successor) {
                         target
                     } else {
-                        let target = lowerer.ir.n(Node::empty());
+                        let target = graph.n(Node::empty());
                         state_ids.insert(successor.clone(), target);
                         states.push(successor);
                         target
                     };
-                    add_transition(
+                    let _ = add_transition(
                         ctx,
-                        &mut lowerer.ir,
+                        &mut graph,
                         node,
                         advanced.guard,
                         target,
                         &rotations,
-                        &protocols,
+                        protocols,
                     );
                 }
             }
@@ -629,21 +656,147 @@ pub fn build_joint_driver_automaton(
     }
 
     // remove unreachable nodes and update choice-node metadata after compaction.
-    lowerer.ir.entry = entry;
-    let node_map = lowerer.ir.garbage_collect_unreachable(ctx);
-    lowerer.ir.simplify_all_exprs(ctx);
+    graph.entry = entry;
+    let node_map = graph.garbage_collect_unreachable(ctx);
+    graph.simplify_all_exprs(ctx);
     let choice_slots = choice_slots
         .into_iter()
         .filter_map(|(node, slots)| Some((*node_map.get(&node)?, slots)))
         .collect();
 
+    let instances = instances
+        .into_iter()
+        .filter_map(|(node, active)| Some((*node_map.get(&node)?, active)))
+        .collect();
+    let mut transition_kinds = transition_kinds
+        .into_iter()
+        .filter_map(|((node, index), kind)| Some(((*node_map.get(&node)?, index), kind)))
+        .collect::<FxHashMap<_, _>>();
+    for (node, data) in graph.nodes() {
+        for index in 0..data.transitions.len() {
+            transition_kinds.entry((node, index)).or_default();
+        }
+    }
+    Ok(JointControlAutomaton {
+        graph,
+        choice_slots,
+        bank_counts,
+        instances,
+        transition_kinds,
+    })
+}
+
+/// Construct one finite automaton that can drive an unbounded, back-to-back
+/// sequence of the supplied protocols.
+pub fn build_joint_driver_automaton(
+    ctx: &mut Context,
+    protocols: Vec<Protocol>,
+    symbols: &SymbolTable,
+) -> Result<JointDriverAutomaton, JointDriverError> {
+    let sources = prepare_joint_protocols(ctx, &protocols, symbols)?;
+    let control = build_joint_control_automaton(ctx, &protocols, &sources, symbols)?;
+    // create the shared inputs used to start the next transaction.
+    let choice_width = if protocols.len() <= 1 {
+        1
+    } else {
+        usize::BITS - (protocols.len() - 1).leading_zeros()
+    };
+    let transaction_valid = ctx.bv_symbol("transaction_valid", 1);
+    let protocol_choice = ctx.bv_symbol("protocol_choice", choice_width);
+
+    let launches = (0..protocols.len())
+        .map(|protocol| {
+            let selected = selector_guard(ctx, protocol_choice, protocol, protocols.len());
+            ctx.and(transaction_valid, selected)
+        })
+        .collect::<Vec<_>>();
+    let stop = ctx.not(transaction_valid);
+    let mut lowerer = Lowerer::new(protocols[0].ctx.clone(), symbols);
+    lowerer.ir = control.graph;
+    // Different protocols have distinct symbols for the same DUT pins. Keep
+    // assignment targets in the shared graph's DUT context, including draining
+    // nodes where no new launch would otherwise supply that protocol's symbols.
+    let inputs = lowerer.ir.dut_input_symbols(symbols).collect::<Vec<_>>();
+    let targets = sources
+        .iter()
+        .flat_map(|source| source.dut_input_symbols(symbols))
+        .map(|symbol| {
+            let target = inputs
+                .iter()
+                .copied()
+                .find(|&input| {
+                    symbols[input].full_name(symbols) == symbols[symbol].full_name(symbols)
+                })
+                .expect("joint protocols must refer to the same DUT inputs");
+            (symbol, target)
+        })
+        .collect::<FxHashMap<_, _>>();
+    let nodes = lowerer.ir.nodes().map(|(id, _)| id).collect::<Vec<_>>();
+    for node in nodes {
+        for (index, edge) in lowerer.ir.node_mut(node).transitions.iter_mut().enumerate() {
+            let selection = match control.transition_kinds[&(node, index)] {
+                JointTransitionKind::Launch(protocol) => launches[protocol],
+                JointTransitionKind::Stop => stop,
+                JointTransitionKind::Continue => ctx.get_true(),
+            };
+            edge.guard = ctx.and(edge.guard, selection);
+        }
+        if control.choice_slots.contains_key(&node) {
+            debug_assert!(
+                lowerer.ir[node]
+                    .actions
+                    .iter()
+                    .all(|action| matches!(lowerer.ir[action.op], Op::Done))
+            );
+            for action in lowerer.ir.node_mut(node).actions.iter_mut() {
+                // The control builder emits only global Done actions here.
+                action.guard = stop;
+            }
+        }
+        lowerer.add_input_dont_care_assignments(ctx, &protocols[0], node);
+        let mut choices = Vec::new();
+        for instance in &control.instances[&node] {
+            let source = &sources[instance.protocol];
+            let substitutions = joint_argument_substitutions(
+                ctx,
+                source,
+                &protocols[instance.protocol],
+                symbols,
+                instance.slot,
+            );
+            let mut actions = Vec::new();
+            for action in &source[instance.control].actions {
+                if matches!(source[action.op], Op::Fork | Op::Done) {
+                    continue;
+                }
+                let op = source[action.op].remap(ctx, &substitutions, &targets);
+                let op = lowerer.ir.o(op);
+                let guard = remap_expr(ctx, action.guard, &substitutions);
+                actions.push(Action::new(guard, op));
+            }
+            let copied = lowerer.ir.n(Node {
+                actions,
+                transitions: Vec::new(),
+            });
+            if instance.starts {
+                choices.push((copied, launches[instance.protocol]));
+            } else {
+                lowerer.graft_contracted_entry(ctx, node, copied, ctx.get_true());
+            }
+        }
+        if !choices.is_empty() {
+            lowerer.graft_disjoint_contracted_entries(ctx, node, &choices);
+        }
+    }
+    lowerer.ir.garbage_collect_unreachable(ctx);
+    lowerer.ir.simplify_all_exprs(ctx);
     Ok(JointDriverAutomaton {
         graph: lowerer.ir,
         protocols,
         transaction_valid,
         protocol_choice,
-        choice_slots,
-        bank_counts,
+        choice_slots: control.choice_slots,
+        bank_counts: control.bank_counts,
     })
 }
 

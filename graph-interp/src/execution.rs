@@ -7,20 +7,20 @@ use protocols::ascii_waveform::print_ascii_waveform;
 use protocols::backends::bmc_transition_system::into_bmc_transition_system;
 use protocols::backends::joint_transition_system::into_joint_transition_system;
 use protocols::backends::transition_system::into_transition_system;
-use protocols::frontend::{Module, ast::Protocol, symbol::SymbolTable};
+use protocols::frontend::Module;
+use protocols::frontend::ast::Protocol;
+use protocols::frontend::symbol::SymbolTable;
 use protocols::interpreter::Value as WaveValue;
-use protocols::ir::{
-    bounded_lowering::lower_bmc,
-    determinize::determinized,
-    graph_interpreter::{self, GraphInterpretFailure, GraphInterpretFailureKind},
-    graphviz::to_dot_string,
-    joint_automaton::{ProtocolId, build_joint_driver_automaton},
-    lowering::lower_ast_to_ir,
-    propagate_assigns::propagate_assignments,
-    proto_graph::ProtoGraph,
-    reaching_defs::{format_reaching_defs, reaching_definitions},
-    trace_lowering::lower_trace_to_ir,
-};
+use protocols::ir::bounded_lowering::lower_bmc;
+use protocols::ir::determinize::determinized;
+use protocols::ir::graph_interpreter::{self, GraphInterpretFailure, GraphInterpretFailureKind};
+use protocols::ir::graphviz::to_dot_string;
+use protocols::ir::joint_automaton::{ProtocolId, build_joint_driver_automaton};
+use protocols::ir::lowering::lower_ast_to_ir;
+use protocols::ir::propagate_assigns::propagate_assignments;
+use protocols::ir::proto_graph::ProtoGraph;
+use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
+use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, PortId, Value};
 use rustc_hash::FxHashMap;
 
@@ -40,6 +40,7 @@ pub fn run(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) 
             cli.bound.expect("validated bounded-driver bound").get(),
         ),
         Flow::UnboundedDriver => run_unbounded_driver(cli, symbols, module, traces),
+        Flow::UnboundedMonitor => unreachable!("waveform monitoring is dispatched separately"),
     }
 }
 
