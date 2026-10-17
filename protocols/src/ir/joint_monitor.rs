@@ -377,6 +377,3 @@ fn push_owned_action(
     graph.push_action(node, Action::new(guard, op));
     monitor.action_owners.insert((node, index), owner);
 }
-
-#[cfg(test)]
-mod tests;

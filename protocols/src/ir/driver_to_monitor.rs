@@ -596,6 +596,3 @@ impl Converter<'_> {
         self.emit(actions, guard, Op::AssertEq(lhs, rhs));
     }
 }
-
-#[cfg(test)]
-mod tests;

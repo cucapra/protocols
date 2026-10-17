@@ -90,19 +90,6 @@ $ cd tests
 $ cargo bi -p adders/add_d1.prot --wave adders/add_d1.fst --instances add_d1:Adder
 ```
 
-To check a waveform using the unbounded monitor transition system, run from the repository root:
-
-```bash
-cargo run -p graph-interp -- --flow unbounded-monitor \
-  --protocol tests/wal/advanced/axis.prot \
-  --wave tests/wal/advanced/uart-axi-minimal.fst \
-  --instances uut_rx:AXIS --sample-posedge uut_rx.clk
-```
-
-This prints `Pass` or `Fail` and exits with code 0 or 1. Operational and internal errors exit with code 2. An unfinished waveform prefix passes if no constraint has failed. Add `--status-only` to the BI command to obtain the same status format. `runt runt/monitor_status` compares both implementations; its only catalogue exclusions are `repeat`, `for-in`, and `--allow-branch-on-arg`.
-
-Unbounded driver and monitor construction requires finite, straight-line execution after a fork. All fork tails within one protocol must consume the same number of cycles so its bank slots retire in FIFO order. Different protocols may have different tail lengths.
-
 ## Interpreter CLI
 The interpreter has a CLI, which can be invoked as follows:
 ```bash
