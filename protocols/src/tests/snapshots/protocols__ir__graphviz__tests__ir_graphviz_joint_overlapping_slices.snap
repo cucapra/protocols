@@ -18,6 +18,9 @@ digraph "overlapping_slices" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[not(transaction_valid)] done\n[transaction_valid] assert_eq(dut.a[2:1], dut.b[1:0])\n[1] $monitor_p_value#0_overlapping_slices := or(concat(0, concat(dut.a, 0)), concat(dut.b[2], 0)) if transaction_valid\n[1] $monitor_live#0_overlapping_slices := 1 if transaction_valid"];
-  node0 -> node0 [label="transaction_valid / step / R_overlapping_slices"];
+  node0 [label="[1] done\n[1] $monitor_p_value#0_overlapping_slices := or(concat(0, concat(dut.a, 0)), concat(dut.b[2], 0)) if 1\n[1] $monitor_live#0_overlapping_slices := 0 if not(eq(dut.a[2:1], dut.b[1:0])); 1 if 1"];
+  node0 -> node0 [label="$monitor_live#0_overlapping_slices / step / R_overlapping_slices"];
+  node0 -> node1 [label="not($monitor_live#0_overlapping_slices) / step"];
+  node1 [label="BAD STATE"];
+  node1 -> node1 [label="1 / step"];
 }

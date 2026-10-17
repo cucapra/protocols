@@ -29,19 +29,26 @@ pub struct JointInstance {
     pub slot: usize,
     /// Node in this protocol's prepared graph.
     pub control: NodeId,
-    pub guard: ExprRef,
     /// This cycle starts a fresh transaction in the slot.
     pub starts: bool,
+}
+
+/// Meaning of an edge before driver or monitor selection guards are attached.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum JointTransitionKind {
+    #[default]
+    Continue,
+    Launch(ProtocolId),
+    Stop,
 }
 
 /// Shared launch, pre-phase, post-phase, and draining control. Both driver and
 /// monitor construction use this schedule and its FIFO slot rotations.
 pub struct JointControlAutomaton {
     pub graph: ProtoGraph,
-    pub transaction_valid: ExprRef,
-    pub protocol_choice: ExprRef,
     pub choice_slots: FxHashMap<NodeId, Vec<usize>>,
     pub bank_counts: Vec<usize>,
+    pub transition_kinds: FxHashMap<(NodeId, usize), JointTransitionKind>,
     pub instances: FxHashMap<NodeId, Vec<JointInstance>>,
 }
 
@@ -264,9 +271,9 @@ fn add_transition(
     target: NodeId,
     rotations: &[usize],
     protocols: &[Protocol],
-) {
+) -> Option<usize> {
     if guard == ctx.get_false() {
-        return;
+        return None;
     }
     let mut transition = Transition::new(guard, target, true);
     transition.rotations = rotations
@@ -278,7 +285,9 @@ fn add_transition(
             amount,
         })
         .collect();
+    let index = graph[source].transitions.len();
     graph.push_transition(source, transition);
+    Some(index)
 }
 
 struct AdvancedPosts {
@@ -417,16 +426,9 @@ pub fn build_joint_control_automaton(
     }
     let mut instances = FxHashMap::default();
 
-    // create the shared inputs used to start the next transaction.
-    let choice_width = if protocols.len() <= 1 {
-        1
-    } else {
-        usize::BITS - (protocols.len() - 1).leading_zeros()
-    };
-    let transaction_valid = ctx.bv_symbol("transaction_valid", 1);
-    let protocol_choice = ctx.bv_symbol("protocol_choice", choice_width);
+    let mut transition_kinds = FxHashMap::default();
 
-    // start from a state where the driver can choose its first transaction.
+    // Start at a choice between the protocols' first cycles.
     let entry_state = JointState {
         posts: Vec::new(),
         frontier: Frontier::Choice,
@@ -450,7 +452,6 @@ pub fn build_joint_control_automaton(
                 protocol: transaction.protocol,
                 slot: transaction.slot,
                 control: shapes[transaction.protocol].post[transaction.post_index],
-                guard: ctx.get_true(),
                 starts: false,
             });
         }
@@ -463,17 +464,14 @@ pub fn build_joint_control_automaton(
                 protocol,
                 control,
                 slot,
-                guard: ctx.get_true(),
                 starts: false,
             }),
             Frontier::Choice => {
                 for (protocol, shape) in shapes.iter().enumerate() {
-                    let selected = selector_guard(ctx, protocol_choice, protocol, protocols.len());
                     active.push(JointInstance {
                         protocol,
                         slot: live_count(&state, protocol),
                         control: shape.entry,
-                        guard: graph.and_guard(ctx, transaction_valid, selected),
                         starts: true,
                     });
                 }
@@ -489,10 +487,9 @@ pub fn build_joint_control_automaton(
         match state.frontier {
             Frontier::Choice => {
                 // Stop launching and drain the remaining transactions.
-                let not_valid = graph.not_guard(ctx, transaction_valid);
                 if state.posts.is_empty() {
                     let done = graph.o(Op::Done);
-                    graph.push_action(node, Action::new(not_valid, done));
+                    graph.push_action(node, Action::new(ctx.get_true(), done));
                 } else {
                     let successor = JointState {
                         posts: advanced.posts.clone(),
@@ -508,8 +505,17 @@ pub fn build_joint_control_automaton(
                         states.push(successor);
                         target
                     };
-                    let guard = graph.and_guard(ctx, advanced.guard, not_valid);
-                    add_transition(ctx, &mut graph, node, guard, target, &rotations, protocols);
+                    if let Some(index) = add_transition(
+                        ctx,
+                        &mut graph,
+                        node,
+                        advanced.guard,
+                        target,
+                        &rotations,
+                        protocols,
+                    ) {
+                        transition_kinds.insert((node, index), JointTransitionKind::Stop);
+                    }
                 }
 
                 // add one guarded transition for each possible protocol launch.
@@ -522,13 +528,10 @@ pub fn build_joint_control_automaton(
                         symbols,
                         slot,
                     );
-                    let selected = selector_guard(ctx, protocol_choice, protocol, protocols.len());
-                    let launch = graph.and_guard(ctx, transaction_valid, selected);
                     let source = shapes[protocol].entry;
                     for step in sources[protocol][source].transitions.clone() {
                         let step_guard = remap_expr(ctx, step.guard, &substitutions);
-                        let guard = graph.and_guard(ctx, advanced.guard, launch);
-                        let guard = graph.and_guard(ctx, guard, step_guard);
+                        let guard = graph.and_guard(ctx, advanced.guard, step_guard);
                         let (successor, retired) = successor_after_frontier_step(
                             &shapes,
                             protocol,
@@ -547,7 +550,12 @@ pub fn build_joint_control_automaton(
                             states.push(successor);
                             target
                         };
-                        add_transition(ctx, &mut graph, node, guard, target, &rotations, protocols);
+                        if let Some(index) = add_transition(
+                            ctx, &mut graph, node, guard, target, &rotations, protocols,
+                        ) {
+                            transition_kinds
+                                .insert((node, index), JointTransitionKind::Launch(protocol));
+                        }
                     }
                 }
             }
@@ -585,7 +593,8 @@ pub fn build_joint_control_automaton(
                         states.push(successor);
                         target
                     };
-                    add_transition(ctx, &mut graph, node, guard, target, &rotations, protocols);
+                    let _ =
+                        add_transition(ctx, &mut graph, node, guard, target, &rotations, protocols);
                 }
             }
             Frontier::Draining => {
@@ -608,7 +617,7 @@ pub fn build_joint_control_automaton(
                         states.push(successor);
                         target
                     };
-                    add_transition(
+                    let _ = add_transition(
                         ctx,
                         &mut graph,
                         node,
@@ -653,13 +662,21 @@ pub fn build_joint_control_automaton(
         .into_iter()
         .filter_map(|(node, active)| Some((*node_map.get(&node)?, active)))
         .collect();
+    let mut transition_kinds = transition_kinds
+        .into_iter()
+        .filter_map(|((node, index), kind)| Some(((*node_map.get(&node)?, index), kind)))
+        .collect::<FxHashMap<_, _>>();
+    for (node, data) in graph.nodes() {
+        for index in 0..data.transitions.len() {
+            transition_kinds.entry((node, index)).or_default();
+        }
+    }
     Ok(JointControlAutomaton {
         graph,
-        transaction_valid,
-        protocol_choice,
         choice_slots,
         bank_counts,
         instances,
+        transition_kinds,
     })
 }
 
@@ -672,6 +689,22 @@ pub fn build_joint_driver_automaton(
 ) -> Result<JointDriverAutomaton, JointDriverError> {
     let sources = prepare_joint_protocols(ctx, &protocols, symbols)?;
     let control = build_joint_control_automaton(ctx, &protocols, &sources, symbols)?;
+    // create the shared inputs used to start the next transaction.
+    let choice_width = if protocols.len() <= 1 {
+        1
+    } else {
+        usize::BITS - (protocols.len() - 1).leading_zeros()
+    };
+    let transaction_valid = ctx.bv_symbol("transaction_valid", 1);
+    let protocol_choice = ctx.bv_symbol("protocol_choice", choice_width);
+
+    let launches = (0..protocols.len())
+        .map(|protocol| {
+            let selected = selector_guard(ctx, protocol_choice, protocol, protocols.len());
+            ctx.and(transaction_valid, selected)
+        })
+        .collect::<Vec<_>>();
+    let stop = ctx.not(transaction_valid);
     let mut lowerer = Lowerer::new(protocols[0].ctx.clone(), symbols);
     lowerer.ir = control.graph;
     // Different protocols have distinct symbols for the same DUT pins. Keep
@@ -694,6 +727,26 @@ pub fn build_joint_driver_automaton(
         .collect::<FxHashMap<_, _>>();
     let nodes = lowerer.ir.nodes().map(|(id, _)| id).collect::<Vec<_>>();
     for node in nodes {
+        for (index, edge) in lowerer.ir.node_mut(node).transitions.iter_mut().enumerate() {
+            let selection = match control.transition_kinds[&(node, index)] {
+                JointTransitionKind::Launch(protocol) => launches[protocol],
+                JointTransitionKind::Stop => stop,
+                JointTransitionKind::Continue => ctx.get_true(),
+            };
+            edge.guard = ctx.and(edge.guard, selection);
+        }
+        if control.choice_slots.contains_key(&node) {
+            debug_assert!(
+                lowerer.ir[node]
+                    .actions
+                    .iter()
+                    .all(|action| matches!(lowerer.ir[action.op], Op::Done))
+            );
+            for action in lowerer.ir.node_mut(node).actions.iter_mut() {
+                // The control builder emits only global Done actions here.
+                action.guard = stop;
+            }
+        }
         lowerer.add_input_dont_care_assignments(ctx, &protocols[0], node);
         let mut choices = Vec::new();
         for instance in &control.instances[&node] {
@@ -720,9 +773,9 @@ pub fn build_joint_driver_automaton(
                 transitions: Vec::new(),
             });
             if instance.starts {
-                choices.push((copied, instance.guard));
+                choices.push((copied, launches[instance.protocol]));
             } else {
-                lowerer.graft_contracted_entry(ctx, node, copied, instance.guard);
+                lowerer.graft_contracted_entry(ctx, node, copied, ctx.get_true());
             }
         }
         if !choices.is_empty() {
@@ -734,8 +787,8 @@ pub fn build_joint_driver_automaton(
     Ok(JointDriverAutomaton {
         graph: lowerer.ir,
         protocols,
-        transaction_valid: control.transaction_valid,
-        protocol_choice: control.protocol_choice,
+        transaction_valid,
+        protocol_choice,
         choice_slots: control.choice_slots,
         bank_counts: control.bank_counts,
     })

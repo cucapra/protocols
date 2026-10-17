@@ -11,6 +11,16 @@ use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
+    to_dot_string_with_node_labels(ctx, protocol, symbols, &[])
+}
+
+/// Add descriptive labels to distinguished states, such as a monitor's bad state.
+pub fn to_dot_string_with_node_labels(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    labels: &[(NodeId, &str)],
+) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "digraph \"{}\" {{\n",
@@ -28,6 +38,9 @@ pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable
         let node = protocol[node_id].clone();
 
         let mut label_parts = vec![];
+        if let Some((_, label)) = labels.iter().find(|(id, _)| *id == node_id) {
+            label_parts.push((*label).to_string());
+        }
 
         // collect action text into the node label
         for action in &node.actions {
@@ -387,6 +400,20 @@ mod tests {
             "ir_graphviz_joint_alu",
             "../tests/alus/alu_d1.prot",
             &["add", "sub", "and", "or"],
+        );
+    }
+
+    #[test]
+    fn test_joint_axis_ready_valid_snapshot() {
+        joint_snap(
+            "ir_graphviz_joint_axis_send_data",
+            "../tests/wal/advanced/axis.prot",
+            &["send_data"],
+        );
+        joint_snap(
+            "ir_graphviz_joint_axis_ready_valid",
+            "../tests/wal/advanced/axis.prot",
+            &["send_data", "idle"],
         );
     }
 

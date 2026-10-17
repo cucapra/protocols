@@ -1,9 +1,14 @@
 //! Unbounded monitor composition using the driver's joint control schedule.
 //!
-//! Launch choices describe a candidate interpretation of the samples. Constraints
-//! remain ordinary AssertEq actions, owned by individual transaction instances.
-//! This assumes protocol choice is unambiguous after the first cycle; it does
-//! not construct sets of competing parameter environments or a transition system.
+//! At a choice node, every protocol tries its first cycle on the current sample.
+//! The surviving candidate selects the edge. We assume there is at most one;
+//! no uniqueness check or external launch/protocol selector is generated.
+//! Each individual monitor's equality constraints become guarded updates that
+//! clear its live flag before instances are composed. Existing transactions must
+//! survive, and a choice must have a surviving candidate, or execution enters
+//! the absorbing bad state. Assignments read the incoming state and are applied
+//! together before edges read the updated live flags. This module does not
+//! construct a transition system or substitute assignment expressions into edges.
 
 use patronus::expr::{Context, ExprRef, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -15,17 +20,22 @@ use crate::ir::driver_to_monitor::{
     MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor
 };
 use crate::ir::joint_automaton::{
-    JointAutomatonError, JointControlAutomaton, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
+    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
 };
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, remap_expr};
+use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
 use crate::ir::simplify_monitor::simplify_monitor;
 
 /// Parameter ownership includes both the protocol and its logical FIFO slot.
 pub type InstanceParameter = (ProtocolId, usize, SymbolId);
 pub type InstanceId = (ProtocolId, usize);
 
+/// A monitor using the driver's unbounded transaction schedule. Assignment
+/// expressions read the incoming state; edges read the state after all node
+/// assignments have been applied, before any edge's FIFO rotations.
 pub struct JointMonitorAutomaton {
     pub control: JointControlAutomaton,
+    /// Absorbing state for an ordinary trace mismatch, separate from internal errors.
+    pub bad_state: NodeId,
     pub protocols: Vec<Protocol>,
     pub value_registers: FxHashMap<InstanceParameter, SymbolId>,
     pub knownness_registers: FxHashMap<InstanceParameter, SymbolId>,
@@ -39,7 +49,12 @@ pub struct JointMonitorAutomaton {
 
 impl JointMonitorAutomaton {
     pub fn to_dot_string(&self, ctx: &Context, symbols: &SymbolTable) -> String {
-        crate::ir::graphviz::to_dot_string(ctx, &self.control.graph, symbols)
+        crate::ir::graphviz::to_dot_string_with_node_labels(
+            ctx,
+            &self.control.graph,
+            symbols,
+            &[(self.bad_state, "BAD STATE")],
+        )
     }
 }
 
@@ -80,16 +95,28 @@ pub fn build_joint_monitor_automaton(
 pub fn compose_joint_monitor_automaton(
     ctx: &mut Context,
     protocols: Vec<Protocol>,
-    monitors: Vec<MonitorAutomaton>,
+    mut monitors: Vec<MonitorAutomaton>,
     symbols: &mut SymbolTable,
 ) -> Result<JointMonitorAutomaton, JointMonitorError> {
+    for monitor in &mut monitors {
+        lower_constraints(ctx, monitor);
+    }
     let sources = monitors
         .iter()
         .map(|monitor| monitor.graph.clone())
         .collect::<Vec<_>>();
-    let control = build_joint_control_automaton(ctx, &protocols, &sources, symbols)?;
+    let mut control = build_joint_control_automaton(ctx, &protocols, &sources, symbols)?;
+    let bad_state = control.graph.n(Node::empty());
+    control
+        .graph
+        .push_transition(bad_state, Transition::new(ctx.get_true(), bad_state, true));
+    control.instances.insert(bad_state, Vec::new());
+    control
+        .transition_kinds
+        .insert((bad_state, 0), JointTransitionKind::Continue);
     let mut result = JointMonitorAutomaton {
         control,
+        bad_state,
         protocols,
         value_registers: FxHashMap::default(),
         knownness_registers: FxHashMap::default(),
@@ -166,25 +193,32 @@ pub fn compose_joint_monitor_automaton(
         .graph
         .nodes()
         .map(|(node, _)| node)
+        .filter(|&node| node != bad_state)
         .collect::<Vec<_>>();
+    result
+        .knownness_outputs
+        .insert(bad_state, FxHashMap::default());
     for node in nodes {
         let mut outputs = FxHashMap::default();
+        let mut ongoing = ctx.get_true();
+        let mut any_launch = ctx.get_false();
+        let mut launches = FxHashMap::default();
         for instance in result.control.instances[&node].clone() {
             let owner = (instance.protocol, instance.slot);
             let monitor = &monitors[instance.protocol];
             let targets = &instance_targets[&owner];
+            let live_register = result.live_registers[&owner];
+            let live = result.control.graph.symbol_expr(live_register).unwrap();
             let mut substitutions = instance_exprs[&owner].clone();
             if instance.starts {
-                // First-cycle checks and learning read fresh initial values,
-                // even if this physical slot held an older transaction before.
+                // Every candidate starts fresh, including slots used before.
+                // All first-cycle observations read these initial expressions.
                 for (&register, &init) in &monitor.register_inits {
                     substitutions.insert(monitor.graph.symbol_expr(register).unwrap(), init);
                 }
             }
             for (&argument, &expr) in &monitor.knownness_outputs[&instance.control] {
                 let expr = remap_expr(ctx, expr, &substitutions);
-                let zero = ctx.zero(expr.get_bv_type(ctx).unwrap());
-                let expr = ctx.ite(instance.guard, expr, zero);
                 outputs.insert((instance.protocol, instance.slot, argument), expr);
             }
             let mut assigned = FxHashSet::default();
@@ -192,38 +226,28 @@ pub fn compose_joint_monitor_automaton(
                 if matches!(monitor.graph[action.op], Op::Fork | Op::Done) {
                     continue;
                 }
-                let mut op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
-                let mut guard = remap_expr(ctx, action.guard, &substitutions);
-                if let Op::Assign(register, assignment) = &mut op {
+                let op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
+                let guard = remap_expr(ctx, action.guard, &substitutions);
+                if let Op::Assign(register, _) = &op {
                     assert_eq!(
                         guard,
                         ctx.get_true(),
                         "monitor assignment guards must be true"
                     );
                     assigned.insert(*register);
-                    assignment.dont_care =
-                        result
-                            .control
-                            .graph
-                            .and_guard(ctx, instance.guard, assignment.dont_care);
-                    for (g, _) in &mut assignment.concretes {
-                        *g = result.control.graph.and_guard(ctx, instance.guard, *g);
-                    }
-                } else {
-                    guard = result.control.graph.and_guard(ctx, instance.guard, guard);
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
             if instance.starts {
-                // Optimization may have removed a hold at entry. Such a register
-                // still needs resetting when its slot is reused.
+                // Even an entry hold removed by simplification must reset its
+                // register: this is a fresh attempt, not the previous occupant.
                 let mut registers = monitor.register_inits.iter().collect::<Vec<_>>();
                 registers.sort_unstable_by_key(|(register, _)| **register);
                 for (&old, &init) in registers {
                     let register = targets[&old];
-                    if !assigned.contains(&register) {
+                    if old != monitor.live_register && !assigned.contains(&register) {
                         let assignment =
-                            Assignment::concrete(ctx.get_false(), instance.guard, init);
+                            Assignment::concrete(ctx.get_false(), ctx.get_true(), init);
                         push_owned_action(
                             &mut result,
                             node,
@@ -234,11 +258,97 @@ pub fn compose_joint_monitor_automaton(
                     }
                 }
             }
+            // Edges execute after assignments, so they read this cycle's live
+            // flag directly. Only instances scheduled here affect the guards.
+            if instance.starts {
+                any_launch = ctx.or(any_launch, live);
+                launches.insert(instance.protocol, live);
+            } else {
+                ongoing = ctx.and(ongoing, live);
+            }
         }
+        let required = if result.control.choice_slots.contains_key(&node) {
+            ctx.and(ongoing, any_launch)
+        } else {
+            ongoing
+        };
+        for (index, edge) in result
+            .control
+            .graph
+            .node_mut(node)
+            .transitions
+            .iter_mut()
+            .enumerate()
+        {
+            let selected = match result.control.transition_kinds[&(node, index)] {
+                JointTransitionKind::Launch(protocol) => launches[&protocol],
+                JointTransitionKind::Stop => ctx.get_false(),
+                JointTransitionKind::Continue => ctx.get_true(),
+            };
+            let survives = ctx.and(ongoing, selected);
+            edge.guard = ctx.and(edge.guard, survives);
+        }
+        let failed = ctx.not(required);
+        let index = result.control.graph[node].transitions.len();
+        result
+            .control
+            .graph
+            .push_transition(node, Transition::new(failed, bad_state, true));
+        result
+            .control
+            .transition_kinds
+            .insert((node, index), JointTransitionKind::Continue);
+        // Done at a choice with no older transactions marks a valid waveform
+        // boundary. Consuming another sample requires a surviving launch edge.
         result.knownness_outputs.insert(node, outputs);
     }
     result.control.graph.simplify_all_exprs(ctx);
     Ok(result)
+}
+
+/// Lower constraints in each individual monitor, before unbounded composition.
+fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
+    let graph = &mut monitor.graph;
+    let live = graph.symbol_expr(monitor.live_register).unwrap();
+    let nodes = graph.nodes().map(|(node, _)| node).collect::<Vec<_>>();
+    for node in nodes {
+        let mut failed = ctx.get_false();
+        let mut actions = Vec::new();
+        for action in graph[node].actions.clone() {
+            if let Op::AssertEq(lhs, rhs) = graph[action.op] {
+                // [guard] assert_eq(lhs, rhs) becomes a reason to clear live:
+                // guard && !(lhs == rhs).
+                let equal = ctx.equal(lhs, rhs);
+                let unequal = ctx.not(equal);
+                let failure = ctx.and(action.guard, unequal);
+                failed = ctx.or(failed, failure);
+            } else {
+                actions.push(action);
+            }
+        }
+        let failed = graph.simplifier.simplify(ctx, failed);
+        let mut concretes = Vec::new();
+        if failed != ctx.get_false() {
+            concretes.push((failed, ctx.get_false()));
+        }
+        // The kill alternative has priority; otherwise preserve liveness.
+        // Fresh-instance copying substitutes live=true into this held value.
+        concretes.push((ctx.get_true(), live));
+        let op = graph.o(Op::Assign(
+            monitor.live_register,
+            Assignment {
+                dont_care: ctx.get_false(),
+                concretes,
+            },
+        ));
+        actions.push(Action::new(ctx.get_true(), op));
+        graph.node_mut(node).actions = actions;
+    }
+    let node_map = graph.garbage_collect_unreachable(ctx);
+    monitor.knownness_outputs = std::mem::take(&mut monitor.knownness_outputs)
+        .into_iter()
+        .filter_map(|(node, outputs)| Some((*node_map.get(&node)?, outputs)))
+        .collect();
 }
 
 fn push_owned_action(
