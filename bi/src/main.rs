@@ -6,11 +6,11 @@
 mod bi;
 mod constraints;
 mod proto_trace;
-mod signal_trace;
 
 use crate::bi::*;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
+use ::bi::{Instance, signal_trace};
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
@@ -92,6 +92,10 @@ struct Cli {
     /// Allow arguments to appear in while/if conditions
     #[arg(long)]
     allow_branch_on_arg: bool,
+
+    /// Print only Pass or Fail instead of inferred transactions and diagnostics.
+    #[arg(long)]
+    status_only: bool,
 
     /// Sample the wall-clock time every N steps (clock cycles) and print all the `step,elapsed_us`
     /// measurements to stderr once the BI finishes
@@ -224,6 +228,17 @@ fn main() {
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
+    if cli.status_only {
+        println!(
+            "{}",
+            if at_least_one_has_failed {
+                "Fail"
+            } else {
+                "Pass"
+            }
+        );
+        std::process::exit(i32::from(at_least_one_has_failed));
+    }
     for (bi, protos) in bis.into_iter().zip(bi_protos) {
         let exclude_from_trace = if cli.include_idle {
             FxHashSet::default()
@@ -405,13 +420,6 @@ fn collects_module_names(duts: &[Module]) -> String {
     let mut dut_names: Vec<String> = duts.iter().map(|d| d.name.clone()).collect();
     dut_names.sort();
     dut_names.join(", ")
-}
-
-struct Instance {
-    name: String,
-    #[allow(dead_code)]
-    module: String,
-    module_id: usize,
 }
 
 /// Takes the contents of the `-i` CLI flag and tries to find
