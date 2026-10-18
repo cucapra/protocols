@@ -1,5 +1,6 @@
 pub mod bounded_lowering;
 pub mod determinize;
+pub mod driver_to_monitor;
 pub mod edge_contract;
 pub mod fork_reach;
 pub mod graph_interpreter;
