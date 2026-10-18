@@ -5,7 +5,9 @@
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
-use patronus::expr::{Context, ExprRef, Simplifier, SparseExprMap, TypeCheck};
+use patronus::expr::{
+    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut, Index};
@@ -133,6 +135,53 @@ pub enum Op {
     Fork,
     InternalAssertFalse,
     Done,
+}
+
+/// Substitute expression references when copying a transaction instance.
+pub fn remap_expr(
+    ctx: &mut Context,
+    expr: ExprRef,
+    substitutions: &FxHashMap<ExprRef, ExprRef>,
+) -> ExprRef {
+    simple_transform_expr(ctx, expr, |_, original, _| {
+        substitutions.get(&original).copied()
+    })
+}
+
+impl Op {
+    /// Remap assignment targets together with every expression that reads them.
+    pub fn remap(
+        &self,
+        ctx: &mut Context,
+        substitutions: &FxHashMap<ExprRef, ExprRef>,
+        targets: &FxHashMap<SymbolId, SymbolId>,
+    ) -> Self {
+        match self {
+            Self::Assign(symbol, assignment) => Self::Assign(
+                targets.get(symbol).copied().unwrap_or(*symbol),
+                Assignment {
+                    dont_care: remap_expr(ctx, assignment.dont_care, substitutions),
+                    concretes: assignment
+                        .concretes
+                        .iter()
+                        .map(|&(guard, rhs)| {
+                            (
+                                remap_expr(ctx, guard, substitutions),
+                                remap_expr(ctx, rhs, substitutions),
+                            )
+                        })
+                        .collect(),
+                },
+            ),
+            Self::AssertEq(lhs, rhs) => {
+                let lhs = remap_expr(ctx, *lhs, substitutions);
+                let rhs = remap_expr(ctx, *rhs, substitutions);
+                debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
+                Self::AssertEq(lhs, rhs)
+            }
+            other => other.clone(),
+        }
+    }
 }
 
 pub struct ProtoGraph {

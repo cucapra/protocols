@@ -14,7 +14,8 @@ use protocols::ir::{
     determinize::determinized,
     graph_interpreter::{self, GraphInterpretFailure, GraphInterpretFailureKind},
     graphviz::to_dot_string,
-    joint_automaton::{ProtocolId, build_joint_driver_automaton},
+    joint_automaton::ProtocolId,
+    joint_driver::build_joint_driver_automaton,
     lowering::lower_ast_to_ir,
     propagate_assigns::propagate_assignments,
     proto_graph::ProtoGraph,
@@ -405,7 +406,7 @@ fn run_bounded_driver(
 }
 
 /// Builds and simulates the unbounded joint driver automaton.
-/// we drive transaction-valid, protocol-choice, and arguments when transaction-ready is asserted (in the same cycle)
+/// we drive choice-valid, protocol-choice, and arguments when transaction-ready is asserted (in the same cycle)
 fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
     let mut ctx = Context::default();
@@ -428,7 +429,7 @@ fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, trace
             .collect();
 
         let dut = build_dut(&mut ctx, cli, module);
-        let driver = build_joint_driver_automaton(&mut ctx, used_protocols, symbols)
+        let driver = build_joint_driver_automaton(&mut ctx, module, used_protocols, symbols)
             .unwrap_or_else(|error| panic!("failed to build joint driver: {error}"));
         if cli.graphout {
             println!("{}", to_dot_string(&ctx, &driver.graph, symbols));
@@ -443,7 +444,7 @@ fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, trace
         );
         let choice_width = result.protocol_choice.get_bv_type(&ctx).unwrap();
         let protocol_inputs = result.protocol_inputs;
-        let transaction_valid = result.transaction_valid;
+        let choice_valid = result.choice_valid;
         let protocol_choice = result.protocol_choice;
         let transaction_ready = result.transaction_ready;
         let mut transaction_index = 0;
@@ -467,7 +468,7 @@ fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, trace
                     == 1;
                 let has_transaction = transaction_index < trace.len();
                 simulator.set(
-                    transaction_valid,
+                    choice_valid,
                     &BitVecValue::from_u64(u64::from(ready && has_transaction), 1),
                 );
                 if !ready || !has_transaction {
