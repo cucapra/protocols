@@ -53,6 +53,7 @@ pub enum SymbolKind {
     OutPort,
     Arg(u16),
     LoopVar,
+    AutomatonState,
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]

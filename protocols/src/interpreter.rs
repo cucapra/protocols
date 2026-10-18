@@ -523,6 +523,9 @@ impl<'a> Evaluator<'a> {
                             .unwrap();
                         Ok(ExprValue::Concrete(value.clone()))
                     }
+                    SymbolKind::AutomatonState => {
+                        unreachable!("Automaton state is not an AST symbol")
+                    }
                 }
             }
             Expr::DontCare => Ok(ExprValue::DontCare),
@@ -752,6 +755,7 @@ impl<'a> Evaluator<'a> {
                 "loop_var".to_string(),
                 stmt_id,
             )),
+            SymbolKind::AutomatonState => unreachable!("automaton state is not an AST symbol"),
         }
     }
 
