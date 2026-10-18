@@ -11,7 +11,8 @@ use crate::backends::transition_system::{
 };
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
-use crate::ir::joint_automaton::{JointDriverAutomaton, ProtocolId};
+use crate::ir::joint_automaton::ProtocolId;
+use crate::ir::joint_driver::JointDriverAutomaton;
 use crate::ir::proto_graph::NodeId;
 
 pub struct JointTransitionSystemResult {
@@ -23,7 +24,7 @@ pub struct JointTransitionSystemResult {
     pub external_assert_state: ExprRef,
     pub internal_assert_state: ExprRef,
     pub is_dont_care: FxHashMap<PortId, ExprRef>,
-    pub transaction_valid: ExprRef,
+    pub choice_valid: ExprRef,
     pub protocol_choice: ExprRef,
     pub transaction_ready: ExprRef,
     pub transaction_banks: Vec<ExprRef>,
@@ -32,7 +33,7 @@ pub struct JointTransitionSystemResult {
 
 struct JointMetadata {
     protocols: Vec<Protocol>,
-    transaction_valid: ExprRef,
+    choice_valid: ExprRef,
     protocol_choice: ExprRef,
     choice_slots: FxHashMap<NodeId, Vec<usize>>,
     bank_counts: Vec<usize>,
@@ -91,7 +92,7 @@ pub fn into_joint_transition_system(
     let JointDriverAutomaton {
         graph,
         protocols,
-        transaction_valid,
+        choice_valid,
         protocol_choice,
         choice_slots,
         bank_counts,
@@ -109,7 +110,7 @@ pub fn into_joint_transition_system(
         core,
         JointMetadata {
             protocols,
-            transaction_valid,
+            choice_valid,
             protocol_choice,
             choice_slots,
             bank_counts,
@@ -127,11 +128,11 @@ fn lower_joint_core(
     let choice_nodes = driver.choice_slots.keys().copied().collect::<Vec<_>>();
     let ready = choice_ready(ctx, &core, &choice_nodes);
     let mut ts = core.ts;
-    ts.add_input(ctx, driver.transaction_valid);
+    ts.add_input(ctx, driver.choice_valid);
     ts.add_input(ctx, driver.protocol_choice);
 
     let valid_one = ctx.bit_vec_val(1, 1);
-    let valid = ctx.equal(driver.transaction_valid, valid_one);
+    let valid = ctx.equal(driver.choice_valid, valid_one);
     let mut protocol_inputs = FxHashMap::default();
     let mut heads = Vec::with_capacity(driver.protocols.len());
     let mut bank_states = Vec::with_capacity(driver.protocols.len());
@@ -328,7 +329,7 @@ fn lower_joint_core(
         external_assert_state: core.external_assert_state,
         internal_assert_state: core.internal_assert_state,
         is_dont_care: core.is_dont_care,
-        transaction_valid: driver.transaction_valid,
+        choice_valid: driver.choice_valid,
         protocol_choice: driver.protocol_choice,
         transaction_ready: ready,
         transaction_banks,
@@ -342,7 +343,7 @@ mod tests {
     use crate::PatronusSim;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::{frontend, require_single_module};
-    use crate::ir::joint_automaton::build_joint_driver_automaton;
+    use crate::ir::joint_driver::build_joint_driver_automaton;
     use patronus::mc::bmc;
     use patronus::smt::{Solver, Z3};
 
@@ -369,7 +370,7 @@ mod tests {
             sim.ios()
                 .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
         );
-        let driver = build_joint_driver_automaton(&mut ctx, protocols, &symbols).unwrap();
+        let driver = build_joint_driver_automaton(&mut ctx, &module, protocols, &symbols).unwrap();
         let mut result = into_joint_transition_system(
             &mut ctx,
             driver,
