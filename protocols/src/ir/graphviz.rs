@@ -239,16 +239,19 @@ mod tests {
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::require_single_module;
+    use crate::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_monitor};
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::lowering::lower_ast_to_ir;
     use crate::ir::propagate_assigns::propagate_assignments;
     use crate::ir::reaching_defs::reaching_definitions;
+    use crate::ir::simplify_monitor::simplify_monitor;
     use insta::Settings;
 
-    fn snap(name: &str, filename: &str) {
+    fn snap(name: &str, filename: &str) -> (Context, SymbolTable, Vec<MonitorAutomaton>) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let mut content = String::new();
+        let mut monitors = Vec::new();
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
@@ -277,6 +280,16 @@ mod tests {
             content += "== post-normalize ==\n";
             content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
             content += "\n";
+
+            assignment_normalized_ir.garbage_collect_unreachable(&ctx);
+            let monitor =
+                convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
+                    .unwrap();
+            let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
+            content += "== simplified monitor ==\n";
+            content += &monitor.to_dot_string(&ctx, &symbols);
+            content += "\n";
+            monitors.push(monitor);
         }
 
         let mut settings = Settings::clone_current();
@@ -284,6 +297,7 @@ mod tests {
         settings.bind(|| {
             insta::assert_snapshot!(name, content);
         });
+        (ctx, symbols, monitors)
     }
     #[test]
     fn test_add_d1_dot_snapshot() {
@@ -313,6 +327,39 @@ mod tests {
         snap(
             "ir_graphviz_bounded_ready_valid",
             "../tests/bounded_ready_valid/bounded_rv.prot",
+        );
+    }
+
+    #[test]
+    fn test_overlapping_parameter_slices_snapshot() {
+        let (mut ctx, symbols, monitors) = snap(
+            "ir_graphviz_overlapping_parameter_slices",
+            "../tests/monitors/overlapping_slices.prot",
+        );
+        let graph = &monitors[0].graph;
+        let pin = |name: &str| {
+            let pin = graph
+                .dut_pins(&symbols)
+                .find(|&pin| symbols[pin].name() == name)
+                .unwrap();
+            graph.symbol_expr(pin).unwrap()
+        };
+        let a = ctx.slice(pin("a"), 2, 1);
+        let b = ctx.slice(pin("b"), 1, 0);
+        let checks = graph
+            .nodes()
+            .flat_map(|(_, node)| &node.actions)
+            .filter_map(|action| match graph[action.op] {
+                Op::AssertEq(lhs, rhs) => Some((action.guard, lhs, rhs)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(checks.len(), 1, "the overlap requires exactly one check");
+        let (guard, lhs, rhs) = checks[0];
+        assert_eq!(guard, ctx.get_true());
+        assert!(
+            (lhs == a && rhs == b) || (lhs == b && rhs == a),
+            "expected assert_eq(DUT.a[2:1], DUT.b[1:0])"
         );
     }
 }

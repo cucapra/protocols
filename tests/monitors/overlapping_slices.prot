@@ -1,0 +1,10 @@
+struct OverlappingSlices {
+    in a: u3,
+    in b: u3,
+}
+
+prot overlap<DUT: OverlappingSlices>(p: u5) {
+    DUT.a := p[3:1];
+    DUT.b := p[4:2];
+    step();
+}
