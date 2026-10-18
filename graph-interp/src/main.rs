@@ -1,6 +1,8 @@
 mod execution;
+mod monitor;
 
-use clap::{Parser, ValueEnum, error::ErrorKind};
+use clap::error::ErrorKind;
+use clap::{Parser, ValueEnum};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::SymbolTable;
 use protocols::frontend::{Module, require_single_module};
@@ -19,6 +21,8 @@ enum Flow {
     BoundedDriver,
     /// Build an unbounded driver transition system.
     UnboundedDriver,
+    /// Evaluate a waveform with an unbounded monitor transition system.
+    UnboundedMonitor,
 }
 
 #[derive(Parser, Debug)]
@@ -33,7 +37,22 @@ struct Cli {
 
     /// Path to a Transactions (.tx) file.
     #[arg(short, long, value_name = "TRANSACTIONS_FILE")]
-    transactions: String,
+    transactions: Option<String>,
+
+    /// Waveform to evaluate with --flow unbounded-monitor.
+    #[arg(short, long)]
+    wave: Option<String>,
+
+    /// Waveform instances, as instance:Module.
+    #[arg(short, long, value_delimiter = ' ', num_args = 1..)]
+    instances: Vec<String>,
+
+    #[arg(long)]
+    sample_posedge: Option<String>,
+
+    /// Use zero for waveform X/Z values instead of deterministic random values.
+    #[arg(long)]
+    force_x_to_zero: bool,
 
     /// Name of the top-level module, if one exists.
     #[arg(short, long, value_name = "MODULE_NAME")]
@@ -69,6 +88,33 @@ struct Cli {
 }
 
 fn validate_cli(cli: &Cli) -> Result<(), String> {
+    if cli.flow == Flow::UnboundedMonitor {
+        if cli.wave.is_none() || cli.instances.is_empty() {
+            return Err("--flow unbounded-monitor requires --wave and --instances".to_string());
+        }
+        if cli.transactions.is_some()
+            || !cli.verilog.is_empty()
+            || cli.module.is_some()
+            || cli.graphout
+            || cli.ascii_waveform
+        {
+            return Err(
+                "--flow unbounded-monitor does not accept driver or trace-display arguments"
+                    .to_string(),
+            );
+        }
+    } else {
+        if cli.transactions.is_none() {
+            return Err("driver flows require --transactions".to_string());
+        }
+        if cli.wave.is_some()
+            || !cli.instances.is_empty()
+            || cli.sample_posedge.is_some()
+            || cli.force_x_to_zero
+        {
+            return Err("waveform arguments require --flow unbounded-monitor".to_string());
+        }
+    }
     match (cli.flow, cli.bound) {
         (Flow::BoundedDriver, None) => {
             return Err("--flow bounded-driver requires --bound".to_string());
@@ -107,13 +153,32 @@ fn load_protocols(cli: &Cli) -> (SymbolTable, Vec<Module>) {
 
 fn load_traces(cli: &Cli, st: &SymbolTable, module: &Module) -> Vec<Vec<(String, Vec<Value>)>> {
     let mut handler = DiagnosticHandler::new(clap::ColorChoice::Never, false, true, false);
-    transaction_frontend(&cli.transactions, st, &module.protos, &mut handler).unwrap()
+    transaction_frontend(
+        cli.transactions.as_ref().unwrap(),
+        st,
+        &module.protos,
+        &mut handler,
+    )
+    .unwrap()
 }
 
 fn main() {
     let cli = Cli::parse();
     if let Err(message) = validate_cli(&cli) {
         clap::Error::raw(ErrorKind::ArgumentConflict, message).exit();
+    }
+
+    if cli.flow == Flow::UnboundedMonitor {
+        match monitor::run(&cli) {
+            Ok(failed) => {
+                println!("{}", if failed { "Fail" } else { "Pass" });
+                std::process::exit(i32::from(failed));
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(2);
+            }
+        }
     }
 
     let (st, modules) = load_protocols(&cli);

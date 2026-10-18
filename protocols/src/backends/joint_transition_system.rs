@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 
-use baa::WidthInt;
 use patronus::expr::{Context, ExprRef, TypeCheck};
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::FxHashMap;
 
 use crate::PortId;
+use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::backends::transition_system::{
     CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr,
 };
@@ -39,20 +39,6 @@ struct JointMetadata {
     bank_counts: Vec<usize>,
 }
 
-fn mod_add(ctx: &mut Context, value: ExprRef, amount: usize, modulus: usize) -> ExprRef {
-    if modulus == 1 || amount.is_multiple_of(modulus) {
-        return value;
-    }
-    let width = value.get_bv_type(ctx).unwrap();
-    let amount = amount % modulus;
-    let amount_expr = ctx.bit_vec_val(amount, width);
-    let threshold = ctx.bit_vec_val(modulus - amount, width);
-    let wrapped = ctx.sub(value, threshold);
-    let normal = ctx.add(value, amount_expr);
-    let overflow = ctx.greater_or_equal(value, threshold);
-    ctx.ite(overflow, wrapped, normal)
-}
-
 fn selector_guard(
     ctx: &mut Context,
     choice: ExprRef,
@@ -71,9 +57,11 @@ fn selector_guard(
 fn choice_ready(
     ctx: &mut Context,
     core: &CoreLoweredSystem,
-    nodes: &[crate::ir::proto_graph::NodeId],
+    // choice node -> next available transaction slot for each protocol (Vec indexed by protocol id)
+    // Ex. node1 -> [2, 0] means proto-A would use slot 2, proto-B would use slot 0.
+    choice_slots: &FxHashMap<NodeId, Vec<usize>>,
 ) -> ExprRef {
-    nodes.iter().fold(ctx.get_false(), |ready, node| {
+    choice_slots.keys().fold(ctx.get_false(), |ready, node| {
         let value = ctx.bit_vec_val(node.as_u32(), core.node_id_width);
         let at_node = ctx.equal(core.node_symbol, value);
         ctx.or(ready, at_node)
@@ -125,8 +113,7 @@ fn lower_joint_core(
     driver: JointMetadata,
     symbols: &SymbolTable,
 ) -> JointTransitionSystemResult {
-    let choice_nodes = driver.choice_slots.keys().copied().collect::<Vec<_>>();
-    let ready = choice_ready(ctx, &core, &choice_nodes);
+    let ready = choice_ready(ctx, &core, &driver.choice_slots);
     let mut ts = core.ts;
     ts.add_input(ctx, driver.choice_valid);
     ts.add_input(ctx, driver.protocol_choice);
@@ -231,17 +218,13 @@ fn lower_joint_core(
                     _ => panic!("unsupported joint-driver argument type"),
                 };
                 let old = ctx.bv_symbol(&format!("joint.{name}#{slot}_{}", protocol.name), width);
-                let mut read = ctx.zero(width as WidthInt);
-                let head_width = heads[protocol_id].get_bv_type(ctx).unwrap();
-                for head_value in 0..driver.bank_counts[protocol_id] {
-                    let bank = (head_value + slot) % driver.bank_counts[protocol_id];
-                    let stored = bank_states[protocol_id][bank][arg_index];
-                    let input = protocol_inputs[&(protocol_id, symbol)];
-                    let value = ctx.ite(capture[protocol_id][bank], input, stored);
-                    let head_literal = ctx.bit_vec_val(head_value, head_width);
-                    let at_head = ctx.equal(heads[protocol_id], head_literal);
-                    read = ctx.ite(at_head, value, read);
-                }
+                let input = protocol_inputs[&(protocol_id, symbol)];
+                let values = bank_states[protocol_id]
+                    .iter()
+                    .enumerate()
+                    .map(|(bank, args)| ctx.ite(capture[protocol_id][bank], input, args[arg_index]))
+                    .collect::<Vec<_>>();
+                let read = read_bank(ctx, heads[protocol_id], slot, &values);
                 replacements.push((old, read));
             }
         }

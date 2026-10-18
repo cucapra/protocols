@@ -48,7 +48,8 @@ fn assignment_to_ite(
 ) -> ExprRef {
     let mut ite = default;
 
-    for (guard, expr) in a.concretes {
+    // Put the first concrete alternative on the outside so it wins overlaps.
+    for (guard, expr) in a.concretes.into_iter().rev() {
         ite = ctx.ite(guard, expr, ite);
     }
 
@@ -414,6 +415,12 @@ pub fn lower_proto_graph_to_transition_system(
     for (_, driver) in input_drivers {
         replace_expr_uses(&mut ts, ctx, driver.input_expr_ref, driver.input_ite);
         transition_ite = replace_expr(ctx, transition_ite, driver.input_expr_ref, driver.input_ite);
+        // Joint bank rotations read these guards after core lowering returns.
+        for (_, node) in pg.nodes_mut() {
+            for edge in &mut node.transitions {
+                edge.guard = replace_expr(ctx, edge.guard, driver.input_expr_ref, driver.input_ite);
+            }
+        }
         for expr in port_to_expr.values_mut() {
             *expr = replace_expr(ctx, *expr, driver.input_expr_ref, driver.input_ite);
         }
