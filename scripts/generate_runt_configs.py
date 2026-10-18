@@ -253,6 +253,18 @@ def monitor_status_runt_command(case: dict) -> list[tuple[str, str]]:
                 [*binary_prefix("bi"), "--status-only", *common], stderr="inherit"
             ),
         ),
+        (
+            "system",
+            repo_root_command(
+                [
+                    *binary_prefix("graph-interp"),
+                    "--flow",
+                    "unbounded-monitor",
+                    *common,
+                ],
+                stderr="inherit",
+            ),
+        ),
     ]
 
 
