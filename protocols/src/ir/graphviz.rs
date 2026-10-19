@@ -14,12 +14,31 @@ pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable
     to_dot_string_with_node_labels(ctx, protocol, symbols, &[])
 }
 
+pub fn to_dot_string_from_entry(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    entry: NodeId,
+) -> String {
+    to_dot_string_with_node_labels_from_entry(ctx, protocol, symbols, &[], entry)
+}
+
 /// Add descriptive labels to distinguished states, such as a monitor's bad state.
 pub fn to_dot_string_with_node_labels(
     ctx: &Context,
     protocol: &ProtoGraph,
     symbols: &SymbolTable,
     labels: &[(NodeId, &str)],
+) -> String {
+    to_dot_string_with_node_labels_from_entry(ctx, protocol, symbols, labels, protocol.entry)
+}
+
+fn to_dot_string_with_node_labels_from_entry(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    labels: &[(NodeId, &str)],
+    entry: NodeId,
 ) -> String {
     let mut out = String::new();
     out.push_str(&format!(

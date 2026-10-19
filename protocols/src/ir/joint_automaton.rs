@@ -57,7 +57,7 @@ pub struct JointControlAutomaton {
 }
 
 #[derive(Clone)]
-struct ProtocolShape {
+pub struct ProtocolShape {
     pub entry: NodeId,
     /// if there is a fork, the *unique* location of the forking node
     pub fork: Option<NodeId>,

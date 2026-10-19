@@ -78,14 +78,13 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         );
 
         // check shape
-        let shape = analyze_shape(&mut ctx, &lowerer.ir, method, (*graph).clone()).unwrap();
+        let shape = analyze_shape(&mut ctx, &lowerer.ir, method).unwrap();
         assert!(
             shape.fork.is_none(),
             "we should have removed all forks at this point!"
         );
         assert!(shape.post.is_empty());
         assert_eq!(shape.done, graph.exit);
-        assert_eq!(&shape.fragment, *graph);
     }
 
     // guard method starts
