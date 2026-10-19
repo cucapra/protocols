@@ -843,7 +843,7 @@ BI_CASES = {
         "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_buggy.fst",
         "instances": ("TOP.testbench.UUT:AXISManager",),
-        "expect": "pass",
+        "expect": "fail",
         "extra_args": (
             "--sample-posedge",
             "TOP.testbench.UUT.M_AXIS_ACLK",
@@ -869,7 +869,7 @@ BI_CASES = {
         "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
         "wave": "tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst",
         "instances": ("TOP.test_axis_adapter_64_8.UUT:AXIS",),
-        "expect": "pass",
+        "expect": "fail",
         "extra_args": (
             "--sample-posedge",
             "TOP.test_axis_adapter_64_8.UUT.clk",
@@ -1204,7 +1204,7 @@ BI_CASES = {
         ],
         "wave": "examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd",
         "instances": (":LitexWishbone",),
-        "expect": "pass",
+        "expect": "fail",
         "extra_args": ("--display-hex", "--show-steps"),
     },
     # wishbone protocol on shortened wb_stream testbench
