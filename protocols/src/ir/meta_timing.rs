@@ -1,37 +1,35 @@
-use std::collections::{BTreeSet, VecDeque};
-
+use patronus::expr::Context;
 use rustc_hash::FxHashSet;
+use std::collections::{BTreeSet, VecDeque};
 
 use crate::ir::meta_automaton::{MetaAutomaton, ProtocolTiming, steady_driver_meta};
 use crate::ir::proto_graph::{NodeId, Op, ProtoGraph};
 
-#[derive(Clone, Copy)]
-enum Marker {
-    Fork,
-    Done,
-}
-
 // TODO: This assumes that we don't have unreachable nodes hanging around that haven't
 // been pruned yet.
-fn marker_nodes(graph: &ProtoGraph, marker: Marker) -> Vec<NodeId> {
-    let mut found = Vec::new();
+fn fork_and_done_nodes(graph: &ProtoGraph) -> (Vec<NodeId>, Vec<NodeId>) {
+    let mut forks = Vec::new();
+    let mut dones = Vec::new();
     for (node_id, node) in graph.nodes() {
         for action in &node.actions {
-            let matches = match marker {
-                Marker::Fork => matches!(graph[action.op], Op::Fork),
-                Marker::Done => matches!(graph[action.op], Op::Done),
-            };
-            if matches {
-                found.push(node_id);
+            match graph[action.op] {
+                Op::Fork => forks.push(node_id),
+                Op::Done => dones.push(node_id),
+                _ => {}
             }
         }
     }
 
-    found
+    (forks, dones)
 }
 
 // Returns None when a cycle occurs before the target.
-fn path_lengths(graph: &ProtoGraph, start: NodeId, target: NodeId) -> Option<BTreeSet<usize>> {
+fn path_lengths(
+    ctx: &Context,
+    graph: &ProtoGraph,
+    start: NodeId,
+    target: NodeId,
+) -> Option<BTreeSet<usize>> {
     let mut stack = VecDeque::from([(start, 0, FxHashSet::default())]);
     let mut lengths = BTreeSet::new();
 
@@ -47,7 +45,7 @@ fn path_lengths(graph: &ProtoGraph, start: NodeId, target: NodeId) -> Option<BTr
         let transitions: Vec<_> = graph[node]
             .transitions
             .iter()
-            .filter(|transition| transition.guard != graph.false_id())
+            .filter(|transition| transition.guard != ctx.get_false())
             .collect();
         assert!(
             !transitions.is_empty(),
@@ -76,14 +74,13 @@ fn path_lengths(graph: &ProtoGraph, start: NodeId, target: NodeId) -> Option<BTr
 /// - there are zero or one fork actions and exactly one done action;
 /// - every fork-to-done path is acyclic and has the same positive length;
 /// - if there is an entry-to-fork cycle, we assume the pre-phase unbounded.
-pub fn analyze_protocol_timing(graph: &ProtoGraph) -> ProtocolTiming {
-    let forks = marker_nodes(graph, Marker::Fork);
+pub fn analyze_protocol_timing(ctx: &Context, graph: &ProtoGraph) -> ProtocolTiming {
+    let (forks, done_nodes) = fork_and_done_nodes(graph);
     assert!(
         forks.len() <= 1,
         "protocol {} cannot contain more than one fork",
         graph.name
     );
-    let done_nodes = marker_nodes(graph, Marker::Done);
     assert_eq!(
         done_nodes.len(),
         1,
@@ -93,7 +90,7 @@ pub fn analyze_protocol_timing(graph: &ProtoGraph) -> ProtocolTiming {
     let done = done_nodes[0];
 
     let (pre_boundary, post_cycles) = if let Some(&fork) = forks.first() {
-        let post_lengths = path_lengths(graph, fork, done)
+        let post_lengths = path_lengths(ctx, graph, fork, done)
             .unwrap_or_else(|| panic!("protocol {} has a cycle after fork", graph.name));
         assert_eq!(
             post_lengths.len(),
@@ -113,7 +110,7 @@ pub fn analyze_protocol_timing(graph: &ProtoGraph) -> ProtocolTiming {
         (done, 0)
     };
 
-    match path_lengths(graph, graph.entry, pre_boundary) {
+    match path_lengths(ctx, graph, graph.entry, pre_boundary) {
         Some(pre_cycles) => ProtocolTiming::new(
             graph.name.clone(),
             pre_cycles.into_iter().collect(),
@@ -125,8 +122,11 @@ pub fn analyze_protocol_timing(graph: &ProtoGraph) -> ProtocolTiming {
 
 /// Analyze post-contraction protocol graphs and construct their steady-state
 /// driver meta-automaton in the same order as the input slice.
-pub fn steady_driver_meta_from_protocols(protocols: &[ProtoGraph]) -> MetaAutomaton {
-    let timings = protocols.iter().map(analyze_protocol_timing).collect();
+pub fn steady_driver_meta_from_protocols(ctx: &Context, protocols: &[ProtoGraph]) -> MetaAutomaton {
+    let timings = protocols
+        .iter()
+        .map(|p| analyze_protocol_timing(ctx, p))
+        .collect();
     steady_driver_meta(timings)
 }
 
@@ -143,25 +143,31 @@ mod tests {
     use crate::ir::edge_contract::contract_edges;
     use crate::ir::lowering::lower_ast_to_ir;
 
-    fn contracted_protocols(filename: &str) -> Vec<ProtoGraph> {
+    fn contracted_protocols(filename: &str) -> (Vec<ProtoGraph>, Context) {
         let mut handler = DiagnosticHandler::default();
         let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
-
-        module
+        let mut ctx = Context::default();
+        let graphs = module
             .protos
             .into_iter()
             .map(|protocol| {
-                let mut graph = lower_ast_to_ir(protocol, &symbols);
-                contract_edges(&mut graph, &symbols);
-                graph.garbage_collect_unreachable();
+                let mut graph = lower_ast_to_ir(&mut ctx, protocol, &symbols);
+                contract_edges(&mut ctx, &mut graph, &symbols);
+                graph.garbage_collect_unreachable(&ctx);
                 graph
             })
-            .collect()
+            .collect();
+        (graphs, ctx)
     }
 
-    fn assert_timing(graph: &ProtoGraph, pre_cycles: Option<Vec<usize>>, post_cycles: usize) {
-        let timing = analyze_protocol_timing(graph);
+    fn assert_timing(
+        ctx: &mut Context,
+        graph: &ProtoGraph,
+        pre_cycles: Option<Vec<usize>>,
+        post_cycles: usize,
+    ) {
+        let timing = analyze_protocol_timing(ctx, graph);
         assert_eq!(timing.name, graph.name);
         assert_eq!(timing.pre_cycles, pre_cycles);
         assert_eq!(timing.post_cycles, post_cycles);
@@ -169,38 +175,38 @@ mod tests {
 
     #[test]
     fn extracts_add_d1_timing() {
-        let graphs = contracted_protocols("../tests/adders/add_d1.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/adders/add_d1.prot");
         assert_eq!(graphs.len(), 1);
-        assert_timing(&graphs[0], Some(vec![1]), 1);
+        assert_timing(&mut ctx, &graphs[0], Some(vec![1]), 1);
     }
 
     #[test]
     fn extracts_counter_timing() {
-        let graphs = contracted_protocols("../tests/counters/counter.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/counters/counter.prot");
         assert_eq!(graphs.len(), 2);
         for graph in &graphs {
-            assert_timing(graph, None, 1);
+            assert_timing(&mut ctx, graph, None, 1);
         }
     }
 
     #[test]
     fn extracts_alu_d1_timings() {
-        let graphs = contracted_protocols("../tests/alus/alu_d1.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/alus/alu_d1.prot");
         assert_eq!(graphs.len(), 4);
         for graph in &graphs {
-            assert_timing(graph, Some(vec![1]), 1);
+            assert_timing(&mut ctx, graph, Some(vec![1]), 1);
         }
     }
 
     #[test]
     fn extracts_add_d0_timings() {
-        let graphs = contracted_protocols("../tests/adders/adder_d0/add_d0.prot");
+        let (graphs, mut ctx) = contracted_protocols("../tests/adders/adder_d0/add_d0.prot");
         assert_eq!(graphs.len(), 4);
         for graph in &graphs {
-            assert_timing(graph, Some(vec![1]), 0);
+            assert_timing(&mut ctx, graph, Some(vec![1]), 0);
         }
 
-        let meta = steady_driver_meta_from_protocols(&graphs);
+        let meta = steady_driver_meta_from_protocols(&ctx, &graphs);
         assert!(
             meta.nodes
                 .iter()

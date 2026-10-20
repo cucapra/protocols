@@ -1,0 +1,139 @@
+// Key points from the APB spec: 
+// - "Every transfer takes at least two cycles to complete" (sec. 1.1)
+// - "Data transfers cannot occur concurrently because the read data and write data buses do not have their own individual
+// handshake signal" (sec. 2.1.2)
+
+struct APB {
+    // active-low reset
+    in  PRESETn: u1,   
+    
+    // PSEL is 1 when the subordinate is selected  
+    // (When there are multiple subordinates, each subordinate gets its own `PSEL`
+    // signal to indicate if it has been selected. Here we only have one subordinate,
+    // so only one `PSEL` signal)
+    in  PSEL:    u1,   
+
+    // Indicates the start of a data transfer (APB spec calls this the "access" state)
+    // (Note: per the spec, when `PENABLE` is low, `PREADY` is meaningless)
+    in  PENABLE: u1,   
+
+    // 1 = write, 0 = read
+    in  PWRITE:  u1,   
+
+    // Address for reads/writes
+    in  PADDR:   u32,
+
+    // Data to be written (this is DontCare during reads)
+    in  PWDATA:  u32,   
+
+    // Bitmask indicating which bytes of `PWDATA` contain valid data for writes.
+    // (APB spec calls this signal the "write strobe".) 
+    // For reads, `PSTRB` is `DontCare`.
+    // APB spec says this signal is optional.
+    in  PSTRB:   u4,   
+
+    // "Protection attributes": 3-bit signal used to indicate if the data access
+    // is normal/privileged/secure, and if it is accessing data/an instruction
+    in  PPROT:   u3,  
+
+    // Read data (supplied by subordinate)
+    out PRDATA:  u32,
+
+    // Ready signal issued from subordinate 
+    out PREADY:  u1,   
+
+    // Optional signal indicating if an error occurred during data transfer
+    // Notes from APB spec section 3.4: 
+    // - PSLVERR should be 0 when either one of PSEL, PENABLE or PREADY are low 
+    // - PSLVERR is only meaningful when all three of PSEL, PENABLE and PREADY are high
+    out PSLVERR: u1,   
+}
+
+#[idle]
+prot idle<DUT: APB>() {
+    // PSEL must be 0 during idle state (sec. 4.1)
+    DUT.PSEL    := 1'b0;
+
+    // Reset is active-low, so reset = 1 during idle (No reset)
+    DUT.PRESETn := 1'b1;
+
+    // Idle means we're not in the Access state, so PENABLE = 0
+    DUT.PENABLE := 1'b0;
+
+    DUT.PWRITE  := X;
+    DUT.PADDR   := X;
+    DUT.PWDATA  := X;
+    DUT.PSTRB   := X;
+    DUT.PPROT   := X;
+    assert_eq(DUT.PSLVERR, 1'b0);
+    step();
+}
+
+prot reset<DUT: APB>() {
+    // Reset is active-low
+    DUT.PRESETn := 1'b0;
+
+    // These are 0, because during reset, we are not in the access state
+    // and the subordinate is not selected
+    DUT.PSEL    := 1'b0;
+    DUT.PENABLE := 1'b0;
+    step();
+}
+
+
+prot write<DUT: APB>(addr: u32, data: u32, strb: u4, pprot: u3, slverr: u1) {
+    DUT.PRESETn := 1'b1;
+
+    // SETUP phase
+    DUT.PSEL    := 1'b1;
+    DUT.PENABLE := 1'b0;
+    DUT.PWRITE  := 1'b1;
+    DUT.PADDR   := addr;
+    DUT.PWDATA  := data;
+    DUT.PSTRB   := strb;
+    DUT.PPROT   := pprot;
+    assert_eq(DUT.PSLVERR, 1'b0);
+
+    step();
+
+    // ACCESS phase: hold everything, wait out the subordinate's wait states
+    DUT.PENABLE := 1'b1;
+    while !(DUT.PREADY == 1'b1) {
+        assert_eq(DUT.PSLVERR, 1'b0);
+        step();
+    }
+    assert_eq(DUT.PSLVERR, slverr);
+    step();
+}
+
+prot read<DUT: APB>(addr: u32, data: u32, pprot: u3, slverr: u1) {
+    DUT.PRESETn := 1'b1;
+
+    // SETUP phase
+    DUT.PSEL    := 1'b1;
+    DUT.PENABLE := 1'b0;
+    DUT.PWRITE  := 1'b0;
+    DUT.PADDR   := addr;
+    DUT.PPROT   := pprot;
+
+    // For read operations, PWDATA is meaningless 
+    // and PSTRB must be set to all zeroes (sec. 3.2)
+    DUT.PWDATA  := X;
+    DUT.PSTRB   := 4'b0000;
+    assert_eq(DUT.PSLVERR, 1'b0);
+    
+    step();
+
+    // ACCESS phase
+    DUT.PENABLE := 1'b1;
+
+    // Wait till subordinate becomes ready
+    while !(DUT.PREADY == 1'b1) {
+        assert_eq(DUT.PSLVERR, 1'b0);
+        step();
+    }
+
+    assert_eq(DUT.PRDATA, data);
+    assert_eq(DUT.PSLVERR, slverr);
+    step();
+}

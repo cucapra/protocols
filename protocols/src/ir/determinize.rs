@@ -8,7 +8,7 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::edge_contract::append_action;
 use crate::ir::proto_graph::{Node as NFANode, NodeId, ProtoGraph, Transition};
 use cranelift_entity::PrimaryMap;
-use patronus::expr::ExprRef;
+use patronus::expr::{Context, ExprRef};
 use rustc_hash::FxHashMap;
 
 /// A DFA Node is a set of NFA nodes active at the same time.
@@ -40,15 +40,11 @@ pub enum SatResult {
 }
 
 // TODO: Strengthen this with a real SAT/SMT query to prune more aggressively.
-pub fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
-    let simplified = {
-        let (expr_ctx, simplifier) = (&mut protocol.expr_ctx, &mut protocol.simplifier);
-        simplifier.simplify(expr_ctx, guard)
-    };
-
-    if simplified == protocol.false_id() {
+pub fn check_sat(ctx: &mut Context, protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
+    let simplified = protocol.simplifier.simplify(ctx, guard);
+    if simplified == ctx.get_false() {
         SatResult::DefinitelyUnsat
-    } else if simplified == protocol.true_id() {
+    } else if simplified == ctx.get_true() {
         SatResult::AlwaysSat
     } else {
         SatResult::MaybeSat
@@ -56,7 +52,7 @@ pub fn check_sat(protocol: &mut ProtoGraph, guard: ExprRef) -> SatResult {
 }
 
 /// Perform subset construction.
-pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
+pub fn determinized(ctx: &mut Context, protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
     let mut protocol = protocol.clone();
     let start: DFANode = BTreeSet::from([protocol.entry]);
     let mut state_ids: FxHashMap<DFANode, NodeId> = FxHashMap::default();
@@ -75,6 +71,7 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
         for &node_id in &set {
             for action in protocol[node_id].actions.clone() {
                 append_action(
+                    ctx,
                     &mut protocol,
                     symbols,
                     &mut actions,
@@ -99,9 +96,9 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
         let mut mutually_exclusive = vec![vec![false; n]; n];
         for i in 0..n {
             for j in (i + 1)..n {
-                let overlap = protocol.and_guard(transition_guards[i], transition_guards[j]);
+                let overlap = protocol.and_guard(ctx, transition_guards[i], transition_guards[j]);
                 let disjoint = matches!(
-                    check_sat(&mut protocol, overlap),
+                    check_sat(ctx, &mut protocol, overlap),
                     SatResult::DefinitelyUnsat
                 );
                 mutually_exclusive[i][j] = disjoint;
@@ -113,7 +110,7 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
         // TODO: Handle states with 128 or more outgoing transitions.
         assert!(n <= 128);
         for mask in 1u128..(1u128 << n) {
-            let mut guard = protocol.true_id();
+            let mut guard = ctx.get_true();
             let mut targets: DFANode = BTreeSet::new();
             for (i, t) in transitions.iter().enumerate() {
                 let selected = (mask >> i) & 1 == 1;
@@ -125,14 +122,14 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
                     // false, so its negation would only add expression noise.
                     continue;
                 } else {
-                    protocol.not_guard(t.guard)
+                    protocol.not_guard(ctx, t.guard)
                 };
-                guard = protocol.and_guard(guard, lit);
+                guard = protocol.and_guard(ctx, guard, lit);
             }
 
-            let guard = match check_sat(&mut protocol, guard) {
+            let guard = match check_sat(ctx, &mut protocol, guard) {
                 SatResult::DefinitelyUnsat => continue,
-                SatResult::AlwaysSat => protocol.true_id(),
+                SatResult::AlwaysSat => ctx.get_true(),
                 SatResult::MaybeSat => guard,
             };
 
@@ -166,6 +163,6 @@ pub fn determinized(protocol: ProtoGraph, symbols: &SymbolTable) -> ProtoGraph {
     // method to ProtoGraph that swaps a set of nodes (seems very contrived)? Ask Kevin what the
     // best idiom for this is.
     let mut protocol = protocol.with_nodes(new_nodes, start_id);
-    protocol.simplify_all_exprs();
+    protocol.simplify_all_exprs(ctx);
     protocol
 }

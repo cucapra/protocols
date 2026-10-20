@@ -22,6 +22,32 @@ import test_catalog
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNT_VERSION = "0.4.1"
 
+# don't satisfy one reachable fork node and a straight-line post-phase
+JOINT_DRIVER_UNSUPPORTED = {
+    "tests/brave_new_world/signal_asynchrony/signal_async.prot",
+    "tests/identities/identity_d0/identity_d0.prot",
+    "tests/multi/multi_data/multi_data.prot",
+}
+
+GRAPH_INTERP_UNSUPPORTED = {"for_in_loop", "repeat_loop", "tuples"}
+
+# Bounded lowering is prohibitively expensive
+# TODO: maybe this should become a dynamically determined
+# TODO: property based on trace length/ # of prootocols.
+BOUNDED_DRIVER_EXCLUDED = {
+    "examples/apb/ch_apb_actual.tx",
+    "examples/apb/ip_apb.tx",
+    "examples/picorv32/unsigned_mul.tx",
+    "examples/wishbone/joint_read_write_long.tx",
+    "tests/adders/adder_d1/joint_add_d1_long.tx",
+    "tests/adders/adder_d2/joint_add_d2_long.tx",
+    "tests/alus/joint_alu_d1_long.tx",
+    "tests/alus/joint_alu_d2_long.tx",
+    "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx",
+    "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx",
+    "tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+}
+
 
 def load_tx_cases() -> list[dict]:
     """Expand the compact catalog rows into the internal field shape.
@@ -74,12 +100,17 @@ def replace_non_alphanumerics(value: object) -> str:
 
 
 def case_stem(case: dict) -> str:
-    # Antmicro & Brave New World test cases for the BI share the same `.prot`
-    # file but have multiple waveforms, so we use the waveform files'
+    # Antmicro, Brave New World & APB test cases for the BI share the same
+    # `.prot` file but have multiple waveforms, so we use the waveform files'
     # names to identify a particular test, otherwise we use the `.prot` file's stem
     # to identify a test
     wave = case.get("wave")
-    if wave and ("antmicro" in wave or "fpga-debugging" in wave or "ethmac" in wave):
+    if wave and (
+        "antmicro" in wave
+        or "fpga-debugging" in wave
+        or "ethmac" in wave
+        or "apb" in wave
+    ):
         return Path(wave).stem
     # for all the .wave bi benchmarks, we use the id
     if wave and (wave.endswith(".wave") or "litex" in wave or "wb_stream" in wave):
@@ -171,19 +202,20 @@ def graph_interp_runt_command(case: dict) -> list[tuple[str, str]]:
     cmd = [*binary_prefix("graph-interp"), "--transactions", " ".join(case["paths"])]
     _tx_tail(cmd, case, with_max_steps=False)
 
-    # wishbone and fifo only work with --respect-forks
-    if case["paths"][0].startswith("tests/fifo/") or case["paths"][0].startswith(
-        "tests/wishbone/"
+    # These flows lower every protocol in the file, not only the trace's calls.
+    if (
+        GRAPH_INTERP_UNSUPPORTED & protocol_constructs(case["protocol_path"])
+        # Wishbone and FIFO require whole-trace fork semantics.
+        or case["paths"][0].startswith("tests/fifo/")
+        or case["paths"][0].startswith("tests/wishbone/")
     ):
-        flag_sets = [("respect_forks", ["--respect-forks", "--determinize"])]
+        flows = [("trace_graph", ["--flow", "trace-graph"])]
     else:
-        # baseline and --contract-edges runs share one golden
-        flag_sets = [
-            ("", []),
-            ("contract_edges", ["--contract-edges"]),
-            ("respect_forks", ["--respect-forks", "--determinize"]),
+        flows = [
+            ("sequential", ["--flow", "sequential"]),
+            ("trace_graph", ["--flow", "trace-graph"]),
         ]
-    return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flag_sets]
+    return [(suffix, repo_root_command(cmd + flags)) for suffix, flags in flows]
 
 
 def bi_runt_command(case: dict) -> list[tuple[str, str]]:
@@ -202,6 +234,40 @@ def bi_runt_command(case: dict) -> list[tuple[str, str]]:
     return [("", repo_root_command(cmd, stderr="stdout"))]
 
 
+def monitor_status_runt_command(case: dict) -> list[tuple[str, str]]:
+    common = []
+    for path in case["paths"]:
+        common += ["--protocol", path]
+    common += ["--wave", case["wave"], "--instances", *case["instances"]]
+    # Display options affect BI's trace formatting, not monitor acceptance.
+    extras = case["extra_args"]
+    if "--sample-posedge" in extras:
+        index = extras.index("--sample-posedge")
+        common += ["--sample-posedge", extras[index + 1]]
+    if "--force-x-to-zero" in extras:
+        common += ["--force-x-to-zero"]
+    return [
+        (
+            "bi",
+            repo_root_command(
+                [*binary_prefix("bi"), "--status-only", *common], stderr="inherit"
+            ),
+        ),
+        (
+            "system",
+            repo_root_command(
+                [
+                    *binary_prefix("graph-interp"),
+                    "--flow",
+                    "unbounded-monitor",
+                    *common,
+                ],
+                stderr="inherit",
+            ),
+        ),
+    ]
+
+
 def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
     ast_cmd = [
         *binary_prefix("protocols-interp"),
@@ -217,8 +283,8 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--respect-forks",
-        "--determinize",
+        "--flow",
+        "trace-graph",
         "--ascii-waveform",
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
@@ -227,7 +293,8 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--transition-system",
+        "--flow",
+        "trace-system",
         "--ascii-waveform",
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
@@ -236,28 +303,34 @@ def waveform_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         case["paths"][0],
+        "--flow",
+        "bounded-driver",
         "--bound",
         str(tx_max_trace_protocols(case["paths"][0])),
         "--ascii-waveform",
     ]
     _tx_tail(bounded_cmd, case, with_max_steps=False)
 
+    unbounded_cmd = [
+        *binary_prefix("graph-interp"),
+        "--transactions",
+        " ".join(case["paths"]),
+        "--flow",
+        "unbounded-driver",
+        "--ascii-waveform",
+    ]
+    _tx_tail(unbounded_cmd, case, with_max_steps=False)
+
     variants: list[tuple[str, str]] = [
         ("ast", repo_root_command(ast_cmd, stderr="discard")),
         ("graph", repo_root_command(graph_cmd, stderr="discard")),
         ("ts", repo_root_command(ts_cmd, stderr="discard")),
     ]
+    if case["protocol_path"] not in JOINT_DRIVER_UNSUPPORTED:
+        variants.append(("joint", repo_root_command(unbounded_cmd, stderr="discard")))
 
-    # I manually checked this one is correct, but it takes too long in debug mode
-    # (and still 1 min in release mode) to be worth running every time.
-    # maybe in the future we can flag a slow/fast runt config
-    # c4_fixed.tx is simply too long (stack overflows in execution) for now but is fixable
-    # Note: ignoring `s3_fixed.tx` for graph-interpreter for now as it is a Brave New World test case
-    if (
-        case["paths"][0] != "examples/picorv32/unsigned_mul.tx"
-        and case["paths"][0] != "tests/fpga-debugging/axis-async-fifo-c4/c4_fixed.tx"
-        and case["paths"][0] != "tests/fpga-debugging/axis-adapter-s3/s3_fixed.tx"
-    ):
+    # Expensive or unsupported bounded cases are centralized in the generator.
+    if case["paths"][0] not in BOUNDED_DRIVER_EXCLUDED:
         variants.append(("bmc", repo_root_command(bounded_cmd, stderr="discard")))
 
     return variants
@@ -268,8 +341,8 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--respect-forks",
-        "--determinize",
+        "--flow",
+        "trace-graph",
         "--brief-graph-errors",
     ]
     _tx_tail(graph_cmd, case, with_max_steps=False)
@@ -278,7 +351,8 @@ def fail_runt_command(case: dict) -> list[tuple[str, str]]:
         *binary_prefix("graph-interp"),
         "--transactions",
         " ".join(case["paths"]),
-        "--transition-system",
+        "--flow",
+        "trace-system",
     ]
     _tx_tail(ts_cmd, case, with_max_steps=False)
 
@@ -310,6 +384,7 @@ RUNT_BUILDERS = {
     "interp": interp_runt_command,
     "graph_interp": graph_interp_runt_command,
     "bi": bi_runt_command,
+    "monitor_status": monitor_status_runt_command,
     "waveform": waveform_runt_command,
     "fail": fail_runt_command,
 }
@@ -319,23 +394,28 @@ RUNT_BUILDERS = {
 
 
 @lru_cache(maxsize=None)
-def protocol_constructs(protocol_path: str) -> frozenset[str]:
+def protocol_constructs(
+    protocol_path: str, transaction_path: str | None = None
+) -> frozenset[str]:
     """
     Constructs used anywhere in a .prot file, via `protocols-cli constructs`.
     """
+    command = [
+        "cargo",
+        "run",
+        "-q",
+        "--bin",
+        "protocols-cli",
+        "--",
+        "--allow-branch-on-arg",
+        "-p",
+        protocol_path,
+        "constructs",
+    ]
+    if transaction_path is not None:
+        command.extend(["--transactions", transaction_path])
     result = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "-q",
-            "--bin",
-            "protocols-cli",
-            "--",
-            "--allow-branch-on-arg",
-            "-p",
-            protocol_path,
-            "constructs",
-        ],
+        command,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -351,14 +431,12 @@ def protocol_constructs(protocol_path: str) -> frozenset[str]:
 
 def graph_interp_cases(cases: list[dict]) -> list[dict]:
     """Passing tx cases whose protocol uses no for-in or repeat loop."""
-    # Loop constructs & tuples the graph interpreter cannot handle (AST construct names).
-    graph_interp_unsupported = {"for_in_loop", "repeat_loop", "tuples"}
-
     selected = [
         c
         for c in cases
         if c["expected"] == "pass"
-        and not graph_interp_unsupported & protocol_constructs(c["protocol_path"])
+        and not GRAPH_INTERP_UNSUPPORTED
+        & protocol_constructs(c["protocol_path"], c["paths"][0])
     ]
     # exclude s3 from graph_interp cases
     # TODO: re-include
@@ -367,8 +445,23 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
     return sorted(selected, key=lambda c: c["paths"][0])
 
 
+def monitor_status_cases(cases: list[dict]) -> list[dict]:
+    """Exclude unsupported loops, argument guards, and guarded-fork composition."""
+    return [
+        case
+        # ignore cases that the automata repr can't handle
+        for case in cases
+        if "--allow-branch-on-arg" not in case["extra_args"]
+        and "examples/wishbone/wishbone_pipelined.prot" not in case["paths"]
+        and not any(
+            {"for_in_loop", "repeat_loop"} & protocol_constructs(path)
+            for path in case["paths"]
+        )
+    ]
+
+
 def waveform_cases(cases: list[dict]) -> list[dict]:
-    """All the graph_interp_cases, except with some extra exclusions"""
+    """Graph-interpreter cases suitable for cycle-exact comparison."""
     # these cases are correct, but our ASCII diffing isn't good enough
     # for us to know they are the same
     xfailed = [
@@ -381,9 +474,9 @@ def waveform_cases(cases: list[dict]) -> list[dict]:
         "tests/brave_new_world/failure_to_update/ftu_sha_fix.tx",
     ]
 
-    return list(
-        filter(lambda c: c["paths"][0] not in xfailed, graph_interp_cases(cases))
-    )
+    return [
+        case for case in graph_interp_cases(cases) if case["paths"][0] not in xfailed
+    ]
 
 
 def fail_cases(cases: list[dict]) -> list[dict]:
@@ -444,14 +537,14 @@ def generate_runt_configs() -> None:
     suite_specs = {
         "interp": ("interp", tx),
         "bi": ("bi", bi),
+        "monitor_status": ("monitor_status", monitor_status_cases(bi)),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
         "fail": ("fail", fail_cases(tx)),
     }
 
-    # A golden may be shared by several variants of the same test (e.g. the
-    # graph_interp baseline and --contract-edges runs), but two *different* tests
-    # sharing one golden is an accidental name collision.
+    # A golden may be shared by several flows of the same test, but two
+    # different tests sharing one golden is an accidental name collision.
     expect_owner: dict[str, str] = {}
     for suite_name, (runner, cases) in suite_specs.items():
         config_dir = REPO_ROOT / "runt" / suite_name

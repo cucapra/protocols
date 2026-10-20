@@ -1,9 +1,34 @@
-# Checked-in test catalog. Hand-maintained source of truth.
-# Consumed by scripts/generate_runt_configs.py.
-#
-# TX_CASES are keyed by their .tx path. BI_CASES are keyed by a unique id
+# This file is the source of truth for all snapshots tests.
+# It is consumed by scripts/generate_runt_configs.py.
 
 TX_CASES = {
+    "examples/apb/ip_apb.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": (
+            "examples/apb/rtl/ip_apb_slave.sv",
+            "examples/apb/rtl/ip_apb_dut.v",
+        ),
+        "top": "ip_apb_dut",
+        "expect": "pass",
+    },
+    "examples/apb/ch_apb_actual.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": (
+            "examples/apb/rtl/ch_apb_slave.sv",
+            "examples/apb/rtl/ch_apb_dut.v",
+        ),
+        "top": "ch_apb_dut",
+        "expect": "pass",
+    },
+    "examples/apb/ch_apb.tx": {
+        "protocol": "examples/apb/apb.prot",
+        "verilog": (
+            "examples/apb/rtl/ch_apb_slave.sv",
+            "examples/apb/rtl/ch_apb_dut.v",
+        ),
+        "top": "ch_apb_dut",
+        "expect": "assertion_mismatch",
+    },
     "examples/picorv32/unsigned_mul.tx": {
         "protocol": "examples/picorv32/pcpi_mul.prot",
         "verilog": ("examples/picorv32/picorv32.v",),
@@ -34,6 +59,12 @@ TX_CASES = {
         "expect": "pass",
     },
     "examples/wishbone/4.?_incremental_address_burst_wrap.tx": {
+        "protocol": "examples/wishbone/wishbone.prot",
+        "verilog": ("examples/wishbone/rtl/dut.v", "examples/wishbone/rtl/tb.v"),
+        "top": "tb",
+        "expect": "pass",
+    },
+    "examples/wishbone/joint_read_write_long.tx": {
         "protocol": "examples/wishbone/wishbone.prot",
         "verilog": ("examples/wishbone/rtl/dut.v", "examples/wishbone/rtl/tb.v"),
         "top": "tb",
@@ -75,6 +106,11 @@ TX_CASES = {
         "expect": "assertion_mismatch",
     },
     "tests/adders/adder_d1/add_multitrace_successful.tx": {
+        "protocol": "tests/adders/adder_d1/add_d1.prot",
+        "verilog": ("tests/adders/adder_d1/add_d1.v",),
+        "expect": "pass",
+    },
+    "tests/adders/adder_d1/joint_add_d1_long.tx": {
         "protocol": "tests/adders/adder_d1/add_d1.prot",
         "verilog": ("tests/adders/adder_d1/add_d1.v",),
         "expect": "pass",
@@ -148,6 +184,11 @@ TX_CASES = {
         "expect": "pass",
         "max_steps": 4,
     },
+    "tests/adders/adder_d2/joint_add_d2_long.tx": {
+        "protocol": "tests/adders/adder_d2/add_d2.prot",
+        "verilog": ("tests/adders/adder_d2/add_d2.v",),
+        "expect": "pass",
+    },
     "tests/adders/adder_d2/no_dontcare_conflict.tx": {
         "protocol": "tests/adders/adder_d2/no_dontcare_conflict.prot",
         "verilog": ("tests/adders/adder_d2/add_d2.v",),
@@ -165,7 +206,19 @@ TX_CASES = {
         "top": "alu_d1",
         "expect": "pass",
     },
+    "tests/alus/joint_alu_d1_long.tx": {
+        "protocol": "tests/alus/alu_d1.prot",
+        "verilog": ("tests/alus/alu_d1.v",),
+        "top": "alu_d1",
+        "expect": "pass",
+    },
     "tests/alus/alu_d2.tx": {
+        "protocol": "tests/alus/alu_d2.prot",
+        "verilog": ("tests/alus/alu_d2.v",),
+        "top": "alu_d2",
+        "expect": "pass",
+    },
+    "tests/alus/joint_alu_d2_long.tx": {
         "protocol": "tests/alus/alu_d2.prot",
         "verilog": ("tests/alus/alu_d2.v",),
         "top": "alu_d2",
@@ -467,6 +520,11 @@ TX_CASES = {
         "verilog": ("tests/multipliers/mult_d2/mult_d2.v",),
         "expect": "pass",
     },
+    "tests/multipliers/mult_d2/joint_mul_d2_long.tx": {
+        "protocol": "tests/multipliers/mult_d2/mult_d2.prot",
+        "verilog": ("tests/multipliers/mult_d2/mult_d2.v",),
+        "expect": "pass",
+    },
     "tests/multipliers/mult_d2/first_thread_fails.tx": {
         "protocol": "tests/multipliers/mult_d2/mult_d2.prot",
         "verilog": ("tests/multipliers/mult_d2/mult_d2.v",),
@@ -495,6 +553,12 @@ TX_CASES = {
         "protocol": "tests/wishbone/wishbone.prot",
         "verilog": ("tests/wishbone/reqwalker.v",),
         "top": "reqwalker",
+        "expect": "pass",
+    },
+    "examples/enginev/enginev_regfile.tx": {
+        "protocol": "examples/enginev/enginev_regfile.prot",
+        "verilog": ("examples/enginev/enginev_reg.v",),
+        "top": "mf8_reg",
         "expect": "pass",
     },
     "tests/muxes/mux2_tuple.tx": {
@@ -554,6 +618,55 @@ TX_CASES = {
 }
 
 BI_CASES = {
+    "examples.apb.ip_apb_interp_fst": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/ip_apb_0.fst",
+        "instances": ("dut:APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps",),
+    },
+    "examples.apb.spec_fig_3_1": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.1_write_transfer_with_no_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_2": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.2_write_transfer_with_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_4": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.4_read_transfer_with_no_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_5": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.5_read_transfer_with_wait_states.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_6": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.6_example_failing_write_transfer.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
+    "examples.apb.spec_fig_3_7": {
+        "protocol": "examples/apb/apb.prot",
+        "wave": "examples/apb/3.7_example_failing_read_transfer.wave",
+        "instances": (":APB",),
+        "expect": "pass",
+        "extra_args": ("--show-steps", "--include-idle", "--display-hex"),
+    },
     "tests.adders.add_d1": {
         "protocol": "tests/adders/add_d1.prot",
         "wave": "tests/adders/add_d1.fst",
@@ -748,7 +861,7 @@ BI_CASES = {
         "protocol": "tests/fpga-debugging/axi-stream-s2/s2.prot",
         "wave": "tests/fpga-debugging/axi-stream-s2/s2_buggy.fst",
         "instances": ("TOP.testbench.UUT:AXISManager",),
-        "expect": "pass",
+        "expect": "fail",
         "extra_args": (
             "--sample-posedge",
             "TOP.testbench.UUT.M_AXIS_ACLK",
@@ -774,7 +887,7 @@ BI_CASES = {
         "protocol": "tests/fpga-debugging/axis-adapter-s3/s3.prot",
         "wave": "tests/fpga-debugging/axis-adapter-s3/s3_buggy.fst",
         "instances": ("TOP.test_axis_adapter_64_8.UUT:AXIS",),
-        "expect": "pass",
+        "expect": "fail",
         "extra_args": (
             "--sample-posedge",
             "TOP.test_axis_adapter_64_8.UUT.clk",
@@ -1109,7 +1222,7 @@ BI_CASES = {
         ],
         "wave": "examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd",
         "instances": (":LitexWishbone",),
-        "expect": "pass",
+        "expect": "fail",
         "extra_args": ("--display-hex", "--show-steps"),
     },
     # wishbone protocol on shortened wb_stream testbench
@@ -1154,6 +1267,12 @@ BI_CASES = {
         "instances": ("dut:Axis",),
         "expect": "pass",
         "extra_args": ("--show-steps",),
+    },
+    "examples.enginev.enginev_regfile.bi": {
+        "protocol": "examples/enginev/enginev_regfile.prot",
+        "wave": "examples/enginev/enginev_regfile.fst",
+        "instances": ("dut:Mf8RegFile",),
+        "expect": "pass",
     },
 }
 

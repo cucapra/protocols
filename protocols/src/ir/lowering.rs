@@ -2,9 +2,7 @@
 // released under MIT License
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
-use patronus::expr::{
-    Context as ExprContext, ExprRef, Type as PatronusType, simple_transform_expr,
-};
+use patronus::expr::{Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 
@@ -51,38 +49,34 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    pub fn with_expr_ctx(
-        ctx: ProtocolContext,
-        symbols: &'a SymbolTable,
-        expr_ctx: ExprContext,
-    ) -> Self {
-        Self {
-            ir: ProtoGraph::with_expr_ctx(ctx, expr_ctx),
-            symbols,
-            trace_arg_subst: TraceArgSubst::default(),
-            current_fragment_nodes: Vec::new(),
-        }
-    }
-
-    pub fn postprocess_trace_fragment(&mut self, fragment: &LoweredFragmentInfo) {
+    pub fn postprocess_trace_fragment(
+        &mut self,
+        ctx: &mut ExprContext,
+        fragment: &LoweredFragmentInfo,
+    ) {
         // The newly lowered transaction is still disconnected from the existing
         // trace graph, so propagation has to start from the fragment entry.
-        contract_edges_from(&mut self.ir, self.symbols, fragment.entry);
-        let rd = reaching_definitions_from(&mut self.ir, self.symbols, fragment.entry);
-        propagate_assignments_from(&mut self.ir, self.symbols, &rd, fragment.entry);
+        contract_edges_from(ctx, &mut self.ir, self.symbols, fragment.entry);
+        let rd = reaching_definitions_from(ctx, &mut self.ir, self.symbols, fragment.entry);
+        propagate_assignments_from(ctx, &mut self.ir, self.symbols, &rd, fragment.entry);
     }
 
-    pub fn graft_points(&mut self, fragment: &LoweredFragmentInfo) -> Vec<(NodeId, ExprRef)> {
-        self.graft_points_from_node(&fragment.nodes, fragment.entry, fragment.exit)
+    pub fn graft_points(
+        &mut self,
+        ctx: &mut ExprContext,
+        fragment: &LoweredFragmentInfo,
+    ) -> Vec<(NodeId, ExprRef)> {
+        self.graft_points_from_node(ctx, &fragment.nodes, fragment.entry, fragment.exit)
     }
 
     pub fn graft_points_from_node(
         &mut self,
+        ctx: &mut Context,
         nodes: &[NodeId],
         entry: NodeId,
         exit: NodeId,
     ) -> Vec<(NodeId, ExprRef)> {
-        let fork_reach = reaching_forks_from(&mut self.ir, entry);
+        let fork_reach = reaching_forks_from(ctx, &mut self.ir, entry);
         let ir = &self.ir;
 
         // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
@@ -133,7 +127,7 @@ impl<'a> Lowerer<'a> {
             .unwrap_or(ForkReachability::Unreachable);
         match exit_reachability {
             ForkReachability::DefinitelyNotForked => {
-                graft_points.push((exit, self.ir.true_id()));
+                graft_points.push((exit, ctx.get_true()));
             }
             ForkReachability::DefinitelyForked | ForkReachability::Unreachable => {}
             ForkReachability::MaybeForked => {
@@ -151,15 +145,13 @@ impl<'a> Lowerer<'a> {
         node_id
     }
 
-    fn dont_care_expr(&mut self, tpe: PatronusType) -> ExprRef {
+    fn dont_care_expr(&mut self, ctx: &mut Context, tpe: PatronusType) -> ExprRef {
         let next_dont_care = self.ir.dont_cares.len();
         let name = format!("dont_care_{}", next_dont_care);
         let dont_care_expr = match tpe {
-            PatronusType::BV(width) => self.ir.expr_ctx.bv_symbol(&name, width),
+            PatronusType::BV(width) => ctx.bv_symbol(&name, width),
             PatronusType::Array(array_tpe) => {
-                self.ir
-                    .expr_ctx
-                    .array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
+                ctx.array_symbol(&name, array_tpe.index_width, array_tpe.data_width)
             }
         };
         self.ir.dont_cares.insert(dont_care_expr);
@@ -168,6 +160,7 @@ impl<'a> Lowerer<'a> {
 
     fn lower_expr(
         &mut self,
+        ctx: &mut Context,
         ast: &Protocol,
         expr: ExprId,
         expected: Option<PatronusType>,
@@ -175,38 +168,38 @@ impl<'a> Lowerer<'a> {
         match &ast[expr] {
             Expr::DontCare => {
                 let tpe = expected.unwrap_or(PatronusType::BV(1));
-                self.dont_care_expr(tpe)
+                self.dont_care_expr(ctx, tpe)
             }
-            Expr::Const(bvv) => self.ir.expr_ctx.bv_lit(bvv),
-            Expr::Sym(sym) => self.lower_symbol(*sym),
+            Expr::Const(bvv) => ctx.bv_lit(bvv),
+            Expr::Sym(sym) => self.lower_symbol(ctx, *sym),
             Expr::Binary(BinOp::Equal, lhs, rhs) => {
-                let lhs_ref = self.lower_expr(ast, *lhs, None);
-                let rhs_ref = self.lower_expr(ast, *rhs, None);
-                self.ir.expr_ctx.equal(lhs_ref, rhs_ref)
+                let lhs_ref = self.lower_expr(ctx, ast, *lhs, None);
+                let rhs_ref = self.lower_expr(ctx, ast, *rhs, None);
+                ctx.equal(lhs_ref, rhs_ref)
             }
             Expr::Binary(BinOp::Concat, lhs, rhs) => {
-                let lhs_ref = self.lower_expr(ast, *lhs, None);
-                let rhs_ref = self.lower_expr(ast, *rhs, None);
-                self.ir.expr_ctx.concat(lhs_ref, rhs_ref)
+                let lhs_ref = self.lower_expr(ctx, ast, *lhs, None);
+                let rhs_ref = self.lower_expr(ctx, ast, *rhs, None);
+                ctx.concat(lhs_ref, rhs_ref)
             }
             Expr::Binary(BinOp::Add, lhs, rhs) => {
-                let lhs_ref = self.lower_expr(ast, *lhs, None);
-                let rhs_ref = self.lower_expr(ast, *rhs, None);
-                self.ir.expr_ctx.add(lhs_ref, rhs_ref)
+                let lhs_ref = self.lower_expr(ctx, ast, *lhs, None);
+                let rhs_ref = self.lower_expr(ctx, ast, *rhs, None);
+                ctx.add(lhs_ref, rhs_ref)
             }
             Expr::Binary(BinOp::And, lhs, rhs) => {
-                let lhs_ref = self.lower_expr(ast, *lhs, None);
-                let rhs_ref = self.lower_expr(ast, *rhs, None);
-                self.ir.expr_ctx.and(lhs_ref, rhs_ref)
+                let lhs_ref = self.lower_expr(ctx, ast, *lhs, None);
+                let rhs_ref = self.lower_expr(ctx, ast, *rhs, None);
+                ctx.and(lhs_ref, rhs_ref)
             }
             Expr::Unary(UnaryOp::Not, inner) => {
-                let inner_ref = self.lower_expr(ast, *inner, Some(PatronusType::BV(1)));
-                self.ir.expr_ctx.not(inner_ref)
+                let inner_ref = self.lower_expr(ctx, ast, *inner, Some(PatronusType::BV(1)));
+                ctx.not(inner_ref)
             }
             Expr::Slice(inner, hi, lo) => {
                 let (hi, lo) = (*hi, *lo);
-                let inner_ref = self.lower_expr(ast, *inner, None);
-                self.ir.expr_ctx.slice(inner_ref, hi, lo)
+                let inner_ref = self.lower_expr(ctx, ast, *inner, None);
+                ctx.slice(inner_ref, hi, lo)
             }
             Expr::IsLastIteration => {
                 panic!("loop expressions are not lowered to Patronus yet")
@@ -220,7 +213,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_symbol(&mut self, symbol_id: SymbolId) -> ExprRef {
+    fn lower_symbol(&mut self, ctx: &mut Context, symbol_id: SymbolId) -> ExprRef {
         // A trace-substituted argument takes precedence over the shared cache:
         // the same argument symbol may resolve to different constants per copy.
         if let Some(expr) = self.trace_arg_subst.get(&symbol_id) {
@@ -235,7 +228,7 @@ impl<'a> Lowerer<'a> {
         let entry = &symbols[symbol_id];
         let full_name = entry.full_name(symbols);
         let expr = match entry.tpe() {
-            FrontType::BitVec(width) => self.ir.expr_ctx.bv_symbol(&full_name, width),
+            FrontType::BitVec(width) => ctx.bv_symbol(&full_name, width),
             FrontType::Struct(_)
             | FrontType::Seq(_)
             | FrontType::Tuple(_)
@@ -254,12 +247,18 @@ impl<'a> Lowerer<'a> {
 
     // lower some statement `stmt_id` (which points to a subtree in the AST) to
     // an IR where the final node in the IR sub-graph points to an exit node `exit`
-    fn lower_stmt(&mut self, ast: &Protocol, stmt_id: StmtId, exit: NodeId) -> NodeId {
+    fn lower_stmt(
+        &mut self,
+        ctx: &mut Context,
+        ast: &Protocol,
+        stmt_id: StmtId,
+        exit: NodeId,
+    ) -> NodeId {
         match &ast[stmt_id] {
             Stmt::Block(stmt_ids) => {
                 if stmt_ids.is_empty() {
                     let node_id = self.n(Node::empty());
-                    let true_id = self.ir.true_id();
+                    let true_id = ctx.get_true();
                     self.ir
                         .push_transition(node_id, Transition::new(true_id, exit, false));
                     return node_id;
@@ -267,7 +266,7 @@ impl<'a> Lowerer<'a> {
 
                 let mut curr_exit = exit;
                 for stmt_id in stmt_ids.clone().iter().rev() {
-                    curr_exit = self.lower_stmt(ast, *stmt_id, curr_exit);
+                    curr_exit = self.lower_stmt(ctx, ast, *stmt_id, curr_exit);
                 }
                 curr_exit
             }
@@ -281,15 +280,15 @@ impl<'a> Lowerer<'a> {
                         other
                     ),
                 };
-                let rhs_ref = self.lower_expr(ast, expr_id, Some(expected));
+                let rhs_ref = self.lower_expr(ctx, ast, expr_id, Some(expected));
                 let assignment = Assignment::from_rhs(
-                    self.ir.false_id(),
-                    self.ir.true_id(),
+                    ctx.get_false(),
+                    ctx.get_true(),
                     rhs_ref,
                     self.ir.dont_cares.contains(&rhs_ref),
                 );
                 let op_id = self.ir.o(Op::Assign(symbol_id, assignment));
-                let true_id = self.ir.true_id();
+                let true_id = ctx.get_true();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
                 self.ir
                     .push_transition(node_id, Transition::new(true_id, exit, false));
@@ -297,7 +296,7 @@ impl<'a> Lowerer<'a> {
             }
             Stmt::Step => {
                 let node_id = self.n(Node::empty());
-                let true_id = self.ir.true_id();
+                let true_id = ctx.get_true();
                 self.ir
                     .push_transition(node_id, Transition::new(true_id, exit, true));
                 node_id
@@ -305,7 +304,7 @@ impl<'a> Lowerer<'a> {
             Stmt::Fork => {
                 let node_id = self.n(Node::empty());
                 let op_id = self.ir.o(Op::Fork);
-                let true_id = self.ir.true_id();
+                let true_id = ctx.get_true();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
                 self.ir
                     .push_transition(node_id, Transition::new(true_id, exit, false));
@@ -314,10 +313,11 @@ impl<'a> Lowerer<'a> {
             Stmt::AssertEq(lhs, rhs) => {
                 let (lhs, rhs) = (*lhs, *rhs);
                 let node_id = self.n(Node::empty());
-                let lhs_ref = self.lower_expr(ast, lhs, None);
-                let rhs_ref = self.lower_expr(ast, rhs, None);
+                let lhs_ref = self.lower_expr(ctx, ast, lhs, None);
+                let rhs_ref = self.lower_expr(ctx, ast, rhs, None);
+                debug_assert_eq!(lhs_ref.get_type(ctx), rhs_ref.get_type(ctx));
                 let op_id = self.ir.o(Op::AssertEq(lhs_ref, rhs_ref));
-                let true_id = self.ir.true_id();
+                let true_id = ctx.get_true();
                 self.ir.push_action(node_id, Action::new(true_id, op_id));
                 self.ir
                     .push_transition(node_id, Transition::new(true_id, exit, false));
@@ -328,17 +328,17 @@ impl<'a> Lowerer<'a> {
                 // create a join node that will be the final node in the IfElse subgraph, pointing to exit
                 // this will also be the target exit node for the sub-branches
                 let join_node_id = self.n(Node::empty());
-                let true_id = self.ir.true_id();
+                let true_id = ctx.get_true();
                 self.ir
                     .push_transition(join_node_id, Transition::new(true_id, exit, false));
 
-                let true_entry = self.lower_stmt(ast, true_branch, join_node_id);
-                let false_entry = self.lower_stmt(ast, false_branch, join_node_id);
+                let true_entry = self.lower_stmt(ctx, ast, true_branch, join_node_id);
+                let false_entry = self.lower_stmt(ctx, ast, false_branch, join_node_id);
 
                 // create the branch node from which we transition into the true or false entry nodes
                 let branch_node_id = self.n(Node::empty());
-                let cond_ref = self.lower_expr(ast, cond, Some(PatronusType::BV(1)));
-                let negated_cond = self.ir.expr_ctx.not(cond_ref);
+                let cond_ref = self.lower_expr(ctx, ast, cond, Some(PatronusType::BV(1)));
+                let negated_cond = ctx.not(cond_ref);
 
                 // push transitions from the branch node to the true/false branch with positive/negative guarded transitions
                 self.ir
@@ -354,7 +354,7 @@ impl<'a> Lowerer<'a> {
             Stmt::While(loop_guard, loop_body) => {
                 let (loop_guard, loop_body) = (*loop_guard, *loop_body);
                 let loop_exit_node_id = self.n(Node::empty());
-                let true_id = self.ir.true_id();
+                let true_id = ctx.get_true();
                 self.ir
                     .push_transition(loop_exit_node_id, Transition::new(true_id, exit, false));
 
@@ -362,11 +362,12 @@ impl<'a> Lowerer<'a> {
                 let loop_guard_node_id = self.n(Node::empty());
 
                 // lower the loop body, which exits into the loop guard (the cycle-forming edge)
-                let loop_body_node_id = self.lower_stmt(ast, loop_body, loop_guard_node_id);
+                let loop_body_node_id = self.lower_stmt(ctx, ast, loop_body, loop_guard_node_id);
 
                 // create transitions from the loop guard to the loop body and the loop exit
-                let loop_guard_ref = self.lower_expr(ast, loop_guard, Some(PatronusType::BV(1)));
-                let negated_loop_guard = self.ir.expr_ctx.not(loop_guard_ref);
+                let loop_guard_ref =
+                    self.lower_expr(ctx, ast, loop_guard, Some(PatronusType::BV(1)));
+                let negated_loop_guard = ctx.not(loop_guard_ref);
                 self.ir.push_transition(
                     loop_guard_node_id,
                     Transition::new(loop_guard_ref, loop_body_node_id, false),
@@ -383,7 +384,12 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn add_input_dont_care_assignments(&mut self, ast: &Protocol, node_id: NodeId) {
+    pub fn add_input_dont_care_assignments(
+        &mut self,
+        ctx: &mut Context,
+        ast: &Protocol,
+        node_id: NodeId,
+    ) {
         let dut = ast.ctx.dut_sym;
 
         for input in self
@@ -391,10 +397,10 @@ impl<'a> Lowerer<'a> {
             .get_children(&dut)
             .filter(|sym| self.symbols[*sym].is_in_port())
         {
-            let assignment = Assignment::dont_care(self.ir.true_id());
+            let assignment = Assignment::dont_care(ctx.get_true());
             let assign = self.ir.o(Op::Assign(input, assignment));
             self.ir
-                .push_action(node_id, Action::new(self.ir.true_id(), assign));
+                .push_action(node_id, Action::new(ctx.get_true(), assign));
         }
     }
 
@@ -403,6 +409,7 @@ impl<'a> Lowerer<'a> {
     /// Returns the nodes, entry, and exit of the lowered fragment
     pub fn lower_protocol_fragment(
         &mut self,
+        ctx: &mut Context,
         ast: &Protocol,
         keep_done: bool,
         postprocess: bool,
@@ -416,29 +423,29 @@ impl<'a> Lowerer<'a> {
         let done = self.n(Node::empty());
         if keep_done {
             let done_op = self.ir.o(Op::Done);
-            let true_id = self.ir.true_id();
+            let true_id = ctx.get_true();
             self.ir.push_action(done, Action::new(true_id, done_op));
         }
 
         // relinquish all ports in the exit node
-        self.add_input_dont_care_assignments(ast, done);
+        self.add_input_dont_care_assignments(ctx, ast, done);
 
         // lower the protocol, which will add the new nodes to self.current_fragment_nodes
-        let body_entry = self.lower_stmt(ast, ast.body, done);
+        let body_entry = self.lower_stmt(ctx, ast, ast.body, done);
         let entry = self.n(Node::empty());
-        self.add_input_dont_care_assignments(ast, entry);
-        let true_id = self.ir.true_id();
+        self.add_input_dont_care_assignments(ctx, ast, entry);
+        let true_id = ctx.get_true();
         self.ir
             .push_transition(entry, Transition::new(true_id, body_entry, false));
 
         if postprocess {
-            contract_edges_from(&mut self.ir, self.symbols, entry);
-            let rd = reaching_definitions_from(&mut self.ir, self.symbols, entry);
-            propagate_assignments_from(&mut self.ir, self.symbols, &rd, entry);
+            contract_edges_from(ctx, &mut self.ir, self.symbols, entry);
+            let rd = reaching_definitions_from(ctx, &mut self.ir, self.symbols, entry);
+            propagate_assignments_from(ctx, &mut self.ir, self.symbols, &rd, entry);
         }
 
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
-        let graft_points = self.graft_points_from_node(&nodes, entry, done);
+        let graft_points = self.graft_points_from_node(ctx, &nodes, entry, done);
         LoweredFragmentInfo {
             nodes,
             entry,
@@ -447,44 +454,54 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn remap_expr(
+    pub fn remap_expr(
         &mut self,
+        ctx: &mut Context,
         expr: ExprRef,
         substitutions: &FxHashMap<ExprRef, ExprRef>,
     ) -> ExprRef {
-        simple_transform_expr(&mut self.ir.expr_ctx, expr, |_ctx, candidate, _children| {
-            substitutions.get(&candidate).copied()
-        })
+        remap_expr(ctx, expr, substitutions)
     }
 
-    fn remap_op(&mut self, op: Op, substitutions: &FxHashMap<ExprRef, ExprRef>) -> Op {
-        match op {
-            Op::Assign(symbol_id, assignment) => Op::Assign(
-                symbol_id,
-                Assignment {
-                    dont_care: self.remap_expr(assignment.dont_care, substitutions),
-                    concretes: assignment
-                        .concretes
-                        .into_iter()
-                        .map(|(guard, rhs)| {
-                            (
-                                self.remap_expr(guard, substitutions),
-                                self.remap_expr(rhs, substitutions),
-                            )
-                        })
-                        .collect(),
-                },
-            ),
-            Op::AssertEq(lhs, rhs) => Op::AssertEq(
-                self.remap_expr(lhs, substitutions),
-                self.remap_expr(rhs, substitutions),
-            ),
-            other => other,
+    fn remap_op(
+        &mut self,
+        ctx: &mut Context,
+        op: Op,
+        substitutions: &FxHashMap<ExprRef, ExprRef>,
+    ) -> Op {
+        op.remap(ctx, substitutions, &FxHashMap::default())
+    }
+
+    /// Copy only the actions from a contracted node, remapping every expression.
+    /// Fork and done actions are optional because combined graphs provide their
+    /// own fork and done control instead of executing the source actions directly.
+    pub fn copy_node_actions(
+        &mut self,
+        ctx: &mut Context,
+        source: NodeId,
+        substitutions: &FxHashMap<ExprRef, ExprRef>,
+        keep_fork_and_done: bool,
+    ) -> NodeId {
+        let source_node = self.ir[source].clone();
+        let mut actions = Vec::with_capacity(source_node.actions.len());
+        for action in source_node.actions {
+            if !keep_fork_and_done && matches!(self.ir[action.op], Op::Fork | Op::Done) {
+                continue;
+            }
+            let op = self.remap_op(ctx, self.ir[action.op].clone(), substitutions);
+            let op = self.ir.o(op);
+            let guard = self.remap_expr(ctx, action.guard, substitutions);
+            actions.push(Action::new(guard, op));
         }
+        self.ir.n(Node {
+            actions,
+            transitions: Vec::new(),
+        })
     }
 
     pub fn copy_protocol_fragment(
         &mut self,
+        ctx: &mut Context,
         frag: LoweredFragmentInfo,
         substitutions: &FxHashMap<ExprRef, ExprRef>,
     ) -> LoweredFragmentInfo {
@@ -511,9 +528,9 @@ impl<'a> Lowerer<'a> {
                 .actions
                 .iter()
                 .map(|action| {
-                    let op = self.remap_op(self.ir[action.op].clone(), substitutions);
+                    let op = self.remap_op(ctx, self.ir[action.op].clone(), substitutions);
                     let op_id = self.ir.o(op);
-                    Action::new(self.remap_expr(action.guard, substitutions), op_id)
+                    Action::new(self.remap_expr(ctx, action.guard, substitutions), op_id)
                 })
                 .collect();
             let new_node = Node {
@@ -524,7 +541,7 @@ impl<'a> Lowerer<'a> {
 
             old_to_new_nodes.insert(current_old_id, new_node_id);
 
-            // Update entry and exit markers
+            // Update the copied entry and exit nodes
             if current_old_id == frag.entry {
                 entry = new_node_id;
             }
@@ -540,7 +557,7 @@ impl<'a> Lowerer<'a> {
                 .position(|(old_graft_id, _)| *old_graft_id == current_old_id)
             {
                 let (_, expr) = frag.graft_points[idx];
-                graft_points.push((new_node_id, self.remap_expr(expr, substitutions)));
+                graft_points.push((new_node_id, self.remap_expr(ctx, expr, substitutions)));
             }
 
             // Add neighbors to queue for BFS traversal
@@ -564,7 +581,7 @@ impl<'a> Lowerer<'a> {
                         .expect("copied fragment transition target should be reachable from entry");
                     Transition {
                         target: new_target,
-                        guard: self.remap_expr(transition.guard, substitutions),
+                        guard: self.remap_expr(ctx, transition.guard, substitutions),
                         consumes_step: transition.consumes_step,
                         rotations: transition.rotations.clone(),
                     }
@@ -584,18 +601,18 @@ impl<'a> Lowerer<'a> {
 }
 
 /// Lower a single AST `Protocol` into a fresh symbolic `ProtoGraph`
-pub fn lower_ast_to_ir(ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
+pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
     // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
-    let fragment = lowerer.lower_protocol_fragment(&ast, true, false);
+    let fragment = lowerer.lower_protocol_fragment(ctx, &ast, true, false);
 
     // link up the default entry node of the ir with the entry node of the lowered AST
     let entry_node = lowerer.ir.entry;
-    let true_id = lowerer.ir.true_id();
-    lowerer
-        .ir
-        .push_transition(entry_node, Transition::new(true_id, fragment.entry, false));
+    lowerer.ir.push_transition(
+        entry_node,
+        Transition::new(ctx.get_true(), fragment.entry, false),
+    );
 
-    lowerer.ir.simplify_all_exprs();
+    lowerer.ir.simplify_all_exprs(ctx);
     lowerer.ir
 }

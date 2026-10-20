@@ -2,10 +2,11 @@ use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use crate::ir::reaching_defs::{ReachingDefs, assignment_is_total};
 use cranelift_entity::EntitySet;
+use patronus::expr::Context;
 use rustc_hash::FxHashMap;
 
-// BFS from the entry
-pub fn reachable_node_ids(pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
+// BFS from the entry, following only possible transitions.
+pub fn reachable_node_ids(ctx: &Context, pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
     let mut visited: EntitySet<NodeId> = EntitySet::default();
     let mut nodes = Vec::new();
     let mut q = vec![start];
@@ -20,6 +21,7 @@ pub fn reachable_node_ids(pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
             pg[nid]
                 .transitions
                 .iter()
+                .filter(|transition| transition.guard != ctx.get_false())
                 .map(|t| t.target)
                 .filter(|target| !visited.contains(*target)),
         );
@@ -31,6 +33,7 @@ pub fn reachable_node_ids(pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
 /// check the invariant that for all nodes reachable from the entry that
 /// every node has a reaching definition for every port.
 fn all_ports_present(
+    ctx: &Context,
     reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
     pg: &ProtoGraph,
     st: &SymbolTable,
@@ -38,7 +41,7 @@ fn all_ports_present(
 ) -> bool {
     let input_ports: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
 
-    for nid in reachable_node_ids(pg, start) {
+    for nid in reachable_node_ids(ctx, pg, start) {
         let Some(rd) = reaching_defs.get(&nid) else {
             return false;
         };
@@ -58,22 +61,24 @@ fn all_ports_present(
 }
 
 pub fn propagate_assignments(
+    ctx: &mut Context,
     pg: &mut ProtoGraph,
     st: &SymbolTable,
     rd: &FxHashMap<NodeId, ReachingDefs>,
 ) {
     let start = pg.entry;
-    propagate_assignments_from(pg, st, rd, start);
+    propagate_assignments_from(ctx, pg, st, rd, start);
 }
 
 pub fn propagate_assignments_from(
+    ctx: &mut Context,
     pg: &mut ProtoGraph,
     st: &SymbolTable,
     rd: &FxHashMap<NodeId, ReachingDefs>,
     start: NodeId,
 ) {
     assert!(
-        all_ports_present(rd, pg, st, start),
+        all_ports_present(ctx, rd, pg, st, start),
         "cannot propagate assignments unless all ports are present at all nodes"
     );
 
@@ -82,7 +87,7 @@ pub fn propagate_assignments_from(
         .filter(|sym_id| st[*sym_id].is_in_port())
         .collect();
 
-    let node_ids = reachable_node_ids(pg, start);
+    let node_ids = reachable_node_ids(ctx, pg, start);
 
     for id in node_ids {
         let Some(node_defs) = rd.get(&id) else {
@@ -106,12 +111,12 @@ pub fn propagate_assignments_from(
                 .get(&st.full_name_from_symbol_id(input))
                 .unwrap_or_else(|| panic!("missing reaching definition for {input} at {id}"));
             assert!(
-                assignment_is_total(pg, assignment),
+                assignment_is_total(ctx, pg, assignment),
                 "cannot propagate partial assignment for {input} at {id}"
             );
 
             let op = pg.o(Op::Assign(*input, assignment.clone()));
-            pg.push_action(id, Action::new(pg.true_id(), op));
+            pg.push_action(id, Action::new(ctx.get_true(), op));
         }
     }
 }

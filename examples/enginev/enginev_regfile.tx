@@ -1,0 +1,6 @@
+
+trace {
+  read_write(5, 0, 1, 42, 0, 0);    // Write 42 to address 5
+  read_write(6, 0, 1, 43, 0, 0);    // Write 43 to address 6
+  read_write(5, 6, 0, 0, 42, 43); // Read back written value on both ports
+}

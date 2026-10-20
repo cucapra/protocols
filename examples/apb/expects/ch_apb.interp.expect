@@ -1,0 +1,9 @@
+error: The two expressions did not evaluate to the same value (in transaction `read(0, 305419896, 0, 0)`)
+    ┌─ examples/apb/apb.prot:136:15
+    │
+136 │     assert_eq(DUT.PRDATA, data);
+    │               ^^^^^^^^^^^^^^^^ LHS Value: 0, RHS Value: 305419896
+
+Trace 0 execution failed.
+---CODE---
+101

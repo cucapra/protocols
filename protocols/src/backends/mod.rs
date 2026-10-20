@@ -1,5 +1,7 @@
 pub mod bmc_transition_system;
-pub mod meta_transition_system;
+pub mod joint_transition_system;
+pub mod monitor_transition_system;
+pub mod protocol_banks;
 pub mod transition_system;
 pub mod verilog;
 

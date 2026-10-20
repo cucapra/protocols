@@ -378,7 +378,7 @@ impl Remapper<'_> {
                     self.out.e(Expr::Const(cc.clone()))
                 } else {
                     match self.st[sym_id].kind() {
-                        SymbolKind::Dut => unreachable!(),
+                        SymbolKind::Dut | SymbolKind::AutomatonState => unreachable!(),
                         SymbolKind::InPort => panic!("Did not expect to encounter an IN port!"),
                         SymbolKind::OutPort => {
                             let (m, _) = self.rename_lookup[&sym_id];

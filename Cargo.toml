@@ -6,7 +6,7 @@ members = ["bi", "interp", "protocols", "cli", "graph-interp"]
 [workspace.package]
 authors = ["Nikil Shyamsunder", "Francis Pham", "Ernest Ng", "Kevin Laeufer"]
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.97"
 repository = "https://github.com/cucapra/protocols"
 readme = "README.md"
 license = "MIT"

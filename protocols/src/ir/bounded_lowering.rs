@@ -2,7 +2,7 @@ use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
-use patronus::expr::{Context as ExprContext, ExprRef, TypeCheck};
+use patronus::expr::{Context as ExprContext, Context, ExprRef, TypeCheck};
 use rustc_hash::FxHashMap;
 
 fn mark_graft_point_ready(lowerer: &mut Lowerer<'_>, node: NodeId, guard: ExprRef) {
@@ -17,18 +17,19 @@ fn mark_graft_point_ready(lowerer: &mut Lowerer<'_>, node: NodeId, guard: ExprRe
 }
 
 fn graft_choice_entries_into(
+    ctx: &mut Context,
     lowerer: &mut Lowerer<'_>,
     parent: NodeId,
     choices: Vec<(NodeId, ExprRef)>,
 ) {
-    lowerer.graft_disjoint_contracted_entries(parent, &choices);
+    lowerer.graft_disjoint_contracted_entries(ctx, parent, &choices);
 }
 
 /// Lower a set of protocols to a joint IR that represents any trace up to `k` in length
 pub fn lower_bmc(
+    ctx: &mut ExprContext,
     protos: Vec<Protocol>,
     symbols: &SymbolTable,
-    mut expr_ctx: ExprContext,
     bound: usize,
 ) -> (ProtoGraph, Vec<ExprRef>) {
     assert!(!protos.is_empty());
@@ -39,20 +40,20 @@ pub fn lower_bmc(
         usize::BITS - (num_protos - 1).leading_zeros()
     };
     let proto_choices: Vec<ExprRef> = (0..bound)
-        .map(|slot| expr_ctx.bv_symbol(&format!("proto_choice_{slot}"), width))
+        .map(|slot| ctx.bv_symbol(&format!("proto_choice_{slot}"), width))
         .collect();
 
     let first_ast = protos.first().unwrap();
     let mut graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
     // set up the lowerer and lower the initial transaction
-    let mut lowerer = Lowerer::with_expr_ctx(first_ast.ctx.clone(), symbols, expr_ctx);
+    let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
     // TODO: Handle done vs not done
     let mut lowered_protocols: Vec<LoweredFragmentInfo> = vec![];
     for protocol in protos {
-        let mut pg = lowerer.lower_protocol_fragment(&protocol, false, true);
+        let mut pg = lowerer.lower_protocol_fragment(ctx, &protocol, false, true);
         // lowerer.postprocess_trace_fragment(&pg);
-        pg.graft_points = lowerer.graft_points(&pg);
+        pg.graft_points = lowerer.graft_points(ctx, &pg);
         lowered_protocols.push(pg);
     }
 
@@ -73,12 +74,9 @@ pub fn lower_bmc(
                 .iter()
                 .filter_map(|symbol_id| {
                     let old_expr = lowerer.ir.symbol_expr(*symbol_id)?;
-                    let width = old_expr.get_bv_type(&lowerer.ir.expr_ctx)?;
+                    let width = old_expr.get_bv_type(ctx)?;
                     let name = lowerer.symbols.full_name_from_symbol_id(symbol_id);
-                    let new_expr = lowerer
-                        .ir
-                        .expr_ctx
-                        .bv_symbol(&format!("{name}#{slot}"), width);
+                    let new_expr = ctx.bv_symbol(&format!("{name}#{slot}"), width);
                     Some((old_expr, new_expr))
                 })
                 .collect()
@@ -89,25 +87,21 @@ pub fn lower_bmc(
 
     let mut initial_choices = Vec::with_capacity(num_protos);
     for (idx, prototype) in lowered_protocols.iter().enumerate().take(num_protos) {
-        let proto_idx_expr = lowerer.ir.expr_ctx.bit_vec_val(idx, width);
+        let proto_idx_expr = ctx.bit_vec_val(idx, width);
         let node_equals = if idx + 1 == num_protos {
-            lowerer
-                .ir
-                .expr_ctx
-                .greater_or_equal(proto_choices[0], proto_idx_expr)
+            ctx.greater_or_equal(proto_choices[0], proto_idx_expr)
         } else {
-            lowerer.ir.expr_ctx.equal(proto_choices[0], proto_idx_expr)
+            ctx.equal(proto_choices[0], proto_idx_expr)
         };
         let new_frag =
-            lowerer.copy_protocol_fragment(prototype.clone(), &instance_substitutions[0]);
+            lowerer.copy_protocol_fragment(ctx, prototype.clone(), &instance_substitutions[0]);
 
         // if bound is 1, then exit should have the done action
         if bound == 1 {
             let done_op = lowerer.ir.o(Op::Done);
-            let true_id = lowerer.ir.true_id();
             lowerer
                 .ir
-                .push_action(new_frag.exit, Action::new(true_id, done_op));
+                .push_action(new_frag.exit, Action::new(ctx.get_true(), done_op));
         }
 
         for &(node, guard) in &new_frag.graft_points {
@@ -116,7 +110,7 @@ pub fn lower_bmc(
         graft_points.extend(new_frag.graft_points.clone());
         initial_choices.push((new_frag.entry, node_equals));
     }
-    graft_choice_entries_into(&mut lowerer, entry_node, initial_choices);
+    graft_choice_entries_into(ctx, &mut lowerer, entry_node, initial_choices);
 
     let mut next_graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
@@ -127,27 +121,26 @@ pub fn lower_bmc(
             let mut choices = Vec::with_capacity(num_protos);
             for (idx, prototype) in lowered_protocols.iter().enumerate().take(num_protos) {
                 // The final protocol absorbs the selector tail.
-                let proto_idx_expr = lowerer.ir.expr_ctx.bit_vec_val(idx, width);
+                let proto_idx_expr = ctx.bit_vec_val(idx, width);
                 let node_equals = if idx + 1 == num_protos {
-                    lowerer
-                        .ir
-                        .expr_ctx
-                        .greater_or_equal(proto_choices[i], proto_idx_expr)
+                    ctx.greater_or_equal(proto_choices[i], proto_idx_expr)
                 } else {
-                    lowerer.ir.expr_ctx.equal(proto_choices[i], proto_idx_expr)
+                    ctx.equal(proto_choices[i], proto_idx_expr)
                 };
-                let and_guard = lowerer.ir.and_guard(guard, node_equals);
+                let and_guard = lowerer.ir.and_guard(ctx, guard, node_equals);
 
-                let new_frag =
-                    lowerer.copy_protocol_fragment(prototype.clone(), &instance_substitutions[i]);
+                let new_frag = lowerer.copy_protocol_fragment(
+                    ctx,
+                    prototype.clone(),
+                    &instance_substitutions[i],
+                );
 
                 // if we're at the last transaction, then exit should have the done action
                 if i == bound - 1 {
                     let done_op = lowerer.ir.o(Op::Done);
-                    let true_id = lowerer.ir.true_id();
                     lowerer
                         .ir
-                        .push_action(new_frag.exit, Action::new(true_id, done_op));
+                        .push_action(new_frag.exit, Action::new(ctx.get_true(), done_op));
                 }
 
                 for &(graft_node, graft_guard) in &new_frag.graft_points {
@@ -156,7 +149,7 @@ pub fn lower_bmc(
                 next_graft_points.extend(new_frag.graft_points.clone());
                 choices.push((new_frag.entry, and_guard));
             }
-            graft_choice_entries_into(&mut lowerer, graft_node, choices);
+            graft_choice_entries_into(ctx, &mut lowerer, graft_node, choices);
         }
 
         // refill with the new set of graft points
@@ -164,6 +157,6 @@ pub fn lower_bmc(
     }
 
     // pass in the initial IR with and its graft points, and append_trace_transactions will lower the rest of the trace from here.
-    lowerer.ir.simplify_all_exprs();
+    lowerer.ir.simplify_all_exprs(ctx);
     (lowerer.ir, proto_choices)
 }

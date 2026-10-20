@@ -1,0 +1,30 @@
+// https://support.arm.com/documentation/ihi0024/e/
+// Figure 3-7 "Example failing read transfer" (section 3.4.2)
+
+// Note: we assume that PENABLE and PLSVERR are 0 during idle (i.e. before/after the read transaction),
+// as Appendix A.1 of the APB spec recommends that "signals which are not required to be valid (meaningful)
+// are driven to zero"
+
+// The figure doesn't specify a value fo PRDATA: the spec says that a read transaction
+// that errors "can return invalid error" and that there is 
+// "no requirement for the peripheral to drive the
+// data bus to all 0s for a read error", so we give `PRDATA` an arbitrary value 
+// 0x0badda7a in this waveform.
+
+// The figure in the spec omits the following signals:
+// - PRESETn (this is a read operation, not a reset, so we set it to 1 as it is active-low)
+// - PSTRB (section 3.2 requires all bits of PSTRB to be LOW for reads, so we set this to 0)
+// - PPROT (we assume this is a normal data access, so we set this to 0)
+// - PWDATA (this is a read operation, so write data is DontCare)
+
+PRESETn      1   1   1   1          1 1
+PSEL         0   1   1   1          1 0
+PENABLE      0   0   1   1          1 0
+PWRITE       x   0   0   0          0 x
+PADDR[31:0]  x 0x1 0x1 0x1        0x1 x   // "Addr 1"
+PWDATA[31:0] x   x   x   x          x x
+PSTRB[3:0]   x   0   0   0          0 x
+PPROT[2:0]   x   0   0   0          0 x
+PRDATA[31:0] x   x   x   x 0x0badda7a x   // no valid read data
+PREADY       x   x   0   0          1 x
+PSLVERR      0   0   0   0          1 0

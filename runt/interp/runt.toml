@@ -1,6 +1,33 @@
 ver = "0.4.1"
 
 [[tests]]
+name = "interp.examples_apb_ch_apb.ch_apb_interp"
+paths = [
+  "../../examples/apb/ch_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ch_apb.tx --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>&1"
+
+[[tests]]
+name = "interp.examples_apb_ch_apb_actual.ch_apb_actual_interp"
+paths = [
+  "../../examples/apb/ch_apb_actual.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ch_apb_actual.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ch_apb_actual.tx --verilog examples/apb/rtl/ch_apb_slave.sv examples/apb/rtl/ch_apb_dut.v --protocol examples/apb/apb.prot --module ch_apb_dut 2>&1"
+
+[[tests]]
+name = "interp.examples_apb_ip_apb.ip_apb_interp"
+paths = [
+  "../../examples/apb/ip_apb.tx",
+]
+expect_dir = "../../examples/apb/expects"
+expect_name = "ip_apb.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/apb/ip_apb.tx --verilog examples/apb/rtl/ip_apb_slave.sv examples/apb/rtl/ip_apb_dut.v --protocol examples/apb/apb.prot --module ip_apb_dut 2>&1"
+
+[[tests]]
 name = "interp.examples_axis_packetize_bytestream.packetize_bytestream_interp"
 paths = [
   "../../examples/axis/packetize_bytestream.tx",
@@ -17,6 +44,15 @@ paths = [
 expect_dir = "../../examples/axis/expects"
 expect_name = "stream_data.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/axis/stream_data.tx --verilog examples/axis/axis_dut.v tests/fpga-debugging/axi-stream-s2/s2_fixed.v --protocol examples/axis/axis_stream_data.prot --module axis_dut 2>&1"
+
+[[tests]]
+name = "interp.examples_enginev_enginev_regfile.enginev_regfile_interp"
+paths = [
+  "../../examples/enginev/enginev_regfile.tx",
+]
+expect_dir = "../../examples/enginev/expects"
+expect_name = "enginev_regfile.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/enginev/enginev_regfile.tx --verilog examples/enginev/enginev_reg.v --protocol examples/enginev/enginev_regfile.prot --module mf8_reg 2>&1"
 
 [[tests]]
 name = "interp.examples_picorv32_unsigned_mul.unsigned_mul_interp"
@@ -71,6 +107,15 @@ paths = [
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "4_incremental_address_burst_wrap.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions 'examples/wishbone/4.?_incremental_address_burst_wrap.tx' --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>&1"
+
+[[tests]]
+name = "interp.examples_wishbone_joint_read_write_long.joint_read_write_long_interp"
+paths = [
+  "../../examples/wishbone/joint_read_write_long.tx",
+]
+expect_dir = "../../examples/wishbone/expects"
+expect_name = "joint_read_write_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions examples/wishbone/joint_read_write_long.tx --verilog examples/wishbone/rtl/dut.v examples/wishbone/rtl/tb.v --protocol examples/wishbone/wishbone.prot --module tb 2>&1"
 
 [[tests]]
 name = "interp.tests_adders_adder_d0_add_combinational.add_combinational_interp"
@@ -226,6 +271,15 @@ expect_name = "fork_before_step_error.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/fork_before_step_error.tx --skip-static-step-fork-checks --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/fork_before_step_error.prot 2>&1"
 
 [[tests]]
+name = "interp.tests_adders_adder_d1_joint_add_d1_long.joint_add_d1_long_interp"
+paths = [
+  "../../tests/adders/adder_d1/joint_add_d1_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d1/expects"
+expect_name = "joint_add_d1_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d1/joint_add_d1_long.tx --verilog tests/adders/adder_d1/add_d1.v --protocol tests/adders/adder_d1/add_d1.prot 2>&1"
+
+[[tests]]
 name = "interp.tests_adders_adder_d1_second_thread_fails.second_thread_fails_interp"
 paths = [
   "../../tests/adders/adder_d1/second_thread_fails.tx",
@@ -271,6 +325,15 @@ expect_name = "both_threads_pass.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d2/both_threads_pass.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot --max-steps 4 2>&1"
 
 [[tests]]
+name = "interp.tests_adders_adder_d2_joint_add_d2_long.joint_add_d2_long_interp"
+paths = [
+  "../../tests/adders/adder_d2/joint_add_d2_long.tx",
+]
+expect_dir = "../../tests/adders/adder_d2/expects"
+expect_name = "joint_add_d2_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/adders/adder_d2/joint_add_d2_long.tx --verilog tests/adders/adder_d2/add_d2.v --protocol tests/adders/adder_d2/add_d2.prot 2>&1"
+
+[[tests]]
 name = "interp.tests_adders_adder_d2_no_dontcare_conflict.no_dontcare_conflict_interp"
 paths = [
   "../../tests/adders/adder_d2/no_dontcare_conflict.tx",
@@ -296,6 +359,24 @@ paths = [
 expect_dir = "../../tests/alus/expects"
 expect_name = "alu_d2.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/alu_d2.tx --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>&1"
+
+[[tests]]
+name = "interp.tests_alus_joint_alu_d1_long.joint_alu_d1_long_interp"
+paths = [
+  "../../tests/alus/joint_alu_d1_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d1_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/joint_alu_d1_long.tx --verilog tests/alus/alu_d1.v --protocol tests/alus/alu_d1.prot --module alu_d1 2>&1"
+
+[[tests]]
+name = "interp.tests_alus_joint_alu_d2_long.joint_alu_d2_long_interp"
+paths = [
+  "../../tests/alus/joint_alu_d2_long.tx",
+]
+expect_dir = "../../tests/alus/expects"
+expect_name = "joint_alu_d2_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/alus/joint_alu_d2_long.tx --verilog tests/alus/alu_d2.v --protocol tests/alus/alu_d2.prot --module alu_d2 2>&1"
 
 [[tests]]
 name = "interp.tests_bounded_ready_valid_toy_reciever_0.toy_reciever_0_interp"
@@ -710,6 +791,15 @@ paths = [
 expect_dir = "../../tests/multipliers/mult_d2/expects"
 expect_name = "first_thread_fails.interp.expect"
 cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/multipliers/mult_d2/first_thread_fails.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>&1"
+
+[[tests]]
+name = "interp.tests_multipliers_mult_d2_joint_mul_d2_long.joint_mul_d2_long_interp"
+paths = [
+  "../../tests/multipliers/mult_d2/joint_mul_d2_long.tx",
+]
+expect_dir = "../../tests/multipliers/mult_d2/expects"
+expect_name = "joint_mul_d2_long.interp.expect"
+cmd = "cd ../.. && target/debug/protocols-interp --color never --transactions tests/multipliers/mult_d2/joint_mul_d2_long.tx --verilog tests/multipliers/mult_d2/mult_d2.v --protocol tests/multipliers/mult_d2/mult_d2.prot 2>&1"
 
 [[tests]]
 name = "interp.tests_multipliers_mult_d2_second_thread_fails.second_thread_fails_interp"

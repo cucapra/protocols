@@ -49,12 +49,23 @@ impl PatronusSim {
         design: &Module,
         waveform_file: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let (ctx, sys) = create_sim_context(verilog_paths, top_module);
+        let mut ctx = patronus::expr::Context::default();
+        Self::new_with_context(&mut ctx, verilog_paths, top_module, design, waveform_file)
+    }
+
+    pub fn new_with_context<P: AsRef<std::path::Path>>(
+        ctx: &mut patronus::expr::Context,
+        verilog_paths: &[P],
+        top_module: Option<&str>,
+        design: &Module,
+        waveform_file: Option<&str>,
+    ) -> anyhow::Result<Self> {
+        let sys = create_sim_context(ctx, verilog_paths, top_module);
 
         let mut sim = if let Some(waveform_file) = waveform_file {
-            Interpreter::new_with_wavedump(&ctx, &sys, waveform_file)
+            Interpreter::new_with_wavedump(ctx, &sys, waveform_file)
         } else {
-            Interpreter::new(&ctx, &sys)
+            Interpreter::new(ctx, &sys)
         };
         sim.init(InitKind::Zero); // TODO: change to random initialization
 
@@ -103,7 +114,7 @@ impl PatronusSim {
                 }
             }
             let width = expr
-                .get_bv_type(&ctx)
+                .get_bv_type(ctx)
                 .context("ports must be of bit-vector and not of array type")?;
             if width != pin.bitwidth() {
                 bail!(
@@ -127,7 +138,7 @@ impl PatronusSim {
             // is this output part of the outputs declared in the struct?
             if let Some(port_out) = out_expr_to_port.get(&out.expr).cloned() {
                 let input_exprs =
-                    patronus::system::analysis::cone_of_influence_comb(&ctx, &sys, out.expr);
+                    patronus::system::analysis::cone_of_influence_comb(ctx, &sys, out.expr);
                 for input_expr in input_exprs {
                     // is this an input that is also declared in the protocol struct?
                     if let Some(port_in) = in_expr_to_port.get(&input_expr).cloned() {
@@ -147,7 +158,7 @@ impl PatronusSim {
         }
 
         Ok(Self {
-            ctx,
+            ctx: ctx.clone(),
             sys,
             sim,
             port_map,
@@ -269,9 +280,10 @@ impl PatronusSim {
 /// Takes a vec of paths to Verilog files and the name of a top-level module,
 /// and returns a (Patronus `Context`, Patronus `TransitionSystem` pair)
 fn create_sim_context<P: AsRef<std::path::Path>>(
+    ctx: &mut patronus::expr::Context,
     verilog_paths: &[P],
     top_module: Option<&str>,
-) -> (patronus::expr::Context, TransitionSystem) {
+) -> TransitionSystem {
     let env = YosysEnv::with_temp_dir().unwrap();
     let sources: Vec<PathBuf> = verilog_paths
         .iter()
@@ -299,10 +311,12 @@ fn create_sim_context<P: AsRef<std::path::Path>>(
         panic!("BTOR file is empty - likely synthesis failed. Check Yosys output for errors.");
     }
 
-    patronus::btor2::parse_file(btor_file.as_path().as_os_str()).unwrap_or_else(|| {
-        panic!(
-            "Failed to parse BTOR file - possibly malformed: {}",
-            btor_file.display()
-        )
-    })
+    patronus::btor2::parse_file_with_ctx(btor_file.as_path().as_os_str(), ctx).unwrap_or_else(
+        || {
+            panic!(
+                "Failed to parse BTOR file - possibly malformed: {}",
+                btor_file.display()
+            )
+        },
+    )
 }

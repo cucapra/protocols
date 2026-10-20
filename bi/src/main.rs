@@ -6,11 +6,11 @@
 mod bi;
 mod constraints;
 mod proto_trace;
-mod signal_trace;
 
 use crate::bi::*;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
+use ::bi::{Instance, signal_trace};
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
@@ -92,6 +92,15 @@ struct Cli {
     /// Allow arguments to appear in while/if conditions
     #[arg(long)]
     allow_branch_on_arg: bool,
+
+    /// Print only Pass or Fail instead of inferred transactions and diagnostics.
+    #[arg(long)]
+    status_only: bool,
+
+    /// Sample the wall-clock time every N steps (clock cycles) and print all the `step,elapsed_us`
+    /// measurements to stderr once the BI finishes
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+    print_time_every_n_cycles: Option<u32>,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -199,18 +208,37 @@ fn main() {
             sampling_mode,
             cli.force_x_to_zero,
         ) {
-            run_bis(bis.as_mut_slice(), &mut trace)
+            run_bis(
+                bis.as_mut_slice(),
+                &mut trace,
+                cli.print_time_every_n_cycles,
+            )
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
             let mut trace =
                 AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
-            run_bis(bis.as_mut_slice(), &mut trace)
+            run_bis(
+                bis.as_mut_slice(),
+                &mut trace,
+                cli.print_time_every_n_cycles,
+            )
         }
     }
     .unwrap();
 
     // display results
     let at_least_one_has_failed = bis.iter().any(|bi| bi.has_failed());
+    if cli.status_only {
+        println!(
+            "{}",
+            if at_least_one_has_failed {
+                "Fail"
+            } else {
+                "Pass"
+            }
+        );
+        std::process::exit(i32::from(at_least_one_has_failed));
+    }
     for (bi, protos) in bis.into_iter().zip(bi_protos) {
         let exclude_from_trace = if cli.include_idle {
             FxHashSet::default()
@@ -300,8 +328,14 @@ fn main() {
 fn run_bis(
     bis: &mut [BackwardsInterpreter],
     trace: &mut impl SignalTrace,
+    print_time_every_n_cycles: Option<u32>,
 ) -> Result<StepToTime, String> {
-    trace.stream_steps(|_step_id, values| {
+    let start = std::time::Instant::now();
+    let mut num_cycles_till_snapshot = 0u32;
+    if print_time_every_n_cycles.is_some() {
+        eprintln!("step,elapsed_us");
+    }
+    trace.stream_steps(|step_id, values| {
         // step all backwards interpreters that have not failed
         let mut r = CallbackResult::Stop;
         for bi in bis.iter_mut() {
@@ -311,6 +345,13 @@ fn run_bis(
                     r = CallbackResult::Continue;
                 }
             }
+        }
+        if let Some(n) = print_time_every_n_cycles {
+            if num_cycles_till_snapshot == 0 {
+                eprintln!("{step_id},{}", start.elapsed().as_micros());
+                num_cycles_till_snapshot = n;
+            }
+            num_cycles_till_snapshot -= 1;
         }
         r
     })?;
@@ -379,13 +420,6 @@ fn collects_module_names(duts: &[Module]) -> String {
     let mut dut_names: Vec<String> = duts.iter().map(|d| d.name.clone()).collect();
     dut_names.sort();
     dut_names.join(", ")
-}
-
-struct Instance {
-    name: String,
-    #[allow(dead_code)]
-    module: String,
-    module_id: usize,
 }
 
 /// Takes the contents of the `-i` CLI flag and tries to find
