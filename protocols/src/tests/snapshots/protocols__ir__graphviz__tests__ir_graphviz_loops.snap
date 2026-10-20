@@ -1,0 +1,641 @@
+---
+source: protocols/src/ir/graphviz.rs
+expression: content
+---
+== pre-contract ==
+digraph "for_zero_or_more" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node11 [label="1"];
+  node11 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] dut.flag := 0 if 1"];
+  node10 -> node4 [label="1"];
+  node4 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node4 -> node5 [label="l0_valid"];
+  node4 -> node3 [label="not(l0_valid)"];
+  node5 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node5 -> node9 [label="1"];
+  node3 [label="[1] dut.flag := 1 if 1"];
+  node3 -> node2 [label="1"];
+  node9 [label="[1] dut.data := l0_value_next if 1"];
+  node9 -> node8 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node8 [label=""];
+  node8 -> node6 [label="1 / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node6 [label=""];
+  node6 -> node3 [label="l0_saved_last_next"];
+  node6 -> node7 [label="not(l0_saved_last_next)"];
+  node7 [label=""];
+  node7 -> node4 [label="1"];
+}
+
+== post-contract ==
+digraph "for_zero_or_more" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); l0_data if l0_valid\n[1] dut.flag := 1 if not(l0_valid); 0 if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node6 [label="l0_valid / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node6 [label="[1] dut.flag := 1 if not(or(l0_saved_last, l0_valid)); 1 if l0_saved_last\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := l0_data if and(not(l0_saved_last), l0_valid)"];
+  node6 -> node1 [label="l0_saved_last / step"];
+  node6 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node6 -> node6 [label="and(not(l0_saved_last), l0_valid) / step"];
+}
+
+== pre-contract ==
+digraph "for_one_or_more" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node12 [label="1"];
+  node12 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node12 -> node2 [label="1"];
+  node2 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node2 -> node3 [label="l0_valid"];
+  node2 -> node1 [label="not(l0_valid)"];
+  node3 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node3 -> node11 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 [label=""];
+  node11 -> node9 [label="l0_saved_last_next"];
+  node11 -> node10 [label="not(l0_saved_last_next)"];
+  node9 [label="[1] dut.flag := 1 if 1"];
+  node9 -> node8 [label="1"];
+  node10 [label="[1] dut.flag := 0 if 1"];
+  node10 -> node8 [label="1"];
+  node8 [label=""];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] dut.data := l0_value_next if 1"];
+  node7 -> node6 [label="1"];
+  node6 [label=""];
+  node6 -> node4 [label="1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="l0_saved_last_next"];
+  node4 -> node5 [label="not(l0_saved_last_next)"];
+  node5 [label=""];
+  node5 -> node2 [label="1"];
+}
+
+== post-contract ==
+digraph "for_one_or_more" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(or(and(l0_valid, l0_last), and(l0_valid, not(l0_last)))); l0_data if and(l0_valid, l0_last); l0_data if and(l0_valid, not(l0_last))\n[1] dut.flag := X if not(or(and(l0_valid, l0_last), and(l0_valid, not(l0_last)))); 1 if and(l0_valid, l0_last); 0 if and(l0_valid, not(l0_last))\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[not(l0_valid)] done\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node4 [label="and(l0_valid, not(l0_last)) / step"];
+  node0 -> node4 [label="and(l0_valid, l0_last) / step"];
+  node4 [label="[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] done\n[1] dut.data := X if and(not(and(and(not(l0_saved_last), l0_valid), l0_last)), and(not(and(and(not(l0_saved_last), l0_valid), not(l0_last))), or(not(or(l0_saved_last, l0_valid)), l0_saved_last))); l0_data if and(and(not(l0_saved_last), l0_valid), l0_last); l0_data if and(and(not(l0_saved_last), l0_valid), not(l0_last))\n[1] dut.flag := X if and(not(and(and(not(l0_saved_last), l0_valid), l0_last)), and(not(and(and(not(l0_saved_last), l0_valid), not(l0_last))), or(not(or(l0_saved_last, l0_valid)), l0_saved_last))); 1 if and(and(not(l0_saved_last), l0_valid), l0_last); 0 if and(and(not(l0_saved_last), l0_valid), not(l0_last))\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)"];
+  node4 -> node4 [label="and(and(not(l0_saved_last), l0_valid), not(l0_last)) / step"];
+  node4 -> node4 [label="and(and(not(l0_saved_last), l0_valid), l0_last) / step"];
+}
+
+== pre-contract ==
+digraph "for_distinct" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node8 -> node2 [label="1"];
+  node2 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node2 -> node3 [label="l0_valid"];
+  node2 -> node1 [label="not(l0_valid)"];
+  node3 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node3 -> node7 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node7 [label="[1] dut.data := add(l0_value_next, l0_index_next) if 1"];
+  node7 -> node6 [label="1"];
+  node6 [label=""];
+  node6 -> node4 [label="1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="l0_saved_last_next"];
+  node4 -> node5 [label="not(l0_saved_last_next)"];
+  node5 [label="[1] l0_index_next := add(l0_index, 1) if 1"];
+  node5 -> node2 [label="1"];
+}
+
+== post-contract ==
+digraph "for_distinct" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); add(l0_data, l0_index) if l0_valid\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[not(l0_valid)] done\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node4 [label="l0_valid / step"];
+  node4 [label="[1] l0_index_next := add(l0_index, 1) if not(l0_saved_last)\n[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] done\n[1] dut.data := X if and(not(and(not(l0_saved_last), l0_valid)), or(not(or(l0_saved_last, l0_valid)), l0_saved_last)); add(l0_data, add(l0_index, 1)) if and(not(l0_saved_last), l0_valid)\n[1] dut.flag := X if or(not(or(l0_saved_last, l0_valid)), l0_saved_last)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)"];
+  node4 -> node4 [label="and(not(l0_saved_last), l0_valid) / step"];
+}
+
+== pre-contract ==
+digraph "repeat_count" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: repeat count"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node12 [label="1"];
+  node12 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node12 -> node2 [label="1"];
+  node2 [label="[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node2 -> node3 [label="l0_valid"];
+  node2 -> node1 [label="not(l0_valid)"];
+  node3 [label="[1] l0_saved_last_next := l0_last if 1"];
+  node3 -> node11 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 [label="[1] dut.data := l0_index_next if 1"];
+  node11 -> node10 [label="1"];
+  node10 [label=""];
+  node10 -> node8 [label="not(l0_saved_last_next)"];
+  node10 -> node9 [label="l0_saved_last_next"];
+  node8 [label="[1] dut.flag := 0 if 1"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] dut.flag := 1 if 1"];
+  node9 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1"];
+  node6 [label=""];
+  node6 -> node4 [label="1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="l0_saved_last_next"];
+  node4 -> node5 [label="not(l0_saved_last_next)"];
+  node5 [label="[1] l0_index_next := add(l0_index, 1) if 1"];
+  node5 -> node2 [label="1"];
+}
+
+== post-contract ==
+digraph "repeat_count" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: repeat count"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); l0_index if l0_valid\n[1] dut.flag := X if not(or(and(l0_valid, not(l0_last)), and(l0_valid, l0_last))); 0 if and(l0_valid, not(l0_last)); 1 if and(l0_valid, l0_last)\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[not(l0_valid)] done\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node4 [label="and(l0_valid, l0_last) / step"];
+  node0 -> node4 [label="and(l0_valid, not(l0_last)) / step"];
+  node4 [label="[1] l0_index_next := add(l0_index, 1) if not(l0_saved_last)\n[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] done\n[1] dut.data := X if and(not(and(not(l0_saved_last), l0_valid)), or(not(or(l0_saved_last, l0_valid)), l0_saved_last)); add(l0_index, 1) if and(not(l0_saved_last), l0_valid)\n[1] dut.flag := X if and(not(and(and(not(l0_saved_last), l0_valid), not(l0_last))), and(not(and(and(not(l0_saved_last), l0_valid), l0_last)), or(not(or(l0_saved_last, l0_valid)), l0_saved_last))); 0 if and(and(not(l0_saved_last), l0_valid), not(l0_last)); 1 if and(and(not(l0_saved_last), l0_valid), l0_last)\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)"];
+  node4 -> node4 [label="and(and(not(l0_saved_last), l0_valid), l0_last) / step"];
+  node4 -> node4 [label="and(and(not(l0_saved_last), l0_valid), not(l0_last)) / step"];
+}
+
+== pre-contract ==
+digraph "two_step_loop" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node13 -> node2 [label="1"];
+  node2 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node2 -> node3 [label="l0_valid"];
+  node2 -> node1 [label="not(l0_valid)"];
+  node3 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node3 -> node12 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node12 [label="[1] dut.data := l0_value_next if 1"];
+  node12 -> node11 [label="1"];
+  node11 [label=""];
+  node11 -> node10 [label="1 / step"];
+  node10 [label=""];
+  node10 -> node8 [label="l0_saved_last_next"];
+  node10 -> node9 [label="not(l0_saved_last_next)"];
+  node8 [label="[1] dut.flag := 1 if 1"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] dut.flag := 0 if 1"];
+  node9 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1"];
+  node6 [label=""];
+  node6 -> node4 [label="1 / step"];
+  node4 [label=""];
+  node4 -> node1 [label="l0_saved_last_next"];
+  node4 -> node5 [label="not(l0_saved_last_next)"];
+  node5 [label=""];
+  node5 -> node2 [label="1"];
+}
+
+== post-contract ==
+digraph "two_step_loop" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); l0_data if l0_valid\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[not(l0_valid)] done\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node10 [label="l0_valid / step"];
+  node10 [label="[1] dut.flag := 1 if l0_saved_last; 0 if not(l0_saved_last)"];
+  node10 -> node4 [label="not(l0_saved_last) / step"];
+  node10 -> node4 [label="l0_saved_last / step"];
+  node4 [label="[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] done\n[1] dut.data := X if and(not(and(not(l0_saved_last), l0_valid)), or(not(or(l0_saved_last, l0_valid)), l0_saved_last)); l0_data if and(not(l0_saved_last), l0_valid)\n[1] dut.flag := X if or(not(or(l0_saved_last, l0_valid)), l0_saved_last)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)"];
+  node4 -> node10 [label="and(not(l0_saved_last), l0_valid) / step"];
+}
+
+== pre-contract ==
+digraph "step_in_middle" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node13 -> node3 [label="1"];
+  node3 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node3 -> node4 [label="l0_valid"];
+  node3 -> node2 [label="not(l0_valid)"];
+  node4 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node4 -> node12 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node12 [label="[1] dut.data := l0_value_next if 1"];
+  node12 -> node11 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 [label=""];
+  node11 -> node10 [label="1 / step"];
+  node10 [label=""];
+  node10 -> node8 [label="l0_saved_last_next"];
+  node10 -> node9 [label="not(l0_saved_last_next)"];
+  node8 [label="[1] dut.flag := 1 if 1"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] dut.flag := 0 if 1"];
+  node9 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node2 [label="l0_saved_last_next"];
+  node5 -> node6 [label="not(l0_saved_last_next)"];
+  node6 [label=""];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "step_in_middle" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); l0_data if l0_valid\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node10 [label="l0_valid / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node10 [label="[1] dut.flag := 1 if l0_saved_last; 0 if not(l0_saved_last)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := l0_data if and(not(l0_saved_last), l0_valid)"];
+  node10 -> node1 [label="l0_saved_last / step"];
+  node10 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node10 -> node10 [label="and(not(l0_saved_last), l0_valid) / step"];
+}
+
+== pre-contract ==
+digraph "conditional_steps" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node17 [label="1"];
+  node17 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node17 -> node3 [label="1"];
+  node3 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node3 -> node4 [label="l0_valid"];
+  node3 -> node2 [label="not(l0_valid)"];
+  node4 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node4 -> node16 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node16 [label=""];
+  node16 -> node13 [label="l0_saved_last_next"];
+  node16 -> node15 [label="not(l0_saved_last_next)"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node13 [label="[1] dut.data := l0_value_next if 1"];
+  node13 -> node12 [label="1"];
+  node15 [label=""];
+  node15 -> node14 [label="1 / step"];
+  node12 [label=""];
+  node12 -> node11 [label="1 / step"];
+  node14 [label="[1] dut.data := l0_value_next if 1"];
+  node14 -> node11 [label="1"];
+  node11 [label=""];
+  node11 -> node10 [label="1"];
+  node10 [label=""];
+  node10 -> node8 [label="l0_saved_last_next"];
+  node10 -> node9 [label="not(l0_saved_last_next)"];
+  node8 [label="[1] dut.flag := 1 if 1"];
+  node8 -> node7 [label="1"];
+  node9 [label="[1] dut.flag := 0 if 1"];
+  node9 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node2 [label="l0_saved_last_next"];
+  node5 -> node6 [label="not(l0_saved_last_next)"];
+  node6 [label=""];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "conditional_steps" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(and(l0_valid, l0_last)); l0_data if and(l0_valid, l0_last)\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node14 [label="and(l0_valid, not(l0_last)) / step"];
+  node0 -> node11 [label="and(l0_valid, l0_last) / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node14 [label="[1] dut.data := l0_data if and(and(not(l0_saved_last), l0_valid), l0_last); l0_value if 1\n[1] dut.flag := 1 if l0_saved_last; 0 if not(l0_saved_last)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)"];
+  node14 -> node1 [label="l0_saved_last / step"];
+  node14 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node14 -> node14 [label="and(and(not(l0_saved_last), l0_valid), not(l0_last)) / step"];
+  node14 -> node11 [label="and(and(not(l0_saved_last), l0_valid), l0_last) / step"];
+  node11 [label="[1] dut.flag := 1 if l0_saved_last; 0 if not(l0_saved_last)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := l0_data if and(and(not(l0_saved_last), l0_valid), l0_last)"];
+  node11 -> node1 [label="l0_saved_last / step"];
+  node11 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node11 -> node14 [label="and(and(not(l0_saved_last), l0_valid), not(l0_last)) / step"];
+  node11 -> node11 [label="and(and(not(l0_saved_last), l0_valid), l0_last) / step"];
+}
+
+== pre-contract ==
+digraph "repeat_literal" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: repeat 3"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node9 [label="1"];
+  node9 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node9 -> node3 [label="1"];
+  node3 [label="[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node3 -> node4 [label="l0_valid"];
+  node3 -> node2 [label="not(l0_valid)"];
+  node4 [label="[1] l0_saved_last_next := l0_last if 1"];
+  node4 -> node8 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node8 [label="[1] dut.data := l0_index_next if 1"];
+  node8 -> node7 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node7 [label=""];
+  node7 -> node5 [label="1 / step"];
+  node5 [label=""];
+  node5 -> node2 [label="l0_saved_last_next"];
+  node5 -> node6 [label="not(l0_saved_last_next)"];
+  node6 [label="[1] l0_index_next := add(l0_index, 1) if 1"];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "repeat_literal" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: repeat 3"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); l0_index if l0_valid\n[1] dut.flag := X if 1\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node5 [label="l0_valid / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node5 [label="[1] l0_index_next := add(l0_index, 1) if not(l0_saved_last)\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := add(l0_index, 1) if and(not(l0_saved_last), l0_valid)"];
+  node5 -> node1 [label="l0_saved_last / step"];
+  node5 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node5 -> node5 [label="and(not(l0_saved_last), l0_valid) / step"];
+}
+
+== pre-contract ==
+digraph "mixed_index_widths" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node13 -> node3 [label="1"];
+  node3 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node3 -> node4 [label="l0_valid"];
+  node3 -> node2 [label="not(l0_valid)"];
+  node4 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node4 -> node12 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node12 [label="[1] dut.data := add(l0_value_next, l0_index_next[7:0]) if 1"];
+  node12 -> node11 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 [label=""];
+  node11 -> node9 [label="eq(l0_index_next, 0)"];
+  node11 -> node10 [label="not(eq(l0_index_next, 0))"];
+  node9 [label="[1] dut.flag := 1 if 1"];
+  node9 -> node8 [label="1"];
+  node10 [label="[1] dut.flag := 0 if 1"];
+  node10 -> node8 [label="1"];
+  node8 [label=""];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node5 [label="1 / step"];
+  node5 [label=""];
+  node5 -> node2 [label="l0_saved_last_next"];
+  node5 -> node6 [label="not(l0_saved_last_next)"];
+  node6 [label="[1] l0_index_next := add(l0_index, 1) if 1"];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "mixed_index_widths" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); add(l0_data, l0_index[7:0]) if l0_valid\n[1] dut.flag := X if not(or(and(l0_valid, eq(l0_index, 0)), and(l0_valid, not(eq(l0_index, 0))))); 1 if and(l0_valid, eq(l0_index, 0)); 0 if and(l0_valid, not(eq(l0_index, 0)))\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node5 [label="and(l0_valid, not(eq(l0_index, 0))) / step"];
+  node0 -> node5 [label="and(l0_valid, eq(l0_index, 0)) / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node5 [label="[1] l0_index_next := add(l0_index, 1) if not(l0_saved_last)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := add(l0_data, add(l0_index, 1)[7:0]) if and(not(l0_saved_last), l0_valid)\n[1] dut.flag := 1 if and(and(not(l0_saved_last), l0_valid), eq(add(l0_index, 1), 0)); 0 if and(and(not(l0_saved_last), l0_valid), not(eq(add(l0_index, 1), 0)))"];
+  node5 -> node1 [label="l0_saved_last / step"];
+  node5 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node5 -> node5 [label="and(and(not(l0_saved_last), l0_valid), not(eq(add(l0_index, 1), 0))) / step"];
+  node5 -> node5 [label="and(and(not(l0_saved_last), l0_valid), eq(add(l0_index, 1), 0)) / step"];
+}
+
+== pre-contract ==
+digraph "frozen_check" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node10 -> node3 [label="1"];
+  node3 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node3 -> node4 [label="l0_valid"];
+  node3 -> node2 [label="not(l0_valid)"];
+  node4 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node4 -> node9 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node9 [label="[1] dut.data := l0_value_next if 1"];
+  node9 -> node8 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node7 [label="[1] assert_eq(l0_value_next, dut.echo)"];
+  node7 -> node5 [label="1"];
+  node5 [label=""];
+  node5 -> node2 [label="l0_saved_last_next"];
+  node5 -> node6 [label="not(l0_saved_last_next)"];
+  node6 [label=""];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "frozen_check" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(l0_valid); l0_data if l0_valid\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node7 [label="l0_valid / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node7 [label="[1] assert_eq(l0_value, dut.echo)\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := l0_data if and(not(l0_saved_last), l0_valid)"];
+  node7 -> node1 [label="l0_saved_last / step"];
+  node7 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node7 -> node7 [label="and(not(l0_saved_last), l0_valid) / step"];
+}
+
+== pre-contract ==
+digraph "wait_in_body" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node13 -> node3 [label="1"];
+  node3 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node3 -> node4 [label="l0_valid"];
+  node3 -> node2 [label="not(l0_valid)"];
+  node4 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node4 -> node10 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node10 [label=""];
+  node10 -> node12 [label="not(dut.ready)"];
+  node10 -> node9 [label="dut.ready"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node12 [label="[1] dut.data := l0_value_next if 1"];
+  node12 -> node11 [label="1"];
+  node9 [label=""];
+  node9 -> node8 [label="1"];
+  node11 [label=""];
+  node11 -> node10 [label="1 / step"];
+  node8 [label="[1] dut.data := l0_value_next if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node5 [label="1 / step"];
+  node5 [label=""];
+  node5 -> node2 [label="l0_saved_last_next"];
+  node5 -> node6 [label="not(l0_saved_last_next)"];
+  node6 [label=""];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "wait_in_body" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: values"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(or(and(l0_valid, dut.ready), and(l0_valid, not(dut.ready)))); l0_data if and(l0_valid, dut.ready); l0_data if and(l0_valid, not(dut.ready))\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid"];
+  node0 -> node1 [label="not(l0_valid) / step"];
+  node0 -> node10 [label="and(l0_valid, not(dut.ready)) / step"];
+  node0 -> node5 [label="and(l0_valid, dut.ready) / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node10 [label="[1] dut.data := l0_value if dut.ready; l0_value if not(dut.ready)"];
+  node10 -> node10 [label="not(dut.ready) / step"];
+  node10 -> node5 [label="dut.ready / step"];
+  node5 [label="[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := l0_data if and(and(not(l0_saved_last), l0_valid), dut.ready); l0_data if and(and(not(l0_saved_last), l0_valid), not(dut.ready))"];
+  node5 -> node1 [label="l0_saved_last / step"];
+  node5 -> node1 [label="not(or(l0_saved_last, l0_valid)) / step"];
+  node5 -> node10 [label="and(and(not(l0_saved_last), l0_valid), not(dut.ready)) / step"];
+  node5 -> node5 [label="and(and(not(l0_saved_last), l0_valid), dut.ready) / step"];
+}
+
+== pre-contract ==
+digraph "independent_loops" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: left\nl1: right"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node15 [label="1"];
+  node15 [label="[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node15 -> node9 [label="1"];
+  node9 [label="[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()"];
+  node9 -> node10 [label="l0_valid"];
+  node9 -> node3 [label="not(l0_valid)"];
+  node10 [label="[1] l0_value_next := l0_data if 1\n[1] l0_saved_last_next := l0_last if 1"];
+  node10 -> node14 [label="1"];
+  node3 [label="[1] l1_data := l1.data()\n[1] l1_last := l1.last()\n[1] l1_valid := l1.valid()"];
+  node3 -> node4 [label="l1_valid"];
+  node3 -> node2 [label="not(l1_valid)"];
+  node14 [label="[1] dut.data := l0_value_next if 1"];
+  node14 -> node13 [label="1"];
+  node4 [label="[1] l1_value_next := l1_data if 1\n[1] l1_saved_last_next := l1_last if 1"];
+  node4 -> node8 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1 / step"];
+  node13 [label=""];
+  node13 -> node11 [label="1 / step"];
+  node8 [label="[1] dut.data := l1_value_next if 1"];
+  node8 -> node7 [label="1"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 [label=""];
+  node11 -> node3 [label="l0_saved_last_next"];
+  node11 -> node12 [label="not(l0_saved_last_next)"];
+  node7 [label=""];
+  node7 -> node5 [label="1 / step"];
+  node12 [label=""];
+  node12 -> node9 [label="1"];
+  node5 [label=""];
+  node5 -> node2 [label="l1_saved_last_next"];
+  node5 -> node6 [label="not(l1_saved_last_next)"];
+  node6 [label=""];
+  node6 -> node3 [label="1"];
+}
+
+== post-contract ==
+digraph "independent_loops" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY\nl0: left\nl1: right"];
+  entry_marker -> node0;
+  node0 [label="[1] dut.data := X if not(or(l1_valid, l0_valid)); l1_data if and(not(l0_valid), l1_valid); l0_data if l0_valid\n[1] dut.flag := X if 1\n[1] l0_data := l0.data()\n[1] l0_last := l0.last()\n[1] l0_valid := l0.valid()\n[not(l0_valid)] l1_data := l1.data()\n[not(l0_valid)] l1_last := l1.last()\n[not(l0_valid)] l1_valid := l1.valid()\n[1] l0_value_next := l0_data if l0_valid\n[1] l0_saved_last_next := l0_last if l0_valid\n[1] l1_value_next := l1_data if and(not(l0_valid), l1_valid)\n[1] l1_saved_last_next := l1_last if and(not(l0_valid), l1_valid)"];
+  node0 -> node1 [label="not(or(l0_valid, l1_valid)) / step"];
+  node0 -> node11 [label="l0_valid / step"];
+  node0 -> node5 [label="and(not(l0_valid), l1_valid) / step"];
+  node1 [label="[1] done\n[1] dut.data := X if 1\n[1] dut.flag := X if 1"];
+  node11 [label="[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] l1_data := l1.data()\n[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] l1_last := l1.last()\n[or(l0_saved_last, not(or(l0_saved_last, l0_valid)))] l1_valid := l1.valid()\n[not(l0_saved_last)] l0_data := l0.data()\n[not(l0_saved_last)] l0_last := l0.last()\n[not(l0_saved_last)] l0_valid := l0.valid()\n[1] l1_value_next := l1_data if and(not(or(l0_saved_last, l0_valid)), l1_valid); l1_data if and(l0_saved_last, l1_valid)\n[1] l1_saved_last_next := l1_last if and(not(or(l0_saved_last, l0_valid)), l1_valid); l1_last if and(l0_saved_last, l1_valid)\n[1] l0_value_next := l0_data if and(not(l0_saved_last), l0_valid)\n[1] l0_saved_last_next := l0_last if and(not(l0_saved_last), l0_valid)\n[1] dut.data := l1_data if and(not(or(l0_saved_last, l0_valid)), l1_valid); l0_data if and(not(l0_saved_last), l0_valid); l1_data if and(l0_saved_last, l1_valid)"];
+  node11 -> node1 [label="and(l0_saved_last, not(l1_valid)) / step"];
+  node11 -> node1 [label="not(or(or(l0_saved_last, l0_valid), l1_valid)) / step"];
+  node11 -> node5 [label="and(l0_saved_last, l1_valid) / step"];
+  node11 -> node11 [label="and(not(l0_saved_last), l0_valid) / step"];
+  node11 -> node5 [label="and(not(or(l0_saved_last, l0_valid)), l1_valid) / step"];
+  node5 [label="[not(l1_saved_last)] l1_data := l1.data()\n[not(l1_saved_last)] l1_last := l1.last()\n[not(l1_saved_last)] l1_valid := l1.valid()\n[1] l1_value_next := l1_data if and(not(l1_saved_last), l1_valid)\n[1] l1_saved_last_next := l1_last if and(not(l1_saved_last), l1_valid)\n[1] dut.data := l1_data if and(not(l1_saved_last), l1_valid)"];
+  node5 -> node1 [label="l1_saved_last / step"];
+  node5 -> node1 [label="not(or(l1_saved_last, l1_valid)) / step"];
+  node5 -> node5 [label="and(not(l1_saved_last), l1_valid) / step"];
+}

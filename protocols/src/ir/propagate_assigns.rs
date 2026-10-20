@@ -60,6 +60,7 @@ fn all_ports_present(
     true
 }
 
+/// Replace DUT input assignments while preserving state updates and other actions.
 pub fn propagate_assignments(
     ctx: &mut Context,
     pg: &mut ProtoGraph,
@@ -100,7 +101,9 @@ pub fn propagate_assignments_from(
         let actions = pg[id]
             .actions
             .iter()
-            .filter(|&action| !matches!(pg[action.op], Op::Assign(_, _)))
+            .filter(|&action| {
+                !matches!(pg[action.op], Op::Assign(symbol, _) if st[symbol].is_in_port())
+            })
             .cloned()
             .collect();
 

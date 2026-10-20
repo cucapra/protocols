@@ -52,6 +52,12 @@ pub fn convert_driver_to_monitor(
     mut graph: ProtoGraph,
     symbols: &mut SymbolTable,
 ) -> Result<MonitorAutomaton, MonitorConversionError> {
+    if !graph.loops.is_empty() {
+        return Err(MonitorConversionError::InvalidPreparedGraph {
+            node: graph.entry,
+            reason: "loop monitor conversion is not implemented yet".into(),
+        });
+    }
     let arguments = graph.args.clone();
     let mut value_registers = FxHashMap::default();
     let mut knownness_registers = FxHashMap::default();
@@ -281,6 +287,11 @@ impl Converter<'_> {
                 }
                 Op::AssertEq(lhs, rhs) => {
                     self.observe_equality(node, action.guard, lhs, rhs, &mut env, &mut actions)?;
+                }
+                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
+                    return Err(invalid(
+                        "loop monitor conversion is not implemented yet".into(),
+                    ));
                 }
                 // retain all other ops as is.
                 op @ (Op::Fork | Op::Done | Op::InternalAssertFalse) => {

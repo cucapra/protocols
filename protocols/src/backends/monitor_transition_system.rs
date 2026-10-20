@@ -189,6 +189,9 @@ pub fn into_monitor_transition_system(
                 Op::AssertEq(..) => {
                     panic!("monitor constraints must be lowered into liveness updates")
                 }
+                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
+                    panic!("loop monitor lowering is not implemented yet")
+                }
                 Op::Fork | Op::Done | Op::InternalAssertFalse => {}
             }
         }

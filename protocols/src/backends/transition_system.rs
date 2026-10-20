@@ -5,7 +5,7 @@ use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
 use patronus::expr::{
-    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr,
+    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr
 };
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -131,6 +131,9 @@ fn replace_proto_graph_exprs(
                 *lhs = replace_expr(ctx, *lhs, old_expr, new_expr);
                 *rhs = replace_expr(ctx, *rhs, old_expr, new_expr);
             }
+            Op::Data { result, .. } | Op::Last { result, .. } | Op::Valid { result, .. } => {
+                *result = replace_expr(ctx, *result, old_expr, new_expr);
+            }
             Op::Fork | Op::InternalAssertFalse | Op::Done => {}
         }
     }
@@ -201,6 +204,10 @@ pub fn lower_proto_graph_to_transition_system(
     mut port_to_expr: FxHashMap<PortId, ExprRef>,
     st: &SymbolTable,
 ) -> CoreLoweredSystem {
+    assert!(
+        pg.loops.is_empty(),
+        "loop transition-system lowering is not implemented yet"
+    );
     let mut is_dont_care = FxHashMap::default();
     for &dont_care in &pg.dont_cares {
         ts.add_input(ctx, dont_care);
@@ -292,6 +299,9 @@ pub fn lower_proto_graph_to_transition_system(
                         if_cond: bad_guard,
                         then: internal_bad_state_id,
                     });
+                }
+                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
+                    panic!("loop transition-system lowering is not implemented yet")
                 }
                 Op::Assign(_, _) | Op::Fork | Op::Done => {}
             }

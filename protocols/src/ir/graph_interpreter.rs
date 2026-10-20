@@ -1,6 +1,6 @@
 use baa::{BitVecOps, BitVecValue, Value as BaaValue};
 use patronus::expr::{
-    Context, ExprRef, SerializableIrNode, SymbolValueStore, TypeCheck, eval_expr,
+    Context, ExprRef, SerializableIrNode, SymbolValueStore, TypeCheck, eval_expr
 };
 use rand::SeedableRng;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -290,6 +290,10 @@ pub fn interpret(
     args: FxHashMap<&str, ArgValue>,
     sim: &mut PatronusSim,
 ) -> GraphInterpretResult {
+    assert!(
+        pg.loops.is_empty(),
+        "loop graph interpretation is not implemented yet"
+    );
     let mut waveform = FxHashMap::default();
     let mut current_inputs =
         FxHashMap::from_iter(sim.inputs().map(|port| (port, WaveValue::DontCare)));
@@ -390,6 +394,9 @@ pub fn interpret(
                                 ),
                             }),
                         };
+                    }
+                    Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
+                        panic!("loop graph interpretation is not implemented yet")
                     }
                     Op::Done => done_triggered = true,
                 }

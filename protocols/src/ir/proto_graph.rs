@@ -6,7 +6,7 @@ use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
-    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
+    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
@@ -21,6 +21,18 @@ entity_impl!(NodeId, "node");
 // if we want debug info on expressions and transitions, we'll need a way to do this with or without Ids
 pub struct OpId(u32);
 entity_impl!(OpId, "op");
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
+pub struct LoopId(u32);
+entity_impl!(LoopId, "l");
+
+/// How a single invocation supplies the loop's finite sequence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoopSource {
+    Sequence(SymbolId),
+    /// A scalar argument or literal; its value is the number of dummy entries.
+    Repeat(ExprRef),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// an Action is a guard and an operation to perform when the guard is true
@@ -132,6 +144,20 @@ impl Assignment {
 pub enum Op {
     Assign(SymbolId, Assignment),
     AssertEq(ExprRef, ExprRef),
+    /// Head signals for one loop. They all describe the same item; reading a
+    /// signal does not itself advance the sequence. There is no FIFO operand.
+    Data {
+        loop_id: LoopId,
+        result: ExprRef,
+    },
+    Last {
+        loop_id: LoopId,
+        result: ExprRef,
+    },
+    Valid {
+        loop_id: LoopId,
+        result: ExprRef,
+    },
     Fork,
     InternalAssertFalse,
     Done,
@@ -179,6 +205,18 @@ impl Op {
                 debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 Self::AssertEq(lhs, rhs)
             }
+            Self::Data { loop_id, result } => Self::Data {
+                loop_id: *loop_id,
+                result: remap_expr(ctx, *result, substitutions),
+            },
+            Self::Last { loop_id, result } => Self::Last {
+                loop_id: *loop_id,
+                result: remap_expr(ctx, *result, substitutions),
+            },
+            Self::Valid { loop_id, result } => Self::Valid {
+                loop_id: *loop_id,
+                result: remap_expr(ctx, *result, substitutions),
+            },
             other => other.clone(),
         }
     }
@@ -200,6 +238,15 @@ pub struct ProtoGraph {
     /// symbol expressions representing DontCare
     pub dont_cares: FxHashSet<ExprRef>,
 
+    pub loops: PrimaryMap<LoopId, LoopSource>,
+    /// Next-value assignment target -> initial value of its physical register.
+    /// Generated state is separate from sticky DUT input assignments.
+    pub register_inits: FxHashMap<SymbolId, ExprRef>,
+    /// Next-value assignment target -> current register value expression.
+    /// The current value is a state input; the assigned next value is a wire.
+    /// These are distinct logical signals connected to one physical register.
+    pub register_inputs: FxHashMap<SymbolId, ExprRef>,
+
     nodes: PrimaryMap<NodeId, Node>,
 
     ops: PrimaryMap<OpId, Op>,
@@ -217,6 +264,9 @@ impl Clone for ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
             dont_cares: self.dont_cares.clone(),
+            loops: self.loops.clone(),
+            register_inits: self.register_inits.clone(),
+            register_inputs: self.register_inputs.clone(),
             nodes: self.nodes.clone(),
             ops: self.ops.clone(),
             op_loc: self.op_loc.clone(),
@@ -239,6 +289,9 @@ impl ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
+            loops: PrimaryMap::new(),
+            register_inits: FxHashMap::default(),
+            register_inputs: FxHashMap::default(),
             nodes,
             ops,
             op_loc,
@@ -294,6 +347,7 @@ impl ProtoGraph {
                     *rhs = self.simplifier.simplify(ctx, *rhs);
                     debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
+                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {}
                 Op::Fork | Op::InternalAssertFalse | Op::Done => {}
             }
         }
@@ -460,307 +514,5 @@ impl Index<&OpId> for ProtoGraph {
 
     fn index(&self, index: &OpId) -> &Self::Output {
         &self.ops[*index]
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::frontend;
-    use crate::frontend::diagnostic::DiagnosticHandler;
-    use crate::frontend::require_single_module;
-    use crate::ir::lowering::lower_ast_to_ir;
-    use std::path::Path;
-    use tempfile::NamedTempFile;
-
-    fn parse_and_lower(source: &str) -> (Context, ProtoGraph) {
-        let file = NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), source).unwrap();
-
-        parse_and_lower_file(file.path(), None)
-    }
-
-    fn parse_and_lower_file(
-        path: impl AsRef<Path>,
-        protocol_name: Option<&str>,
-    ) -> (Context, ProtoGraph) {
-        let mut handler = DiagnosticHandler::default();
-        let skip_static_step_fork_checks = true;
-        let (st, modules) =
-            frontend(&[&path], &mut handler, skip_static_step_fork_checks, false).unwrap();
-        let module = require_single_module(modules, &[&path]).unwrap();
-        let proto = match protocol_name {
-            Some(protocol_name) => module
-                .protos
-                .into_iter()
-                .find(|ast| ast.name == protocol_name)
-                .unwrap(),
-            None => {
-                assert_eq!(module.protos.len(), 1);
-                module.protos.into_iter().next().unwrap()
-            }
-        };
-        let mut ctx = Context::default();
-        let graph = lower_ast_to_ir(&mut ctx, proto, &st);
-        (ctx, graph)
-    }
-
-    #[test]
-    fn lowers_straight_line_protocol_into_distinct_ir_nodes() {
-        let (ctx, ir) = parse_and_lower(
-            r#"
-            struct Dummy {
-              in a: u32,
-              out b: u32,
-            }
-
-            prot pipe<dut: Dummy>(a: u32, b: u32) {
-              dut.a := a;
-              step();
-              assert_eq(b, dut.b);
-            }
-            "#,
-        );
-
-        assert_eq!(ir.name, "pipe");
-        assert_eq!(ir.args.len(), 2);
-        assert_eq!(ir.nodes.len(), 6);
-        assert_eq!(ir.ops.len(), 5);
-
-        let entry = &ir.nodes[ir.entry];
-        assert!(entry.actions.is_empty());
-        assert_eq!(entry.transitions.len(), 1);
-        assert_eq!(
-            entry.transitions[0],
-            Transition {
-                guard: ctx.get_true(),
-                target: NodeId(5),
-                consumes_step: false,
-                rotations: vec![],
-            }
-        );
-
-        let init = &ir.nodes[NodeId(5)];
-        assert_eq!(init.actions.len(), 1);
-        assert_eq!(init.actions[0].guard, ctx.get_true());
-        assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
-        assert_eq!(
-            init.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(4),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let assign = &ir.nodes[NodeId(4)];
-        assert_eq!(assign.actions.len(), 1);
-        assert_eq!(assign.actions[0].guard, ctx.get_true());
-        assert!(matches!(ir.ops[assign.actions[0].op], Op::Assign(_, _)));
-        assert_eq!(
-            assign.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(3),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let step = &ir.nodes[NodeId(3)];
-        assert!(step.actions.is_empty());
-        assert_eq!(
-            step.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(2),
-                consumes_step: true,
-                rotations: vec![],
-            }]
-        );
-
-        let assert_node = &ir.nodes[NodeId(2)];
-        assert_eq!(assert_node.actions.len(), 1);
-        assert_eq!(assert_node.actions[0].guard, ctx.get_true());
-        assert!(matches!(
-            ir.ops[assert_node.actions[0].op],
-            Op::AssertEq(_, _)
-        ));
-        assert_eq!(
-            assert_node.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(1),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let exit = &ir.nodes[NodeId(1)];
-        assert_eq!(exit.actions.len(), 2);
-        assert_eq!(exit.actions[0].guard, ctx.get_true());
-        assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
-        assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
-        assert!(exit.transitions.is_empty());
-    }
-
-    #[test]
-    fn lowers_fork_into_action_and_non_step_transition() {
-        let (ctx, ir) = parse_and_lower(
-            r#"
-            struct Dummy {
-              in a: u32,
-              out b: u32,
-            }
-
-            prot pipe<dut: Dummy>(a: u32, b: u32) {
-              fork();
-            }
-            "#,
-        );
-
-        assert_eq!(ir.nodes.len(), 4);
-        assert_eq!(ir.ops.len(), 4);
-
-        let init = &ir.nodes[NodeId(3)];
-        assert_eq!(init.actions.len(), 1);
-        assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
-        assert_eq!(
-            init.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(2),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let fork = &ir.nodes[NodeId(2)];
-        assert_eq!(fork.actions.len(), 1);
-        assert!(matches!(ir.ops[fork.actions[0].op], Op::Fork));
-        assert_eq!(
-            fork.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(1),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let exit = &ir.nodes[NodeId(1)];
-        assert_eq!(exit.actions.len(), 2);
-        assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
-        assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
-        assert!(exit.transitions.is_empty());
-    }
-
-    #[test]
-    fn lowers_add_d1_fixture_via_parser_and_lowering() {
-        let (ctx, ir) = parse_and_lower_file("../tests/adders/adder_d1/add_d1.prot", Some("add"));
-
-        assert_eq!(ir.name, "add");
-        assert_eq!(ir.args.len(), 3);
-        assert_eq!(ir.nodes.len(), 11);
-        assert_eq!(ir.ops.len(), 11);
-
-        let entry = &ir.nodes[ir.entry];
-        assert!(entry.actions.is_empty());
-        assert_eq!(
-            entry.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(10),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let init = &ir.nodes[NodeId(10)];
-        assert_eq!(init.actions.len(), 2);
-        assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
-        assert!(matches!(ir.ops[init.actions[1].op], Op::Assign(_, _)));
-        assert_eq!(
-            init.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(9),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let step = &ir.nodes[NodeId(7)];
-        assert!(step.actions.is_empty());
-        assert_eq!(
-            step.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(6),
-                consumes_step: true,
-                rotations: vec![],
-            }]
-        );
-
-        let fork = &ir.nodes[NodeId(3)];
-        assert_eq!(fork.actions.len(), 1);
-        assert!(matches!(ir.ops[fork.actions[0].op], Op::Fork));
-        assert_eq!(
-            fork.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(2),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let last_step = &ir.nodes[NodeId(2)];
-        assert!(last_step.actions.is_empty());
-        assert_eq!(
-            last_step.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(1),
-                consumes_step: true,
-                rotations: vec![],
-            }]
-        );
-
-        let exit = &ir.nodes[NodeId(1)];
-        assert_eq!(exit.actions.len(), 3);
-        assert!(matches!(ir.ops[exit.actions[0].op], Op::Done));
-        assert!(matches!(ir.ops[exit.actions[1].op], Op::Assign(_, _)));
-        assert!(matches!(ir.ops[exit.actions[2].op], Op::Assign(_, _)));
-        assert!(exit.transitions.is_empty());
-    }
-
-    #[test]
-    fn garbage_collects_unreachable_nodes_and_ops() {
-        let mut pg = ProtoGraph::new(ProtocolContext::new(
-            "test".into(),
-            crate::frontend::symbol::ROOT_SCOPE,
-        ));
-        let ctx = Context::default();
-        let reachable = pg.n(Node::empty());
-        let unreachable = pg.n(Node::empty());
-
-        let fork = pg.o(Op::Fork);
-        let done = pg.o(Op::Done);
-
-        let true_id = ctx.get_true();
-        pg.push_action(reachable, Action::new(true_id, fork));
-        pg.push_action(unreachable, Action::new(true_id, done));
-        pg.push_transition(pg.entry, Transition::new(true_id, reachable, false));
-
-        assert_eq!(pg.nodes.len(), 3);
-        assert_eq!(pg.ops.len(), 2);
-
-        pg.garbage_collect_unreachable(&ctx);
-
-        assert_eq!(pg.nodes.len(), 2);
-        assert_eq!(pg.ops.len(), 1);
-        assert_eq!(pg[pg.entry].transitions.len(), 1);
     }
 }

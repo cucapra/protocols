@@ -11,7 +11,8 @@ use itertools::Itertools;
 use patronus::expr::{Context, ExprRef};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-// Maps ports (by their `String` name`), to the existing Assignment for that port
+/// Reaching assignments to DUT input pins, keyed by full port name.
+/// Register and iterator values remain opaque inputs to these expressions.
 pub type ReachingDefs = FxHashMap<String, Assignment>;
 
 /// Nodes only store their outgoing transitions. This function precomputes and
@@ -295,7 +296,9 @@ pub fn reaching_definitions_from(
             .actions
             .iter()
             .filter_map(|a| match pg[a.op].clone() {
-                Op::Assign(symbol_id, assignment) => Some((symbol_id, assignment)),
+                Op::Assign(symbol_id, assignment) if st[symbol_id].is_in_port() => {
+                    Some((symbol_id, assignment))
+                }
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -399,6 +402,100 @@ mod tests {
 
     fn concrete_assignment(ctx: &Context, guard: ExprRef, rhs: ExprRef) -> Assignment {
         Assignment::concrete(ctx.get_false(), guard, rhs)
+    }
+
+    #[test]
+    fn dut_input_dataflow_preserves_loop_state() {
+        use crate::frontend;
+        use crate::frontend::diagnostic::DiagnosticHandler;
+        use crate::frontend::require_single_module;
+        use crate::ir::lowering::lower_ast_to_ir;
+        use crate::ir::propagate_assigns::propagate_assignments;
+        use crate::ir::proto_graph::{Action, Node, Transition};
+        use cranelift_entity::PrimaryMap;
+        use patronus::expr::TypeCheck;
+
+        let filename = "../tests/loops/loops.prot";
+        let mut handler = DiagnosticHandler::default();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let ast = module
+            .protos
+            .into_iter()
+            .find(|p| p.name == "for_distinct")
+            .unwrap();
+        let mut ctx = Context::default();
+        let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+        let state_actions = graph
+            .nodes()
+            .flat_map(|(_, node)| &node.actions)
+            .filter(|a| match graph[a.op] {
+                Op::Assign(target, _) => !symbols[target].is_in_port(),
+                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => true,
+                _ => false,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let inputs = graph.dut_input_symbols(&symbols).collect::<Vec<_>>();
+        let mut assignments = Vec::new();
+        for pin in inputs {
+            // State references in a DUT RHS are opaque: the analysis must not
+            // import or substitute the assignments that update that state.
+            let width = match symbols[pin].tpe() {
+                crate::frontend::symbol::Type::BitVec(width) => width,
+                _ => unreachable!(),
+            };
+            let rhs = *graph
+                .register_inputs
+                .values()
+                .find(|expr| expr.get_bv_type(&ctx) == Some(width))
+                .unwrap();
+            let assignment = Assignment::concrete(ctx.get_false(), ctx.get_true(), rhs);
+            let op = graph.o(Op::Assign(pin, assignment.clone()));
+            assignments.push((pin, assignment, Action::new(ctx.get_true(), op)));
+        }
+        let mut nodes = PrimaryMap::new();
+        let entry = nodes.push(Node::empty());
+        let body = nodes.push(Node::empty());
+        nodes[entry].actions = assignments
+            .iter()
+            .map(|(_, _, action)| action.clone())
+            .collect();
+        nodes[entry].transitions = vec![Transition::new(ctx.get_true(), body, true)];
+        nodes[body].actions = state_actions.clone();
+        // One pin is assigned locally; the other must be propagated from entry.
+        nodes[body].actions.push(assignments[0].2.clone());
+        nodes[body].transitions = vec![Transition::new(ctx.get_true(), body, true)];
+        graph = graph.with_nodes(nodes, entry);
+
+        let definitions = reaching_definitions(&mut ctx, &mut graph, &symbols);
+        let input_names = assignments
+            .iter()
+            .map(|(pin, _, _)| symbols.full_name_from_symbol_id(pin))
+            .collect::<Vec<_>>();
+        for defs in definitions.values() {
+            assert_eq!(defs.len(), input_names.len());
+            assert!(defs.keys().all(|name| input_names.contains(name)));
+        }
+        propagate_assignments(&mut ctx, &mut graph, &symbols, &definitions);
+        let preserved = graph[body]
+            .actions
+            .iter()
+            .filter(|a| !matches!(graph[a.op], Op::Assign(pin, _) if symbols[pin].is_in_port()))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(preserved, state_actions);
+        for (pin, expected, _) in assignments {
+            let actual = graph[body]
+                .actions
+                .iter()
+                .filter_map(|a| match &graph[a.op] {
+                    Op::Assign(target, assignment) if *target == pin => Some(assignment),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, vec![&expected]);
+        }
     }
 
     #[test]

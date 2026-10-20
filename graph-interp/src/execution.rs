@@ -115,6 +115,9 @@ fn prepare_trace_graph(
 
 /// Executes each protocol instance in a trace sequentially on the DUT.
 fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+    // TODO: everything probably needs a mutable symbol table passed in instead of this
+    let mut lowered_symbols = symbols.clone();
+    let symbols = &mut lowered_symbols;
     let mut ctx = Context::default();
     let graphs: Vec<(String, ProtoGraph)> = module
         .protos

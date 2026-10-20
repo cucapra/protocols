@@ -4,7 +4,7 @@
 
 use crate::frontend::serialize::serialize_bitvec;
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{Assignment, LoopSource, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use std::collections::{BTreeSet, VecDeque};
@@ -28,7 +28,22 @@ pub fn to_dot_string_with_node_labels(
     ));
     out.push_str("  rankdir=LR;\n");
     out.push_str("  node [shape=box];\n");
-    out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
+    let mut entry = vec!["ENTRY".to_string()];
+    // some helpful info on each loop
+    for (id, source) in protocol.loops.iter() {
+        entry.push(match source {
+            LoopSource::Sequence(argument) => {
+                format!("{id}: {}", symbols.full_name_from_symbol_id(argument))
+            }
+            LoopSource::Repeat(count) => {
+                format!("{id}: repeat {}", format_expr(ctx, protocol, *count))
+            }
+        });
+    }
+    out.push_str(&format!(
+        "  entry_marker [shape=plain,label=\"{}\"];\n",
+        escape_label(&entry.join("\\n"))
+    ));
     out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
 
     let mut seen: BTreeSet<NodeId> = BTreeSet::new();
@@ -117,6 +132,18 @@ fn format_op(
             "assert_eq({}, {})",
             format_expr(ctx, protocol, *lhs),
             format_expr(ctx, protocol, *rhs)
+        ),
+        Op::Data { loop_id, result } => format!(
+            "{} := {loop_id}.data()",
+            format_expr(ctx, protocol, *result)
+        ),
+        Op::Last { loop_id, result } => format!(
+            "{} := {loop_id}.last()",
+            format_expr(ctx, protocol, *result)
+        ),
+        Op::Valid { loop_id, result } => format!(
+            "{} := {loop_id}.valid()",
+            format_expr(ctx, protocol, *result)
         ),
         Op::Fork => "fork".to_string(),
         Op::InternalAssertFalse => "internal_assert_false".to_string(),
@@ -257,7 +284,7 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &symbols);
+            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
@@ -301,6 +328,33 @@ mod tests {
         });
         (ctx, symbols, monitors)
     }
+    #[test]
+    // TODO: some duplicate code here. eventually, just test it all
+    // TODO: the way through all the passes (and remove this special function).
+    fn test_loops_snapshot() {
+        let filename = "../tests/loops/loops.prot";
+        let mut handler = DiagnosticHandler::default();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let mut content = String::new();
+        for ast in module.protos {
+            // Each graph is an independent invocation with its own loop state.
+            let mut symbols = symbols.clone();
+            let mut ctx = Context::default();
+            let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+            content += "== pre-contract ==\n";
+            content += &to_dot_string(&ctx, &graph, &symbols);
+            content += "\n";
+            contract_edges(&mut ctx, &mut graph, &symbols);
+            content += "== post-contract ==\n";
+            content += &to_dot_string(&ctx, &graph, &symbols);
+            content += "\n";
+        }
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| insta::assert_snapshot!("ir_graphviz_loops", content));
+    }
+
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");

@@ -2,8 +2,9 @@ use std::collections::{BTreeSet, VecDeque};
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::propagate_assigns::reachable_node_ids;
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::{Context, ExprRef};
+use rustc_hash::FxHashMap;
 
 fn symbol_expr(
     ctx: &mut Context,
@@ -506,12 +507,80 @@ fn append_action_with_mode(
                 actions.push(action);
             }
         }
+        Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
+            // Copies of one head reached through alternative paths share its
+            // signals. Their guards say when that head is actually reached.
+            if let Some(existing) = actions
+                .iter_mut()
+                .find(|a| protocol[a.op] == protocol[action.op])
+            {
+                existing.guard = protocol.or_guard(ctx, existing.guard, action.guard);
+            } else {
+                actions.push(action);
+            }
+        }
         Op::AssertEq(_, _) => {
             actions.push(action);
         }
         Op::InternalAssertFalse => {
             actions.push(action);
         }
+    }
+}
+
+/// Earlier reads use current register values; later reads use the expressions
+/// TODO: Should we be doing this for DUT pins as well?
+fn resolve_state_in_node(
+    ctx: &mut Context,
+    graph: &mut ProtoGraph,
+    node: Node,
+    values: &mut FxHashMap<ExprRef, ExprRef>,
+) -> Node {
+    if graph.register_inputs.is_empty() {
+        return node;
+    }
+    let mut reads = values.clone();
+    let mut actions = Vec::with_capacity(node.actions.len());
+    for action in node.actions {
+        let op = graph[action.op].remap(ctx, &reads, &FxHashMap::default());
+        let guard = crate::ir::proto_graph::remap_expr(ctx, action.guard, &reads);
+        let op = graph.o(op);
+        actions.push(Action::new(guard, op));
+    }
+
+    // All RHSs above used the same incoming map. Apply their results only now.
+    for action in &actions {
+        if let Op::Assign(register, assignment) = graph[action.op].clone()
+            && graph.register_inputs.contains_key(&register)
+        {
+            assert_eq!(action.guard, ctx.get_true());
+            // TODO: This is a coarse-grained check, but it's
+            // TODO: for register-only stuff since we know it's never set to X
+            assert_eq!(
+                assignment.dont_care,
+                ctx.get_false(),
+                "generated state cannot be X"
+            );
+            let target = graph.symbol_expr(register).unwrap();
+            let mut value = values[&target];
+            for (guard, rhs) in assignment.concretes.into_iter().rev() {
+                value = ctx.ite(guard, rhs, value);
+            }
+            values.insert(target, graph.simplifier.simplify(ctx, value));
+        }
+    }
+    reads.extend(values.iter().map(|(&symbol, &value)| (symbol, value)));
+    let transitions = node
+        .transitions
+        .into_iter()
+        .map(|mut transition| {
+            transition.guard = crate::ir::proto_graph::remap_expr(ctx, transition.guard, &reads);
+            transition
+        })
+        .collect();
+    Node {
+        actions,
+        transitions,
     }
 }
 
@@ -527,11 +596,27 @@ pub fn contract_edges_from(
     start: NodeId,
 ) {
     let node_ids = reachable_node_ids(ctx, protocol, start);
+    let originals = (!protocol.register_inputs.is_empty()).then(|| {
+        protocol
+            .nodes()
+            .map(|(id, node)| (id, node.clone()))
+            .collect::<FxHashMap<_, _>>()
+    });
 
     for source_node_id in node_ids.into_iter().rev() {
-        let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
+        let mut values = protocol
+            .register_inputs
+            .iter()
+            .map(|(&register, &incoming)| (protocol.symbol_expr(register).unwrap(), incoming))
+            .collect::<FxHashMap<_, _>>();
+        let source = originals.as_ref().map_or_else(
+            || protocol[source_node_id].clone(),
+            |nodes| nodes[&source_node_id].clone(),
+        );
+        let source = resolve_state_in_node(ctx, protocol, source, &mut values);
+        let mut contracted_actions = Vec::with_capacity(source.actions.len());
         let mut internal_assert_guard = None;
-        for action in protocol[source_node_id].actions.clone() {
+        for action in source.actions {
             append_action(
                 ctx,
                 protocol,
@@ -543,10 +628,8 @@ pub fn contract_edges_from(
             );
         }
 
-        let (mut step_transitions, pending_transitions): (Vec<_>, Vec<_>) = protocol
-            [source_node_id]
+        let (mut step_transitions, pending_transitions): (Vec<_>, Vec<_>) = source
             .transitions
-            .clone()
             .into_iter()
             .partition(|transition| transition.consumes_step);
 
@@ -554,15 +637,19 @@ pub fn contract_edges_from(
             .into_iter()
             .rev()
             .map(|transition| {
-                (transition, {
-                    let mut path = BTreeSet::new();
-                    path.insert(source_node_id);
-                    path
-                })
+                (
+                    transition,
+                    {
+                        let mut path = BTreeSet::new();
+                        path.insert(source_node_id);
+                        path
+                    },
+                    values.clone(),
+                )
             })
             .collect();
 
-        while let Some((transition, path)) = pending_transitions.pop_front() {
+        while let Some((transition, path, mut values)) = pending_transitions.pop_front() {
             assert!(!transition.consumes_step);
 
             let target_node_id = transition.target;
@@ -577,8 +664,13 @@ pub fn contract_edges_from(
             }
 
             let incoming_guard = transition.guard;
-            let target_actions = protocol[target_node_id].actions.clone();
-            let target_transitions = protocol[target_node_id].transitions.clone();
+            let target = originals.as_ref().map_or_else(
+                || protocol[target_node_id].clone(),
+                |nodes| nodes[&target_node_id].clone(),
+            );
+            let target = resolve_state_in_node(ctx, protocol, target, &mut values);
+            let target_actions = target.actions;
+            let target_transitions = target.transitions;
             let mut next_path = path.clone();
             next_path.insert(target_node_id);
 
@@ -619,7 +711,11 @@ pub fn contract_edges_from(
                 if contracted_transition.consumes_step {
                     step_transitions.push(contracted_transition);
                 } else {
-                    pending_transitions.push_back((contracted_transition, next_path.clone()));
+                    pending_transitions.push_back((
+                        contracted_transition,
+                        next_path.clone(),
+                        values.clone(),
+                    ));
                 }
             }
         }
