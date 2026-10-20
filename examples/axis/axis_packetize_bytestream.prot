@@ -89,6 +89,7 @@ prot packetize_bytestream<DUT: Axis>(bytes: [u8]+) {
       step();
 
     } else {
+      // Here is_last = false 
       // Only perform data transfer once we've assembled all 4 bytes of `tdata`
       if iter_count::<u2>() == 2'b11 {
         assert_eq(DUT.tlast, 1'b0);
