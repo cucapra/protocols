@@ -22,6 +22,12 @@ use std::path::PathBuf;
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct PortId(u32);
 
+impl PortId {
+    pub fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+}
+
 const EMPTY_PORT_VEC: Vec<PortId> = vec![];
 const EMPTY_PORT_VEC_REF: &Vec<PortId> = &EMPTY_PORT_VEC;
 

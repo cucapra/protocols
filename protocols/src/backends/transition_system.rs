@@ -335,7 +335,9 @@ pub fn lower_proto_graph_to_transition_system(
         let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
         ts.add_input(ctx, input_dont_care);
 
-        let input_port = *symbol_to_port.get(&input).unwrap();
+        let Some(input_port) = symbol_to_port.get(&input).cloned() else {
+            panic!("Cannot find {}", st.full_name_from_symbol_id(&input))
+        };
         let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
         input_drivers.push((
             input,

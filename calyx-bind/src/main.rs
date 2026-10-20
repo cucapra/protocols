@@ -1,17 +1,21 @@
 use clap::{ColorChoice, Parser};
-use patronus::expr::{Context, ExprRef};
-use patronus::system::TransitionSystem;
-use protocols::backends::transition_system::lower_proto_graph_to_transition_system;
-use protocols::frontend;
+use patronus::expr::{Context, ExprRef, SerializableIrNode, TypeCheck, simple_transform_expr};
+use patronus::system::{Output, TransitionSystem};
+use protocols::backends::transition_system::{
+    lower_proto_graph_to_transition_system, replace_expr,
+};
 use protocols::frontend::Module;
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::SymbolTable;
-use protocols::ir::graphviz::to_dot_string_from_entry;
+use protocols::frontend::symbol::{Dir, SymbolTable};
+use protocols::ir::graphviz::{to_dot_string, to_dot_string_from_entry};
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
-use protocols::ir::proto_graph::{NodeId, Op, ProtoGraph};
+use protocols::ir::propagate_assigns::reachable_node_ids;
+use protocols::ir::proto_graph::{Node, NodeId, Op, ProtoGraph, Transition};
+use protocols::{PortId, frontend};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
+use std::io::Write;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -78,7 +82,8 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         );
 
         // check shape
-        let shape = analyze_shape(&mut ctx, &lowerer.ir, method).unwrap();
+        lowerer.ir.entry = graph.entry;
+        let shape = analyze_shape(&ctx, &lowerer.ir, method).unwrap();
         assert!(
             shape.fork.is_none(),
             "we should have removed all forks at this point!"
@@ -87,36 +92,101 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         assert_eq!(shape.done, graph.exit);
     }
 
-    // guard method starts
-    let op_width = std::cmp::max(1, usize::BITS - (methods.len() - 1).leading_ones());
+    // guard method starts with op == i && go and merge them into a single start state
+    let op_width = std::cmp::max(1, usize::BITS - (methods.len() - 1).leading_zeros());
     let op = ctx.bv_symbol("op", op_width);
     let go = ctx.bv_symbol("go", 1);
 
+    // common start state
+    lowerer.ir.entry = lowerer.ir.n(Node::empty());
+    let entry = lowerer.ir.entry;
+    // self loop if go is low
+    lowerer.ir[entry]
+        .transitions
+        .push(Transition::new(ctx.not(go), entry, true));
+
+    // merge methods into start state
     for (idx, graph) in methods.iter().enumerate() {
         let idx = ctx.bit_vec_val(idx, op_width);
         let selected = ctx.equal(op, idx);
         let selected_and_go = and(&mut ctx, go, selected);
-        add_guard(&mut ctx, &mut lowerer.ir, graph.entry, selected_and_go);
+        lowerer.graft_contracted_entry(&mut ctx, entry, graph.entry, selected_and_go);
+    }
+    // not go means we are in idle
+    if let Some(idle) = idle {
+        let not_go = ctx.not(go);
+        lowerer.graft_contracted_entry(&mut ctx, entry, idle, not_go);
     }
 
-    for (graph, method) in methods.iter().zip(m.protos.iter()) {
-        println!("{}", method.name);
-        println!(
-            "{}\n",
-            to_dot_string_from_entry(&ctx, &lowerer.ir, st, graph.entry)
-        );
+    // build one common done state from idle
+    let done_state_id = lowerer.ir.n(Node::empty());
+    lowerer.ir[done_state_id]
+        .transitions
+        .push(Transition::new(ctx.get_true(), entry, true));
+    if let Some(idle) = idle {
+        lowerer.ir[done_state_id].actions = lowerer.ir[idle].actions.clone();
+    }
+    remove_done(&mut ctx, &mut lowerer.ir, done_state_id);
+    remove_dont_care(st, &mut ctx, &mut lowerer.ir);
+
+    // compact graph
+    let node_remap = lowerer.ir.garbage_collect_unreachable(&ctx);
+    lowerer.ir.simplify_all_exprs(&mut ctx);
+
+    let mut node_labels: Vec<String> = (0..lowerer.ir.nodes().count())
+        .map(|i| format!("node_{i}"))
+        .collect();
+    node_labels[lowerer.ir.entry.as_u32() as usize] = "start".to_string();
+    node_labels[node_remap[&done_state_id].as_u32() as usize] = "done".to_string();
+
+    // show graph
+    println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
+
+    //
+    // // lower to transition system
+    // let sys = to_transition_system(&mut ctx, m, lowerer.ir, st);
+    //
+    // println!("{}", sys.serialize_to_str(&ctx));
+
+    let verilog = to_verilog(&ctx, m, &lowerer.ir, st, &node_labels);
+}
+
+fn to_verilog(
+    ctx: &Context,
+    m: &Module,
+    pg: &ProtoGraph,
+    st: &SymbolTable,
+    node_labels: &[String],
+    out: &impl Write,
+) -> std::io::Result<()> {
+    let num_states = pg.nodes().count();
+    let state_width = usize::BITS - num_states.leading_zeros();
+
+    write!(out, "typedef enum logic [{}:0] {{", state_width - 1)?;
+
+    Ok(())
+}
+
+fn remove_dont_care(st: &SymbolTable, ctx: &mut Context, pg: &mut ProtoGraph) {
+    for node in reachable_node_ids(ctx, pg, pg.entry) {
+        let actions = pg[node].actions.clone();
+        for act in actions {
+            if let Op::Assign(sym, assign) = &mut pg[act.op] {
+                if assign.concretes.is_empty() {
+                    let width: u32 = st[*sym].tpe().bitwidth();
+                    assign.concretes.push((assign.dont_care, ctx.zero(width)));
+                } else if assign.dont_care != ctx.get_false() {
+                    let guard = &mut assign.concretes[0].0;
+                    *guard = ctx.or(*guard, assign.dont_care);
+                }
+                assign.dont_care = ctx.get_false();
+            }
+        }
     }
 }
 
-fn add_guard(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId, guard: ExprRef) {
-    let node = &mut pg[node_id];
-    for tran in node.transitions.iter_mut() {
-        tran.guard = and(ctx, tran.guard, guard);
-    }
-    for act in node.actions.iter_mut() {
-        act.guard = and(ctx, act.guard, guard);
-    }
-}
+// node0 [label="[1] DUT.data_i := input if or(and(go, not(op)), not(or(op, not(go))))\n[1] DUT.v_i := 1; 0\n                                                [1] DUT.enq_not_deq_i := 1 if go; 0 if go\n[1] DUT.reset_i := 0\n[and(or(and(go, not(op)), and(go, op)), not(go))] internal_assert_false"];
+// node0 [label="[1] DUT.data_i := X if or(op, not(go)); input if and(go, not(op))\n    [1] DUT.v_i := 1 if or(and(go, not(op)), and(go, op)); 0 if not(go)\n[1] DUT.enq_not_deq_i := X if not(go); 1 if and(go, not(op)); 0 if and(go, op)\n[1] DUT.reset_i := 0\n[and(or(and(go, not(op)), and(go, op)), not(go))] internal_assert_false"];
 
 fn to_transition_system(
     ctx: &mut Context,
@@ -124,36 +194,91 @@ fn to_transition_system(
     pg: ProtoGraph,
     st: &SymbolTable,
 ) -> TransitionSystem {
-    let sys = TransitionSystem::new(module.name.clone());
-    let symbol_to_port = FxHashMap::default();
-    let port_to_expr = FxHashMap::default();
-    let lowered =
-        lower_proto_graph_to_transition_system(ctx, pg, sys, symbol_to_port, port_to_expr, st);
-    lowered.ts
+    let mut sys = TransitionSystem::new(module.name.clone());
+    let mut symbol_to_port = FxHashMap::default();
+    let mut port_to_expr = FxHashMap::default();
+    let mut port_to_dir = FxHashMap::default();
+    // all DUT inputs are outputs, all DUT outputs are inputs
+    for (pin_idx, pin) in module.pins.iter().enumerate() {
+        let port = PortId::from_raw(pin_idx as u32);
+        for syms in module.proto_pin_map.iter() {
+            symbol_to_port.insert(syms[pin_idx], port);
+        }
+        let sym = ctx.bv_symbol(&format!("dut_{}", pin.name()), pin.bitwidth());
+        if pin.dir() == Dir::Out {
+            debug_assert_eq!(pin.dir(), Dir::Out);
+            sys.inputs.push(sym);
+        }
+        port_to_dir.insert(port, pin.dir());
+        port_to_expr.insert(port, sym);
+    }
+
+    let lowered = lower_proto_graph_to_transition_system(
+        ctx,
+        pg,
+        sys,
+        symbol_to_port,
+        port_to_expr.clone(),
+        st,
+    );
+    let mut sys = lowered.ts;
+
+    for (port, &expr) in &lowered.port_to_expr {
+        if port_to_dir[port] == Dir::In {
+            let port = port_to_expr[port];
+            let name = ctx[port].get_symbol_name_ref().unwrap();
+            sys.outputs.push(Output { name, expr });
+        }
+    }
+
+    // remove_dont_care_inputs(ctx, &mut sys);
+    patronus::system::transform::simplify_expressions(ctx, &mut sys);
+    sys
+}
+
+fn remove_dont_care_inputs(ctx: &mut Context, sys: &mut TransitionSystem) {
+    let mut remap = FxHashMap::default();
+    sys.inputs.retain(|&i| {
+        if ctx.get_symbol_name(i).unwrap().starts_with("dont_care") {
+            remap.insert(i, ctx.zero(i.get_bv_type(ctx).unwrap()));
+            false
+        } else {
+            true
+        }
+    });
+
+    sys.update_expressions(|expr| {
+        Some(simple_transform_expr(
+            ctx,
+            expr,
+            |_ctx, candidate, _children| remap.get(&candidate).cloned(),
+        ))
+    });
 }
 
 /// returns the condition under which we will be done in the next step
-fn next_state_is_done(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId) -> ExprRef {
-    let dones: SmallVec<[_; 2]> = pg[node_id]
+fn next_state_is_done(ctx: &mut Context, pg: &ProtoGraph, node_id: NodeId) -> ExprRef {
+    let done_guards: SmallVec<[_; 2]> = pg[node_id]
         .transitions
         .iter()
-        .map(|t| {
-            let dones: SmallVec<[_; 2]> = pg[t.target]
-                .actions
-                .iter()
-                .filter(|a| matches!(pg[a.op], Op::Done))
-                .map(|a| a.guard)
-                .collect();
-            (t.guard, dones)
-        })
+        .filter(|t| is_done_state(ctx, pg, t.target))
+        .map(|t| t.guard)
         .collect();
-    dones
-        .into_iter()
-        .fold(ctx.get_false(), |a, (guard, inner)| {
-            let inner = reduce_or(ctx, inner.into_iter());
-            let inner = and(ctx, guard, inner);
-            or(ctx, a, inner)
-        })
+    reduce_or(ctx, done_guards.into_iter())
+}
+
+fn is_done_state(ctx: &mut Context, pg: &ProtoGraph, node_id: NodeId) -> bool {
+    // we only support done guarded with true or false
+    let dones: SmallVec<[_; 2]> = pg[node_id]
+        .actions
+        .iter()
+        .filter(|a| matches!(pg[a.op], Op::Done))
+        .map(|a| a.guard)
+        .collect();
+
+    let expr = reduce_or(ctx, dones.into_iter());
+    assert!(expr == ctx.get_true() || expr == ctx.get_false());
+    expr == ctx.get_true()
 }
 
 fn reduce_or(ctx: &mut Context, items: impl Iterator<Item = ExprRef>) -> ExprRef {
@@ -189,6 +314,33 @@ fn and(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
         a
     } else {
         ctx.and(a, b)
+    }
+}
+
+fn remove_done(ctx: &mut Context, pg: &mut ProtoGraph, done_state_id: NodeId) {
+    let mut todo = vec![pg.entry];
+    let mut visited = FxHashSet::default();
+    while let Some(node_id) = todo.pop() {
+        if !visited.contains(&node_id) {
+            visited.insert(node_id);
+            let is_done_state: SmallVec<[_; 2]> = pg[node_id]
+                .transitions
+                .iter()
+                .map(|t| is_done_state(ctx, pg, t.target))
+                .collect();
+            for (tran, next_is_done_state) in pg[node_id]
+                .transitions
+                .iter_mut()
+                .zip(is_done_state.into_iter())
+            {
+                if next_is_done_state {
+                    tran.target = done_state_id;
+                } else if tran.guard != ctx.get_false() && !visited.contains(&tran.target) {
+                    assert!(tran.consumes_step);
+                    todo.push(tran.target);
+                }
+            }
+        }
     }
 }
 

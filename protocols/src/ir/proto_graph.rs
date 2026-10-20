@@ -461,6 +461,12 @@ impl Index<OpId> for ProtoGraph {
     }
 }
 
+impl IndexMut<OpId> for ProtoGraph {
+    fn index_mut(&mut self, index: OpId) -> &mut Self::Output {
+        &mut self.ops[index]
+    }
+}
+
 impl Index<&OpId> for ProtoGraph {
     type Output = Op;
 
