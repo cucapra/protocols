@@ -148,7 +148,9 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
     //
     // println!("{}", sys.serialize_to_str(&ctx));
 
-    let verilog = to_verilog(&ctx, m, &lowerer.ir, st, &node_labels);
+    let mut verilog = vec![];
+    to_verilog(&ctx, m, &lowerer.ir, st, &node_labels, &mut verilog).unwrap();
+    println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
 fn to_verilog(
@@ -157,12 +159,15 @@ fn to_verilog(
     pg: &ProtoGraph,
     st: &SymbolTable,
     node_labels: &[String],
-    out: &impl Write,
+    out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let num_states = pg.nodes().count();
     let state_width = usize::BITS - num_states.leading_zeros();
 
-    write!(out, "typedef enum logic [{}:0] {{", state_width - 1)?;
+    writeln!(out, "typedef enum logic [{}:0] {{", state_width - 1)?;
+    for (idx, lbl) in node_labels.iter().enumerate() {
+        writeln!(out, "")?;
+    }
 
     Ok(())
 }
