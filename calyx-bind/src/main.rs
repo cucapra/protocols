@@ -149,26 +149,67 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
     // println!("{}", sys.serialize_to_str(&ctx));
 
     let mut verilog = vec![];
-    to_verilog(&ctx, m, &lowerer.ir, st, &node_labels, &mut verilog).unwrap();
+    // TODO: we need to actually extract the reset actions!!!!
+    let reset = reset.map(|node_id| node_remap[&node_id]);
+    to_verilog(&ctx, m, reset, &lowerer.ir, st, &node_labels, &mut verilog).unwrap();
     println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
 fn to_verilog(
     ctx: &Context,
     m: &Module,
+    reset: Option<NodeId>,
     pg: &ProtoGraph,
     st: &SymbolTable,
     node_labels: &[String],
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let num_states = pg.nodes().count();
+    assert_eq!(num_states, node_labels.len());
+    let state_labels: Vec<_> = node_labels
+        .iter()
+        .map(|l| format!("ST_{}", l.to_uppercase()))
+        .collect();
     let state_width = usize::BITS - num_states.leading_zeros();
 
-    writeln!(out, "typedef enum logic [{}:0] {{", state_width - 1)?;
-    for (idx, lbl) in node_labels.iter().enumerate() {
-        writeln!(out, "")?;
+    writeln!(out, "  typedef enum logic [{}:0] {{", state_width - 1)?;
+    for (idx, lbl) in state_labels.iter().enumerate() {
+        writeln!(out, "    {lbl}  = {state_width}'d{idx},")?;
     }
+    writeln!(out, "  }} state_t;\n")?;
+    writeln!(out, "  state_t state, next_state;\n")?;
+    // state register
+    writeln!(out, "  always_ff @(posedge clk)")?;
+    writeln!(
+        out,
+        "    if reset state <= {};",
+        state_labels[pg.entry.as_u32() as usize]
+    )?;
+    writeln!(out, "    else state <= next_state;\n",)?;
 
+    // combinational
+    writeln!(out, "  always_comb begin")?;
+    writeln!(out, "    if reset begin")?;
+    if let Some(reset) = reset {
+        state_to_verilog(ctx, pg, "      ", &pg[reset], out)?;
+    }
+    writeln!(out, "    end")?;
+
+    writeln!(out, "  end")?;
+
+    Ok(())
+}
+
+fn state_to_verilog(
+    ctx: &Context,
+    pg: &ProtoGraph,
+    indent: &str,
+    node: &Node,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<()> {
+    for act in &node.actions {
+        writeln!(out, "{indent}// {act:?}")?;
+    }
     Ok(())
 }
 
