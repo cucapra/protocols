@@ -15,7 +15,7 @@ use protocols::ir::driver_to_monitor::convert_driver_to_capturing_driver;
 use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graphviz::{to_dot_string, to_dot_string_from_entry};
 use protocols::ir::joint_automaton::analyze_shape;
-use protocols::ir::joint_driver::build_joint_driver_automaton;
+use protocols::ir::joint_driver::{build_joint_driver_automaton, build_joint_driver_automaton_from_lowered};
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer, lower_ast_to_ir};
 use protocols::ir::propagate_assigns::{propagate_assignments, reachable_node_ids};
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
@@ -23,6 +23,7 @@ use protocols::ir::reaching_defs::reaching_definitions;
 use protocols::{PortId, frontend};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
+use protocols::ir::simplify_monitor::simplify_monitor;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -47,7 +48,7 @@ struct Args {
     module: String,
 }
 
-fn gen_driver(st: &mut SymbolTable, m: &Module) {
+fn gen_driver_alt(st: &mut SymbolTable, m: &Module) {
     assert!(
         m.protos.iter().filter(|p| p.is_idle).count() <= 1,
         "TODO: support more than a single idle protocol"
@@ -63,13 +64,27 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
         .filter(|p| !p.is_idle && !p.is_reset)
         .collect();
 
+
     let mut ctx = Context::default();
-    let driver = build_joint_driver_automaton(&mut ctx, m, methods, st).unwrap();
+
+    let autos: Vec<_> = methods.iter().map(|p| {
+        let mut lowerer = Lowerer::new(p.ctx.clone(), st);
+        let fragment = lowerer.lower_protocol_fragment(&mut ctx, p, true, false);
+        lowerer.postprocess_trace_fragment(&mut ctx, &fragment);
+        lowerer.ir.entry = fragment.entry;
+        lowerer.ir.garbage_collect_unreachable(&mut ctx, false);
+        let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
+        let auto = simplify_monitor(&mut ctx, auto, st);
+        auto
+    }).collect();
+    let sources: Vec<_> = autos.iter().map(|a| a.graph.clone()).collect();
+
+    let driver = build_joint_driver_automaton_from_lowered(&mut ctx, m, methods, sources, st).unwrap();
 
     println!("{}", to_dot_string(&ctx, &driver.graph, st));
 }
 
-fn gen_driver_old(st: &mut SymbolTable, m: &Module) {
+fn gen_driver(st: &mut SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
     let mut ctx = Context::default();
@@ -122,6 +137,11 @@ fn gen_driver_old(st: &mut SymbolTable, m: &Module) {
         );
         assert!(shape.post.is_empty());
         assert_eq!(shape.done, graph.exit);
+
+        // turn into observing driver
+        lowerer.ir.args = method.args.clone();
+        let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
+        lowerer.ir = auto.graph;
 
         // print graph
         // println!("-----------------------------------------------------------");
