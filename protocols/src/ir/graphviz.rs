@@ -266,7 +266,9 @@ mod tests {
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::require_single_module;
-    use crate::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_monitor};
+    use crate::ir::driver_to_monitor::{
+        MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
+    };
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::joint_driver::build_joint_driver_automaton;
     use crate::ir::joint_monitor::build_joint_monitor_automaton;
@@ -328,6 +330,28 @@ mod tests {
         });
         (ctx, symbols, monitors)
     }
+    #[test]
+    fn test_capturing_driver_snapshot() {
+        let filename = "../tests/adders/adder_d1/add_d1.prot";
+        let mut handler = DiagnosticHandler::default();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let ast = module.protos.into_iter().next().unwrap();
+        let mut ctx = Context::default();
+        let mut graph = lower_ast_to_ir(&mut ctx, ast, &symbols);
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        let defs = reaching_definitions(&mut ctx, &mut graph, &symbols);
+        propagate_assignments(&mut ctx, &mut graph, &symbols, &defs);
+        normalize_assignments(&mut ctx, &mut graph, &symbols);
+        graph.garbage_collect_unreachable(&ctx);
+        let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
+        let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
+        let dot = driver.to_dot_string(&ctx, &symbols);
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| insta::assert_snapshot!("ir_graphviz_capturing_driver", dot));
+    }
+
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");
