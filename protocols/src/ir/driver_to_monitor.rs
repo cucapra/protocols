@@ -146,7 +146,7 @@ fn convert_driver(
         converter.convert_node(node, &initial_env)?;
     }
     // Drop obsolete driver operations, without optimizing monitor expressions.
-    graph.garbage_collect_unreachable(ctx, false);
+    // graph.garbage_collect_unreachable(ctx, false);
     let masks = knownness_registers
         .iter()
         .map(|(&argument, &register)| (argument, graph.symbol_expr(register).unwrap()))

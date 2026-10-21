@@ -10,6 +10,7 @@ use protocols::backends::transition_system::{
 use protocols::frontend::Module;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{Dir, SymbolTable};
+use protocols::ir::driver_to_monitor::convert_driver_to_capturing_driver;
 use protocols::ir::graphviz::{to_dot_string, to_dot_string_from_entry};
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
@@ -43,7 +44,7 @@ struct Args {
     module: String,
 }
 
-fn gen_driver(st: &SymbolTable, m: &Module) {
+fn gen_driver(st: &mut SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
     let mut ctx = Context::default();
@@ -133,40 +134,34 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         lowerer.ir[done_state_id].actions = lowerer.ir[idle].actions.clone();
     }
     remove_done(&mut ctx, &mut lowerer.ir, done_state_id);
-    remove_dont_care(st, &mut ctx, &mut lowerer.ir);
+    // remove_dont_care(st, &mut ctx, &mut lowerer.ir);
+
+    // turn assert_eq into assignments
+    let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
+    let mut pg = auto.graph;
 
     // compact graph
-    let node_remap = lowerer.ir.garbage_collect_unreachable(&ctx, true);
+    let node_remap = pg.garbage_collect_unreachable(&ctx, true);
     let done_state_id = node_remap[&done_state_id];
-    lowerer.ir.simplify_all_exprs(&mut ctx);
+    pg.simplify_all_exprs(&mut ctx);
 
-    let mut node_labels: Vec<String> = (0..lowerer.ir.nodes().count())
+    let mut node_labels: Vec<String> = (0..pg.nodes().count())
         .map(|i| format!("node_{i}"))
         .collect();
-    node_labels[lowerer.ir.entry.as_u32() as usize] = "start".to_string();
+    node_labels[pg.entry.as_u32() as usize] = "start".to_string();
     node_labels[done_state_id.as_u32() as usize] = "done".to_string();
 
     // show graph
-    println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
+    println!("{}", to_dot_string(&ctx, &pg, st));
 
     //
     // // lower to transition system
-    // let sys = to_transition_system(&mut ctx, m, lowerer.ir, st);
+    // let sys = to_transition_system(&mut ctx, m, pg, st);
     //
     // println!("{}", sys.serialize_to_str(&ctx));
 
     let mut verilog = vec![];
-    // TODO: we need to actually extract the reset actions!!!!
-    to_verilog(
-        &ctx,
-        m,
-        reset_actions,
-        &lowerer.ir,
-        st,
-        &node_labels,
-        &mut verilog,
-    )
-    .unwrap();
+    to_verilog(&ctx, m, reset_actions, &pg, st, &node_labels, &mut verilog).unwrap();
     println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
@@ -606,7 +601,7 @@ fn main() {
     // we always parse and type check the protocol file
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(ColorChoice::Auto, false, true, false);
-    let (st, modules) = frontend(
+    let (mut st, modules) = frontend(
         &args.protocol,
         &mut d,
         skip_static_step_fork_checks,
@@ -626,5 +621,5 @@ fn main() {
             )
         });
 
-    gen_driver(&st, module);
+    gen_driver(&mut st, module);
 }
