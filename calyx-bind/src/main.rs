@@ -8,18 +8,21 @@ use protocols::backends::transition_system::{
     lower_proto_graph_to_transition_system, replace_expr,
 };
 use protocols::frontend::Module;
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{Dir, SymbolTable};
 use protocols::ir::driver_to_monitor::convert_driver_to_capturing_driver;
+use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
 use protocols::ir::graphviz::{to_dot_string, to_dot_string_from_entry};
 use protocols::ir::joint_automaton::analyze_shape;
-use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
-use protocols::ir::propagate_assigns::reachable_node_ids;
+use protocols::ir::joint_driver::build_joint_driver_automaton;
+use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer, lower_ast_to_ir};
+use protocols::ir::propagate_assigns::{propagate_assignments, reachable_node_ids};
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
+use protocols::ir::reaching_defs::reaching_definitions;
 use protocols::{PortId, frontend};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
-use std::io::Write;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -45,6 +48,28 @@ struct Args {
 }
 
 fn gen_driver(st: &mut SymbolTable, m: &Module) {
+    assert!(
+        m.protos.iter().filter(|p| p.is_idle).count() <= 1,
+        "TODO: support more than a single idle protocol"
+    );
+    assert!(
+        m.protos.iter().filter(|p| p.is_reset).count() <= 1,
+        "Only a single reset protocol is supported."
+    );
+    let methods: Vec<_> = m
+        .protos
+        .iter()
+        .cloned()
+        .filter(|p| !p.is_idle && !p.is_reset)
+        .collect();
+
+    let mut ctx = Context::default();
+    let driver = build_joint_driver_automaton(&mut ctx, m, methods, st).unwrap();
+
+    println!("{}", to_dot_string(&ctx, &driver.graph, st));
+}
+
+fn gen_driver_old(st: &mut SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
     let mut ctx = Context::default();
@@ -97,6 +122,11 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
         );
         assert!(shape.post.is_empty());
         assert_eq!(shape.done, graph.exit);
+
+        // print graph
+        // println!("-----------------------------------------------------------");
+        // println!("Lowered {}", method.name);
+        // println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
     }
 
     // guard method starts with op == i && go and merge them into a single start state
@@ -119,6 +149,12 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
         let selected_and_go = and(&mut ctx, go, selected);
         lowerer.graft_contracted_entry(&mut ctx, entry, graph.entry, selected_and_go);
     }
+
+    // print graph
+    // println!("-----------------------------------------------------------");
+    // println!("With common start state");
+    // println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
+
     // not go means we are in idle
     if let Some(idle) = idle {
         let not_go = ctx.not(go);
@@ -139,6 +175,9 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     // turn assert_eq into assignments
     let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
     let mut pg = auto.graph;
+
+    // show graph
+    println!("{}", to_dot_string(&ctx, &pg, st));
 
     // compact graph
     let node_remap = pg.garbage_collect_unreachable(&ctx, true);
@@ -162,8 +201,18 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
 
     let mut verilog = vec![];
     to_verilog(&ctx, m, reset_actions, &pg, st, &node_labels, &mut verilog).unwrap();
-    println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
+    // println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
+
+// fn lower_proto(st: &SymbolTable, ctx: &mut Context, proto: &Protocol) -> ProtoGraph {
+//     let mut graph = lower_ast_to_ir(ctx, proto, st);
+//     contract_edges(ctx, &mut graph, st);
+//     let defs = reaching_definitions(ctx, &mut graph, st);
+//     propagate_assignments(ctx, &mut graph, st, &defs);
+//     normalize_assignments(ctx, &mut graph, st);
+//     graph.garbage_collect_unreachable(&ctx, false);
+//     graph
+// }
 
 fn to_verilog(
     ctx: &Context,
