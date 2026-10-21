@@ -141,7 +141,7 @@ pub fn build_joint_driver_automaton(
             lowerer.graft_disjoint_contracted_entries(ctx, node, &choices);
         }
     }
-    lowerer.ir.garbage_collect_unreachable(ctx);
+    lowerer.ir.garbage_collect_unreachable(ctx, false);
     lowerer.ir.simplify_all_exprs(ctx);
     Ok(JointDriverAutomaton {
         graph: lowerer.ir,

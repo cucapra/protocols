@@ -378,7 +378,7 @@ pub fn prepare_joint_protocols(
             let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
-            lowerer.ir.garbage_collect_unreachable(ctx);
+            lowerer.ir.garbage_collect_unreachable(ctx, false);
             lowerer.ir
         })
         .collect())
@@ -641,7 +641,7 @@ pub fn build_joint_control_automaton(
 
     // remove unreachable nodes and update choice-node metadata after compaction.
     graph.entry = entry;
-    let node_map = graph.garbage_collect_unreachable(ctx);
+    let node_map = graph.garbage_collect_unreachable(ctx, false);
     graph.simplify_all_exprs(ctx);
     let choice_slots = choice_slots
         .into_iter()

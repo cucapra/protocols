@@ -349,7 +349,11 @@ impl ProtoGraph {
 
     /// Rebuild the graph from the subgraph reachable from `entry`.
     /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
+    pub fn garbage_collect_unreachable(
+        &mut self,
+        ctx: &Context,
+        keep_all_ops: bool,
+    ) -> FxHashMap<NodeId, NodeId> {
         let mut reachable_old_nodes = Vec::new();
         let mut seen = FxHashSet::default();
         let mut q = VecDeque::from([self.entry]);
@@ -387,6 +391,9 @@ impl ProtoGraph {
                 }
             }
         }
+        if keep_all_ops {
+            reachable_old_ops = self.ops.keys().collect();
+        }
 
         let mut op_map: FxHashMap<OpId, OpId> = FxHashMap::default();
         let mut new_ops = PrimaryMap::new();
@@ -410,8 +417,10 @@ impl ProtoGraph {
 
         self.entry = node_map[&self.entry];
         self.nodes = new_nodes;
-        self.ops = new_ops;
-        self.op_loc = new_op_loc;
+        if !keep_all_ops {
+            self.ops = new_ops;
+            self.op_loc = new_op_loc;
+        }
 
         node_map
     }
@@ -769,7 +778,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable(&ctx);
+        pg.garbage_collect_unreachable(&ctx, false);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);

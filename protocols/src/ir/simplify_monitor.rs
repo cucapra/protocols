@@ -35,7 +35,7 @@ pub fn simplify_monitor(
     remove_unused_masks(ctx, &mut monitor);
     compress_uniform_masks(ctx, &mut monitor, symbols);
     remove_unused_masks(ctx, &mut monitor);
-    let node_map = monitor.graph.garbage_collect_unreachable(ctx);
+    let node_map = monitor.graph.garbage_collect_unreachable(ctx, false);
     monitor.knownness_outputs = monitor
         .knownness_outputs
         .into_iter()

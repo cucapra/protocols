@@ -1,5 +1,8 @@
+use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
-use patronus::expr::{Context, ExprRef, SerializableIrNode, TypeCheck, simple_transform_expr};
+use patronus::expr::{
+    Context, Expr, ExprRef, SerializableIrNode, TypeCheck, simple_transform_expr,
+};
 use patronus::system::{Output, TransitionSystem};
 use protocols::backends::transition_system::{
     lower_proto_graph_to_transition_system, replace_expr,
@@ -11,7 +14,7 @@ use protocols::ir::graphviz::{to_dot_string, to_dot_string_from_entry};
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer};
 use protocols::ir::propagate_assigns::reachable_node_ids;
-use protocols::ir::proto_graph::{Node, NodeId, Op, ProtoGraph, Transition};
+use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
 use protocols::{PortId, frontend};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
@@ -53,14 +56,17 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
         .filter(|(p, _)| !p.is_idle && !p.is_reset)
         .map(|(_, l)| l)
         .collect();
-    let reset: Option<_> = m
+    let reset_actions = m
         .protos
         .iter()
         .zip(lowered.iter())
         .find(|(p, _)| p.is_reset)
         .map(|(_, l)| {
-            get_single_cycle(&mut ctx, &mut lowerer.ir, l).expect("reset should be single cycle")
-        });
+            let node_id = get_single_cycle(&mut ctx, &mut lowerer.ir, l)
+                .expect("reset should be single cycle");
+            lowerer.ir[node_id].actions.clone()
+        })
+        .unwrap_or_default();
     let idle: Option<_> = m
         .protos
         .iter()
@@ -130,14 +136,15 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
     remove_dont_care(st, &mut ctx, &mut lowerer.ir);
 
     // compact graph
-    let node_remap = lowerer.ir.garbage_collect_unreachable(&ctx);
+    let node_remap = lowerer.ir.garbage_collect_unreachable(&ctx, true);
+    let done_state_id = node_remap[&done_state_id];
     lowerer.ir.simplify_all_exprs(&mut ctx);
 
     let mut node_labels: Vec<String> = (0..lowerer.ir.nodes().count())
         .map(|i| format!("node_{i}"))
         .collect();
     node_labels[lowerer.ir.entry.as_u32() as usize] = "start".to_string();
-    node_labels[node_remap[&done_state_id].as_u32() as usize] = "done".to_string();
+    node_labels[done_state_id.as_u32() as usize] = "done".to_string();
 
     // show graph
     println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
@@ -150,15 +157,23 @@ fn gen_driver(st: &SymbolTable, m: &Module) {
 
     let mut verilog = vec![];
     // TODO: we need to actually extract the reset actions!!!!
-    let reset = reset.map(|node_id| node_remap[&node_id]);
-    to_verilog(&ctx, m, reset, &lowerer.ir, st, &node_labels, &mut verilog).unwrap();
+    to_verilog(
+        &ctx,
+        m,
+        reset_actions,
+        &lowerer.ir,
+        st,
+        &node_labels,
+        &mut verilog,
+    )
+    .unwrap();
     println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
 fn to_verilog(
     ctx: &Context,
     m: &Module,
-    reset: Option<NodeId>,
+    reset_actions: Vec<Action>,
     pg: &ProtoGraph,
     st: &SymbolTable,
     node_labels: &[String],
@@ -189,10 +204,43 @@ fn to_verilog(
 
     // combinational
     writeln!(out, "  always_comb begin")?;
+    writeln!(out, "    next_state = state;")?;
+    // TODO: add defaults for outputs
+
+    // reset
     writeln!(out, "    if reset begin")?;
-    if let Some(reset) = reset {
-        state_to_verilog(ctx, pg, "      ", &pg[reset], out)?;
+    for act in &reset_actions {
+        action_to_verilog(ctx, pg, st, act, "      ", out)?;
     }
+    writeln!(out, "    end else begin")?;
+    // states
+    writeln!(out, "      case (state)")?;
+    for (idx, lbl) in state_labels.iter().enumerate() {
+        writeln!(out, "      {lbl}: begin")?;
+        let node_id = NodeId::from_u32(idx as u32);
+        for act in &pg[node_id].actions {
+            action_to_verilog(ctx, pg, st, act, "        ", out)?;
+        }
+        for tran in &pg[node_id].transitions {
+            if tran.guard == ctx.get_false() || tran.target == node_id {
+                continue;
+            }
+
+            if tran.guard != ctx.get_true() {
+                writeln!(out, "        if {}", expr_to_verilog(ctx, tran.guard))?;
+                write!(out, "  ")?;
+            }
+
+            writeln!(
+                out,
+                "        state = {}",
+                state_labels[tran.target.as_u32() as usize]
+            )?;
+        }
+        writeln!(out, "      end")?;
+    }
+    writeln!(out, "      endcase")?;
+
     writeln!(out, "    end")?;
 
     writeln!(out, "  end")?;
@@ -200,17 +248,88 @@ fn to_verilog(
     Ok(())
 }
 
-fn state_to_verilog(
+fn action_to_verilog(
     ctx: &Context,
     pg: &ProtoGraph,
+    st: &SymbolTable,
+    act: &Action,
     indent: &str,
-    node: &Node,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    for act in &node.actions {
-        writeln!(out, "{indent}// {act:?}")?;
+    if act.guard != ctx.get_true() {
+        writeln!(out, "{indent}if {}", expr_to_verilog(ctx, act.guard))?;
+        write!(out, "  ")?; // extra indent
+    }
+    match &pg[act.op] {
+        // ignore don't care
+        Op::Assign(lhs, rhs) => {
+            let width = st[lhs].tpe().bitwidth();
+            let lhs = format!("dut_{}", st[lhs].name());
+            if rhs.dont_care == ctx.get_true() {
+                writeln!(out, "{indent}// {lhs} = DontCare")?;
+            } else {
+                if rhs.concretes.len() == 1 {
+                    writeln!(
+                        out,
+                        "{indent}{lhs} = {};",
+                        expr_to_verilog(ctx, rhs.concretes[0].1)
+                    )?;
+                } else {
+                    let false_assign = rhs
+                        .concretes
+                        .iter()
+                        .find(|(_, e)| *e == ctx.get_false())
+                        .cloned();
+                    let true_assign = rhs
+                        .concretes
+                        .iter()
+                        .find(|(_, e)| *e == ctx.get_true())
+                        .cloned();
+                    if let Some((tg, _)) = true_assign
+                        && let Some((fg, _)) = false_assign
+                        && rhs.concretes.len() == 2
+                    {
+                        let tg = expr_to_verilog(ctx, tg);
+                        let fg = expr_to_verilog(ctx, fg);
+                        if tg.len() < fg.len() {
+                            writeln!(out, "{indent}{lhs} = {tg};")?;
+                        } else {
+                            writeln!(out, "{indent}{lhs} = ~({fg});")?;
+                        }
+                    } else {
+                        todo!("deal with multiple options")
+                    }
+                }
+            }
+        }
+        Op::AssertEq(a, b) => {
+            writeln!(
+                out,
+                "{indent}// TODO: assert_eq({}, {});",
+                expr_to_verilog(ctx, *a),
+                expr_to_verilog(ctx, *b)
+            )?;
+        }
+        Op::Fork => unreachable!("all forks should be gone!"),
+        Op::InternalAssertFalse => {}
+        Op::Done => writeln!(out, "{indent}// WARN: ignoring done")?,
     }
     Ok(())
+}
+
+fn expr_to_verilog(ctx: &Context, expr: ExprRef) -> String {
+    patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| match &ctx[expr] {
+        Expr::BVSymbol { name, .. } => ctx[*name].to_string(),
+        Expr::BVLiteral(value) => format!(
+            "{}'b{}",
+            value.get(ctx).width(),
+            value.get(ctx).to_bit_str()
+        ),
+        Expr::BVNot(..) => format!("~({})", children[0]),
+        Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
+        Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
+        other => todo!("{:?}", other),
+    })
 }
 
 fn remove_dont_care(st: &SymbolTable, ctx: &mut Context, pg: &mut ProtoGraph) {

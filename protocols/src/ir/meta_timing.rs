@@ -154,7 +154,7 @@ mod tests {
             .map(|protocol| {
                 let mut graph = lower_ast_to_ir(&mut ctx, protocol, &symbols);
                 contract_edges(&mut ctx, &mut graph, &symbols);
-                graph.garbage_collect_unreachable(&ctx);
+                graph.garbage_collect_unreachable(&ctx, false);
                 graph
             })
             .collect();

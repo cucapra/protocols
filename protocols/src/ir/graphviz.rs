@@ -310,7 +310,7 @@ mod tests {
             content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
             content += "\n";
 
-            assignment_normalized_ir.garbage_collect_unreachable(&ctx);
+            assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
             let monitor =
                 convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
                     .unwrap();
