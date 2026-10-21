@@ -49,8 +49,26 @@ pub enum MonitorConversionError {
 /// The returned graph is unoptimized.
 pub fn convert_driver_to_monitor(
     ctx: &mut Context,
+    graph: ProtoGraph,
+    symbols: &mut SymbolTable,
+) -> Result<MonitorAutomaton, MonitorConversionError> {
+    convert_driver(ctx, graph, symbols, true)
+}
+
+/// Only converts assertions to monitor versions.
+pub fn convert_driver_to_capturing_driver(
+    ctx: &mut Context,
+    graph: ProtoGraph,
+    symbols: &mut SymbolTable,
+) -> Result<MonitorAutomaton, MonitorConversionError> {
+    convert_driver(ctx, graph, symbols, false)
+}
+
+fn convert_driver(
+    ctx: &mut Context,
     mut graph: ProtoGraph,
     symbols: &mut SymbolTable,
+    convert_assignments: bool,
 ) -> Result<MonitorAutomaton, MonitorConversionError> {
     let arguments = graph.args.clone();
     let mut value_registers = FxHashMap::default();
@@ -121,6 +139,7 @@ pub fn convert_driver_to_monitor(
         knownness_registers: &knownness_registers,
         parameter_exprs,
         parameter_dependencies: FxHashMap::default(),
+        convert_assignments,
     };
 
     for node in nodes {
@@ -204,6 +223,7 @@ struct Converter<'a> {
     knownness_registers: &'a FxHashMap<SymbolId, SymbolId>,
     parameter_exprs: FxHashMap<ExprRef, usize>,
     parameter_dependencies: FxHashMap<ExprRef, bool>,
+    convert_assignments: bool,
 }
 
 impl Converter<'_> {
@@ -250,6 +270,10 @@ impl Converter<'_> {
         let mut actions = Vec::new();
         for action in self.graph[node].actions.clone() {
             match self.graph[action.op].clone() {
+                // Capturing drivers still drive their inputs normally.
+                op @ Op::Assign(..) if !self.convert_assignments => {
+                    self.emit(&mut actions, action.guard, op);
+                }
                 // Assignment conversion. Here is an example:
                 // dont_care = x
                 // concretes = [(g1, p), (g2, q)]
