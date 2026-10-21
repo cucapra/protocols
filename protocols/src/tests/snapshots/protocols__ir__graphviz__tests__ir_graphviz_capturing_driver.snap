@@ -1,0 +1,15 @@
+---
+source: protocols/src/ir/graphviz.rs
+expression: dot
+---
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1\n[1] $monitor_s_value := DUT.s if 1"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
