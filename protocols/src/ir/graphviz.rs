@@ -260,7 +260,7 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::driver_to_monitor::{
         MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
-        simplify_monitor
+        simplify_monitor,
     };
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::joint_driver::build_joint_driver_automaton;

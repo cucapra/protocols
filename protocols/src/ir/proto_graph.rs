@@ -6,7 +6,7 @@ use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
-    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr
+    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;

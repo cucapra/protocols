@@ -5,10 +5,11 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::driver_to_monitor::{
-    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor
+    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor,
 };
 use crate::ir::joint_automaton::{
-    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
+    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
+    build_joint_control_automaton, prepare_joint_protocols,
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
 
@@ -138,7 +139,10 @@ pub fn compose_joint_monitor_automaton(
                     .unwrap()
                     .get_bv_type(ctx)
                     .unwrap();
-                let register = result.control.graph.add_register(ctx, symbols, &base, width);
+                let register = result
+                    .control
+                    .graph
+                    .add_register(ctx, symbols, &base, width);
                 let expr = result.control.graph.symbol_expr(register).unwrap();
                 targets.insert(old, register);
                 substitutions.insert(monitor.graph.symbol_expr(old).unwrap(), expr);

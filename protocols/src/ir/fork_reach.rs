@@ -5,8 +5,8 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
 use crate::ir::register_simplify::simplify_registers;
 
-/// Make fork history explicit, then eliminate it with ordinary register
-/// simplification. Completion launches only when no explicit fork has occurred.
+/// add registers for forking, then simplify registers, then return all
+/// remaining fork points
 pub fn fork_graft_points(
     ctx: &mut Context,
     graph: &mut ProtoGraph,
@@ -17,30 +17,24 @@ pub fn fork_graft_points(
     let register = graph.add_register(ctx, symbols, "$has_forked", 1);
     let current = graph.symbol_expr(register).unwrap();
     let nodes = graph.reachable_node_ids(ctx, entry);
-    // A distinct operation ID identifies the implicit-fork markers for removal
-    // after the ordinary rewriter has simplified their guards.
+
     let implicit_fork = graph.o(Op::Fork);
     for &node in &nodes {
         let mut requested = ctx.get_false();
-        let mut done = if node == exit {
-            ctx.get_true()
-        } else {
-            ctx.get_false()
-        };
+        let mut done = None;
         let mut actions = Vec::new();
         for action in graph[node].actions.clone() {
             match graph[action.op] {
                 Op::Fork => {
-                    requested = graph.or_guard(ctx, requested, action.guard);
-                    let not_forked = graph.not_guard(ctx, current);
-                    let guard = graph.and_guard(ctx, action.guard, not_forked);
-                    actions.push(action.with_guard(guard));
+                    // There is at most one fork action per node
+                    requested = action.guard;
                     let twice = graph.and_guard(ctx, action.guard, current);
+                    actions.push(action);
                     let op = graph.o(Op::InternalAssertFalse);
                     actions.push(Action::new(twice, op));
                 }
                 Op::Done => {
-                    done = graph.or_guard(ctx, done, action.guard);
+                    done = Some(action.guard);
                     actions.push(action);
                 }
                 _ => actions.push(action),
@@ -52,12 +46,19 @@ pub fn fork_graft_points(
             Assignment::concrete(ctx.get_false(), ctx.get_true(), next),
         ));
         actions.push(Action::new(ctx.get_true(), op));
-        // This expression sees explicit forks from the same node as completion.
+        let done = done.unwrap_or_else(|| {
+            if node == exit {
+                ctx.get_true()
+            } else {
+                ctx.get_false()
+            }
+        });
         let not_forked = ctx.not(next);
         let implicit = ctx.and(done, not_forked);
         actions.push(Action::new(implicit, implicit_fork));
         graph.node_mut(node).actions = actions;
     }
+
     let initial = FxHashMap::from_iter([(register, ctx.get_false())]);
     let dead = simplify_registers(ctx, graph, symbols, entry, &initial, &FxHashSet::default());
     assert!(

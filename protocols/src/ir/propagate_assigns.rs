@@ -1,6 +1,6 @@
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
 use crate::ir::edge_contract::{
-    canonicalize_assignment, merge_ordered_assignment, same_assignment_target
+    canonicalize_assignment, merge_ordered_assignment, same_assignment_target,
 };
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
 use crate::ir::register_simplify::{RegisterFacts, simplify_registers};
@@ -115,14 +115,7 @@ pub fn simplify_assignments_from(
     entry: NodeId,
     initial: &RegisterFacts,
 ) {
-    simplify_registers(
-        ctx,
-        pg,
-        st,
-        entry,
-        initial,
-        &FxHashSet::default(),
-    );
+    simplify_registers(ctx, pg, st, entry, initial, &FxHashSet::default());
 
     // canonicalize assignments (second level of simplification)
     for node in pg.reachable_node_ids(ctx, entry) {
@@ -178,4 +171,3 @@ pub fn simplify_assignments_from(
         "we were unable to optimize away all register state: {remaining:?}"
     );
 }
-

@@ -2,7 +2,8 @@ use crate::frontend::Module;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::joint_automaton::{
-    JointDriverError, JointTransitionKind, build_joint_control_automaton, joint_argument_substitutions, prepare_joint_protocols
+    JointDriverError, JointTransitionKind, build_joint_control_automaton,
+    joint_argument_substitutions, prepare_joint_protocols,
 };
 use crate::ir::lowering::Lowerer;
 use crate::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, remap_expr};

@@ -6,7 +6,7 @@ use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
 use crate::ir::proto_graph::{
-    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr
+    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr,
 };
 
 /// TODO: This should probbaly be standardized somewhere in the frontend

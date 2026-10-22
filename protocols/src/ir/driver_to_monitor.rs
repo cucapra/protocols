@@ -120,18 +120,8 @@ fn convert_driver(
         let expr = symbol_expr(ctx, &mut graph, symbols, argument);
         parameter_exprs.insert(expr, index);
         let name = symbols[argument].name().to_string();
-        let value = graph.add_register(
-            ctx,
-            symbols,
-            &format!("$monitor_{name}_value"),
-            width,
-        );
-        let known = graph.add_register(
-            ctx,
-            symbols,
-            &format!("$monitor_{name}_known"),
-            width,
-        );
+        let value = graph.add_register(ctx, symbols, &format!("$monitor_{name}_value"), width);
+        let known = graph.add_register(ctx, symbols, &format!("$monitor_{name}_known"), width);
         value_registers.insert(argument, value);
         knownness_registers.insert(argument, known);
         let zero = ctx.zero(width);
