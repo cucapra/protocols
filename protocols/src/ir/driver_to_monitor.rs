@@ -2,9 +2,10 @@ use patronus::expr::{Context, Expr, ExprRef, ForEachChild, TypeCheck};
 use rustc_hash::FxHashMap;
 use thiserror::Error;
 
-use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
+use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
+use crate::ir::register_simplify::add_register;
 
 #[derive(Clone)]
 /// wrap an owned ProtoGraph in extra metadata (which is useful to simplify
@@ -19,8 +20,6 @@ pub struct MonitorAutomaton {
     /// (For the naive monitor, value, and knownness registers all start 0,
     /// and the live register starts at 1, but as we optimize these can change).
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
-    /// node -> symbol -> the knownness expression (this is relevant when we optimize away knownness registers)
-    pub knownness_outputs: FxHashMap<NodeId, FxHashMap<SymbolId, ExprRef>>,
     /// the symbol that is true if a constraint hasn't failed yet.
     pub live_register: SymbolId,
 }
@@ -41,8 +40,8 @@ pub enum MonitorConversionError {
     UnsupportedExpression { node: NodeId, reason: String },
 }
 
-/// Precondition: ProtoGraph is a single-protocol graph after edge contraction, reaching definitions,
-/// assignment propagation/normalization, and cleanup.
+/// Precondition: ProtoGraph is a single-protocol graph after edge contraction,
+/// assignment persistence lowering/register simplification, normalization, and cleanup.
 /// Each node has one total effective assignment per DUT input, including held values and X releases.
 /// Expressions must pass frontend well-formedness checks.
 /// TODO: Right now, we assume `allow_branch_on_arg = false`
@@ -92,19 +91,19 @@ fn convert_driver(
         let expr = symbol_expr(ctx, &mut graph, symbols, argument);
         parameter_exprs.insert(expr, index);
         let name = symbols[argument].name().to_string();
-        let value = allocate_register(
+        let value = add_register(
             ctx,
             &mut graph,
             symbols,
-            width,
             &format!("$monitor_{name}_value"),
+            width,
         );
-        let known = allocate_register(
+        let known = add_register(
             ctx,
             &mut graph,
             symbols,
-            width,
             &format!("$monitor_{name}_known"),
+            width,
         );
         value_registers.insert(argument, value);
         knownness_registers.insert(argument, known);
@@ -113,7 +112,7 @@ fn convert_driver(
     }
 
     // allocate liveness register, set it to 1.
-    let live_register = allocate_register(ctx, &mut graph, symbols, 1, "$monitor_live");
+    let live_register = add_register(ctx, &mut graph, symbols, "$monitor_live", 1);
     register_inits.insert(live_register, ctx.get_true());
 
     // Cache pin expressions, including pins used only as assignment targets.
@@ -146,21 +145,12 @@ fn convert_driver(
         converter.convert_node(node, &initial_env)?;
     }
     // Drop obsolete driver operations, without optimizing monitor expressions.
-    // graph.garbage_collect_unreachable(ctx, false);
-    let masks = knownness_registers
-        .iter()
-        .map(|(&argument, &register)| (argument, graph.symbol_expr(register).unwrap()))
-        .collect::<FxHashMap<_, _>>();
-    let knownness_outputs = graph
-        .nodes()
-        .map(|(node, _)| (node, masks.clone()))
-        .collect();
+    graph.garbage_collect_unreachable(ctx, false);
     Ok(MonitorAutomaton {
         graph,
         value_registers,
         knownness_registers,
         register_inits,
-        knownness_outputs,
         live_register,
     })
 }
@@ -183,31 +173,6 @@ fn symbol_expr(
     );
     graph.cache_symbol_expr(symbol, expr);
     expr
-}
-
-/// generate fresh, human-readable symbols with unique names from a base string `base`
-fn allocate_register(
-    ctx: &mut Context,
-    graph: &mut ProtoGraph,
-    symbols: &mut SymbolTable,
-    width: u32,
-    base: &str,
-) -> SymbolId {
-    let mut index = 0;
-    let name = loop {
-        let name = if index == 0 {
-            base.to_string()
-        } else {
-            format!("{base}_{index}")
-        };
-        if symbols.symbol_id_from_name_in_active_scope(&name).is_none() {
-            break name;
-        }
-        index += 1;
-    };
-    let symbol = symbols.add_without_parent(name, Type::BitVec(width), SymbolKind::AutomatonState);
-    symbol_expr(ctx, graph, symbols, symbol);
-    symbol
 }
 
 #[derive(Clone, Copy)]

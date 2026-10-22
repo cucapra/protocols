@@ -8,7 +8,6 @@ pub mod graphviz;
 pub mod joint_automaton;
 pub mod joint_driver;
 pub mod joint_monitor;
-pub mod known_bits_analysis;
 pub mod lowering;
 pub mod meta_automaton;
 pub mod meta_graphviz;

@@ -5,11 +5,10 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use crate::ir::driver_to_monitor::{
-    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor,
+    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor
 };
 use crate::ir::joint_automaton::{
-    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
-    build_joint_control_automaton, prepare_joint_protocols,
+    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
 use crate::ir::simplify_monitor::simplify_monitor;
@@ -27,8 +26,6 @@ pub struct JointMonitorAutomaton {
     pub knownness_registers: FxHashMap<InstanceParameter, SymbolId>,
     pub live_registers: FxHashMap<InstanceId, SymbolId>,
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
-    /// Logical full-width masks at node entry, including masks with no register.
-    pub knownness_outputs: FxHashMap<NodeId, FxHashMap<InstanceParameter, ExprRef>>,
     /// (Node, action index) -> owning instance. Global Done actions have no owner.
     pub action_owners: FxHashMap<(NodeId, usize), InstanceId>,
 }
@@ -113,7 +110,6 @@ pub fn compose_joint_monitor_automaton(
         knownness_registers: FxHashMap::default(),
         live_registers: FxHashMap::default(),
         register_inits: FxHashMap::default(),
-        knownness_outputs: FxHashMap::default(),
         action_owners: FxHashMap::default(),
     };
 
@@ -192,12 +188,8 @@ pub fn compose_joint_monitor_automaton(
         .map(|(node, _)| node)
         .filter(|&node| node != bad_state)
         .collect::<Vec<_>>();
-    result
-        .knownness_outputs
-        .insert(bad_state, FxHashMap::default());
     for node in nodes {
-        // Collect this node's knownness outputs and survival conditions.
-        let mut outputs = FxHashMap::default();
+        // Collect this node's survival conditions.
         let mut ongoing = ctx.get_true();
         let mut any_launch = ctx.get_false();
         let mut launches = FxHashMap::default();
@@ -214,11 +206,6 @@ pub fn compose_joint_monitor_automaton(
                 for (&register, &init) in &monitor.register_inits {
                     substitutions.insert(monitor.graph.symbol_expr(register).unwrap(), init);
                 }
-            }
-            // Copy knownness outputs using this instance's register substitutions.
-            for (&argument, &expr) in &monitor.knownness_outputs[&instance.control] {
-                let expr = remap_expr(ctx, expr, &substitutions);
-                outputs.insert((instance.protocol, instance.slot, argument), expr);
             }
             // Copy this instance's actions and track which registers they update.
             let mut assigned = FxHashSet::default();
@@ -301,8 +288,6 @@ pub fn compose_joint_monitor_automaton(
             .control
             .transition_kinds
             .insert((node, index), JointTransitionKind::Continue);
-        // Save this node's inferred knownness outputs for later passes.
-        result.knownness_outputs.insert(node, outputs);
     }
     result.control.graph.simplify_all_exprs(ctx);
     Ok(result)
@@ -344,11 +329,7 @@ fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
         actions.push(Action::new(ctx.get_true(), op));
         graph.node_mut(node).actions = actions;
     }
-    let node_map = graph.garbage_collect_unreachable(ctx, false);
-    monitor.knownness_outputs = std::mem::take(&mut monitor.knownness_outputs)
-        .into_iter()
-        .filter_map(|(node, outputs)| Some((*node_map.get(&node)?, outputs)))
-        .collect();
+    graph.garbage_collect_unreachable(ctx, false);
 }
 
 fn push_owned_action(

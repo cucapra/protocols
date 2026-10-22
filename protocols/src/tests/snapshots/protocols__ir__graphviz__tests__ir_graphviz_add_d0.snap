@@ -74,7 +74,7 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] $monitor_a_value := DUT.a"];
+  node0 [label=""];
   node0 -> node1 [label="not(eq(DUT.s, 0)) / step"];
   node0 -> node1 [label="eq(DUT.s, 0) / step"];
   node1 [label="[1] done"];
@@ -142,7 +142,7 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] $monitor_a_value_1 := DUT.a\n[1] $monitor_s_value_1 := DUT.s"];
+  node0 [label=""];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
 }
@@ -213,7 +213,7 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] $monitor_a_value_2 := ite(eq(DUT.s, 0), DUT.a, $monitor_a_value_2)\n[1] $monitor_a_known_2_bool := eq(DUT.s, 0)"];
+  node0 [label=""];
   node0 -> node1 [label="not(eq(DUT.s, 0)) / step"];
   node0 -> node1 [label="eq(DUT.s, 0) / step"];
   node1 [label="[1] done"];
@@ -279,7 +279,7 @@ digraph "add_combinational" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] $monitor_a_value_3 := DUT.a\n[1] $monitor_b_value_3 := DUT.b\n[1] $monitor_s_value_3 := DUT.s"];
+  node0 [label=""];
   node0 -> node1 [label="1 / step"];
   node1 [label="[1] done"];
 }
