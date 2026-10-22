@@ -15,7 +15,6 @@ pub mod meta_timing;
 pub mod propagate_assigns;
 pub mod proto_graph;
 pub mod register_simplify;
-pub mod simplify_monitor;
 pub mod trace_lowering;
 // TODO: add a function to transform AST to IR
 // pub fn frontend(
