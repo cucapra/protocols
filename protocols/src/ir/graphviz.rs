@@ -304,22 +304,22 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let mut ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
-            let entry = ir.entry;
-            let initial =
-                insert_assignment_registers(&mut ctx, &mut ir, &mut symbols, entry);
+            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
             let mut contracted_ir = ir.clone();
-            let entry = contracted_ir.entry;
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
+
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            // Make held DUT assignments explicit and eliminate their saved state.
+            let entry = contracted_ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
+
             simplify_assignments(&mut ctx, &mut contracted_ir, &symbols, &initial);
             content += "== post-simplification ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
@@ -359,8 +359,8 @@ mod tests {
         let mut ctx = Context::default();
         let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
         let entry = graph.entry;
-        let initial = insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
         contract_edges(&mut ctx, &mut graph, &symbols);
+        let initial = insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
 
         simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
