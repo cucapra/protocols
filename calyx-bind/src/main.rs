@@ -116,11 +116,6 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
         );
     }
 
-    // print graph
-    // println!("-----------------------------------------------------------");
-    // println!("With common start state");
-    // println!("{}", to_dot_string(&ctx, &pg, st));
-
     // not go means we are in idle
     if let Some(idle) = idle {
         let not_go = ctx.not(go);
@@ -152,26 +147,10 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     // show graph
     println!("{}", to_dot_string(&ctx, &pg, st));
 
-    //
-    // // lower to transition system
-    // let sys = to_transition_system(&mut ctx, m, pg, st);
-    //
-    // println!("{}", sys.serialize_to_str(&ctx));
-
     let mut verilog = vec![];
     to_verilog(&ctx, m, reset_actions, &pg, st, &node_labels, &mut verilog).unwrap();
-    // println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
+    println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
-
-// fn lower_proto(st: &SymbolTable, ctx: &mut Context, proto: &Protocol) -> ProtoGraph {
-//     let mut graph = lower_ast_to_ir(ctx, proto, st);
-//     contract_edges(ctx, &mut graph, st);
-//     let defs = reaching_definitions(ctx, &mut graph, st);
-//     propagate_assignments(ctx, &mut graph, st, &defs);
-//     normalize_assignments(ctx, &mut graph, st);
-//     graph.garbage_collect_unreachable(&ctx, false);
-//     graph
-// }
 
 fn to_verilog(
     ctx: &Context,
@@ -333,95 +312,6 @@ fn expr_to_verilog(ctx: &Context, expr: ExprRef) -> String {
         Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
         other => todo!("{:?}", other),
     })
-}
-
-fn remove_dont_care(st: &SymbolTable, ctx: &mut Context, pg: &mut ProtoGraph) {
-    for node in reachable_node_ids(ctx, pg, pg.entry) {
-        let actions = pg[node].actions.clone();
-        for act in actions {
-            if let Op::Assign(sym, assign) = &mut pg[act.op] {
-                if assign.concretes.is_empty() {
-                    let width: u32 = st[*sym].tpe().bitwidth();
-                    assign.concretes.push((assign.dont_care, ctx.zero(width)));
-                } else if assign.dont_care != ctx.get_false() {
-                    let guard = &mut assign.concretes[0].0;
-                    *guard = ctx.or(*guard, assign.dont_care);
-                }
-                assign.dont_care = ctx.get_false();
-            }
-        }
-    }
-}
-
-// node0 [label="[1] DUT.data_i := input if or(and(go, not(op)), not(or(op, not(go))))\n[1] DUT.v_i := 1; 0\n                                                [1] DUT.enq_not_deq_i := 1 if go; 0 if go\n[1] DUT.reset_i := 0\n[and(or(and(go, not(op)), and(go, op)), not(go))] internal_assert_false"];
-// node0 [label="[1] DUT.data_i := X if or(op, not(go)); input if and(go, not(op))\n    [1] DUT.v_i := 1 if or(and(go, not(op)), and(go, op)); 0 if not(go)\n[1] DUT.enq_not_deq_i := X if not(go); 1 if and(go, not(op)); 0 if and(go, op)\n[1] DUT.reset_i := 0\n[and(or(and(go, not(op)), and(go, op)), not(go))] internal_assert_false"];
-
-fn to_transition_system(
-    ctx: &mut Context,
-    module: &Module,
-    pg: ProtoGraph,
-    st: &SymbolTable,
-) -> TransitionSystem {
-    let mut sys = TransitionSystem::new(module.name.clone());
-    let mut symbol_to_port = FxHashMap::default();
-    let mut port_to_expr = FxHashMap::default();
-    let mut port_to_dir = FxHashMap::default();
-    // all DUT inputs are outputs, all DUT outputs are inputs
-    for (pin_idx, pin) in module.pins.iter().enumerate() {
-        let port = PortId::from_raw(pin_idx as u32);
-        for syms in module.proto_pin_map.iter() {
-            symbol_to_port.insert(syms[pin_idx], port);
-        }
-        let sym = ctx.bv_symbol(&format!("dut_{}", pin.name()), pin.bitwidth());
-        if pin.dir() == Dir::Out {
-            debug_assert_eq!(pin.dir(), Dir::Out);
-            sys.inputs.push(sym);
-        }
-        port_to_dir.insert(port, pin.dir());
-        port_to_expr.insert(port, sym);
-    }
-
-    let lowered = lower_proto_graph_to_transition_system(
-        ctx,
-        pg,
-        sys,
-        symbol_to_port,
-        port_to_expr.clone(),
-        st,
-    );
-    let mut sys = lowered.ts;
-
-    for (port, &expr) in &lowered.port_to_expr {
-        if port_to_dir[port] == Dir::In {
-            let port = port_to_expr[port];
-            let name = ctx[port].get_symbol_name_ref().unwrap();
-            sys.outputs.push(Output { name, expr });
-        }
-    }
-
-    // remove_dont_care_inputs(ctx, &mut sys);
-    patronus::system::transform::simplify_expressions(ctx, &mut sys);
-    sys
-}
-
-fn remove_dont_care_inputs(ctx: &mut Context, sys: &mut TransitionSystem) {
-    let mut remap = FxHashMap::default();
-    sys.inputs.retain(|&i| {
-        if ctx.get_symbol_name(i).unwrap().starts_with("dont_care") {
-            remap.insert(i, ctx.zero(i.get_bv_type(ctx).unwrap()));
-            false
-        } else {
-            true
-        }
-    });
-
-    sys.update_expressions(|expr| {
-        Some(simple_transform_expr(
-            ctx,
-            expr,
-            |_ctx, candidate, _children| remap.get(&candidate).cloned(),
-        ))
-    });
 }
 
 /// returns the condition under which we will be done in the next step
