@@ -3,12 +3,38 @@ use std::collections::VecDeque;
 use patronus::expr::{Context, Expr, ExprRef, Simplifier, SparseExprMap, find_symbols};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
+use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, remap_expr};
 
 pub type RegisterFacts = FxHashMap<SymbolId, ExprRef>;
 pub type RegisterAnalysis = FxHashMap<NodeId, Option<RegisterFacts>>;
 type ExprSimplifier = Simplifier<SparseExprMap<Option<ExprRef>>>;
+
+/// Allocate ordinary compiler state. Initialization and ownership belong to the caller.
+pub fn add_register(
+    ctx: &mut Context,
+    graph: &mut ProtoGraph,
+    symbols: &mut SymbolTable,
+    base: &str,
+    width: u32,
+) -> SymbolId {
+    let mut suffix = 0;
+    let name = loop {
+        let name = if suffix == 0 {
+            base.to_string()
+        } else {
+            format!("{base}_{suffix}")
+        };
+        if symbols.symbol_id_from_name_in_active_scope(&name).is_none() {
+            break name;
+        }
+        suffix += 1;
+    };
+    let symbol = symbols.add_without_parent(name, Type::BitVec(width), SymbolKind::AutomatonState);
+    let expr = ctx.bv_symbol(&symbols[symbol].full_name(symbols), width);
+    graph.cache_symbol_expr(symbol, expr);
+    symbol
+}
 
 /// Simplify using replacement expressions (which are hopefully simpler), then use
 /// the Patronus simpler

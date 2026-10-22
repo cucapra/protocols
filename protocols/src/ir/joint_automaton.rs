@@ -7,7 +7,7 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
 use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{
-    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr,
+    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr
 };
 
 /// TODO: This should probbaly be standardized somewhere in the frontend
@@ -366,7 +366,7 @@ fn successor_after_frontier_step(
 pub fn prepare_joint_protocols(
     ctx: &mut Context,
     protocols: &[Protocol],
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> Result<Vec<ProtoGraph>, JointAutomatonError> {
     if protocols.is_empty() {
         return Err(JointAutomatonError::EmptyProtocolSet);
@@ -683,7 +683,7 @@ mod tests {
         selected: &[&str],
     ) -> (JointDriverAutomaton, SymbolTable, Context) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         let protocols = module
@@ -692,7 +692,8 @@ mod tests {
             .filter(|protocol| selected.contains(&protocol.name.as_str()))
             .cloned()
             .collect();
-        let driver = build_joint_driver_automaton(&mut ctx, &module, protocols, &symbols).unwrap();
+        let driver =
+            build_joint_driver_automaton(&mut ctx, &module, protocols, &mut symbols).unwrap();
         (driver, symbols, ctx)
     }
 

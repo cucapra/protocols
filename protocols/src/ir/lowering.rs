@@ -10,9 +10,8 @@ use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt,
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::edge_contract::contract_edges_from;
 use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
-use crate::ir::propagate_assigns::propagate_assignments_from;
+use crate::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments_from};
 use crate::ir::proto_graph::*;
-use crate::ir::reaching_defs::reaching_definitions_from;
 
 /// substitution of argument symbols to concrete expressions for trace lowering
 pub type TraceArgSubst = FxHashMap<SymbolId, ExprRef>;
@@ -32,7 +31,7 @@ pub struct LoweredFragmentInfo {
 /// The stateful driver of lowering an AST to an IR
 pub struct Lowerer<'a> {
     pub ir: ProtoGraph,
-    pub symbols: &'a SymbolTable,
+    pub symbols: &'a mut SymbolTable,
     /// Optional substitution of args for concrete values
     pub trace_arg_subst: TraceArgSubst,
     /// The nodes from the most recent lowered fragment.
@@ -40,7 +39,7 @@ pub struct Lowerer<'a> {
 }
 
 impl<'a> Lowerer<'a> {
-    pub fn new(ctx: ProtocolContext, symbols: &'a SymbolTable) -> Self {
+    pub fn new(ctx: ProtocolContext, symbols: &'a mut SymbolTable) -> Self {
         Self {
             ir: ProtoGraph::new(ctx),
             symbols,
@@ -56,9 +55,9 @@ impl<'a> Lowerer<'a> {
     ) {
         // The newly lowered transaction is still disconnected from the existing
         // trace graph, so propagation has to start from the fragment entry.
+        let initial = insert_assignment_registers(ctx, &mut self.ir, self.symbols, fragment.entry);
         contract_edges_from(ctx, &mut self.ir, self.symbols, fragment.entry);
-        let rd = reaching_definitions_from(ctx, &mut self.ir, self.symbols, fragment.entry);
-        propagate_assignments_from(ctx, &mut self.ir, self.symbols, &rd, fragment.entry);
+        simplify_assignments_from(ctx, &mut self.ir, self.symbols, fragment.entry, &initial);
     }
 
     pub fn graft_points(
@@ -224,7 +223,7 @@ impl<'a> Lowerer<'a> {
             return expr;
         }
 
-        let symbols = self.symbols;
+        let symbols = &*self.symbols;
         let entry = &symbols[symbol_id];
         let full_name = entry.full_name(symbols);
         let expr = match entry.tpe() {
@@ -439,9 +438,9 @@ impl<'a> Lowerer<'a> {
             .push_transition(entry, Transition::new(true_id, body_entry, false));
 
         if postprocess {
+            let initial = insert_assignment_registers(ctx, &mut self.ir, self.symbols, entry);
             contract_edges_from(ctx, &mut self.ir, self.symbols, entry);
-            let rd = reaching_definitions_from(ctx, &mut self.ir, self.symbols, entry);
-            propagate_assignments_from(ctx, &mut self.ir, self.symbols, &rd, entry);
+            simplify_assignments_from(ctx, &mut self.ir, self.symbols, entry, &initial);
         }
 
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
@@ -601,7 +600,7 @@ impl<'a> Lowerer<'a> {
 }
 
 /// Lower a single AST `Protocol` into a fresh symbolic `ProtoGraph`
-pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
+pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &mut SymbolTable) -> ProtoGraph {
     // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
     let fragment = lowerer.lower_protocol_fragment(ctx, &ast, true, false);

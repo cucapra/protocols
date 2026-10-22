@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use crate::PortId;
 use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::backends::transition_system::{
-    CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr,
+    CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr
 };
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
@@ -333,7 +333,7 @@ mod tests {
     fn joint_add_d1_bmc(add_constraint: bool) -> patronus::mc::ModelCheckResult {
         let filename = "../tests/adders/adder_d1/add_d1.prot";
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
         let protocols = module
             .protos
@@ -353,7 +353,8 @@ mod tests {
             sim.ios()
                 .filter_map(|port| sim.get_port_expr(port).map(|expr| (port, expr))),
         );
-        let driver = build_joint_driver_automaton(&mut ctx, &module, protocols, &symbols).unwrap();
+        let driver =
+            build_joint_driver_automaton(&mut ctx, &module, protocols, &mut symbols).unwrap();
         let mut result = into_joint_transition_system(
             &mut ctx,
             driver,

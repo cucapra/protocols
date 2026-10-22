@@ -27,12 +27,12 @@ digraph "overlap" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := p[3:1]\n[1] DUT.b := p[4:2]"];
+  node0 [label="[1] DUT.a := p[3:1]; p[3:1]; p[3:1]; $previous_a if not($previous_a_is_x)\n[1] $previous_a := p[3:1]\n[1] $previous_a_is_x := 0\n[1] DUT.b := p[4:2]; p[4:2]; $previous_b if not($previous_b_is_x)\n[1] $previous_b := p[4:2]\n[1] $previous_b_is_x := 0"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node1 [label="[1] done\n[1] DUT.a := X; $previous_a if 0\n[1] $previous_a := $previous_a\n[1] $previous_a_is_x := 1\n[1] DUT.b := X; $previous_b if 0\n[1] $previous_b := $previous_b\n[1] $previous_b_is_x := 1"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "overlap" {
   rankdir=LR;
   node [shape=box];

@@ -181,8 +181,8 @@ fn main() {
         }
     }
 
-    let (st, modules) = load_protocols(&cli);
+    let (mut st, modules) = load_protocols(&cli);
     let module = require_single_module(modules, &cli.protocol).unwrap();
     let traces = load_traces(&cli, &st, &module);
-    execution::run(&cli, &st, &module, &traces);
+    execution::run(&cli, &mut st, &module, &traces);
 }

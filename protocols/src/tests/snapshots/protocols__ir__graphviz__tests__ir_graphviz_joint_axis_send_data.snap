@@ -12,8 +12,8 @@ digraph "send_data" {
   node0 -> node1 [label="and(not(D.m_axis_tready), choice_valid) / step"];
   node0 -> node0 [label="and(D.m_axis_tready, choice_valid) / step / R_send_data"];
   node1 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := joint.data#0_send_data"];
-  node1 -> node0 [label="D.m_axis_tready / step / R_send_data"];
   node1 -> node1 [label="not(D.m_axis_tready) / step"];
+  node1 -> node0 [label="D.m_axis_tready / step / R_send_data"];
 }
 
 == unbounded-monitor ==
@@ -27,8 +27,8 @@ digraph "send_data" {
   node0 -> node0 [label="and(D.m_axis_tready, $monitor_live#0_send_data) / step / R_send_data"];
   node0 -> node2 [label="not($monitor_live#0_send_data) / step"];
   node1 [label="[1] $monitor_live#0_send_data := 0 if not(and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata))); $monitor_live#0_send_data"];
-  node1 -> node0 [label="and(D.m_axis_tready, $monitor_live#0_send_data) / step / R_send_data"];
   node1 -> node1 [label="and(not(D.m_axis_tready), $monitor_live#0_send_data) / step"];
+  node1 -> node0 [label="and(D.m_axis_tready, $monitor_live#0_send_data) / step / R_send_data"];
   node1 -> node2 [label="not($monitor_live#0_send_data) / step"];
   node2 [label="BAD STATE"];
   node2 -> node2 [label="1 / step"];

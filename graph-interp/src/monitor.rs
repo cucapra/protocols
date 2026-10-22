@@ -1,7 +1,7 @@
 use baa::{BitVecOps, Value};
 use bi::Instance;
 use bi::signal_trace::{
-    AsciWaveTrace, CallbackResult, SignalTrace, WaveSamplingMode, WaveSignalTrace,
+    AsciWaveTrace, CallbackResult, SignalTrace, WaveSamplingMode, WaveSignalTrace
 };
 use patronus::expr::Context;
 use patronus::sim::{InitKind, Interpreter, Simulator};

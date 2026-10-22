@@ -267,14 +267,13 @@ mod tests {
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::require_single_module;
     use crate::ir::driver_to_monitor::{
-        MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
+        MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor
     };
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::joint_driver::build_joint_driver_automaton;
     use crate::ir::joint_monitor::build_joint_monitor_automaton;
     use crate::ir::lowering::lower_ast_to_ir;
-    use crate::ir::propagate_assigns::propagate_assignments;
-    use crate::ir::reaching_defs::reaching_definitions;
+    use crate::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments};
     use crate::ir::simplify_monitor::simplify_monitor;
     use insta::Settings;
 
@@ -286,23 +285,23 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &symbols);
+            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
             let mut contracted_ir = ir.clone();
+            let entry = contracted_ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            // run the reaching definitions analysis
-            let reaching_defs = reaching_definitions(&mut ctx, &mut contracted_ir, &symbols);
-
-            // print post-propagation of assignments
-            propagate_assignments(&mut ctx, &mut contracted_ir, &symbols, &reaching_defs);
-            content += "== post-propagation ==\n";
+            // Make held DUT assignments explicit and eliminate their saved state.
+            simplify_assignments(&mut ctx, &mut contracted_ir, &symbols, &initial);
+            content += "== post-simplification ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
@@ -338,10 +337,12 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let ast = module.protos.into_iter().next().unwrap();
         let mut ctx = Context::default();
-        let mut graph = lower_ast_to_ir(&mut ctx, ast, &symbols);
+        let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+        let entry = graph.entry;
+        let initial = insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
         contract_edges(&mut ctx, &mut graph, &symbols);
-        let defs = reaching_definitions(&mut ctx, &mut graph, &symbols);
-        propagate_assignments(&mut ctx, &mut graph, &symbols, &defs);
+
+        simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
         graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
@@ -428,7 +429,8 @@ mod tests {
             .collect::<Vec<_>>();
         let mut ctx = Context::default();
         let driver =
-            build_joint_driver_automaton(&mut ctx, &module, protocols.clone(), &symbols).unwrap();
+            build_joint_driver_automaton(&mut ctx, &module, protocols.clone(), &mut symbols)
+                .unwrap();
         let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
         let driver_dot = to_dot_string(&ctx, &driver.graph, &symbols);
         let monitor_dot = monitor.to_dot_string(&ctx, &symbols);

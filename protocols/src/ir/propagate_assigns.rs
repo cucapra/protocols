@@ -1,9 +1,11 @@
-use crate::frontend::symbol::{SymbolId, SymbolTable};
-use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
-use crate::ir::reaching_defs::{ReachingDefs, assignment_is_total};
+use crate::frontend::symbol::{SymbolKind, SymbolTable};
+use crate::ir::edge_contract::{merge_ordered_assignment, same_assignment_target};
+use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
+use crate::ir::reaching_defs::canonicalize_assignment;
+use crate::ir::register_simplify::{RegisterFacts, add_register, simplify_registers};
 use cranelift_entity::EntitySet;
-use patronus::expr::Context;
-use rustc_hash::FxHashMap;
+use patronus::expr::{Context, find_symbols};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 // BFS from the entry, following only possible transitions.
 pub fn reachable_node_ids(ctx: &Context, pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
@@ -30,93 +32,179 @@ pub fn reachable_node_ids(ctx: &Context, pg: &ProtoGraph, start: NodeId) -> Vec<
     nodes
 }
 
-/// check the invariant that for all nodes reachable from the entry that
-/// every node has a reaching definition for every port.
-fn all_ports_present(
-    ctx: &Context,
-    reaching_defs: &FxHashMap<NodeId, ReachingDefs>,
-    pg: &ProtoGraph,
-    st: &SymbolTable,
-    start: NodeId,
-) -> bool {
-    let input_ports: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
+/// Insert saved values and release bits before contraction. Return their entry
+/// values for propagation after contraction has composed the within-cycle reads.
+pub fn insert_assignment_registers(
+    ctx: &mut Context,
+    pg: &mut ProtoGraph,
+    st: &mut SymbolTable,
+    entry: NodeId,
+) -> RegisterFacts {
+    let pins = pg.proto_ctx.dut_input_symbols(st).collect::<Vec<_>>();
+    let mut initial = FxHashMap::default();
+    let mut saved = Vec::new();
+    for pin in pins {
+        let name = st[pin].name().to_string();
+        let value = add_register(
+            ctx,
+            pg,
+            st,
+            &format!("$previous_{name}"),
+            st[pin].tpe().bitwidth(),
+        );
+        let released = add_register(ctx, pg, st, &format!("$previous_{name}_is_x"), 1);
+        initial.insert(value, ctx.zero(st[pin].tpe().bitwidth()));
+        initial.insert(released, ctx.get_true());
+        saved.push((pin, value, released));
+    }
+    for node in reachable_node_ids(ctx, pg, entry) {
+        let mut actions = pg[node]
+            .actions
+            .iter()
+            .filter(|a| !matches!(pg[a.op], Op::Assign(pin, _) if st[pin].is_in_port()))
+            .cloned()
+            .collect::<Vec<_>>();
+        for &(pin, value, released) in &saved {
+            let mut local = Assignment {
+                dont_care: ctx.get_false(),
+                concretes: vec![],
+            };
+            for action in pg[node].actions.clone() {
+                if let Op::Assign(target, assignment) = pg[action.op].clone()
+                    && same_assignment_target(st, pin, target)
+                {
+                    assert_eq!(
+                        action.guard,
+                        ctx.get_true(),
+                        "assignment action guards must be true"
+                    );
+                    local = merge_ordered_assignment(ctx, pg, local, assignment);
+                }
+            }
+            let old_value = pg.symbol_expr(value).unwrap();
+            let old_x = pg.symbol_expr(released).unwrap();
+            let coverage = local
+                .concretes
+                .iter()
+                .fold(local.dont_care, |g, (next, _)| pg.or_guard(ctx, g, *next));
+            let missing = pg.not_guard(ctx, coverage);
+            let held_x = pg.and_guard(ctx, missing, old_x);
+            let dont_care = pg.or_guard(ctx, local.dont_care, held_x);
+            let not_x = pg.not_guard(ctx, old_x);
+            let held_value_guard = pg.and_guard(ctx, missing, not_x);
+            let mut concrete = local.concretes.clone();
+            concrete.push((held_value_guard, old_value));
+            let op = pg.o(Op::Assign(
+                pin,
+                Assignment {
+                    dont_care,
+                    concretes: concrete,
+                },
+            ));
+            actions.push(Action::new(ctx.get_true(), op));
 
-    for nid in reachable_node_ids(ctx, pg, start) {
-        let Some(rd) = reaching_defs.get(&nid) else {
-            return false;
-        };
-
-        if nid == pg.entry && rd.is_empty() {
-            continue;
+            // Local writes select the new saved state; otherwise hold it. X
+            // releases the pin without sampling an arbitrary concrete value.
+            let mut next_value = old_value;
+            let mut next_x = old_x;
+            for &(guard, rhs) in local.concretes.iter().rev() {
+                next_value = ctx.ite(guard, rhs, next_value);
+                next_x = ctx.ite(guard, ctx.get_false(), next_x);
+            }
+            next_value = ctx.ite(local.dont_care, old_value, next_value);
+            next_x = ctx.ite(local.dont_care, ctx.get_true(), next_x);
+            for (target, rhs) in [(value, next_value), (released, next_x)] {
+                let op = pg.o(Op::Assign(
+                    target,
+                    Assignment::concrete(ctx.get_false(), ctx.get_true(), rhs),
+                ));
+                actions.push(Action::new(ctx.get_true(), op));
+            }
         }
+        pg.node_mut(node).actions = actions;
+    }
+    initial
+}
 
-        for input in &input_ports {
-            if !rd.contains_key(&st.full_name_from_symbol_id(input).to_string()) {
-                return false;
+/// Eliminate the saved state after edge contraction has resolved its reads.
+pub fn simplify_assignments(
+    ctx: &mut Context,
+    pg: &mut ProtoGraph,
+    st: &SymbolTable,
+    initial: &RegisterFacts,
+) {
+    let entry = pg.entry;
+    simplify_assignments_from(ctx, pg, st, entry, initial);
+}
+
+pub fn simplify_assignments_from(
+    ctx: &mut Context,
+    pg: &mut ProtoGraph,
+    st: &SymbolTable,
+    entry: NodeId,
+    initial: &RegisterFacts,
+) {
+    simplify_registers(
+        ctx,
+        pg,
+        st,
+        entry,
+        initial,
+        &FxHashSet::default(),
+    );
+
+    // canonicalize assignments (second level of simplification)
+    for node in reachable_node_ids(ctx, pg, entry) {
+        let mut actions = pg[node]
+            .actions
+            .iter()
+            .filter(|a| !matches!(pg[a.op], Op::Assign(pin, _) if st[pin].is_in_port()))
+            .cloned()
+            .collect::<Vec<_>>();
+        for action in pg[node].actions.clone() {
+            if let Op::Assign(pin, assignment) = pg[action.op].clone()
+                && st[pin].is_in_port()
+            {
+                let assignment = canonicalize_assignment(ctx, pg, assignment);
+                let replacement = pg.o(Op::Assign(pin, assignment));
+                actions.push(Action::new(action.guard, replacement));
+            }
+        }
+        pg.node_mut(node).actions = actions;
+    }
+
+    // Panic if there are any registers left.
+    let mut expressions = Vec::new();
+    for node in reachable_node_ids(ctx, pg, entry) {
+        expressions.extend(pg[node].transitions.iter().map(|e| e.guard));
+        for action in &pg[node].actions {
+            expressions.push(action.guard);
+            match &pg[action.op] {
+                Op::Assign(target, a) => {
+                    if st[*target].kind() == SymbolKind::AutomatonState {
+                        expressions.push(pg.symbol_expr(*target).unwrap());
+                    }
+                    expressions.push(a.dont_care);
+                    expressions.extend(a.concretes.iter().flat_map(|&(g, rhs)| [g, rhs]));
+                }
+                Op::AssertEq(a, b) => expressions.extend([*a, *b]),
+                _ => {}
             }
         }
     }
-
-    true
-}
-
-pub fn propagate_assignments(
-    ctx: &mut Context,
-    pg: &mut ProtoGraph,
-    st: &SymbolTable,
-    rd: &FxHashMap<NodeId, ReachingDefs>,
-) {
-    let start = pg.entry;
-    propagate_assignments_from(ctx, pg, st, rd, start);
-}
-
-pub fn propagate_assignments_from(
-    ctx: &mut Context,
-    pg: &mut ProtoGraph,
-    st: &SymbolTable,
-    rd: &FxHashMap<NodeId, ReachingDefs>,
-    start: NodeId,
-) {
+    let used = expressions
+        .into_iter()
+        .flat_map(|e| find_symbols(ctx, e))
+        .collect::<FxHashSet<_>>();
+    let remaining = pg
+        .symbol_expr
+        .iter()
+        .filter(|(r, expr)| st[**r].kind() == SymbolKind::AutomatonState && used.contains(expr))
+        .map(|(r, _)| st[*r].full_name(st))
+        .collect::<Vec<_>>();
     assert!(
-        all_ports_present(ctx, rd, pg, st, start),
-        "cannot propagate assignments unless all ports are present at all nodes"
+        remaining.is_empty(),
+        "we were unable to optimize away all register state: {remaining:?}"
     );
-
-    let input_ports: Vec<SymbolId> = st
-        .get_children(&pg.proto_ctx.dut_sym)
-        .filter(|sym_id| st[*sym_id].is_in_port())
-        .collect();
-
-    let node_ids = reachable_node_ids(ctx, pg, start);
-
-    for id in node_ids {
-        let Some(node_defs) = rd.get(&id) else {
-            continue;
-        };
-        if id == pg.entry && node_defs.is_empty() {
-            continue;
-        }
-
-        let actions = pg[id]
-            .actions
-            .iter()
-            .filter(|&action| !matches!(pg[action.op], Op::Assign(_, _)))
-            .cloned()
-            .collect();
-
-        pg.node_mut(id).actions = actions;
-
-        for input in &input_ports {
-            let assignment = node_defs
-                .get(&st.full_name_from_symbol_id(input))
-                .unwrap_or_else(|| panic!("missing reaching definition for {input} at {id}"));
-            assert!(
-                assignment_is_total(ctx, pg, assignment),
-                "cannot propagate partial assignment for {input} at {id}"
-            );
-
-            let op = pg.o(Op::Assign(*input, assignment.clone()));
-            pg.push_action(id, Action::new(ctx.get_true(), op));
-        }
-    }
 }
+

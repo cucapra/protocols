@@ -145,14 +145,14 @@ mod tests {
 
     fn contracted_protocols(filename: &str) -> (Vec<ProtoGraph>, Context) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         let graphs = module
             .protos
             .into_iter()
             .map(|protocol| {
-                let mut graph = lower_ast_to_ir(&mut ctx, protocol, &symbols);
+                let mut graph = lower_ast_to_ir(&mut ctx, protocol, &mut symbols);
                 contract_edges(&mut ctx, &mut graph, &symbols);
                 graph.garbage_collect_unreachable(&ctx, false);
                 graph

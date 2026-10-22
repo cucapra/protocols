@@ -34,28 +34,28 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
+  node0 [label="[1] D.m_axis_tvalid := 1 if D.m_axis_tready; 1 if not(D.m_axis_tready); 1 if D.m_axis_tready; 1; 1; $previous_m_axis_tvalid if not($previous_m_axis_tvalid_is_x)\n[1] $previous_m_axis_tvalid := 1\n[1] $previous_m_axis_tvalid_is_x := 0\n[1] D.m_axis_tdata := data if D.m_axis_tready; data if not(D.m_axis_tready); data if D.m_axis_tready; data; data; data; $previous_m_axis_tdata if not($previous_m_axis_tdata_is_x)\n[1] $previous_m_axis_tdata := data\n[1] $previous_m_axis_tdata_is_x := 0"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
-  node4 [label=""];
-  node4 -> node1 [label="D.m_axis_tready / step"];
+  node0 -> node1 [label="D.m_axis_tready / step"];
+  node4 [label="[1] D.m_axis_tvalid := X if $previous_m_axis_tvalid_is_x; $previous_m_axis_tvalid if and(D.m_axis_tready, not($previous_m_axis_tvalid_is_x)); $previous_m_axis_tvalid if not(or(D.m_axis_tready, $previous_m_axis_tvalid_is_x)); $previous_m_axis_tvalid if and(D.m_axis_tready, not($previous_m_axis_tvalid_is_x)); $previous_m_axis_tvalid if not($previous_m_axis_tvalid_is_x)\n[1] $previous_m_axis_tvalid := $previous_m_axis_tvalid\n[1] $previous_m_axis_tvalid_is_x := $previous_m_axis_tvalid_is_x\n[1] D.m_axis_tdata := X if $previous_m_axis_tdata_is_x; $previous_m_axis_tdata if and(D.m_axis_tready, not($previous_m_axis_tdata_is_x)); $previous_m_axis_tdata if not(or(D.m_axis_tready, $previous_m_axis_tdata_is_x)); $previous_m_axis_tdata if and(D.m_axis_tready, not($previous_m_axis_tdata_is_x)); $previous_m_axis_tdata if not($previous_m_axis_tdata_is_x)\n[1] $previous_m_axis_tdata := $previous_m_axis_tdata\n[1] $previous_m_axis_tdata_is_x := $previous_m_axis_tdata_is_x"];
   node4 -> node4 [label="not(D.m_axis_tready) / step"];
+  node4 -> node1 [label="D.m_axis_tready / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X; $previous_m_axis_tvalid if 0\n[1] $previous_m_axis_tvalid := $previous_m_axis_tvalid\n[1] $previous_m_axis_tvalid_is_x := 1\n[1] D.m_axis_tdata := X; $previous_m_axis_tdata if 0\n[1] $previous_m_axis_tdata := $previous_m_axis_tdata\n[1] $previous_m_axis_tdata_is_x := 1"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "send_data" {
   rankdir=LR;
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 -> node1 [label="D.m_axis_tready / step"];
   node4 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node4 -> node1 [label="D.m_axis_tready / step"];
   node4 -> node4 [label="not(D.m_axis_tready) / step"];
+  node4 -> node1 [label="D.m_axis_tready / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
 }
 
 == post-normalize ==
@@ -65,12 +65,12 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
   node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 -> node1 [label="D.m_axis_tready / step"];
   node4 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node4 -> node1 [label="D.m_axis_tready / step"];
   node4 -> node4 [label="not(D.m_axis_tready) / step"];
+  node4 -> node1 [label="D.m_axis_tready / step"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
 }
 
 == simplified monitor ==
@@ -80,12 +80,12 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] assert_eq(D.m_axis_tvalid, 1)\n[1] $monitor_data_value := D.m_axis_tdata"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
-  node0 -> node2 [label="not(D.m_axis_tready) / step"];
-  node1 [label="[1] done"];
-  node2 [label="[1] assert_eq(D.m_axis_tvalid, 1)\n[1] assert_eq($monitor_data_value, D.m_axis_tdata)"];
-  node2 -> node1 [label="D.m_axis_tready / step"];
-  node2 -> node2 [label="not(D.m_axis_tready) / step"];
+  node0 -> node1 [label="not(D.m_axis_tready) / step"];
+  node0 -> node2 [label="D.m_axis_tready / step"];
+  node1 [label="[1] assert_eq(D.m_axis_tvalid, 1)\n[1] assert_eq($monitor_data_value, D.m_axis_tdata)"];
+  node1 -> node1 [label="not(D.m_axis_tready) / step"];
+  node1 -> node2 [label="D.m_axis_tready / step"];
+  node2 [label="[1] done"];
 }
 
 == pre-contract ==
@@ -111,12 +111,12 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0\n[1] D.m_axis_tdata := X"];
+  node0 [label="[1] D.m_axis_tvalid := 0; 0; $previous_m_axis_tvalid_1 if not($previous_m_axis_tvalid_is_x_1)\n[1] $previous_m_axis_tvalid_1 := 0\n[1] $previous_m_axis_tvalid_is_x_1 := 0\n[1] D.m_axis_tdata := X; $previous_m_axis_tdata_1 if not($previous_m_axis_tdata_is_x_1)\n[1] $previous_m_axis_tdata_1 := $previous_m_axis_tdata_1\n[1] $previous_m_axis_tdata_is_x_1 := 1"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node1 [label="[1] done\n[1] D.m_axis_tvalid := X; $previous_m_axis_tvalid_1 if 0\n[1] $previous_m_axis_tvalid_1 := $previous_m_axis_tvalid_1\n[1] $previous_m_axis_tvalid_is_x_1 := 1\n[1] D.m_axis_tdata := X; $previous_m_axis_tdata_1 if 0\n[1] $previous_m_axis_tdata_1 := $previous_m_axis_tdata_1\n[1] $previous_m_axis_tdata_is_x_1 := 1"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "idle" {
   rankdir=LR;
   node [shape=box];
