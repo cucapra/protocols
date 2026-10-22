@@ -1,20 +1,17 @@
-use baa::BitVecOps;
+use baa::{BitVecOps, WidthInt};
 use clap::{ColorChoice, Parser};
-use patronus::expr::{Context, Expr, ExprRef, TypeCheck, simple_transform_expr};
-use patronus::system::{Output, TransitionSystem};
-use protocols::backends::transition_system::lower_proto_graph_to_transition_system;
+use patronus::expr::{Context, Expr, ExprRef};
+use protocols::frontend;
 use protocols::frontend::Module;
-use protocols::frontend::ast::Protocol;
+use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::{Dir, SymbolId, SymbolKind, SymbolTable};
+use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::Lowerer;
-use protocols::ir::propagate_assigns::reachable_node_ids;
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
 use protocols::ir::simplify_monitor::simplify_monitor;
-use protocols::{PortId, frontend};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
@@ -162,6 +159,8 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
+const DUT_PREFIX: &str = "dut_";
+
 fn to_verilog(
     ctx: &Context,
     m: &Module,
@@ -180,6 +179,8 @@ fn to_verilog(
         .collect();
     let state_width = usize::BITS - num_states.leading_zeros();
 
+    verilog_dut_instance(m, "  ", out)?;
+
     writeln!(out, "  typedef enum logic [{}:0] {{", state_width - 1)?;
     for (idx, lbl) in state_labels.iter().enumerate() {
         writeln!(out, "    {lbl}  = {state_width}'d{idx},")?;
@@ -189,8 +190,8 @@ fn to_verilog(
     for (reg, value, _) in auto_regs {
         writeln!(
             out,
-            "  logic [{}:0] {}, next_{};",
-            st[reg].tpe().bitwidth() - 1,
+            "  {} {}, next_{};",
+            logic(st[reg].tpe().bitwidth()),
             st[reg].name(),
             st[reg].name()
         )?;
@@ -271,6 +272,47 @@ fn to_verilog(
     Ok(())
 }
 
+fn verilog_dut_instance(
+    m: &Module,
+    indent: &str,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<()> {
+    // declare I/O
+    for pin in &m.pins {
+        writeln!(
+            out,
+            "{indent}{} {DUT_PREFIX}{}; // {:?}",
+            logic(pin.bitwidth()),
+            pin.name(),
+            pin.dir()
+        )?;
+    }
+    writeln!(out)?;
+
+    // create module instance
+    writeln!(out, "{indent}{} {}_inst (", m.name, m.name)?;
+    // TODO: clock
+    for pin in &m.pins {
+        writeln!(
+            out,
+            "{indent}  .{} ({DUT_PREFIX}{}),",
+            pin.name(),
+            pin.name()
+        )?;
+    }
+
+    Ok(())
+}
+
+fn logic(width: WidthInt) -> String {
+    assert!(width > 0);
+    if width == 1 {
+        "logic".to_string()
+    } else {
+        format!("logic [{}:0]", width - 1)
+    }
+}
+
 fn action_to_verilog(
     ctx: &Context,
     pg: &ProtoGraph,
@@ -286,8 +328,7 @@ fn action_to_verilog(
     match &pg[act.op] {
         // ignore don't care
         Op::Assign(lhs, rhs) => {
-            let width = st[lhs].tpe().bitwidth();
-            let lhs = symbol_name(st, *lhs);
+            let lhs = lhs_symbol_name(st, *lhs);
             if rhs.dont_care == ctx.get_true() {
                 writeln!(out, "{indent}// {lhs} = DontCare")?;
             } else {
@@ -340,7 +381,7 @@ fn action_to_verilog(
     Ok(())
 }
 
-fn symbol_name(st: &SymbolTable, sym: SymbolId) -> String {
+fn lhs_symbol_name(st: &SymbolTable, sym: SymbolId) -> String {
     let sym = &st[sym];
     match sym.kind() {
         SymbolKind::Dut => panic!("unexpected DUT symbol!"),
@@ -348,7 +389,7 @@ fn symbol_name(st: &SymbolTable, sym: SymbolId) -> String {
         // TODO: find out what protocol the argument is for
         SymbolKind::Arg(_) => sym.name().to_string(),
         SymbolKind::LoopVar => todo!("loop var"),
-        SymbolKind::AutomatonState => sym.name().to_string(),
+        SymbolKind::AutomatonState => format!("next_{}", sym.name()),
     }
 }
 
