@@ -5,7 +5,6 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
-use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{
     Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr
 };
@@ -112,7 +111,7 @@ fn analyze_shape(
 ) -> Result<ProtocolShape, JointAutomatonError> {
     let mut forks = Vec::new();
     let mut dones = Vec::new();
-    for node in reachable_node_ids(ctx, graph, graph.entry) {
+    for node in graph.reachable_node_ids(ctx, graph.entry) {
         for action in &graph[node].actions {
             match graph[action.op] {
                 Op::Fork => {

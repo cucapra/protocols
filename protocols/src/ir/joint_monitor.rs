@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
 use crate::frontend::ast::Protocol;
-use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
+use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::driver_to_monitor::{
     MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor
 };
@@ -132,25 +132,14 @@ pub fn compose_joint_monitor_automaton(
                     slot,
                     result.protocols[protocol].name
                 );
-                let mut name = base.clone();
-                let mut suffix = 1;
-                while symbols.symbol_id_from_name_in_active_scope(&name).is_some() {
-                    name = format!("{base}_{suffix}");
-                    suffix += 1;
-                }
-                let register = symbols.add_without_parent(
-                    name,
-                    symbols[old].tpe(),
-                    SymbolKind::AutomatonState,
-                );
                 let width = monitor
                     .graph
                     .symbol_expr(old)
                     .unwrap()
                     .get_bv_type(ctx)
                     .unwrap();
-                let expr = ctx.bv_symbol(&symbols[register].full_name(symbols), width);
-                result.control.graph.cache_symbol_expr(register, expr);
+                let register = result.control.graph.add_register(ctx, symbols, &base, width);
+                let expr = result.control.graph.symbol_expr(register).unwrap();
                 targets.insert(old, register);
                 substitutions.insert(monitor.graph.symbol_expr(old).unwrap(), expr);
                 // No transaction is active initially. Launching restores the

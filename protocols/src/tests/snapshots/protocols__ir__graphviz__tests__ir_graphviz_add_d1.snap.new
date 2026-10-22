@@ -1,0 +1,688 @@
+---
+source: protocols/src/ir/graphviz.rs
+assertion_line: 321
+expression: content
+---
+== pre-contract ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1; $previous_a if 0\n[1] $previous_a := ite(1, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(1, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if 1; $previous_b if 0\n[1] $previous_b := ite(1, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(1, 1, $previous_b_is_x) if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1; $previous_a if 0\n[1] $previous_a := ite(0, $previous_a, ite(1, a, $previous_a)) if 1\n[1] $previous_a_is_x := ite(0, 1, ite(1, 0, $previous_a_is_x)) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := b if 1; $previous_b if 0\n[1] $previous_b := ite(0, $previous_b, ite(1, b, $previous_b)) if 1\n[1] $previous_b_is_x := ite(0, 1, ite(1, 0, $previous_b_is_x)) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1; $previous_a if 0\n[1] $previous_a := ite(1, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(1, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if 1; $previous_b if 0\n[1] $previous_b := ite(1, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(1, 1, $previous_b_is_x) if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x; $previous_a if not($previous_a_is_x)\n[1] $previous_a := ite(0, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(0, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if $previous_b_is_x; $previous_b if not($previous_b_is_x)\n[1] $previous_b := ite(0, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(0, 1, $previous_b_is_x) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a if 0\n[1] $previous_a := ite(1, $previous_a, $previous_a) if 1\n[1] $previous_a_is_x := ite(1, 1, $previous_a_is_x) if 1\n[1] DUT.b := X if 1; $previous_b if 0\n[1] $previous_b := ite(1, $previous_b, $previous_b) if 1\n[1] $previous_b_is_x := ite(1, 1, $previous_b_is_x) if 1"];
+}
+
+== post-contract ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1; a if 1; a if 1; $previous_a if not($previous_a_is_x)\n[1] $previous_a := a if 1\n[1] $previous_a_is_x := 0 if 1\n[1] DUT.b := b if 1; b if 1; $previous_b if not($previous_b_is_x)\n[1] $previous_b := b if 1\n[1] $previous_b_is_x := 0 if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1; $previous_a if 0\n[1] $previous_a := $previous_a if 1\n[1] $previous_a_is_x := 1 if 1\n[1] DUT.b := X if 1; $previous_b if not($previous_b_is_x)\n[1] $previous_b := $previous_b if 1\n[1] $previous_b_is_x := 1 if 1\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a if 0\n[1] $previous_a := $previous_a if 1\n[1] $previous_a_is_x := 1 if 1\n[1] DUT.b := X if 1; $previous_b if 0\n[1] $previous_b := $previous_b if 1\n[1] $previous_b_is_x := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1; $previous_a_1 if 0\n[1] $previous_a_1 := ite(1, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(1, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if 1; $previous_b_1 if 0\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(1, 1, $previous_b_is_x_1) if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1; $previous_a_1 if 0\n[1] $previous_a_1 := ite(0, $previous_a_1, ite(1, a, $previous_a_1)) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, ite(1, 0, $previous_a_is_x_1)) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := b if 1; $previous_b_1 if 0\n[1] $previous_b_1 := ite(0, $previous_b_1, ite(1, b, $previous_b_1)) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, ite(1, 0, $previous_b_is_x_1)) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if 1; $previous_a_1 if 0\n[1] $previous_a_1 := ite(1, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(1, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if 1; $previous_b_1 if 0\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(1, 1, $previous_b_is_x_1) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := ite(0, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(0, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if $previous_b_is_x_1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := ite(0, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(0, 1, $previous_b_is_x_1) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_1 if 0\n[1] $previous_a_1 := ite(1, $previous_a_1, $previous_a_1) if 1\n[1] $previous_a_is_x_1 := ite(1, 1, $previous_a_is_x_1) if 1\n[1] DUT.b := X if 1; $previous_b_1 if 0\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1) if 1\n[1] $previous_b_is_x_1 := ite(1, 1, $previous_b_is_x_1) if 1"];
+}
+
+== post-contract ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1; a if 1; a if 1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := a if 1\n[1] $previous_a_is_x_1 := 0 if 1\n[1] DUT.b := b if 1; b if 1; $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := b if 1\n[1] $previous_b_is_x_1 := 0 if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] fork\n[1] DUT.a := X if 1; $previous_a_1 if not($previous_a_is_x_1)\n[1] $previous_a_1 := $previous_a_1 if 1\n[1] $previous_a_is_x_1 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_1 if not($previous_b_is_x_1); $previous_b_1 if not($previous_b_is_x_1)\n[1] $previous_b_1 := $previous_b_1 if 1\n[1] $previous_b_is_x_1 := 1 if 1\n[1] assert_eq(s, DUT.s)"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_1 if 0\n[1] $previous_a_1 := $previous_a_1 if 1\n[1] $previous_a_is_x_1 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_1 if 0\n[1] $previous_b_1 := $previous_b_1 if 1\n[1] $previous_b_is_x_1 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] fork\n[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] fork\n[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "add_fork_early" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1; $previous_a_2 if 0\n[1] $previous_a_2 := ite(1, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(1, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if 1; $previous_b_2 if 0\n[1] $previous_b_2 := ite(1, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(1, 1, $previous_b_is_x_2) if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a if 1; $previous_a_2 if 0\n[1] $previous_a_2 := ite(0, $previous_a_2, ite(1, a, $previous_a_2)) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, ite(1, 0, $previous_a_is_x_2)) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := b if 1; $previous_b_2 if 0\n[1] $previous_b_2 := ite(0, $previous_b_2, ite(1, b, $previous_b_2)) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, ite(1, 0, $previous_b_is_x_2)) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1; $previous_a_2 if 0\n[1] $previous_a_2 := ite(0, $previous_a_2, ite(1, a, $previous_a_2)) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, ite(1, 0, $previous_a_is_x_2)) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := b if 1; $previous_b_2 if 0\n[1] $previous_b_2 := ite(0, $previous_b_2, ite(1, b, $previous_b_2)) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, ite(1, 0, $previous_b_is_x_2)) if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_2; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := ite(0, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(0, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if $previous_b_is_x_2; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := ite(0, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(0, 1, $previous_b_is_x_2) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_2 if 0\n[1] $previous_a_2 := ite(1, $previous_a_2, $previous_a_2) if 1\n[1] $previous_a_is_x_2 := ite(1, 1, $previous_a_is_x_2) if 1\n[1] DUT.b := X if 1; $previous_b_2 if 0\n[1] $previous_b_2 := ite(1, $previous_b_2, $previous_b_2) if 1\n[1] $previous_b_is_x_2 := ite(1, 1, $previous_b_is_x_2) if 1"];
+}
+
+== post-contract ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1; a if 1; a if 1; $previous_a_2 if not($previous_a_is_x_2)\n[1] $previous_a_2 := a if 1\n[1] $previous_a_is_x_2 := 0 if 1\n[1] DUT.b := b if 1; b if 1; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := b if 1\n[1] $previous_b_is_x_2 := 0 if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1; a if 1; a if 1; a if 1; a if 1; a if 0\n[1] $previous_a_2 := a if 1\n[1] $previous_a_is_x_2 := 0 if 1\n[1] DUT.b := b if 1; b if 1; b if 1; b if 1; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_b_2 := b if 1\n[1] $previous_b_is_x_2 := 0 if 1\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_2 if 0\n[1] $previous_a_2 := $previous_a_2 if 1\n[1] $previous_a_is_x_2 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_2 if 0\n[1] $previous_b_2 := $previous_b_2 if 1\n[1] $previous_b_is_x_2 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "add_incorrect" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value_2 := DUT.a if 1\n[1] $monitor_b_value_2 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value_2, DUT.a)\n[1] assert_eq($monitor_b_value_2, DUT.b)"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := ite(0, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := ite(0, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, $previous_b_is_x_3) if 1"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if 1; $previous_a_3 if 0\n[1] $previous_a_3 := ite(1, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(1, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if 1; $previous_b_3 if 0\n[1] $previous_b_3 := ite(1, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(1, 1, $previous_b_is_x_3) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := a if 1; $previous_a_3 if 0\n[1] $previous_a_3 := ite(0, $previous_a_3, ite(1, a, $previous_a_3)) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, ite(1, 0, $previous_a_is_x_3)) if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := ite(0, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, $previous_b_is_x_3) if 1"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := ite(0, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := b if 1; $previous_b_3 if 0\n[1] $previous_b_3 := ite(0, $previous_b_3, ite(1, b, $previous_b_3)) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, ite(1, 0, $previous_b_is_x_3)) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := ite(0, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := ite(0, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, $previous_b_is_x_3) if 1"];
+  node5 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := ite(0, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := ite(0, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, $previous_b_is_x_3) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := ite(0, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := ite(0, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, $previous_b_is_x_3) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := ite(0, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(0, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := ite(0, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(0, 1, $previous_b_is_x_3) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_3 if 0\n[1] $previous_a_3 := ite(1, $previous_a_3, $previous_a_3) if 1\n[1] $previous_a_is_x_3 := ite(1, 1, $previous_a_is_x_3) if 1\n[1] DUT.b := X if 1; $previous_b_3 if 0\n[1] $previous_b_3 := ite(1, $previous_b_3, $previous_b_3) if 1\n[1] $previous_b_is_x_3 := ite(1, 1, $previous_b_is_x_3) if 1"];
+}
+
+== post-contract ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1; a if 1; a if 1; $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := a if 1\n[1] $previous_a_is_x_3 := 0 if 1\n[1] DUT.b := b if 1; b if 1; $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := b if 1\n[1] $previous_b_is_x_3 := 0 if 1"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3); $previous_a_3 if not($previous_a_is_x_3); $previous_a_3 if not($previous_a_is_x_3)\n[1] $previous_a_3 := $previous_a_3 if 1\n[1] $previous_a_is_x_3 := $previous_a_is_x_3 if 1\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3); $previous_b_3 if not($previous_b_is_x_3); $previous_b_3 if not($previous_b_is_x_3)\n[1] $previous_b_3 := $previous_b_3 if 1\n[1] $previous_b_is_x_3 := $previous_b_is_x_3 if 1\n[1] fork"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_3 if 0\n[1] $previous_a_3 := $previous_a_3 if 1\n[1] $previous_a_is_x_3 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_3 if 0\n[1] $previous_b_3 := $previous_b_3 if 1\n[1] $previous_b_is_x_3 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node4 [label="1 / step"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node4 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "add_incorrect_implicit" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_a_value_3 := DUT.a if 1\n[1] $monitor_b_value_3 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value_3, DUT.a)\n[1] assert_eq($monitor_b_value_3, DUT.b)"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X if 1; $previous_a_4 if 0\n[1] $previous_a_4 := ite(1, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(1, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if 1; $previous_b_4 if 0\n[1] $previous_b_4 := ite(1, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(1, 1, $previous_b_is_x_4) if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node9 -> node8 [label="1 / step"];
+  node8 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1; $previous_a_4 if 0\n[1] $previous_a_4 := ite(0, $previous_a_4, ite(1, a, $previous_a_4)) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, ite(1, 0, $previous_a_is_x_4)) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := b if 1; $previous_b_4 if 0\n[1] $previous_b_4 := ite(0, $previous_b_4, ite(1, b, $previous_b_4)) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, ite(1, 0, $previous_b_is_x_4)) if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node4 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := ite(0, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(0, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := ite(0, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(0, 1, $previous_b_is_x_4) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_4 if 0\n[1] $previous_a_4 := ite(1, $previous_a_4, $previous_a_4) if 1\n[1] $previous_a_is_x_4 := ite(1, 1, $previous_a_is_x_4) if 1\n[1] DUT.b := X if 1; $previous_b_4 if 0\n[1] $previous_b_4 := ite(1, $previous_b_4, $previous_b_4) if 1\n[1] $previous_b_is_x_4 := ite(1, 1, $previous_b_is_x_4) if 1"];
+}
+
+== post-contract ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if 1; $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := $previous_a_4 if 1\n[1] $previous_a_is_x_4 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := $previous_b_4 if 1\n[1] $previous_b_is_x_4 := 1 if 1"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4); $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := $previous_a_4 if 1\n[1] $previous_a_is_x_4 := $previous_a_is_x_4 if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4); $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := $previous_b_4 if 1\n[1] $previous_b_is_x_4 := $previous_b_is_x_4 if 1"];
+  node8 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1; a if 1; a if 1; a if 0\n[1] $previous_a_4 := a if 1\n[1] $previous_a_is_x_4 := 0 if 1\n[1] DUT.b := b if 1; b if 1; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := b if 1\n[1] $previous_b_is_x_4 := 0 if 1"];
+  node6 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4); $previous_a_4 if not($previous_a_is_x_4)\n[1] $previous_a_4 := $previous_a_4 if 1\n[1] $previous_a_is_x_4 := $previous_a_is_x_4 if 1\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4); $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_b_4 := $previous_b_4 if 1\n[1] $previous_b_is_x_4 := $previous_b_is_x_4 if 1"];
+  node3 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_4 if 0\n[1] $previous_a_4 := $previous_a_4 if 1\n[1] $previous_a_is_x_4 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_4 if 0\n[1] $previous_b_4 := $previous_b_4 if 1\n[1] $previous_b_is_x_4 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node8 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node6 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node3 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node8 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node6 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node3 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "wait_and_add" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label=""];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] $monitor_a_value_4 := DUT.a if 1\n[1] $monitor_b_value_4 := DUT.b if 1"];
+  node2 -> node3 [label="1 / step"];
+  node3 [label="[1] assert_eq($monitor_a_value_4, DUT.a)\n[1] assert_eq($monitor_b_value_4, DUT.b)"];
+  node3 -> node4 [label="1 / step"];
+  node4 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node0 -> node14 [label="1"];
+  node14 [label="[1] DUT.a := X if 1; $previous_a_5 if 0\n[1] $previous_a_5 := ite(1, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(1, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if 1; $previous_b_5 if 0\n[1] $previous_b_5 := ite(1, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(1, 1, $previous_b_is_x_5) if 1"];
+  node14 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := a if 1; $previous_a_5 if 0\n[1] $previous_a_5 := ite(0, $previous_a_5, ite(1, a, $previous_a_5)) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, ite(1, 0, $previous_a_is_x_5)) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node13 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node12 -> node10 [label="eq(DUT.a, 2)"];
+  node12 -> node11 [label="not(eq(DUT.a, 2))"];
+  node10 [label="[1] DUT.a := 0 if 1; $previous_a_5 if 0\n[1] $previous_a_5 := ite(0, $previous_a_5, ite(1, 0, $previous_a_5)) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, ite(1, 0, $previous_a_is_x_5)) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node10 -> node9 [label="1"];
+  node11 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node11 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := b if 1; $previous_b_5 if 0\n[1] $previous_b_5 := ite(0, $previous_b_5, ite(1, b, $previous_b_5)) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, ite(1, 0, $previous_b_is_x_5)) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1; $previous_a_5 if 0\n[1] $previous_a_5 := ite(1, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(1, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if 1; $previous_b_5 if 0\n[1] $previous_b_5 := ite(1, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(1, 1, $previous_b_is_x_5) if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_5; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(0, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(0, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if $previous_b_is_x_5; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(0, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(0, 1, $previous_b_is_x_5) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_5 if 0\n[1] $previous_a_5 := ite(1, $previous_a_5, $previous_a_5) if 1\n[1] $previous_a_is_x_5 := ite(1, 1, $previous_a_is_x_5) if 1\n[1] DUT.b := X if 1; $previous_b_5 if 0\n[1] $previous_b_5 := ite(1, $previous_b_5, $previous_b_5) if 1\n[1] $previous_b_is_x_5 := ite(1, 1, $previous_b_is_x_5) if 1"];
+}
+
+== post-contract ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := 0 if eq(DUT.a, 2); a if not(eq(DUT.a, 2)); 0 if eq(DUT.a, 2); a if not(eq(DUT.a, 2)); 0 if eq(DUT.a, 2); a if not(eq(DUT.a, 2)); 0 if eq(DUT.a, 2); a if not(eq(DUT.a, 2)); a if 1; a if 1; $previous_a_5 if not($previous_a_is_x_5)\n[1] $previous_a_5 := ite(eq(DUT.a, 2), 0, ite(not(eq(DUT.a, 2)), a, ite(eq(DUT.a, 2), 0, ite(not(eq(DUT.a, 2)), a, ite(eq(DUT.a, 2), 0, ite(not(eq(DUT.a, 2)), a, ite(eq(DUT.a, 2), 0, a))))))) if 1\n[1] $previous_a_is_x_5 := 0 if 1\n[1] DUT.b := b if eq(DUT.a, 2); b if not(eq(DUT.a, 2)); b if eq(DUT.a, 2); b if not(eq(DUT.a, 2)); $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := ite(eq(DUT.a, 2), b, ite(not(eq(DUT.a, 2)), b, ite(eq(DUT.a, 2), b, ite(not(eq(DUT.a, 2)), b, $previous_b_5)))) if 1\n[1] $previous_b_is_x_5 := 0 if 1"];
+  node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
+  node0 -> node6 [label="eq(DUT.a, 2) / step"];
+  node6 [label="[1] DUT.a := X if 1; $previous_a_5 if 0\n[1] $previous_a_5 := $previous_a_5 if 1\n[1] $previous_a_is_x_5 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_b_5 := $previous_b_5 if 1\n[1] $previous_b_is_x_5 := 1 if 1\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_5 if 0\n[1] $previous_a_5 := $previous_a_5 if 1\n[1] $previous_a_is_x_5 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_5 if 0\n[1] $previous_b_5 := $previous_b_5 if 1\n[1] $previous_b_is_x_5 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := 0 if eq(DUT.a, 2); a if not(eq(DUT.a, 2))\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
+  node0 -> node6 [label="eq(DUT.a, 2) / step"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := 0 if eq(DUT.a, 2); a if not(eq(DUT.a, 2))\n[1] DUT.b := b if 1"];
+  node0 -> node6 [label="not(eq(DUT.a, 2)) / step"];
+  node0 -> node6 [label="eq(DUT.a, 2) / step"];
+  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "assign_after_observation" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[eq(DUT.a, 2)] assert_eq(DUT.a, 0)"];
+  node0 -> node1 [label="not(eq(DUT.a, 2)) / step"];
+  node0 -> node1 [label="eq(DUT.a, 2) / step"];
+  node1 [label="[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node0 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := X if 1; $previous_a_6 if 0\n[1] $previous_a_6 := ite(1, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(1, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if 1; $previous_b_6 if 0\n[1] $previous_b_6 := ite(1, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(1, 1, $previous_b_is_x_6) if 1"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := a if 1; $previous_a_6 if 0\n[1] $previous_a_6 := ite(0, $previous_a_6, ite(1, a, $previous_a_6)) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, ite(1, 0, $previous_a_is_x_6)) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := b if 1; $previous_b_6 if 0\n[1] $previous_b_6 := ite(0, $previous_b_6, ite(1, b, $previous_b_6)) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, ite(1, 0, $previous_b_is_x_6)) if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node8 -> node7 [label="1 / step"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node7 -> node5 [label="eq(DUT.s, 0)"];
+  node7 -> node6 [label="not(eq(DUT.s, 0))"];
+  node5 [label="[1] DUT.a := X if 1; $previous_a_6 if 0\n[1] $previous_a_6 := ite(1, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(1, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node5 -> node4 [label="1"];
+  node6 [label="[1] DUT.a := 5 if 1; $previous_a_6 if 0\n[1] $previous_a_6 := ite(0, $previous_a_6, ite(1, 5, $previous_a_6)) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, ite(1, 0, $previous_a_is_x_6)) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node6 -> node4 [label="1"];
+  node4 [label="[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_6; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(0, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(0, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := ite(0, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(0, 1, $previous_b_is_x_6) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_6 if 0\n[1] $previous_a_6 := ite(1, $previous_a_6, $previous_a_6) if 1\n[1] $previous_a_is_x_6 := ite(1, 1, $previous_a_is_x_6) if 1\n[1] DUT.b := X if 1; $previous_b_6 if 0\n[1] $previous_b_6 := ite(1, $previous_b_6, $previous_b_6) if 1\n[1] $previous_b_is_x_6 := ite(1, 1, $previous_b_is_x_6) if 1"];
+}
+
+== post-contract ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1; a if 1; a if 1; $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := a if 1\n[1] $previous_a_is_x_6 := 0 if 1\n[1] DUT.b := b if 1; b if 1; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := b if 1\n[1] $previous_b_is_x_6 := 0 if 1"];
+  node0 -> node7 [label="1 / step"];
+  node7 [label="[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0)); 5 if not(eq(DUT.s, 0)); 5 if not(eq(DUT.s, 0)); 5 if not(eq(DUT.s, 0)); $previous_a_6 if not($previous_a_is_x_6)\n[1] $previous_a_6 := ite(eq(DUT.s, 0), $previous_a_6, ite(not(eq(DUT.s, 0)), 5, ite(eq(DUT.s, 0), $previous_a_6, ite(not(eq(DUT.s, 0)), 5, ite(eq(DUT.s, 0), $previous_a_6, ite(not(eq(DUT.s, 0)), 5, ite(eq(DUT.s, 0), $previous_a_6, ite(not(eq(DUT.s, 0)), 5, $previous_a_6)))))))) if 1\n[1] $previous_a_is_x_6 := eq(DUT.s, 0) if 1\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if and(eq(DUT.s, 0), not($previous_b_is_x_6)); $previous_b_6 if not(or(eq(DUT.s, 0), $previous_b_is_x_6)); $previous_b_6 if and(eq(DUT.s, 0), not($previous_b_is_x_6)); $previous_b_6 if not(or(eq(DUT.s, 0), $previous_b_is_x_6)); $previous_b_6 if and(eq(DUT.s, 0), not($previous_b_is_x_6)); $previous_b_6 if not(or(eq(DUT.s, 0), $previous_b_is_x_6)); $previous_b_6 if and(eq(DUT.s, 0), not($previous_b_is_x_6)); $previous_b_6 if not(or(eq(DUT.s, 0), $previous_b_is_x_6)); $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_b_6 := $previous_b_6 if 1\n[1] $previous_b_is_x_6 := $previous_b_is_x_6 if 1\n[1] fork\n[0] internal_assert_false"];
+  node7 -> node1 [label="not(eq(DUT.s, 0)) / step"];
+  node7 -> node1 [label="eq(DUT.s, 0) / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_6 if 0\n[1] $previous_a_6 := $previous_a_6 if 1\n[1] $previous_a_is_x_6 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_6 if 0\n[1] $previous_b_6 := $previous_b_6 if 1\n[1] $previous_b_is_x_6 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node7 [label="1 / step"];
+  node7 [label="[1] fork\n[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0))\n[1] DUT.b := b if 1"];
+  node7 -> node1 [label="not(eq(DUT.s, 0)) / step"];
+  node7 -> node1 [label="eq(DUT.s, 0) / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a if 1\n[1] DUT.b := b if 1"];
+  node0 -> node7 [label="1 / step"];
+  node7 [label="[1] fork\n[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0))\n[1] DUT.b := b if 1"];
+  node7 -> node1 [label="not(eq(DUT.s, 0)) / step"];
+  node7 -> node1 [label="eq(DUT.s, 0) / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "better_if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] $monitor_b_value_6 := DUT.b if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] fork\n[not(eq(DUT.s, 0))] assert_eq(DUT.a, 5)\n[1] assert_eq($monitor_b_value_6, DUT.b)"];
+  node1 -> node2 [label="not(eq(DUT.s, 0)) / step"];
+  node1 -> node2 [label="eq(DUT.s, 0) / step"];
+  node2 [label="[1] done"];
+}
+
+== pre-contract ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := X if 1; $previous_a_7 if 0\n[1] $previous_a_7 := ite(1, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(1, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if 1; $previous_b_7 if 0\n[1] $previous_b_7 := ite(1, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(1, 1, $previous_b_is_x_7) if 1"];
+  node13 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node12 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := a1 if 1; $previous_a_7 if 0\n[1] $previous_a_7 := ite(0, $previous_a_7, ite(1, a1, $previous_a_7)) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, ite(1, 0, $previous_a_is_x_7)) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := 0 if 1; $previous_b_7 if 0\n[1] $previous_b_7 := ite(0, $previous_b_7, ite(1, 0, $previous_b_7)) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, ite(1, 0, $previous_b_is_x_7)) if 1"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node7 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1; $previous_a_7 if 0\n[1] $previous_a_7 := ite(1, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(1, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node6 -> node5 [label="1"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if 1; $previous_b_7 if 0\n[1] $previous_b_7 := ite(1, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(1, 1, $previous_b_is_x_7) if 1"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] assert_eq(a1, DUT.s)\n[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node4 -> node3 [label="1"];
+  node3 [label="[1] fork\n[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node3 -> node2 [label="1"];
+  node2 [label="[1] DUT.a := X if $previous_a_is_x_7; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := ite(0, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(0, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if $previous_b_is_x_7; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := ite(0, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(0, 1, $previous_b_is_x_7) if 1"];
+  node2 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_7 if 0\n[1] $previous_a_7 := ite(1, $previous_a_7, $previous_a_7) if 1\n[1] $previous_a_is_x_7 := ite(1, 1, $previous_a_is_x_7) if 1\n[1] DUT.b := X if 1; $previous_b_7 if 0\n[1] $previous_b_7 := ite(1, $previous_b_7, $previous_b_7) if 1\n[1] $previous_b_is_x_7 := ite(1, 1, $previous_b_is_x_7) if 1"];
+}
+
+== post-contract ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a1 if 1; a1 if 1; a1 if 1; a1 if 1; $previous_a_7 if not($previous_a_is_x_7)\n[1] $previous_a_7 := a1 if 1\n[1] $previous_a_is_x_7 := 0 if 1\n[1] DUT.b := 0 if 1; 0 if 1; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := 0 if 1\n[1] $previous_b_is_x_7 := 0 if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if 1; $previous_a_7 if 0\n[1] $previous_a_7 := $previous_a_7 if 1\n[1] $previous_a_is_x_7 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_b_7 := $previous_b_7 if 1\n[1] $previous_b_is_x_7 := 1 if 1\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1; $previous_a_7 if 0\n[1] $previous_a_7 := $previous_a_7 if 1\n[1] $previous_a_is_x_7 := 1 if 1\n[1] DUT.b := X if 1; $previous_b_7 if 0\n[1] $previous_b_7 := $previous_b_7 if 1\n[1] $previous_b_is_x_7 := 1 if 1"];
+}
+
+== post-simplification ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a1 if 1\n[1] DUT.b := 0 if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] assert_eq(a1, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== post-normalize ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] DUT.a := a1 if 1\n[1] DUT.b := 0 if 1"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] assert_eq(a1, DUT.s)\n[1] fork\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+  node6 -> node1 [label="1 / step"];
+  node1 [label="[1] done\n[1] DUT.a := X if 1\n[1] DUT.b := X if 1"];
+}
+
+== simplified monitor ==
+digraph "if_else" {
+  rankdir=LR;
+  node [shape=box];
+  entry_marker [shape=plain,label="ENTRY"];
+  entry_marker -> node0;
+  node0 [label="[1] assert_eq(DUT.b, 0)\n[1] $monitor_a1_value := DUT.a if 1"];
+  node0 -> node1 [label="1 / step"];
+  node1 [label="[1] assert_eq($monitor_a1_value, DUT.s)\n[1] fork"];
+  node1 -> node2 [label="1 / step"];
+  node2 [label="[1] done"];
+}

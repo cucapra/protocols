@@ -3,35 +3,9 @@ use crate::ir::edge_contract::{
     canonicalize_assignment, merge_ordered_assignment, same_assignment_target
 };
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
-use crate::ir::register_simplify::{RegisterFacts, add_register, simplify_registers};
-use cranelift_entity::EntitySet;
+use crate::ir::register_simplify::{RegisterFacts, simplify_registers};
 use patronus::expr::{Context, find_symbols};
 use rustc_hash::{FxHashMap, FxHashSet};
-
-// BFS from the entry, following only possible transitions.
-pub fn reachable_node_ids(ctx: &Context, pg: &ProtoGraph, start: NodeId) -> Vec<NodeId> {
-    let mut visited: EntitySet<NodeId> = EntitySet::default();
-    let mut nodes = Vec::new();
-    let mut q = vec![start];
-
-    while let Some(nid) = q.pop() {
-        if !visited.insert(nid) {
-            continue;
-        }
-
-        nodes.push(nid);
-        q.extend(
-            pg[nid]
-                .transitions
-                .iter()
-                .filter(|transition| transition.guard != ctx.get_false())
-                .map(|t| t.target)
-                .filter(|target| !visited.contains(*target)),
-        );
-    }
-
-    nodes
-}
 
 /// Insert saved values and release bits before contraction. Return their entry
 /// values for propagation after contraction has composed the within-cycle reads.
@@ -46,19 +20,18 @@ pub fn insert_assignment_registers(
     let mut saved = Vec::new();
     for pin in pins {
         let name = st[pin].name().to_string();
-        let value = add_register(
+        let value = pg.add_register(
             ctx,
-            pg,
             st,
             &format!("$previous_{name}"),
             st[pin].tpe().bitwidth(),
         );
-        let released = add_register(ctx, pg, st, &format!("$previous_{name}_is_x"), 1);
+        let released = pg.add_register(ctx, st, &format!("$previous_{name}_is_x"), 1);
         initial.insert(value, ctx.zero(st[pin].tpe().bitwidth()));
         initial.insert(released, ctx.get_true());
         saved.push((pin, value, released));
     }
-    for node in reachable_node_ids(ctx, pg, entry) {
+    for node in pg.reachable_node_ids(ctx, entry) {
         let mut actions = pg[node]
             .actions
             .iter()
@@ -155,7 +128,7 @@ pub fn simplify_assignments_from(
     );
 
     // canonicalize assignments (second level of simplification)
-    for node in reachable_node_ids(ctx, pg, entry) {
+    for node in pg.reachable_node_ids(ctx, entry) {
         let mut actions = pg[node]
             .actions
             .iter()
@@ -176,7 +149,7 @@ pub fn simplify_assignments_from(
 
     // Panic if there are any registers left.
     let mut expressions = Vec::new();
-    for node in reachable_node_ids(ctx, pg, entry) {
+    for node in pg.reachable_node_ids(ctx, entry) {
         expressions.extend(pg[node].transitions.iter().map(|e| e.guard));
         for action in &pg[node].actions {
             expressions.push(action.guard);

@@ -3,9 +3,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
-use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
-use crate::ir::register_simplify::{add_register, simplify_registers};
+use crate::ir::register_simplify::simplify_registers;
 
 #[derive(Clone)]
 /// wrap an owned ProtoGraph in extra metadata (which is useful to simplify
@@ -115,16 +114,14 @@ fn convert_driver(
         let expr = symbol_expr(ctx, &mut graph, symbols, argument);
         parameter_exprs.insert(expr, index);
         let name = symbols[argument].name().to_string();
-        let value = add_register(
+        let value = graph.add_register(
             ctx,
-            &mut graph,
             symbols,
             &format!("$monitor_{name}_value"),
             width,
         );
-        let known = add_register(
+        let known = graph.add_register(
             ctx,
-            &mut graph,
             symbols,
             &format!("$monitor_{name}_known"),
             width,
@@ -136,7 +133,7 @@ fn convert_driver(
     }
 
     // allocate liveness register, set it to 1.
-    let live_register = add_register(ctx, &mut graph, symbols, "$monitor_live", 1);
+    let live_register = graph.add_register(ctx, symbols, "$monitor_live", 1);
     register_inits.insert(live_register, ctx.get_true());
 
     // Cache pin expressions, including pins used only as assignment targets.
@@ -154,7 +151,7 @@ fn convert_driver(
         })
         .collect();
 
-    let nodes = reachable_node_ids(ctx, &graph, graph.entry);
+    let nodes = graph.reachable_node_ids(ctx, graph.entry);
     let mut converter = Converter {
         ctx,
         graph: &mut graph,

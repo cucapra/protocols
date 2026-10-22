@@ -2,9 +2,8 @@ use patronus::expr::{Context, ExprRef};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::frontend::symbol::SymbolTable;
-use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
-use crate::ir::register_simplify::{add_register, simplify_registers};
+use crate::ir::register_simplify::simplify_registers;
 
 /// Make fork history explicit, then eliminate it with ordinary register
 /// simplification. Completion launches only when no explicit fork has occurred.
@@ -15,9 +14,9 @@ pub fn fork_graft_points(
     entry: NodeId,
     exit: NodeId,
 ) -> Vec<(NodeId, ExprRef)> {
-    let register = add_register(ctx, graph, symbols, "$has_forked", 1);
+    let register = graph.add_register(ctx, symbols, "$has_forked", 1);
     let current = graph.symbol_expr(register).unwrap();
-    let nodes = reachable_node_ids(ctx, graph, entry);
+    let nodes = graph.reachable_node_ids(ctx, entry);
     // A distinct operation ID identifies the implicit-fork markers for removal
     // after the ordinary rewriter has simplified their guards.
     let implicit_fork = graph.o(Op::Fork);
@@ -66,7 +65,7 @@ pub fn fork_graft_points(
         "fork history requires unsupported register state at {entry}"
     );
     let mut grafts = Vec::new();
-    for node in reachable_node_ids(ctx, graph, entry) {
+    for node in graph.reachable_node_ids(ctx, entry) {
         for action in &graph[node].actions {
             if matches!(graph[action.op], Op::Fork) {
                 grafts.push((node, action.guard));

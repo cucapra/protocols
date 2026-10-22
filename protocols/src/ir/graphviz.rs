@@ -7,7 +7,6 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
@@ -31,10 +30,7 @@ pub fn to_dot_string_with_node_labels(
     out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
     out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
 
-    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
-    seen.insert(protocol.entry);
-    let mut q = VecDeque::from([protocol.entry]);
-    while let Some(node_id) = q.pop_front() {
+    for node_id in protocol.reachable_node_ids(ctx, protocol.entry) {
         let node = protocol[node_id].clone();
 
         let mut label_parts = vec![];
@@ -90,9 +86,6 @@ pub fn to_dot_string_with_node_labels(
                 transition.target,
                 escape_label(&edge_label)
             ));
-            if seen.insert(transition.target) {
-                q.push_back(transition.target);
-            }
         }
     }
 
@@ -284,15 +277,16 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
+            let mut ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
+            let entry = ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut ir, &mut symbols, entry);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
             let mut contracted_ir = ir.clone();
             let entry = contracted_ir.entry;
-            let initial =
-                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);

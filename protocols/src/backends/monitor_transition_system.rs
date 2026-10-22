@@ -10,7 +10,6 @@ use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::frontend::Module;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::joint_monitor::JointMonitorAutomaton;
-use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Op, remap_expr};
 
 pub struct MonitorTransitionSystemResult {
@@ -149,7 +148,7 @@ pub fn into_monitor_transition_system(
     let bad_id = ctx.bit_vec_val(monitor.bad_state.as_u32(), node_width);
     let bad = ctx.equal(node_symbol, bad_id);
     let mut node_next = internal_state;
-    let mut nodes = reachable_node_ids(ctx, graph, graph.entry);
+    let mut nodes = graph.reachable_node_ids(ctx, graph.entry);
     nodes.sort();
     for node in nodes {
         let node_id = ctx.bit_vec_val(node.as_u32(), node_width);
