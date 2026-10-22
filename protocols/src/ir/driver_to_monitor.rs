@@ -55,7 +55,7 @@ pub fn simplify_monitor(
     monitor.register_inits.retain(|r, _| !dead.contains(r));
     monitor.value_registers.retain(|_, r| !dead.contains(r));
     monitor.knownness_registers.retain(|_, r| !dead.contains(r));
-    monitor.graph.garbage_collect_unreachable(ctx);
+    monitor.graph.garbage_collect_unreachable(ctx, false);
     monitor
 }
 
@@ -120,18 +120,8 @@ fn convert_driver(
         let expr = symbol_expr(ctx, &mut graph, symbols, argument);
         parameter_exprs.insert(expr, index);
         let name = symbols[argument].name().to_string();
-        let value = graph.add_register(
-            ctx,
-            symbols,
-            &format!("$monitor_{name}_value"),
-            width,
-        );
-        let known = graph.add_register(
-            ctx,
-            symbols,
-            &format!("$monitor_{name}_known"),
-            width,
-        );
+        let value = graph.add_register(ctx, symbols, &format!("$monitor_{name}_value"), width);
+        let known = graph.add_register(ctx, symbols, &format!("$monitor_{name}_known"), width);
         value_registers.insert(argument, value);
         knownness_registers.insert(argument, known);
         let zero = ctx.zero(width);
@@ -172,7 +162,7 @@ fn convert_driver(
         converter.convert_node(node, &initial_env)?;
     }
     // Drop obsolete driver operations, without optimizing monitor expressions.
-    graph.garbage_collect_unreachable(ctx);
+    graph.garbage_collect_unreachable(ctx, false);
     Ok(MonitorAutomaton {
         graph,
         value_registers,

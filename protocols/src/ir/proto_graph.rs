@@ -6,7 +6,7 @@ use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
-    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr
+    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
@@ -419,8 +419,12 @@ impl ProtoGraph {
     }
 
     /// Rebuild the graph from the subgraph reachable from `entry`.
-    /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
+    /// Node IDs are compacted; operation IDs are preserved when `keep_all_ops` is true.
+    pub fn garbage_collect_unreachable(
+        &mut self,
+        ctx: &Context,
+        keep_all_ops: bool,
+    ) -> FxHashMap<NodeId, NodeId> {
         let reachable_old_nodes = self.reachable_node_ids(ctx, self.entry);
 
         let mut node_map: FxHashMap<NodeId, NodeId> = FxHashMap::default();
@@ -442,7 +446,9 @@ impl ProtoGraph {
         }
         self.entry = node_map[&self.entry];
         self.nodes = new_nodes;
-        self.garbage_collect_ops();
+        if !keep_all_ops {
+            self.garbage_collect_ops();
+        }
 
         node_map
     }
@@ -800,7 +806,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable(&ctx);
+        pg.garbage_collect_unreachable(&ctx, false);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);

@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use crate::PortId;
 use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::backends::transition_system::{
-    CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr
+    CoreLoweredSystem, lower_proto_graph_to_transition_system, replace_expr,
 };
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};

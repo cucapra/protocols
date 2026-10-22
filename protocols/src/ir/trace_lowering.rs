@@ -10,7 +10,9 @@ use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::edge_contract::{
-    append_action, append_action_disjoint, contract_edges, guard_assignment, merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch, same_assignment_target
+    append_action, append_action_disjoint, contract_edges, guard_assignment,
+    merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch,
+    same_assignment_target,
 };
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};

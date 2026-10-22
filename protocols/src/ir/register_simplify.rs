@@ -387,4 +387,3 @@ pub fn simplify_registers(
     let analysis = analyze_registers(ctx, graph, symbols, entry, initial);
     rewrite_registers(ctx, graph, symbols, entry, &analysis, preserved)
 }
-

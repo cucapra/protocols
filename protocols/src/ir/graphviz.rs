@@ -287,7 +287,7 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::driver_to_monitor::{
         MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
-        simplify_monitor
+        simplify_monitor,
     };
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::joint_driver::build_joint_driver_automaton;
@@ -331,7 +331,7 @@ mod tests {
             content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
             content += "\n";
 
-            assignment_normalized_ir.garbage_collect_unreachable(&ctx);
+            assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
             let monitor =
                 convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
                     .unwrap();
@@ -364,7 +364,7 @@ mod tests {
 
         simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
-        graph.garbage_collect_unreachable(&ctx);
+        graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
         let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
         let dot = driver.to_dot_string(&ctx, &symbols);
