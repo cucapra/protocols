@@ -1,9 +1,12 @@
 use std::collections::{BTreeSet, VecDeque};
 
-use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
+use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type as FrontType};
 use crate::ir::propagate_assigns::reachable_node_ids;
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{
+    Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition, remap_expr
+};
 use patronus::expr::{Context, ExprRef};
+use rustc_hash::FxHashMap;
 
 fn symbol_expr(
     ctx: &mut Context,
@@ -515,6 +518,61 @@ fn append_action_with_mode(
     }
 }
 
+// Compose this node's register updates with the preceding non-step path.
+// All update RHSs read the incoming map. Other actions and edges see the updates.
+// Expressions already emitted for preceding nodes are never rewritten again.
+fn resolve_registers(
+    ctx: &mut Context,
+    graph: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    mut node: Node,
+    values: &mut FxHashMap<ExprRef, ExprRef>,
+) -> Node {
+    let mut updates = FxHashMap::default();
+    for action in &mut node.actions {
+        if let Op::Assign(register, _) = graph[action.op]
+            && symbols[register].kind() == SymbolKind::AutomatonState
+        {
+            let op = graph[action.op].remap(ctx, values, &FxHashMap::default());
+            let Op::Assign(_, assignment) = &op else {
+                unreachable!()
+            };
+            assert_eq!(action.guard, ctx.get_true());
+            assert_eq!(
+                assignment.dont_care,
+                ctx.get_false(),
+                "generated registers must not assign X"
+            );
+            let current = graph.symbol_expr(register).unwrap();
+            let held = values.get(&current).copied().unwrap_or(current);
+            let value = assignment
+                .concretes
+                .iter()
+                .rev()
+                .fold(held, |value, &(guard, rhs)| ctx.ite(guard, rhs, value));
+            let value = graph.simplifier.simplify(ctx, value);
+            assert!(
+                updates.insert(current, value).is_none(),
+                "multiple register updates in one node"
+            );
+            action.op = graph.o(op);
+        }
+    }
+    values.extend(updates);
+    for action in &mut node.actions {
+        if !matches!(graph[action.op], Op::Assign(r, _) if symbols[r].kind() == SymbolKind::AutomatonState)
+        {
+            let op = graph[action.op].remap(ctx, values, &FxHashMap::default());
+            action.op = graph.o(op);
+            action.guard = remap_expr(ctx, action.guard, values);
+        }
+    }
+    for edge in &mut node.transitions {
+        edge.guard = remap_expr(ctx, edge.guard, values);
+    }
+    node
+}
+
 pub fn contract_edges(ctx: &mut Context, pg: &mut ProtoGraph, symbols: &SymbolTable) {
     contract_edges_from(ctx, pg, symbols, pg.entry);
 }
@@ -527,11 +585,32 @@ pub fn contract_edges_from(
     start: NodeId,
 ) {
     let node_ids = reachable_node_ids(ctx, protocol, start);
+    // A previously contracted target already contains composed expressions.
+    // Start each register path from original nodes so updates are applied once.
+    let originals = node_ids.iter()
+        .any(|node| protocol[*node].actions.iter().any(|a| matches!(protocol[a.op], Op::Assign(r, _) if symbols[r].kind() == SymbolKind::AutomatonState)))
+        .then(|| {
+            protocol
+                .nodes()
+                .map(|(id, node)| (id, node.clone()))
+                .collect::<FxHashMap<_, _>>()
+        });
 
     for source_node_id in node_ids.into_iter().rev() {
-        let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
+        let mut values = FxHashMap::default();
+        let source = match &originals {
+            Some(nodes) => resolve_registers(
+                ctx,
+                protocol,
+                symbols,
+                nodes[&source_node_id].clone(),
+                &mut values,
+            ),
+            None => protocol[source_node_id].clone(),
+        };
+        let mut contracted_actions = Vec::with_capacity(source.actions.len());
         let mut internal_assert_guard = None;
-        for action in protocol[source_node_id].actions.clone() {
+        for action in source.actions {
             append_action(
                 ctx,
                 protocol,
@@ -543,10 +622,8 @@ pub fn contract_edges_from(
             );
         }
 
-        let (mut step_transitions, pending_transitions): (Vec<_>, Vec<_>) = protocol
-            [source_node_id]
+        let (mut step_transitions, pending_transitions): (Vec<_>, Vec<_>) = source
             .transitions
-            .clone()
             .into_iter()
             .partition(|transition| transition.consumes_step);
 
@@ -554,15 +631,19 @@ pub fn contract_edges_from(
             .into_iter()
             .rev()
             .map(|transition| {
-                (transition, {
-                    let mut path = BTreeSet::new();
-                    path.insert(source_node_id);
-                    path
-                })
+                (
+                    transition,
+                    {
+                        let mut path = BTreeSet::new();
+                        path.insert(source_node_id);
+                        path
+                    },
+                    values.clone(),
+                )
             })
             .collect();
 
-        while let Some((transition, path)) = pending_transitions.pop_front() {
+        while let Some((transition, path, mut values)) = pending_transitions.pop_front() {
             assert!(!transition.consumes_step);
 
             let target_node_id = transition.target;
@@ -577,8 +658,18 @@ pub fn contract_edges_from(
             }
 
             let incoming_guard = transition.guard;
-            let target_actions = protocol[target_node_id].actions.clone();
-            let target_transitions = protocol[target_node_id].transitions.clone();
+            let target = match &originals {
+                Some(nodes) => resolve_registers(
+                    ctx,
+                    protocol,
+                    symbols,
+                    nodes[&target_node_id].clone(),
+                    &mut values,
+                ),
+                None => protocol[target_node_id].clone(),
+            };
+            let target_actions = target.actions;
+            let target_transitions = target.transitions;
             let mut next_path = path.clone();
             next_path.insert(target_node_id);
 
@@ -619,7 +710,34 @@ pub fn contract_edges_from(
                 if contracted_transition.consumes_step {
                     step_transitions.push(contracted_transition);
                 } else {
-                    pending_transitions.push_back((contracted_transition, next_path.clone()));
+                    pending_transitions.push_back((
+                        contracted_transition,
+                        next_path.clone(),
+                        values.clone(),
+                    ));
+                }
+            }
+        }
+
+        // Merge the path-guarded writes into one simultaneous final update.
+        // Checks above already contain the expressions at their observation.
+        if originals.is_some() {
+            for action in &mut contracted_actions {
+                if let Op::Assign(register, assignment) = &protocol[action.op]
+                    && symbols[*register].kind() == SymbolKind::AutomatonState
+                {
+                    let register = *register;
+                    let held = protocol.symbol_expr(register).unwrap();
+                    let value = assignment
+                        .concretes
+                        .iter()
+                        .rev()
+                        .fold(held, |value, &(g, rhs)| ctx.ite(g, rhs, value));
+                    let value = protocol.simplifier.simplify(ctx, value);
+                    action.op = protocol.o(Op::Assign(
+                        register,
+                        Assignment::concrete(ctx.get_false(), ctx.get_true(), value),
+                    ));
                 }
             }
         }
@@ -685,8 +803,189 @@ mod tests {
     use super::*;
     use crate::frontend::ast::ProtocolContext;
     use crate::frontend::symbol::ROOT_SCOPE;
+    use baa::{BitVecOps, BitVecValue};
     use cranelift_entity::EntityRef;
-    use patronus::expr::SerializableIrNode;
+    use patronus::expr::{SerializableIrNode, SymbolValueStore, eval_expr};
+
+    fn register_graph() -> (Context, ProtoGraph, SymbolTable, SymbolId, ExprRef) {
+        let mut ctx = Context::default();
+        let mut symbols = SymbolTable::default();
+        let r = symbols.add_without_parent(
+            "r".into(),
+            FrontType::BitVec(8),
+            SymbolKind::AutomatonState,
+        );
+        let mut graph = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let expr = ctx.bv_symbol("r", 8);
+        graph.cache_symbol_expr(r, expr);
+        (ctx, graph, symbols, r, expr)
+    }
+
+    fn bv(ctx: &Context, store: &SymbolValueStore, expr: ExprRef) -> BitVecValue {
+        eval_expr(ctx, store, expr).try_into().unwrap()
+    }
+
+    #[test]
+    fn register_checks_are_frozen_and_edges_see_updates_once() {
+        let (mut ctx, mut graph, symbols, r, current) = register_graph();
+        let entry = graph.entry;
+        let middle = graph.n(Node::empty());
+        let after_step = graph.n(Node::empty());
+        let otherwise = graph.n(Node::empty());
+        let g = ctx.bv_symbol("g", 1);
+        let one = ctx.one(8);
+        let first = ctx.add(current, one);
+        let two = ctx.bit_vec_val(2, 8);
+        let second = ctx.add(current, two);
+        let op = graph.o(Op::Assign(
+            r,
+            Assignment {
+                dont_care: ctx.get_false(),
+                concretes: vec![
+                    (g, first),
+                    (ctx.get_true(), second),
+                    (ctx.get_true(), current),
+                ],
+            },
+        ));
+        graph.push_action(entry, Action::new(ctx.get_true(), op));
+        let three = ctx.bit_vec_val(3, 8);
+        let check = graph.o(Op::AssertEq(current, three));
+        let guard = ctx.equal(current, three);
+        graph.push_action(entry, Action::new(guard, check));
+        graph.push_transition(entry, Transition::new(ctx.get_true(), middle, false));
+        let four = ctx.bit_vec_val(4, 8);
+        let next = ctx.add(current, four);
+        let op = graph.o(Op::Assign(
+            r,
+            Assignment::concrete(ctx.get_false(), ctx.get_true(), next),
+        ));
+        graph.push_action(middle, Action::new(ctx.get_true(), op));
+        let seven = ctx.bit_vec_val(7, 8);
+        let check = graph.o(Op::AssertEq(current, seven));
+        graph.push_action(middle, Action::new(ctx.get_true(), check));
+        let guard = ctx.equal(current, seven);
+        let not_guard = ctx.not(guard);
+        graph.push_transition(middle, Transition::new(guard, after_step, true));
+        graph.push_transition(middle, Transition::new(not_guard, otherwise, true));
+        let eight = ctx.bit_vec_val(8, 8);
+        let next = ctx.add(current, eight);
+        let op = graph.o(Op::Assign(
+            r,
+            Assignment::concrete(ctx.get_false(), ctx.get_true(), next),
+        ));
+        graph.push_action(after_step, Action::new(ctx.get_true(), op));
+        graph.push_transition(
+            after_step,
+            Transition::new(ctx.get_true(), after_step, true),
+        );
+
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        let checks = graph[entry]
+            .actions
+            .iter()
+            .filter_map(|a| match graph[a.op] {
+                Op::AssertEq(lhs, _) => Some((a.guard, lhs)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(checks.len(), 2);
+        for initial in 0..8 {
+            for select in [false, true] {
+                let mut store = SymbolValueStore::default();
+                store.define_bv(current, &BitVecValue::from_u64(initial, 8));
+                store.define_bv(g, &BitVecValue::from_u64(select as u64, 1));
+                let first = initial + if select { 1 } else { 2 };
+                assert_eq!(
+                    bv(&ctx, &store, checks[0].1),
+                    BitVecValue::from_u64(first, 8)
+                );
+                assert_eq!(!bv(&ctx, &store, checks[0].0).is_zero(), first == 3);
+                assert_eq!(
+                    bv(&ctx, &store, checks[1].1),
+                    BitVecValue::from_u64(first + 4, 8)
+                );
+                assert_eq!(
+                    !bv(
+                        &ctx,
+                        &store,
+                        graph[entry]
+                            .transitions
+                            .iter()
+                            .find(|e| e.target == after_step)
+                            .unwrap()
+                            .guard
+                    )
+                    .is_zero(),
+                    first + 4 == 7
+                );
+                let Op::Assign(_, assignment) = &graph[graph[after_step].actions[0].op] else {
+                    unreachable!()
+                };
+                assert_eq!(
+                    bv(&ctx, &store, assignment.concretes[0].1),
+                    BitVecValue::from_u64(initial + 8, 8)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn register_updates_on_alternative_paths_stay_separate() {
+        let (mut ctx, mut graph, symbols, r, current) = register_graph();
+        let entry = graph.entry;
+        let left = graph.n(Node::empty());
+        let right = graph.n(Node::empty());
+        let join = graph.n(Node::empty());
+        let end = graph.n(Node::empty());
+        let g = ctx.bv_symbol("g", 1);
+        let not_g = ctx.not(g);
+        graph.push_transition(entry, Transition::new(g, left, false));
+        graph.push_transition(entry, Transition::new(not_g, right, false));
+        for (node, increment) in [(left, 1), (right, 2)] {
+            let increment = ctx.bit_vec_val(increment, 8);
+            let value = ctx.add(current, increment);
+            let op = graph.o(Op::Assign(
+                r,
+                Assignment::concrete(ctx.get_false(), ctx.get_true(), value),
+            ));
+            graph.push_action(node, Action::new(ctx.get_true(), op));
+            graph.push_transition(node, Transition::new(ctx.get_true(), join, false));
+        }
+        let nine = ctx.bit_vec_val(9, 8);
+        let check = graph.o(Op::AssertEq(current, nine));
+        graph.push_action(join, Action::new(ctx.get_true(), check));
+        graph.push_transition(join, Transition::new(ctx.get_true(), end, true));
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        for select in [false, true] {
+            let mut store = SymbolValueStore::default();
+            store.define_bv(current, &BitVecValue::from_u64(7, 8));
+            store.define_bv(g, &BitVecValue::from_u64(select as u64, 1));
+            let expected = BitVecValue::from_u64(if select { 8 } else { 9 }, 8);
+            let mut checked = 0;
+            for action in &graph[entry].actions {
+                if bv(&ctx, &store, action.guard).is_zero() {
+                    continue;
+                }
+                match &graph[action.op] {
+                    Op::AssertEq(lhs, _) => {
+                        assert_eq!(bv(&ctx, &store, *lhs), expected);
+                        checked += 1;
+                    }
+                    Op::Assign(_, assignment) => {
+                        let (_, rhs) = assignment
+                            .concretes
+                            .iter()
+                            .find(|(g, _)| !bv(&ctx, &store, *g).is_zero())
+                            .unwrap();
+                        assert_eq!(bv(&ctx, &store, *rhs), expected);
+                    }
+                    _ => {}
+                }
+            }
+            assert_eq!(checked, 1);
+        }
+    }
 
     fn concrete_assignment(ctx: &Context, rhs: ExprRef) -> Assignment {
         Assignment::concrete(ctx.get_false(), ctx.get_true(), rhs)
