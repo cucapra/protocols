@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::edge_contract::contract_edges_from;
-use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
+use crate::ir::fork_reach::fork_graft_points;
 use crate::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments_from};
 use crate::ir::proto_graph::*;
 
@@ -65,76 +65,13 @@ impl<'a> Lowerer<'a> {
         ctx: &mut ExprContext,
         fragment: &LoweredFragmentInfo,
     ) -> Vec<(NodeId, ExprRef)> {
-        self.graft_points_from_node(ctx, &fragment.nodes, fragment.entry, fragment.exit)
-    }
-
-    pub fn graft_points_from_node(
-        &mut self,
-        ctx: &mut Context,
-        nodes: &[NodeId],
-        entry: NodeId,
-        exit: NodeId,
-    ) -> Vec<(NodeId, ExprRef)> {
-        let fork_reach = reaching_forks_from(ctx, &mut self.ir, entry);
-        let ir = &self.ir;
-
-        // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
-        // TODO: instead of reachability, we should just run garbage collection
-        let mut graft_points: Vec<(NodeId, ExprRef)> = nodes
-            .iter()
-            .flat_map(|id| {
-                let reachability = fork_reach
-                    .in_reach
-                    .get(id)
-                    .copied()
-                    .unwrap_or(ForkReachability::Unreachable);
-
-                if reachability != ForkReachability::DefinitelyNotForked {
-                    return Vec::new().into_iter();
-                }
-
-                let node = &ir[*id];
-                node.actions
-                    .iter()
-                    .filter(|action| matches!(ir[action.op], Op::Fork))
-                    .map(move |action| (*id, action.guard))
-                    .collect::<Vec<_>>()
-                    .into_iter()
-            })
-            .collect();
-
-        // at every fork point, we want to have it proven that we haven't forked before
-        for (fork_node, _) in &graft_points {
-            let reachability = fork_reach.in_reach.get(fork_node).copied().unwrap();
-            assert!(
-                matches!(
-                    reachability,
-                    // nodes never get cleaned up, so there are old (pre-contraction) fork nodes that are Unreachable we need to account for
-                    ForkReachability::Unreachable | ForkReachability::DefinitelyNotForked
-                ),
-                "fork node {fork_node} can be reached after a prior fork"
-            );
-        }
-
-        // if we can prove we haven't forked up to know, we'll also graft onto the exit
-        // if we can prove we have forked up to know, we won't graft onto the exit node
-        // otherwise, panic! - we're gonna have an exponential blowup
-        let exit_reachability = fork_reach
-            .in_reach
-            .get(&exit)
-            .copied()
-            .unwrap_or(ForkReachability::Unreachable);
-        match exit_reachability {
-            ForkReachability::DefinitelyNotForked => {
-                graft_points.push((exit, ctx.get_true()));
-            }
-            ForkReachability::DefinitelyForked | ForkReachability::Unreachable => {}
-            ForkReachability::MaybeForked => {
-                panic!("done node {} may or may not have forked", exit);
-            }
-        }
-
-        graft_points
+        fork_graft_points(
+            ctx,
+            &mut self.ir,
+            self.symbols,
+            fragment.entry,
+            fragment.exit,
+        )
     }
 
     /// Add a new node to the IR and track it in current fragment
@@ -444,7 +381,7 @@ impl<'a> Lowerer<'a> {
         }
 
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
-        let graft_points = self.graft_points_from_node(ctx, &nodes, entry, done);
+        let graft_points = fork_graft_points(ctx, &mut self.ir, self.symbols, entry, done);
         LoweredFragmentInfo {
             nodes,
             entry,

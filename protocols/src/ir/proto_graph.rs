@@ -347,6 +347,34 @@ impl ProtoGraph {
         self.nodes[node_id].transitions.push(t);
     }
 
+    /// Remove unused operations without changing node IDs or action positions.
+    pub fn garbage_collect_ops(&mut self) {
+        let used = self
+            .nodes
+            .iter()
+            .flat_map(|(_, n)| n.actions.iter().map(|a| a.op))
+            .collect::<FxHashSet<_>>();
+        let mut mapping = FxHashMap::default();
+        let mut ops = PrimaryMap::new();
+        let mut locations = SecondaryMap::new();
+        for (old, op) in self.ops.iter() {
+            if used.contains(&old) {
+                let new = ops.push(op.clone());
+                mapping.insert(old, new);
+                if let Some(&location) = self.op_loc.get(old) {
+                    locations[new] = location;
+                }
+            }
+        }
+        for (_, node) in self.nodes.iter_mut() {
+            for action in &mut node.actions {
+                action.op = mapping[&action.op];
+            }
+        }
+        self.ops = ops;
+        self.op_loc = locations;
+    }
+
     /// Rebuild the graph from the subgraph reachable from `entry`.
     /// This compacts both node IDs and op IDs.
     pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
@@ -378,40 +406,14 @@ impl ProtoGraph {
                 .retain(|transition| transition.guard != ctx.get_false());
         }
 
-        let mut reachable_old_ops = Vec::new();
-        let mut seen_ops = FxHashSet::default();
-        for (_, node) in new_nodes.iter() {
-            for action in &node.actions {
-                if seen_ops.insert(action.op) {
-                    reachable_old_ops.push(action.op);
-                }
-            }
-        }
-
-        let mut op_map: FxHashMap<OpId, OpId> = FxHashMap::default();
-        let mut new_ops = PrimaryMap::new();
-        let mut new_op_loc = SecondaryMap::new();
-        for old_op_id in reachable_old_ops {
-            let new_op_id = new_ops.push(self.ops[old_op_id].clone());
-            op_map.insert(old_op_id, new_op_id);
-            if let Some(loc) = self.op_loc.get(old_op_id).copied() {
-                new_op_loc[new_op_id] = loc;
-            }
-        }
-
         for (_, node) in new_nodes.iter_mut() {
-            for action in &mut node.actions {
-                action.op = op_map[&action.op];
-            }
             for transition in &mut node.transitions {
                 transition.target = node_map[&transition.target];
             }
         }
-
         self.entry = node_map[&self.entry];
         self.nodes = new_nodes;
-        self.ops = new_ops;
-        self.op_loc = new_op_loc;
+        self.garbage_collect_ops();
 
         node_map
     }

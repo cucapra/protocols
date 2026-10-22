@@ -1,7 +1,8 @@
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
-use crate::ir::edge_contract::{merge_ordered_assignment, same_assignment_target};
+use crate::ir::edge_contract::{
+    canonicalize_assignment, merge_ordered_assignment, same_assignment_target
+};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
-use crate::ir::reaching_defs::canonicalize_assignment;
 use crate::ir::register_simplify::{RegisterFacts, add_register, simplify_registers};
 use cranelift_entity::EntitySet;
 use patronus::expr::{Context, find_symbols};

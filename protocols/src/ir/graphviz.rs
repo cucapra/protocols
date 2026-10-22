@@ -124,6 +124,32 @@ fn format_op(
     }
 }
 
+/// Text view of the prepared DUT assignments, used by the legacy CLI flag.
+pub fn format_assignments(ctx: &Context, graph: &ProtoGraph, symbols: &SymbolTable) -> String {
+    let mut out = String::new();
+    for (id, node) in graph.nodes() {
+        out.push_str(&format!("{id}:\n"));
+        let mut assignments = node
+            .actions
+            .iter()
+            .filter_map(|a| match &graph[a.op] {
+                Op::Assign(pin, assignment) if symbols[*pin].is_in_port() => {
+                    Some((symbols[*pin].full_name(symbols), assignment))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assignments.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, assignment) in assignments {
+            out.push_str(&format!(
+                "  {name}: {}\n",
+                format_assignment(ctx, graph, assignment)
+            ));
+        }
+    }
+    out
+}
+
 fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignment) -> String {
     let mut parts = Vec::new();
     if assignment.dont_care != ctx.get_false() {

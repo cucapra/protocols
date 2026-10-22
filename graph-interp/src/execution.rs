@@ -15,13 +15,12 @@ use protocols::ir::bounded_lowering::lower_bmc;
 use protocols::ir::determinize::determinized;
 use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter::{self, GraphInterpretFailure, GraphInterpretFailureKind};
-use protocols::ir::graphviz::to_dot_string;
+use protocols::ir::graphviz::{format_assignments, to_dot_string};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_driver::build_joint_driver_automaton;
 use protocols::ir::lowering::lower_ast_to_ir;
 use protocols::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments};
 use protocols::ir::proto_graph::ProtoGraph;
-use protocols::ir::reaching_defs::format_reaching_defs;
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, PortId, Value};
 use rustc_hash::FxHashMap;
@@ -105,28 +104,9 @@ fn prepare_trace_graph(
     let initial = insert_assignment_registers(ctx, &mut graph, symbols, entry);
     contract_edges(ctx, &mut graph, symbols);
     simplify_assignments(ctx, &mut graph, symbols, &initial);
-    let reaching = graph
-        .nodes()
-        .map(|(id, node)| {
-            (
-                id,
-                node.actions
-                    .iter()
-                    .filter_map(|a| match &graph[a.op] {
-                        protocols::ir::proto_graph::Op::Assign(pin, assignment)
-                            if symbols[*pin].is_in_port() =>
-                        {
-                            Some((symbols[*pin].full_name(symbols), assignment.clone()))
-                        }
-                        _ => None,
-                    })
-                    .collect(),
-            )
-        })
-        .collect();
     if cli.reaching_definitions {
         println!("// reaching definitions for trace {trace_index}");
-        println!("{}", format_reaching_defs(ctx, &graph, symbols, &reaching));
+        println!("{}", format_assignments(ctx, &graph, symbols));
     }
     if cli.graphout {
         println!("// final trace graph for trace {trace_index}");
