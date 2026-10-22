@@ -10,9 +10,7 @@ use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::edge_contract::{
-    append_action, append_action_disjoint, contract_edges, guard_assignment,
-    merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch,
-    same_assignment_target,
+    append_action, append_action_disjoint, contract_edges, guard_assignment, merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch, same_assignment_target
 };
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
@@ -291,7 +289,7 @@ pub fn lower_trace_to_ir(
     ctx: &mut Context,
     trace: &[(String, Vec<Value>)],
     protos_by_name: &FxHashMap<&str, &Protocol>,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> ProtoGraph {
     assert!(!trace.is_empty(), "cannot lower an empty trace");
 
@@ -309,7 +307,7 @@ pub fn lower_trace_to_ir(
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     lowerer.postprocess_trace_fragment(ctx, &first);
-    contract_edges(ctx, &mut lowerer.ir, symbols);
+    contract_edges(ctx, &mut lowerer.ir, lowerer.symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.graft_points(ctx, &first);

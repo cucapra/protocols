@@ -6,7 +6,7 @@ use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::SymbolId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
-    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
+    Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
@@ -486,7 +486,7 @@ mod tests {
     ) -> (Context, ProtoGraph) {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
-        let (st, modules) =
+        let (mut st, modules) =
             frontend(&[&path], &mut handler, skip_static_step_fork_checks, false).unwrap();
         let module = require_single_module(modules, &[&path]).unwrap();
         let proto = match protocol_name {
@@ -501,7 +501,7 @@ mod tests {
             }
         };
         let mut ctx = Context::default();
-        let graph = lower_ast_to_ir(&mut ctx, proto, &st);
+        let graph = lower_ast_to_ir(&mut ctx, proto, &mut st);
         (ctx, graph)
     }
 

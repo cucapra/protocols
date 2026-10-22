@@ -1,0 +1,42 @@
+struct Pins {
+  in data: u8,
+  out sample: u8,
+  out select: u1,
+}
+
+prot persistent<DUT: Pins>(p: u8) {
+  DUT.data := p;
+  step();
+  step();
+  DUT.data := X;
+  step();
+  step();
+}
+
+prot same_cycle<DUT: Pins>(p: u8) {
+  DUT.data := p;
+  if (DUT.select == 1'b1) {
+    assert_eq(DUT.sample, p);
+  } else {
+    assert_eq(DUT.sample, p);
+  }
+  step();
+  step();
+}
+
+prot sampled<DUT: Pins>() {
+  DUT.data := DUT.sample;
+  step();
+  step();
+}
+
+prot selected<DUT: Pins>(p: u8, q: u8) {
+  if (DUT.select == 1'b1) {
+    DUT.data := p;
+    step();
+  } else {
+    DUT.data := q;
+    step();
+  }
+  step();
+}
