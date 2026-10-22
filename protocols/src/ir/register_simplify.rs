@@ -117,9 +117,6 @@ fn assume_helper(
     }
 }
 
-/// Register updates must not assign X; DUT pin assignments may still do so.
-/// Within-cycle reads must already be resolved by contraction (or constructed
-/// directly as composed expressions). Remaining register reads mean node entry.
 pub fn analyze_registers(
     ctx: &mut Context,
     graph: &ProtoGraph,

@@ -7,8 +7,6 @@ use crate::ir::register_simplify::{RegisterFacts, simplify_registers};
 use patronus::expr::{Context, find_symbols};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-/// Insert saved values and release bits before contraction. Return their entry
-/// values for propagation after contraction has composed the within-cycle reads.
 pub fn insert_assignment_registers(
     ctx: &mut Context,
     pg: &mut ProtoGraph,
@@ -100,7 +98,6 @@ pub fn insert_assignment_registers(
     initial
 }
 
-/// Eliminate the saved state after edge contraction has resolved its reads.
 pub fn simplify_assignments(
     ctx: &mut Context,
     pg: &mut ProtoGraph,

@@ -35,8 +35,14 @@ pub fn simplify_monitor(
     mut monitor: MonitorAutomaton,
     symbols: &mut SymbolTable,
 ) -> MonitorAutomaton {
+    // Parameter values are captured results, even when no later check reads them.
     // Joint construction adds liveness reads after this simplification.
-    let preserved = FxHashSet::from_iter([monitor.live_register]);
+    let mut preserved = monitor
+        .value_registers
+        .values()
+        .copied()
+        .collect::<FxHashSet<_>>();
+    preserved.insert(monitor.live_register);
     let entry = monitor.graph.entry;
     let dead = simplify_registers(
         ctx,
