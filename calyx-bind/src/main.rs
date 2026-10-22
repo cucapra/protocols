@@ -1,29 +1,22 @@
 use baa::BitVecOps;
 use clap::{ColorChoice, Parser};
-use patronus::expr::{
-    Context, Expr, ExprRef, SerializableIrNode, TypeCheck, simple_transform_expr,
-};
+use patronus::expr::{Context, Expr, ExprRef, TypeCheck, simple_transform_expr};
 use patronus::system::{Output, TransitionSystem};
-use protocols::backends::transition_system::{
-    lower_proto_graph_to_transition_system, replace_expr,
-};
+use protocols::backends::transition_system::lower_proto_graph_to_transition_system;
 use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{Dir, SymbolTable};
-use protocols::ir::driver_to_monitor::convert_driver_to_capturing_driver;
-use protocols::ir::edge_contract::{contract_edges, normalize_assignments};
-use protocols::ir::graphviz::{to_dot_string, to_dot_string_from_entry};
+use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
+use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_automaton::analyze_shape;
-use protocols::ir::joint_driver::{build_joint_driver_automaton, build_joint_driver_automaton_from_lowered};
-use protocols::ir::lowering::{LoweredFragmentInfo, Lowerer, lower_ast_to_ir};
-use protocols::ir::propagate_assigns::{propagate_assignments, reachable_node_ids};
+use protocols::ir::lowering::Lowerer;
+use protocols::ir::propagate_assigns::reachable_node_ids;
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
-use protocols::ir::reaching_defs::reaching_definitions;
+use protocols::ir::simplify_monitor::simplify_monitor;
 use protocols::{PortId, frontend};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
-use protocols::ir::simplify_monitor::simplify_monitor;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -48,47 +41,11 @@ struct Args {
     module: String,
 }
 
-fn gen_driver_alt(st: &mut SymbolTable, m: &Module) {
-    assert!(
-        m.protos.iter().filter(|p| p.is_idle).count() <= 1,
-        "TODO: support more than a single idle protocol"
-    );
-    assert!(
-        m.protos.iter().filter(|p| p.is_reset).count() <= 1,
-        "Only a single reset protocol is supported."
-    );
-    let methods: Vec<_> = m
-        .protos
-        .iter()
-        .cloned()
-        .filter(|p| !p.is_idle && !p.is_reset)
-        .collect();
-
-
-    let mut ctx = Context::default();
-
-    let autos: Vec<_> = methods.iter().map(|p| {
-        let mut lowerer = Lowerer::new(p.ctx.clone(), st);
-        let fragment = lowerer.lower_protocol_fragment(&mut ctx, p, true, false);
-        lowerer.postprocess_trace_fragment(&mut ctx, &fragment);
-        lowerer.ir.entry = fragment.entry;
-        lowerer.ir.garbage_collect_unreachable(&mut ctx, false);
-        let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
-        let auto = simplify_monitor(&mut ctx, auto, st);
-        auto
-    }).collect();
-    let sources: Vec<_> = autos.iter().map(|a| a.graph.clone()).collect();
-
-    let driver = build_joint_driver_automaton_from_lowered(&mut ctx, m, methods, sources, st).unwrap();
-
-    println!("{}", to_dot_string(&ctx, &driver.graph, st));
-}
-
 fn gen_driver(st: &mut SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
     let mut ctx = Context::default();
-    let (mut lowerer, lowered) = lower_protocols(&mut ctx, st, m);
+    let (mut pg, lowered) = lower_protocols(st, &mut ctx, m);
     debug_assert_eq!(lowered.len(), m.protos.len());
     let methods: Vec<_> = m
         .protos
@@ -103,9 +60,9 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
         .zip(lowered.iter())
         .find(|(p, _)| p.is_reset)
         .map(|(_, l)| {
-            let node_id = get_single_cycle(&mut ctx, &mut lowerer.ir, l)
-                .expect("reset should be single cycle");
-            lowerer.ir[node_id].actions.clone()
+            let node_id =
+                get_single_cycle(&mut ctx, &mut pg, *l).expect("reset should be single cycle");
+            pg[node_id].actions.clone()
         })
         .unwrap_or_default();
     let idle: Option<_> = m
@@ -114,39 +71,21 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
         .zip(lowered.iter())
         .find(|(p, _)| p.is_idle)
         .map(|(_, l)| {
-            get_single_cycle(&mut ctx, &mut lowerer.ir, l).expect("idle should be single cycle")
+            get_single_cycle(&mut ctx, &mut pg, *l).expect("idle should be single cycle")
         });
 
     // pad methods with idle to remove any forks in the protocol
-    for (graph, method) in methods.iter().zip(m.protos.iter()) {
-        remove_fork(&mut ctx, &mut lowerer, graph, idle);
-        // make sure it worked
-        assert!(
-            lowerer
-                .graft_points(&mut ctx, graph)
-                .iter()
-                .all(|(p, _)| *p == graph.exit)
-        );
+    for (&&entry_node, method) in methods.iter().zip(m.protos.iter()) {
+        remove_fork(st, &mut ctx, &mut pg, entry_node, idle);
 
         // check shape
-        lowerer.ir.entry = graph.entry;
-        let shape = analyze_shape(&ctx, &lowerer.ir, method).unwrap();
+        pg.entry = entry_node;
+        let shape = analyze_shape(&ctx, &pg, method).unwrap();
         assert!(
             shape.fork.is_none(),
             "we should have removed all forks at this point!"
         );
         assert!(shape.post.is_empty());
-        assert_eq!(shape.done, graph.exit);
-
-        // turn into observing driver
-        lowerer.ir.args = method.args.clone();
-        let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
-        lowerer.ir = auto.graph;
-
-        // print graph
-        // println!("-----------------------------------------------------------");
-        // println!("Lowered {}", method.name);
-        // println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
     }
 
     // guard method starts with op == i && go and merge them into a single start state
@@ -155,49 +94,49 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     let go = ctx.bv_symbol("go", 1);
 
     // common start state
-    lowerer.ir.entry = lowerer.ir.n(Node::empty());
-    let entry = lowerer.ir.entry;
+    pg.entry = pg.n(Node::empty());
+    let entry = pg.entry;
     // self loop if go is low
-    lowerer.ir[entry]
+    pg[entry]
         .transitions
         .push(Transition::new(ctx.not(go), entry, true));
 
     // merge methods into start state
-    for (idx, graph) in methods.iter().enumerate() {
+    for (idx, &&method_entry) in methods.iter().enumerate() {
         let idx = ctx.bit_vec_val(idx, op_width);
         let selected = ctx.equal(op, idx);
         let selected_and_go = and(&mut ctx, go, selected);
-        lowerer.graft_contracted_entry(&mut ctx, entry, graph.entry, selected_and_go);
+        Lowerer::graft_contracted_entry(
+            st,
+            &mut ctx,
+            &mut pg,
+            entry,
+            method_entry,
+            selected_and_go,
+        );
     }
 
     // print graph
     // println!("-----------------------------------------------------------");
     // println!("With common start state");
-    // println!("{}", to_dot_string(&ctx, &lowerer.ir, st));
+    // println!("{}", to_dot_string(&ctx, &pg, st));
 
     // not go means we are in idle
     if let Some(idle) = idle {
         let not_go = ctx.not(go);
-        lowerer.graft_contracted_entry(&mut ctx, entry, idle, not_go);
+        Lowerer::graft_contracted_entry(&st, &mut ctx, &mut pg, entry, idle, not_go);
     }
 
     // build one common done state from idle
-    let done_state_id = lowerer.ir.n(Node::empty());
-    lowerer.ir[done_state_id]
+    let done_state_id = pg.n(Node::empty());
+    pg[done_state_id]
         .transitions
         .push(Transition::new(ctx.get_true(), entry, true));
     if let Some(idle) = idle {
-        lowerer.ir[done_state_id].actions = lowerer.ir[idle].actions.clone();
+        pg[done_state_id].actions = pg[idle].actions.clone();
     }
-    remove_done(&mut ctx, &mut lowerer.ir, done_state_id);
-    // remove_dont_care(st, &mut ctx, &mut lowerer.ir);
-
-    // turn assert_eq into assignments
-    let auto = convert_driver_to_capturing_driver(&mut ctx, lowerer.ir, st).unwrap();
-    let mut pg = auto.graph;
-
-    // show graph
-    println!("{}", to_dot_string(&ctx, &pg, st));
+    remove_done(&mut ctx, &mut pg, done_state_id);
+    // remove_dont_care(st, &mut ctx, &mut pg);
 
     // compact graph
     let node_remap = pg.garbage_collect_unreachable(&ctx, true);
@@ -574,20 +513,21 @@ fn remove_done(ctx: &mut Context, pg: &mut ProtoGraph, done_state_id: NodeId) {
 }
 
 fn remove_fork(
+    st: &SymbolTable,
     ctx: &mut Context,
-    lowerer: &mut Lowerer,
-    graph: &LoweredFragmentInfo,
+    pg: &mut ProtoGraph,
+    entry: NodeId,
     idle: Option<NodeId>,
 ) {
-    let mut todo = vec![(false, graph.entry)];
+    let mut todo = vec![(false, entry)];
     let mut visited = FxHashSet::default();
     while let Some((mut has_forked, node_id)) = todo.pop() {
         if !visited.contains(&node_id) {
             // skip done nodes
-            let is_done_state = lowerer.ir[node_id]
+            let is_done_state = pg[node_id]
                 .actions
                 .iter()
-                .find(|a| matches!(lowerer.ir[a.op], Op::Done))
+                .find(|a| matches!(pg[a.op], Op::Done))
                 .is_some();
             if is_done_state {
                 visited.insert(node_id);
@@ -595,16 +535,16 @@ fn remove_fork(
             }
 
             // check if this node forks
-            let node_forks = try_remove_fork(ctx, &mut lowerer.ir, node_id);
+            let node_forks = try_remove_fork(ctx, pg, node_id);
             assert!(!(has_forked && node_forks), "Cannot fork twice");
             has_forked = has_forked | node_forks;
             if has_forked {
                 let idle = idle.expect("an idle transaction is required because a protocol forks!");
                 // parallel merge idle into state
-                lowerer.graft_contracted_entry(ctx, node_id, idle, ctx.get_true());
+                Lowerer::graft_contracted_entry(st, ctx, pg, node_id, idle, ctx.get_true());
             }
 
-            for tran in &lowerer.ir[node_id].transitions {
+            for tran in &pg[node_id].transitions {
                 if tran.guard != ctx.get_false() && !visited.contains(&tran.target) {
                     assert!(tran.consumes_step);
                     todo.push((has_forked, tran.target));
@@ -632,30 +572,82 @@ fn try_remove_fork(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId) -> b
     removed_fork
 }
 
-fn lower_protocols<'a>(
+fn lower_protocols(
+    st: &mut SymbolTable,
     ctx: &mut Context,
-    st: &'a SymbolTable,
     m: &Module,
-) -> (Lowerer<'a>, Vec<LoweredFragmentInfo>) {
-    let mut lowerer = Lowerer::new(m.protos.first().unwrap().ctx.clone(), st);
-    let lowered: Vec<_> = m
-        .protos
-        .iter()
-        .map(|p| lowerer.lower_protocol_fragment(ctx, p, true, true))
+) -> (ProtoGraph, Vec<NodeId>) {
+    let mut graph = ProtoGraph::new(m.protos[0].ctx.clone());
+    let autos = m.protos.iter().map(|p| {
+        // println!("{}", p.name);
+        let p = lower_proto(st, ctx, p);
+        // println!("{}\n", to_dot_string(ctx, &p.graph, st));
+        p
+    });
+    let nodes: Vec<_> = autos
+        .into_iter()
+        .map(|a| add_to_graph(&mut graph, &a.graph))
         .collect();
-    (lowerer, lowered)
+    (graph, nodes)
 }
 
-fn get_single_cycle(
-    ctx: &mut Context,
-    pg: &mut ProtoGraph,
-    low: &LoweredFragmentInfo,
-) -> Option<NodeId> {
+fn add_to_graph(pg: &mut ProtoGraph, other: &ProtoGraph) -> NodeId {
+    let mut node_remap = FxHashMap::default();
+    let mut op_remap = FxHashMap::default();
+    let mut todo = vec![other.entry];
+    while let Some(node) = todo.pop() {
+        node_remap.entry(node).or_insert_with(|| {
+            // copy over ops
+            let mut actions = other[node].actions.clone();
+            for act in actions.iter_mut() {
+                act.op = *op_remap
+                    .entry(act.op)
+                    .or_insert_with(|| pg.o(other[act.op].clone()));
+            }
+            pg.n(Node {
+                actions,
+                transitions: vec![],
+            })
+        });
+        for t in &other[node].transitions {
+            if !node_remap.contains_key(&t.target) {
+                todo.push(t.target);
+            }
+        }
+    }
+
+    for (&old_node, &repl_node) in &node_remap {
+        pg[repl_node].transitions = other[old_node]
+            .transitions
+            .iter()
+            .map(|t| Transition {
+                guard: t.guard,
+                target: node_remap[&t.target],
+                consumes_step: t.consumes_step,
+                rotations: t.rotations.clone(),
+            })
+            .collect();
+    }
+    node_remap[&other.entry]
+}
+
+fn lower_proto(st: &mut SymbolTable, ctx: &mut Context, p: &Protocol) -> MonitorAutomaton {
+    let mut lowerer = Lowerer::new(p.ctx.clone(), st);
+    let fragment = lowerer.lower_protocol_fragment(ctx, p, true, false);
+    lowerer.postprocess_trace_fragment(ctx, &fragment);
+    lowerer.ir.entry = fragment.entry;
+    lowerer.ir.garbage_collect_unreachable(ctx, false);
+    let auto = convert_driver_to_capturing_driver(ctx, lowerer.ir, st).unwrap();
+    let auto = simplify_monitor(ctx, auto, st);
+    auto
+}
+
+fn get_single_cycle(ctx: &mut Context, pg: &mut ProtoGraph, entry: NodeId) -> Option<NodeId> {
     // check to make sure that the start node is the only node
-    let next_state_is_done = next_state_is_done(ctx, pg, low.entry);
+    let next_state_is_done = next_state_is_done(ctx, pg, entry);
     if next_state_is_done == ctx.get_true() {
         // make a copy to remove the done state
-        let mut st = pg[low.entry].clone();
+        let mut st = pg[entry].clone();
         st.transitions.clear();
         Some(pg.n(st))
     } else {

@@ -134,7 +134,14 @@ pub fn build_joint_driver_automaton(
             if instance.starts {
                 choices.push((copied, launches[instance.protocol]));
             } else {
-                lowerer.graft_contracted_entry(ctx, node, copied, ctx.get_true());
+                Lowerer::graft_contracted_entry(
+                    lowerer.symbols,
+                    ctx,
+                    &mut lowerer.ir,
+                    node,
+                    copied,
+                    ctx.get_true(),
+                );
             }
         }
         if !choices.is_empty() {

@@ -49,14 +49,17 @@ impl<'a> Lowerer<'a> {
 
     /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.
     pub fn graft_contracted_entry(
-        &mut self,
+        symbols: &SymbolTable,
         ctx: &mut Context,
+        ir: &mut ProtoGraph,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
     ) {
-        self.graft_contracted_entry_with_mode(
+        Self::graft_contracted_entry_with_mode(
+            symbols,
             ctx,
+            ir,
             graft_points_node_id,
             entry_node_id,
             graft_guard,
@@ -67,14 +70,17 @@ impl<'a> Lowerer<'a> {
     /// Graft an entry whose guard is mutually exclusive with the other entries
     /// being accumulated into the same node.
     pub fn graft_disjoint_contracted_entry(
-        &mut self,
+        symbols: &SymbolTable,
         ctx: &mut Context,
+        ir: &mut ProtoGraph,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
     ) {
-        self.graft_contracted_entry_with_mode(
+        Self::graft_contracted_entry_with_mode(
+            symbols,
             ctx,
+            ir,
             graft_points_node_id,
             entry_node_id,
             graft_guard,
@@ -176,48 +182,42 @@ impl<'a> Lowerer<'a> {
     }
 
     fn graft_contracted_entry_with_mode(
-        &mut self,
+        symbols: &SymbolTable,
         ctx: &mut Context,
+        ir: &mut ProtoGraph,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
         disjoint: bool,
     ) {
-        let mut actions = self.ir[graft_points_node_id].actions.clone();
-        let entry_actions = self.ir[entry_node_id].actions.clone();
+        let mut actions = ir[graft_points_node_id].actions.clone();
+        let entry_actions = ir[entry_node_id].actions.clone();
         let mut internal_assert_guard = None;
 
         for action in entry_actions {
-            let guarded_action = match self.ir[action.op].clone() {
+            let guarded_action = match ir[action.op].clone() {
                 Op::Assign(symbol_id, assignment) => {
                     assert_eq!(
                         action.guard,
                         ctx.get_true(),
                         "assignment action guards must be 1; path conditions belong in Assignment"
                     );
-                    let guarded_assignment =
-                        guard_assignment(ctx, &mut self.ir, assignment, graft_guard);
-                    let guarded_op = self.ir.o(Op::Assign(symbol_id, guarded_assignment));
+                    let guarded_assignment = guard_assignment(ctx, ir, assignment, graft_guard);
+                    let guarded_op = ir.o(Op::Assign(symbol_id, guarded_assignment));
                     Action::new(ctx.get_true(), guarded_op)
                 }
                 _ => {
-                    let guard = self.ir.and_guard(ctx, graft_guard, action.guard);
+                    let guard = ir.and_guard(ctx, graft_guard, action.guard);
                     action.with_guard(guard)
                 }
             };
             if disjoint {
-                append_action_disjoint(
-                    ctx,
-                    &mut self.ir,
-                    self.symbols,
-                    &mut actions,
-                    guarded_action,
-                );
+                append_action_disjoint(ctx, ir, symbols, &mut actions, guarded_action);
             } else {
                 append_action(
                     ctx,
-                    &mut self.ir,
-                    self.symbols,
+                    ir,
+                    symbols,
                     &mut actions,
                     &mut internal_assert_guard,
                     guarded_action,
@@ -227,17 +227,17 @@ impl<'a> Lowerer<'a> {
         }
 
         if let Some(internal_assert_guard) = internal_assert_guard {
-            let internal_assert_op = self.ir.o(Op::InternalAssertFalse);
+            let internal_assert_op = ir.o(Op::InternalAssertFalse);
             actions.push(Action::new(internal_assert_guard, internal_assert_op));
         }
 
-        let mut transitions = self.ir[graft_points_node_id].transitions.clone();
-        for transition in self.ir[entry_node_id].transitions.clone() {
-            let guard = self.ir.and_guard(ctx, graft_guard, transition.guard);
+        let mut transitions = ir[graft_points_node_id].transitions.clone();
+        for transition in ir[entry_node_id].transitions.clone() {
+            let guard = ir.and_guard(ctx, graft_guard, transition.guard);
             transitions.push(transition.with_guard(guard));
         }
 
-        let graft_points_node = self.ir.node_mut(graft_points_node_id);
+        let graft_points_node = ir.node_mut(graft_points_node_id);
         graft_points_node.actions = actions;
         graft_points_node.transitions = transitions;
     }
@@ -276,7 +276,14 @@ impl<'a> Lowerer<'a> {
         let next = self.graft_points(ctx, &fragment);
 
         for (node, guard) in graft_points {
-            self.graft_contracted_entry(ctx, node, fragment.entry, guard);
+            Self::graft_contracted_entry(
+                self.symbols,
+                ctx,
+                &mut self.ir,
+                node,
+                fragment.entry,
+                guard,
+            );
         }
         contract_edges(ctx, &mut self.ir, self.symbols);
 
