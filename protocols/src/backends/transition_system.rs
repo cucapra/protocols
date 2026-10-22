@@ -8,7 +8,7 @@ use patronus::expr::{
     Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr,
 };
 use patronus::system::{State, TransitionSystem};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 
 /// the first part of an ITE: the if condition, and the then expression
@@ -224,12 +224,8 @@ pub fn lower_proto_graph_to_transition_system(
     // Generate a big vector of all the transitions
     let mut transitions: Vec<IfThenExpr> = vec![];
     // create the transition function - only use the reachable nodes for efficiency
-    let mut q = vec![pg.entry];
-    let mut visited: FxHashSet<NodeId> = FxHashSet::default();
-    visited.insert(pg.entry);
-    let mut reachable_nodes = Vec::new();
-    while let Some(id) = q.pop() {
-        reachable_nodes.push(id);
+    let reachable_nodes = pg.reachable_node_ids(ctx, pg.entry);
+    for &id in &reachable_nodes {
         let src = ctx.bit_vec_val(id.as_u32(), node_id_width);
         let node_guard = ctx.equal(node_sym, src);
 
@@ -256,11 +252,6 @@ pub fn lower_proto_graph_to_transition_system(
                 then: dst,
             };
             transitions.push(t);
-
-            if !visited.contains(&dst_node) {
-                visited.insert(dst_node);
-                q.push(dst_node);
-            }
         }
 
         // these need to come later in the vector so they are preferred in the ITE

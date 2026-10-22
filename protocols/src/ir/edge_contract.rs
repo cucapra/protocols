@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, VecDeque};
 
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type as FrontType};
 use crate::ir::determinize::{SatResult, check_sat};
-use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{
     Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition, remap_expr
 };
@@ -654,7 +653,7 @@ pub fn contract_edges_from(
     symbols: &SymbolTable,
     start: NodeId,
 ) {
-    let node_ids = reachable_node_ids(ctx, protocol, start);
+    let node_ids = protocol.reachable_node_ids(ctx, start);
     // A previously contracted target already contains composed expressions.
     // Start each register path from original nodes so updates are applied once.
     let originals = node_ids.iter()

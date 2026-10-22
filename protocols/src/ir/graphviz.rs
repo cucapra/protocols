@@ -7,7 +7,6 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
@@ -50,10 +49,7 @@ fn to_dot_string_with_node_labels_from_entry(
     out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
     out.push_str(&format!("  entry_marker -> {};\n", entry));
 
-    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
-    seen.insert(entry);
-    let mut q = VecDeque::from([entry]);
-    while let Some(node_id) = q.pop_front() {
+    for node_id in protocol.reachable_node_ids(ctx, entry) {
         let node = protocol[node_id].clone();
 
         let mut label_parts = vec![];
@@ -109,9 +105,6 @@ fn to_dot_string_with_node_labels_from_entry(
                 transition.target,
                 escape_label(&edge_label)
             ));
-            if seen.insert(transition.target) {
-                q.push_back(transition.target);
-            }
         }
     }
 
@@ -311,15 +304,16 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
+            let mut ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
+            let entry = ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut ir, &mut symbols, entry);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
             let mut contracted_ir = ir.clone();
             let entry = contracted_ir.entry;
-            let initial =
-                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
@@ -337,7 +331,7 @@ mod tests {
             content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
             content += "\n";
 
-            assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
+            assignment_normalized_ir.garbage_collect_unreachable(&ctx);
             let monitor =
                 convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
                     .unwrap();
@@ -370,7 +364,7 @@ mod tests {
 
         simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
-        graph.garbage_collect_unreachable(&ctx, false);
+        graph.garbage_collect_unreachable(&ctx);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
         let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
         let dot = driver.to_dot_string(&ctx, &symbols);

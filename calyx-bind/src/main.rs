@@ -827,7 +827,7 @@ fn lower_proto(st: &mut SymbolTable, ctx: &mut Context, p: &Protocol) -> Monitor
     let fragment = lowerer.lower_protocol_fragment(ctx, p, true, false);
     lowerer.postprocess_trace_fragment(ctx, &fragment);
     lowerer.ir.entry = fragment.entry;
-    lowerer.ir.garbage_collect_unreachable(ctx, false);
+    lowerer.ir.garbage_collect_unreachable(ctx);
     let auto = convert_driver_to_capturing_driver(ctx, lowerer.ir, st).unwrap();
 
     simplify_monitor(ctx, auto, st)

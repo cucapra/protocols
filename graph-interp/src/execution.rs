@@ -355,7 +355,7 @@ fn run_bounded_driver(
 
         let dut = build_dut(&mut ctx, cli, module);
         let (mut graph, choices) = lower_bmc(&mut ctx, used_protocols, symbols, bound);
-        graph.garbage_collect_unreachable(&ctx, false);
+        graph.garbage_collect_unreachable(&ctx);
         graph = determinized(&mut ctx, graph, symbols);
         if cli.graphout {
             println!("{}", to_dot_string(&ctx, &graph, symbols));

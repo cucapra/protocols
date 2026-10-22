@@ -3,7 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use crate::frontend::ast::ProtocolContext;
-use crate::frontend::symbol::SymbolId;
+use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
     Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr
@@ -253,6 +253,49 @@ impl ProtoGraph {
         self.symbol_expr.insert(symbol_id, expr);
     }
 
+    pub fn add_register(
+        &mut self,
+        ctx: &mut Context,
+        symbols: &mut SymbolTable,
+        base: &str,
+        width: u32,
+    ) -> SymbolId {
+        let mut suffix = 0;
+        let name = loop {
+            let name = if suffix == 0 {
+                base.to_string()
+            } else {
+                format!("{base}_{suffix}")
+            };
+            if symbols.symbol_id_from_name_in_active_scope(&name).is_none() {
+                break name;
+            }
+            suffix += 1;
+        };
+        let symbol =
+            symbols.add_without_parent(name, Type::BitVec(width), SymbolKind::AutomatonState);
+        let expr = ctx.bv_symbol(&symbols[symbol].full_name(symbols), width);
+        self.cache_symbol_expr(symbol, expr);
+        symbol
+    }
+
+    /// Visit nodes in breadth-first order from `entry`, skipping false edges
+    /// Each node appears once in resulting vector, including `entry` itself
+    pub fn reachable_node_ids(&self, ctx: &Context, entry: NodeId) -> Vec<NodeId> {
+        let mut nodes = Vec::new();
+        let mut seen = FxHashSet::from_iter([entry]);
+        let mut pending = VecDeque::from([entry]);
+        while let Some(node) = pending.pop_front() {
+            nodes.push(node);
+            for edge in &self[node].transitions {
+                if edge.guard != ctx.get_false() && seen.insert(edge.target) {
+                    pending.push_back(edge.target);
+                }
+            }
+        }
+        nodes
+    }
+
     /// convenience methods for construction simplified
     /// (p AND q) or (p OR q) expressions
     pub fn and_guard(&mut self, ctx: &mut Context, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
@@ -377,26 +420,8 @@ impl ProtoGraph {
 
     /// Rebuild the graph from the subgraph reachable from `entry`.
     /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(
-        &mut self,
-        ctx: &Context,
-        keep_all_ops: bool,
-    ) -> FxHashMap<NodeId, NodeId> {
-        let mut reachable_old_nodes = Vec::new();
-        let mut seen = FxHashSet::default();
-        let mut q = VecDeque::from([self.entry]);
-
-        while let Some(node_id) = q.pop_front() {
-            if !seen.insert(node_id) {
-                continue;
-            }
-            reachable_old_nodes.push(node_id);
-            for transition in &self.nodes[node_id].transitions {
-                if transition.guard != ctx.get_false() {
-                    q.push_back(transition.target);
-                }
-            }
-        }
+    pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
+        let reachable_old_nodes = self.reachable_node_ids(ctx, self.entry);
 
         let mut node_map: FxHashMap<NodeId, NodeId> = FxHashMap::default();
         let mut new_nodes = PrimaryMap::new();
@@ -417,9 +442,7 @@ impl ProtoGraph {
         }
         self.entry = node_map[&self.entry];
         self.nodes = new_nodes;
-        if !keep_all_ops {
-            self.garbage_collect_ops();
-        }
+        self.garbage_collect_ops();
 
         node_map
     }
@@ -777,7 +800,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable(&ctx, false);
+        pg.garbage_collect_unreachable(&ctx);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);

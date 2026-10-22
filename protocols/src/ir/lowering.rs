@@ -3,8 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use patronus::expr::{Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck};
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::collections::VecDeque;
+use rustc_hash::FxHashMap;
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
@@ -446,16 +445,8 @@ impl<'a> Lowerer<'a> {
         let mut exit: NodeId = frag.exit;
         let mut graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
-        // BFS traversal from entry node
-        let mut visited: FxHashSet<NodeId> = FxHashSet::default();
-        let mut queue: VecDeque<NodeId> = VecDeque::new();
-
-        // Start BFS from entry node
-        queue.push_back(frag.entry);
-        visited.insert(frag.entry);
-
         // First, copy all reachable nodes from entry
-        while let Some(current_old_id) = queue.pop_front() {
+        for current_old_id in self.ir.reachable_node_ids(ctx, frag.entry) {
             let node = self.ir[current_old_id].clone();
 
             // Copy actions immediately, but leave transitions to be remapped
@@ -495,22 +486,15 @@ impl<'a> Lowerer<'a> {
                 let (_, expr) = frag.graft_points[idx];
                 graft_points.push((new_node_id, self.remap_expr(ctx, expr, substitutions)));
             }
-
-            // Add neighbors to queue for BFS traversal
-            for transition in &node.transitions {
-                let target_old_id = transition.target;
-                if !visited.contains(&target_old_id) {
-                    visited.insert(target_old_id);
-                    queue.push_back(target_old_id);
-                }
-            }
         }
 
         // Now rewrite transitions so the copied fragment is self-contained.
+        let false_guard = ctx.get_false();
         for (old_node_id, new_node_id) in &old_to_new_nodes {
             let transitions = self.ir[*old_node_id].transitions.clone();
             let updated_transitions = transitions
                 .iter()
+                .filter(|transition| transition.guard != false_guard)
                 .map(|transition| {
                     let new_target = *old_to_new_nodes
                         .get(&transition.target)
