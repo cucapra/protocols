@@ -6,7 +6,7 @@ use protocols::backends::transition_system::lower_proto_graph_to_transition_syst
 use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::{Dir, SymbolTable};
+use protocols::frontend::symbol::{Dir, SymbolId, SymbolTable};
 use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_automaton::analyze_shape;
@@ -45,7 +45,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
     let mut ctx = Context::default();
-    let (mut pg, lowered) = lower_protocols(st, &mut ctx, m);
+    let (mut pg, lowered, auto_regs) = lower_protocols(st, &mut ctx, m);
     debug_assert_eq!(lowered.len(), m.protos.len());
     let methods: Vec<_> = m
         .protos
@@ -148,7 +148,17 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     println!("{}", to_dot_string(&ctx, &pg, st));
 
     let mut verilog = vec![];
-    to_verilog(&ctx, m, reset_actions, &pg, st, &node_labels, &mut verilog).unwrap();
+    to_verilog(
+        &ctx,
+        m,
+        reset_actions,
+        &pg,
+        st,
+        &node_labels,
+        &auto_regs,
+        &mut verilog,
+    )
+    .unwrap();
     println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
@@ -159,6 +169,7 @@ fn to_verilog(
     pg: &ProtoGraph,
     st: &SymbolTable,
     node_labels: &[String],
+    auto_regs: &[(SymbolId, ExprRef)],
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let num_states = pg.nodes().count();
@@ -176,13 +187,28 @@ fn to_verilog(
     writeln!(out, "  }} state_t;\n")?;
     writeln!(out, "  state_t state, next_state;\n")?;
     // state register
-    writeln!(out, "  always_ff @(posedge clk)")?;
+    writeln!(out, "  always_ff @(posedge clk) begin")?;
+    writeln!(out, "    if reset begin",)?;
     writeln!(
         out,
-        "    if reset state <= {};",
+        "      state <= {};",
         state_labels[pg.entry.as_u32() as usize]
     )?;
-    writeln!(out, "    else state <= next_state;\n",)?;
+    for (reg, value) in auto_regs {
+        writeln!(
+            out,
+            "      {} <= {};",
+            st[reg].name(),
+            expr_to_verilog(ctx, *value)
+        )?;
+    }
+    writeln!(out, "    end else begin",)?;
+    writeln!(out, "      state <= next_state;",)?;
+    for (reg, value) in auto_regs {
+        let name = st[reg].name();
+        writeln!(out, "      {name} <= next_{name};",)?;
+    }
+    writeln!(out, "    end\n",)?;
 
     // combinational
     writeln!(out, "  always_comb begin")?;
@@ -466,11 +492,22 @@ fn lower_protocols(
     st: &mut SymbolTable,
     ctx: &mut Context,
     m: &Module,
-) -> (ProtoGraph, Vec<NodeId>) {
+) -> (ProtoGraph, Vec<NodeId>, Vec<(SymbolId, ExprRef)>) {
     let mut graph = ProtoGraph::new(m.protos[0].ctx.clone());
+    let mut regs_and_init = vec![];
     let autos = m.protos.iter().map(|p| {
         // println!("{}", p.name);
         let p = lower_proto(st, ctx, p);
+        // TODO: iter over value and knownness registers and then index into the register_init
+        for (reg, value) in p.register_inits.iter() {
+            println!(
+                "{reg:?} {:?} {:?}",
+                p.value_registers, p.knownness_registers
+            );
+            if p.value_registers.contains_key(reg) || p.knownness_registers.contains_key(reg) {
+                regs_and_init.push((*reg, *value));
+            }
+        }
         // println!("{}\n", to_dot_string(ctx, &p.graph, st));
         p
     });
@@ -478,7 +515,8 @@ fn lower_protocols(
         .into_iter()
         .map(|a| add_to_graph(&mut graph, &a.graph))
         .collect();
-    (graph, nodes)
+    regs_and_init.sort();
+    (graph, nodes, regs_and_init)
 }
 
 fn add_to_graph(pg: &mut ProtoGraph, other: &ProtoGraph) -> NodeId {
