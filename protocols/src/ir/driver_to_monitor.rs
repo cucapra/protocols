@@ -1,11 +1,11 @@
 use patronus::expr::{Context, Expr, ExprRef, ForEachChild, TypeCheck};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
-use crate::ir::register_simplify::add_register;
+use crate::ir::register_simplify::{add_register, simplify_registers};
 
 #[derive(Clone)]
 /// wrap an owned ProtoGraph in extra metadata (which is useful to simplify
@@ -28,6 +28,30 @@ impl MonitorAutomaton {
     pub fn to_dot_string(&self, ctx: &Context, symbols: &SymbolTable) -> String {
         crate::ir::graphviz::to_dot_string(ctx, &self.graph, symbols)
     }
+}
+
+/// Simplify register state and remove metadata for eliminated registers.
+pub fn simplify_monitor(
+    ctx: &mut Context,
+    mut monitor: MonitorAutomaton,
+    symbols: &mut SymbolTable,
+) -> MonitorAutomaton {
+    // Joint construction adds liveness reads after this simplification.
+    let preserved = FxHashSet::from_iter([monitor.live_register]);
+    let entry = monitor.graph.entry;
+    let dead = simplify_registers(
+        ctx,
+        &mut monitor.graph,
+        symbols,
+        entry,
+        &monitor.register_inits,
+        &preserved,
+    );
+    monitor.register_inits.retain(|r, _| !dead.contains(r));
+    monitor.value_registers.retain(|_, r| !dead.contains(r));
+    monitor.knownness_registers.retain(|_, r| !dead.contains(r));
+    monitor.graph.garbage_collect_unreachable(ctx);
+    monitor
 }
 
 #[derive(Debug, Error)]

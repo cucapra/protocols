@@ -5,13 +5,12 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use crate::ir::driver_to_monitor::{
-    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor
+    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor
 };
 use crate::ir::joint_automaton::{
     JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
-use crate::ir::simplify_monitor::simplify_monitor;
 
 /// Parameter ownership includes both the protocol and its logical FIFO slot.
 pub type InstanceParameter = (ProtocolId, usize, SymbolId);
