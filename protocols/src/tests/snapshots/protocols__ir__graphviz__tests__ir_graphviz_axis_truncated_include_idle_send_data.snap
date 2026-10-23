@@ -43,7 +43,7 @@ digraph "send_data" {
   node4 -> node4 [label="not(D.m_axis_tready) / step"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "send_data" {
   rankdir=LR;
   node [shape=box];
@@ -116,7 +116,7 @@ digraph "idle" {
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X if 1\n[1] D.m_axis_tdata := X if 1"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "idle" {
   rankdir=LR;
   node [shape=box];

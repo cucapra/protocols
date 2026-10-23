@@ -49,7 +49,7 @@ digraph "count_up" {
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "count_up" {
   rankdir=LR;
   node [shape=box];
@@ -149,7 +149,7 @@ digraph "count_up_extra_assertion" {
   node1 [label="[1] done\n[1] dut.a := X if 1"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "count_up_extra_assertion" {
   rankdir=LR;
   node [shape=box];
@@ -189,7 +189,7 @@ digraph "count_up_extra_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] assert_eq(and(ite(eq(dut.s, dut.a), dut.s, $monitor_a_value_1), ite(eq(dut.s, dut.a), 18446744073709551615, 0)), and(dut.a, ite(eq(dut.s, dut.a), 18446744073709551615, 0)))\n[1] $monitor_a_value_1 := or(and(ite(eq(dut.s, dut.a), dut.s, $monitor_a_value_1), ite(eq(dut.s, dut.a), 18446744073709551615, 0)), and(dut.a, not(ite(eq(dut.s, dut.a), 18446744073709551615, 0)))) if 1"];
+  node0 [label="[1] assert_eq(and(ite(eq(dut.s, dut.a), dut.s, 0), ite(eq(dut.s, dut.a), 18446744073709551615, 0)), and(dut.a, ite(eq(dut.s, dut.a), 18446744073709551615, 0)))\n[1] $monitor_a_value_1 := or(and(ite(eq(dut.s, dut.a), dut.s, 0), ite(eq(dut.s, dut.a), 18446744073709551615, 0)), and(dut.a, not(ite(eq(dut.s, dut.a), 18446744073709551615, 0)))) if 1"];
   node0 -> node1 [label="not(eq(dut.s, dut.a)) / step"];
   node0 -> node2 [label="eq(dut.s, dut.a) / step"];
   node1 [label="[eq(dut.s, dut.a)] assert_eq($monitor_a_value_1, dut.s)\n[1] assert_eq($monitor_a_value_1, dut.a)"];

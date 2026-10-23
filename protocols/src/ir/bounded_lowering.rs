@@ -29,7 +29,7 @@ fn graft_choice_entries_into(
 pub fn lower_bmc(
     ctx: &mut ExprContext,
     protos: Vec<Protocol>,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
     bound: usize,
 ) -> (ProtoGraph, Vec<ExprRef>) {
     assert!(!protos.is_empty());

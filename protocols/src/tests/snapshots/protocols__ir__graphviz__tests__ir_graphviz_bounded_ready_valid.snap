@@ -58,7 +58,7 @@ digraph "send_data" {
   node5 -> node1 [label="1 / step"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "send_data" {
   rankdir=LR;
   node [shape=box];

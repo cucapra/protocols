@@ -291,7 +291,7 @@ pub fn lower_trace_to_ir(
     ctx: &mut Context,
     trace: &[(String, Vec<Value>)],
     protos_by_name: &FxHashMap<&str, &Protocol>,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> ProtoGraph {
     assert!(!trace.is_empty(), "cannot lower an empty trace");
 
@@ -309,7 +309,7 @@ pub fn lower_trace_to_ir(
         .ir
         .push_transition(entry_node, Transition::new(true_id, first.entry, false));
     lowerer.postprocess_trace_fragment(ctx, &first);
-    contract_edges(ctx, &mut lowerer.ir, symbols);
+    contract_edges(ctx, &mut lowerer.ir, lowerer.symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.graft_points(ctx, &first);

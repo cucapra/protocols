@@ -3,16 +3,14 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use patronus::expr::{Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck};
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::collections::VecDeque;
+use rustc_hash::FxHashMap;
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
 use crate::ir::edge_contract::contract_edges_from;
-use crate::ir::fork_reach::{ForkReachability, reaching_forks_from};
-use crate::ir::propagate_assigns::propagate_assignments_from;
+use crate::ir::fork_reach::fork_graft_points;
+use crate::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments_from};
 use crate::ir::proto_graph::*;
-use crate::ir::reaching_defs::reaching_definitions_from;
 
 /// substitution of argument symbols to concrete expressions for trace lowering
 pub type TraceArgSubst = FxHashMap<SymbolId, ExprRef>;
@@ -32,7 +30,7 @@ pub struct LoweredFragmentInfo {
 /// The stateful driver of lowering an AST to an IR
 pub struct Lowerer<'a> {
     pub ir: ProtoGraph,
-    pub symbols: &'a SymbolTable,
+    pub symbols: &'a mut SymbolTable,
     /// Optional substitution of args for concrete values
     pub trace_arg_subst: TraceArgSubst,
     /// The nodes from the most recent lowered fragment.
@@ -40,7 +38,7 @@ pub struct Lowerer<'a> {
 }
 
 impl<'a> Lowerer<'a> {
-    pub fn new(ctx: ProtocolContext, symbols: &'a SymbolTable) -> Self {
+    pub fn new(ctx: ProtocolContext, symbols: &'a mut SymbolTable) -> Self {
         Self {
             ir: ProtoGraph::new(ctx),
             symbols,
@@ -57,8 +55,8 @@ impl<'a> Lowerer<'a> {
         // The newly lowered transaction is still disconnected from the existing
         // trace graph, so propagation has to start from the fragment entry.
         contract_edges_from(ctx, &mut self.ir, self.symbols, fragment.entry);
-        let rd = reaching_definitions_from(ctx, &mut self.ir, self.symbols, fragment.entry);
-        propagate_assignments_from(ctx, &mut self.ir, self.symbols, &rd, fragment.entry);
+        let initial = insert_assignment_registers(ctx, &mut self.ir, self.symbols, fragment.entry);
+        simplify_assignments_from(ctx, &mut self.ir, self.symbols, fragment.entry, &initial);
     }
 
     pub fn graft_points(
@@ -66,76 +64,13 @@ impl<'a> Lowerer<'a> {
         ctx: &mut ExprContext,
         fragment: &LoweredFragmentInfo,
     ) -> Vec<(NodeId, ExprRef)> {
-        self.graft_points_from_node(ctx, &fragment.nodes, fragment.entry, fragment.exit)
-    }
-
-    pub fn graft_points_from_node(
-        &mut self,
-        ctx: &mut Context,
-        nodes: &[NodeId],
-        entry: NodeId,
-        exit: NodeId,
-    ) -> Vec<(NodeId, ExprRef)> {
-        let fork_reach = reaching_forks_from(ctx, &mut self.ir, entry);
-        let ir = &self.ir;
-
-        // find all the forks in the IR that are within this lowered fragment (the most recent transaction we lowered).
-        // TODO: instead of reachability, we should just run garbage collection
-        let mut graft_points: Vec<(NodeId, ExprRef)> = nodes
-            .iter()
-            .flat_map(|id| {
-                let reachability = fork_reach
-                    .in_reach
-                    .get(id)
-                    .copied()
-                    .unwrap_or(ForkReachability::Unreachable);
-
-                if reachability != ForkReachability::DefinitelyNotForked {
-                    return Vec::new().into_iter();
-                }
-
-                let node = &ir[*id];
-                node.actions
-                    .iter()
-                    .filter(|action| matches!(ir[action.op], Op::Fork))
-                    .map(move |action| (*id, action.guard))
-                    .collect::<Vec<_>>()
-                    .into_iter()
-            })
-            .collect();
-
-        // at every fork point, we want to have it proven that we haven't forked before
-        for (fork_node, _) in &graft_points {
-            let reachability = fork_reach.in_reach.get(fork_node).copied().unwrap();
-            assert!(
-                matches!(
-                    reachability,
-                    // nodes never get cleaned up, so there are old (pre-contraction) fork nodes that are Unreachable we need to account for
-                    ForkReachability::Unreachable | ForkReachability::DefinitelyNotForked
-                ),
-                "fork node {fork_node} can be reached after a prior fork"
-            );
-        }
-
-        // if we can prove we haven't forked up to know, we'll also graft onto the exit
-        // if we can prove we have forked up to know, we won't graft onto the exit node
-        // otherwise, panic! - we're gonna have an exponential blowup
-        let exit_reachability = fork_reach
-            .in_reach
-            .get(&exit)
-            .copied()
-            .unwrap_or(ForkReachability::Unreachable);
-        match exit_reachability {
-            ForkReachability::DefinitelyNotForked => {
-                graft_points.push((exit, ctx.get_true()));
-            }
-            ForkReachability::DefinitelyForked | ForkReachability::Unreachable => {}
-            ForkReachability::MaybeForked => {
-                panic!("done node {} may or may not have forked", exit);
-            }
-        }
-
-        graft_points
+        fork_graft_points(
+            ctx,
+            &mut self.ir,
+            self.symbols,
+            fragment.entry,
+            fragment.exit,
+        )
     }
 
     /// Add a new node to the IR and track it in current fragment
@@ -224,7 +159,7 @@ impl<'a> Lowerer<'a> {
             return expr;
         }
 
-        let symbols = self.symbols;
+        let symbols = &*self.symbols;
         let entry = &symbols[symbol_id];
         let full_name = entry.full_name(symbols);
         let expr = match entry.tpe() {
@@ -440,12 +375,12 @@ impl<'a> Lowerer<'a> {
 
         if postprocess {
             contract_edges_from(ctx, &mut self.ir, self.symbols, entry);
-            let rd = reaching_definitions_from(ctx, &mut self.ir, self.symbols, entry);
-            propagate_assignments_from(ctx, &mut self.ir, self.symbols, &rd, entry);
+            let initial = insert_assignment_registers(ctx, &mut self.ir, self.symbols, entry);
+            simplify_assignments_from(ctx, &mut self.ir, self.symbols, entry, &initial);
         }
 
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
-        let graft_points = self.graft_points_from_node(ctx, &nodes, entry, done);
+        let graft_points = fork_graft_points(ctx, &mut self.ir, self.symbols, entry, done);
         LoweredFragmentInfo {
             nodes,
             entry,
@@ -510,16 +445,8 @@ impl<'a> Lowerer<'a> {
         let mut exit: NodeId = frag.exit;
         let mut graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
-        // BFS traversal from entry node
-        let mut visited: FxHashSet<NodeId> = FxHashSet::default();
-        let mut queue: VecDeque<NodeId> = VecDeque::new();
-
-        // Start BFS from entry node
-        queue.push_back(frag.entry);
-        visited.insert(frag.entry);
-
         // First, copy all reachable nodes from entry
-        while let Some(current_old_id) = queue.pop_front() {
+        for current_old_id in self.ir.reachable_node_ids(ctx, frag.entry) {
             let node = self.ir[current_old_id].clone();
 
             // Copy actions immediately, but leave transitions to be remapped
@@ -559,22 +486,15 @@ impl<'a> Lowerer<'a> {
                 let (_, expr) = frag.graft_points[idx];
                 graft_points.push((new_node_id, self.remap_expr(ctx, expr, substitutions)));
             }
-
-            // Add neighbors to queue for BFS traversal
-            for transition in &node.transitions {
-                let target_old_id = transition.target;
-                if !visited.contains(&target_old_id) {
-                    visited.insert(target_old_id);
-                    queue.push_back(target_old_id);
-                }
-            }
         }
 
         // Now rewrite transitions so the copied fragment is self-contained.
+        let false_guard = ctx.get_false();
         for (old_node_id, new_node_id) in &old_to_new_nodes {
             let transitions = self.ir[*old_node_id].transitions.clone();
             let updated_transitions = transitions
                 .iter()
+                .filter(|transition| transition.guard != false_guard)
                 .map(|transition| {
                     let new_target = *old_to_new_nodes
                         .get(&transition.target)
@@ -601,7 +521,7 @@ impl<'a> Lowerer<'a> {
 }
 
 /// Lower a single AST `Protocol` into a fresh symbolic `ProtoGraph`
-pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &SymbolTable) -> ProtoGraph {
+pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &mut SymbolTable) -> ProtoGraph {
     // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
     let fragment = lowerer.lower_protocol_fragment(ctx, &ast, true, false);
