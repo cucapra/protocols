@@ -5,11 +5,10 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::driver_to_monitor::{
-    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor,
+    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor
 };
 use crate::ir::joint_automaton::{
-    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
-    build_joint_control_automaton, prepare_joint_protocols,
+    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
 
@@ -201,6 +200,11 @@ pub fn compose_joint_monitor_automaton(
             }
             // Copy this instance's actions and track which registers they update.
             let mut assigned = FxHashSet::default();
+            let mut survives = if instance.starts {
+                ctx.get_true()
+            } else {
+                live
+            };
             for action in &monitor.graph[instance.control].actions {
                 // Fork and completion are handled by the shared control graph.
                 if matches!(monitor.graph[action.op], Op::Fork | Op::Done) {
@@ -208,13 +212,22 @@ pub fn compose_joint_monitor_automaton(
                 }
                 let op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
                 let guard = remap_expr(ctx, action.guard, &substitutions);
-                if let Op::Assign(register, _) = &op {
+                if let Op::Assign(register, assignment) = &op {
                     assert_eq!(
                         guard,
                         ctx.get_true(),
                         "monitor assignment guards must be true"
                     );
                     assigned.insert(*register);
+                    if *register == live_register {
+                        let old = if instance.starts {
+                            ctx.get_true()
+                        } else {
+                            live
+                        };
+                        let x = ctx.get_false();
+                        survives = assignment.to_expr(ctx, x, old);
+                    }
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
@@ -239,10 +252,10 @@ pub fn compose_joint_monitor_automaton(
             }
             // Track new and ongoing instances' live flags after this node's assignments.
             if instance.starts {
-                any_launch = ctx.or(any_launch, live);
-                launches.insert(instance.protocol, live);
+                any_launch = ctx.or(any_launch, survives);
+                launches.insert(instance.protocol, survives);
             } else {
-                ongoing = ctx.and(ongoing, live);
+                ongoing = ctx.and(ongoing, survives);
             }
         }
         // Require all ongoing instances to survive, plus a candidate at choice nodes.

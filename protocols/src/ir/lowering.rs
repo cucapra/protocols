@@ -3,7 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use patronus::expr::{Context as ExprContext, Context, ExprRef, Type as PatronusType, TypeCheck};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::frontend::ast::{BinOp, Expr, ExprId, Protocol, ProtocolContext, Stmt, StmtId, UnaryOp};
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
@@ -27,6 +27,196 @@ pub struct LoweredFragmentInfo {
     pub graft_points: Vec<(NodeId, ExprRef)>,
 }
 
+#[derive(Clone, Copy)]
+struct LoopContext {
+    id: LoopId,
+    // Source loop variable and the register holding the current iteration's item.
+    value: Option<(SymbolId, SymbolId)>,
+    uses_last: bool,
+    valid: SymbolId,
+    index: Option<(SymbolId, u32)>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct LoopBodyUsage {
+    index_width: Option<u32>,
+    uses_last: bool,
+}
+
+impl LoopBodyUsage {
+    fn merge(self, other: Self) -> Self {
+        Self {
+            index_width: self.index_width.max(other.index_width),
+            uses_last: self.uses_last || other.uses_last,
+        }
+    }
+}
+
+// Allocate one counter at the widest iter_count() use, and specialize only
+// bodies which inspect is_last(). Scan even branches that may become dead.
+fn loop_body_usage(ast: &Protocol, body: StmtId) -> LoopBodyUsage {
+    fn expr_usage(ast: &Protocol, expr: ExprId) -> LoopBodyUsage {
+        match ast[expr] {
+            Expr::IterCount(width) => LoopBodyUsage {
+                index_width: Some(width),
+                ..Default::default()
+            },
+            Expr::IsLastIteration => LoopBodyUsage {
+                uses_last: true,
+                ..Default::default()
+            },
+            Expr::Binary(_, lhs, rhs) => expr_usage(ast, lhs).merge(expr_usage(ast, rhs)),
+            Expr::Unary(_, inner) | Expr::Slice(inner, _, _) | Expr::TupleProj(inner, _) => {
+                expr_usage(ast, inner)
+            }
+            _ => LoopBodyUsage::default(),
+        }
+    }
+    match &ast[body] {
+        Stmt::Block(stmts) => stmts.iter().fold(LoopBodyUsage::default(), |usage, &s| {
+            usage.merge(loop_body_usage(ast, s))
+        }),
+        Stmt::Assign(_, expr) => expr_usage(ast, *expr),
+        Stmt::IfElse(cond, tru, fals) => expr_usage(ast, *cond)
+            .merge(loop_body_usage(ast, *tru))
+            .merge(loop_body_usage(ast, *fals)),
+        Stmt::While(cond, body) => expr_usage(ast, *cond).merge(loop_body_usage(ast, *body)),
+        Stmt::AssertEq(lhs, rhs) => expr_usage(ast, *lhs).merge(expr_usage(ast, *rhs)),
+        Stmt::RepeatLoop(_, _) | Stmt::ForInLoop(_, _, _) => {
+            panic!("unsupported loop: nested iterator loops")
+        }
+        Stmt::Step | Stmt::Fork => LoopBodyUsage::default(),
+    }
+}
+
+fn new_loop_register(
+    ctx: &mut Context,
+    graph: &mut ProtoGraph,
+    symbols: &mut SymbolTable,
+    loop_id: LoopId,
+    role: &str,
+    width: u32,
+) -> SymbolId {
+    let register = graph.add_register(ctx, symbols, &format!("{loop_id}_{role}"), width);
+    graph.register_inits.insert(register, ctx.zero(width));
+    register
+}
+
+// Allocate loop IDs and registers in source order before lowering statements backwards.
+fn prepare_loops(
+    ctx: &mut Context,
+    ast: &Protocol,
+    stmt: StmtId,
+    in_while: bool,
+    symbols: &mut SymbolTable,
+    graph: &mut ProtoGraph,
+    loops: &mut FxHashMap<StmtId, LoopContext>,
+) {
+    let (source_expr, variable, body) = match &ast[stmt] {
+        Stmt::RepeatLoop(source, body) => (*source, None, *body),
+        Stmt::ForInLoop(variable, source, body) => (*source, Some(*variable), *body),
+        Stmt::Block(stmts) => {
+            for &stmt in stmts {
+                prepare_loops(ctx, ast, stmt, in_while, symbols, graph, loops);
+            }
+            return;
+        }
+        Stmt::IfElse(_, tru, fals) => {
+            prepare_loops(ctx, ast, *tru, in_while, symbols, graph, loops);
+            prepare_loops(ctx, ast, *fals, in_while, symbols, graph, loops);
+            return;
+        }
+        Stmt::While(_, body) => {
+            prepare_loops(ctx, ast, *body, true, symbols, graph, loops);
+            return;
+        }
+        _ => return,
+    };
+    assert!(
+        !in_while,
+        "unsupported loop: iterator loop may not be re-entered from a while loop"
+    );
+    let usage = loop_body_usage(ast, body);
+    let source = match (variable, &ast[source_expr]) {
+        (Some(_), Expr::Sym(argument)) if symbols[*argument].is_arg() => {
+            assert!(
+                !graph
+                    .loops
+                    .values()
+                    .any(|l| l.source.argument == Some(*argument)),
+                "unsupported loop: sequence argument may only be consumed once"
+            );
+            let FrontType::Seq(seq) = symbols[*argument].tpe() else {
+                unreachable!()
+            };
+            LoopSource {
+                argument: Some(*argument),
+                length: None,
+                min_len: symbols[seq].min_len(),
+            }
+        }
+        (None, Expr::Sym(argument)) if symbols[*argument].is_arg() => {
+            let width = match symbols[*argument].tpe() {
+                FrontType::UnsignedInt => 64,
+                FrontType::BitVec(width) => width,
+                _ => panic!("unsupported loop: repeat count must be scalar"),
+            };
+            let expr = ctx.bv_symbol(&symbols.full_name_from_symbol_id(argument), width);
+            graph.cache_symbol_expr(*argument, expr);
+            LoopSource {
+                argument: None,
+                length: Some(expr),
+                min_len: 0,
+            }
+        }
+        (None, Expr::Const(value)) => LoopSource {
+            argument: None,
+            length: Some(ctx.bv_lit(value)),
+            min_len: 0,
+        },
+        _ => panic!(
+            "unsupported loop: expected a sequence argument, or a repeat count argument or literal"
+        ),
+    };
+    let id = graph.loops.next_key();
+    let width = variable.map(|v| symbols[v].tpe().bitwidth()).unwrap_or(1);
+    let data = ctx.bv_symbol(&format!("{id}.data()"), width);
+    let last = ctx.bv_symbol(&format!("{id}.last()"), 1);
+    let valid = ctx.bv_symbol(&format!("{id}.valid()"), 1);
+    graph.loops.push(Loop {
+        source,
+        data,
+        last,
+        valid,
+    });
+    let value = variable.map(|variable| {
+        let FrontType::BitVec(width) = symbols[variable].tpe() else {
+            panic!("unsupported loop: only scalar bit-vector items are supported")
+        };
+        (
+            variable,
+            new_loop_register(ctx, graph, symbols, id, "data", width),
+        )
+    });
+    let valid = new_loop_register(ctx, graph, symbols, id, "valid", 1);
+    let index = usage.index_width.map(|width| {
+        (
+            new_loop_register(ctx, graph, symbols, id, "index", width),
+            width,
+        )
+    });
+    loops.insert(
+        stmt,
+        LoopContext {
+            id,
+            value,
+            uses_last: usage.uses_last,
+            valid,
+            index,
+        },
+    );
+}
+
 /// The stateful driver of lowering an AST to an IR
 pub struct Lowerer<'a> {
     pub ir: ProtoGraph,
@@ -35,6 +225,10 @@ pub struct Lowerer<'a> {
     pub trace_arg_subst: TraceArgSubst,
     /// The nodes from the most recent lowered fragment.
     current_fragment_nodes: Vec<NodeId>,
+    loops: FxHashMap<StmtId, LoopContext>,
+    current_loop: Option<LoopContext>,
+    /// Constant binding while lowering a final or non-final body copy.
+    current_is_last: Option<bool>,
 }
 
 impl<'a> Lowerer<'a> {
@@ -44,6 +238,9 @@ impl<'a> Lowerer<'a> {
             symbols,
             trace_arg_subst: TraceArgSubst::default(),
             current_fragment_nodes: Vec::new(),
+            loops: FxHashMap::default(),
+            current_loop: None,
+            current_is_last: None,
         }
     }
 
@@ -137,10 +334,26 @@ impl<'a> Lowerer<'a> {
                 ctx.slice(inner_ref, hi, lo)
             }
             Expr::IsLastIteration => {
-                panic!("loop expressions are not lowered to Patronus yet")
+                if self
+                    .current_is_last
+                    .expect("is_last() outside an iterator loop")
+                {
+                    ctx.get_true()
+                } else {
+                    ctx.get_false()
+                }
             }
-            Expr::IterCount(_) => {
-                panic!("loop expressions are not lowered to Patronus yet")
+            Expr::IterCount(width) => {
+                let (register, full_width) = self
+                    .current_loop
+                    .and_then(|l| l.index)
+                    .expect("iter_count() outside an iterator loop");
+                let value = self.ir.symbol_expr(register).unwrap();
+                if *width == full_width {
+                    value
+                } else {
+                    ctx.slice(value, *width - 1, 0)
+                }
             }
             Expr::TupleProj(_, _) => {
                 panic!("Tuple projection expressions are not lowered to Patronus yet")
@@ -153,6 +366,12 @@ impl<'a> Lowerer<'a> {
         // the same argument symbol may resolve to different constants per copy.
         if let Some(expr) = self.trace_arg_subst.get(&symbol_id) {
             return *expr;
+        }
+
+        if let Some((variable, register)) = self.current_loop.and_then(|l| l.value)
+            && variable == symbol_id
+        {
+            return self.ir.symbol_expr(register).unwrap();
         }
 
         if let Some(expr) = self.ir.symbol_expr(symbol_id) {
@@ -260,6 +479,13 @@ impl<'a> Lowerer<'a> {
             }
             Stmt::IfElse(cond, true_branch, false_branch) => {
                 let (cond, true_branch, false_branch) = (*cond, *true_branch, *false_branch);
+                let cond_ref = self.lower_condition(ctx, ast, cond);
+                if self.current_is_last.is_some() && cond_ref == ctx.get_true() {
+                    return self.lower_stmt(ctx, ast, true_branch, exit);
+                }
+                if self.current_is_last.is_some() && cond_ref == ctx.get_false() {
+                    return self.lower_stmt(ctx, ast, false_branch, exit);
+                }
                 // create a join node that will be the final node in the IfElse subgraph, pointing to exit
                 // this will also be the target exit node for the sub-branches
                 let join_node_id = self.n(Node::empty());
@@ -272,7 +498,6 @@ impl<'a> Lowerer<'a> {
 
                 // create the branch node from which we transition into the true or false entry nodes
                 let branch_node_id = self.n(Node::empty());
-                let cond_ref = self.lower_expr(ctx, ast, cond, Some(PatronusType::BV(1)));
                 let negated_cond = ctx.not(cond_ref);
 
                 // push transitions from the branch node to the true/false branch with positive/negative guarded transitions
@@ -288,6 +513,10 @@ impl<'a> Lowerer<'a> {
             // maybe just "cond"?
             Stmt::While(loop_guard, loop_body) => {
                 let (loop_guard, loop_body) = (*loop_guard, *loop_body);
+                let loop_guard_ref = self.lower_condition(ctx, ast, loop_guard);
+                if self.current_is_last.is_some() && loop_guard_ref == ctx.get_false() {
+                    return exit;
+                }
                 let loop_exit_node_id = self.n(Node::empty());
                 let true_id = ctx.get_true();
                 self.ir
@@ -300,8 +529,6 @@ impl<'a> Lowerer<'a> {
                 let loop_body_node_id = self.lower_stmt(ctx, ast, loop_body, loop_guard_node_id);
 
                 // create transitions from the loop guard to the loop body and the loop exit
-                let loop_guard_ref =
-                    self.lower_expr(ctx, ast, loop_guard, Some(PatronusType::BV(1)));
                 let negated_loop_guard = ctx.not(loop_guard_ref);
                 self.ir.push_transition(
                     loop_guard_node_id,
@@ -314,9 +541,145 @@ impl<'a> Lowerer<'a> {
 
                 loop_guard_node_id
             }
-            Stmt::RepeatLoop(_expr_id, _stmt_id) => todo!(),
-            Stmt::ForInLoop(_symbol_id, _expr_id, _stmt_id) => todo!(),
+            Stmt::RepeatLoop(_, body) | Stmt::ForInLoop(_, _, body) => {
+                self.lower_iterator_loop(ctx, ast, stmt_id, *body, exit)
+            }
         }
+    }
+
+    fn lower_condition(&mut self, ctx: &mut Context, ast: &Protocol, cond: ExprId) -> ExprRef {
+        let cond = self.lower_expr(ctx, ast, cond, Some(PatronusType::BV(1)));
+        if self.current_is_last.is_some() {
+            self.ir.simplifier.simplify(ctx, cond)
+        } else {
+            cond
+        }
+    }
+
+    fn state_assignment(
+        &mut self,
+        ctx: &Context,
+        node: NodeId,
+        register: SymbolId,
+        value: ExprRef,
+    ) {
+        let assignment = Assignment::concrete(ctx.get_false(), ctx.get_true(), value);
+        let op = self.ir.o(Op::Assign(register, assignment));
+        self.ir.push_action(node, Action::new(ctx.get_true(), op));
+    }
+
+    fn lower_iterator_loop(
+        &mut self,
+        ctx: &mut Context,
+        ast: &Protocol,
+        stmt: StmtId,
+        body: StmtId,
+        exit: NodeId,
+    ) -> NodeId {
+        let current = *self
+            .loops
+            .get(&stmt)
+            .expect("iterator loop state must be allocated before lowering its body");
+        let head = self.n(Node::empty());
+        let finish = self.n(Node::empty());
+        let valid = self.ir.loops[current.id].valid;
+        let empty = ctx.not(valid);
+
+        // Increment only after the whole body, including its post-step suffix.
+        // Unspecialized loops also return here after their final item; the next
+        // head's empty alternative performs no loads, pops, or steps.
+        if let Some((register, width)) = current.index {
+            let index = self.ir.symbol_expr(register).unwrap();
+            let one = ctx.bit_vec_val(1, width);
+            let next = ctx.add(index, one);
+            self.state_assignment(ctx, finish, register, next);
+        }
+
+        if current.uses_last {
+            let continuation = self.n(Node::empty());
+            self.ir
+                .push_transition(finish, Transition::new(ctx.get_true(), continuation, false));
+            let non_final = self.lower_iterator_body(ctx, ast, body, current, Some(false), finish);
+            let final_finish = self.n(Node::empty());
+            self.ir
+                .push_transition(final_finish, Transition::new(ctx.get_true(), exit, false));
+            let final_body =
+                self.lower_iterator_body(ctx, ast, body, current, Some(true), final_finish);
+
+            let last = self.ir.loops[current.id].last;
+            let not_last = ctx.not(last);
+            let non_final_guard = ctx.and(valid, not_last);
+            let final_guard = ctx.and(valid, last);
+            for selection in [head, continuation] {
+                self.ir.push_transition(
+                    selection,
+                    Transition::new(non_final_guard, non_final, false),
+                );
+                self.ir
+                    .push_transition(selection, Transition::new(final_guard, final_body, false));
+            }
+            // A non-final item promises a successor, so only the initial head
+            // may take an empty exit. A broken promise is an internal failure.
+            let invalid = self.ir.o(Op::InternalAssertFalse);
+            self.ir
+                .push_action(continuation, Action::new(empty, invalid));
+        } else {
+            self.ir
+                .push_transition(finish, Transition::new(ctx.get_true(), head, false));
+            let body_entry = self.lower_iterator_body(ctx, ast, body, current, None, finish);
+            self.ir
+                .push_transition(head, Transition::new(valid, body_entry, false));
+        }
+        self.ir
+            .push_transition(head, Transition::new(empty, exit, false));
+        head
+    }
+
+    fn lower_iterator_body(
+        &mut self,
+        ctx: &mut Context,
+        ast: &Protocol,
+        body: StmtId,
+        current: LoopContext,
+        is_last: Option<bool>,
+        finish: NodeId,
+    ) -> NodeId {
+        let previous = self.current_loop.replace(current);
+        let previous_is_last = std::mem::replace(&mut self.current_is_last, is_last);
+        let body_entry = self.lower_stmt(ctx, ast, body, finish);
+        self.current_loop = previous;
+        self.current_is_last = previous_is_last;
+        // Validate against this copy's finish, before following its outgoing
+        // edges. Each reachable body path must cross its own step.
+        let mut pending = vec![body_entry];
+        let mut seen = FxHashSet::default();
+        while let Some(node) = pending.pop() {
+            assert_ne!(
+                node, finish,
+                "unsupported loop: every iteration path must contain a step()"
+            );
+            if seen.insert(node) {
+                pending.extend(
+                    self.ir[node]
+                        .transitions
+                        .iter()
+                        .filter(|t| !t.consumes_step && t.guard != ctx.get_false())
+                        .map(|t| t.target),
+                );
+            }
+        }
+
+        // Loads are ordinary synchronous assignments. The selected valid
+        // transition records entry; the interpreter advances at cycle end.
+        let entry = self.n(Node::empty());
+        let fifo = self.ir.loops[current.id].clone();
+        if let Some((_, target)) = current.value {
+            self.state_assignment(ctx, entry, target, fifo.data);
+        }
+        self.state_assignment(ctx, entry, current.valid, fifo.valid);
+        self.ir
+            .push_transition(entry, Transition::new(ctx.get_true(), body_entry, false));
+        entry
     }
 
     pub fn add_input_dont_care_assignments(
@@ -340,13 +703,12 @@ impl<'a> Lowerer<'a> {
     }
 
     /// lowers an AST into fresh IR nodes which are unconnected to any existing IR nodes
-    /// If `keep_done`, then the exit node has the Done action.
+    /// Done markers survive preparation so completion can supply fork points.
     /// Returns the nodes, entry, and exit of the lowered fragment
     pub fn lower_protocol_fragment(
         &mut self,
         ctx: &mut Context,
         ast: &Protocol,
-        keep_done: bool,
         postprocess: bool,
     ) -> LoweredFragmentInfo {
         debug_assert!(
@@ -355,8 +717,19 @@ impl<'a> Lowerer<'a> {
           lowering a fragment"
         );
 
+        self.loops.clear();
+        prepare_loops(
+            ctx,
+            ast,
+            ast.body,
+            false,
+            self.symbols,
+            &mut self.ir,
+            &mut self.loops,
+        );
+
         let done = self.n(Node::empty());
-        if keep_done {
+        {
             let done_op = self.ir.o(Op::Done);
             let true_id = ctx.get_true();
             self.ir.push_action(done, Action::new(true_id, done_op));
@@ -380,7 +753,11 @@ impl<'a> Lowerer<'a> {
         }
 
         let nodes = std::mem::take(&mut self.current_fragment_nodes);
-        let graft_points = fork_graft_points(ctx, &mut self.ir, self.symbols, entry, done);
+        let graft_points = if postprocess {
+            fork_graft_points(ctx, &mut self.ir, self.symbols, entry, done)
+        } else {
+            Vec::new()
+        };
         LoweredFragmentInfo {
             nodes,
             entry,
@@ -524,7 +901,7 @@ impl<'a> Lowerer<'a> {
 pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &mut SymbolTable) -> ProtoGraph {
     // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
-    let fragment = lowerer.lower_protocol_fragment(ctx, &ast, true, false);
+    let fragment = lowerer.lower_protocol_fragment(ctx, &ast, false);
 
     // link up the default entry node of the ir with the entry node of the lowered AST
     let entry_node = lowerer.ir.entry;

@@ -67,7 +67,16 @@ impl PatronusSim {
         waveform_file: Option<&str>,
     ) -> anyhow::Result<Self> {
         let sys = create_sim_context(ctx, verilog_paths, top_module);
+        Self::from_system(ctx, sys, design, waveform_file)
+    }
 
+    /// Construct a DUT simulator from an existing system, including small test DUTs.
+    pub fn from_system(
+        ctx: &patronus::expr::Context,
+        sys: TransitionSystem,
+        design: &Module,
+        waveform_file: Option<&str>,
+    ) -> anyhow::Result<Self> {
         let mut sim = if let Some(waveform_file) = waveform_file {
             Interpreter::new_with_wavedump(ctx, &sys, waveform_file)
         } else {

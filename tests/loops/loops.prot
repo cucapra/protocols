@@ -1,0 +1,271 @@
+struct LoopDut {
+    in data: u8,
+    in flag: u1,
+    out ready: u1,
+    out echo: u8,
+}
+
+prot for_zero_or_more<dut: LoopDut>(values: [u8]) {
+    dut.flag := 1'b0;
+    for value in values {
+        dut.data := value;
+        step();
+    }
+    dut.flag := 1'b1;
+    step();
+}
+
+prot for_one_or_more<dut: LoopDut>(values: [u8]+) {
+    for value in values {
+        if is_last() {
+            dut.flag := 1'b1;
+        } else {
+            dut.flag := 1'b0;
+        }
+        dut.data := value;
+        step();
+    }
+}
+
+prot for_distinct<dut: LoopDut>(values: [u8]++) {
+    for value in values {
+        dut.data := value + iter_count::<u8>();
+        step();
+    }
+}
+
+prot repeat_count<dut: LoopDut>(count: uint) {
+    repeat count iterations {
+        dut.data := iter_count::<u8>();
+        if !is_last() {
+            dut.flag := 1'b0;
+        } else {
+            dut.flag := 1'b1;
+        }
+        step();
+    }
+}
+
+prot two_step_loop<dut: LoopDut>(values: [u8]+) {
+    for value in values {
+        dut.data := value;
+        step();
+        if is_last() {
+            dut.flag := 1'b1;
+        } else {
+            dut.flag := 1'b0;
+        }
+        step();
+    }
+}
+
+// The suffix after step() must still run on the final iteration before exit.
+prot step_in_middle<dut: LoopDut>(values: [u8]+) {
+    for value in values {
+        dut.data := value;
+        step();
+        if is_last() {
+            dut.flag := 1'b1;
+        } else {
+            dut.flag := 1'b0;
+        }
+    }
+    step();
+}
+
+// Different branches reach their first step at different source locations.
+prot conditional_steps<dut: LoopDut>(values: [u8]) {
+    for value in values {
+        if is_last() {
+            dut.data := value;
+            step();
+        } else {
+            step();
+            dut.data := value;
+        }
+        if is_last() {
+            dut.flag := 1'b1;
+        } else {
+            dut.flag := 1'b0;
+        }
+    }
+    step();
+}
+
+prot repeat_literal<dut: LoopDut>() {
+    repeat 8'd3 iterations {
+        dut.data := iter_count::<u8>();
+        step();
+    }
+    step();
+}
+
+prot mixed_index_widths<dut: LoopDut>(values: [u8]) {
+    for value in values {
+        dut.data := value + iter_count::<u8>();
+        if iter_count::<u128>() == 128'd0 {
+            dut.flag := 1'b1;
+        } else {
+            dut.flag := 1'b0;
+        }
+        step();
+    }
+    step();
+}
+
+
+prot frozen_check<dut: LoopDut>(values: [u8]) {
+    for value in values {
+        dut.data := value;
+        step();
+        assert_eq(value, dut.echo);
+    }
+    step();
+}
+
+prot wait_in_body<dut: LoopDut>(values: [u8]) {
+    for value in values {
+        while !dut.ready {
+            dut.data := value;
+            step();
+        }
+        dut.data := value;
+        step();
+    }
+    step();
+}
+
+prot independent_loops<dut: LoopDut>(left: [u8], right: [u8]) {
+    for first in left {
+        dut.data := first;
+        step();
+    }
+    for second in right {
+        dut.data := second;
+        step();
+    }
+    step();
+}
+
+// With values = [10, 20], data must be 10 on both samples: the final
+// iteration holds the previous assignment instead of reading the next item.
+prot hold_across_iterations<dut: LoopDut>(values: [u8]+) {
+    for value in values {
+        if !is_last() {
+            dut.data := value;
+        }
+        step();
+    }
+}
+
+// Pin history keeps the first item even as the loop's item register advances.
+prot hold_first_iteration<dut: LoopDut>(values: [u8]++) {
+    for value in values {
+        if iter_count::<u8>() == 8'd0 {
+            dut.data := value;
+        }
+        step();
+    }
+}
+
+// Pin history keeps the chosen value across the second step as ready changes.
+prot hold_sampled_choice<dut: LoopDut>(values: [u8]+) {
+    for value in values {
+        if dut.ready {
+            dut.data := value;
+        } else {
+            dut.data := value + 8'd1;
+        }
+        step();
+        step();
+    }
+}
+
+prot release_in_loop<dut: LoopDut>(values: [u8]) {
+    for value in values {
+        dut.data := value;
+        step();
+        dut.data := X;
+        step();
+    }
+    step();
+}
+
+// Both specialized bodies wait, retain their item through the wait, and run
+// a suffix after the step. The final assignment must stay held after exit.
+prot specialized_waits<dut: LoopDut>(values: [u8]) {
+    dut.data := 8'd99;
+    for value in values {
+        if is_last() {
+            while !dut.ready {
+                dut.data := value;
+                step();
+            }
+            dut.flag := 1'b1;
+        } else {
+            while !dut.ready {
+                dut.data := value;
+                step();
+            }
+            dut.flag := 1'b0;
+        }
+        dut.data := value;
+        step();
+        assert_eq(value, dut.echo);
+        dut.data := value + iter_count::<u8>();
+    }
+    step();
+    step();
+}
+
+prot specialized_repeat_waits<dut: LoopDut>(count: uint) {
+    dut.data := 8'd99;
+    repeat count iterations {
+        // These conditions require simplification after binding is_last().
+        if is_last() == !is_last() {
+            dut.data := 8'd200;
+        } else {
+            while !dut.ready {
+                if is_last() {
+                    dut.flag := 1'b1;
+                } else {
+                    dut.flag := 1'b0;
+                }
+                step();
+            }
+            dut.data := iter_count::<u8>();
+            step();
+            if !is_last() {
+                dut.flag := 1'b1;
+            } else {
+                dut.flag := 1'b0;
+            }
+        }
+    }
+    step();
+    step();
+}
+
+// The empty head check must preserve the last driven item and its suffix.
+prot hold_after_plain_loop<dut: LoopDut>(values: [u8]) {
+    dut.data := 8'd99;
+    for value in values {
+        dut.data := value;
+        step();
+        assert_eq(value, dut.echo);
+        dut.data := value + iter_count::<u8>();
+    }
+    step();
+    step();
+}
+
+prot plain_repeat_count<dut: LoopDut>(count: uint) {
+    dut.data := 8'd99;
+    repeat count iterations {
+        dut.data := iter_count::<u8>();
+        step();
+        dut.data := iter_count::<u8>() + 8'd1;
+    }
+    step();
+    step();
+}

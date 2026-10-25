@@ -46,7 +46,21 @@ fn to_dot_string_with_node_labels_from_entry(
     ));
     out.push_str("  rankdir=LR;\n");
     out.push_str("  node [shape=box];\n");
-    out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
+    let mut entry_label = "ENTRY".to_string();
+    for (id, source) in protocol.loops.iter() {
+        let source = match source.source.argument {
+            Some(argument) => symbols[argument].name().to_string(),
+            None => format!(
+                "length {}",
+                format_expr(ctx, protocol, source.source.length.unwrap())
+            ),
+        };
+        entry_label.push_str(&format!("\\n{id}: {source}"));
+    }
+    out.push_str(&format!(
+        "  entry_marker [shape=plain,label=\"{}\"];\n",
+        escape_label(&entry_label)
+    ));
     out.push_str(&format!("  entry_marker -> {};\n", entry));
 
     for node_id in protocol.reachable_node_ids(ctx, entry) {
@@ -333,8 +347,13 @@ mod tests {
 
             assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
             let monitor =
-                convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
-                    .unwrap();
+                match convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols) {
+                    Ok(monitor) => monitor,
+                    Err(error) => {
+                        content += &format!("== unsupported monitor ==\n{error}\n\n");
+                        continue;
+                    }
+                };
             let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
             content += "== simplified monitor ==\n";
             content += &monitor.to_dot_string(&ctx, &symbols);
@@ -373,6 +392,67 @@ mod tests {
         settings.bind(|| insta::assert_snapshot!("ir_graphviz_capturing_driver", dot));
     }
 
+    fn loops_snap(contracted: bool) {
+        let filename = "../tests/loops/loops.prot";
+        let mut handler = DiagnosticHandler::default();
+        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let directory = std::env::var_os("PROTOCOLS_LOOP_DOT_DIR").map(|directory| {
+            let directory = std::path::PathBuf::from(directory);
+            if contracted {
+                directory.join("contracted")
+            } else {
+                directory
+            }
+        });
+        if let Some(directory) = &directory {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+        let mut content = String::new();
+        for ast in module.protos {
+            let name = ast.name.clone();
+            let mut symbols = symbols.clone();
+            let mut ctx = Context::default();
+            let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+            if contracted {
+                contract_edges(&mut ctx, &mut graph, &symbols);
+                let entry = graph.entry;
+                let initial =
+                    insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
+                simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
+                normalize_assignments(&mut ctx, &mut graph, &symbols);
+                graph.garbage_collect_unreachable(&ctx);
+            }
+            let dot = to_dot_string(&ctx, &graph, &symbols);
+            if let Some(directory) = &directory {
+                std::fs::write(directory.join(format!("{name}.dot")), &dot).unwrap();
+            }
+            content += &dot;
+            content.push('\n');
+        }
+        if let Some(directory) = &directory {
+            std::fs::write(directory.join("loops.dot"), &content).unwrap();
+        }
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        let name = if contracted {
+            "ir_graphviz_loops_contracted"
+        } else {
+            "ir_graphviz_loops_uncontracted"
+        };
+        settings.bind(|| insta::assert_snapshot!(name, content));
+    }
+
+    #[test]
+    fn test_loops_uncontracted_snapshot() {
+        loops_snap(false);
+    }
+
+    #[test]
+    fn test_loops_contracted_snapshot() {
+        loops_snap(true);
+    }
+
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");
@@ -393,7 +473,12 @@ mod tests {
 
     #[test]
     fn test_counter_snapshot() {
-        snap("ir_graphviz_counter", "../tests/counters/counter.prot");
+        let (_, _, monitors) = snap("ir_graphviz_counter", "../tests/counters/counter.prot");
+        // Contraction replaces dut.a with parameter a in the loop conditions.
+        assert!(
+            monitors.is_empty(),
+            "parameter-dependent conditions must be rejected"
+        );
     }
 
     #[test]

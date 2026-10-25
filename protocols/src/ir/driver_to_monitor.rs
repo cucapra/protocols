@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
+use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, remap_expr};
 use crate::ir::register_simplify::simplify_registers;
 
 #[derive(Clone)]
@@ -72,8 +72,9 @@ pub enum MonitorConversionError {
 /// Precondition: ProtoGraph is a single-protocol graph after edge contraction,
 /// assignment persistence lowering/register simplification, normalization, and cleanup.
 /// Each node has one total effective assignment per DUT input, including held values and X releases.
-/// Expressions must pass frontend well-formedness checks.
-/// TODO: Right now, we assume `allow_branch_on_arg = false`
+/// Expressions must pass frontend well-formedness checks. At most one equality
+/// operand may contain parameters; action, assignment, ITE, and edge conditions
+/// must be parameter-free (including conditions introduced by contraction).
 /// The returned graph is unoptimized.
 pub fn convert_driver_to_monitor(
     ctx: &mut Context,
@@ -134,8 +135,30 @@ fn convert_driver(
 
     // Cache pin expressions, including pins used only as assignment targets.
     let pins: Vec<_> = graph.dut_pins(symbols).collect();
+    let mut sampled_x = FxHashMap::default();
     for pin in pins {
-        symbol_expr(ctx, &mut graph, symbols, pin);
+        let sample = symbol_expr(ctx, &mut graph, symbols, pin);
+        let alias = ctx.bv_symbol(
+            &format!("dont_care.{}", symbols[pin].name()),
+            symbols[pin].tpe().bitwidth(),
+        );
+        if graph.dont_cares.remove(&alias) {
+            sampled_x.insert(alias, sample);
+        }
+    }
+    // An X drive is unconstrained, but a later read of that pin is still a
+    // concrete waveform observation. Contraction used an independent X input
+    // so an earlier write could not replace that read while composing nodes.
+    for (_, op) in graph.ops_mut() {
+        *op = op.remap(ctx, &sampled_x, &FxHashMap::default());
+    }
+    for (_, node) in graph.nodes_mut() {
+        for action in &mut node.actions {
+            action.guard = remap_expr(ctx, action.guard, &sampled_x);
+        }
+        for edge in &mut node.transitions {
+            edge.guard = remap_expr(ctx, edge.guard, &sampled_x);
+        }
     }
     let initial_env: Vec<Binding> = arguments
         .iter()
@@ -238,6 +261,17 @@ impl Converter<'_> {
         actions.push(Action::new(guard, op));
     }
 
+    fn check_condition(
+        &mut self,
+        node: NodeId,
+        condition: ExprRef,
+    ) -> Result<(), MonitorConversionError> {
+        if self.contains_parameter(condition) {
+            return Err(self.unsupported(node, "parameter-dependent conditions are unsupported"));
+        }
+        Ok(())
+    }
+
     /// switches a node from a driver version toa  monitor version
     fn convert_node(
         &mut self,
@@ -250,7 +284,10 @@ impl Converter<'_> {
 
         let mut env = initial_env.to_vec();
         let mut actions = Vec::new();
+        // Process observations in their existing order. Parameters may occur
+        // on one side of an equality, but cannot select which actions execute.
         for action in self.graph[node].actions.clone() {
+            self.check_condition(node, action.guard)?;
             match self.graph[action.op].clone() {
                 // Capturing drivers still drive their inputs normally.
                 op @ Op::Assign(..) if !self.convert_assignments => {
@@ -268,10 +305,12 @@ impl Converter<'_> {
                     if action.guard != self.ctx.get_true() {
                         return Err(invalid("assignment action guards must be true".into()));
                     }
+                    self.check_condition(node, assignment.dont_care)?;
                     let sample = self.graph.symbol_expr(pin).unwrap();
                     // X wins, then the first applicable concrete alternative.
                     let mut prior = assignment.dont_care;
                     for (guard, rhs) in assignment.concretes {
+                        self.check_condition(node, guard)?;
                         let not_prior = self.graph.not_guard(self.ctx, prior);
                         let effective = self.graph.and_guard(self.ctx, not_prior, guard);
                         self.observe_equality(
@@ -293,6 +332,9 @@ impl Converter<'_> {
                     self.emit(&mut actions, action.guard, op);
                 }
             }
+        }
+        for edge in self.graph[node].transitions.clone() {
+            self.check_condition(node, edge.guard)?;
         }
         for (index, binding) in env.into_iter().enumerate() {
             let argument = self.graph.args[index].symbol();
@@ -331,7 +373,7 @@ impl Converter<'_> {
         if left_has_parameter && right_has_parameter {
             return Err(self.unsupported(
                 node,
-                "relations between unresolved parameters are unsupported",
+                "equalities with parameters on both sides are unsupported",
             ));
         }
         let (sample, pattern) = if left_has_parameter {
@@ -407,6 +449,7 @@ impl Converter<'_> {
                 }
             }
             Expr::BVIte { cond, tru, fals } => {
+                self.check_condition(node, cond)?;
                 let true_guard = self.graph.and_guard(self.ctx, guard, cond);
                 let not_cond = self.graph.not_guard(self.ctx, cond);
                 let false_guard = self.graph.and_guard(self.ctx, guard, not_cond);
@@ -517,5 +560,42 @@ impl Converter<'_> {
         // Emit the check built from V, K, and Q above. Keep those expressions
         // frozen: substituting later updates could erase an observation conflict.
         self.emit(actions, guard, Op::AssertEq(lhs, rhs));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::ir::edge_contract::contract_edges;
+    use crate::ir::lowering::lower_ast_to_ir;
+
+    #[test]
+    fn rejects_parameter_equality_even_after_observing_both_parameters() {
+        let mut diagnostics = DiagnosticHandler::default();
+        let (mut symbols, modules) = crate::frontend(
+            &["../tests/adders/adder_d1/add_d1.prot"],
+            &mut diagnostics,
+            false,
+            false,
+        )
+        .unwrap();
+        let ast = modules[0].protos[0].clone();
+        let mut ctx = Context::default();
+        let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        let a = graph.symbol_expr(graph.args[0].symbol()).unwrap();
+        let b = graph.symbol_expr(graph.args[1].symbol()).unwrap();
+        // Entry already observes a and b through the DUT assignments. Reject
+        // a == b anyway, rather than scheduling inference and rewriting it.
+        let op = graph.o(Op::AssertEq(a, b));
+        graph.push_action(graph.entry, Action::new(ctx.get_true(), op));
+        let error = convert_driver_to_monitor(&mut ctx, graph, &mut symbols)
+            .err()
+            .expect("parameter-only equality must be rejected");
+        assert!(
+            matches!(error, MonitorConversionError::UnsupportedExpression { reason, .. }
+            if reason == "equalities with parameters on both sides are unsupported")
+        );
     }
 }

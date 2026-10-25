@@ -1,9 +1,11 @@
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
-use crate::ir::determinize::{SatResult, check_sat};
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{
+    Action, Assignment, Node, NodeId, Op, ProtoGraph, Transition, remap_expr,
+};
 use patronus::expr::{Context, ExprRef};
+use rustc_hash::FxHashMap;
 
 fn symbol_expr(
     ctx: &mut Context,
@@ -98,17 +100,26 @@ pub fn guard_disjoint_assignment(
     }
 }
 
+/// Concrete Coverage (not accounting for DontCare)
+pub fn raw_concrete_coverage(
+    ctx: &mut Context,
+    protocol: &mut ProtoGraph,
+    assignment: &Assignment,
+) -> ExprRef {
+    assignment
+        .concretes
+        .iter()
+        .fold(ctx.get_false(), |coverage, &(guard, _)| {
+            protocol.or_guard(ctx, coverage, guard)
+        })
+}
+
 pub fn concrete_coverage(
     ctx: &mut Context,
     protocol: &mut ProtoGraph,
     assignment: &Assignment,
 ) -> ExprRef {
-    let raw_coverage = assignment
-        .concretes
-        .iter()
-        .fold(ctx.get_false(), |guard, (concrete_guard, _)| {
-            protocol.or_guard(ctx, guard, *concrete_guard)
-        });
+    let raw_coverage = raw_concrete_coverage(ctx, protocol, assignment);
     let not_dont_care = protocol.not_guard(ctx, assignment.dont_care);
     protocol.and_guard(ctx, not_dont_care, raw_coverage)
 }
@@ -167,75 +178,6 @@ fn concretes_without_dont_care(
         .collect()
 }
 
-// TODO: I feel like this can be done at *merge-time* in edge-contract.rs instead
-// TODO: of as a post-processing step
-pub fn canonicalize_assignment(
-    ctx: &mut Context,
-    pg: &mut ProtoGraph,
-    assignment: Assignment,
-) -> Assignment {
-    let dont_care = pg.simplifier.simplify(ctx, assignment.dont_care);
-    if dont_care == ctx.get_true() {
-        return Assignment {
-            dont_care,
-            concretes: Vec::new(),
-        };
-    }
-
-    let mut prior = dont_care;
-    let mut concretes: Vec<(ExprRef, ExprRef)> = Vec::new();
-
-    for (guard, rhs) in assignment.concretes {
-        let guard = pg.simplifier.simplify(ctx, guard);
-        let not_prior = pg.not_guard(ctx, prior);
-        let effective_guard = pg.and_guard(ctx, not_prior, guard);
-        let effective_guard = pg.simplifier.simplify(ctx, effective_guard);
-
-        match check_sat(ctx, pg, effective_guard) {
-            SatResult::DefinitelyUnsat => {}
-            SatResult::AlwaysSat => {
-                merge_concrete_guard(ctx, pg, &mut concretes, ctx.get_true(), rhs);
-                break;
-            }
-            SatResult::MaybeSat => {
-                merge_concrete_guard(ctx, pg, &mut concretes, effective_guard, rhs);
-                let next_prior = pg.or_guard(ctx, prior, effective_guard);
-                prior = pg.simplifier.simplify(ctx, next_prior);
-            }
-        }
-
-        if prior == ctx.get_true() {
-            break;
-        }
-    }
-
-    Assignment {
-        dont_care,
-        concretes,
-    }
-}
-
-/// if the `rhs` already exists in `concretes` with guard `old_guard`
-/// `guard` should be an *effective* guard, so that performing
-/// `old_guard || guard` does not violate merge semantics
-fn merge_concrete_guard(
-    ctx: &mut Context,
-    pg: &mut ProtoGraph,
-    concretes: &mut Vec<(ExprRef, ExprRef)>,
-    guard: ExprRef,
-    rhs: ExprRef,
-) {
-    if let Some((existing_guard, _)) = concretes
-        .iter_mut()
-        .find(|(_, existing_rhs)| *existing_rhs == rhs)
-    {
-        let merged_guard = pg.or_guard(ctx, *existing_guard, guard);
-        *existing_guard = pg.simplifier.simplify(ctx, merged_guard);
-    } else {
-        concretes.push((guard, rhs));
-    }
-}
-
 pub fn merge_ordered_assignment(
     ctx: &mut Context,
     protocol: &mut ProtoGraph,
@@ -268,27 +210,17 @@ pub fn merge_unordered_assignment(
     // Check conflicts using effective guards, but do not put those expanded
     // guards in the merged assignment. The raw vectors already carry their
     // precedence through their order.
-    let mut prior_existing = existing.dont_care;
-    for (existing_guard, existing_rhs) in &existing.concretes {
-        let not_prior_existing = protocol.not_guard(ctx, prior_existing);
-        let existing_effective = protocol.and_guard(ctx, not_prior_existing, *existing_guard);
-        let mut prior_new = new.dont_care;
-
-        for (new_guard, new_rhs) in &new.concretes {
-            let not_prior_new = protocol.not_guard(ctx, prior_new);
-            let new_effective = protocol.and_guard(ctx, not_prior_new, *new_guard);
-
+    let existing_effective = effective_concretes(ctx, protocol, &existing);
+    let new_effective = effective_concretes(ctx, protocol, &new);
+    for &(existing_guard, existing_rhs) in &existing_effective {
+        for &(new_guard, new_rhs) in &new_effective {
             if existing_rhs != new_rhs {
-                let overlap = protocol.and_guard(ctx, existing_effective, new_effective);
+                let overlap = protocol.and_guard(ctx, existing_guard, new_guard);
                 if overlap != ctx.get_false() {
                     record_internal_assert(ctx, protocol, internal_assert_guard, overlap);
                 }
             }
-
-            prior_new = protocol.or_guard(ctx, prior_new, *new_guard);
         }
-
-        prior_existing = protocol.or_guard(ctx, prior_existing, *existing_guard);
     }
 
     let mut existing_concretes = concrete_coverage(ctx, protocol, &existing);
@@ -322,24 +254,12 @@ pub fn merge_disjoint_assignments(
 
     for assignment in assignments {
         dont_care = protocol.or_guard(ctx, dont_care, assignment.dont_care);
-        let group = coalesce_concretes(ctx, protocol, assignment.concretes);
-        let prior_groups_end = concretes.len();
-
-        for (guard, rhs) in group {
-            let existing = concretes[..prior_groups_end]
-                .iter()
-                .position(|(_, existing_rhs)| *existing_rhs == rhs);
-            if let Some(index) = existing {
-                concretes[index].0 = protocol.or_guard(ctx, concretes[index].0, guard);
-            } else {
-                concretes.push((guard, rhs));
-            }
-        }
+        concretes.extend(assignment.concretes);
     }
 
     Assignment {
         dont_care,
-        concretes,
+        concretes: coalesce_concretes(ctx, protocol, concretes),
     }
 }
 
@@ -347,92 +267,12 @@ pub fn merge_disjoint_guarded_assignments(
     ctx: &mut Context,
     protocol: &mut ProtoGraph,
     groups: Vec<(ExprRef, Assignment)>,
-) -> (Assignment, ExprRef) {
-    let mut dont_care = ctx.get_false();
-    let mut coverage = ctx.get_false();
-    let mut concretes = Vec::new();
-
-    for (guard, assignment) in groups {
-        let local_coverage = concrete_coverage(ctx, protocol, &assignment);
-        let guarded_coverage = protocol.and_guard(ctx, guard, local_coverage);
-        coverage = protocol.or_guard(ctx, coverage, guarded_coverage);
-        let guarded_dont_care = protocol.and_guard(ctx, guard, assignment.dont_care);
-        dont_care = protocol.or_guard(ctx, dont_care, guarded_dont_care);
-
-        let unclipped = concretes_without_dont_care(ctx, protocol, &assignment);
-        let guarded = unclipped
-            .into_iter()
-            .map(|(branch, rhs)| (protocol.and_guard(ctx, guard, branch), rhs))
-            .collect();
-        let group = coalesce_concretes(ctx, protocol, guarded);
-        let prior_groups_end = concretes.len();
-
-        for (branch, rhs) in group {
-            let existing = concretes[..prior_groups_end]
-                .iter()
-                .position(|(_, existing_rhs)| *existing_rhs == rhs);
-            if let Some(index) = existing {
-                concretes[index].0 = protocol.or_guard(ctx, concretes[index].0, branch);
-            } else {
-                concretes.push((branch, rhs));
-            }
-        }
-    }
-
-    (
-        Assignment {
-            dont_care,
-            concretes,
-        },
-        coverage,
-    )
-}
-
-pub fn merge_unordered_assignment_with_disjoint_batch(
-    ctx: &mut Context,
-    protocol: &mut ProtoGraph,
-    internal_assert_guard: &mut Option<ExprRef>,
-    existing: Assignment,
-    groups: Vec<(ExprRef, Assignment)>,
 ) -> Assignment {
-    let existing_effective = effective_concretes(ctx, protocol, &existing);
-    for (group_guard, group) in &groups {
-        for (existing_guard, existing_rhs) in &existing_effective {
-            for (branch_guard, group_rhs) in effective_concretes(ctx, protocol, group) {
-                if existing_rhs == &group_rhs {
-                    continue;
-                }
-                let guarded_branch = protocol.and_guard(ctx, *group_guard, branch_guard);
-                let overlap = protocol.and_guard(ctx, *existing_guard, guarded_branch);
-                if overlap != ctx.get_false() {
-                    record_internal_assert(ctx, protocol, internal_assert_guard, overlap);
-                }
-            }
-        }
-    }
-
-    let (batch, batch_coverage) = merge_disjoint_guarded_assignments(ctx, protocol, groups);
-    if existing.dont_care == ctx.get_true() && existing.concretes.is_empty() {
-        let dont_care = protocol.not_guard(ctx, batch_coverage);
-        return Assignment {
-            dont_care,
-            concretes: batch.concretes,
-        };
-    }
-
-    let existing_coverage = concrete_coverage(ctx, protocol, &existing);
-    let not_batch_coverage = protocol.not_guard(ctx, batch_coverage);
-    let existing_dont_care = protocol.and_guard(ctx, not_batch_coverage, existing.dont_care);
-    let not_existing_coverage = protocol.not_guard(ctx, existing_coverage);
-    let batch_dont_care = protocol.and_guard(ctx, not_existing_coverage, batch.dont_care);
-
-    let mut concretes = concretes_without_dont_care(ctx, protocol, &existing);
-    concretes.extend(batch.concretes);
-
-    Assignment {
-        dont_care: protocol.or_guard(ctx, existing_dont_care, batch_dont_care),
-        concretes: coalesce_concretes(ctx, protocol, concretes),
-    }
+    let assignments = groups
+        .into_iter()
+        .map(|(guard, assignment)| guard_disjoint_assignment(ctx, protocol, assignment, guard))
+        .collect();
+    merge_disjoint_assignments(ctx, protocol, assignments)
 }
 
 fn merge_disjoint_assignment(
@@ -584,11 +424,79 @@ fn append_action_with_mode(
     }
 }
 
+/// Since assignments don't take effect until the step edge,
+/// Rewrite assertions, guards, transitions to use newly assigned values
+fn normalize_node(
+    ctx: &mut Context,
+    graph: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    node: Node,
+) -> Node {
+    let mut actions = Vec::new();
+    let mut error = None;
+    for action in node.actions {
+        append_action(ctx, graph, symbols, &mut actions, &mut error, action, true);
+    }
+    if let Some(guard) = error {
+        let op = graph.o(Op::InternalAssertFalse);
+        actions.push(Action::new(guard, op));
+    }
+    let values = assigned_values(ctx, graph, symbols, &actions);
+    for action in &mut actions {
+        if !matches!(graph[action.op], Op::Assign(..)) {
+            let op = graph[action.op].remap(ctx, &values, &FxHashMap::default());
+            action.op = graph.o(op);
+            action.guard = remap_expr(ctx, action.guard, &values);
+        }
+    }
+    let transitions = node
+        .transitions
+        .into_iter()
+        .map(|mut edge| {
+            edge.guard = remap_expr(ctx, edge.guard, &values);
+            edge
+        })
+        .collect();
+    Node {
+        actions,
+        transitions,
+    }
+}
+
+// For every symbol assigned to, return its `ExprRef` verison and what it's assigned to
+// in `actions`.
+fn assigned_values(
+    ctx: &mut Context,
+    graph: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    actions: &[Action],
+) -> FxHashMap<ExprRef, ExprRef> {
+    let mut values = FxHashMap::default();
+    for action in actions {
+        if let Op::Assign(target, assignment) = graph[action.op].clone() {
+            let held = symbol_expr(ctx, graph, symbols, target);
+            let x = if symbols[target].is_in_port() && assignment.dont_care != ctx.get_false() {
+                graph.dont_care_input(ctx, symbols, target)
+            } else {
+                assert_eq!(assignment.dont_care, ctx.get_false(), "state cannot be X");
+                held
+            };
+            let value = assignment.to_expr(ctx, x, held);
+            let value = ctx.ite(action.guard, value, held);
+            let value = graph.simplifier.simplify(ctx, value);
+            values.insert(held, value);
+        }
+    }
+    values
+}
+
 pub fn contract_edges(ctx: &mut Context, pg: &mut ProtoGraph, symbols: &SymbolTable) {
     contract_edges_from(ctx, pg, symbols, pg.entry);
 }
 
-/// returns `protocol` with semantic behavior preserved, but no non-step edges
+/// Resolve action order in a raw graph and remove its non-step edges.
+/// NOTE: This function is not idempotent!
+/// This is due to the use of `normalize_node`, which is not idempotent
 pub fn contract_edges_from(
     ctx: &mut Context,
     protocol: &mut ProtoGraph,
@@ -596,118 +504,143 @@ pub fn contract_edges_from(
     start: NodeId,
 ) {
     let node_ids = protocol.reachable_node_ids(ctx, start);
+    let mut sources = FxHashMap::default();
+    for &id in &node_ids {
+        let node = normalize_node(ctx, protocol, symbols, protocol[id].clone());
+        sources.insert(id, node);
+    }
+    for source in node_ids {
+        let contracted = contract_node(
+            ctx,
+            protocol,
+            symbols,
+            source,
+            &sources,
+            &mut BTreeSet::new(),
+        );
+        *protocol.node_mut(source) = contracted;
+    }
+}
 
-    for source_node_id in node_ids.into_iter().rev() {
-        let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());
-        let mut internal_assert_guard = None;
-        for action in protocol[source_node_id].actions.clone() {
-            append_action(
-                ctx,
-                protocol,
-                symbols,
-                &mut contracted_actions,
-                &mut internal_assert_guard,
-                action,
-                true,
-            );
-        }
+fn same_transition_effect(a: &Transition, b: &Transition) -> bool {
+    a.target == b.target && a.consumes_step == b.consumes_step && a.rotations == b.rotations
+}
 
-        let (mut step_transitions, pending_transitions): (Vec<_>, Vec<_>) = protocol
-            [source_node_id]
-            .transitions
-            .clone()
-            .into_iter()
-            .partition(|transition| transition.consumes_step);
-
-        let mut pending_transitions: VecDeque<_> = pending_transitions
-            .into_iter()
-            .rev()
-            .map(|transition| {
-                (transition, {
-                    let mut path = BTreeSet::new();
-                    path.insert(source_node_id);
-                    path
-                })
-            })
-            .collect();
-
-        while let Some((transition, path)) = pending_transitions.pop_front() {
-            assert!(!transition.consumes_step);
-
-            let target_node_id = transition.target;
-            if path.contains(&target_node_id) {
-                internal_assert_guard = Some(match internal_assert_guard.take() {
-                    Some(existing_guard) => {
-                        protocol.or_guard(ctx, existing_guard, transition.guard)
-                    }
-                    None => transition.guard,
-                });
-                continue;
-            }
-
-            let incoming_guard = transition.guard;
-            let target_actions = protocol[target_node_id].actions.clone();
-            let target_transitions = protocol[target_node_id].transitions.clone();
-            let mut next_path = path.clone();
-            next_path.insert(target_node_id);
-
-            for action in target_actions {
-                let merged_action = match protocol[action.op].clone() {
-                    Op::Assign(symbol_id, assignment) => {
-                        assert_eq!(
-                            action.guard,
-                            ctx.get_true(),
-                            "assignment action guards must be 1; path conditions belong in Assignment"
-                        );
-                        let guarded_assignment =
-                            guard_assignment(ctx, protocol, assignment, incoming_guard);
-                        let guarded_op = protocol.o(Op::Assign(symbol_id, guarded_assignment));
-                        Action::new(ctx.get_true(), guarded_op)
-                    }
-                    _ => Action::with_guard(
-                        &action,
-                        protocol.and_guard(ctx, incoming_guard, action.guard),
-                    ),
-                };
-                append_action(
-                    ctx,
-                    protocol,
-                    symbols,
-                    &mut contracted_actions,
-                    &mut internal_assert_guard,
-                    merged_action,
-                    true,
-                );
-            }
-
-            for target_transition in target_transitions.into_iter().rev() {
-                let contracted_transition = Transition::with_guard(
-                    &target_transition,
-                    protocol.and_guard(ctx, incoming_guard, target_transition.guard),
-                );
-                if contracted_transition.consumes_step {
-                    step_transitions.push(contracted_transition);
+/// Group equal effects and OR their path-guarded conditions.
+fn merge_branches(
+    ctx: &mut Context,
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    branches: Vec<(ExprRef, Node)>,
+) -> Node {
+    let mut merged = Node::empty();
+    for (condition, branch) in branches {
+        for mut action in branch.actions {
+            if let Op::Assign(target, assignment) = protocol[action.op].clone() {
+                let assignment = guard_assignment(ctx, protocol, assignment, condition);
+                action.op = protocol.o(Op::Assign(target, assignment));
+                append_action_disjoint(ctx, protocol, symbols, &mut merged.actions, action);
+            } else {
+                action.guard = protocol.and_guard(ctx, condition, action.guard);
+                if let Some(prior) = merged
+                    .actions
+                    .iter_mut()
+                    .find(|a| protocol[a.op] == protocol[action.op])
+                {
+                    prior.guard = protocol.or_guard(ctx, prior.guard, action.guard);
                 } else {
-                    pending_transitions.push_back((contracted_transition, next_path.clone()));
+                    merged.actions.push(action);
                 }
             }
         }
-
-        if let Some(internal_assert_guard) = internal_assert_guard {
-            let internal_assert_op = protocol.o(Op::InternalAssertFalse);
-            let source_node = protocol.node_mut(source_node_id);
-            source_node.actions = contracted_actions;
-            source_node
-                .actions
-                .push(Action::new(internal_assert_guard, internal_assert_op));
-        } else {
-            let source_node = protocol.node_mut(source_node_id);
-            source_node.actions = contracted_actions;
+        for mut edge in branch.transitions {
+            edge.guard = protocol.and_guard(ctx, condition, edge.guard);
+            if let Some(prior) = merged
+                .transitions
+                .iter_mut()
+                .find(|e| same_transition_effect(e, &edge))
+            {
+                prior.guard = protocol.or_guard(ctx, prior.guard, edge.guard);
+            } else {
+                merged.transitions.push(edge);
+            }
         }
-        protocol.node_mut(source_node_id).transitions = step_transitions;
+    }
+    merged.actions.retain(|a| a.guard != ctx.get_false());
+    merged.transitions.retain(|e| e.guard != ctx.get_false());
+    merged
+}
+
+// Compose mutually exclusive branches, then append their effects in source order.
+fn contract_node(
+    ctx: &mut Context,
+    protocol: &mut ProtoGraph,
+    symbols: &SymbolTable,
+    source: NodeId,
+    sources: &FxHashMap<NodeId, Node>,
+    path: &mut BTreeSet<NodeId>,
+) -> Node {
+    path.insert(source);
+    let node = sources[&source].clone();
+    let values = assigned_values(ctx, protocol, symbols, &node.actions);
+    let mut actions = node.actions;
+    let mut branches = Vec::new();
+    for edge in node.transitions {
+        if edge.guard == ctx.get_false() {
+            continue;
+        }
+        let branch = if edge.consumes_step {
+            Node {
+                actions: vec![],
+                transitions: vec![edge.with_guard(ctx.get_true())],
+            }
+        } else if path.contains(&edge.target) { // Fail on a combintional loop
+            let op = protocol.o(Op::InternalAssertFalse);
+            Node {
+                actions: vec![Action::new(ctx.get_true(), op)],
+                transitions: vec![],
+            }
+        } else {
+            // by construction, all branches are mutually exclusive. follow the branch first,
+            // and then we'll merge them later
+            let mut branch =
+                contract_node(ctx, protocol, symbols, edge.target, sources, path);
+            for action in &mut branch.actions {
+                let op = protocol[action.op].remap(ctx, &values, &FxHashMap::default());
+                action.op = protocol.o(op);
+                action.guard = remap_expr(ctx, action.guard, &values);
+            }
+            for transition in &mut branch.transitions {
+                transition.guard = remap_expr(ctx, transition.guard, &values);
+            }
+            branch
+        };
+        branches.push((edge.guard, branch));
     }
 
-    // TODO: check all simplifications here
+    // merge all the branches together
+    let branches = merge_branches(ctx, protocol, symbols, branches);
+    let mut error = None;
+    for action in branches.actions {
+        append_action(
+            ctx,
+            protocol,
+            symbols,
+            &mut actions,
+            &mut error,
+            action,
+            true,
+        );
+    }
+    if let Some(guard) = error {
+        let op = protocol.o(Op::InternalAssertFalse);
+        actions.push(Action::new(guard, op));
+    }
+    path.remove(&source);
+    Node {
+        actions,
+        transitions: branches.transitions,
+    }
 }
 
 /// returns `protocol` with explicit assignments to every port
@@ -754,8 +687,10 @@ mod tests {
     use super::*;
     use crate::frontend::ast::ProtocolContext;
     use crate::frontend::symbol::ROOT_SCOPE;
+    use crate::ir::proto_graph::Transition;
+    use baa::{BitVecOps, BitVecValue};
     use cranelift_entity::EntityRef;
-    use patronus::expr::SerializableIrNode;
+    use patronus::expr::{SerializableIrNode, SymbolValueStore, eval_expr};
 
     fn concrete_assignment(ctx: &Context, rhs: ExprRef) -> Assignment {
         Assignment::concrete(ctx.get_false(), ctx.get_true(), rhs)
@@ -767,6 +702,310 @@ mod tests {
 
     fn expr_str(ctx: &Context, expr: ExprRef) -> String {
         expr.serialize_to_str(ctx)
+    }
+
+    fn active(ctx: &Context, store: &SymbolValueStore, guard: ExprRef) -> bool {
+        let value: BitVecValue = eval_expr(ctx, store, guard).try_into().unwrap();
+        !value.is_zero()
+    }
+
+    #[test]
+    fn state_updates_are_resolved_once_and_stop_at_steps() {
+        use crate::backends::transition_system::lower_proto_graph_to_transition_system;
+        use patronus::sim::{InitKind, Interpreter, Simulator};
+        use patronus::system::TransitionSystem;
+
+        let mut ctx = Context::default();
+        let mut symbols = SymbolTable::default();
+        let mut graph = ProtoGraph::new(ProtocolContext::new("state_order".into(), ROOT_SCOPE));
+        let register = graph.add_register(&mut ctx, &mut symbols, "r", 8);
+        let r = graph.symbol_expr(register).unwrap();
+        graph.register_inits.insert(register, ctx.zero(8));
+        let one = ctx.bit_vec_val(1, 8);
+        let two = ctx.bit_vec_val(2, 8);
+        let three = ctx.bit_vec_val(3, 8);
+        let four = ctx.bit_vec_val(4, 8);
+        let increment = ctx.add(r, one);
+        let entry = graph.entry;
+        let check = graph.n(Node::empty());
+        let update = graph.n(Node::empty());
+        let check_again = graph.n(Node::empty());
+        let second_cycle = graph.n(Node::empty());
+        let second_update = graph.n(Node::empty());
+        let final_cycle = graph.n(Node::empty());
+        for (node, op) in [
+            (entry, Op::Assign(register, concrete_assignment(&ctx, two))),
+            (check, Op::AssertEq(increment, three)),
+            (
+                update,
+                Op::Assign(register, concrete_assignment(&ctx, increment)),
+            ),
+            (check_again, Op::AssertEq(r, three)),
+            (second_cycle, Op::AssertEq(r, three)),
+            (
+                second_update,
+                Op::Assign(register, concrete_assignment(&ctx, increment)),
+            ),
+            (final_cycle, Op::AssertEq(r, four)),
+            (final_cycle, Op::Done),
+        ] {
+            let op = graph.o(op);
+            graph.push_action(node, Action::new(ctx.get_true(), op));
+        }
+        for (from, to, step) in [
+            (entry, check, false),
+            (check, update, false),
+            (update, check_again, false),
+            (check_again, second_cycle, true),
+            (second_cycle, second_update, false),
+        ] {
+            graph.push_transition(from, Transition::new(ctx.get_true(), to, step));
+        }
+        // The raw node's edge sees its assignment, whereas its assignment RHS
+        // reads the incoming r. The contracted edge must contain r + 1 once.
+        let guard = ctx.equal(r, four);
+        graph.push_transition(second_update, Transition::new(guard, final_cycle, true));
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        let expected = ctx.equal(increment, four);
+        assert_eq!(graph[second_cycle].transitions[0].guard, expected);
+
+        let core = lower_proto_graph_to_transition_system(
+            &mut ctx,
+            graph,
+            TransitionSystem::new("state_order".into()),
+            FxHashMap::default(),
+            FxHashMap::default(),
+            &symbols,
+        );
+        let mut sim = Interpreter::new(&ctx, &core.ts);
+        sim.init(InitKind::Zero);
+        for expected in [3, 4, 4] {
+            sim.step();
+            assert_eq!(sim.get(r), BitVecValue::from_u64(expected, 8).into());
+        }
+        assert_eq!(sim.get(core.node_symbol), sim.get(core.done_state));
+    }
+
+    #[test]
+    fn an_x_release_is_still_observable_after_an_earlier_write() {
+        use crate::ir::driver_to_monitor::convert_driver_to_monitor;
+        let mut ctx = Context::default();
+        let mut diagnostics = crate::frontend::diagnostic::DiagnosticHandler::default();
+        let (mut symbols, modules) = crate::frontend(
+            &["../tests/synchronous/wire.prot"],
+            &mut diagnostics,
+            false,
+            false,
+        )
+        .unwrap();
+        let context = modules[0].protos[0].ctx.clone();
+        let pin = context.dut_input_symbols(&symbols).next().unwrap();
+        let mut graph = ProtoGraph::new(context);
+        let pin_expr = symbol_expr(&mut ctx, &mut graph, &symbols, pin);
+        let entry = graph.entry;
+        let release = graph.n(Node::empty());
+        let observation = graph.n(Node::empty());
+        for (node, op) in [
+            (
+                entry,
+                Op::Assign(pin, concrete_assignment(&ctx, ctx.get_true())),
+            ),
+            (release, Op::Assign(pin, dont_care_assignment(&ctx))),
+            (observation, Op::AssertEq(pin_expr, ctx.get_false())),
+            (observation, Op::Done),
+        ] {
+            let op = graph.o(op);
+            graph.push_action(node, Action::new(ctx.get_true(), op));
+        }
+        graph.push_transition(entry, Transition::new(ctx.get_true(), release, false));
+        graph.push_transition(release, Transition::new(ctx.get_true(), observation, false));
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        let assertion = graph[entry]
+            .actions
+            .iter()
+            .find_map(|a| match graph[a.op] {
+                Op::AssertEq(a, _) => Some(a),
+                _ => None,
+            })
+            .unwrap();
+        assert!(graph.dont_cares.contains(&assertion));
+        let monitor = convert_driver_to_monitor(&mut ctx, graph, &mut symbols).unwrap();
+        assert!(monitor.graph[entry].actions.iter().any(|a| {
+            matches!(monitor.graph[a.op], Op::AssertEq(lhs, rhs)
+                if lhs == pin_expr && rhs == ctx.get_false())
+        }));
+    }
+
+    #[test]
+    fn disjoint_merge_preserves_each_branchs_priority() {
+        let mut graph = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
+        let branch = ctx.bv_symbol("branch", 1);
+        let not_branch = ctx.not(branch);
+        let condition = ctx.bv_symbol("condition", 1);
+        let one = ctx.bit_vec_val(1, 8);
+        let two = ctx.bit_vec_val(2, 8);
+        let left = Assignment {
+            dont_care: ctx.get_false(),
+            concretes: vec![(condition, one), (ctx.get_true(), two)],
+        };
+        let right = Assignment {
+            dont_care: ctx.get_false(),
+            concretes: vec![(condition, two), (ctx.get_true(), one)],
+        };
+        let merged = merge_disjoint_guarded_assignments(
+            &mut ctx,
+            &mut graph,
+            vec![(branch, left), (not_branch, right)],
+        );
+        for b in [false, true] {
+            for c in [false, true] {
+                let mut store = SymbolValueStore::default();
+                store.define_bv(branch, &BitVecValue::from_u64(b as u64, 1));
+                store.define_bv(condition, &BitVecValue::from_u64(c as u64, 1));
+                let (_, rhs) = merged
+                    .concretes
+                    .iter()
+                    .find(|(g, _)| active(&ctx, &store, *g))
+                    .unwrap();
+                assert_eq!(*rhs, if b == c { one } else { two });
+            }
+        }
+    }
+
+    #[test]
+    fn contracts_branches_before_sequential_composition() {
+        let mut graph = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
+        let mut symbols = SymbolTable::default();
+        let pin = symbols.add_without_parent(
+            "signal".into(),
+            FrontType::BitVec(8),
+            crate::frontend::symbol::SymbolKind::InPort,
+        );
+        let b = ctx.bv_symbol("branch", 1);
+        let p = ctx.bv_symbol("left_write", 1);
+        let q = ctx.bv_symbol("right_write", 1);
+        let t = ctx.bv_symbol("later_write", 1);
+        let one = ctx.bit_vec_val(1, 8);
+        let two = ctx.bit_vec_val(2, 8);
+        let three = ctx.bit_vec_val(3, 8);
+        let left = graph.n(Node::empty());
+        let right = graph.n(Node::empty());
+        let join = graph.n(Node::empty());
+        let overwrite = graph.n(Node::empty());
+        let step = graph.n(Node::empty());
+        let end = graph.n(Node::empty());
+        let entry = graph.entry;
+        for (node, assignment) in [
+            (entry, dont_care_assignment(&ctx)),
+            (left, Assignment::concrete(ctx.get_false(), p, one)),
+            (right, Assignment::concrete(ctx.get_false(), q, two)),
+            (overwrite, concrete_assignment(&ctx, three)),
+        ] {
+            let op = graph.o(Op::Assign(pin, assignment));
+            graph.push_action(node, Action::new(ctx.get_true(), op));
+        }
+        // X; if b { if p { pin := 1 } } else { if q { pin := 2 } };
+        // if t { pin := 3 }; step(); done.
+        graph.push_transition(entry, Transition::new(b, left, false));
+        graph.push_transition(entry, Transition::new(ctx.not(b), right, false));
+        for node in [left, right] {
+            let fork = graph.o(Op::Fork);
+            graph.push_action(node, Action::new(ctx.get_true(), fork));
+            graph.push_transition(node, Transition::new(ctx.get_true(), join, false));
+        }
+        graph.push_transition(join, Transition::new(t, overwrite, false));
+        graph.push_transition(join, Transition::new(ctx.not(t), step, false));
+        graph.push_transition(overwrite, Transition::new(ctx.get_true(), step, false));
+        graph.push_transition(step, Transition::new(ctx.get_true(), end, true));
+        let done = graph.o(Op::Done);
+        graph.push_action(end, Action::new(ctx.get_true(), done));
+        contract_edges(&mut ctx, &mut graph, &symbols);
+        let assignment = graph[entry]
+            .actions
+            .iter()
+            .find_map(|a| match &graph[a.op] {
+                Op::Assign(_, assignment) => Some(assignment),
+                _ => None,
+            })
+            .unwrap();
+        for bits in 0..16 {
+            let [bv, pv, qv, tv] = [0, 1, 2, 3].map(|bit| (bits >> bit) & 1 != 0);
+            let mut store = SymbolValueStore::default();
+            for (expr, value) in [(b, bv), (p, pv), (q, qv), (t, tv)] {
+                store.define_bv(expr, &BitVecValue::from_u64(value as u64, 1));
+            }
+            let expected = if tv {
+                Some(three)
+            } else if bv && pv {
+                Some(one)
+            } else if !bv && qv {
+                Some(two)
+            } else {
+                None // the initial X remains in effect
+            };
+            let actual = if active(&ctx, &store, assignment.dont_care) {
+                None
+            } else {
+                Some(
+                    assignment
+                        .concretes
+                        .iter()
+                        .find(|(g, _)| active(&ctx, &store, *g))
+                        .unwrap()
+                        .1,
+                )
+            };
+            assert_eq!(actual, expected, "branches {bits:04b}");
+            let actions: Vec<_> = graph[entry]
+                .actions
+                .iter()
+                .filter(|a| active(&ctx, &store, a.guard))
+                .map(|a| &graph[a.op])
+                .collect();
+            assert_eq!(
+                actions.iter().filter(|op| matches!(op, Op::Fork)).count(),
+                1
+            );
+            assert!(
+                !actions
+                    .iter()
+                    .any(|op| matches!(op, Op::Done | Op::InternalAssertFalse))
+            );
+            let edges: Vec<_> = graph[entry]
+                .transitions
+                .iter()
+                .filter(|e| active(&ctx, &store, e.guard))
+                .collect();
+            assert_eq!(edges.len(), 1);
+            assert!(edges[0].consumes_step);
+            assert_eq!(edges[0].target, end);
+        }
+    }
+
+    #[test]
+    fn contraction_preserves_guarded_non_step_cycle_errors() {
+        let mut graph = ProtoGraph::new(ProtocolContext::new("test".into(), ROOT_SCOPE));
+        let mut ctx = Context::default();
+        let guard = ctx.bv_symbol("cycle", 1);
+        let exit = graph.n(Node::empty());
+        let entry = graph.entry;
+        graph.push_transition(entry, Transition::new(guard, entry, false));
+        let not_guard = ctx.not(guard);
+        graph.push_transition(entry, Transition::new(not_guard, exit, false));
+        let done = graph.o(Op::Done);
+        graph.push_action(exit, Action::new(ctx.get_true(), done));
+        contract_edges(&mut ctx, &mut graph, &SymbolTable::default());
+        assert!(graph[entry].transitions.is_empty());
+        assert_eq!(graph[entry].actions.len(), 2);
+        for action in &graph[entry].actions {
+            match graph[action.op] {
+                Op::Done => assert_eq!(action.guard, not_guard),
+                Op::InternalAssertFalse => assert_eq!(action.guard, guard),
+                _ => panic!("unexpected action"),
+            }
+        }
     }
 
     #[test]
@@ -1005,5 +1244,131 @@ mod tests {
         // any two of the forks should not trigger at once
         // below expression is equivalent to (p or q) and (p or r) and (q or r)
         assert_eq!(internal_guard, "or(and(p, q), and(or(p, q), r))");
+    }
+
+    #[test]
+    fn branch_assignment_merges_preserve_priority_releases_and_missing_writes() {
+        for variant in 0..3 {
+            let mut ctx = Context::default();
+            let mut graph = ProtoGraph::new(ProtocolContext::new("priority".into(), ROOT_SCOPE));
+            let mut symbols = SymbolTable::default();
+            let pin = symbols.add_without_parent(
+                "pin".into(),
+                FrontType::BitVec(8),
+                crate::frontend::symbol::SymbolKind::InPort,
+            );
+            let c = ctx.bv_symbol("condition", 1);
+            let x = ctx.bv_symbol("release", 1);
+            let p = ctx.bv_symbol("first", 1);
+            let q = ctx.bv_symbol("other_first", 1);
+            let one = ctx.bit_vec_val(1, 8);
+            let two = ctx.bit_vec_val(2, 8);
+            let old = ctx.bit_vec_val(9, 8);
+            let entry = graph.entry;
+            let left = graph.n(Node::empty());
+            let right = graph.n(Node::empty());
+            let join = graph.n(Node::empty());
+            let end = graph.n(Node::empty());
+            let op = graph.o(Op::Assign(pin, concrete_assignment(&ctx, old)));
+            graph.push_action(entry, Action::new(ctx.get_true(), op));
+            let op = graph.o(Op::Assign(
+                pin,
+                Assignment {
+                    dont_care: x,
+                    concretes: vec![(p, one), (ctx.get_true(), two)],
+                },
+            ));
+            graph.push_action(left, Action::new(ctx.get_true(), op));
+            if variant != 2 {
+                let (first, fallback) = if variant == 0 { (one, two) } else { (two, one) };
+                let op = graph.o(Op::Assign(
+                    pin,
+                    Assignment {
+                        dont_care: ctx.get_false(),
+                        concretes: vec![(q, first), (ctx.get_true(), fallback)],
+                    },
+                ));
+                graph.push_action(right, Action::new(ctx.get_true(), op));
+            }
+            graph.push_transition(entry, Transition::new(c, left, false));
+            graph.push_transition(entry, Transition::new(ctx.not(c), right, false));
+            for node in [left, right] {
+                graph.push_transition(node, Transition::new(ctx.get_true(), join, false));
+            }
+            graph.push_transition(join, Transition::new(ctx.get_true(), end, true));
+            contract_edges(&mut ctx, &mut graph, &symbols);
+            let assignment = graph[entry]
+                .actions
+                .iter()
+                .find_map(|a| match &graph[a.op] {
+                    Op::Assign(_, assignment) => Some(assignment),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(graph[entry].transitions.len(), 1);
+            assert_eq!(graph[entry].transitions[0].guard, ctx.get_true());
+            for bits in 0..16 {
+                let [cv, xv, pv, qv] = [0, 1, 2, 3].map(|i| (bits >> i) & 1 != 0);
+                let mut store = SymbolValueStore::default();
+                for (symbol, value) in [(c, cv), (x, xv), (p, pv), (q, qv)] {
+                    store.define_bv(symbol, &BitVecValue::from_u64(value as u64, 1));
+                }
+                let expected = if cv {
+                    if xv {
+                        None
+                    } else {
+                        Some(if pv { one } else { two })
+                    }
+                } else if variant == 2 {
+                    Some(old)
+                } else {
+                    Some(if qv == (variant == 0) { one } else { two })
+                };
+                let actual = if active(&ctx, &store, assignment.dont_care) {
+                    None
+                } else {
+                    assignment
+                        .concretes
+                        .iter()
+                        .find(|(g, _)| active(&ctx, &store, *g))
+                        .map(|(_, v)| *v)
+                };
+                assert_eq!(actual, expected, "variant {variant}, inputs {bits:04b}");
+            }
+        }
+    }
+
+    #[test]
+    fn edge_coalescing_preserves_step_and_rotation_effects() {
+        use crate::ir::proto_graph::TransitionRotation;
+        let mut ctx = Context::default();
+        let mut graph = ProtoGraph::new(ProtocolContext::new("effects".into(), ROOT_SCOPE));
+        let c = ctx.bv_symbol("condition", 1);
+        let end = graph.n(Node::empty());
+        let step = Transition::new(ctx.get_true(), end, true);
+        let no_step = Transition::new(ctx.get_true(), end, false);
+        let mut rotate = step.clone();
+        rotate.rotations.push(TransitionRotation {
+            protocol: "test".into(),
+            amount: 1,
+        });
+        let branch = |transitions| Node {
+            actions: vec![],
+            transitions,
+        };
+        let not_c = ctx.not(c);
+        let merged = merge_branches(
+            &mut ctx,
+            &mut graph,
+            &SymbolTable::default(),
+            vec![
+                (c, branch(vec![step.clone(), no_step.clone()])),
+                (not_c, branch(vec![step, rotate.clone()])),
+            ],
+        );
+        assert_eq!(merged.transitions.len(), 3);
+        assert_eq!(merged.transitions[0].guard, ctx.get_true());
+        assert_eq!(merged.transitions[1], no_step.with_guard(c));
+        assert_eq!(merged.transitions[2], rotate.with_guard(not_c));
     }
 }

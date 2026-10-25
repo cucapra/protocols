@@ -1,0 +1,11 @@
+struct Wire { in x:u1, out y:u1, }
+prot send_one<DUT:Wire>() {
+ DUT.x := 1'b1;
+ if DUT.y == 1'b1 { step(); }
+ else { assert_eq(1'b0,1'b1); step(); }
+}
+prot send_zero<DUT:Wire>() {
+ DUT.x := 1'b0;
+ if DUT.y == 1'b0 { step(); }
+ else { assert_eq(1'b0,1'b1); step(); }
+}

@@ -22,6 +22,29 @@ entity_impl!(NodeId, "node");
 pub struct OpId(u32);
 entity_impl!(OpId, "op");
 
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
+pub struct LoopId(u32);
+entity_impl!(LoopId, "l");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoopSource {
+    /// Sequence argument supplying items; absent when the items are unused.
+    pub argument: Option<SymbolId>,
+    /// Exact loop length expression (used for repeat loops, where we need to
+    /// match the argument to the parameter used in the loop)
+    pub length: Option<ExprRef>,
+    pub min_len: u64,
+}
+
+/// Loop metadata + the expressions that map to l.data(), l.last(), l.valid()
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loop {
+    pub source: LoopSource,
+    pub data: ExprRef,
+    pub last: ExprRef,
+    pub valid: ExprRef,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// an Action is a guard and an operation to perform when the guard is true
 pub struct Action {
@@ -77,7 +100,6 @@ impl Transition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-// A node is a (logically) unordered set of actions and transitions
 pub struct Node {
     pub actions: Vec<Action>,
     pub transitions: Vec<Transition>,
@@ -99,6 +121,18 @@ pub struct Assignment {
 }
 
 impl Assignment {
+    pub fn to_expr(&self, ctx: &mut Context, dont_care: ExprRef, default: ExprRef) -> ExprRef {
+        let mut value = default;
+        for &(guard, rhs) in self.concretes.iter().rev() {
+            value = ctx.ite(guard, rhs, value);
+        }
+        if self.dont_care == ctx.get_false() {
+            value
+        } else {
+            ctx.ite(self.dont_care, dont_care, value)
+        }
+    }
+
     pub fn concrete(false_id: ExprRef, guard: ExprRef, rhs: ExprRef) -> Self {
         Self {
             dont_care: false_id,
@@ -200,6 +234,12 @@ pub struct ProtoGraph {
     /// symbol expressions representing DontCare
     pub dont_cares: FxHashSet<ExprRef>,
 
+    /// LoopIds -> their metadata
+    pub loops: PrimaryMap<LoopId, Loop>,
+
+    /// Initial values of automaton registers.
+    pub register_inits: FxHashMap<SymbolId, ExprRef>,
+
     nodes: PrimaryMap<NodeId, Node>,
 
     ops: PrimaryMap<OpId, Op>,
@@ -217,6 +257,8 @@ impl Clone for ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
             dont_cares: self.dont_cares.clone(),
+            register_inits: self.register_inits.clone(),
+            loops: self.loops.clone(),
             nodes: self.nodes.clone(),
             ops: self.ops.clone(),
             op_loc: self.op_loc.clone(),
@@ -239,10 +281,27 @@ impl ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
+            register_inits: FxHashMap::default(),
+            loops: PrimaryMap::new(),
             nodes,
             ops,
             op_loc,
         }
+    }
+
+    /// One arbitrary sample per DUT input and cycle, shared with DUT wiring.
+    pub fn dont_care_input(
+        &mut self,
+        ctx: &mut Context,
+        symbols: &SymbolTable,
+        pin: SymbolId,
+    ) -> ExprRef {
+        let expr = ctx.bv_symbol(
+            &format!("dont_care.{}", symbols[pin].name()),
+            symbols[pin].tpe().bitwidth(),
+        );
+        self.dont_cares.insert(expr);
+        expr
     }
 
     pub fn symbol_expr(&self, symbol_id: SymbolId) -> Option<ExprRef> {
@@ -337,7 +396,9 @@ impl ProtoGraph {
                     *rhs = self.simplifier.simplify(ctx, *rhs);
                     debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
-                Op::Fork | Op::InternalAssertFalse | Op::Done => {}
+                Op::Fork
+                | Op::InternalAssertFalse
+                | Op::Done => {}
             }
         }
     }
@@ -364,15 +425,15 @@ impl ProtoGraph {
         self.ops.push(op)
     }
 
-    pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
+    pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> {
         self.nodes.iter()
     }
 
-    pub fn nodes_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut Node)> + '_ {
+    pub fn nodes_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut Node)> {
         self.nodes.iter_mut()
     }
 
-    pub fn ops_mut(&mut self) -> impl Iterator<Item = (OpId, &mut Op)> + '_ {
+    pub fn ops_mut(&mut self) -> impl Iterator<Item = (OpId, &mut Op)> {
         self.ops.iter_mut()
     }
 

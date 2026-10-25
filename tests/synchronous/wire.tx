@@ -1,0 +1,1 @@
+trace { send_one(); send_zero(); }

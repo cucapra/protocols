@@ -1,6 +1,6 @@
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
 use crate::ir::edge_contract::{
-    canonicalize_assignment, merge_ordered_assignment, same_assignment_target,
+    merge_ordered_assignment, raw_concrete_coverage, same_assignment_target,
 };
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
 use crate::ir::register_simplify::{RegisterFacts, simplify_registers};
@@ -55,10 +55,8 @@ pub fn insert_assignment_registers(
             }
             let old_value = pg.symbol_expr(value).unwrap();
             let old_x = pg.symbol_expr(released).unwrap();
-            let coverage = local
-                .concretes
-                .iter()
-                .fold(local.dont_care, |g, (next, _)| pg.or_guard(ctx, g, *next));
+            let concrete_guard = raw_concrete_coverage(ctx, pg, &local);
+            let coverage = pg.or_guard(ctx, local.dont_care, concrete_guard);
             let missing = pg.not_guard(ctx, coverage);
             let held_x = pg.and_guard(ctx, missing, old_x);
             let dont_care = pg.or_guard(ctx, local.dont_care, held_x);
@@ -78,13 +76,14 @@ pub fn insert_assignment_registers(
             // Local writes select the new saved state; otherwise hold it. X
             // releases the pin without sampling an arbitrary concrete value.
             let mut next_value = old_value;
-            let mut next_x = old_x;
             for &(guard, rhs) in local.concretes.iter().rev() {
                 next_value = ctx.ite(guard, rhs, next_value);
-                next_x = ctx.ite(guard, ctx.get_false(), next_x);
             }
             next_value = ctx.ite(local.dont_care, old_value, next_value);
-            next_x = ctx.ite(local.dont_care, ctx.get_true(), next_x);
+            // Every concrete write clears the release bit, irrespective of its
+            // payload. Merge their guards before building the saved state.
+            let next_x = ctx.ite(concrete_guard, ctx.get_false(), old_x);
+            let next_x = ctx.ite(local.dont_care, ctx.get_true(), next_x);
             for (target, rhs) in [(value, next_value), (released, next_x)] {
                 let op = pg.o(Op::Assign(
                     target,
@@ -94,6 +93,10 @@ pub fn insert_assignment_registers(
             }
         }
         pg.node_mut(node).actions = actions;
+    }
+    if !pg.loops.is_empty() {
+        pg.register_inits
+            .extend(initial.iter().map(|(&r, &v)| (r, v)));
     }
     initial
 }
@@ -115,26 +118,14 @@ pub fn simplify_assignments_from(
     entry: NodeId,
     initial: &RegisterFacts,
 ) {
-    simplify_registers(ctx, pg, st, entry, initial, &FxHashSet::default());
-
-    // canonicalize assignments (second level of simplification)
-    for node in pg.reachable_node_ids(ctx, entry) {
-        let mut actions = pg[node]
-            .actions
-            .iter()
-            .filter(|a| !matches!(pg[a.op], Op::Assign(pin, _) if st[pin].is_in_port()))
-            .cloned()
-            .collect::<Vec<_>>();
-        for action in pg[node].actions.clone() {
-            if let Op::Assign(pin, assignment) = pg[action.op].clone()
-                && st[pin].is_in_port()
-            {
-                let assignment = canonicalize_assignment(ctx, pg, assignment);
-                let replacement = pg.o(Op::Assign(pin, assignment));
-                actions.push(Action::new(action.guard, replacement));
-            }
-        }
-        pg.node_mut(node).actions = actions;
+    let preserved = FxHashSet::default();
+    // Existing loop registers remain opaque storage anchors. Analyze the
+    // inserted pin-history registers without specializing the first iteration.
+    let dead = simplify_registers(ctx, pg, st, entry, initial, &preserved);
+    pg.register_inits.retain(|r, _| !dead.contains(r));
+    pg.simplify_all_exprs(ctx);
+    if !pg.loops.is_empty() {
+        return;
     }
 
     // Panic if there are any registers left.
