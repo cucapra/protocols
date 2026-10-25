@@ -22,6 +22,29 @@ entity_impl!(NodeId, "node");
 pub struct OpId(u32);
 entity_impl!(OpId, "op");
 
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
+pub struct LoopId(u32);
+entity_impl!(LoopId, "l");
+
+/// How a single invocation supplies the loop's finite sequence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoopSource {
+    /// Sequence argument supplying items; absent when the items are unused.
+    pub argument: Option<SymbolId>,
+    /// Exact source length, if supplied independently of the items.
+    pub length: Option<ExprRef>,
+    pub min_len: u64,
+}
+
+/// The three current FIFO inputs, separate from registers loaded from them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loop {
+    pub source: LoopSource,
+    pub data: ExprRef,
+    pub last: ExprRef,
+    pub valid: ExprRef,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// an Action is a guard and an operation to perform when the guard is true
 pub struct Action {
@@ -77,7 +100,9 @@ impl Transition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-// A node is a (logically) unordered set of actions and transitions
+// In contracted nodes, RHSs and consumers read incoming state and current
+// inputs. State updates commit simultaneously; action order is already encoded
+// in the expressions by contraction. Raw nodes place assignments before consumers.
 pub struct Node {
     pub actions: Vec<Action>,
     pub transitions: Vec<Transition>,
@@ -99,6 +124,19 @@ pub struct Assignment {
 }
 
 impl Assignment {
+    /// X wins, then the first applicable concrete alternative, otherwise hold.
+    pub fn to_expr(&self, ctx: &mut Context, dont_care: ExprRef, default: ExprRef) -> ExprRef {
+        let mut value = default;
+        for &(guard, rhs) in self.concretes.iter().rev() {
+            value = ctx.ite(guard, rhs, value);
+        }
+        if self.dont_care == ctx.get_false() {
+            value
+        } else {
+            ctx.ite(self.dont_care, dont_care, value)
+        }
+    }
+
     pub fn concrete(false_id: ExprRef, guard: ExprRef, rhs: ExprRef) -> Self {
         Self {
             dont_care: false_id,
@@ -132,6 +170,20 @@ impl Assignment {
 pub enum Op {
     Assign(SymbolId, Assignment),
     AssertEq(ExprRef, ExprRef),
+    /// Load a FIFO head signal into an ordinary automaton register. All three
+    /// reads describe the same item and do not themselves advance the FIFO.
+    Data {
+        loop_id: LoopId,
+        target: SymbolId,
+    },
+    Last {
+        loop_id: LoopId,
+        target: SymbolId,
+    },
+    Valid {
+        loop_id: LoopId,
+        target: SymbolId,
+    },
     Fork,
     InternalAssertFalse,
     Done,
@@ -149,6 +201,21 @@ pub fn remap_expr(
 }
 
 impl Op {
+    /// View ordinary assignments and FIFO loads through the same state-update API.
+    pub fn assignment(&self, ctx: &Context, graph: &ProtoGraph) -> Option<(SymbolId, Assignment)> {
+        let (target, value) = match self {
+            Self::Assign(target, assignment) => return Some((*target, assignment.clone())),
+            Self::Data { loop_id, target } => (*target, graph.loops[*loop_id].data),
+            Self::Last { loop_id, target } => (*target, graph.loops[*loop_id].last),
+            Self::Valid { loop_id, target } => (*target, graph.loops[*loop_id].valid),
+            _ => return None,
+        };
+        Some((
+            target,
+            Assignment::concrete(ctx.get_false(), ctx.get_true(), value),
+        ))
+    }
+
     /// Remap assignment targets together with every expression that reads them.
     pub fn remap(
         &self,
@@ -179,6 +246,18 @@ impl Op {
                 debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 Self::AssertEq(lhs, rhs)
             }
+            Self::Data { loop_id, target } => Self::Data {
+                loop_id: *loop_id,
+                target: targets.get(target).copied().unwrap_or(*target),
+            },
+            Self::Last { loop_id, target } => Self::Last {
+                loop_id: *loop_id,
+                target: targets.get(target).copied().unwrap_or(*target),
+            },
+            Self::Valid { loop_id, target } => Self::Valid {
+                loop_id: *loop_id,
+                target: targets.get(target).copied().unwrap_or(*target),
+            },
             other => other.clone(),
         }
     }
@@ -200,6 +279,12 @@ pub struct ProtoGraph {
     /// symbol expressions representing DontCare
     pub dont_cares: FxHashSet<ExprRef>,
 
+    /// FIFO source for each iterator loop in this invocation.
+    pub loops: PrimaryMap<LoopId, Loop>,
+
+    /// Initial values of persistent automaton registers.
+    pub register_inits: FxHashMap<SymbolId, ExprRef>,
+
     nodes: PrimaryMap<NodeId, Node>,
 
     ops: PrimaryMap<OpId, Op>,
@@ -217,6 +302,8 @@ impl Clone for ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
             dont_cares: self.dont_cares.clone(),
+            register_inits: self.register_inits.clone(),
+            loops: self.loops.clone(),
             nodes: self.nodes.clone(),
             ops: self.ops.clone(),
             op_loc: self.op_loc.clone(),
@@ -239,10 +326,27 @@ impl ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
+            register_inits: FxHashMap::default(),
+            loops: PrimaryMap::new(),
             nodes,
             ops,
             op_loc,
         }
+    }
+
+    /// One arbitrary sample per DUT input and cycle, shared with DUT wiring.
+    pub fn dont_care_input(
+        &mut self,
+        ctx: &mut Context,
+        symbols: &SymbolTable,
+        pin: SymbolId,
+    ) -> ExprRef {
+        let expr = ctx.bv_symbol(
+            &format!("dont_care.{}", symbols[pin].name()),
+            symbols[pin].tpe().bitwidth(),
+        );
+        self.dont_cares.insert(expr);
+        expr
     }
 
     pub fn symbol_expr(&self, symbol_id: SymbolId) -> Option<ExprRef> {
@@ -337,7 +441,12 @@ impl ProtoGraph {
                     *rhs = self.simplifier.simplify(ctx, *rhs);
                     debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
-                Op::Fork | Op::InternalAssertFalse | Op::Done => {}
+                Op::Data { .. }
+                | Op::Last { .. }
+                | Op::Valid { .. }
+                | Op::Fork
+                | Op::InternalAssertFalse
+                | Op::Done => {}
             }
         }
     }

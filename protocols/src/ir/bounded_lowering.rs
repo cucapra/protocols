@@ -51,9 +51,7 @@ pub fn lower_bmc(
     // TODO: Handle done vs not done
     let mut lowered_protocols: Vec<LoweredFragmentInfo> = vec![];
     for protocol in protos {
-        let mut pg = lowerer.lower_protocol_fragment(ctx, &protocol, false, true);
-        // lowerer.postprocess_trace_fragment(&pg);
-        pg.graft_points = lowerer.graft_points(ctx, &pg);
+        let pg = lowerer.lower_protocol_fragment(ctx, &protocol, true);
         lowered_protocols.push(pg);
     }
 
@@ -96,14 +94,6 @@ pub fn lower_bmc(
         let new_frag =
             lowerer.copy_protocol_fragment(ctx, prototype.clone(), &instance_substitutions[0]);
 
-        // if bound is 1, then exit should have the done action
-        if bound == 1 {
-            let done_op = lowerer.ir.o(Op::Done);
-            lowerer
-                .ir
-                .push_action(new_frag.exit, Action::new(ctx.get_true(), done_op));
-        }
-
         for &(node, guard) in &new_frag.graft_points {
             mark_graft_point_ready(&mut lowerer, node, guard);
         }
@@ -134,14 +124,6 @@ pub fn lower_bmc(
                     prototype.clone(),
                     &instance_substitutions[i],
                 );
-
-                // if we're at the last transaction, then exit should have the done action
-                if i == bound - 1 {
-                    let done_op = lowerer.ir.o(Op::Done);
-                    lowerer
-                        .ir
-                        .push_action(new_frag.exit, Action::new(ctx.get_true(), done_op));
-                }
 
                 for &(graft_node, graft_guard) in &new_frag.graft_points {
                     mark_graft_point_ready(&mut lowerer, graft_node, graft_guard);

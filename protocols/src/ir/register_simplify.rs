@@ -1,11 +1,15 @@
 use std::collections::VecDeque;
 
-use patronus::expr::{Context, Expr, ExprRef, Simplifier, SparseExprMap, find_symbols};
+use patronus::expr::{
+    Context, Expr, ExprRef, ForEachChild, Simplifier, SparseExprMap, find_symbols
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, remap_expr};
 
+/// Exact node-entry values, expressed using constants, arguments, and earlier
+/// registers. Missing entries are unknown, rather than fresh sampled values.
 pub type RegisterFacts = FxHashMap<SymbolId, ExprRef>;
 pub type RegisterAnalysis = FxHashMap<NodeId, Option<RegisterFacts>>;
 type ExprSimplifier = Simplifier<SparseExprMap<Option<ExprRef>>>;
@@ -57,15 +61,15 @@ fn updates(
 ) -> FxHashMap<ExprRef, ExprRef> {
     let mut updates = FxHashMap::default();
     for action in &graph[node].actions {
-        if let Op::Assign(register, assignment) = &graph[action.op]
-            && symbols[*register].kind() == SymbolKind::AutomatonState
+        if let Some((register, assignment)) = graph[action.op].assignment(ctx, graph)
+            && symbols[register].kind() == SymbolKind::AutomatonState
         {
             assert_eq!(
                 assignment.dont_care,
                 ctx.get_false(),
                 "generated register updates must not assign X"
             );
-            let held = graph.symbol_expr(*register).unwrap();
+            let held = graph.symbol_expr(register).unwrap();
             let mut value = held;
             for &(guard, rhs) in assignment.concretes.iter().rev() {
                 value = ctx.ite(guard, rhs, value);
@@ -117,6 +121,93 @@ fn assume_helper(
     }
 }
 
+// Match incoming computations to the earlier registers that capture them.
+// Results refer to successor state: never substitute entry facts into them again.
+struct Captures<'a> {
+    // E.g. `index + 1 -> index`: the successor's index stores this computation.
+    values: FxHashMap<ExprRef, ExprRef>,
+    entry: &'a FxHashMap<ExprRef, ExprRef>,
+    assumptions: &'a FxHashMap<ExprRef, ExprRef>,
+    symbol_ids: &'a FxHashMap<ExprRef, SymbolId>,
+    symbols: &'a SymbolTable,
+}
+
+impl Captures<'_> {
+    fn expr(
+        &self,
+        ctx: &mut Context,
+        simplifier: &mut ExprSimplifier,
+        expr: ExprRef,
+    ) -> Option<ExprRef> {
+        if is_immutable(ctx, expr, self.symbol_ids, self.symbols) {
+            return Some(simplifier.simplify(ctx, expr));
+        }
+        if let Some(&register) = self.values.get(&expr) {
+            return Some(register);
+        }
+        if let Some(&value) = self.entry.get(&expr) {
+            return self.expr(ctx, simplifier, value);
+        }
+        let mut children = Vec::new();
+        ctx[expr].collect_children(&mut children);
+        let mut replacements = FxHashMap::default();
+        for &child in &children {
+            if let Some(value) = self.expr(ctx, simplifier, child) {
+                // Only the selected ITE branch needs a captured representation.
+                if let Expr::BVIte { cond, tru, fals } = ctx[expr]
+                    && child == cond
+                {
+                    if value == ctx.get_true() {
+                        return self.expr(ctx, simplifier, tru);
+                    }
+                    if value == ctx.get_false() {
+                        return self.expr(ctx, simplifier, fals);
+                    }
+                }
+                replacements.insert(child, value);
+            } else {
+                break;
+            }
+        }
+        if !children.is_empty() && children.iter().all(|c| replacements.contains_key(c)) {
+            let value = remap_expr(ctx, expr, &replacements);
+            return Some(simplifier.simplify(ctx, value));
+        }
+        // An edge can select an ITE branch whose value was captured, even if
+        // its overwritten condition cannot be reconstructed in successor state.
+        let value = simplify(ctx, simplifier, expr, self.entry);
+        let value = simplify(ctx, simplifier, value, self.assumptions);
+        if value != expr {
+            self.expr(ctx, simplifier, value)
+        } else {
+            None
+        }
+    }
+}
+
+// Choose an enabled update without replacing its sampled value by a constant
+// from the edge guard; other captures may need to name that same sample.
+fn selected_update(
+    ctx: &mut Context,
+    simplifier: &mut ExprSimplifier,
+    mut value: ExprRef,
+    entry: &FxHashMap<ExprRef, ExprRef>,
+    assumptions: &FxHashMap<ExprRef, ExprRef>,
+) -> ExprRef {
+    while let Expr::BVIte { cond, tru, fals } = ctx[value] {
+        let cond = simplify(ctx, simplifier, cond, entry);
+        let cond = simplify(ctx, simplifier, cond, assumptions);
+        if cond == ctx.get_true() {
+            value = tru;
+        } else if cond == ctx.get_false() {
+            value = fals;
+        } else {
+            break;
+        }
+    }
+    value
+}
+
 pub fn analyze_registers(
     ctx: &mut Context,
     graph: &ProtoGraph,
@@ -125,12 +216,13 @@ pub fn analyze_registers(
     initial: &RegisterFacts,
 ) -> RegisterAnalysis {
     let mut simplifier = ExprSimplifier::new(SparseExprMap::default());
-    let registers = graph
+    let mut registers = graph
         .symbol_expr
         .keys()
         .copied()
         .filter(|r| symbols[*r].kind() == SymbolKind::AutomatonState)
         .collect::<Vec<_>>();
+    registers.sort();
     let symbol_ids = graph
         .symbol_expr
         .iter()
@@ -172,30 +264,60 @@ pub fn analyze_registers(
             }
             let assumptions = assume(ctx, guard, true);
 
-            // Transfer function: First substitute the entry values into each update.
-            // Next, we know the edge must be true so we simplify under the edge condition.
-            // Finally, we keep the resulting expressions iff immutable.
-            let out: RegisterFacts = registers
-                .iter()
-                .filter_map(|&register| {
-                    let current = graph.symbol_expr(register).unwrap();
-                    let value = updates.get(&current).copied().unwrap_or(current);
-                    let value = simplify(ctx, &mut simplifier, value, &replacements);
-                    let value = simplify(ctx, &mut simplifier, value, &assumptions);
-                    is_immutable(ctx, value, &symbol_ids, symbols).then_some((register, value))
-                })
-                .collect();
+            // Transfer: express each new value using immutable inputs and
+            // earlier registers that capture the same computations. The order
+            // prevents cyclic facts; incoming reads still use entry state.
+            let mut captures = Captures {
+                values: FxHashMap::default(),
+                entry: &replacements,
+                assumptions: &assumptions,
+                symbol_ids: &symbol_ids,
+                symbols,
+            };
+            let mut out = RegisterFacts::default();
+            for &register in &registers {
+                let current = graph.symbol_expr(register).unwrap();
+                let value = updates.get(&current).copied().unwrap_or(current);
+                if let Some(value) = captures.expr(ctx, &mut simplifier, value) {
+                    out.insert(register, value);
+                }
+                let selected =
+                    selected_update(ctx, &mut simplifier, value, &replacements, &assumptions);
+                captures.values.entry(selected).or_insert(current);
+                let expanded = simplify(ctx, &mut simplifier, selected, &replacements);
+                captures.values.entry(expanded).or_insert(current);
+            }
 
             // Merge: combine this edge with the target node's other in-edges.
-            // If this is the first processed edge, use its facts; otherwise, reconcile
-            // it with existing facts by only keeping a fact if it is identical between all branches.
+            // Keep equal expressions, simplifying with facts shared by both
+            // paths first. For example, a common `valid = 1` makes
+            // `ite(valid, data, 0)` and `data` the same captured value.
             let target = facts.get_mut(&edge.target).unwrap();
             let joined = match target.as_ref() {
                 None => out,
-                Some(old) => old
-                    .iter()
-                    .filter_map(|(&r, &v)| (out.get(&r) == Some(&v)).then_some((r, v)))
-                    .collect(),
+                Some(old) => {
+                    let common: RegisterFacts = old
+                        .iter()
+                        .filter_map(|(&r, &v)| (out.get(&r) == Some(&v)).then_some((r, v)))
+                        .collect();
+                    // Facts can refer to earlier registers. Expand those
+                    // shared facts first, so aliases simplify transitively.
+                    let mut replacements = FxHashMap::default();
+                    for register in &registers {
+                        if let Some(&value) = common.get(register) {
+                            let value = simplify(ctx, &mut simplifier, value, &replacements);
+                            replacements.insert(graph.symbol_expr(*register).unwrap(), value);
+                        }
+                    }
+                    old.iter()
+                        .filter_map(|(&r, &v)| {
+                            let other = *out.get(&r)?;
+                            let v = simplify(ctx, &mut simplifier, v, &replacements);
+                            let other = simplify(ctx, &mut simplifier, other, &replacements);
+                            (v == other).then_some((r, v))
+                        })
+                        .collect()
+                }
             };
 
             // add back to the worklist if changed
@@ -387,3 +509,7 @@ pub fn simplify_registers(
     let analysis = analyze_registers(ctx, graph, symbols, entry, initial);
     rewrite_registers(ctx, graph, symbols, entry, &analysis, preserved)
 }
+
+#[cfg(test)]
+#[path = "register_simplify_tests.rs"]
+mod tests;

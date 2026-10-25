@@ -6,7 +6,7 @@ use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
 use crate::ir::proto_graph::{
-    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr,
+    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr
 };
 
 /// TODO: This should probbaly be standardized somewhere in the frontend
@@ -374,7 +374,7 @@ pub fn prepare_joint_protocols(
         .iter()
         .map(|protocol| {
             let mut lowerer = Lowerer::new(protocol.ctx.clone(), symbols);
-            let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
+            let fragment = lowerer.lower_protocol_fragment(ctx, protocol, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
             lowerer.ir.garbage_collect_unreachable(ctx);

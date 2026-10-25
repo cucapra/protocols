@@ -5,7 +5,7 @@ use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
 use patronus::expr::{
-    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr,
+    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr
 };
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::FxHashMap;
@@ -36,24 +36,6 @@ pub fn if_thens_to_ite(v: Vec<IfThenExpr>, ctx: &mut Context, default: ExprRef) 
     for ge in v {
         ite = ctx.ite(ge.if_cond, ge.then, ite);
     }
-
-    ite
-}
-
-fn assignment_to_ite(
-    a: Assignment,
-    ctx: &mut Context,
-    dont_care: ExprRef,
-    default: ExprRef,
-) -> ExprRef {
-    let mut ite = default;
-
-    // Put the first concrete alternative on the outside so it wins overlaps.
-    for (guard, expr) in a.concretes.into_iter().rev() {
-        ite = ctx.ite(guard, expr, ite);
-    }
-
-    ite = ctx.ite(a.dont_care, dont_care, ite);
 
     ite
 }
@@ -131,7 +113,12 @@ fn replace_proto_graph_exprs(
                 *lhs = replace_expr(ctx, *lhs, old_expr, new_expr);
                 *rhs = replace_expr(ctx, *rhs, old_expr, new_expr);
             }
-            Op::Fork | Op::InternalAssertFalse | Op::Done => {}
+            Op::Data { .. }
+            | Op::Last { .. }
+            | Op::Valid { .. }
+            | Op::Fork
+            | Op::InternalAssertFalse
+            | Op::Done => {}
         }
     }
 
@@ -258,6 +245,11 @@ pub fn lower_proto_graph_to_transition_system(
         // i.e. assertions are checked before transitions
         for action in &pg[id].actions {
             match pg[action.op].clone() {
+                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
+                    panic!(
+                        "iterator FIFO reads are not supported by transition-system lowering yet"
+                    )
+                }
                 Op::AssertEq(lhs, rhs) => {
                     if lhs.get_type(ctx) != rhs.get_type(ctx) {
                         println!(
@@ -309,6 +301,41 @@ pub fn lower_proto_graph_to_transition_system(
     // the final done state self-loops, so it won't trigger this
     let mut transition_ite = if_thens_to_ite(transitions, ctx, internal_bad_state_id);
 
+    // Contracted RHSs already read incoming state. Storage lowering does not
+    // substitute updates into any consumer for a second time.
+    let mut registers = pg
+        .register_inits
+        .iter()
+        .map(|(&r, &init)| (r, init))
+        .collect::<Vec<_>>();
+    registers.sort_by_key(|&(r, _)| r);
+    for (register, init) in registers {
+        let symbol = pg.symbol_expr(register).unwrap();
+        let mut next = symbol;
+        for &id in &reachable_nodes {
+            for action in &pg[id].actions {
+                if let Op::Assign(target, assignment) = &pg[action.op]
+                    && *target == register
+                {
+                    assert_eq!(assignment.dont_care, ctx.get_false());
+                    let x = ctx.get_false();
+                    let value = assignment.to_expr(ctx, x, symbol);
+                    let node = ctx.bit_vec_val(id.as_u32(), node_id_width);
+                    let guard = ctx.equal(node_sym, node);
+                    next = ctx.ite(guard, value, next);
+                }
+            }
+        }
+        ts.add_state(
+            ctx,
+            State {
+                symbol,
+                init: Some(init),
+                next: Some(next),
+            },
+        );
+    }
+
     // set up ITE expressions based on what node state we're in for each port,
     // and replace the inputs with the ITEs everywhere
     let input_symbols: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
@@ -322,9 +349,11 @@ pub fn lower_proto_graph_to_transition_system(
             _ => panic!("unsupported input port type"),
         };
 
-        let dont_care_name = format!("dont_care.{}", st.full_name_from_symbol_id(&input));
+        let dont_care_name = format!("dont_care.{}", st[input].name());
         let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
-        ts.add_input(ctx, input_dont_care);
+        if !ts.inputs.contains(&input_dont_care) {
+            ts.add_input(ctx, input_dont_care);
+        }
 
         let input_port = *symbol_to_port.get(&input).unwrap();
         let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
@@ -386,12 +415,8 @@ pub fn lower_proto_graph_to_transition_system(
 
         for (assignment, group_guard) in grouped_assignments {
             let assignment_is_dont_care = assignment.dont_care;
-            let assignment_ite = assignment_to_ite(
-                assignment,
-                ctx,
-                driver.input_dont_care,
-                driver.input_expr_ref,
-            );
+            let assignment_ite =
+                assignment.to_expr(ctx, driver.input_dont_care, driver.input_expr_ref);
 
             driver.input_ite = ctx.ite(group_guard, assignment_ite, driver.input_ite);
             driver.input_is_dont_care = ctx.ite(
