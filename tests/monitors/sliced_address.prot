@@ -1,0 +1,18 @@
+interface Address {
+    in address: u8,
+}
+
+prot transfer<dut: Address>(base: u8) {
+    dut.address := base + 8'd4;
+    step();
+    dut.address := base + 8'd8;
+    step();
+}
+
+module WordAddress : Address {
+    in word: u6 = Address.address[7:2] with Address.address[1:0] == 2'd0,
+}
+
+module LowAddress : Address {
+    in low: u4 = Address.address[3:0] with Address.address[7:4] == 4'd0,
+}

@@ -1,0 +1,172 @@
+struct LoopDut {
+    in data: u8,
+    in flag: u2,
+    in index: u8,
+    out ready: u1,
+    out echo: u8,
+}
+
+// Empty and body alternatives are distinguishable on flag. On the exit
+// sample, data still holds the previous item and echo checks its suffix.
+prot plain<dut: LoopDut>(values: [u8]) {
+    dut.flag := 2'd0;
+    for value in values {
+        dut.data := value;
+        step();
+        assert_eq(value, dut.echo);
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot specialized<dut: LoopDut>(values: [u8]) {
+    for value in values {
+        if is_last() {
+            dut.flag := 2'd1;
+        } else {
+            dut.flag := 2'd0;
+        }
+        dut.data := value;
+        dut.index := iter_count::<u8>();
+        while !dut.ready {
+            step();
+        }
+        step();
+        // Incoming item, even when the next iteration begins
+        // and captures a different item in this same sample.
+        assert_eq(value, dut.echo);
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot minimum<dut: LoopDut>(values: [u8]++) {
+    for value in values {
+        if is_last() {
+            dut.flag := 2'd1;
+        } else {
+            dut.flag := 2'd0;
+        }
+        dut.data := value;
+        step();
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot minimum_plain<dut: LoopDut>(values: [u8]++) {
+    dut.flag := 2'd0;
+    for value in values {
+        dut.data := value;
+        step();
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot sequential<dut: LoopDut>(left: [u8], right: [u8]++) {
+    dut.flag := 2'd0;
+    for first in left {
+        dut.data := first;
+        step();
+        assert_eq(first, dut.echo);
+    }
+    dut.flag := 2'd1;
+    for second in right {
+        dut.data := second;
+        step();
+        assert_eq(second, dut.echo);
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot repeat_plain<dut: LoopDut>(count: uint) {
+    dut.data := 8'd99;
+    dut.flag := 2'd0;
+    repeat count iterations {
+        dut.data := 8'd99;
+        dut.index := iter_count::<u8>();
+        while !dut.ready {
+            step();
+        }
+        step();
+        assert_eq(8'd99, dut.echo);
+        dut.data := iter_count::<u8>() + 8'd1;
+    }
+    dut.flag := 2'd2;
+    step();
+    step();
+}
+
+prot repeat_specialized<dut: LoopDut>(count: uint) {
+    dut.data := 8'd99;
+    repeat count iterations {
+        if is_last() {
+            dut.flag := 2'd1;
+        } else {
+            dut.flag := 2'd0;
+        }
+        dut.data := 8'd99;
+        dut.index := iter_count::<u8>();
+        while !dut.ready {
+            step();
+        }
+        step();
+        assert_eq(8'd99, dut.echo);
+        dut.data := iter_count::<u8>() + 8'd1;
+    }
+    dut.flag := 2'd2;
+    step();
+    step();
+}
+
+prot repeat_literal<dut: LoopDut>() {
+    dut.flag := 2'd0;
+    repeat 8'd3 iterations {
+        dut.data := iter_count::<u8>();
+        step();
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot repeat_zero<dut: LoopDut>() {
+    repeat 8'd0 iterations {
+        dut.flag := 2'd0;
+        step();
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot repeat_literal_specialized<dut: LoopDut>() {
+    repeat 8'd3 iterations {
+        if is_last() {
+            dut.flag := 2'd1;
+        } else {
+            dut.flag := 2'd0;
+        }
+        dut.data := iter_count::<u8>();
+        step();
+    }
+    dut.flag := 2'd2;
+    step();
+}
+
+prot repeat_then_sequence<dut: LoopDut>(count: uint, values: [u8]) {
+    dut.data := 8'd99;
+    dut.flag := 2'd0;
+    repeat count iterations {
+        dut.index := iter_count::<u8>();
+        step();
+    }
+    dut.flag := 2'd1;
+    for value in values {
+        dut.data := value;
+        step();
+        assert_eq(value, dut.echo);
+    }
+    dut.flag := 2'd2;
+    step();
+}

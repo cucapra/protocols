@@ -31,25 +31,22 @@ fn bank_fields(monitor: &JointMonitorAutomaton) -> Vec<Vec<Vec<SymbolId>>> {
         .protocols
         .iter()
         .enumerate()
-        .map(|(protocol, proto)| {
+        .map(|(protocol, _)| {
             let count = monitor.control.bank_counts[protocol];
-            let mut fields = Vec::new();
-            for arg in &proto.args {
-                for registers in [&monitor.value_registers, &monitor.knownness_registers] {
-                    if registers.contains_key(&(protocol, 0, arg.symbol())) {
-                        fields.push(
-                            (0..count)
-                                .map(|slot| registers[&(protocol, slot, arg.symbol())])
-                                .collect::<Vec<_>>(),
-                        );
-                    }
-                }
-            }
-            fields.push(
-                (0..count)
-                    .map(|slot| monitor.live_registers[&(protocol, slot)])
-                    .collect(),
-            );
+            let mut registers = monitor
+                .registers
+                .keys()
+                .filter_map(|&(p, slot, r)| (p == protocol && slot == 0).then_some(r))
+                .collect::<Vec<_>>();
+            registers.sort();
+            let fields = registers
+                .into_iter()
+                .map(|r| {
+                    (0..count)
+                        .map(|slot| monitor.registers[&(protocol, slot, r)])
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
             for field in &fields {
                 for &register in field {
                     assert!(

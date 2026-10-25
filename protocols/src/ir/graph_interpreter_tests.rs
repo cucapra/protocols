@@ -533,6 +533,376 @@ fn wishbone_rtl_bursts() {
     }
 }
 
+type Samples = Vec<FxHashMap<String, BitVecValue>>;
+
+fn driver_samples(
+    filename: &str,
+    trace: &[(String, Vec<ArgValue>)],
+    create_dut: impl Fn(&mut Context, &Module) -> PatronusSim,
+) -> Samples {
+    let (mut symbols, module) = load(filename);
+    let mut ctx = Context::default();
+    let mut dut = create_dut(&mut ctx, &module);
+    let mut samples = Vec::new();
+    for (name, arguments) in trace {
+        let ast = module
+            .protos
+            .iter()
+            .find(|p| p.name == *name)
+            .unwrap()
+            .clone();
+        let graph = prepared(&mut ctx, &mut symbols, ast);
+        let args = graph
+            .args
+            .iter()
+            .zip(arguments)
+            .map(|(a, v)| (symbols[a.symbol()].name(), v.clone()))
+            .collect();
+        let result = interpret(&ctx, &graph, &symbols, args, &mut dut);
+        assert!(result.failure.is_none(), "{name}: {:?}", result.failure);
+        for cycle in 0..result.waveform.values().next().unwrap().len() {
+            let sample = result
+                .waveform
+                .iter()
+                .map(|(&port, values)| {
+                    let value = match &values[cycle] {
+                        WaveValue::Concrete(v) => v.clone(),
+                        WaveValue::DontCare => BitVecValue::zero(dut.port_width(port)),
+                    };
+                    (dut.port_name(port).to_string(), value)
+                })
+                .collect();
+            samples.push(sample);
+        }
+    }
+    samples
+}
+
+fn monitor_failure(filename: &str, protocols: &[&str], samples: &Samples) -> Option<usize> {
+    use crate::backends::monitor_transition_system::into_monitor_transition_system;
+    use crate::ir::joint_monitor::build_joint_monitor_automaton;
+    use patronus::sim::{InitKind, Interpreter, Simulator};
+    let (mut symbols, module) = load(filename);
+    let mut ctx = Context::default();
+    let selected = module
+        .protos
+        .iter()
+        .filter(|p| protocols.is_empty() || protocols.contains(&p.name.as_str()))
+        .cloned()
+        .collect();
+    let monitor = build_joint_monitor_automaton(&mut ctx, selected, &mut symbols).unwrap();
+    let core = into_monitor_transition_system(&mut ctx, &monitor, &module, &symbols);
+    let mut sim = Interpreter::new(&ctx, &core.ts);
+    sim.init(InitKind::Zero);
+    for (cycle, sample) in samples.iter().enumerate() {
+        for (&pin, &input) in &core.pin_inputs {
+            sim.set(input, &sample[symbols[pin].name()]);
+        }
+        sim.step();
+        assert_eq!(
+            sim.get(core.internal_error),
+            BitVecValue::from_u64(0, 1).into(),
+            "internal monitor error on cycle {cycle}"
+        );
+        if sim.get(core.bad) == BitVecValue::from_u64(1, 1).into() {
+            return Some(cycle);
+        }
+    }
+    None
+}
+
+#[test]
+fn wishbone_rtl_loop_monitors() {
+    let filename = "../examples/wishbone/wishbone.prot";
+    let (symbols, module) = load(filename);
+    let mut mutations = 0;
+    for transactions in [
+        "read_write.tx",
+        "4.8_constant_address_burst.tx",
+        "4.?_incremental_address_burst.tx",
+        "4.?_incremental_address_burst_wrap.tx",
+    ] {
+        let path = format!("../examples/wishbone/{transactions}");
+        let mut handler = DiagnosticHandler::default();
+        let traces =
+            crate::transaction_frontend(&path, &symbols, &module.protos, &mut handler).unwrap();
+        for trace in traces {
+            let samples = driver_samples(filename, &trace, |ctx, module| {
+                PatronusSim::new_with_context(
+                    ctx,
+                    &[
+                        "../examples/wishbone/rtl/dut.v",
+                        "../examples/wishbone/rtl/tb.v",
+                    ],
+                    Some("tb"),
+                    module,
+                    None,
+                )
+                .unwrap()
+            });
+            assert_eq!(
+                monitor_failure(filename, &[], &samples),
+                None,
+                "{transactions}"
+            );
+            // Changing a request while waiting must kill the selected burst,
+            // even if the changed sample resembles another valid protocol.
+            if let Some(cycle) = (1..samples.len()).find(|&cycle| {
+                let prev = &samples[cycle - 1];
+                let now = &samples[cycle];
+                prev["ACK"].to_u64() == Some(0)
+                    && now["RST"].to_u64() == Some(0)
+                    && now["CYC"].to_u64() == Some(1)
+                    && now["STB"].to_u64() == Some(1)
+                    && now["WE"].to_u64() == Some(1)
+                    && now["CTI"] == prev["CTI"]
+                    && matches!(now["CTI"].to_u64(), Some(1 | 2))
+            }) {
+                for (pin, mask, width) in [("CTI", 7, 3), ("ADR", 4, 32), ("DAT_O", 1, 32)] {
+                    let mut broken = samples.clone();
+                    let value = broken[cycle][pin].to_u64().unwrap() ^ mask;
+                    broken[cycle].insert(pin.into(), BitVecValue::from_u64(value, width));
+                    assert_eq!(
+                        monitor_failure(filename, &[], &broken),
+                        Some(cycle),
+                        "{transactions}: {pin}"
+                    );
+                    mutations += 1;
+                }
+            }
+            if let Some(cycle) = (1..samples.len()).find(|&cycle| {
+                samples[cycle - 1]["ACK"].to_u64() == Some(1)
+                    && matches!(samples[cycle - 1]["CTI"].to_u64(), Some(1 | 2))
+                    && samples[cycle]["STB"].to_u64() == Some(1)
+            }) {
+                // A new beat may capture new data, but its address must still
+                // agree with the transaction's saved base and loop counter.
+                let mut broken = samples.clone();
+                let address = broken[cycle]["ADR"].to_u64().unwrap() ^ 4;
+                broken[cycle].insert("ADR".into(), BitVecValue::from_u64(address, 32));
+                assert_eq!(
+                    monitor_failure(filename, &[], &broken),
+                    Some(cycle),
+                    "{transactions}: next address"
+                );
+            }
+        }
+    }
+    assert!(
+        mutations >= 9,
+        "exercise all three burst transaction suites"
+    );
+}
+
+#[test]
+fn wishbone_loop_monitor_graphs_stay_compact() {
+    use crate::ir::driver_to_monitor::{convert_driver_to_monitor, simplify_monitor};
+    use crate::ir::joint_automaton::prepare_joint_protocols;
+    for mapping in [
+        None,
+        Some("antmicro_litex.prot"),
+        Some("litex_unittest.prot"),
+        Some("wb_stream.prot"),
+    ] {
+        let mut diagnostics = DiagnosticHandler::default();
+        let mapping_path = mapping.map(|p| format!("../examples/wishbone/{p}"));
+        let mut paths = vec!["../examples/wishbone/wishbone.prot"];
+        paths.extend(mapping_path.as_deref());
+        let (mut symbols, modules) = frontend(&paths, &mut diagnostics, false, false).unwrap();
+        let mut ctx = Context::default();
+        for module in modules {
+            if mapping.is_some() && module.name == "Wishbone" {
+                continue;
+            }
+            let drivers = prepare_joint_protocols(&mut ctx, &module.protos, &mut symbols).unwrap();
+            for (proto, driver) in module.protos.iter().zip(drivers) {
+                let monitor = convert_driver_to_monitor(&mut ctx, driver, &mut symbols).unwrap();
+                let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
+                let dot = monitor.to_dot_string(&ctx, &symbols);
+                // DOT expands expressions, so this catches repeated subexpressions
+                // growing even when their shared DAG representation remains small.
+                assert!(
+                    dot.len() < 16 * 1024,
+                    "{} monitor expressions grew excessively",
+                    proto.name
+                );
+                assert!(
+                    monitor.graph.nodes().count() <= 5,
+                    "{} gained redundant control states",
+                    proto.name
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn loop_monitor_empty_suffix_waits_and_wrap() {
+    let filename = "../tests/loops/monitor.prot";
+    for name in ["plain", "specialized", "minimum", "minimum_plain"] {
+        let mut trace = Vec::new();
+        for values in [&[][..], &[10][..], &[10, 20, 30][..], &[10; 260][..]] {
+            if name.starts_with("minimum") && values.len() < 2 {
+                continue;
+            }
+            trace.push((name.to_string(), vec![sequence(values, 8)]));
+        }
+        // Reuse the monitor's state slots for different transactions as well
+        // as capturing fresh items within each transaction.
+        let samples = driver_samples(filename, &trace, mock_dut);
+        assert_eq!(monitor_failure(filename, &[name], &samples), None, "{name}");
+    }
+    let trace = [vec![], vec![10], vec![10, 20]]
+        .into_iter()
+        .map(|left| {
+            (
+                "sequential".into(),
+                vec![sequence(&left, 8), sequence(&[30, 40], 8)],
+            )
+        })
+        .collect::<Vec<_>>();
+    let samples = driver_samples(filename, &trace, mock_dut);
+    assert_eq!(monitor_failure(filename, &["sequential"], &samples), None);
+}
+
+#[test]
+fn repeat_monitors_share_sequence_alternatives() {
+    use crate::ir::driver_to_monitor::convert_driver_to_monitor;
+    let filename = "../tests/loops/monitor.prot";
+    for (name, width) in [("repeat_plain", 64), ("repeat_specialized", 64)] {
+        let trace = [0, 1, 3, 260]
+            .into_iter()
+            .map(|count| (name.to_string(), vec![scalar(count, width)]))
+            .collect::<Vec<_>>();
+        let samples = driver_samples(filename, &trace, mock_dut);
+        assert_eq!(monitor_failure(filename, &[name], &samples), None, "{name}");
+        for pin in ["index", "echo", "data"] {
+            let mut broken = samples.clone();
+            let cycle = if pin == "data" {
+                broken.len() - 1 // held assignment after the final suffix
+            } else {
+                samples
+                    .iter()
+                    .position(|s| s["index"].to_u64() == Some(1))
+                    .unwrap()
+            };
+            let value = broken[cycle][pin].to_u64().unwrap() ^ 1;
+            broken[cycle].insert(pin.into(), BitVecValue::from_u64(value, 8));
+            assert_eq!(
+                monitor_failure(filename, &[name], &broken),
+                Some(cycle),
+                "{name}: {pin}"
+            );
+        }
+        // No value/knownness registers are allocated for the dummy length.
+        let (mut symbols, module) = load(filename);
+        let ast = module.protos.into_iter().find(|p| p.name == name).unwrap();
+        let count = ast.args[0].symbol();
+        let mut ctx = Context::default();
+        let driver = prepared(&mut ctx, &mut symbols, ast);
+        let monitor = convert_driver_to_monitor(&mut ctx, driver, &mut symbols).unwrap();
+        assert!(!monitor.value_registers.contains_key(&count));
+        assert!(!monitor.knownness_registers.contains_key(&count));
+    }
+    for name in [
+        "repeat_literal",
+        "repeat_literal_specialized",
+        "repeat_zero",
+    ] {
+        let samples = driver_samples(filename, &[(name.into(), vec![])], mock_dut);
+        assert_eq!(monitor_failure(filename, &[name], &samples), None, "{name}");
+        if name == "repeat_zero" {
+            let mut broken = samples.clone();
+            broken[0].insert("flag".into(), BitVecValue::from_u64(0, 2));
+            assert_eq!(monitor_failure(filename, &[name], &broken), Some(0));
+        } else {
+            let mut short = samples.clone();
+            short.remove(2);
+            assert_eq!(
+                monitor_failure(filename, &[name], &short),
+                Some(2),
+                "short {name}"
+            );
+            let mut long = samples.clone();
+            long.insert(3, samples[2].clone());
+            assert_eq!(
+                monitor_failure(filename, &[name], &long),
+                Some(3),
+                "long {name}"
+            );
+            if name == "repeat_literal_specialized" {
+                for cycle in [0, 2] {
+                    let mut broken = samples.clone();
+                    let flag = if cycle == 0 { 1 } else { 0 };
+                    broken[cycle].insert("flag".into(), BitVecValue::from_u64(flag, 2));
+                    assert_eq!(monitor_failure(filename, &[name], &broken), Some(cycle));
+                }
+            }
+        }
+    }
+    for count in [0, 1, 3] {
+        for values in [&[][..], &[10][..], &[10, 20, 30][..]] {
+            let samples = driver_samples(
+                filename,
+                &[(
+                    "repeat_then_sequence".into(),
+                    vec![scalar(count, 64), sequence(values, 8)],
+                )],
+                mock_dut,
+            );
+            assert_eq!(
+                monitor_failure(filename, &["repeat_then_sequence"], &samples),
+                None
+            );
+        }
+    }
+}
+
+#[test]
+fn loop_monitor_rejects_bad_suffix_hold_and_short_sequence() {
+    let filename = "../tests/loops/monitor.prot";
+    for name in ["plain", "specialized"] {
+        let trace = [(name.to_string(), vec![sequence(&[10, 20, 30], 8)])];
+        let samples = driver_samples(filename, &trace, mock_dut);
+        // Every noninitial echo is the previous sample's item, including the
+        // sample that observes the next item and the final exit sample.
+        for cycle in 1..samples.len() {
+            let mut broken = samples.clone();
+            let value = broken[cycle]["echo"].to_u64().unwrap() ^ 1;
+            broken[cycle].insert("echo".into(), BitVecValue::from_u64(value, 8));
+            // Wait samples need not check echo; only a suffix does.
+            if cycle == samples.len() - 1 || samples[cycle]["data"] != samples[cycle - 1]["data"] {
+                assert_eq!(
+                    monitor_failure(filename, &[name], &broken),
+                    Some(cycle),
+                    "{name}"
+                );
+            }
+        }
+        let mut broken = samples.clone();
+        let cycle = broken.len() - 1;
+        broken[cycle].insert("data".into(), BitVecValue::from_u64(99, 8));
+        assert_eq!(
+            monitor_failure(filename, &[name], &broken),
+            Some(cycle),
+            "held {name}"
+        );
+    }
+    for (source, target) in [("specialized", "minimum"), ("plain", "minimum_plain")] {
+        for values in [&[][..], &[10][..]] {
+            let samples = driver_samples(
+                filename,
+                &[(source.into(), vec![sequence(values, 8)])],
+                mock_dut,
+            );
+            assert!(
+                monitor_failure(filename, &[target], &samples).is_some(),
+                "short {target}"
+            );
+        }
+    }
+}
+
 #[test]
 fn loop_assertions_reject_bad_dut_samples() {
     let (mut symbols, module) = load("../tests/loops/loops.prot");

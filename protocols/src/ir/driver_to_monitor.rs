@@ -1,9 +1,12 @@
+use baa::BitVecOps;
 use patronus::expr::{Context, Expr, ExprRef, ForEachChild, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 use thiserror::Error;
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, remap_expr};
+use crate::ir::proto_graph::{
+    Action, Assignment, LoopId, Node, NodeId, Op, ProtoGraph, remap_expr,
+};
 use crate::ir::register_simplify::simplify_registers;
 
 #[derive(Clone)]
@@ -55,13 +58,16 @@ pub fn simplify_monitor(
     monitor.register_inits.retain(|r, _| !dead.contains(r));
     monitor.value_registers.retain(|_, r| !dead.contains(r));
     monitor.knownness_registers.retain(|_, r| !dead.contains(r));
+    monitor.graph.register_inits = monitor.register_inits.clone();
     monitor.graph.garbage_collect_unreachable(ctx);
     monitor
 }
 
 #[derive(Debug, Error)]
 pub enum MonitorConversionError {
-    #[error("unsupported monitor parameter {argument}: expected a scalar bit vector, got {tpe:?}")]
+    #[error(
+        "unsupported monitor parameter {argument}: expected a bit vector or a sequence of bit vectors, got {tpe:?}"
+    )]
     UnsupportedParameter { argument: String, tpe: Type },
     #[error("invalid prepared driver at {node}: {reason}")]
     InvalidPreparedGraph { node: NodeId, reason: String },
@@ -75,6 +81,9 @@ pub enum MonitorConversionError {
 /// Expressions must pass frontend well-formedness checks. At most one equality
 /// operand may contain parameters; action, assignment, ITE, and edge conditions
 /// must be parameter-free (including conditions introduced by contraction).
+/// Sequence alternatives must be distinguishable on their first sample. FIFO
+/// valid/last select specialized alternatives; their input constraints select
+/// the monitor path. Remaining state is deterministic, as in the driver.
 /// The returned graph is unoptimized.
 pub fn convert_driver_to_monitor(
     ctx: &mut Context,
@@ -99,18 +108,123 @@ fn convert_driver(
     symbols: &mut SymbolTable,
     convert_assignments: bool,
 ) -> Result<MonitorAutomaton, MonitorConversionError> {
-    let arguments = graph.args.clone();
+    if !convert_assignments && !graph.loops.is_empty() {
+        return Err(MonitorConversionError::UnsupportedExpression {
+            node: graph.entry,
+            reason: "capturing drivers with iterator loops are not supported yet".into(),
+        });
+    }
+    // Sequence lengths are not items to capture.
+    // Retain a bound as an ordinary parameter only if the body also reads it.
+    let length_parameters = graph
+        .loops
+        .values()
+        .filter_map(|source| source.source.length)
+        .collect::<FxHashSet<_>>();
+    let mut reads = FxHashSet::default();
+    if !length_parameters.is_empty() {
+        for (_, node) in graph.nodes() {
+            let mut expressions = node.transitions.iter().map(|t| t.guard).collect::<Vec<_>>();
+            for action in &node.actions {
+                expressions.push(action.guard);
+                match &graph[action.op] {
+                    Op::Assign(_, assignment) => {
+                        expressions.push(assignment.dont_care);
+                        expressions.extend(assignment.concretes.iter().flat_map(|&(g, v)| [g, v]));
+                    }
+                    Op::AssertEq(a, b) => expressions.extend([*a, *b]),
+                    _ => {}
+                }
+            }
+            for expression in expressions {
+                reads.extend(patronus::expr::find_symbols(ctx, expression));
+            }
+        }
+    }
+    let arguments = graph
+        .args
+        .iter()
+        .filter(|arg| {
+            graph
+                .symbol_expr(arg.symbol())
+                .is_none_or(|expr| !length_parameters.contains(&expr) || reads.contains(&expr))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    graph.args = arguments.clone();
     let mut value_registers = FxHashMap::default();
     let mut knownness_registers = FxHashMap::default();
-    let mut register_inits = FxHashMap::default();
+    let mut register_inits = graph.register_inits.clone();
     let mut parameter_exprs = FxHashMap::default();
+    let mut items = FxHashMap::default();
+
+    let mut captures = 0;
+    for (id, source) in graph.loops.clone().iter() {
+        let fixed_length = source.source.length.and_then(|length| {
+            if let Expr::BVLiteral(value) = ctx[length] {
+                Some(value.get(ctx).to_u64().unwrap())
+            } else {
+                None
+            }
+        });
+        let minimum = fixed_length.unwrap_or(source.source.min_len);
+        let exact = fixed_length.is_some();
+        // Count only the items still required by the declared minimum. The
+        // counter saturates at zero, so arbitrarily long sequences stay legal.
+        let remaining = (minimum != 0 || exact).then(|| {
+            let width = (u64::BITS - minimum.leading_zeros()).max(1);
+            let register =
+                graph.add_register(ctx, symbols, &format!("$monitor_{id}_remaining"), width);
+            register_inits.insert(register, ctx.bit_vec_val(minimum, width));
+            register
+        });
+        let capture = source.source.argument.map(|argument| {
+            let saved = arguments
+                .iter()
+                .position(|a| a.symbol() == argument)
+                .unwrap();
+            let fresh = arguments.len() + captures;
+            captures += 1;
+            parameter_exprs.insert(source.data, fresh);
+            (saved, fresh)
+        });
+        items.insert(
+            id,
+            ItemBinding {
+                capture,
+                remaining,
+                exact,
+            },
+        );
+    }
+    for op in graph
+        .nodes()
+        .flat_map(|(_, node)| node.actions.iter())
+        .map(|a| &graph[a.op])
+    {
+        match *op {
+            Op::Data { loop_id, target } => {
+                let (saved, _) = items[&loop_id].capture.unwrap();
+                parameter_exprs.insert(graph.symbol_expr(target).unwrap(), saved);
+                register_inits.remove(&target);
+            }
+            Op::Valid { target, .. } => {
+                register_inits.remove(&target);
+            }
+            _ => {}
+        }
+    }
 
     // create value and knownness registers for every parameter,
     // and initialize both to zero
     for (index, arg) in arguments.iter().enumerate() {
         let argument = arg.symbol();
-        let width = match symbols[argument].tpe() {
+        let tpe = symbols[argument].tpe();
+        let width = match tpe {
             Type::BitVec(width) if width > 0 => width,
+            Type::Seq(seq) if matches!(symbols[seq].tpe(), Type::BitVec(_)) => {
+                symbols[seq].tpe().bitwidth()
+            }
             tpe => {
                 return Err(MonitorConversionError::UnsupportedParameter {
                     argument: symbols[argument].full_name(symbols),
@@ -118,8 +232,10 @@ fn convert_driver(
                 });
             }
         };
-        let expr = symbol_expr(ctx, &mut graph, symbols, argument);
-        parameter_exprs.insert(expr, index);
+        if matches!(tpe, Type::BitVec(_)) {
+            let expr = symbol_expr(ctx, &mut graph, symbols, argument);
+            parameter_exprs.insert(expr, index);
+        }
         let name = symbols[argument].name().to_string();
         let value = graph.add_register(ctx, symbols, &format!("$monitor_{name}_value"), width);
         let known = graph.add_register(ctx, symbols, &format!("$monitor_{name}_known"), width);
@@ -171,6 +287,7 @@ fn convert_driver(
         .collect();
 
     let nodes = graph.reachable_node_ids(ctx, graph.entry);
+    let input_pins = graph.proto_ctx.dut_input_symbols(symbols).collect();
     let mut converter = Converter {
         ctx,
         graph: &mut graph,
@@ -179,11 +296,15 @@ fn convert_driver(
         parameter_exprs,
         parameter_dependencies: FxHashMap::default(),
         convert_assignments,
+        items,
+        input_pins,
     };
 
     for node in nodes {
-        converter.convert_node(node, &initial_env)?;
+        converter.convert_alternatives(node, &initial_env)?;
     }
+    graph.loops.clear();
+    graph.register_inits = register_inits.clone();
     // Drop obsolete driver operations, without optimizing monitor expressions.
     graph.garbage_collect_unreachable(ctx);
     Ok(MonitorAutomaton {
@@ -221,6 +342,13 @@ struct Binding {
     known: ExprRef,
 }
 
+#[derive(Clone, Copy)]
+struct ItemBinding {
+    capture: Option<(usize, usize)>,
+    remaining: Option<SymbolId>,
+    exact: bool,
+}
+
 struct Converter<'a> {
     ctx: &'a mut Context,
     graph: &'a mut ProtoGraph,
@@ -229,9 +357,230 @@ struct Converter<'a> {
     parameter_exprs: FxHashMap<ExprRef, usize>,
     parameter_dependencies: FxHashMap<ExprRef, bool>,
     convert_assignments: bool,
+    items: FxHashMap<LoopId, ItemBinding>,
+    input_pins: FxHashSet<SymbolId>,
 }
 
 impl Converter<'_> {
+    fn substitute(&mut self, expr: ExprRef, values: &FxHashMap<ExprRef, ExprRef>) -> ExprRef {
+        let expr = remap_expr(self.ctx, expr, values);
+        self.graph.simplifier.simplify(self.ctx, expr)
+    }
+
+    fn specialize(&mut self, mut node: Node, values: &FxHashMap<ExprRef, ExprRef>) -> Node {
+        for action in &mut node.actions {
+            action.guard = self.substitute(action.guard, values);
+            let mut op = self.graph[action.op].clone();
+            match &mut op {
+                Op::Assign(_, a) => {
+                    a.dont_care = self.substitute(a.dont_care, values);
+                    for (guard, rhs) in &mut a.concretes {
+                        *guard = self.substitute(*guard, values);
+                        *rhs = self.substitute(*rhs, values);
+                    }
+                    a.concretes.retain(|(g, _)| *g != self.ctx.get_false());
+                }
+                Op::AssertEq(a, b) => {
+                    *a = self.substitute(*a, values);
+                    *b = self.substitute(*b, values);
+                }
+                _ => {}
+            }
+            action.op = self.graph.o(op);
+        }
+        for edge in &mut node.transitions {
+            edge.guard = self.substitute(edge.guard, values);
+        }
+        node.actions.retain(|a| a.guard != self.ctx.get_false());
+        node.transitions.retain(|e| e.guard != self.ctx.get_false());
+        node
+    }
+
+    // Alternatives are resolved from this sample. They share incoming state,
+    // but only the matching alternative commits its captures and state updates.
+    fn convert_alternatives(
+        &mut self,
+        node: NodeId,
+        initial_env: &[Binding],
+    ) -> Result<(), MonitorConversionError> {
+        let original = self.graph[node].clone();
+        let mut variants = vec![(original.clone(), self.ctx.get_true())];
+        let mut heads = FxHashSet::default();
+        for action in &original.actions {
+            if let Op::Valid { loop_id, .. } = self.graph[action.op] {
+                heads.insert(loop_id);
+            }
+        }
+        if heads.is_empty() {
+            return self.convert_node(node, initial_env);
+        }
+        let mut heads = heads.into_iter().collect::<Vec<_>>();
+        heads.sort();
+        for id in heads {
+            let fifo = self.graph.loops[id].clone();
+            let item = self.items[&id];
+            let mut expressions = original
+                .transitions
+                .iter()
+                .map(|t| t.guard)
+                .collect::<Vec<_>>();
+            for a in &original.actions {
+                expressions.push(a.guard);
+                if let Op::Assign(_, assign) = &self.graph[a.op] {
+                    expressions.push(assign.dont_care);
+                    expressions.extend(assign.concretes.iter().flat_map(|&(g, v)| [g, v]));
+                }
+            }
+            let uses_last = expressions
+                .into_iter()
+                .any(|e| patronus::expr::find_symbols(self.ctx, e).contains(&fifo.last));
+            let choices = if uses_last {
+                &[(false, false), (true, false), (true, true)][..]
+            } else {
+                &[(false, false), (true, false)][..]
+            };
+            let mut next = Vec::new();
+            for (body, allowed) in variants {
+                // An earlier empty loop can expose another head in this
+                // sample. Its guard already includes those earlier choices.
+                let mut head = self.ctx.get_false();
+                for action in &body.actions {
+                    if matches!(self.graph[action.op], Op::Valid { loop_id, .. } if loop_id == id) {
+                        head = self.graph.or_guard(self.ctx, head, action.guard);
+                    }
+                }
+                for &(valid, last) in choices {
+                    let bit = |b| {
+                        if b {
+                            self.ctx.get_true()
+                        } else {
+                            self.ctx.get_false()
+                        }
+                    };
+                    let values =
+                        FxHashMap::from_iter([(fifo.valid, bit(valid)), (fifo.last, bit(last))]);
+                    let mut body = self.specialize(body.clone(), &values);
+                    let mut allowed = allowed;
+                    if let Some(register) = item.remaining {
+                        let remaining = self.graph.symbol_expr(register).unwrap();
+                        let width = remaining.get_bv_type(self.ctx).unwrap();
+                        let zero = self.ctx.zero(width);
+                        let one = self.ctx.bit_vec_val(1, width);
+                        let empty = self.ctx.equal(remaining, zero);
+                        let mut head_values = values.clone();
+                        head_values.insert(fifo.valid, self.ctx.get_true());
+                        let evaluated = self.substitute(head, &head_values);
+                        if item.exact || !valid || last {
+                            let enough = if !valid {
+                                empty
+                            } else if item.exact {
+                                if last {
+                                    self.ctx.equal(remaining, one)
+                                } else if uses_last {
+                                    self.ctx.greater(remaining, one)
+                                } else {
+                                    self.ctx.greater(remaining, zero)
+                                }
+                            } else {
+                                self.ctx.greater_or_equal(one, remaining)
+                            };
+                            let not_evaluated = self.graph.not_guard(self.ctx, evaluated);
+                            let enough = self.graph.or_guard(self.ctx, not_evaluated, enough);
+                            allowed = self.graph.and_guard(self.ctx, allowed, enough);
+                        }
+                        if valid {
+                            let decremented = self.ctx.sub(remaining, one);
+                            let next = self.ctx.ite(empty, zero, decremented);
+                            let op = self.graph.o(Op::Assign(
+                                register,
+                                Assignment::concrete(self.ctx.get_false(), evaluated, next),
+                            ));
+                            body.actions.push(Action::new(self.ctx.get_true(), op));
+                        }
+                    }
+                    next.push((body, allowed));
+                }
+            }
+            variants = next;
+        }
+        let mut merged = Node::empty();
+        let mut updates: FxHashMap<SymbolId, Assignment> = FxHashMap::default();
+        let mut survives = self.ctx.get_false();
+        for (body, mut matches) in variants {
+            *self.graph.node_mut(node) = body;
+            self.convert_node(node, initial_env)?;
+            let body = self.graph[node].clone();
+            for action in &body.actions {
+                let failed = match self.graph[action.op] {
+                    Op::AssertEq(a, b) => {
+                        let equal = self.ctx.equal(a, b);
+                        self.graph.not_guard(self.ctx, equal)
+                    }
+                    Op::InternalAssertFalse => self.ctx.get_true(),
+                    _ => continue,
+                };
+                let failed = self.graph.and_guard(self.ctx, action.guard, failed);
+                let passes = self.graph.not_guard(self.ctx, failed);
+                matches = self.graph.and_guard(self.ctx, matches, passes);
+            }
+            if matches == self.ctx.get_false() {
+                continue;
+            }
+            survives = self.graph.or_guard(self.ctx, survives, matches);
+            for action in body.actions {
+                match self.graph[action.op].clone() {
+                    Op::Assign(target, assignment) => {
+                        let update = updates.entry(target).or_insert_with(|| Assignment {
+                            dont_care: self.ctx.get_false(),
+                            concretes: Vec::new(),
+                        });
+                        let selected = self.graph.and_guard(self.ctx, matches, action.guard);
+                        for (guard, rhs) in assignment.concretes {
+                            let guard = self.graph.and_guard(self.ctx, selected, guard);
+                            update.concretes.push((guard, rhs));
+                        }
+                    }
+                    Op::AssertEq(..) | Op::InternalAssertFalse => {}
+                    _ => merged.actions.push(action.with_guard(self.graph.and_guard(
+                        self.ctx,
+                        matches,
+                        action.guard,
+                    ))),
+                }
+            }
+            for edge in body.transitions {
+                let guard = self.graph.and_guard(self.ctx, matches, edge.guard);
+                if guard != self.ctx.get_false() {
+                    if let Some(existing) = merged.transitions.iter_mut().find(|e| {
+                        e.target == edge.target
+                            && e.consumes_step == edge.consumes_step
+                            && e.rotations == edge.rotations
+                    }) {
+                        existing.guard = self.graph.or_guard(self.ctx, existing.guard, guard);
+                    } else {
+                        merged.transitions.push(edge.with_guard(guard));
+                    }
+                }
+            }
+        }
+        let mut updates = updates.into_iter().collect::<Vec<_>>();
+        updates.sort_by_key(|(r, _)| *r);
+        for (register, assignment) in updates {
+            self.emit(
+                &mut merged.actions,
+                self.ctx.get_true(),
+                Op::Assign(register, assignment),
+            );
+        }
+        self.emit(
+            &mut merged.actions,
+            self.ctx.get_true(),
+            Op::AssertEq(survives, self.ctx.get_true()),
+        );
+        *self.graph.node_mut(node) = merged;
+        Ok(())
+    }
+
     fn unsupported(&self, node: NodeId, reason: impl Into<String>) -> MonitorConversionError {
         MonitorConversionError::UnsupportedExpression {
             node,
@@ -283,18 +632,48 @@ impl Converter<'_> {
             |reason: String| MonitorConversionError::InvalidPreparedGraph { node, reason };
 
         let mut env = initial_env.to_vec();
+        let mut items = self
+            .items
+            .values()
+            .filter_map(|item| item.capture)
+            .collect::<Vec<_>>();
+        items.sort_by_key(|&(_, fresh)| fresh);
+        for &(saved, _) in &items {
+            let width = env[saved].value.get_bv_type(self.ctx).unwrap();
+            let zero = self.ctx.zero(width);
+            env.push(Binding {
+                value: zero,
+                known: zero,
+            });
+        }
         let mut actions = Vec::new();
-        // Process observations in their existing order. Parameters may occur
-        // on one side of an equality, but cannot select which actions execute.
+        let mut updates = Vec::new();
+        let mut checks = Vec::new();
+        let mut loads = FxHashMap::default();
+        // Defer arithmetic assertions until after pin observations: interface
+        // mappings can assert omitted sum bits whose carry needs captured bits.
+        // Keep other observations in order so constant captures stay simple.
         for action in self.graph[node].actions.clone() {
             self.check_condition(node, action.guard)?;
             match self.graph[action.op].clone() {
-                Op::Data { .. } | Op::Last { .. } | Op::Valid { .. } => {
-                    return Err(self.unsupported(node, "iterator FIFO reads are not supported yet"));
+                Op::Data { .. } => {}
+                Op::Valid { loop_id, .. } => {
+                    if let Some((saved, _)) = self.items[&loop_id].capture {
+                        loads.insert(saved, action.guard);
+                    }
+                }
+                Op::Last { .. } => {
+                    return Err(self.unsupported(
+                        node,
+                        "stored last flags must be specialized before monitor conversion",
+                    ));
                 }
                 // Capturing drivers still drive their inputs normally.
                 op @ Op::Assign(..) if !self.convert_assignments => {
                     self.emit(&mut actions, action.guard, op);
+                }
+                Op::Assign(register, _) if !self.input_pins.contains(&register) => {
+                    updates.push(action);
                 }
                 // Assignment conversion. Here is an example:
                 // dont_care = x
@@ -327,6 +706,11 @@ impl Converter<'_> {
                         prior = self.graph.or_guard(self.ctx, prior, guard);
                     }
                 }
+                Op::AssertEq(lhs, rhs)
+                    if self.contains_addition(lhs) || self.contains_addition(rhs) =>
+                {
+                    checks.push((action.guard, lhs, rhs));
+                }
                 Op::AssertEq(lhs, rhs) => {
                     self.observe_equality(node, action.guard, lhs, rhs, &mut env, &mut actions)?;
                 }
@@ -336,10 +720,35 @@ impl Converter<'_> {
                 }
             }
         }
+        for (guard, lhs, rhs) in checks {
+            self.observe_equality(node, guard, lhs, rhs, &mut env, &mut actions)?;
+        }
         for edge in self.graph[node].transitions.clone() {
             self.check_condition(node, edge.guard)?;
         }
-        for (index, binding) in env.into_iter().enumerate() {
+        // State writes are non-blocking. Their RHSs use the incoming item or
+        // the freshly learned item according to the original expression.
+        let values = self
+            .parameter_exprs
+            .iter()
+            .map(|(&expr, &i)| (expr, env[i].value))
+            .collect();
+        for mut action in updates {
+            action.op =
+                self.graph
+                    .o(self.graph[action.op].remap(self.ctx, &values, &FxHashMap::default()));
+            actions.push(action);
+        }
+        let mut next = env[..initial_env.len()].to_vec();
+        for (saved, fresh) in items {
+            if let Some(&guard) = loads.get(&saved) {
+                next[saved] = Binding {
+                    value: self.ctx.ite(guard, env[fresh].value, env[saved].value),
+                    known: self.ctx.ite(guard, env[fresh].known, env[saved].known),
+                };
+            }
+        }
+        for (index, binding) in next.into_iter().enumerate() {
             let argument = self.graph.args[index].symbol();
             for (register, rhs) in [
                 (self.value_registers[&argument], binding.value),
@@ -367,6 +776,9 @@ impl Converter<'_> {
         env: &mut Vec<Binding>,
         actions: &mut Vec<Action>,
     ) -> Result<(), MonitorConversionError> {
+        if guard == self.ctx.get_false() {
+            return Ok(());
+        }
         // An effective whole-value X is a release, with no observation.
         if self.graph.dont_cares.contains(&lhs) || self.graph.dont_cares.contains(&rhs) {
             return Ok(());
@@ -408,6 +820,9 @@ impl Converter<'_> {
         env: &mut Vec<Binding>,
         actions: &mut Vec<Action>,
     ) -> Result<(), MonitorConversionError> {
+        if guard == self.ctx.get_false() {
+            return Ok(());
+        }
         // X leaf: these bits impose no constraint.
         if self.graph.dont_cares.contains(&pattern) {
             return Ok(());
@@ -419,6 +834,47 @@ impl Converter<'_> {
         }
         // Otherwise recurse through the expression, or check parameter-free bits directly
         match self.ctx[pattern].clone() {
+            Expr::BVAdd(a, b, _) => {
+                let (unknown, offset) =
+                    match (self.contains_parameter(a), self.contains_parameter(b)) {
+                        (true, false) => (a, b),
+                        (false, true) => (b, a),
+                        (false, false) => {
+                            let expected = self.ctx.slice(pattern, hi, lo);
+                            self.emit(actions, guard, Op::AssertEq(sample, expected));
+                            return Ok(());
+                        }
+                        _ => {
+                            return Err(self.unsupported(
+                                node,
+                                "addition must have only one parameter-dependent operand",
+                            ));
+                        }
+                    };
+                let mut offset_part = self.ctx.slice(offset, hi, lo);
+                if lo != 0 {
+                    let low_offset = self.ctx.slice(offset, lo - 1, 0);
+                    let low_offset = self.graph.simplifier.simplify(self.ctx, low_offset);
+                    if low_offset != self.ctx.zero(lo) {
+                        // The omitted low bits can carry into the observed
+                        // slice. Use already captured bits; never assume zero.
+                        let low_unknown = self
+                            .captured_range(unknown, (lo - 1, 0), env)
+                            .ok_or_else(|| {
+                                self.unsupported(node,
+                                "sliced addition has an unresolved carry from unobserved low bits")
+                            })?;
+                        let low_unknown = self.ctx.zero_extend(low_unknown, 1);
+                        let low_offset = self.ctx.zero_extend(low_offset, 1);
+                        let sum = self.ctx.add(low_unknown, low_offset);
+                        let carry = self.ctx.slice(sum, lo, lo);
+                        let carry = self.ctx.zero_extend(carry, hi - lo);
+                        offset_part = self.ctx.add(offset_part, carry);
+                    }
+                }
+                let observed = self.ctx.sub(sample, offset_part);
+                self.observe_range(node, guard, observed, unknown, (hi, lo), env, actions)?;
+            }
             Expr::BVSlice { e, lo: offset, .. } => {
                 self.observe_range(
                     node,
@@ -504,6 +960,57 @@ impl Converter<'_> {
         Ok(())
     }
 
+    /// Read a range only when its parameter bits have already been captured.
+    /// Slicing first avoids requiring knowledge of unrelated parameter bits.
+    fn captured_range(
+        &mut self,
+        pattern: ExprRef,
+        (hi, lo): (u32, u32),
+        env: &[Binding],
+    ) -> Option<ExprRef> {
+        if let Some(&parameter) = self.parameter_exprs.get(&pattern) {
+            let known = self.ctx.slice(env[parameter].known, hi, lo);
+            let known = self.graph.simplifier.simplify(self.ctx, known);
+            return (known == self.ctx.ones(hi - lo + 1))
+                .then(|| self.ctx.slice(env[parameter].value, hi, lo));
+        }
+        if !self.contains_parameter(pattern) {
+            return Some(self.ctx.slice(pattern, hi, lo));
+        }
+        match self.ctx[pattern].clone() {
+            Expr::BVSlice { e, lo: offset, .. } => {
+                self.captured_range(e, (hi + offset, lo + offset), env)
+            }
+            Expr::BVConcat(left, right, _) => {
+                let width = right.get_bv_type(self.ctx).unwrap();
+                if hi < width {
+                    return self.captured_range(right, (hi, lo), env);
+                }
+                if lo >= width {
+                    return self.captured_range(left, (hi - width, lo - width), env);
+                }
+                let left = self.captured_range(left, (hi - width, 0), env)?;
+                let right = self.captured_range(right, (width - 1, lo), env)?;
+                Some(self.ctx.concat(left, right))
+            }
+            Expr::BVIte { cond, tru, fals } => {
+                let tru = self.captured_range(tru, (hi, lo), env)?;
+                let fals = self.captured_range(fals, (hi, lo), env)?;
+                Some(self.ctx.ite(cond, tru, fals))
+            }
+            _ => None,
+        }
+    }
+
+    fn contains_addition(&self, expr: ExprRef) -> bool {
+        if matches!(self.ctx[expr], Expr::BVAdd(..)) {
+            return true;
+        }
+        let mut found = false;
+        self.ctx[expr].for_each_child(|child| found |= self.contains_addition(*child));
+        found
+    }
+
     // generate the correct updates for the knownness and value registers
     fn learn(
         &mut self,
@@ -569,9 +1076,215 @@ impl Converter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frontend::ast::ProtocolContext;
     use crate::frontend::diagnostic::DiagnosticHandler;
+    use crate::frontend::symbol::ROOT_SCOPE;
     use crate::ir::edge_contract::contract_edges;
     use crate::ir::lowering::lower_ast_to_ir;
+    use baa::BitVecValue;
+    use patronus::expr::{SymbolValueStore, eval_expr};
+
+    #[test]
+    fn sliced_address_joint_monitors_check_alignment_carry_and_overflow() {
+        use crate::backends::monitor_transition_system::into_monitor_transition_system;
+        use crate::ir::joint_monitor::build_joint_monitor_automaton;
+        use patronus::sim::{InitKind, Interpreter, Simulator};
+
+        let mut diagnostics = DiagnosticHandler::default();
+        let (mut symbols, modules) = crate::frontend(
+            &["../tests/monitors/sliced_address.prot"],
+            &mut diagnostics,
+            false,
+            false,
+        )
+        .unwrap();
+        for module in modules {
+            let (width, shift, bases) = match module.name.as_str() {
+                "WordAddress" => (
+                    6,
+                    2,
+                    (0..256).step_by(4).map(|b| (b, false)).collect::<Vec<_>>(),
+                ),
+                "LowAddress" => (
+                    4,
+                    0,
+                    (0..12)
+                        .chain(252..256)
+                        .map(|b| (b, (8..12).contains(&b)))
+                        .collect(),
+                ),
+                _ => continue,
+            };
+            let mut ctx = Context::default();
+            let monitor =
+                build_joint_monitor_automaton(&mut ctx, module.protos.clone(), &mut symbols)
+                    .unwrap();
+            let core = into_monitor_transition_system(&mut ctx, &monitor, &module, &symbols);
+            for (base, overflow) in bases {
+                for corrupt in [false, true] {
+                    if overflow && corrupt {
+                        continue;
+                    }
+                    let mut sim = Interpreter::new(&ctx, &core.ts);
+                    sim.init(InitKind::Zero);
+                    for (cycle, offset) in [4, 8].into_iter().enumerate() {
+                        let address = (((base + offset) & 255) >> shift) & ((1 << width) - 1);
+                        let address = address ^ u64::from(corrupt && cycle == 1);
+                        for &pin in core.pin_inputs.values() {
+                            sim.set(pin, &BitVecValue::from_u64(address, width));
+                        }
+                        sim.step();
+                        assert_eq!(
+                            sim.get(core.internal_error),
+                            BitVecValue::from_u64(0, 1).into()
+                        );
+                        let bad = (overflow || corrupt) && cycle == 1;
+                        assert_eq!(
+                            sim.get(core.bad),
+                            BitVecValue::from_u64(u64::from(bad), 1).into(),
+                            "{}: base={base}, cycle={cycle}",
+                            module.name
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sliced_addition_capture_handles_carries_and_wraparound() {
+        for hi in 0..4 {
+            for lo in 0..=hi {
+                for aligned in [false, true] {
+                    for reversed in [false, true] {
+                        let mut ctx = Context::default();
+                        let mut graph =
+                            ProtoGraph::new(ProtocolContext::new("slice".into(), ROOT_SCOPE));
+                        let node = graph.entry;
+                        let parameter = ctx.bv_symbol("parameter", 4);
+                        let saved = ctx.bv_symbol("saved", 4);
+                        let offset = ctx.bv_symbol("offset", 4);
+                        let sample = ctx.bv_symbol("sample", hi - lo + 1);
+                        let again = ctx.bv_symbol("again", hi - lo + 1);
+                        let low_mask = (1u64 << lo) - 1;
+                        let known = ctx.bit_vec_val(if aligned { 0 } else { low_mask }, 4);
+                        let value = ctx.and(saved, known);
+                        let offset_expr = if aligned {
+                            let mask = ctx.bit_vec_val(15 ^ low_mask, 4);
+                            ctx.and(offset, mask)
+                        } else {
+                            offset
+                        };
+                        let sum = if reversed {
+                            ctx.add(offset_expr, parameter)
+                        } else {
+                            ctx.add(parameter, offset_expr)
+                        };
+                        let empty = FxHashMap::default();
+                        let mut converter = Converter {
+                            ctx: &mut ctx,
+                            graph: &mut graph,
+                            value_registers: &empty,
+                            knownness_registers: &empty,
+                            parameter_exprs: FxHashMap::from_iter([(parameter, 0)]),
+                            parameter_dependencies: FxHashMap::default(),
+                            convert_assignments: true,
+                            items: FxHashMap::default(),
+                            input_pins: FxHashSet::default(),
+                        };
+                        let mut env = vec![Binding { value, known }];
+                        let mut actions = Vec::new();
+                        let guard = converter.ctx.get_true();
+                        converter
+                            .observe_range(
+                                node,
+                                guard,
+                                sample,
+                                sum,
+                                (hi, lo),
+                                &mut env,
+                                &mut actions,
+                            )
+                            .unwrap();
+                        let captured = env[0];
+                        converter
+                            .observe_range(
+                                node,
+                                guard,
+                                again,
+                                sum,
+                                (hi, lo),
+                                &mut env,
+                                &mut actions,
+                            )
+                            .unwrap();
+                        if lo != 0 && !aligned {
+                            let zero = converter.ctx.zero(4);
+                            let mut unknown = vec![Binding {
+                                value: zero,
+                                known: zero,
+                            }];
+                            let error = converter
+                                .observe_range(
+                                    node,
+                                    guard,
+                                    sample,
+                                    sum,
+                                    (hi, lo),
+                                    &mut unknown,
+                                    &mut Vec::new(),
+                                )
+                                .unwrap_err();
+                            assert!(
+                                matches!(error, MonitorConversionError::UnsupportedExpression { reason, .. } if reason.contains("unresolved carry"))
+                            );
+                        }
+                        let observed_mask = (1u64 << (hi - lo + 1)) - 1;
+                        let captured_mask =
+                            (observed_mask << lo) | if aligned { 0 } else { low_mask };
+                        for a in 0..16 {
+                            for b in 0..16 {
+                                let offset_value = if aligned { b & !low_mask } else { b };
+                                let observed = ((a + offset_value) >> lo) & observed_mask;
+                                for corrupt in [false, true] {
+                                    let mut store = SymbolValueStore::default();
+                                    for (symbol, value, width) in [
+                                        (saved, a, 4),
+                                        (offset, b, 4),
+                                        (sample, observed, hi - lo + 1),
+                                        (again, observed ^ u64::from(corrupt), hi - lo + 1),
+                                    ] {
+                                        store.define_bv(
+                                            symbol,
+                                            &BitVecValue::from_u64(value, width),
+                                        );
+                                    }
+                                    assert_eq!(
+                                        eval_expr(&ctx, &store, captured.value),
+                                        BitVecValue::from_u64(a & captured_mask, 4).into()
+                                    );
+                                    assert_eq!(
+                                        eval_expr(&ctx, &store, captured.known),
+                                        BitVecValue::from_u64(captured_mask, 4).into()
+                                    );
+                                    let passed = actions.iter().all(|action| {
+                                        let Op::AssertEq(lhs, rhs) = graph[action.op] else {
+                                            panic!("expected observation constraint")
+                                        };
+                                        eval_expr(&ctx, &store, lhs) == eval_expr(&ctx, &store, rhs)
+                                    });
+                                    assert_eq!(
+                                        passed, !corrupt,
+                                        "slice {hi}:{lo}, {a} + {offset_value}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn rejects_parameter_equality_even_after_observing_both_parameters() {
