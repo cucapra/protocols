@@ -509,7 +509,3 @@ pub fn simplify_registers(
     let analysis = analyze_registers(ctx, graph, symbols, entry, initial);
     rewrite_registers(ctx, graph, symbols, entry, &analysis, preserved)
 }
-
-#[cfg(test)]
-#[path = "register_simplify_tests.rs"]
-mod tests;

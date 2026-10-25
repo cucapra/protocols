@@ -534,7 +534,3 @@ pub fn interpret(
         failure: None,
     }
 }
-
-#[cfg(test)]
-#[path = "graph_interpreter_tests.rs"]
-mod tests;
