@@ -247,6 +247,7 @@ pub fn into_monitor_transition_system(
     ts.bad_states.extend([bad, internal_error]);
     ts.add_output(ctx, Cow::Borrowed("bad"), bad);
     ts.add_output(ctx, Cow::Borrowed("internal_error"), internal_error);
+    patronus::system::transform::simplify_expressions(ctx, &mut ts);
     MonitorTransitionSystemResult {
         ts,
         pin_inputs,

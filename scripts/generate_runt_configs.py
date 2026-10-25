@@ -238,7 +238,10 @@ def monitor_status_runt_command(case: dict) -> list[tuple[str, str]]:
     common = []
     for path in case["paths"]:
         common += ["--protocol", path]
-    common += ["--wave", case["wave"], "--instances", *case["instances"]]
+    if case["wave"]:
+        common += ["--wave", case["wave"]]
+    if case["instances"]:
+        common += ["--instances", *case["instances"]]
     # Display options affect BI's trace formatting, not monitor acceptance.
     extras = case["extra_args"]
     if "--sample-posedge" in extras:
@@ -246,11 +249,13 @@ def monitor_status_runt_command(case: dict) -> list[tuple[str, str]]:
         common += ["--sample-posedge", extras[index + 1]]
     if "--force-x-to-zero" in extras:
         common += ["--force-x-to-zero"]
+    bi_extras = [arg for arg in extras if arg == "--allow-branch-on-arg"]
     return [
         (
             "bi",
             repo_root_command(
-                [*binary_prefix("bi"), "--status-only", *common], stderr="inherit"
+                [*binary_prefix("bi"), "--status-only", *common, *bi_extras],
+                stderr="inherit",
             ),
         ),
         (
@@ -445,21 +450,6 @@ def graph_interp_cases(cases: list[dict]) -> list[dict]:
     return sorted(selected, key=lambda c: c["paths"][0])
 
 
-def monitor_status_cases(cases: list[dict]) -> list[dict]:
-    """Exclude unsupported loops, argument guards, and guarded-fork composition."""
-    return [
-        case
-        # ignore cases that the automata repr can't handle
-        for case in cases
-        if "--allow-branch-on-arg" not in case["extra_args"]
-        and "examples/wishbone/wishbone_pipelined.prot" not in case["paths"]
-        and not any(
-            {"for_in_loop", "repeat_loop"} & protocol_constructs(path)
-            for path in case["paths"]
-        )
-    ]
-
-
 def waveform_cases(cases: list[dict]) -> list[dict]:
     """Graph-interpreter cases suitable for cycle-exact comparison."""
     # these cases are correct, but our ASCII diffing isn't good enough
@@ -507,7 +497,14 @@ def runt_case_suites(suite_name: str, runner: str, cases: list[dict]):
         )
         for suffix, cmd in build(case):
             name = f"{base_name}.{suffix}" if suffix else base_name
-            suites.append((name, edir, ename, cmd, path))
+            # Missing-wave cases exercise each CLI's argument diagnostics,
+            # which differ between BI and graph-interp.
+            variant_ename = (
+                Path(ename).with_suffix(f".{suffix}.expect").name
+                if runner == "monitor_status" and not case["wave"]
+                else ename
+            )
+            suites.append((name, edir, variant_ename, cmd, path))
     return suites
 
 
@@ -537,7 +534,8 @@ def generate_runt_configs() -> None:
     suite_specs = {
         "interp": ("interp", tx),
         "bi": ("bi", bi),
-        "monitor_status": ("monitor_status", monitor_status_cases(bi)),
+        # Keep unsupported monitor cases visible as failures, including loops.
+        "monitor_status": ("monitor_status", bi),
         "graph_interp": ("graph_interp", graph_interp_cases(tx)),
         "waveform": ("waveform", waveform_cases(tx)),
         "fail": ("fail", fail_cases(tx)),

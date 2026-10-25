@@ -1,0 +1,4 @@
+---CODE---
+2
+---STDERR---
+error: --flow unbounded-monitor requires --wave and --instances
