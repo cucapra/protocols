@@ -280,6 +280,12 @@ fn type_check_stmt(
             }
         }
         Stmt::RepeatLoop(count_expr, bodyid) => {
+            if !matches!(tr[count_expr], Expr::Sym(symbol) if st[symbol].is_arg()) {
+                // TODO: unroll loops that have a fixed repeat count
+                let error_msg = "Repeat count must be a protocol argument.";
+                handler.emit_diagnostic_expr(tr, count_expr, error_msg, Level::Error);
+                return Err(anyhow!(error_msg));
+            }
             // Typecheck the no. of iterations (which must be a uint type)
             let num_iterations_type = type_check_expr(tr, st, handler, count_expr)?;
             // Temporarily allow the argument to repeat loops to have type `u8`

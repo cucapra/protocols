@@ -51,7 +51,7 @@ pub fn lower_bmc(
     // TODO: Handle done vs not done
     let mut lowered_protocols: Vec<LoweredFragmentInfo> = vec![];
     for protocol in protos {
-        let pg = lowerer.lower_protocol_fragment(ctx, &protocol, true);
+        let pg = lowerer.lower_protocol_fragment(ctx, &protocol, true, true);
         lowered_protocols.push(pg);
     }
 

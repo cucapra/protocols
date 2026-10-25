@@ -28,7 +28,7 @@ entity_impl!(LoopId, "l");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoopSource {
-    /// Sequence argument supplying items; absent when the items are unused.
+    /// Sequence argument supplying items
     pub argument: Option<SymbolId>,
     /// Exact loop length expression (used for repeat loops, where we need to
     /// match the argument to the parameter used in the loop)
@@ -40,6 +40,7 @@ pub struct LoopSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Loop {
     pub source: LoopSource,
+    pub uses_last: bool,
     pub data: ExprRef,
     pub last: ExprRef,
     pub valid: ExprRef,
@@ -183,6 +184,15 @@ pub fn remap_expr(
 }
 
 impl Op {
+    pub fn assertion_failure(&self, ctx: &mut Context, guard: ExprRef) -> Option<ExprRef> {
+        let Self::AssertEq(lhs, rhs) = *self else {
+            return None;
+        };
+        let equal = ctx.equal(lhs, rhs);
+        let unequal = ctx.not(equal);
+        Some(ctx.and(guard, unequal))
+    }
+
     /// Remap assignment targets together with every expression that reads them.
     pub fn remap(
         &self,
@@ -289,7 +299,6 @@ impl ProtoGraph {
         }
     }
 
-    /// One arbitrary sample per DUT input and cycle, shared with DUT wiring.
     pub fn dont_care_input(
         &mut self,
         ctx: &mut Context,
@@ -396,9 +405,7 @@ impl ProtoGraph {
                     *rhs = self.simplifier.simplify(ctx, *rhs);
                     debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
-                Op::Fork
-                | Op::InternalAssertFalse
-                | Op::Done => {}
+                Op::Fork | Op::InternalAssertFalse | Op::Done => {}
             }
         }
     }

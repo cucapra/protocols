@@ -5,7 +5,7 @@ use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::WidthInt;
 use itertools::Itertools;
 use patronus::expr::{
-    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr
+    Context, ExprRef, SerializableIrNode, Type, TypeCheck, simple_transform_expr,
 };
 use patronus::system::{State, TransitionSystem};
 use rustc_hash::FxHashMap;
@@ -113,9 +113,7 @@ fn replace_proto_graph_exprs(
                 *lhs = replace_expr(ctx, *lhs, old_expr, new_expr);
                 *rhs = replace_expr(ctx, *rhs, old_expr, new_expr);
             }
-            Op::Fork
-            | Op::InternalAssertFalse
-            | Op::Done => {}
+            Op::Fork | Op::InternalAssertFalse | Op::Done => {}
         }
     }
 

@@ -92,14 +92,6 @@ prot conditional_steps<dut: LoopDut>(values: [u8]) {
     step();
 }
 
-prot repeat_literal<dut: LoopDut>() {
-    repeat 8'd3 iterations {
-        dut.data := iter_count::<u8>();
-        step();
-    }
-    step();
-}
-
 prot mixed_index_widths<dut: LoopDut>(values: [u8]) {
     for value in values {
         dut.data := value + iter_count::<u8>();
@@ -246,7 +238,7 @@ prot specialized_repeat_waits<dut: LoopDut>(count: uint) {
     step();
 }
 
-// The empty head check must preserve the last driven item and its suffix.
+// The empty loop entry check must preserve the last driven item and its suffix.
 prot hold_after_plain_loop<dut: LoopDut>(values: [u8]) {
     dut.data := 8'd99;
     for value in values {

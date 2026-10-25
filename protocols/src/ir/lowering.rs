@@ -53,7 +53,7 @@ impl LoopBodyUsage {
 }
 
 // Allocate one counter at the widest iter_count() use, and specialize only
-// bodies which inspect is_last(). Scan even branches that may become dead.
+// bodies which inspect is_last().
 fn loop_body_usage(ast: &Protocol, body: StmtId) -> LoopBodyUsage {
     fn expr_usage(ast: &Protocol, expr: ExprId) -> LoopBodyUsage {
         match ast[expr] {
@@ -169,14 +169,7 @@ fn prepare_loops(
                 min_len: 0,
             }
         }
-        (None, Expr::Const(value)) => LoopSource {
-            argument: None,
-            length: Some(ctx.bv_lit(value)),
-            min_len: 0,
-        },
-        _ => panic!(
-            "unsupported loop: expected a sequence argument, or a repeat count argument or literal"
-        ),
+        _ => panic!("unsupported loop: expected a sequence argument or a repeat count argument"),
     };
     let id = graph.loops.next_key();
     let width = variable.map(|v| symbols[v].tpe().bitwidth()).unwrap_or(1);
@@ -185,6 +178,7 @@ fn prepare_loops(
     let valid = ctx.bv_symbol(&format!("{id}.valid()"), 1);
     graph.loops.push(Loop {
         source,
+        uses_last: usage.uses_last,
         data,
         last,
         valid,
@@ -580,14 +574,11 @@ impl<'a> Lowerer<'a> {
             .loops
             .get(&stmt)
             .expect("iterator loop state must be allocated before lowering its body");
-        let head = self.n(Node::empty());
+        let loop_entry = self.n(Node::empty());
         let finish = self.n(Node::empty());
         let valid = self.ir.loops[current.id].valid;
         let empty = ctx.not(valid);
 
-        // Increment only after the whole body, including its post-step suffix.
-        // Unspecialized loops also return here after their final item; the next
-        // head's empty alternative performs no loads, pops, or steps.
         if let Some((register, width)) = current.index {
             let index = self.ir.symbol_expr(register).unwrap();
             let one = ctx.bit_vec_val(1, width);
@@ -610,7 +601,7 @@ impl<'a> Lowerer<'a> {
             let not_last = ctx.not(last);
             let non_final_guard = ctx.and(valid, not_last);
             let final_guard = ctx.and(valid, last);
-            for selection in [head, continuation] {
+            for selection in [loop_entry, continuation] {
                 self.ir.push_transition(
                     selection,
                     Transition::new(non_final_guard, non_final, false),
@@ -618,21 +609,21 @@ impl<'a> Lowerer<'a> {
                 self.ir
                     .push_transition(selection, Transition::new(final_guard, final_body, false));
             }
-            // A non-final item promises a successor, so only the initial head
+            // A non-final item promises a successor, so only the initial loop entry
             // may take an empty exit. A broken promise is an internal failure.
             let invalid = self.ir.o(Op::InternalAssertFalse);
             self.ir
                 .push_action(continuation, Action::new(empty, invalid));
         } else {
             self.ir
-                .push_transition(finish, Transition::new(ctx.get_true(), head, false));
+                .push_transition(finish, Transition::new(ctx.get_true(), loop_entry, false));
             let body_entry = self.lower_iterator_body(ctx, ast, body, current, None, finish);
             self.ir
-                .push_transition(head, Transition::new(valid, body_entry, false));
+                .push_transition(loop_entry, Transition::new(valid, body_entry, false));
         }
         self.ir
-            .push_transition(head, Transition::new(empty, exit, false));
-        head
+            .push_transition(loop_entry, Transition::new(empty, exit, false));
+        loop_entry
     }
 
     fn lower_iterator_body(
@@ -649,8 +640,7 @@ impl<'a> Lowerer<'a> {
         let body_entry = self.lower_stmt(ctx, ast, body, finish);
         self.current_loop = previous;
         self.current_is_last = previous_is_last;
-        // Validate against this copy's finish, before following its outgoing
-        // edges. Each reachable body path must cross its own step.
+
         let mut pending = vec![body_entry];
         let mut seen = FxHashSet::default();
         while let Some(node) = pending.pop() {
@@ -669,8 +659,6 @@ impl<'a> Lowerer<'a> {
             }
         }
 
-        // Loads are ordinary synchronous assignments. The selected valid
-        // transition records entry; the interpreter advances at cycle end.
         let entry = self.n(Node::empty());
         let fifo = self.ir.loops[current.id].clone();
         if let Some((_, target)) = current.value {
@@ -703,12 +691,13 @@ impl<'a> Lowerer<'a> {
     }
 
     /// lowers an AST into fresh IR nodes which are unconnected to any existing IR nodes
-    /// Done markers survive preparation so completion can supply fork points.
+    /// If `keep_done`, the returned fragment retains its Done actions.
     /// Returns the nodes, entry, and exit of the lowered fragment
     pub fn lower_protocol_fragment(
         &mut self,
         ctx: &mut Context,
         ast: &Protocol,
+        keep_done: bool,
         postprocess: bool,
     ) -> LoweredFragmentInfo {
         debug_assert!(
@@ -758,6 +747,17 @@ impl<'a> Lowerer<'a> {
         } else {
             Vec::new()
         };
+        if !keep_done {
+            for &node in &nodes {
+                let actions = self.ir[node]
+                    .actions
+                    .iter()
+                    .filter(|action| !matches!(self.ir[action.op], Op::Done))
+                    .cloned()
+                    .collect();
+                self.ir.node_mut(node).actions = actions;
+            }
+        }
         LoweredFragmentInfo {
             nodes,
             entry,
@@ -822,11 +822,11 @@ impl<'a> Lowerer<'a> {
         let mut exit: NodeId = frag.exit;
         let mut graft_points: Vec<(NodeId, ExprRef)> = vec![];
 
-        // First, copy all reachable nodes from entry
+        // first, copy all reachable nodes from entry
         for current_old_id in self.ir.reachable_node_ids(ctx, frag.entry) {
             let node = self.ir[current_old_id].clone();
 
-            // Copy actions immediately, but leave transitions to be remapped
+            // copy actions immediately, but leave transitions to be remapped
             // after we've discovered the full old->new node map.
             let actions = node
                 .actions
@@ -865,7 +865,7 @@ impl<'a> Lowerer<'a> {
             }
         }
 
-        // Now rewrite transitions so the copied fragment is self-contained.
+        // Now rewrite transitions so the copied fragment is self-contained
         let false_guard = ctx.get_false();
         for (old_node_id, new_node_id) in &old_to_new_nodes {
             let transitions = self.ir[*old_node_id].transitions.clone();
@@ -901,7 +901,7 @@ impl<'a> Lowerer<'a> {
 pub fn lower_ast_to_ir(ctx: &mut Context, ast: Protocol, symbols: &mut SymbolTable) -> ProtoGraph {
     // create a lowerer and lower the ast
     let mut lowerer = Lowerer::new(ast.ctx.clone(), symbols);
-    let fragment = lowerer.lower_protocol_fragment(ctx, &ast, false);
+    let fragment = lowerer.lower_protocol_fragment(ctx, &ast, true, false);
 
     // link up the default entry node of the ir with the entry node of the lowered AST
     let entry_node = lowerer.ir.entry;

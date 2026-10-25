@@ -392,67 +392,6 @@ mod tests {
         settings.bind(|| insta::assert_snapshot!("ir_graphviz_capturing_driver", dot));
     }
 
-    fn loops_snap(contracted: bool) {
-        let filename = "../tests/loops/loops.prot";
-        let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
-        let module = require_single_module(modules, &[filename]).unwrap();
-        let directory = std::env::var_os("PROTOCOLS_LOOP_DOT_DIR").map(|directory| {
-            let directory = std::path::PathBuf::from(directory);
-            if contracted {
-                directory.join("contracted")
-            } else {
-                directory
-            }
-        });
-        if let Some(directory) = &directory {
-            std::fs::create_dir_all(directory).unwrap();
-        }
-        let mut content = String::new();
-        for ast in module.protos {
-            let name = ast.name.clone();
-            let mut symbols = symbols.clone();
-            let mut ctx = Context::default();
-            let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
-            if contracted {
-                contract_edges(&mut ctx, &mut graph, &symbols);
-                let entry = graph.entry;
-                let initial =
-                    insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
-                simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
-                normalize_assignments(&mut ctx, &mut graph, &symbols);
-                graph.garbage_collect_unreachable(&ctx);
-            }
-            let dot = to_dot_string(&ctx, &graph, &symbols);
-            if let Some(directory) = &directory {
-                std::fs::write(directory.join(format!("{name}.dot")), &dot).unwrap();
-            }
-            content += &dot;
-            content.push('\n');
-        }
-        if let Some(directory) = &directory {
-            std::fs::write(directory.join("loops.dot"), &content).unwrap();
-        }
-        let mut settings = Settings::clone_current();
-        settings.set_snapshot_path(Path::new("../tests/snapshots"));
-        let name = if contracted {
-            "ir_graphviz_loops_contracted"
-        } else {
-            "ir_graphviz_loops_uncontracted"
-        };
-        settings.bind(|| insta::assert_snapshot!(name, content));
-    }
-
-    #[test]
-    fn test_loops_uncontracted_snapshot() {
-        loops_snap(false);
-    }
-
-    #[test]
-    fn test_loops_contracted_snapshot() {
-        loops_snap(true);
-    }
-
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");

@@ -5,12 +5,14 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::driver_to_monitor::{
-    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor
+    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor,
 };
 use crate::ir::joint_automaton::{
-    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId, build_joint_control_automaton, prepare_joint_protocols
+    JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
+    build_joint_control_automaton, prepare_joint_protocols,
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
+use crate::ir::register_simplify::simplify_guarded;
 
 /// Parameter ownership includes both the protocol and its logical FIFO slot.
 pub type InstanceParameter = (ProtocolId, usize, SymbolId);
@@ -25,6 +27,8 @@ pub struct JointMonitorAutomaton {
     pub knownness_registers: FxHashMap<InstanceParameter, SymbolId>,
     pub live_registers: FxHashMap<InstanceId, SymbolId>,
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
+    /// All registers, including deterministic loop state, grouped by instance.
+    pub registers: FxHashMap<InstanceParameter, SymbolId>,
     /// (Node, action index) -> owning instance. Global Done actions have no owner.
     pub action_owners: FxHashMap<(NodeId, usize), InstanceId>,
 }
@@ -109,6 +113,7 @@ pub fn compose_joint_monitor_automaton(
         knownness_registers: FxHashMap::default(),
         live_registers: FxHashMap::default(),
         register_inits: FxHashMap::default(),
+        registers: FxHashMap::default(),
         action_owners: FxHashMap::default(),
     };
 
@@ -144,6 +149,7 @@ pub fn compose_joint_monitor_automaton(
                     .add_register(ctx, symbols, &base, width);
                 let expr = result.control.graph.symbol_expr(register).unwrap();
                 targets.insert(old, register);
+                result.registers.insert((protocol, slot, old), register);
                 substitutions.insert(monitor.graph.symbol_expr(old).unwrap(), expr);
                 // No transaction is active initially. Launching restores the
                 // template's live=true along with fresh parameter values/masks.
@@ -184,6 +190,7 @@ pub fn compose_joint_monitor_automaton(
         let mut ongoing = ctx.get_true();
         let mut any_launch = ctx.get_false();
         let mut launches = FxHashMap::default();
+        let mut edge_values = FxHashMap::default();
         for instance in result.control.instances[&node].clone() {
             // Use the register copies allocated for this protocol and slot.
             let owner = (instance.protocol, instance.slot);
@@ -196,6 +203,17 @@ pub fn compose_joint_monitor_automaton(
                 // Fresh candidates read initial values, even when their slots are reused.
                 for (&register, &init) in &monitor.register_inits {
                     substitutions.insert(monitor.graph.symbol_expr(register).unwrap(), init);
+                }
+            }
+            for (old, alias) in crate::ir::joint_automaton::joint_argument_substitutions(
+                ctx,
+                &monitor.graph,
+                &result.protocols[instance.protocol],
+                symbols,
+                instance.slot,
+            ) {
+                if let Some(&value) = substitutions.get(&old) {
+                    edge_values.insert(alias, value);
                 }
             }
             // Copy this instance's actions and track which registers they update.
@@ -280,7 +298,8 @@ pub fn compose_joint_monitor_automaton(
                 JointTransitionKind::Continue => ctx.get_true(),
             };
             let survives = ctx.and(ongoing, selected);
-            edge.guard = ctx.and(edge.guard, survives);
+            let guard = remap_expr(ctx, edge.guard, &edge_values);
+            edge.guard = ctx.and(guard, survives);
         }
         // Enter the bad state if an ongoing instance dies or all choice candidates fail.
         let failed = ctx.not(required);
@@ -308,16 +327,13 @@ fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
         let mut failed = ctx.get_false();
         let mut actions = Vec::new();
         for action in graph[node].actions.clone() {
-            if let Op::AssertEq(lhs, rhs) = graph[action.op] {
-                let equal = ctx.equal(lhs, rhs);
-                let unequal = ctx.not(equal);
-                let failure = ctx.and(action.guard, unequal);
+            if let Some(failure) = graph[action.op].assertion_failure(ctx, action.guard) {
                 failed = ctx.or(failed, failure);
             } else {
                 actions.push(action);
             }
         }
-        let failed = graph.simplifier.simplify(ctx, failed);
+        let failed = simplify_guarded(ctx, &mut graph.simplifier, failed, ctx.get_true());
         let mut concretes = Vec::new();
         if failed != ctx.get_false() {
             concretes.push((failed, ctx.get_false()));

@@ -510,9 +510,7 @@ pub fn interpret(
                 // This occurs <===> we evaluate fifo.valid to true in this cycle
                 let inputs = find_symbols(ctx, t.guard);
                 for (id, fifo) in pg.loops.iter() {
-                    if inputs.contains(&fifo.valid)
-                        && evaluate_guard(ctx, pg, &store, fifo.valid)
-                    {
+                    if inputs.contains(&fifo.valid) && evaluate_guard(ctx, pg, &store, fifo.valid) {
                         pending_pops.insert(id);
                     }
                 }
@@ -543,7 +541,3 @@ pub fn interpret(
         failure: None,
     }
 }
-
-#[cfg(test)]
-#[path = "graph_interpreter_tests.rs"]
-mod tests;

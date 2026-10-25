@@ -654,7 +654,7 @@ impl ParserContext<'_> {
         Ok(Stmt::While(guard, body))
     }
 
-    /// Parses a bounded loop (loop with a fixed no. of iterations)
+    /// Parses a repeat loop.
     fn parse_bounded_loop(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<Stmt, String> {
         let mut inner_rules = pair.clone().into_inner();
         let expr_rule = self.expect_rule(

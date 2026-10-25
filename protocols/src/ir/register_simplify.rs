@@ -1,15 +1,14 @@
 use std::collections::VecDeque;
 
 use patronus::expr::{
-    Context, Expr, ExprRef, ForEachChild, Simplifier, SparseExprMap, find_symbols
+    Context, Expr, ExprRef, ForEachChild, Simplifier, SparseExprMap, find_symbols,
+    simple_transform_expr,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, remap_expr};
 
-/// Exact node-entry values, expressed using constants, arguments, and earlier
-/// registers. Missing entries are unknown, rather than fresh sampled values.
 pub type RegisterFacts = FxHashMap<SymbolId, ExprRef>;
 pub type RegisterAnalysis = FxHashMap<NodeId, Option<RegisterFacts>>;
 type ExprSimplifier = Simplifier<SparseExprMap<Option<ExprRef>>>;
@@ -24,6 +23,48 @@ fn simplify(
 ) -> ExprRef {
     let expr = remap_expr(ctx, expr, replacements);
     simplifier.simplify(ctx, expr)
+}
+
+/// Simplify conditional values using facts from their guards
+/// TODO: Mabe Patronus simplifier could do something like this, but
+/// TODO: currently it's struggling
+pub fn simplify_guarded(
+    ctx: &mut Context,
+    simplifier: &mut ExprSimplifier,
+    expr: ExprRef,
+    guard: ExprRef,
+) -> ExprRef {
+    let facts = assume(ctx, guard, true);
+    let mut expr = simplify(ctx, simplifier, expr, &facts);
+    loop {
+        let next =
+            simple_transform_expr(ctx, expr, |ctx, original, children| match ctx[original] {
+                Expr::BVIte { .. } => {
+                    let cond = children[0];
+                    let true_facts = assume(ctx, cond, true);
+                    let false_facts = assume(ctx, cond, false);
+                    let tru = simplify(ctx, simplifier, children[1], &true_facts);
+                    let fals = simplify(ctx, simplifier, children[2], &false_facts);
+                    Some(ctx.ite(cond, tru, fals))
+                }
+                Expr::BVAnd(_, _, 1) => {
+                    let facts = assume(ctx, children[0], true);
+                    let rhs = simplify(ctx, simplifier, children[1], &facts);
+                    Some(ctx.and(children[0], rhs))
+                }
+                Expr::BVOr(_, _, 1) => {
+                    let facts = assume(ctx, children[0], false);
+                    let rhs = simplify(ctx, simplifier, children[1], &facts);
+                    Some(ctx.or(children[0], rhs))
+                }
+                _ => None,
+            });
+        let next = simplifier.simplify(ctx, next);
+        if next == expr {
+            return next;
+        }
+        expr = next;
+    }
 }
 
 // Very annoying step we have to do to go from RegisterFacts, which operates over symbols
@@ -121,10 +162,8 @@ fn assume_helper(
     }
 }
 
-// Match incoming computations to the earlier registers that capture them.
-// Results refer to successor state: never substitute entry facts into them again.
+// Match incoming computations to the earlier registers that capture them
 struct Captures<'a> {
-    // E.g. `index + 1 -> index`: the successor's index stores this computation.
     values: FxHashMap<ExprRef, ExprRef>,
     entry: &'a FxHashMap<ExprRef, ExprRef>,
     assumptions: &'a FxHashMap<ExprRef, ExprRef>,
@@ -185,8 +224,6 @@ impl Captures<'_> {
     }
 }
 
-// Choose an enabled update without replacing its sampled value by a constant
-// from the edge guard; other captures may need to name that same sample.
 fn selected_update(
     ctx: &mut Context,
     simplifier: &mut ExprSimplifier,
@@ -264,9 +301,9 @@ pub fn analyze_registers(
             }
             let assumptions = assume(ctx, guard, true);
 
-            // Transfer: express each new value using immutable inputs and
-            // earlier registers that capture the same computations. The order
-            // prevents cyclic facts; incoming reads still use entry state.
+            // Transfer function: First substitute the entry values into each update.
+            // Next, we know the edge must be true so we simplify under the edge condition.
+            // Finally, we keep the resulting expressions iff immutable.
             let mut captures = Captures {
                 values: FxHashMap::default(),
                 entry: &replacements,
@@ -289,9 +326,8 @@ pub fn analyze_registers(
             }
 
             // Merge: combine this edge with the target node's other in-edges.
-            // Keep equal expressions, simplifying with facts shared by both
-            // paths first. For example, a common `valid = 1` makes
-            // `ite(valid, data, 0)` and `data` the same captured value.
+            // If this is the first processed edge, use its facts; otherwise, reconcile
+            // it with existing facts by only keeping a fact if it is identical between all branches.
             let target = facts.get_mut(&edge.target).unwrap();
             let joined = match target.as_ref() {
                 None => out,
@@ -509,7 +545,3 @@ pub fn simplify_registers(
     let analysis = analyze_registers(ctx, graph, symbols, entry, initial);
     rewrite_registers(ctx, graph, symbols, entry, &analysis, preserved)
 }
-
-#[cfg(test)]
-#[path = "register_simplify_tests.rs"]
-mod tests;

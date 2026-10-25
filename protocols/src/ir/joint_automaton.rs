@@ -6,7 +6,7 @@ use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
 use crate::ir::proto_graph::{
-    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr
+    Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr,
 };
 
 /// TODO: This should probbaly be standardized somewhere in the frontend
@@ -171,7 +171,7 @@ pub fn analyze_shape(
     })
 }
 
-// arguments need to be renamed for the specific transaction instance to
+// Arguments and state need to be renamed for the specific transaction instance to
 // prevent collisions between concurrently running protocols
 pub fn joint_argument_substitutions(
     ctx: &mut Context,
@@ -180,16 +180,17 @@ pub fn joint_argument_substitutions(
     symbols: &SymbolTable,
     slot: usize,
 ) -> FxHashMap<ExprRef, ExprRef> {
-    // give this transaction's arguments names that cannot collide with other slots.
+    // Give arguments and retained state distinct names for each transaction slot.
     protocol
         .args
         .iter()
-        .filter_map(|arg| {
-            let symbol = arg.symbol();
+        .map(|arg| arg.symbol())
+        .chain(graph.register_inits.keys().copied())
+        .filter_map(|symbol| {
             let old = graph.symbol_expr(symbol)?;
             let width = old
                 .get_bv_type(ctx)
-                .expect("protocol arguments must be bit vectors");
+                .expect("protocol arguments and state must be bit vectors");
             let name = symbols[symbol].name();
             let new = ctx.bv_symbol(&format!("joint.{name}#{slot}_{}", protocol.name), width);
             Some((old, new))
@@ -374,7 +375,7 @@ pub fn prepare_joint_protocols(
         .iter()
         .map(|protocol| {
             let mut lowerer = Lowerer::new(protocol.ctx.clone(), symbols);
-            let fragment = lowerer.lower_protocol_fragment(ctx, protocol, false);
+            let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
             lowerer.ir.garbage_collect_unreachable(ctx, false);
