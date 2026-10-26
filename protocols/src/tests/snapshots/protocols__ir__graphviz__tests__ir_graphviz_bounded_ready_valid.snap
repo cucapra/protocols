@@ -9,36 +9,42 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node14 [label="1"];
-  node14 [label="[1] D.valid := X\n[1] D.data := X"];
-  node14 -> node13 [label="1"];
-  node13 [label="[1] D.data := data"];
-  node13 -> node12 [label="1"];
-  node12 [label="[1] D.valid := 1"];
-  node12 -> node11 [label="1"];
+  node0 -> node17 [label="1"];
+  node17 [label="[1] D.valid := X\n[1] D.data := X"];
+  node17 -> node16 [label="1"];
+  node16 [label="[1] D.data := data"];
+  node16 -> node15 [label="1"];
+  node15 [label="[1] D.valid := 1"];
+  node15 -> node14 [label="1"];
+  node14 [label=""];
+  node14 -> node12 [label="not(D.ready)"];
+  node14 -> node13 [label="D.ready"];
+  node12 [label=""];
+  node12 -> node11 [label="1 / step"];
+  node13 [label=""];
+  node13 -> node4 [label="1"];
   node11 [label=""];
-  node11 -> node9 [label="not(D.ready)"];
-  node11 -> node10 [label="D.ready"];
-  node9 [label=""];
-  node9 -> node8 [label="1 / step"];
-  node10 [label=""];
-  node10 -> node3 [label="1"];
-  node8 [label=""];
-  node8 -> node6 [label="not(D.ready)"];
-  node8 -> node7 [label="D.ready"];
-  node3 [label=""];
-  node3 -> node2 [label="1"];
-  node6 [label=""];
-  node6 -> node5 [label="1 / step"];
-  node7 [label=""];
-  node7 -> node4 [label="1"];
-  node2 [label=""];
-  node2 -> node1 [label="1 / step"];
-  node5 [label="[1] assert_eq(D.ready, 1)"];
-  node5 -> node4 [label="1"];
+  node11 -> node10 [label="1"];
   node4 [label=""];
   node4 -> node3 [label="1"];
+  node10 [label=""];
+  node10 -> node8 [label="not(D.ready)"];
+  node10 -> node9 [label="D.ready"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
+  node8 [label=""];
+  node8 -> node7 [label="1 / step"];
+  node9 [label=""];
+  node9 -> node5 [label="1"];
+  node2 [label=""];
+  node2 -> node1 [label="1"];
+  node7 [label=""];
+  node7 -> node6 [label="1"];
+  node5 [label=""];
+  node5 -> node4 [label="1"];
   node1 [label="[1] done\n[1] D.valid := X\n[1] D.data := X"];
+  node6 [label="[1] assert_eq(D.ready, 1)"];
+  node6 -> node5 [label="1"];
 }
 
 == post-contract ==
@@ -47,15 +53,15 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.valid := 1\n[1] D.data := data"];
-  node0 -> node8 [label="not(D.ready) / step"];
-  node0 -> node1 [label="D.ready / step"];
-  node8 [label=""];
-  node8 -> node5 [label="not(D.ready) / step"];
-  node8 -> node1 [label="D.ready / step"];
-  node1 [label="[1] done\n[1] D.valid := X\n[1] D.data := X"];
-  node5 [label="[1] assert_eq(D.ready, 1)"];
-  node5 -> node1 [label="1 / step"];
+  node0 [label="[1] D.valid := 1\n[1] $previous_valid := ite(1, 1, $previous_valid); ite(1, $previous_valid, $previous_valid)\n[1] $previous_valid_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_valid_is_x))\n[1] D.data := data\n[1] $previous_data := ite(1, data, $previous_data); ite(1, $previous_data, $previous_data)\n[1] $previous_data_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_data_is_x))"];
+  node0 -> node11 [label="not(D.ready) / step"];
+  node0 -> node2 [label="D.ready / step"];
+  node11 [label="[1] D.valid := X if $previous_valid_is_x; $previous_valid if not($previous_valid_is_x)\n[1] D.data := X if $previous_data_is_x; $previous_data if not($previous_data_is_x)"];
+  node11 -> node7 [label="not(D.ready) / step"];
+  node11 -> node2 [label="D.ready / step"];
+  node2 [label="[1] D.valid := X; $previous_valid if not($previous_valid_is_x)\n[1] D.data := X; $previous_data if not($previous_data_is_x)\n[1] done\n[1] $previous_valid := ite(1, $previous_valid, $previous_valid)\n[1] $previous_valid_is_x := ite(1, 1, ite(0, 0, $previous_valid_is_x))\n[1] $previous_data := ite(1, $previous_data, $previous_data)\n[1] $previous_data_is_x := ite(1, 1, ite(0, 0, $previous_data_is_x))"];
+  node7 [label="[1] D.valid := X if $previous_valid_is_x; $previous_valid if not($previous_valid_is_x)\n[1] D.data := X if $previous_data_is_x; $previous_data if not($previous_data_is_x)\n[1] assert_eq(D.ready, 1)"];
+  node7 -> node2 [label="1 / step"];
 }
 
 == post-simplification ==
@@ -65,31 +71,14 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] D.valid := 1\n[1] D.data := data"];
-  node0 -> node8 [label="not(D.ready) / step"];
-  node0 -> node1 [label="D.ready / step"];
-  node8 [label="[1] D.valid := 1\n[1] D.data := data"];
-  node8 -> node5 [label="not(D.ready) / step"];
-  node8 -> node1 [label="D.ready / step"];
-  node1 [label="[1] done\n[1] D.valid := X\n[1] D.data := X"];
-  node5 [label="[1] assert_eq(D.ready, 1)\n[1] D.valid := 1\n[1] D.data := data"];
-  node5 -> node1 [label="1 / step"];
-}
-
-== post-normalize ==
-digraph "send_data" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] D.valid := 1\n[1] D.data := data"];
-  node0 -> node8 [label="not(D.ready) / step"];
-  node0 -> node1 [label="D.ready / step"];
-  node8 [label="[1] D.valid := 1\n[1] D.data := data"];
-  node8 -> node5 [label="not(D.ready) / step"];
-  node8 -> node1 [label="D.ready / step"];
-  node1 [label="[1] done\n[1] D.valid := X\n[1] D.data := X"];
-  node5 [label="[1] assert_eq(D.ready, 1)\n[1] D.valid := 1\n[1] D.data := data"];
-  node5 -> node1 [label="1 / step"];
+  node0 -> node11 [label="not(D.ready) / step"];
+  node0 -> node2 [label="D.ready / step"];
+  node11 [label="[1] D.valid := 1\n[1] D.data := data"];
+  node11 -> node7 [label="not(D.ready) / step"];
+  node11 -> node2 [label="D.ready / step"];
+  node2 [label="[1] D.valid := X\n[1] D.data := X\n[1] done"];
+  node7 [label="[1] D.valid := 1\n[1] D.data := data\n[1] assert_eq(D.ready, 1)"];
+  node7 -> node2 [label="1 / step"];
 }
 
 == simplified monitor ==
@@ -105,6 +94,6 @@ digraph "send_data" {
   node1 -> node3 [label="not(D.ready) / step"];
   node1 -> node2 [label="D.ready / step"];
   node2 [label="[1] done"];
-  node3 [label="[1] assert_eq(D.ready, 1)\n[1] assert_eq(D.valid, 1)\n[1] assert_eq($monitor_data_value, D.data)"];
+  node3 [label="[1] assert_eq(D.valid, 1)\n[1] assert_eq($monitor_data_value, D.data)\n[1] assert_eq(D.ready, 1)"];
   node3 -> node2 [label="1 / step"];
 }

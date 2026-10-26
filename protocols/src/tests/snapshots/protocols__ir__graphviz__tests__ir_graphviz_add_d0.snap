@@ -9,26 +9,28 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X"];
   node10 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := X"];
+  node9 [label="[1] DUT.b := X"];
   node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := X"];
+  node8 [label="[1] DUT.a := a"];
   node8 -> node7 [label="1"];
-  node7 [label="[1] DUT.a := a"];
-  node7 -> node6 [label="1"];
+  node7 [label=""];
+  node7 -> node5 [label="eq(DUT.s, 0)"];
+  node7 -> node6 [label="not(eq(DUT.s, 0))"];
+  node5 [label=""];
+  node5 -> node4 [label="1"];
   node6 [label=""];
-  node6 -> node4 [label="eq(DUT.s, 0)"];
-  node6 -> node5 [label="not(eq(DUT.s, 0))"];
+  node6 -> node4 [label="1"];
   node4 [label=""];
   node4 -> node3 [label="1"];
-  node5 [label=""];
-  node5 -> node3 [label="1"];
   node3 [label=""];
-  node3 -> node2 [label="1"];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -38,9 +40,9 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a := ite(1, a, $previous_a); ite(1, $previous_a, $previous_a); ite(1, $previous_a, $previous_a)\n[1] $previous_a_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x))\n[1] DUT.b := X\n[1] $previous_b := ite(1, $previous_b, $previous_b); ite(1, $previous_b, $previous_b)\n[1] $previous_b_is_x := ite(1, 1, ite(0, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x))"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a if not($previous_a_is_x)\n[1] DUT.b := X; $previous_b if not($previous_b_is_x)\n[1] done\n[1] $previous_a := ite(1, $previous_a, $previous_a)\n[1] $previous_a_is_x := ite(1, 1, ite(0, 0, $previous_a_is_x))\n[1] $previous_b := ite(1, $previous_b, $previous_b)\n[1] $previous_b_is_x := ite(1, 1, ite(0, 0, $previous_b_is_x))"];
 }
 
 == post-simplification ==
@@ -50,19 +52,8 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_combinational_illegal_observation_in_conditional" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -83,19 +74,21 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
-  node7 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node8 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X"];
   node7 -> node6 [label="1"];
-  node6 [label="[1] DUT.a := X"];
+  node6 [label="[1] DUT.b := X"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] DUT.a := a"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] DUT.a := a"];
+  node4 [label="[1] assert_eq(DUT.s, s)"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] assert_eq(DUT.s, s)"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -105,9 +98,9 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := X\n[1] assert_eq(DUT.s, s)"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a_1 := ite(1, a, $previous_a_1); ite(1, $previous_a_1, $previous_a_1); ite(1, $previous_a_1, $previous_a_1)\n[1] $previous_a_is_x_1 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_1))\n[1] DUT.b := X\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1); ite(1, $previous_b_1, $previous_b_1)\n[1] $previous_b_is_x_1 := ite(1, 1, ite(0, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_1))\n[1] assert_eq(DUT.s, s)"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_1 if not($previous_a_is_x_1)\n[1] DUT.b := X; $previous_b_1 if not($previous_b_is_x_1)\n[1] done\n[1] $previous_a_1 := ite(1, $previous_a_1, $previous_a_1)\n[1] $previous_a_is_x_1 := ite(1, 1, ite(0, 0, $previous_a_is_x_1))\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1)\n[1] $previous_b_is_x_1 := ite(1, 1, ite(0, 0, $previous_b_is_x_1))"];
 }
 
 == post-simplification ==
@@ -116,20 +109,9 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] assert_eq(DUT.s, s)\n[1] DUT.a := a\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_combinational_illegal_observation_in_assertion" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] assert_eq(DUT.s, s)\n[1] DUT.a := a\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] DUT.b := X\n[1] assert_eq(DUT.s, s)"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -150,20 +132,22 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node7 [label="1"];
-  node7 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node7 -> node6 [label="1"];
+  node0 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node8 -> node7 [label="1"];
+  node7 [label=""];
+  node7 -> node5 [label="eq(DUT.s, 0)"];
+  node7 -> node6 [label="not(eq(DUT.s, 0))"];
+  node5 [label="[1] DUT.a := a"];
+  node5 -> node4 [label="1"];
   node6 [label=""];
-  node6 -> node4 [label="eq(DUT.s, 0)"];
-  node6 -> node5 [label="not(eq(DUT.s, 0))"];
-  node4 [label="[1] DUT.a := a"];
+  node6 -> node4 [label="1"];
+  node4 [label=""];
   node4 -> node3 [label="1"];
-  node5 [label=""];
-  node5 -> node3 [label="1"];
   node3 [label=""];
-  node3 -> node2 [label="1"];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -173,9 +157,9 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := X if not(eq(DUT.s, 0)); a if eq(DUT.s, 0)\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := X if not(eq(DUT.s, 0)); a if eq(DUT.s, 0)\n[1] $previous_a_2 := ite(1, a, $previous_a_2) if eq(DUT.s, 0); ite(1, $previous_a_2, $previous_a_2)\n[1] $previous_a_is_x_2 := ite(0, 1, ite(1, 0, 1)) if eq(DUT.s, 0); ite(1, 1, ite(0, 0, $previous_a_is_x_2))\n[1] DUT.b := X\n[1] $previous_b_2 := ite(1, $previous_b_2, $previous_b_2)\n[1] $previous_b_is_x_2 := ite(1, 1, ite(0, 0, $previous_b_is_x_2))"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_2 if not($previous_a_is_x_2)\n[1] DUT.b := X; $previous_b_2 if not($previous_b_is_x_2)\n[1] done\n[1] $previous_a_2 := ite(1, $previous_a_2, $previous_a_2)\n[1] $previous_a_is_x_2 := ite(1, 1, ite(0, 0, $previous_a_is_x_2))\n[1] $previous_b_2 := ite(1, $previous_b_2, $previous_b_2)\n[1] $previous_b_is_x_2 := ite(1, 1, ite(0, 0, $previous_b_is_x_2))"];
 }
 
 == post-simplification ==
@@ -185,19 +169,8 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := X if not(eq(DUT.s, 0)); a if eq(DUT.s, 0)\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_combinational_legal_observation_illegal_assignment" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := X if not(eq(DUT.s, 0)); a if eq(DUT.s, 0)\n[1] DUT.b := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -218,17 +191,19 @@ digraph "add_combinational" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node6 [label="1"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node7 [label="1"];
+  node7 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.a := a"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.a := a"];
+  node5 [label="[1] DUT.b := b"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] DUT.b := b"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] assert_eq(s, DUT.s)"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -238,9 +213,9 @@ digraph "add_combinational" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a_3 := ite(1, a, $previous_a_3); ite(1, $previous_a_3, $previous_a_3)\n[1] $previous_a_is_x_3 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_3))\n[1] DUT.b := b\n[1] $previous_b_3 := ite(1, b, $previous_b_3); ite(1, $previous_b_3, $previous_b_3)\n[1] $previous_b_is_x_3 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_3))\n[1] assert_eq(s, DUT.s)"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_3 if not($previous_a_is_x_3)\n[1] DUT.b := X; $previous_b_3 if not($previous_b_is_x_3)\n[1] done\n[1] $previous_a_3 := ite(1, $previous_a_3, $previous_a_3)\n[1] $previous_a_is_x_3 := ite(1, 1, ite(0, 0, $previous_a_is_x_3))\n[1] $previous_b_3 := ite(1, $previous_b_3, $previous_b_3)\n[1] $previous_b_is_x_3 := ite(1, 1, ite(0, 0, $previous_b_is_x_3))"];
 }
 
 == post-simplification ==
@@ -249,20 +224,9 @@ digraph "add_combinational" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_combinational" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==

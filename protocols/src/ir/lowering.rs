@@ -245,8 +245,8 @@ impl<'a> Lowerer<'a> {
     ) {
         // The newly lowered transaction is still disconnected from the existing
         // trace graph, so propagation has to start from the fragment entry.
-        contract_edges_from(ctx, &mut self.ir, self.symbols, fragment.entry);
         let initial = insert_assignment_registers(ctx, &mut self.ir, self.symbols, fragment.entry);
+        contract_edges_from(ctx, &mut self.ir, self.symbols, fragment.entry);
         simplify_assignments_from(ctx, &mut self.ir, self.symbols, fragment.entry, &initial);
     }
 
@@ -443,10 +443,13 @@ impl<'a> Lowerer<'a> {
                 node_id
             }
             Stmt::Step => {
-                let node_id = self.n(Node::empty());
-                let true_id = ctx.get_true();
+                // give propagation a separate place to restore held inputs after the step
+                let restore = self.n(Node::empty());
                 self.ir
-                    .push_transition(node_id, Transition::new(true_id, exit, true));
+                    .push_transition(restore, Transition::new(ctx.get_true(), exit, false));
+                let node_id = self.n(Node::empty());
+                self.ir
+                    .push_transition(node_id, Transition::new(ctx.get_true(), restore, true));
                 node_id
             }
             Stmt::Fork => {
@@ -736,8 +739,8 @@ impl<'a> Lowerer<'a> {
             .push_transition(entry, Transition::new(true_id, body_entry, false));
 
         if postprocess {
-            contract_edges_from(ctx, &mut self.ir, self.symbols, entry);
             let initial = insert_assignment_registers(ctx, &mut self.ir, self.symbols, entry);
+            contract_edges_from(ctx, &mut self.ir, self.symbols, entry);
             simplify_assignments_from(ctx, &mut self.ir, self.symbols, entry, &initial);
         }
 

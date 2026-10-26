@@ -9,22 +9,26 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node8 [label="1"];
-  node8 [label="[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
-  node8 -> node7 [label="1"];
-  node7 [label="[1] D.m_axis_tdata := data"];
-  node7 -> node6 [label="1"];
-  node6 [label="[1] D.m_axis_tvalid := 1"];
-  node6 -> node4 [label="1"];
-  node4 [label=""];
-  node4 -> node5 [label="not(D.m_axis_tready)"];
-  node4 -> node3 [label="D.m_axis_tready"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] D.m_axis_tdata := data"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] D.m_axis_tvalid := 1"];
+  node8 -> node5 [label="1"];
   node5 [label=""];
-  node5 -> node4 [label="1 / step"];
+  node5 -> node7 [label="not(D.m_axis_tready)"];
+  node5 -> node4 [label="D.m_axis_tready"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node4 [label=""];
+  node4 -> node3 [label="1"];
+  node6 [label=""];
+  node6 -> node5 [label="1"];
   node3 [label=""];
-  node3 -> node2 [label="1"];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
 }
 
@@ -34,13 +38,13 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
-  node4 [label=""];
-  node4 -> node4 [label="not(D.m_axis_tready) / step"];
-  node4 -> node1 [label="D.m_axis_tready / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 [label="[1] D.m_axis_tvalid := 1\n[1] $previous_m_axis_tvalid := ite(1, 1, $previous_m_axis_tvalid); ite(1, $previous_m_axis_tvalid, $previous_m_axis_tvalid)\n[1] $previous_m_axis_tvalid_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_m_axis_tvalid_is_x))\n[1] D.m_axis_tdata := data\n[1] $previous_m_axis_tdata := ite(1, data, $previous_m_axis_tdata); ite(1, $previous_m_axis_tdata, $previous_m_axis_tdata)\n[1] $previous_m_axis_tdata_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_m_axis_tdata_is_x))"];
+  node0 -> node6 [label="not(D.m_axis_tready) / step"];
+  node0 -> node2 [label="D.m_axis_tready / step"];
+  node6 [label="[1] D.m_axis_tvalid := X if $previous_m_axis_tvalid_is_x; $previous_m_axis_tvalid if not($previous_m_axis_tvalid_is_x)\n[1] D.m_axis_tdata := X if $previous_m_axis_tdata_is_x; $previous_m_axis_tdata if not($previous_m_axis_tdata_is_x)"];
+  node6 -> node6 [label="not(D.m_axis_tready) / step"];
+  node6 -> node2 [label="D.m_axis_tready / step"];
+  node2 [label="[1] D.m_axis_tvalid := X; $previous_m_axis_tvalid if not($previous_m_axis_tvalid_is_x)\n[1] D.m_axis_tdata := X; $previous_m_axis_tdata if not($previous_m_axis_tdata_is_x)\n[1] done\n[1] $previous_m_axis_tvalid := ite(1, $previous_m_axis_tvalid, $previous_m_axis_tvalid)\n[1] $previous_m_axis_tvalid_is_x := ite(1, 1, ite(0, 0, $previous_m_axis_tvalid_is_x))\n[1] $previous_m_axis_tdata := ite(1, $previous_m_axis_tdata, $previous_m_axis_tdata)\n[1] $previous_m_axis_tdata_is_x := ite(1, 1, ite(0, 0, $previous_m_axis_tdata_is_x))"];
 }
 
 == post-simplification ==
@@ -50,27 +54,12 @@ digraph "send_data" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
-  node4 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node4 -> node4 [label="not(D.m_axis_tready) / step"];
-  node4 -> node1 [label="D.m_axis_tready / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
-}
-
-== post-normalize ==
-digraph "send_data" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node0 -> node4 [label="not(D.m_axis_tready) / step"];
-  node0 -> node1 [label="D.m_axis_tready / step"];
-  node4 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
-  node4 -> node4 [label="not(D.m_axis_tready) / step"];
-  node4 -> node1 [label="D.m_axis_tready / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 -> node6 [label="not(D.m_axis_tready) / step"];
+  node0 -> node2 [label="D.m_axis_tready / step"];
+  node6 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := data"];
+  node6 -> node6 [label="not(D.m_axis_tready) / step"];
+  node6 -> node2 [label="D.m_axis_tready / step"];
+  node2 [label="[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -95,13 +84,15 @@ digraph "idle" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node4 [label="1"];
-  node4 [label="[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 -> node5 [label="1"];
+  node5 [label="[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] D.m_axis_tvalid := 0"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] D.m_axis_tvalid := 0"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
 }
 
@@ -111,9 +102,9 @@ digraph "idle" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0\n[1] D.m_axis_tdata := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 [label="[1] D.m_axis_tvalid := 0\n[1] $previous_m_axis_tvalid_1 := ite(1, 0, $previous_m_axis_tvalid_1); ite(1, $previous_m_axis_tvalid_1, $previous_m_axis_tvalid_1)\n[1] $previous_m_axis_tvalid_is_x_1 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_m_axis_tvalid_is_x_1))\n[1] D.m_axis_tdata := X\n[1] $previous_m_axis_tdata_1 := ite(1, $previous_m_axis_tdata_1, $previous_m_axis_tdata_1)\n[1] $previous_m_axis_tdata_is_x_1 := ite(1, 1, ite(0, 0, $previous_m_axis_tdata_is_x_1))"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] D.m_axis_tvalid := X; $previous_m_axis_tvalid_1 if not($previous_m_axis_tvalid_is_x_1)\n[1] D.m_axis_tdata := X; $previous_m_axis_tdata_1 if not($previous_m_axis_tdata_is_x_1)\n[1] done\n[1] $previous_m_axis_tvalid_1 := ite(1, $previous_m_axis_tvalid_1, $previous_m_axis_tvalid_1)\n[1] $previous_m_axis_tvalid_is_x_1 := ite(1, 1, ite(0, 0, $previous_m_axis_tvalid_is_x_1))\n[1] $previous_m_axis_tdata_1 := ite(1, $previous_m_axis_tdata_1, $previous_m_axis_tdata_1)\n[1] $previous_m_axis_tdata_is_x_1 := ite(1, 1, ite(0, 0, $previous_m_axis_tdata_is_x_1))"];
 }
 
 == post-simplification ==
@@ -123,19 +114,8 @@ digraph "idle" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] D.m_axis_tvalid := 0\n[1] D.m_axis_tdata := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
-}
-
-== post-normalize ==
-digraph "idle" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] D.m_axis_tvalid := 0\n[1] D.m_axis_tdata := X"];
-  node0 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X"];
+  node0 -> node2 [label="1 / step"];
+  node2 [label="[1] D.m_axis_tvalid := X\n[1] D.m_axis_tdata := X\n[1] done"];
 }
 
 == simplified monitor ==
