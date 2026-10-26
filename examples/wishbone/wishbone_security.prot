@@ -70,6 +70,12 @@ prot idle_no_cycle<self: Wishbone>() {
     // NEW: Acks are not allowed when CYC = 0, i.e. there is no bus cycle in progress (adapted from Xray P8)
     assert_eq(self.ACK, 1'b0);
 
+    // NEW: should error & retry signals should be zeroed out outside of a bus cycle?
+    // (eXpect rules say that there should only be response if there is a corresponding request, 
+    // so it seems natural to zero these signals if there is no bus cycle)
+    assert_eq(self.ERR, 1'b0);
+    assert_eq(self.RTY, 1'b0);
+
     // NEW: data from the subordinate should also be zeroed out when there's no transfer (eXpect P16)
     assert_eq(self.DAT_I, 32'b0);
 
