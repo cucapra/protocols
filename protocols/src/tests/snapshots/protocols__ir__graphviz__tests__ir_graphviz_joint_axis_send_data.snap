@@ -11,7 +11,7 @@ digraph "send_data" {
   node0 [label="[not(choice_valid)] done\n[1] D.m_axis_tvalid := X if not(choice_valid); 1 if choice_valid\n[1] D.m_axis_tdata := X if not(choice_valid); joint.data#0_send_data if choice_valid"];
   node0 -> node1 [label="and(not(D.m_axis_tready), choice_valid) / step"];
   node0 -> node0 [label="and(D.m_axis_tready, choice_valid) / step / R_send_data"];
-  node1 [label="[1] D.m_axis_tvalid := 1 if 1\n[1] D.m_axis_tdata := joint.data#0_send_data if 1"];
+  node1 [label="[1] D.m_axis_tvalid := 1\n[1] D.m_axis_tdata := joint.data#0_send_data"];
   node1 -> node0 [label="D.m_axis_tready / step / R_send_data"];
   node1 -> node1 [label="not(D.m_axis_tready) / step"];
 }
@@ -22,11 +22,11 @@ digraph "send_data" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] done\n[1] $monitor_data_value#0_send_data := D.m_axis_tdata if 1\n[1] $monitor_live#0_send_data := 0 if not(D.m_axis_tvalid); 1 if 1"];
+  node0 [label="[1] done\n[1] $monitor_data_value#0_send_data := D.m_axis_tdata\n[1] $monitor_live#0_send_data := 0 if not(D.m_axis_tvalid); 1"];
   node0 -> node1 [label="and(not(D.m_axis_tready), $monitor_live#0_send_data) / step"];
   node0 -> node0 [label="and(D.m_axis_tready, $monitor_live#0_send_data) / step / R_send_data"];
   node0 -> node2 [label="not($monitor_live#0_send_data) / step"];
-  node1 [label="[1] $monitor_live#0_send_data := 0 if not(and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata))); $monitor_live#0_send_data if 1"];
+  node1 [label="[1] $monitor_live#0_send_data := 0 if not(and(D.m_axis_tvalid, eq($monitor_data_value#0_send_data, D.m_axis_tdata))); $monitor_live#0_send_data"];
   node1 -> node0 [label="and(D.m_axis_tready, $monitor_live#0_send_data) / step / R_send_data"];
   node1 -> node1 [label="and(not(D.m_axis_tready), $monitor_live#0_send_data) / step"];
   node1 -> node2 [label="not($monitor_live#0_send_data) / step"];
