@@ -132,7 +132,7 @@ prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
 
     while self.ACK == 1'b0 {
         // NEW: during writes, the read data should be zeroed out, 
-        // (inspired by eXpect properties)
+        // (inspired by eXpect / Xray properties)
         assert_eq(self.DAT_I, 1'b0);
         step();
     }
@@ -164,7 +164,7 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     self.WE := 1'b0;
 
     // NEW: During a read transaction, write data should be zeroed out 
-    // (inspired by eXpect properties)
+    // (inspired by eXpect / Xray properties)
     self.DAT_O := 1'b0;
 
     // apply parameters
