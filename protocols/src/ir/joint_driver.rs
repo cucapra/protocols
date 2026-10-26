@@ -134,14 +134,21 @@ pub fn build_joint_driver_automaton(
             if instance.starts {
                 choices.push((copied, launches[instance.protocol]));
             } else {
-                lowerer.graft_contracted_entry(ctx, node, copied, ctx.get_true());
+                Lowerer::graft_contracted_entry(
+                    lowerer.symbols,
+                    ctx,
+                    &mut lowerer.ir,
+                    node,
+                    copied,
+                    ctx.get_true(),
+                );
             }
         }
         if !choices.is_empty() {
             lowerer.graft_disjoint_contracted_entries(ctx, node, &choices);
         }
     }
-    lowerer.ir.garbage_collect_unreachable(ctx);
+    lowerer.ir.garbage_collect_unreachable(ctx, false);
     lowerer.ir.simplify_all_exprs(ctx);
     Ok(JointDriverAutomaton {
         graph: lowerer.ir,

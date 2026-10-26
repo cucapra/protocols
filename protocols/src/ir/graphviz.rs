@@ -14,12 +14,31 @@ pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable
     to_dot_string_with_node_labels(ctx, protocol, symbols, &[])
 }
 
+pub fn to_dot_string_from_entry(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    entry: NodeId,
+) -> String {
+    to_dot_string_with_node_labels_from_entry(ctx, protocol, symbols, &[], entry)
+}
+
 /// Add descriptive labels to distinguished states, such as a monitor's bad state.
 pub fn to_dot_string_with_node_labels(
     ctx: &Context,
     protocol: &ProtoGraph,
     symbols: &SymbolTable,
     labels: &[(NodeId, &str)],
+) -> String {
+    to_dot_string_with_node_labels_from_entry(ctx, protocol, symbols, labels, protocol.entry)
+}
+
+fn to_dot_string_with_node_labels_from_entry(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    labels: &[(NodeId, &str)],
+    entry: NodeId,
 ) -> String {
     let mut out = String::new();
     out.push_str(&format!(
@@ -29,11 +48,11 @@ pub fn to_dot_string_with_node_labels(
     out.push_str("  rankdir=LR;\n");
     out.push_str("  node [shape=box];\n");
     out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
-    out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
+    out.push_str(&format!("  entry_marker -> {};\n", entry));
 
     let mut seen: BTreeSet<NodeId> = BTreeSet::new();
-    seen.insert(protocol.entry);
-    let mut q = VecDeque::from([protocol.entry]);
+    seen.insert(entry);
+    let mut q = VecDeque::from([entry]);
     while let Some(node_id) = q.pop_front() {
         let node = protocol[node_id].clone();
 
@@ -128,21 +147,29 @@ fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignme
     let mut parts = Vec::new();
     if assignment.dont_care != ctx.get_false() {
         parts.push(format!(
-            "X if {}",
-            format_expr(ctx, protocol, assignment.dont_care)
+            "X{}",
+            format_guard(ctx, protocol, assignment.dont_care)
         ));
     }
     for (guard, rhs) in &assignment.concretes {
         parts.push(format!(
-            "{} if {}",
+            "{}{}",
             format_expr(ctx, protocol, *rhs),
-            format_expr(ctx, protocol, *guard)
+            format_guard(ctx, protocol, *guard)
         ));
     }
     if parts.is_empty() {
         "internal_assert_false".to_string()
     } else {
         parts.join("; ")
+    }
+}
+
+fn format_guard(ctx: &Context, protocol: &ProtoGraph, guard: ExprRef) -> String {
+    if guard == ctx.get_true() {
+        "".to_string()
+    } else {
+        format!(" if {}", format_expr(ctx, protocol, guard))
     }
 }
 
@@ -285,7 +312,7 @@ mod tests {
             content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
             content += "\n";
 
-            assignment_normalized_ir.garbage_collect_unreachable(&ctx);
+            assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
             let monitor =
                 convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
                     .unwrap();
@@ -316,7 +343,7 @@ mod tests {
         let defs = reaching_definitions(&mut ctx, &mut graph, &symbols);
         propagate_assignments(&mut ctx, &mut graph, &symbols, &defs);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
-        graph.garbage_collect_unreachable(&ctx);
+        graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
         let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
         let dot = driver.to_dot_string(&ctx, &symbols);

@@ -88,7 +88,7 @@ cond = { if ~ else? }
 
 // Annotations on top of functions (only `idle` is supported right now)
 annotation = { "#[" ~ annotation_name ~ "]" }
-annotation_name = { "idle" }
+annotation_name = { "idle" | "reset" }
 
 // Structs
 field = {dir ~ path_id ~ ":" ~ tpe }

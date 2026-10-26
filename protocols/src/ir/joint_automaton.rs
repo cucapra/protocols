@@ -57,13 +57,13 @@ pub struct JointControlAutomaton {
 }
 
 #[derive(Clone)]
-struct ProtocolShape {
-    entry: NodeId,
+pub struct ProtocolShape {
+    pub entry: NodeId,
     /// if there is a fork, the *unique* location of the forking node
-    fork: Option<NodeId>,
-    done: NodeId,
+    pub fork: Option<NodeId>,
+    pub done: NodeId,
     /// the straight-line post-phase.
-    post: Vec<NodeId>,
+    pub post: Vec<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -105,7 +105,7 @@ fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointAutomaton
     }
 }
 
-fn analyze_shape(
+pub fn analyze_shape(
     ctx: &Context,
     graph: &ProtoGraph,
     protocol: &Protocol,
@@ -378,7 +378,7 @@ pub fn prepare_joint_protocols(
             let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
-            lowerer.ir.garbage_collect_unreachable(ctx);
+            lowerer.ir.garbage_collect_unreachable(ctx, false);
             lowerer.ir
         })
         .collect())
@@ -641,7 +641,7 @@ pub fn build_joint_control_automaton(
 
     // remove unreachable nodes and update choice-node metadata after compaction.
     graph.entry = entry;
-    let node_map = graph.garbage_collect_unreachable(ctx);
+    let node_map = graph.garbage_collect_unreachable(ctx, false);
     graph.simplify_all_exprs(ctx);
     let choice_slots = choice_slots
         .into_iter()

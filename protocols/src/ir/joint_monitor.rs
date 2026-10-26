@@ -344,7 +344,7 @@ fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
         actions.push(Action::new(ctx.get_true(), op));
         graph.node_mut(node).actions = actions;
     }
-    let node_map = graph.garbage_collect_unreachable(ctx);
+    let node_map = graph.garbage_collect_unreachable(ctx, false);
     monitor.knownness_outputs = std::mem::take(&mut monitor.knownness_outputs)
         .into_iter()
         .filter_map(|(node, outputs)| Some((*node_map.get(&node)?, outputs)))

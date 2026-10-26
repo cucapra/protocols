@@ -40,6 +40,9 @@ pub struct ProtocolContext {
     /// Whether the protocol has been marked as `idle` with `#[idle]`
     pub is_idle: bool,
 
+    /// Whether the protocol has been marked as `reset` with `#[reset]`
+    pub is_reset: bool,
+
     /// Maps `ExprId`s to their corresponding `Expr`s
     exprs: PrimaryMap<ExprId, Expr>,
 
@@ -79,6 +82,7 @@ impl ProtocolContext {
             args: Vec::default(),
             dut_sym: INVALID_SYMBOL_ID,
             is_idle: false,
+            is_reset: false,
             exprs,
             dont_care_id,
             true_expr_id,
