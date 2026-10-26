@@ -50,6 +50,7 @@ prot reset<self: Wishbone>() {
     self.WE := 1'b0;
     self.DAT_O := 32'd0;
     self.ADR := 32'd0;
+    assert_eq(self.DAT_I, 1'b0);
     assert_eq(self.ACK, 1'b0);
     assert_eq(self.RTY, 1'b0);
     assert_eq(self.ERR, 1'b0);
