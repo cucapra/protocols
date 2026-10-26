@@ -343,7 +343,7 @@ mod tests {
         let defs = reaching_definitions(&mut ctx, &mut graph, &symbols);
         propagate_assignments(&mut ctx, &mut graph, &symbols, &defs);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
-        graph.garbage_collect_unreachable(&ctx);
+        graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
         let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
         let dot = driver.to_dot_string(&ctx, &symbols);
