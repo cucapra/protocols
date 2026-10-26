@@ -168,6 +168,7 @@ fn op_port_width(m: &Module) -> WidthInt {
 
 const DUT_PREFIX: &str = "dut_";
 
+#[allow(clippy::too_many_arguments)]
 fn to_verilog(
     ctx: &Context,
     m: &Module,
@@ -362,6 +363,7 @@ fn assignment_expressions_by_target(pg: &ProtoGraph) -> FxHashMap<SymbolId, Smal
 
 #[derive(Debug)]
 struct ArgPin {
+    #[allow(dead_code)]
     ids: Vec<ArgId>,
     name: String,
     output_reg: Option<SymbolId>,
@@ -369,7 +371,9 @@ struct ArgPin {
 
 #[derive(Debug)]
 struct ArgId {
+    #[allow(dead_code)]
     method_idx: usize,
+    #[allow(dead_code)]
     arg_idx: usize,
 }
 
@@ -664,10 +668,7 @@ fn remove_done(ctx: &mut Context, pg: &mut ProtoGraph, done_state_id: NodeId) {
                 .iter()
                 .map(|t| is_done_state(ctx, pg, t.target))
                 .collect();
-            for (tran, next_is_done_state) in pg[node_id]
-                .transitions
-                .iter_mut()
-                .zip(is_done_state)
+            for (tran, next_is_done_state) in pg[node_id].transitions.iter_mut().zip(is_done_state)
             {
                 if next_is_done_state {
                     tran.target = done_state_id;
@@ -828,7 +829,7 @@ fn lower_proto(st: &mut SymbolTable, ctx: &mut Context, p: &Protocol) -> Monitor
     lowerer.ir.entry = fragment.entry;
     lowerer.ir.garbage_collect_unreachable(ctx, false);
     let auto = convert_driver_to_capturing_driver(ctx, lowerer.ir, st).unwrap();
-    
+
     simplify_monitor(ctx, auto, st)
 }
 
