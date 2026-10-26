@@ -145,7 +145,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     node_labels[done_state_id.as_u32() as usize] = "done".to_string();
 
     // show graph
-    println!("{}", to_dot_string(&ctx, &pg, st));
+    // println!("{}", to_dot_string(&ctx, &pg, st));
 
     let mut verilog = vec![];
     to_verilog(
