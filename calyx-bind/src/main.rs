@@ -5,7 +5,7 @@ use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
+use protocols::frontend::symbol::{Dir, SymbolId, SymbolKind, SymbolTable, Type};
 use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_automaton::analyze_shape;
@@ -13,7 +13,7 @@ use protocols::ir::lowering::Lowerer;
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
 use protocols::ir::simplify_monitor::simplify_monitor;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -263,22 +263,48 @@ fn to_verilog(
         let name = st[reg].name();
         writeln!(out, "      {name} <= next_{name};",)?;
     }
-    writeln!(out, "    end\n",)?;
+    writeln!(out, "    end",)?;
+    writeln!(out, "  end\n",)?;
 
     // connect output pins
+    writeln!(
+        out,
+        "  // connect output arguments to registers that capture them"
+    )?;
     for pin in &arg_pin_info {
-        todo!();
+        if let Some(reg) = pin.output_reg {
+            writeln!(out, "  assign {} = {};", pin.name, st[reg].name())?;
+        }
     }
+    writeln!(out)?;
 
     // combinational
     writeln!(out, "  always_comb begin")?;
+    writeln!(out, "    // register default to their previous values")?;
     writeln!(out, "    next_state = state;")?;
     for (reg, _, _) in auto_regs {
         let name = st[reg].name();
         writeln!(out, "    next_{name} = {name};",)?;
     }
-
-    // TODO: add defaults for outputs
+    writeln!(out)?;
+    writeln!(out, "    // default values for dut inputs")?;
+    let assignments = assignment_expressions_by_target(pg);
+    for pin in &m.pins {
+        if pin.dir() == Dir::In {
+            // TODO: we need to know all the symbols that this pin maps to
+            writeln!(
+                out,
+                "    // TODO: find all the assignments to this particular pin for a better default assignment!"
+            )?;
+            writeln!(
+                out,
+                "    {DUT_PREFIX}{} = {}'d0;",
+                pin.name(),
+                pin.bitwidth()
+            )?;
+        }
+    }
+    writeln!(out)?;
 
     // reset
     writeln!(out, "    if reset begin")?;
@@ -320,6 +346,19 @@ fn to_verilog(
     writeln!(out, "endmodule")?;
 
     Ok(())
+}
+
+fn assignment_expressions_by_target(pg: &ProtoGraph) -> FxHashMap<SymbolId, SmallVecExprRef> {
+    let mut out = FxHashMap::default();
+    for act in pg.nodes().flat_map(|(_, node)| node.actions.iter()) {
+        if let Op::Assign(sym, assign) = &pg[act.op] {
+            let vec = out.entry(*sym).or_insert_with(|| smallvec![]);
+            for (_, expr) in &assign.concretes {
+                vec.push(*expr);
+            }
+        }
+    }
+    out
 }
 
 #[derive(Debug)]
@@ -684,6 +723,8 @@ fn remove_fork(
         }
     }
 }
+
+type SmallVecExprRef = SmallVec<[ExprRef; 4]>;
 
 fn assignment_targets(pg: &ProtoGraph) -> FxHashSet<SymbolId> {
     pg.nodes()
