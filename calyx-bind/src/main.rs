@@ -5,7 +5,7 @@ use protocols::frontend;
 use protocols::frontend::Module;
 use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::DiagnosticHandler;
-use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
+use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_automaton::analyze_shape;
@@ -36,6 +36,10 @@ struct Args {
     /// Name of the top-level module/struct to generate a binding for
     #[arg(short, long)]
     module: String,
+}
+
+fn proto_methods(m: &Module) -> impl Iterator<Item = &Protocol> {
+    m.protos.iter().filter(|p| !p.is_idle && !p.is_reset)
 }
 
 fn gen_driver(st: &mut SymbolTable, m: &Module) {
@@ -86,8 +90,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     }
 
     // guard method starts with op == i && go and merge them into a single start state
-    let op_width = std::cmp::max(1, usize::BITS - (methods.len() - 1).leading_zeros());
-    let op = ctx.bv_symbol("op", op_width);
+    let op = ctx.bv_symbol("op", op_port_width(m));
     let go = ctx.bv_symbol("go", 1);
 
     // common start state
@@ -100,7 +103,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
 
     // merge methods into start state
     for (idx, &&method_entry) in methods.iter().enumerate() {
-        let idx = ctx.bit_vec_val(idx, op_width);
+        let idx = ctx.bit_vec_val(idx, op_port_width(m));
         let selected = ctx.equal(op, idx);
         let selected_and_go = and(&mut ctx, go, selected);
         Lowerer::graft_contracted_entry(
@@ -159,6 +162,11 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     println!("{}", std::str::from_utf8(verilog.as_slice()).unwrap())
 }
 
+fn op_port_width(m: &Module) -> WidthInt {
+    let num_methods = proto_methods(m).count();
+    std::cmp::max(1, usize::BITS - (num_methods - 1).leading_zeros())
+}
+
 const DUT_PREFIX: &str = "dut_";
 
 fn to_verilog(
@@ -171,6 +179,44 @@ fn to_verilog(
     auto_regs: &[(SymbolId, ExprRef, SymbolId)],
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
+    // module I/O
+    writeln!(
+        out,
+        "// this file was generated from a protocol using calyx-bind"
+    )?;
+    writeln!(out, "module {}Bind(", m.name)?;
+    writeln!(out, "  input  {} clk,   // global clock", logic(1))?;
+    writeln!(
+        out,
+        "  input  {} reset, // 1-cycle active-high reset",
+        logic(1)
+    )?;
+    writeln!(
+        out,
+        "  input  {} go,    // calyx standard control",
+        logic(1)
+    )?;
+    writeln!(
+        out,
+        "  output {} done,  // calyx standard control",
+        logic(1)
+    )?;
+    let ops: Vec<_> = proto_methods(m)
+        .enumerate()
+        .map(|(i, p)| format!("{i}={}", p.name))
+        .collect();
+    writeln!(
+        out,
+        "  input  {} op,    // {}",
+        logic(op_port_width(m)),
+        ops.join(", ")
+    )?;
+    let arg_pin_info = arg_pins(st, m, auto_regs, out)?;
+    writeln!(out, ");\n")?;
+
+    verilog_dut_instance(m, "  ", out)?;
+    writeln!(out)?;
+
     let num_states = pg.nodes().count();
     assert_eq!(num_states, node_labels.len());
     let state_labels: Vec<_> = node_labels
@@ -178,8 +224,6 @@ fn to_verilog(
         .map(|l| format!("ST_{}", l.to_uppercase()))
         .collect();
     let state_width = usize::BITS - num_states.leading_zeros();
-
-    verilog_dut_instance(m, "  ", out)?;
 
     writeln!(out, "  typedef enum logic [{}:0] {{", state_width - 1)?;
     for (idx, lbl) in state_labels.iter().enumerate() {
@@ -197,7 +241,7 @@ fn to_verilog(
         )?;
     }
     writeln!(out)?;
-    // state register
+    // registers
     writeln!(out, "  always_ff @(posedge clk) begin")?;
     writeln!(out, "    if reset begin",)?;
     writeln!(
@@ -220,6 +264,11 @@ fn to_verilog(
         writeln!(out, "      {name} <= next_{name};",)?;
     }
     writeln!(out, "    end\n",)?;
+
+    // connect output pins
+    for pin in &arg_pin_info {
+        todo!();
+    }
 
     // combinational
     writeln!(out, "  always_comb begin")?;
@@ -268,7 +317,104 @@ fn to_verilog(
     writeln!(out, "    end")?;
 
     writeln!(out, "  end")?;
+    writeln!(out, "endmodule")?;
 
+    Ok(())
+}
+
+#[derive(Debug)]
+struct ArgPin {
+    ids: Vec<ArgId>,
+    name: String,
+    output_reg: Option<SymbolId>,
+}
+
+#[derive(Debug)]
+struct ArgId {
+    method_idx: usize,
+    arg_idx: usize,
+}
+
+fn arg_pins(
+    st: &SymbolTable,
+    m: &Module,
+    auto_regs: &[(SymbolId, ExprRef, SymbolId)],
+    out: &mut impl std::io::Write,
+) -> std::io::Result<Vec<ArgPin>> {
+    let arg_to_reg: FxHashMap<_, _> = auto_regs.iter().map(|(reg, _, arg)| (*arg, *reg)).collect();
+
+    let mut pins_by_name = FxHashMap::default();
+    for (idx, p) in proto_methods(m).enumerate() {
+        for (arg_idx, arg) in p.args.iter().enumerate() {
+            let sym = &st[arg.symbol()];
+            assert!(sym.is_arg());
+            let output_reg = arg_to_reg.get(&arg.symbol()).cloned();
+            pins_by_name
+                .entry(sym.name().to_string())
+                .or_insert_with(|| vec![])
+                .push((idx, arg_idx, sym.tpe(), output_reg))
+        }
+    }
+
+    let mut pins_by_name: Vec<_> = pins_by_name.into_iter().collect();
+    pins_by_name.sort();
+    let method_names: Vec<_> = proto_methods(m).map(|p| p.name.to_string()).collect();
+    let mut arg_pins = vec![];
+    for (name, mut pins) in pins_by_name {
+        debug_assert!(!pins.is_empty());
+        pins.sort();
+        let all_same = pins
+            .iter()
+            .all(|(_, _, tpe, reg)| tpe == &pins[0].2 && reg == &pins[0].3);
+        let full_names: Vec<_> = pins
+            .iter()
+            .map(|(idx, ..)| format!("{}.{name}", method_names[*idx]))
+            .collect();
+        if all_same {
+            declare_pin(&name, &pins[0], &full_names.join(", "), out)?;
+            let ids = pins
+                .iter()
+                .map(|&(method_idx, arg_idx, ..)| ArgId {
+                    method_idx,
+                    arg_idx,
+                })
+                .collect();
+            arg_pins.push(ArgPin {
+                ids,
+                name: name.clone(),
+                output_reg: pins[0].3,
+            });
+        } else {
+            for pin in &pins {
+                let name = format!("{}_{name}", &method_names[pin.0]);
+                let comment = format!("{}.{name}", &method_names[pin.0]);
+                declare_pin(&name, pin, &comment, out)?;
+                arg_pins.push(ArgPin {
+                    ids: vec![ArgId {
+                        method_idx: pin.0,
+                        arg_idx: pin.1,
+                    }],
+                    name,
+                    output_reg: pin.3,
+                });
+            }
+        }
+    }
+    Ok(arg_pins)
+}
+
+fn declare_pin(
+    name: &str,
+    pin: &(usize, usize, Type, Option<SymbolId>),
+    comment: &str,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<()> {
+    let dir = if pin.3.is_some() { "output" } else { "input" };
+    writeln!(
+        out,
+        "  {dir} {} {name} ,  // {comment}",
+        logic(pin.2.bitwidth())
+    )?;
     Ok(())
 }
 
@@ -539,6 +685,16 @@ fn remove_fork(
     }
 }
 
+fn assignment_targets(pg: &ProtoGraph) -> FxHashSet<SymbolId> {
+    pg.nodes()
+        .flat_map(|(_, node)| node.actions.iter())
+        .filter_map(|action| match &pg[action.op] {
+            Op::Assign(target, _) => Some(*target),
+            _ => None,
+        })
+        .collect()
+}
+
 fn try_remove_fork(ctx: &mut Context, pg: &mut ProtoGraph, node_id: NodeId) -> bool {
     let mut removed_fork = false;
     let mut actions = std::mem::take(&mut pg[node_id].actions);
@@ -566,9 +722,14 @@ fn lower_protocols(
     let autos = m.protos.iter().map(|p| {
         // println!("{}", p.name);
         let p = lower_proto(st, ctx, p);
+        let assigned = assignment_targets(&p.graph);
+
         for (src, reg) in p.value_registers.iter().chain(p.knownness_registers.iter()) {
-            let init = p.register_inits[reg];
-            regs_and_init.push((*reg, init, *src));
+            if assigned.contains(reg) {
+                // only collect if register is actually used!
+                let init = p.register_inits[reg];
+                regs_and_init.push((*reg, init, *src));
+            }
         }
         p
     });
