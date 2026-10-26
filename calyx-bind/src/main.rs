@@ -3,11 +3,10 @@ use clap::{ColorChoice, Parser};
 use patronus::expr::{Context, Expr, ExprRef};
 use protocols::frontend;
 use protocols::frontend::Module;
-use protocols::frontend::ast::{Clock, Protocol};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{Dir, SymbolId, SymbolKind, SymbolTable, Type};
 use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
-use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::Lowerer;
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
@@ -119,7 +118,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     // not go means we are in idle
     if let Some(idle) = idle {
         let not_go = ctx.not(go);
-        Lowerer::graft_contracted_entry(&st, &mut ctx, &mut pg, entry, idle, not_go);
+        Lowerer::graft_contracted_entry(st, &mut ctx, &mut pg, entry, idle, not_go);
     }
 
     // build one common done state from idle
@@ -231,7 +230,7 @@ fn to_verilog(
     }
     writeln!(out, "  }} state_t;\n")?;
     writeln!(out, "  state_t state, next_state;")?;
-    for (reg, value, _) in auto_regs {
+    for (reg, _value, _) in auto_regs {
         writeln!(
             out,
             "  {} {}, next_{};",
@@ -288,7 +287,7 @@ fn to_verilog(
     }
     writeln!(out)?;
     writeln!(out, "    // default values for dut inputs")?;
-    let assignments = assignment_expressions_by_target(pg);
+    let _assignments = assignment_expressions_by_target(pg);
     for pin in &m.pins {
         if pin.dir() == Dir::In {
             // TODO: we need to know all the symbols that this pin maps to
@@ -390,7 +389,7 @@ fn arg_pins(
             let output_reg = arg_to_reg.get(&arg.symbol()).cloned();
             pins_by_name
                 .entry(sym.name().to_string())
-                .or_insert_with(|| vec![])
+                .or_insert_with(std::vec::Vec::new)
                 .push((idx, arg_idx, sym.tpe(), output_reg))
         }
     }
@@ -425,8 +424,8 @@ fn arg_pins(
             });
         } else {
             for pin in &pins {
-                let name = format!("{}_{name}", &method_names[pin.0]);
-                let comment = format!("{}.{name}", &method_names[pin.0]);
+                let name = format!("{}_{name}", method_names[pin.0]);
+                let comment = format!("{}.{name}", method_names[pin.0]);
                 declare_pin(&name, pin, &comment, out)?;
                 arg_pins.push(ArgPin {
                     ids: vec![ArgId {
@@ -668,7 +667,7 @@ fn remove_done(ctx: &mut Context, pg: &mut ProtoGraph, done_state_id: NodeId) {
             for (tran, next_is_done_state) in pg[node_id]
                 .transitions
                 .iter_mut()
-                .zip(is_done_state.into_iter())
+                .zip(is_done_state)
             {
                 if next_is_done_state {
                     tran.target = done_state_id;
@@ -706,7 +705,7 @@ fn remove_fork(
             // check if this node forks
             let node_forks = try_remove_fork(ctx, pg, node_id);
             assert!(!(has_forked && node_forks), "Cannot fork twice");
-            has_forked = has_forked | node_forks;
+            has_forked |= node_forks;
             if has_forked {
                 let idle = idle.expect("an idle transaction is required because a protocol forks!");
                 // parallel merge idle into state
@@ -829,8 +828,8 @@ fn lower_proto(st: &mut SymbolTable, ctx: &mut Context, p: &Protocol) -> Monitor
     lowerer.ir.entry = fragment.entry;
     lowerer.ir.garbage_collect_unreachable(ctx, false);
     let auto = convert_driver_to_capturing_driver(ctx, lowerer.ir, st).unwrap();
-    let auto = simplify_monitor(ctx, auto, st);
-    auto
+    
+    simplify_monitor(ctx, auto, st)
 }
 
 fn get_single_cycle(ctx: &mut Context, pg: &mut ProtoGraph, entry: NodeId) -> Option<NodeId> {
