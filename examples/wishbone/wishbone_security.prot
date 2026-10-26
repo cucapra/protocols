@@ -133,6 +133,9 @@ prot write<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     while self.ACK == 1'b0 {
         step();
     }
+    // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+    assert_eq(self.ERR, 1'b0);
+    assert_eq(self.RTY, 1'b0);
 
     // acknowledge is now true
     step();
@@ -163,6 +166,9 @@ prot read<self: Wishbone>(mask: u4, addr: u32, data: u32) {
         assert_eq(self.DAT_I, 32'b0);
         step();
     }
+    // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+    assert_eq(self.ERR, 1'b0);
+    assert_eq(self.RTY, 1'b0);
 
     // TODO: masking
     // if mask[0] { assert_eq(self.DAT_I[ 7: 0], data[ 7: 0]); }
