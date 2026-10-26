@@ -67,8 +67,11 @@ prot idle_no_cycle<self: Wishbone>() {
     self.DAT_O := 32'b0;
     self.ADR := 32'b0;
 
-    // NEW: Acks are not allowed when there is no bus cycle in progress (adapted from Xray P8)
-    assert_eq(self.ACK, 1'b0);`
+    // NEW: Acks are not allowed when CYC = 0, i.e. there is no bus cycle in progress (adapted from Xray P8)
+    assert_eq(self.ACK, 1'b0);
+
+    // NEW: data from the subordinate should also be zeroed out when there's no transfer (eXpect P16)
+    assert_eq(self.DAT_I, 32'b0);
 
     step();
 }
@@ -83,6 +86,12 @@ prot idle_continue_cycle<self: Wishbone>() {
     // NEW: data & address must be zeroed out when there is no transfer (eXpect P16)
     self.DAT_O := 32'b0;
     self.ADR := 32'b0;
+
+    // NEW: Acks are not allowed when CYC = 0, i.e. there is no bus cycle in progress (adapted from Xray P8)
+    assert_eq(self.ACK, 1'b0);
+
+    // NEW: data from the subordinate should also be zeroed out when there's no transfer (eXpect P16)
+    assert_eq(self.DAT_I, 32'b0);
 
     step();
 }
