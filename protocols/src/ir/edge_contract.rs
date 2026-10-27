@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, VecDeque};
 
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type as FrontType};
-use crate::ir::propagate_assigns::reachable_node_ids;
+use crate::ir::determinize::{SatResult, check_sat};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
 use patronus::expr::{Context, ExprRef};
 
@@ -165,6 +165,75 @@ fn concretes_without_dont_care(
             (guard != ctx.get_false()).then_some((guard, *rhs))
         })
         .collect()
+}
+
+// TODO: I feel like this can be done at *merge-time* in edge-contract.rs instead
+// TODO: of as a post-processing step
+pub fn canonicalize_assignment(
+    ctx: &mut Context,
+    pg: &mut ProtoGraph,
+    assignment: Assignment,
+) -> Assignment {
+    let dont_care = pg.simplifier.simplify(ctx, assignment.dont_care);
+    if dont_care == ctx.get_true() {
+        return Assignment {
+            dont_care,
+            concretes: Vec::new(),
+        };
+    }
+
+    let mut prior = dont_care;
+    let mut concretes: Vec<(ExprRef, ExprRef)> = Vec::new();
+
+    for (guard, rhs) in assignment.concretes {
+        let guard = pg.simplifier.simplify(ctx, guard);
+        let not_prior = pg.not_guard(ctx, prior);
+        let effective_guard = pg.and_guard(ctx, not_prior, guard);
+        let effective_guard = pg.simplifier.simplify(ctx, effective_guard);
+
+        match check_sat(ctx, pg, effective_guard) {
+            SatResult::DefinitelyUnsat => {}
+            SatResult::AlwaysSat => {
+                merge_concrete_guard(ctx, pg, &mut concretes, ctx.get_true(), rhs);
+                break;
+            }
+            SatResult::MaybeSat => {
+                merge_concrete_guard(ctx, pg, &mut concretes, effective_guard, rhs);
+                let next_prior = pg.or_guard(ctx, prior, effective_guard);
+                prior = pg.simplifier.simplify(ctx, next_prior);
+            }
+        }
+
+        if prior == ctx.get_true() {
+            break;
+        }
+    }
+
+    Assignment {
+        dont_care,
+        concretes,
+    }
+}
+
+/// if the `rhs` already exists in `concretes` with guard `old_guard`
+/// `guard` should be an *effective* guard, so that performing
+/// `old_guard || guard` does not violate merge semantics
+fn merge_concrete_guard(
+    ctx: &mut Context,
+    pg: &mut ProtoGraph,
+    concretes: &mut Vec<(ExprRef, ExprRef)>,
+    guard: ExprRef,
+    rhs: ExprRef,
+) {
+    if let Some((existing_guard, _)) = concretes
+        .iter_mut()
+        .find(|(_, existing_rhs)| *existing_rhs == rhs)
+    {
+        let merged_guard = pg.or_guard(ctx, *existing_guard, guard);
+        *existing_guard = pg.simplifier.simplify(ctx, merged_guard);
+    } else {
+        concretes.push((guard, rhs));
+    }
 }
 
 pub fn merge_ordered_assignment(
@@ -526,7 +595,7 @@ pub fn contract_edges_from(
     symbols: &SymbolTable,
     start: NodeId,
 ) {
-    let node_ids = reachable_node_ids(ctx, protocol, start);
+    let node_ids = protocol.reachable_node_ids(ctx, start);
 
     for source_node_id in node_ids.into_iter().rev() {
         let mut contracted_actions = Vec::with_capacity(protocol[source_node_id].actions.len());

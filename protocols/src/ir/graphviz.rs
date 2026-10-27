@@ -7,7 +7,6 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
@@ -50,10 +49,7 @@ fn to_dot_string_with_node_labels_from_entry(
     out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
     out.push_str(&format!("  entry_marker -> {};\n", entry));
 
-    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
-    seen.insert(entry);
-    let mut q = VecDeque::from([entry]);
-    while let Some(node_id) = q.pop_front() {
+    for node_id in protocol.reachable_node_ids(ctx, entry) {
         let node = protocol[node_id].clone();
 
         let mut label_parts = vec![];
@@ -109,9 +105,6 @@ fn to_dot_string_with_node_labels_from_entry(
                 transition.target,
                 escape_label(&edge_label)
             ));
-            if seen.insert(transition.target) {
-                q.push_back(transition.target);
-            }
         }
     }
 
@@ -141,6 +134,32 @@ fn format_op(
         Op::InternalAssertFalse => "internal_assert_false".to_string(),
         Op::Done => "done".to_string(),
     }
+}
+
+/// Text view of the prepared DUT assignments, used by the legacy CLI flag.
+pub fn format_assignments(ctx: &Context, graph: &ProtoGraph, symbols: &SymbolTable) -> String {
+    let mut out = String::new();
+    for (id, node) in graph.nodes() {
+        out.push_str(&format!("{id}:\n"));
+        let mut assignments = node
+            .actions
+            .iter()
+            .filter_map(|a| match &graph[a.op] {
+                Op::Assign(pin, assignment) if symbols[*pin].is_in_port() => {
+                    Some((symbols[*pin].full_name(symbols), assignment))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assignments.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, assignment) in assignments {
+            out.push_str(&format!(
+                "  {name}: {}\n",
+                format_assignment(ctx, graph, assignment)
+            ));
+        }
+    }
+    out
 }
 
 fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignment) -> String {
@@ -268,14 +287,13 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::driver_to_monitor::{
         MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
+        simplify_monitor,
     };
     use crate::ir::edge_contract::{contract_edges, normalize_assignments};
     use crate::ir::joint_driver::build_joint_driver_automaton;
     use crate::ir::joint_monitor::build_joint_monitor_automaton;
     use crate::ir::lowering::lower_ast_to_ir;
-    use crate::ir::propagate_assigns::propagate_assignments;
-    use crate::ir::reaching_defs::reaching_definitions;
-    use crate::ir::simplify_monitor::simplify_monitor;
+    use crate::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments};
     use insta::Settings;
 
     fn snap(name: &str, filename: &str) -> (Context, SymbolTable, Vec<MonitorAutomaton>) {
@@ -286,23 +304,24 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &symbols);
+            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
             let mut contracted_ir = ir.clone();
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
+
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            // run the reaching definitions analysis
-            let reaching_defs = reaching_definitions(&mut ctx, &mut contracted_ir, &symbols);
+            let entry = contracted_ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
 
-            // print post-propagation of assignments
-            propagate_assignments(&mut ctx, &mut contracted_ir, &symbols, &reaching_defs);
-            content += "== post-propagation ==\n";
+            simplify_assignments(&mut ctx, &mut contracted_ir, &symbols, &initial);
+            content += "== post-simplification ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
@@ -338,10 +357,12 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let ast = module.protos.into_iter().next().unwrap();
         let mut ctx = Context::default();
-        let mut graph = lower_ast_to_ir(&mut ctx, ast, &symbols);
+        let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+        let entry = graph.entry;
         contract_edges(&mut ctx, &mut graph, &symbols);
-        let defs = reaching_definitions(&mut ctx, &mut graph, &symbols);
-        propagate_assignments(&mut ctx, &mut graph, &symbols, &defs);
+        let initial = insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
+
+        simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
         normalize_assignments(&mut ctx, &mut graph, &symbols);
         graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
@@ -428,7 +449,8 @@ mod tests {
             .collect::<Vec<_>>();
         let mut ctx = Context::default();
         let driver =
-            build_joint_driver_automaton(&mut ctx, &module, protocols.clone(), &symbols).unwrap();
+            build_joint_driver_automaton(&mut ctx, &module, protocols.clone(), &mut symbols)
+                .unwrap();
         let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
         let driver_dot = to_dot_string(&ctx, &driver.graph, &symbols);
         let monitor_dot = monitor.to_dot_string(&ctx, &symbols);

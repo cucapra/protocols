@@ -44,7 +44,7 @@ digraph "add_combinational_illegal_observation_in_conditional" {
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "add_combinational_illegal_observation_in_conditional" {
   rankdir=LR;
   node [shape=box];
@@ -114,7 +114,7 @@ digraph "add_combinational_illegal_observation_in_assertion" {
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "add_combinational_illegal_observation_in_assertion" {
   rankdir=LR;
   node [shape=box];
@@ -183,7 +183,7 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "add_combinational_legal_observation_illegal_assignment" {
   rankdir=LR;
   node [shape=box];
@@ -213,7 +213,7 @@ digraph "add_combinational_legal_observation_illegal_assignment" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] $monitor_a_value_2 := ite(eq(DUT.s, 0), DUT.a, $monitor_a_value_2)\n[1] $monitor_a_known_2_bool := eq(DUT.s, 0)"];
+  node0 [label="[1] $monitor_a_value_2 := ite(eq(DUT.s, 0), DUT.a, 0)"];
   node0 -> node1 [label="not(eq(DUT.s, 0)) / step"];
   node0 -> node1 [label="eq(DUT.s, 0) / step"];
   node1 [label="[1] done"];
@@ -251,7 +251,7 @@ digraph "add_combinational" {
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
-== post-propagation ==
+== post-simplification ==
 digraph "add_combinational" {
   rankdir=LR;
   node [shape=box];

@@ -6,11 +6,12 @@ use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{Dir, SymbolId, SymbolKind, SymbolTable, Type};
-use protocols::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_capturing_driver};
+use protocols::ir::driver_to_monitor::{
+    MonitorAutomaton, convert_driver_to_capturing_driver, simplify_monitor,
+};
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::Lowerer;
 use protocols::ir::proto_graph::{Action, Node, NodeId, Op, ProtoGraph, Transition};
-use protocols::ir::simplify_monitor::simplify_monitor;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
 

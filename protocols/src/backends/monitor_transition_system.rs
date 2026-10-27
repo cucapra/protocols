@@ -9,8 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::frontend::Module;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
-use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
-use crate::ir::propagate_assigns::reachable_node_ids;
+use crate::ir::joint_monitor::JointMonitorAutomaton;
 use crate::ir::proto_graph::{Op, remap_expr};
 
 pub struct MonitorTransitionSystemResult {
@@ -23,7 +22,6 @@ pub struct MonitorTransitionSystemResult {
     pub heads: Vec<ExprRef>,
     /// reads of FIFO registers, using the current bank heads.
     pub register_reads: FxHashMap<SymbolId, ExprRef>,
-    pub knownness_outputs: FxHashMap<InstanceParameter, ExprRef>,
 }
 
 /// set up the monitor ring-buffers with value, knownness registers and the liveness register
@@ -150,8 +148,7 @@ pub fn into_monitor_transition_system(
     let bad_id = ctx.bit_vec_val(monitor.bad_state.as_u32(), node_width);
     let bad = ctx.equal(node_symbol, bad_id);
     let mut node_next = internal_state;
-    let mut knownness_outputs = FxHashMap::default();
-    let mut nodes = reachable_node_ids(ctx, graph, graph.entry);
+    let mut nodes = graph.reachable_node_ids(ctx, graph.entry);
     nodes.sort();
     for node in nodes {
         let node_id = ctx.bit_vec_val(node.as_u32(), node_width);
@@ -223,12 +220,6 @@ pub fn into_monitor_transition_system(
                 node_next = ctx.ite(failed, internal_state, node_next);
             }
         }
-        for (&parameter, &expr) in &monitor.knownness_outputs[&node] {
-            let value = remap_expr(ctx, expr, &reads);
-            let zero = ctx.zero(value.get_bv_type(ctx).unwrap());
-            let held = *knownness_outputs.entry(parameter).or_insert(zero);
-            knownness_outputs.insert(parameter, ctx.ite(at_node, value, held));
-        }
     }
 
     for (protocol, fields) in fields.iter().enumerate() {
@@ -274,6 +265,5 @@ pub fn into_monitor_transition_system(
         internal_error,
         heads,
         register_reads,
-        knownness_outputs,
     }
 }

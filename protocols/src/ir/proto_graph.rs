@@ -3,7 +3,7 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use crate::frontend::ast::ProtocolContext;
-use crate::frontend::symbol::SymbolId;
+use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
     Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
@@ -253,6 +253,49 @@ impl ProtoGraph {
         self.symbol_expr.insert(symbol_id, expr);
     }
 
+    pub fn add_register(
+        &mut self,
+        ctx: &mut Context,
+        symbols: &mut SymbolTable,
+        base: &str,
+        width: u32,
+    ) -> SymbolId {
+        let mut suffix = 0;
+        let name = loop {
+            let name = if suffix == 0 {
+                base.to_string()
+            } else {
+                format!("{base}_{suffix}")
+            };
+            if symbols.symbol_id_from_name_in_active_scope(&name).is_none() {
+                break name;
+            }
+            suffix += 1;
+        };
+        let symbol =
+            symbols.add_without_parent(name, Type::BitVec(width), SymbolKind::AutomatonState);
+        let expr = ctx.bv_symbol(&symbols[symbol].full_name(symbols), width);
+        self.cache_symbol_expr(symbol, expr);
+        symbol
+    }
+
+    /// Visit nodes in breadth-first order from `entry`, skipping false edges
+    /// Each node appears once in resulting vector, including `entry` itself
+    pub fn reachable_node_ids(&self, ctx: &Context, entry: NodeId) -> Vec<NodeId> {
+        let mut nodes = Vec::new();
+        let mut seen = FxHashSet::from_iter([entry]);
+        let mut pending = VecDeque::from([entry]);
+        while let Some(node) = pending.pop_front() {
+            nodes.push(node);
+            for edge in &self[node].transitions {
+                if edge.guard != ctx.get_false() && seen.insert(edge.target) {
+                    pending.push_back(edge.target);
+                }
+            }
+        }
+        nodes
+    }
+
     /// convenience methods for construction simplified
     /// (p AND q) or (p OR q) expressions
     pub fn and_guard(&mut self, ctx: &mut Context, lhs: ExprRef, rhs: ExprRef) -> ExprRef {
@@ -347,28 +390,42 @@ impl ProtoGraph {
         self.nodes[node_id].transitions.push(t);
     }
 
+    /// Remove unused operations without changing node IDs or action positions.
+    pub fn garbage_collect_ops(&mut self) {
+        let used = self
+            .nodes
+            .iter()
+            .flat_map(|(_, n)| n.actions.iter().map(|a| a.op))
+            .collect::<FxHashSet<_>>();
+        let mut mapping = FxHashMap::default();
+        let mut ops = PrimaryMap::new();
+        let mut locations = SecondaryMap::new();
+        for (old, op) in self.ops.iter() {
+            if used.contains(&old) {
+                let new = ops.push(op.clone());
+                mapping.insert(old, new);
+                if let Some(&location) = self.op_loc.get(old) {
+                    locations[new] = location;
+                }
+            }
+        }
+        for (_, node) in self.nodes.iter_mut() {
+            for action in &mut node.actions {
+                action.op = mapping[&action.op];
+            }
+        }
+        self.ops = ops;
+        self.op_loc = locations;
+    }
+
     /// Rebuild the graph from the subgraph reachable from `entry`.
-    /// This compacts both node IDs and op IDs.
+    /// Node IDs are compacted; operation IDs are preserved when `keep_all_ops` is true.
     pub fn garbage_collect_unreachable(
         &mut self,
         ctx: &Context,
         keep_all_ops: bool,
     ) -> FxHashMap<NodeId, NodeId> {
-        let mut reachable_old_nodes = Vec::new();
-        let mut seen = FxHashSet::default();
-        let mut q = VecDeque::from([self.entry]);
-
-        while let Some(node_id) = q.pop_front() {
-            if !seen.insert(node_id) {
-                continue;
-            }
-            reachable_old_nodes.push(node_id);
-            for transition in &self.nodes[node_id].transitions {
-                if transition.guard != ctx.get_false() {
-                    q.push_back(transition.target);
-                }
-            }
-        }
+        let reachable_old_nodes = self.reachable_node_ids(ctx, self.entry);
 
         let mut node_map: FxHashMap<NodeId, NodeId> = FxHashMap::default();
         let mut new_nodes = PrimaryMap::new();
@@ -382,44 +439,15 @@ impl ProtoGraph {
                 .retain(|transition| transition.guard != ctx.get_false());
         }
 
-        let mut reachable_old_ops = Vec::new();
-        let mut seen_ops = FxHashSet::default();
-        for (_, node) in new_nodes.iter() {
-            for action in &node.actions {
-                if seen_ops.insert(action.op) {
-                    reachable_old_ops.push(action.op);
-                }
-            }
-        }
-        if keep_all_ops {
-            reachable_old_ops = self.ops.keys().collect();
-        }
-
-        let mut op_map: FxHashMap<OpId, OpId> = FxHashMap::default();
-        let mut new_ops = PrimaryMap::new();
-        let mut new_op_loc = SecondaryMap::new();
-        for old_op_id in reachable_old_ops {
-            let new_op_id = new_ops.push(self.ops[old_op_id].clone());
-            op_map.insert(old_op_id, new_op_id);
-            if let Some(loc) = self.op_loc.get(old_op_id).copied() {
-                new_op_loc[new_op_id] = loc;
-            }
-        }
-
         for (_, node) in new_nodes.iter_mut() {
-            for action in &mut node.actions {
-                action.op = op_map[&action.op];
-            }
             for transition in &mut node.transitions {
                 transition.target = node_map[&transition.target];
             }
         }
-
         self.entry = node_map[&self.entry];
         self.nodes = new_nodes;
         if !keep_all_ops {
-            self.ops = new_ops;
-            self.op_loc = new_op_loc;
+            self.garbage_collect_ops();
         }
 
         node_map
@@ -507,7 +535,7 @@ mod tests {
     ) -> (Context, ProtoGraph) {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
-        let (st, modules) =
+        let (mut st, modules) =
             frontend(&[&path], &mut handler, skip_static_step_fork_checks, false).unwrap();
         let module = require_single_module(modules, &[&path]).unwrap();
         let proto = match protocol_name {
@@ -522,7 +550,7 @@ mod tests {
             }
         };
         let mut ctx = Context::default();
-        let graph = lower_ast_to_ir(&mut ctx, proto, &st);
+        let graph = lower_ast_to_ir(&mut ctx, proto, &mut st);
         (ctx, graph)
     }
 

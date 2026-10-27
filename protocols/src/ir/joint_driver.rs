@@ -29,7 +29,7 @@ pub fn build_joint_driver_automaton(
     ctx: &mut Context,
     module: &Module,
     protocols: Vec<Protocol>,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> Result<JointDriverAutomaton, JointDriverError> {
     let sources = prepare_joint_protocols(ctx, &protocols, symbols)?;
     let control = build_joint_control_automaton(ctx, &protocols, &sources, symbols)?;
@@ -75,7 +75,11 @@ pub fn build_joint_driver_automaton(
         .proto_pin_map
         .iter()
         .flat_map(|pins| pins.iter().zip(&module.proto_pin_map[first]))
-        .filter_map(|(&symbol, &target)| symbols[symbol].is_in_port().then_some((symbol, target)))
+        .filter_map(|(&symbol, &target)| {
+            lowerer.symbols[symbol]
+                .is_in_port()
+                .then_some((symbol, target))
+        })
         .collect::<FxHashMap<_, _>>();
 
     let nodes = lowerer.ir.nodes().map(|(id, _)| id).collect::<Vec<_>>();
@@ -114,7 +118,7 @@ pub fn build_joint_driver_automaton(
                 ctx,
                 source,
                 &protocols[instance.protocol],
-                symbols,
+                lowerer.symbols,
                 instance.slot,
             );
             let mut actions = Vec::new();

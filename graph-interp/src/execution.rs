@@ -13,14 +13,14 @@ use protocols::frontend::symbol::SymbolTable;
 use protocols::interpreter::Value as WaveValue;
 use protocols::ir::bounded_lowering::lower_bmc;
 use protocols::ir::determinize::determinized;
+use protocols::ir::edge_contract::contract_edges;
 use protocols::ir::graph_interpreter::{self, GraphInterpretFailure, GraphInterpretFailureKind};
-use protocols::ir::graphviz::to_dot_string;
+use protocols::ir::graphviz::{format_assignments, to_dot_string};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_driver::build_joint_driver_automaton;
 use protocols::ir::lowering::lower_ast_to_ir;
-use protocols::ir::propagate_assigns::propagate_assignments;
+use protocols::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments};
 use protocols::ir::proto_graph::ProtoGraph;
-use protocols::ir::reaching_defs::{format_reaching_defs, reaching_definitions};
 use protocols::ir::trace_lowering::lower_trace_to_ir;
 use protocols::{PatronusSim, PortId, Value};
 use rustc_hash::FxHashMap;
@@ -28,7 +28,7 @@ use rustc_hash::FxHashMap;
 type Trace = Vec<(String, Vec<Value>)>;
 
 /// Dispatches execution to the flow selected by the command-line arguments.
-pub fn run(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+pub fn run(cli: &Cli, symbols: &mut SymbolTable, module: &Module, traces: &[Trace]) {
     match cli.flow {
         Flow::Sequential => run_sequential(cli, symbols, module, traces),
         Flow::TraceGraph => run_trace_graph(cli, symbols, module, traces),
@@ -93,19 +93,21 @@ fn print_graph_failure(failure: &GraphInterpretFailure, brief: bool) {
 fn prepare_trace_graph(
     ctx: &mut Context,
     cli: &Cli,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
     protocols: &FxHashMap<&str, &Protocol>,
     trace: &Trace,
     trace_index: usize,
 ) -> ProtoGraph {
     let mut graph = lower_trace_to_ir(ctx, trace, protocols, symbols);
     graph = determinized(ctx, graph, symbols);
-    let reaching = reaching_definitions(ctx, &mut graph, symbols);
+    let entry = graph.entry;
+    contract_edges(ctx, &mut graph, symbols);
+    let initial = insert_assignment_registers(ctx, &mut graph, symbols, entry);
+    simplify_assignments(ctx, &mut graph, symbols, &initial);
     if cli.reaching_definitions {
         println!("// reaching definitions for trace {trace_index}");
-        println!("{}", format_reaching_defs(ctx, &graph, symbols, &reaching));
+        println!("{}", format_assignments(ctx, &graph, symbols));
     }
-    propagate_assignments(ctx, &mut graph, symbols, &reaching);
     if cli.graphout {
         println!("// final trace graph for trace {trace_index}");
         println!("{}", to_dot_string(ctx, &graph, symbols));
@@ -114,7 +116,7 @@ fn prepare_trace_graph(
 }
 
 /// Executes each protocol instance in a trace sequentially on the DUT.
-fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+fn run_sequential(cli: &Cli, symbols: &mut SymbolTable, module: &Module, traces: &[Trace]) {
     let mut ctx = Context::default();
     let graphs: Vec<(String, ProtoGraph)> = module
         .protos
@@ -137,8 +139,10 @@ fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[T
                 .find(|(protocol_name, _)| protocol_name == name)
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
             let mut graph = template.clone();
-            let reaching = reaching_definitions(&mut ctx, &mut graph, symbols);
-            propagate_assignments(&mut ctx, &mut graph, symbols, &reaching);
+            let entry = graph.entry;
+            contract_edges(&mut ctx, &mut graph, symbols);
+            let initial = insert_assignment_registers(&mut ctx, &mut graph, symbols, entry);
+            simplify_assignments(&mut ctx, &mut graph, symbols, &initial);
             if cli.graphout {
                 println!("// final graph for protocol {name}");
                 println!("{}", to_dot_string(&ctx, &graph, symbols));
@@ -164,7 +168,7 @@ fn run_sequential(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[T
 }
 
 /// Lowers each trace to a graph and interprets that graph directly.
-fn run_trace_graph(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+fn run_trace_graph(cli: &Cli, symbols: &mut SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
     let mut ctx = Context::default();
     for (trace_index, trace) in traces.iter().enumerate() {
@@ -271,7 +275,7 @@ fn simulate_transition_system(
 }
 
 /// Lowers each trace graph to a transition system and simulates it without extra inputs.
-fn run_trace_system(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+fn run_trace_system(cli: &Cli, symbols: &mut SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
     let mut ctx = Context::default();
     for (trace_index, trace) in traces.iter().enumerate() {
@@ -307,7 +311,7 @@ fn run_trace_system(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &
 /// we don't need to stream inputs since the bound is known, so every transaction has its own argument slot, so we just initialize all arguments and choices at cycle zero.
 fn run_bounded_driver(
     cli: &Cli,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
     module: &Module,
     traces: &[Trace],
     bound: usize,
@@ -408,7 +412,7 @@ fn run_bounded_driver(
 
 /// Builds and simulates the unbounded joint driver automaton.
 /// we drive choice-valid, protocol-choice, and arguments when transaction-ready is asserted (in the same cycle)
-fn run_unbounded_driver(cli: &Cli, symbols: &SymbolTable, module: &Module, traces: &[Trace]) {
+fn run_unbounded_driver(cli: &Cli, symbols: &mut SymbolTable, module: &Module, traces: &[Trace]) {
     let protocols = protocol_map(module);
     let mut ctx = Context::default();
     for (trace_index, trace) in traces.iter().enumerate() {
