@@ -1,3 +1,7 @@
+// Copyright 2026 Cornell University
+// released under MIT License
+// author: Kevin Laeufer <laeufer@cornell.edu>
+
 use baa::{BitVecOps, WidthInt};
 use clap::{ColorChoice, Parser};
 use patronus::expr::{Context, Expr, ExprRef};
@@ -421,9 +425,12 @@ fn op_port_width(m: &Module) -> WidthInt {
 
 const DUT_PREFIX: &str = "dut_";
 
+
+fn reg_name(st: &SymbolTable, reg: SymbolId, )
+
 #[allow(clippy::too_many_arguments)]
 fn to_verilog(
-    ctx: &Context,
+    ctx: &mut Context,
     m: &Module,
     reset_actions: Vec<Action>,
     pg: &ProtoGraph,
@@ -433,6 +440,20 @@ fn to_verilog(
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let keywords = FxHashSet::from_iter(VERILOG_KEYWORDS.iter().cloned());
+    let mut symbol_names = FxHashMap::default();
+    let mut expr_names = FxHashMap::default();
+
+    // compute Verilog compatible names for all automaton registers
+    for &(_, _, reg) in auto_regs {
+        let reg_name = st[reg].name().to_string();
+        if let Some(name) = reg_name.strip_prefix("$monitor_") {
+            let new_name = format!("_{name}");
+            symbol_names.insert(reg, new_name);
+            let width = st[reg].tpe().bitwidth();
+            let expr = ctx.bv_symbol(&reg_name, width);
+            expr_names.insert(expr, new_name);
+        }
+    }
 
     // module I/O
     writeln!(
@@ -1099,7 +1120,6 @@ fn lower_proto(st: &mut SymbolTable, ctx: &mut Context, p: &Protocol) -> Monitor
     lowerer.ir.entry = fragment.entry;
     lowerer.ir.garbage_collect_unreachable(ctx, false);
     let auto = convert_driver_to_capturing_driver(ctx, lowerer.ir, st).unwrap();
-
     simplify_monitor(ctx, auto, st)
 }
 
