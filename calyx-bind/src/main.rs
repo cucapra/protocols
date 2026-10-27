@@ -3,7 +3,7 @@ use clap::{ColorChoice, Parser};
 use patronus::expr::{Context, Expr, ExprRef};
 use protocols::frontend;
 use protocols::frontend::Module;
-use protocols::frontend::ast::Protocol;
+use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{Dir, SymbolId, SymbolKind, SymbolTable, Type};
 use protocols::ir::driver_to_monitor::{
@@ -197,11 +197,6 @@ fn to_verilog(
         "  input  {} go,    // calyx standard control",
         logic(1)
     )?;
-    writeln!(
-        out,
-        "  output {} done,  // calyx standard control",
-        logic(1)
-    )?;
     let ops: Vec<_> = proto_methods(m)
         .enumerate()
         .map(|(i, p)| format!("{i}={}", p.name))
@@ -213,6 +208,11 @@ fn to_verilog(
         ops.join(", ")
     )?;
     let arg_pin_info = arg_pins(st, m, auto_regs, out)?;
+    writeln!(
+        out,
+        "  output {} done   // calyx standard control",
+        logic(1)
+    )?;
     writeln!(out, ");\n")?;
 
     verilog_dut_instance(m, "  ", out)?;
@@ -227,9 +227,12 @@ fn to_verilog(
     let state_width = usize::BITS - num_states.leading_zeros();
 
     writeln!(out, "  typedef enum logic [{}:0] {{", state_width - 1)?;
-    for (idx, lbl) in state_labels.iter().enumerate() {
-        writeln!(out, "    {lbl}  = {state_width}'d{idx},")?;
-    }
+    let entries: Vec<_> = state_labels
+        .iter()
+        .enumerate()
+        .map(|(idx, lbl)| format!("    {lbl}  = {state_width}'d{idx}"))
+        .collect();
+    writeln!(out, "{}", entries.join(",\n"))?;
     writeln!(out, "  }} state_t;\n")?;
     writeln!(out, "  state_t state, next_state;")?;
     for (reg, _value, _) in auto_regs {
@@ -244,7 +247,7 @@ fn to_verilog(
     writeln!(out)?;
     // registers
     writeln!(out, "  always_ff @(posedge clk) begin")?;
-    writeln!(out, "    if reset begin",)?;
+    writeln!(out, "    if (reset) begin",)?;
     writeln!(
         out,
         "      state <= {};",
@@ -308,7 +311,7 @@ fn to_verilog(
     writeln!(out)?;
 
     // reset
-    writeln!(out, "    if reset begin")?;
+    writeln!(out, "    if (reset) begin")?;
     for act in &reset_actions {
         action_to_verilog(ctx, pg, st, act, "      ", out)?;
     }
@@ -327,13 +330,13 @@ fn to_verilog(
             }
 
             if tran.guard != ctx.get_true() {
-                writeln!(out, "        if {}", expr_to_verilog(ctx, tran.guard))?;
+                writeln!(out, "        if ({})", expr_to_verilog(ctx, tran.guard))?;
                 write!(out, "  ")?;
             }
 
             writeln!(
                 out,
-                "        state = {}",
+                "        state = {};",
                 state_labels[tran.target.as_u32() as usize]
             )?;
         }
@@ -394,7 +397,7 @@ fn arg_pins(
             let output_reg = arg_to_reg.get(&arg.symbol()).cloned();
             pins_by_name
                 .entry(sym.name().to_string())
-                .or_insert_with(std::vec::Vec::new)
+                .or_insert_with(Vec::new)
                 .push((idx, arg_idx, sym.tpe(), output_reg))
         }
     }
@@ -480,15 +483,20 @@ fn verilog_dut_instance(
 
     // create module instance
     writeln!(out, "{indent}{} {}_inst (", m.name, m.name)?;
-    // TODO: clock
-    for pin in &m.pins {
-        writeln!(
-            out,
-            "{indent}  .{} ({DUT_PREFIX}{}),",
-            pin.name(),
-            pin.name()
-        )?;
+    match &m.clock {
+        Clock::None => {}
+        Clock::PosEdge(name) | Clock::NegEdge(name) => {
+            writeln!(out, "{indent}  .{name} (clk),")?;
+        }
     }
+    let connects: Vec<_> = m
+        .pins
+        .iter()
+        .enumerate()
+        .map(|(_, pin)| format!("{indent}  .{} ({DUT_PREFIX}{})", pin.name(), pin.name()))
+        .collect();
+    writeln!(out, "{}", connects.join(",\n"))?;
+    writeln!(out, "\n{indent});")?;
 
     Ok(())
 }
@@ -511,7 +519,7 @@ fn action_to_verilog(
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     if act.guard != ctx.get_true() {
-        writeln!(out, "{indent}if {}", expr_to_verilog(ctx, act.guard))?;
+        writeln!(out, "{indent}if ({})", expr_to_verilog(ctx, act.guard))?;
         write!(out, "  ")?; // extra indent
     }
     match &pg[act.op] {
