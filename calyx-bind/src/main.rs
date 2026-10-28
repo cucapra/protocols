@@ -43,13 +43,17 @@ struct Args {
     /// Name of the top-level module/struct to generate a binding for
     #[arg(short, long)]
     module: String,
+
+    /// Name of the generated wrapper.
+    #[arg(short, long)]
+    name: Option<String>,
 }
 
 fn proto_methods(m: &Module) -> impl Iterator<Item = &Protocol> {
     m.protos.iter().filter(|p| !p.is_idle && !p.is_reset)
 }
 
-fn gen_driver(st: &mut SymbolTable, m: &Module) {
+fn gen_driver(st: &mut SymbolTable, m: &Module, name: &str) {
     assert!(m.protos.iter().filter(|p| p.is_idle).count() <= 1);
     assert!(m.protos.iter().filter(|p| p.is_reset).count() <= 1);
     let mut ctx = Context::default();
@@ -157,6 +161,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
     let mut verilog = vec![];
     to_verilog(
         &mut ctx,
+        name,
         m,
         reset_actions,
         &pg,
@@ -458,5 +463,7 @@ fn main() {
             )
         });
 
-    gen_driver(&mut st, module);
+    let name = args.name.unwrap_or_else(|| format!("{}Bind", module.name));
+
+    gen_driver(&mut st, module, &name);
 }

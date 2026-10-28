@@ -29,6 +29,7 @@ fn insert_symbol_name(
 #[allow(clippy::too_many_arguments)]
 pub fn to_verilog(
     ctx: &mut Context,
+    name: &str,
     m: &Module,
     reset_actions: Vec<Action>,
     pg: &ProtoGraph,
@@ -55,7 +56,7 @@ pub fn to_verilog(
         out,
         "// this file was generated from a protocol using calyx-bind"
     )?;
-    writeln!(out, "module {}Bind(", m.name)?;
+    writeln!(out, "module {name}(")?;
     writeln!(out, "  input  {} clk,   // global clock", logic(1))?;
     writeln!(
         out,
