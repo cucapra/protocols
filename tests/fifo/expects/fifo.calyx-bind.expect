@@ -1,0 +1,105 @@
+// this file was generated from a protocol using calyx-bind
+module Fifo(
+  input  logic clk,   // global clock
+  input  logic reset, // 1-cycle active-high reset
+  input  logic go,    // calyx standard control
+  input  logic op,    // 0=push, 1=pop
+  input logic [31:0] push_input ,  // push.input
+  output logic [31:0] pop_output ,  // pop.output
+  output logic done   // calyx standard control
+);
+
+  logic [31:0] dut_data_i; // In
+  logic dut_v_i; // In
+  logic dut_enq_not_deq_i; // In
+  logic dut_reset_i; // In
+  logic dut_full_o; // Out
+  logic dut_empty_o; // Out
+  logic [31:0] dut_data_o; // Out
+
+  fifo_wrapper fifo_wrapper_inst (
+    .clk_i (clk),
+    .data_i (dut_data_i),
+    .v_i (dut_v_i),
+    .enq_not_deq_i (dut_enq_not_deq_i),
+    .reset_i (dut_reset_i),
+    .full_o (dut_full_o),
+    .empty_o (dut_empty_o),
+    .data_o (dut_data_o)
+  );
+
+  typedef enum logic [1:0] {
+    ST_START  = 2'd0,
+    ST_DONE  = 2'd1,
+    ST_NODE_2  = 2'd2
+  } state_t;
+
+  state_t state, next_state;
+  logic [31:0] _output_value, next__output_value;
+
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      state <= ST_START;
+      _output_value <= 32'b00000000000000000000000000000000;
+    end else begin
+      state <= next_state;
+      _output_value <= next__output_value;
+    end
+  end
+
+  // connect output arguments to registers that capture them
+  assign pop_output = _output_value;
+
+  always_comb begin
+    // register default to their previous values
+    next_state = state;
+    next__output_value = _output_value;
+
+    // default values for dut inputs
+    // TODO: find all the assignments to this particular pin for a better default assignment!
+    dut_data_i = 32'd0;
+    // TODO: find all the assignments to this particular pin for a better default assignment!
+    dut_v_i = 1'd0;
+    // TODO: find all the assignments to this particular pin for a better default assignment!
+    dut_enq_not_deq_i = 1'd0;
+    // TODO: find all the assignments to this particular pin for a better default assignment!
+    dut_reset_i = 1'd0;
+
+    if (reset) begin
+      // dut_data_i = DontCare
+      dut_v_i = 1'b0;
+      // dut_enq_not_deq_i = DontCare
+      dut_reset_i = 1'b1;
+    end else begin
+      unique case (state)
+      ST_START: begin
+        dut_data_i = push_input;
+        dut_v_i = ~(~(go));
+        dut_enq_not_deq_i = ~((go) & (op));
+        dut_reset_i = 1'b0;
+        if ((((go) & (~(op))) | ((go) & (op))) & (~(go)))
+          if ((go) & (~(op)))
+          next_state = ST_DONE;
+        if ((go) & (op))
+          next_state = ST_NODE_2;
+      end
+      ST_DONE: begin
+        // dut_data_i = DontCare
+        dut_v_i = 1'b0;
+        // dut_enq_not_deq_i = DontCare
+        dut_reset_i = 1'b0;
+        next_state = ST_START;
+      end
+      ST_NODE_2: begin
+        // dut_data_i = DontCare
+        dut_v_i = 1'b0;
+        // dut_enq_not_deq_i = DontCare
+        dut_reset_i = 1'b0;
+        next__output_value = dut_data_o;
+        next_state = ST_DONE;
+      end
+      endcase
+    end
+  end
+endmodule
+
