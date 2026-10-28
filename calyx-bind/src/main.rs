@@ -616,7 +616,7 @@ fn to_verilog(
     }
     writeln!(out, "    end else begin")?;
     // states
-    writeln!(out, "      case (state)")?;
+    writeln!(out, "      unique case (state)")?;
     for (idx, lbl) in state_labels.iter().enumerate() {
         writeln!(out, "      {lbl}: begin")?;
         let node_id = NodeId::from_u32(idx as u32);
@@ -648,7 +648,7 @@ fn to_verilog(
 
             writeln!(
                 out,
-                "        state = {};",
+                "        next_state = {};",
                 state_labels[tran.target.as_u32() as usize]
             )?;
         }
@@ -898,7 +898,7 @@ fn action_to_verilog(
                             writeln!(out, "{indent}{lhs} = ~({fg});")?;
                         }
                     } else {
-                        todo!("deal with multiple options")
+                        todo!("deal with multiple options {rhs:?}")
                     }
                 }
             }
@@ -949,6 +949,7 @@ fn expr_to_verilog(ctx: &Context, expr: ExprRef, expr_names: &ExprNames) -> Stri
                 Expr::BVNot(..) => format!("~({})", children[0]),
                 Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
                 Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
+                Expr::BVEqual(..) => format!("({}) == ({})", children[0], children[1]),
                 other => todo!("{:?}", other),
             }
         }
