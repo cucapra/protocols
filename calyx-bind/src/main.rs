@@ -425,6 +425,18 @@ fn op_port_width(m: &Module) -> WidthInt {
 
 const DUT_PREFIX: &str = "dut_";
 
+fn insert_symbol_name(
+    sym: SymbolId,
+    name: String,
+    pg: &ProtoGraph,
+    symbol_names: &mut SymbolNames,
+    expr_names: &mut ExprNames,
+) {
+    let expr = pg.symbol_expr[&sym];
+    symbol_names.insert(sym, name.clone());
+    expr_names.insert(expr, name);
+}
+
 #[allow(clippy::too_many_arguments)]
 fn to_verilog(
     ctx: &mut Context,
@@ -445,10 +457,7 @@ fn to_verilog(
         let reg_name = st[reg].name().to_string();
         if let Some(name) = reg_name.strip_prefix("$monitor_") {
             let new_name = format!("_{name}");
-            symbol_names.insert(reg, new_name.clone());
-            let width = st[reg].tpe().bitwidth();
-            let expr = ctx.bv_symbol(&reg_name, width);
-            expr_names.insert(expr, new_name);
+            insert_symbol_name(reg, new_name, pg, &mut symbol_names, &mut expr_names);
         }
     }
 
@@ -480,6 +489,22 @@ fn to_verilog(
         ops.join(", ")
     )?;
     let arg_pin_info = arg_pins(st, m, auto_regs, &keywords, out)?;
+    for pin in &arg_pin_info {
+        for &ArgId {
+            method_idx,
+            arg_idx,
+        } in &pin.ids
+        {
+            let arg_sym = proto_methods(m).skip(method_idx).next().unwrap().args[arg_idx].symbol();
+            insert_symbol_name(
+                arg_sym,
+                pin.name.clone(),
+                pg,
+                &mut symbol_names,
+                &mut expr_names,
+            );
+        }
+    }
     writeln!(
         out,
         "  output {} done   // calyx standard control",
@@ -488,6 +513,7 @@ fn to_verilog(
     writeln!(out, ");\n")?;
 
     verilog_dut_instance(m, "  ", out)?;
+    dut_pin_binding(m, pg, &mut symbol_names, &mut expr_names);
     writeln!(out)?;
 
     let num_states = pg.nodes().count();
@@ -794,6 +820,21 @@ fn verilog_dut_instance(
     Ok(())
 }
 
+fn dut_pin_binding(
+    m: &Module,
+    pg: &ProtoGraph,
+    symbol_names: &mut SymbolNames,
+    expr_names: &mut ExprNames,
+) {
+    for (pin_idx, pin) in m.pins.iter().enumerate() {
+        let name = format!("{DUT_PREFIX}{}", pin.name());
+        for symbols in &m.proto_pin_map {
+            let sym = symbols[pin_idx];
+            insert_symbol_name(sym, name.clone(), pg, symbol_names, expr_names);
+        }
+    }
+}
+
 fn logic(width: WidthInt) -> String {
     assert!(width > 0);
     if width == 1 {
@@ -878,18 +919,14 @@ fn action_to_verilog(
 }
 
 fn lhs_symbol_name(st: &SymbolTable, sym: SymbolId, symbol_names: &SymbolNames) -> String {
-    if let Some(s) = symbol_names.get(&sym) {
-        s.to_string()
+    // all symbols that appear on the lhs should be defined in the name table
+    let name = &symbol_names[&sym];
+    let sym = &st[sym];
+    if sym.kind() == SymbolKind::AutomatonState {
+        // on the lhs, we want to refer to the next state
+        format!("next_{name}")
     } else {
-        let sym = &st[sym];
-        match sym.kind() {
-            SymbolKind::Dut => panic!("unexpected DUT symbol!"),
-            SymbolKind::InPort | SymbolKind::OutPort => format!("dut_{}", sym.name()),
-            // TODO: find out what protocol the argument is for
-            SymbolKind::Arg(_) => sym.name().to_string(),
-            SymbolKind::LoopVar => todo!("loop var"),
-            SymbolKind::AutomatonState => format!("next_{}", sym.name()),
-        }
+        name.to_string()
     }
 }
 
@@ -1082,6 +1119,7 @@ fn lower_protocols(
 ) -> (ProtoGraph, Vec<NodeId>, Vec<(SymbolId, ExprRef, SymbolId)>) {
     let mut graph = ProtoGraph::new(m.protos[0].ctx.clone());
     let mut regs_and_init = vec![];
+    let mut symbol_exprs = FxHashMap::default();
     let autos = m.protos.iter().map(|p| {
         // println!("{}", p.name);
         let p = lower_proto(st, ctx, p);
@@ -1094,6 +1132,11 @@ fn lower_protocols(
                 regs_and_init.push((*reg, init, *src));
             }
         }
+
+        for (&sym, &expr) in p.graph.symbol_expr.iter() {
+            debug_assert!(!symbol_exprs.contains_key(&sym) || symbol_exprs[&sym] == expr);
+            symbol_exprs.insert(sym, expr);
+        }
         p
     });
     let nodes: Vec<_> = autos
@@ -1101,6 +1144,8 @@ fn lower_protocols(
         .map(|a| add_to_graph(&mut graph, &a.graph))
         .collect();
     regs_and_init.sort();
+    debug_assert!(graph.symbol_expr.is_empty());
+    graph.symbol_expr = symbol_exprs;
     (graph, nodes, regs_and_init)
 }
 
