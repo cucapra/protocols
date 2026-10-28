@@ -85,7 +85,7 @@ pub fn to_verilog(
             arg_idx,
         } in &pin.ids
         {
-            let arg_sym = proto_methods(m).skip(method_idx).next().unwrap().args[arg_idx].symbol();
+            let arg_sym = proto_methods(m).nth(method_idx).unwrap().args[arg_idx].symbol();
             insert_symbol_name(
                 arg_sym,
                 pin.name.clone(),
@@ -146,7 +146,7 @@ pub fn to_verilog(
         writeln!(
             out,
             "      {} <= {};",
-            &symbol_names[reg],
+            symbol_names[reg],
             expr_to_verilog(ctx, *value, &expr_names)
         )?;
     }
@@ -166,7 +166,7 @@ pub fn to_verilog(
     )?;
     for pin in &arg_pin_info {
         if let Some(reg) = pin.output_reg {
-            writeln!(out, "  assign {} = {};", pin.name, &symbol_names[&reg])?;
+            writeln!(out, "  assign {} = {};", pin.name, symbol_names[&reg])?;
         }
     }
     writeln!(out)?;
@@ -401,8 +401,7 @@ fn verilog_dut_instance(
     let connects: Vec<_> = m
         .pins
         .iter()
-        .enumerate()
-        .map(|(_, pin)| format!("{indent}  .{} ({DUT_PREFIX}{})", pin.name(), pin.name()))
+        .map(|pin| format!("{indent}  .{} ({DUT_PREFIX}{})", pin.name(), pin.name()))
         .collect();
     writeln!(out, "{}", connects.join(",\n"))?;
     writeln!(out, "{indent});")?;
@@ -434,6 +433,7 @@ fn logic(width: WidthInt) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn action_to_verilog(
     ctx: &Context,
     pg: &ProtoGraph,
