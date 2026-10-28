@@ -405,7 +405,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module) {
 
     let mut verilog = vec![];
     to_verilog(
-        &ctx,
+        &mut ctx,
         m,
         reset_actions,
         &pg,
@@ -425,9 +425,6 @@ fn op_port_width(m: &Module) -> WidthInt {
 
 const DUT_PREFIX: &str = "dut_";
 
-
-fn reg_name(st: &SymbolTable, reg: SymbolId, )
-
 #[allow(clippy::too_many_arguments)]
 fn to_verilog(
     ctx: &mut Context,
@@ -444,11 +441,11 @@ fn to_verilog(
     let mut expr_names = FxHashMap::default();
 
     // compute Verilog compatible names for all automaton registers
-    for &(_, _, reg) in auto_regs {
+    for &(reg, ..) in auto_regs {
         let reg_name = st[reg].name().to_string();
         if let Some(name) = reg_name.strip_prefix("$monitor_") {
             let new_name = format!("_{name}");
-            symbol_names.insert(reg, new_name);
+            symbol_names.insert(reg, new_name.clone());
             let width = st[reg].tpe().bitwidth();
             let expr = ctx.bv_symbol(&reg_name, width);
             expr_names.insert(expr, new_name);
@@ -510,13 +507,14 @@ fn to_verilog(
     writeln!(out, "{}", entries.join(",\n"))?;
     writeln!(out, "  }} state_t;\n")?;
     writeln!(out, "  state_t state, next_state;")?;
-    for (reg, _value, _) in auto_regs {
+    for (reg, ..) in auto_regs {
+        let name = &symbol_names[reg];
         writeln!(
             out,
             "  {} {}, next_{};",
             logic(st[reg].tpe().bitwidth()),
-            st[reg].name(),
-            st[reg].name()
+            name,
+            name,
         )?;
     }
     writeln!(out)?;
@@ -532,14 +530,14 @@ fn to_verilog(
         writeln!(
             out,
             "      {} <= {};",
-            st[reg].name(),
-            expr_to_verilog(ctx, *value)
+            &symbol_names[reg],
+            expr_to_verilog(ctx, *value, &expr_names)
         )?;
     }
     writeln!(out, "    end else begin",)?;
     writeln!(out, "      state <= next_state;",)?;
     for (reg, _, _) in auto_regs {
-        let name = st[reg].name();
+        let name = &symbol_names[reg];
         writeln!(out, "      {name} <= next_{name};",)?;
     }
     writeln!(out, "    end",)?;
@@ -552,7 +550,7 @@ fn to_verilog(
     )?;
     for pin in &arg_pin_info {
         if let Some(reg) = pin.output_reg {
-            writeln!(out, "  assign {} = {};", pin.name, st[reg].name())?;
+            writeln!(out, "  assign {} = {};", pin.name, &symbol_names[&reg])?;
         }
     }
     writeln!(out)?;
@@ -562,7 +560,7 @@ fn to_verilog(
     writeln!(out, "    // register default to their previous values")?;
     writeln!(out, "    next_state = state;")?;
     for (reg, _, _) in auto_regs {
-        let name = st[reg].name();
+        let name = &symbol_names[reg];
         writeln!(out, "    next_{name} = {name};",)?;
     }
     writeln!(out)?;
@@ -588,7 +586,7 @@ fn to_verilog(
     // reset
     writeln!(out, "    if (reset) begin")?;
     for act in &reset_actions {
-        action_to_verilog(ctx, pg, st, act, "      ", out)?;
+        action_to_verilog(ctx, pg, st, act, "      ", &expr_names, &symbol_names, out)?;
     }
     writeln!(out, "    end else begin")?;
     // states
@@ -597,7 +595,16 @@ fn to_verilog(
         writeln!(out, "      {lbl}: begin")?;
         let node_id = NodeId::from_u32(idx as u32);
         for act in &pg[node_id].actions {
-            action_to_verilog(ctx, pg, st, act, "        ", out)?;
+            action_to_verilog(
+                ctx,
+                pg,
+                st,
+                act,
+                "        ",
+                &expr_names,
+                &symbol_names,
+                out,
+            )?;
         }
         for tran in &pg[node_id].transitions {
             if tran.guard == ctx.get_false() || tran.target == node_id {
@@ -605,7 +612,11 @@ fn to_verilog(
             }
 
             if tran.guard != ctx.get_true() {
-                writeln!(out, "        if ({})", expr_to_verilog(ctx, tran.guard))?;
+                writeln!(
+                    out,
+                    "        if ({})",
+                    expr_to_verilog(ctx, tran.guard, &expr_names)
+                )?;
                 write!(out, "  ")?;
             }
 
@@ -778,7 +789,7 @@ fn verilog_dut_instance(
         .map(|(_, pin)| format!("{indent}  .{} ({DUT_PREFIX}{})", pin.name(), pin.name()))
         .collect();
     writeln!(out, "{}", connects.join(",\n"))?;
-    writeln!(out, "\n{indent});")?;
+    writeln!(out, "{indent});")?;
 
     Ok(())
 }
@@ -798,16 +809,22 @@ fn action_to_verilog(
     st: &SymbolTable,
     act: &Action,
     indent: &str,
+    expr_names: &ExprNames,
+    symbol_names: &SymbolNames,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     if act.guard != ctx.get_true() {
-        writeln!(out, "{indent}if ({})", expr_to_verilog(ctx, act.guard))?;
+        writeln!(
+            out,
+            "{indent}if ({})",
+            expr_to_verilog(ctx, act.guard, expr_names)
+        )?;
         write!(out, "  ")?; // extra indent
     }
     match &pg[act.op] {
         // ignore don't care
         Op::Assign(lhs, rhs) => {
-            let lhs = lhs_symbol_name(st, *lhs);
+            let lhs = lhs_symbol_name(st, *lhs, symbol_names);
             if rhs.dont_care == ctx.get_true() {
                 writeln!(out, "{indent}// {lhs} = DontCare")?;
             } else {
@@ -815,7 +832,7 @@ fn action_to_verilog(
                     writeln!(
                         out,
                         "{indent}{lhs} = {};",
-                        expr_to_verilog(ctx, rhs.concretes[0].1)
+                        expr_to_verilog(ctx, rhs.concretes[0].1, expr_names)
                     )?;
                 } else {
                     let false_assign = rhs
@@ -832,8 +849,8 @@ fn action_to_verilog(
                         && let Some((fg, _)) = false_assign
                         && rhs.concretes.len() == 2
                     {
-                        let tg = expr_to_verilog(ctx, tg);
-                        let fg = expr_to_verilog(ctx, fg);
+                        let tg = expr_to_verilog(ctx, tg, expr_names);
+                        let fg = expr_to_verilog(ctx, fg, expr_names);
                         if tg.len() < fg.len() {
                             writeln!(out, "{indent}{lhs} = {tg};")?;
                         } else {
@@ -849,8 +866,8 @@ fn action_to_verilog(
             writeln!(
                 out,
                 "{indent}// TODO: assert_eq({}, {});",
-                expr_to_verilog(ctx, *a),
-                expr_to_verilog(ctx, *b)
+                expr_to_verilog(ctx, *a, expr_names),
+                expr_to_verilog(ctx, *b, expr_names)
             )?;
         }
         Op::Fork => unreachable!("all forks should be gone!"),
@@ -860,30 +877,44 @@ fn action_to_verilog(
     Ok(())
 }
 
-fn lhs_symbol_name(st: &SymbolTable, sym: SymbolId) -> String {
-    let sym = &st[sym];
-    match sym.kind() {
-        SymbolKind::Dut => panic!("unexpected DUT symbol!"),
-        SymbolKind::InPort | SymbolKind::OutPort => format!("dut_{}", sym.name()),
-        // TODO: find out what protocol the argument is for
-        SymbolKind::Arg(_) => sym.name().to_string(),
-        SymbolKind::LoopVar => todo!("loop var"),
-        SymbolKind::AutomatonState => format!("next_{}", sym.name()),
+fn lhs_symbol_name(st: &SymbolTable, sym: SymbolId, symbol_names: &SymbolNames) -> String {
+    if let Some(s) = symbol_names.get(&sym) {
+        s.to_string()
+    } else {
+        let sym = &st[sym];
+        match sym.kind() {
+            SymbolKind::Dut => panic!("unexpected DUT symbol!"),
+            SymbolKind::InPort | SymbolKind::OutPort => format!("dut_{}", sym.name()),
+            // TODO: find out what protocol the argument is for
+            SymbolKind::Arg(_) => sym.name().to_string(),
+            SymbolKind::LoopVar => todo!("loop var"),
+            SymbolKind::AutomatonState => format!("next_{}", sym.name()),
+        }
     }
 }
 
-fn expr_to_verilog(ctx: &Context, expr: ExprRef) -> String {
-    patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| match &ctx[expr] {
-        Expr::BVSymbol { name, .. } => ctx[*name].to_string(),
-        Expr::BVLiteral(value) => format!(
-            "{}'b{}",
-            value.get(ctx).width(),
-            value.get(ctx).to_bit_str()
-        ),
-        Expr::BVNot(..) => format!("~({})", children[0]),
-        Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
-        Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
-        other => todo!("{:?}", other),
+type SymbolNames = FxHashMap<SymbolId, String>;
+
+type ExprNames = FxHashMap<ExprRef, String>;
+
+fn expr_to_verilog(ctx: &Context, expr: ExprRef, expr_names: &ExprNames) -> String {
+    patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| {
+        if let Some(s) = expr_names.get(&expr) {
+            s.to_string()
+        } else {
+            match &ctx[expr] {
+                Expr::BVSymbol { name, .. } => ctx[*name].to_string(),
+                Expr::BVLiteral(value) => format!(
+                    "{}'b{}",
+                    value.get(ctx).width(),
+                    value.get(ctx).to_bit_str()
+                ),
+                Expr::BVNot(..) => format!("~({})", children[0]),
+                Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
+                Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
+                other => todo!("{:?}", other),
+            }
+        }
     })
 }
 
