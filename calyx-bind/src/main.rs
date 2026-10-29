@@ -165,6 +165,7 @@ fn gen_driver(st: &mut SymbolTable, m: &Module, name: &str) {
         m,
         reset_actions,
         &pg,
+        done_state_id,
         st,
         &node_labels,
         &auto_regs,
