@@ -33,6 +33,7 @@ pub fn to_verilog(
     m: &Module,
     reset_actions: Vec<Action>,
     pg: &ProtoGraph,
+    done_state: NodeId,
     st: &SymbolTable,
     node_labels: &[String],
     auto_regs: &[(SymbolId, ExprRef, SymbolId)],
@@ -169,6 +170,15 @@ pub fn to_verilog(
             writeln!(out, "  assign {} = {};", pin.name, symbol_names[&reg])?;
         }
     }
+    writeln!(out)?;
+
+    // connect done pin
+    writeln!(out, "  // done is true iff we are in the done state")?;
+    writeln!(
+        out,
+        "  assign done = state == {};",
+        state_labels[done_state.as_u32() as usize]
+    )?;
     writeln!(out)?;
 
     // combinational
@@ -444,6 +454,14 @@ fn action_to_verilog(
     symbol_names: &SymbolNames,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
+    if matches!(&pg[act.op], Op::InternalAssertFalse) {
+        writeln!(
+            out,
+            "{indent}// assert_false({})",
+            expr_to_verilog(ctx, act.guard, expr_names)
+        )?;
+        return Ok(()); // ignore internal asserts
+    }
     if act.guard != ctx.get_true() {
         writeln!(
             out,
