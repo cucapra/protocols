@@ -303,7 +303,7 @@ mod tests {
         MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
         simplify_monitor,
     };
-    use crate::ir::edge_contract::{contract_edges, normalize_assignments};
+    use crate::ir::edge_contract::contract_edges;
     use crate::ir::joint_driver::build_joint_driver_automaton;
     use crate::ir::joint_monitor::build_joint_monitor_automaton;
     use crate::ir::lowering::lower_ast_to_ir;
@@ -324,36 +324,28 @@ mod tests {
             content += "\n";
 
             let mut contracted_ir = ir.clone();
+            let entry = contracted_ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
 
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            let entry = contracted_ir.entry;
-            let initial =
-                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
-
             simplify_assignments(&mut ctx, &mut contracted_ir, &symbols, &initial);
             content += "== post-simplification ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            let mut assignment_normalized_ir = contracted_ir.clone();
-            normalize_assignments(&mut ctx, &mut assignment_normalized_ir, &symbols);
-            content += "== post-normalize ==\n";
-            content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
-            content += "\n";
-
-            assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
-            let monitor =
-                match convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols) {
-                    Ok(monitor) => monitor,
-                    Err(error) => {
-                        content += &format!("== unsupported monitor ==\n{error}\n\n");
-                        continue;
-                    }
-                };
+            contracted_ir.garbage_collect_unreachable(&ctx, false);
+            let monitor = match convert_driver_to_monitor(&mut ctx, contracted_ir, &mut symbols) {
+                Ok(monitor) => monitor,
+                Err(error) => {
+                    content += &format!("== unsupported monitor ==\n{error}\n\n");
+                    continue;
+                }
+            };
             let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
             content += "== simplified monitor ==\n";
             content += &monitor.to_dot_string(&ctx, &symbols);
@@ -378,11 +370,10 @@ mod tests {
         let mut ctx = Context::default();
         let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
         let entry = graph.entry;
-        contract_edges(&mut ctx, &mut graph, &symbols);
         let initial = insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
+        contract_edges(&mut ctx, &mut graph, &symbols);
 
         simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
-        normalize_assignments(&mut ctx, &mut graph, &symbols);
         graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
         let driver = simplify_monitor(&mut ctx, driver, &mut symbols);

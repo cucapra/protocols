@@ -1,7 +1,5 @@
 use crate::frontend::symbol::{SymbolKind, SymbolTable};
-use crate::ir::edge_contract::{
-    merge_ordered_assignment, raw_concrete_coverage, same_assignment_target,
-};
+use crate::ir::edge_contract::{raw_concrete_coverage, same_assignment_target};
 use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
 use crate::ir::register_simplify::{RegisterFacts, simplify_registers};
 use patronus::expr::{Context, find_symbols};
@@ -29,61 +27,60 @@ pub fn insert_assignment_registers(
         initial.insert(released, ctx.get_true());
         saved.push((pin, value, released));
     }
-    for node in pg.reachable_node_ids(ctx, entry) {
-        let mut actions = pg[node]
-            .actions
-            .iter()
-            .filter(|a| !matches!(pg[a.op], Op::Assign(pin, _) if st[pin].is_in_port()))
-            .cloned()
-            .collect::<Vec<_>>();
+    let nodes = pg.reachable_node_ids(ctx, entry);
+    let step_entries = nodes
+        .iter()
+        .flat_map(|&node| &pg[node].transitions)
+        .filter(|edge| edge.consumes_step)
+        .map(|edge| edge.target)
+        .collect::<FxHashSet<_>>();
+
+    // Restore held inputs immediately after each step, before the next source statement
+    for &node in &step_entries {
+        assert!(
+            pg[node].actions.is_empty(),
+            "step targets must be empty restore nodes"
+        );
         for &(pin, value, released) in &saved {
-            let mut local = Assignment {
-                dont_care: ctx.get_false(),
-                concretes: vec![],
+            let old_value = pg.symbol_expr(value).unwrap();
+            let old_x = pg.symbol_expr(released).unwrap();
+            let concrete = pg.not_guard(ctx, old_x);
+            let op = pg.o(Op::Assign(
+                pin,
+                Assignment::concrete(old_x, concrete, old_value),
+            ));
+            pg.push_action(node, Action::new(ctx.get_true(), op));
+        }
+    }
+
+    // mirror source writes into saved state
+    for node in nodes {
+        if step_entries.contains(&node) {
+            continue;
+        }
+        let mut actions = Vec::new();
+        for action in pg[node].actions.clone() {
+            actions.push(action.clone());
+            let Op::Assign(pin, assignment) = pg[action.op].clone() else {
+                continue;
             };
-            for action in pg[node].actions.clone() {
-                if let Op::Assign(target, assignment) = pg[action.op].clone()
-                    && same_assignment_target(st, pin, target)
-                {
-                    assert_eq!(
-                        action.guard,
-                        ctx.get_true(),
-                        "assignment action guards must be true"
-                    );
-                    local = merge_ordered_assignment(ctx, pg, local, assignment);
-                }
+            let Some(&(target, value, released)) = saved
+                .iter()
+                .find(|&&(p, _, _)| same_assignment_target(st, p, pin))
+            else {
+                continue;
+            };
+            assert_eq!(action.guard, ctx.get_true());
+            // Protocol copies use distinct symbol IDs for the same physical input.
+            if target != pin {
+                actions.last_mut().unwrap().op = pg.o(Op::Assign(target, assignment.clone()));
             }
             let old_value = pg.symbol_expr(value).unwrap();
             let old_x = pg.symbol_expr(released).unwrap();
-            let concrete_guard = raw_concrete_coverage(ctx, pg, &local);
-            let coverage = pg.or_guard(ctx, local.dont_care, concrete_guard);
-            let missing = pg.not_guard(ctx, coverage);
-            let held_x = pg.and_guard(ctx, missing, old_x);
-            let dont_care = pg.or_guard(ctx, local.dont_care, held_x);
-            let not_x = pg.not_guard(ctx, old_x);
-            let held_value_guard = pg.and_guard(ctx, missing, not_x);
-            let mut concrete = local.concretes.clone();
-            concrete.push((held_value_guard, old_value));
-            let op = pg.o(Op::Assign(
-                pin,
-                Assignment {
-                    dont_care,
-                    concretes: concrete,
-                },
-            ));
-            actions.push(Action::new(ctx.get_true(), op));
-
-            // Local writes select the new saved state; otherwise hold it. X
-            // releases the pin without sampling an arbitrary concrete value.
-            let mut next_value = old_value;
-            for &(guard, rhs) in local.concretes.iter().rev() {
-                next_value = ctx.ite(guard, rhs, next_value);
-            }
-            next_value = ctx.ite(local.dont_care, old_value, next_value);
-            // Every concrete write clears the release bit, irrespective of its
-            // payload. Merge their guards before building the saved state.
-            let next_x = ctx.ite(concrete_guard, ctx.get_false(), old_x);
-            let next_x = ctx.ite(local.dont_care, ctx.get_true(), next_x);
+            let next_value = assignment.to_expr(ctx, old_value, old_value);
+            let concrete = raw_concrete_coverage(ctx, pg, &assignment);
+            let next_x = ctx.ite(concrete, ctx.get_false(), old_x);
+            let next_x = ctx.ite(assignment.dont_care, ctx.get_true(), next_x);
             for (target, rhs) in [(value, next_value), (released, next_x)] {
                 let op = pg.o(Op::Assign(
                     target,

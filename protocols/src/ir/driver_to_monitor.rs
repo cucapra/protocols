@@ -75,7 +75,7 @@ pub enum MonitorConversionError {
 }
 
 /// Precondition: ProtoGraph is a single-protocol graph after edge contraction,
-/// assignment persistence lowering/register simplification, normalization, and cleanup.
+/// assignment persistence lowering/register simplification, and cleanup.
 /// Each node has one total effective assignment per DUT input, including held values and X releases.
 /// Expressions must pass frontend well-formedness checks. At most one equality
 /// operand may contain parameters; action, assignment, ITE, and edge conditions

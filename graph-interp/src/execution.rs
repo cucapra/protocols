@@ -100,9 +100,8 @@ fn prepare_trace_graph(
 ) -> ProtoGraph {
     let mut graph = lower_trace_to_ir(ctx, trace, protocols, symbols);
     graph = determinized(ctx, graph, symbols);
-    let entry = graph.entry;
     contract_edges(ctx, &mut graph, symbols);
-    let initial = insert_assignment_registers(ctx, &mut graph, symbols, entry);
+    let initial = graph.register_inits.clone();
     simplify_assignments(ctx, &mut graph, symbols, &initial);
     if cli.reaching_definitions {
         println!("// reaching definitions for trace {trace_index}");
@@ -140,8 +139,8 @@ fn run_sequential(cli: &Cli, symbols: &mut SymbolTable, module: &Module, traces:
                 .unwrap_or_else(|| panic!("unknown protocol {name}"));
             let mut graph = template.clone();
             let entry = graph.entry;
-            contract_edges(&mut ctx, &mut graph, symbols);
             let initial = insert_assignment_registers(&mut ctx, &mut graph, symbols, entry);
+            contract_edges(&mut ctx, &mut graph, symbols);
             simplify_assignments(&mut ctx, &mut graph, symbols, &initial);
             if cli.graphout {
                 println!("// final graph for protocol {name}");

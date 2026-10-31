@@ -128,16 +128,13 @@ fn replace_proto_graph_exprs(
         .collect();
 }
 
-/// swap out all the ports in the ProtoGraph with their equivalents
-/// in the DUT
-fn bind_proto_graph_ports_to_dut(
-    ctx: &mut Context,
-    pg: &mut ProtoGraph,
+/// Match protocol port symbols to the corresponding DUT expressions
+fn proto_graph_port_bindings(
+    pg: &ProtoGraph,
     symbol_to_port: &FxHashMap<SymbolId, PortId>,
     port_to_expr: &FxHashMap<PortId, ExprRef>,
-) {
-    let port_bindings: Vec<_> = pg
-        .symbol_expr
+) -> Vec<(ExprRef, ExprRef)> {
+    pg.symbol_expr
         .iter()
         .filter_map(|(symbol_id, graph_expr)| {
             let port = symbol_to_port.get(symbol_id)?;
@@ -145,11 +142,7 @@ fn bind_proto_graph_ports_to_dut(
             Some((*graph_expr, *dut_expr))
         })
         .filter(|(graph_expr, dut_expr)| graph_expr != dut_expr)
-        .collect();
-
-    for (graph_expr, dut_expr) in port_bindings {
-        replace_proto_graph_exprs(pg, ctx, graph_expr, dut_expr);
-    }
+        .collect()
 }
 
 pub struct LoweredSystemResult {
@@ -191,7 +184,6 @@ pub fn lower_proto_graph_to_transition_system(
     for &dont_care in &pg.dont_cares {
         ts.add_input(ctx, dont_care);
     }
-    bind_proto_graph_ports_to_dut(ctx, &mut pg, &symbol_to_port, &port_to_expr);
 
     let node_count = pg.nodes().try_len().unwrap() as u64 + 3;
     let node_id_width = u64::from(u64::BITS - node_count.leading_zeros());
@@ -207,10 +199,123 @@ pub fn lower_proto_graph_to_transition_system(
     let internal_bad_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 1, node_id_width);
     let done_state_id = ctx.bit_vec_val(pg.next_node_id().as_u32() + 2, node_id_width);
 
+    let reachable_nodes = pg.reachable_node_ids(ctx, pg.entry);
+    // Build each DUT input's drive expression from the current protocol node
+    let input_symbols: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
+
+    // set up default input drivers per input
+    let mut input_drivers = Vec::with_capacity(input_symbols.len());
+    for input in input_symbols {
+        let tpe = st[input].tpe();
+        let input_width = match tpe {
+            symbol::Type::BitVec(width) => width,
+            _ => panic!("unsupported input port type"),
+        };
+
+        let dont_care_name = format!("dont_care.{}", st[input].name());
+        let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
+        if !ts.inputs.contains(&input_dont_care) {
+            ts.add_input(ctx, input_dont_care);
+        }
+
+        let Some(input_port) = symbol_to_port.get(&input).cloned() else {
+            panic!("Cannot find {}", st.full_name_from_symbol_id(&input))
+        };
+        let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
+        input_drivers.push((
+            input,
+            InputDriver {
+                port: input_port,
+                input_expr_ref,
+                input_ite: input_dont_care,
+                input_is_dont_care: ctx.get_true(),
+                input_dont_care,
+            },
+        ));
+    }
+
+    let mut input_assignment_failed = ctx.get_false();
+    // populate the input drivers with assignments in the reachable nodes
+    for (input, driver) in &mut input_drivers {
+        let mut assignment_failed_guard = ctx.get_false();
+        let mut grouped_assignments: Vec<(Assignment, ExprRef)> = Vec::new();
+
+        for id in &reachable_nodes {
+            let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
+            let node_equals = ctx.equal(node_sym, node_id_expr);
+
+            let assignment: Assignment = pg[*id]
+                .actions
+                .iter()
+                .filter_map(|action| match pg[action.op].clone() {
+                    Op::Assign(assigned_input, expr) if assigned_input == *input => Some(expr),
+                    _ => None,
+                })
+                .next()
+                .unwrap();
+
+            let assignment_is_triggered = assignment_is_triggered(&assignment, ctx);
+            let assignment_not_triggered = ctx.not(assignment_is_triggered);
+
+            // if an assignment isn't triggered, go to the bad state
+            let failed = ctx.and(node_equals, assignment_not_triggered);
+            assignment_failed_guard = ctx.or(assignment_failed_guard, failed);
+
+            if let Some((_, group_guard)) = grouped_assignments
+                .iter_mut()
+                .find(|(grouped_assignment, _)| *grouped_assignment == assignment)
+            {
+                *group_guard = ctx.or(*group_guard, node_equals);
+            } else {
+                grouped_assignments.push((assignment, node_equals));
+            }
+        }
+
+        input_assignment_failed = ctx.or(input_assignment_failed, assignment_failed_guard);
+
+        for (assignment, group_guard) in grouped_assignments {
+            let assignment_is_dont_care = assignment.dont_care;
+            let assignment_ite =
+                assignment.to_expr(ctx, driver.input_dont_care, driver.input_expr_ref);
+
+            driver.input_ite = ctx.ite(group_guard, assignment_ite, driver.input_ite);
+            driver.input_is_dont_care = ctx.ite(
+                group_guard,
+                assignment_is_dont_care,
+                driver.input_is_dont_care,
+            );
+        }
+    }
+
+    // Bind output reads in drive expressions to the DUT before connecting its inputs
+    let bindings = proto_graph_port_bindings(&pg, &symbol_to_port, &port_to_expr);
+    for (_, driver) in &mut input_drivers {
+        for &(graph_expr, dut_expr) in &bindings {
+            driver.input_ite = replace_expr(ctx, driver.input_ite, graph_expr, dut_expr);
+        }
+    }
+
+    // Connect the driver to the DUT
+    for (_, driver) in input_drivers {
+        replace_expr_uses(&mut ts, ctx, driver.input_expr_ref, driver.input_ite);
+        for expr in port_to_expr.values_mut() {
+            *expr = replace_expr(ctx, *expr, driver.input_expr_ref, driver.input_ite);
+        }
+        is_dont_care.insert(driver.port, driver.input_is_dont_care);
+    }
+
+    // Bind protocol ports and diagnostics to the driven DUT
+    for (graph_expr, dut_expr) in proto_graph_port_bindings(&pg, &symbol_to_port, &port_to_expr) {
+        input_assignment_failed = replace_expr(ctx, input_assignment_failed, graph_expr, dut_expr);
+        for expr in is_dont_care.values_mut() {
+            *expr = replace_expr(ctx, *expr, graph_expr, dut_expr);
+        }
+        replace_proto_graph_exprs(&mut pg, ctx, graph_expr, dut_expr);
+    }
+
     // Generate a big vector of all the transitions
     let mut transitions: Vec<IfThenExpr> = vec![];
     // create the transition function - only use the reachable nodes for efficiency
-    let reachable_nodes = pg.reachable_node_ids(ctx, pg.entry);
     for &id in &reachable_nodes {
         let src = ctx.bit_vec_val(id.as_u32(), node_id_width);
         let node_guard = ctx.equal(node_sym, src);
@@ -294,6 +399,13 @@ pub fn lower_proto_graph_to_transition_system(
     // if no transition is satisfied, we go to the internal bad state
     // the final done state self-loops, so it won't trigger this
     let mut transition_ite = if_thens_to_ite(transitions, ctx, internal_bad_state_id);
+    if input_assignment_failed != ctx.get_false() {
+        transition_ite = ctx.ite(
+            input_assignment_failed,
+            internal_bad_state_id,
+            transition_ite,
+        );
+    }
 
     // Contracted RHSs already read incoming state. Storage lowering does not
     // substitute updates into any consumer for a second time.
@@ -328,115 +440,6 @@ pub fn lower_proto_graph_to_transition_system(
                 next: Some(next),
             },
         );
-    }
-
-    // set up ITE expressions based on what node state we're in for each port,
-    // and replace the inputs with the ITEs everywhere
-    let input_symbols: Vec<SymbolId> = pg.proto_ctx.dut_input_symbols(st).collect();
-
-    // set up default input drivers per input
-    let mut input_drivers = Vec::with_capacity(input_symbols.len());
-    for input in input_symbols {
-        let tpe = st[input].tpe();
-        let input_width = match tpe {
-            symbol::Type::BitVec(width) => width,
-            _ => panic!("unsupported input port type"),
-        };
-
-        let dont_care_name = format!("dont_care.{}", st[input].name());
-        let input_dont_care = ctx.bv_symbol(&dont_care_name, input_width as WidthInt);
-        if !ts.inputs.contains(&input_dont_care) {
-            ts.add_input(ctx, input_dont_care);
-        }
-
-        let Some(input_port) = symbol_to_port.get(&input).cloned() else {
-            panic!("Cannot find {}", st.full_name_from_symbol_id(&input))
-        };
-        let input_expr_ref = *port_to_expr.get(&input_port).unwrap();
-        input_drivers.push((
-            input,
-            InputDriver {
-                port: input_port,
-                input_expr_ref,
-                input_ite: input_dont_care,
-                input_is_dont_care: ctx.get_true(),
-                input_dont_care,
-            },
-        ));
-    }
-
-    // populate the input drivers with assignments in the reachable nodes
-    for (input, driver) in &mut input_drivers {
-        let mut assignment_failed_guard = ctx.get_false();
-        let mut grouped_assignments: Vec<(Assignment, ExprRef)> = Vec::new();
-
-        for id in &reachable_nodes {
-            let node_id_expr = ctx.bit_vec_val(id.as_u32(), node_id_width);
-            let node_equals = ctx.equal(node_sym, node_id_expr);
-
-            let assignment: Assignment = pg[*id]
-                .actions
-                .iter()
-                .filter_map(|action| match pg[action.op].clone() {
-                    Op::Assign(assigned_input, expr) if assigned_input == *input => Some(expr),
-                    _ => None,
-                })
-                .next()
-                .unwrap();
-
-            let assignment_is_triggered = assignment_is_triggered(&assignment, ctx);
-            let assignment_not_triggered = ctx.not(assignment_is_triggered);
-
-            // if an assignment isn't triggered, go to the bad state
-            let input_assignment_failed = ctx.and(node_equals, assignment_not_triggered);
-            assignment_failed_guard = ctx.or(assignment_failed_guard, input_assignment_failed);
-
-            if let Some((_, group_guard)) = grouped_assignments
-                .iter_mut()
-                .find(|(grouped_assignment, _)| *grouped_assignment == assignment)
-            {
-                *group_guard = ctx.or(*group_guard, node_equals);
-            } else {
-                grouped_assignments.push((assignment, node_equals));
-            }
-        }
-
-        if assignment_failed_guard != ctx.get_false() {
-            transition_ite = ctx.ite(
-                assignment_failed_guard,
-                internal_bad_state_id,
-                transition_ite,
-            );
-        }
-
-        for (assignment, group_guard) in grouped_assignments {
-            let assignment_is_dont_care = assignment.dont_care;
-            let assignment_ite =
-                assignment.to_expr(ctx, driver.input_dont_care, driver.input_expr_ref);
-
-            driver.input_ite = ctx.ite(group_guard, assignment_ite, driver.input_ite);
-            driver.input_is_dont_care = ctx.ite(
-                group_guard,
-                assignment_is_dont_care,
-                driver.input_is_dont_care,
-            );
-        }
-    }
-
-    // replace the input ExprRef with the input_ite everywhere
-    for (_, driver) in input_drivers {
-        replace_expr_uses(&mut ts, ctx, driver.input_expr_ref, driver.input_ite);
-        transition_ite = replace_expr(ctx, transition_ite, driver.input_expr_ref, driver.input_ite);
-        // Joint bank rotations read these guards after core lowering returns.
-        for (_, node) in pg.nodes_mut() {
-            for edge in &mut node.transitions {
-                edge.guard = replace_expr(ctx, edge.guard, driver.input_expr_ref, driver.input_ite);
-            }
-        }
-        for expr in port_to_expr.values_mut() {
-            *expr = replace_expr(ctx, *expr, driver.input_expr_ref, driver.input_ite);
-        }
-        is_dont_care.insert(driver.port, driver.input_is_dont_care);
     }
 
     let node_state = State {

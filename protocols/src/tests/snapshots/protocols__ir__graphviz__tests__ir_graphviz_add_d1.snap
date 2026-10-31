@@ -9,25 +9,29 @@ digraph "add" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node12 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := a"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.b := b"];
   node10 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := a"];
-  node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node8 [label=""];
   node8 -> node7 [label="1"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X"];
+  node7 [label="[1] DUT.a := X"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.b := X"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] assert_eq(s, DUT.s)"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 [label="[1] fork"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -37,11 +41,11 @@ digraph "add" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a := ite(1, a, $previous_a); ite(1, $previous_a, $previous_a)\n[1] $previous_a_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x))\n[1] DUT.b := b\n[1] $previous_b := ite(1, b, $previous_b); ite(1, $previous_b, $previous_b)\n[1] $previous_b_is_x := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x))"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X; $previous_a if not($previous_a_is_x)\n[1] DUT.b := X; $previous_b if not($previous_b_is_x)\n[1] $previous_a := ite(1, $previous_a, $previous_a)\n[1] $previous_a_is_x := ite(1, 1, ite(0, 0, $previous_a_is_x))\n[1] $previous_b := ite(1, $previous_b, $previous_b)\n[1] $previous_b_is_x := ite(1, 1, ite(0, 0, $previous_b_is_x))\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a if not($previous_a_is_x)\n[1] DUT.b := X; $previous_b if not($previous_b_is_x)\n[1] done\n[1] $previous_a := ite(1, $previous_a, $previous_a)\n[1] $previous_a_is_x := ite(1, 1, ite(0, 0, $previous_a_is_x))\n[1] $previous_b := ite(1, $previous_b, $previous_b)\n[1] $previous_b_is_x := ite(1, 1, ite(0, 0, $previous_b_is_x))"];
 }
 
 == post-simplification ==
@@ -51,23 +55,10 @@ digraph "add" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -90,25 +81,29 @@ digraph "add_fork_early" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node12 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := a"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.b := b"];
   node10 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := a"];
-  node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node8 [label=""];
   node8 -> node7 [label="1"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] fork"];
+  node7 [label="[1] fork"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.a := X"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.a := X"];
+  node5 [label="[1] DUT.b := X"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] DUT.b := X"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] assert_eq(s, DUT.s)"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -118,11 +113,11 @@ digraph "add_fork_early" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] fork\n[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a_1 := ite(1, a, $previous_a_1); ite(1, $previous_a_1, $previous_a_1)\n[1] $previous_a_is_x_1 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_1))\n[1] DUT.b := b\n[1] $previous_b_1 := ite(1, b, $previous_b_1); ite(1, $previous_b_1, $previous_b_1)\n[1] $previous_b_is_x_1 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_1))"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X; $previous_a_1 if not($previous_a_is_x_1)\n[1] DUT.b := X; $previous_b_1 if not($previous_b_is_x_1)\n[1] fork\n[1] $previous_a_1 := ite(1, $previous_a_1, $previous_a_1)\n[1] $previous_a_is_x_1 := ite(1, 1, ite(0, 0, $previous_a_is_x_1))\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1)\n[1] $previous_b_is_x_1 := ite(1, 1, ite(0, 0, $previous_b_is_x_1))\n[1] assert_eq(s, DUT.s)"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_1 if not($previous_a_is_x_1)\n[1] DUT.b := X; $previous_b_1 if not($previous_b_is_x_1)\n[1] done\n[1] $previous_a_1 := ite(1, $previous_a_1, $previous_a_1)\n[1] $previous_a_is_x_1 := ite(1, 1, ite(0, 0, $previous_a_is_x_1))\n[1] $previous_b_1 := ite(1, $previous_b_1, $previous_b_1)\n[1] $previous_b_is_x_1 := ite(1, 1, ite(0, 0, $previous_b_is_x_1))"];
 }
 
 == post-simplification ==
@@ -132,23 +127,10 @@ digraph "add_fork_early" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] fork\n[1] assert_eq(s, DUT.s)\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_fork_early" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] fork\n[1] assert_eq(s, DUT.s)\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] fork\n[1] assert_eq(s, DUT.s)"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -171,25 +153,29 @@ digraph "add_incorrect" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node12 -> node11 [label="1"];
+  node11 [label="[1] DUT.a := a"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.b := b"];
   node10 -> node9 [label="1"];
-  node9 [label="[1] DUT.a := a"];
-  node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node9 [label=""];
+  node9 -> node8 [label="1 / step"];
+  node8 [label=""];
   node8 -> node7 [label="1"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a"];
+  node7 [label="[1] DUT.a := a"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.b := b"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := b"];
+  node5 [label="[1] assert_eq(s, DUT.s)"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 [label="[1] fork"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -199,11 +185,11 @@ digraph "add_incorrect" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)\n[1] fork"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a_2 := ite(1, a, $previous_a_2); ite(1, $previous_a_2, $previous_a_2)\n[1] $previous_a_is_x_2 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_2))\n[1] DUT.b := b\n[1] $previous_b_2 := ite(1, b, $previous_b_2); ite(1, $previous_b_2, $previous_b_2)\n[1] $previous_b_is_x_2 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_2))"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := a; $previous_a_2 if not($previous_a_is_x_2)\n[1] DUT.b := b; $previous_b_2 if not($previous_b_is_x_2)\n[1] $previous_a_2 := ite(1, a, $previous_a_2)\n[1] $previous_a_is_x_2 := ite(0, 1, ite(1, 0, $previous_a_is_x_2))\n[1] $previous_b_2 := ite(1, b, $previous_b_2)\n[1] $previous_b_is_x_2 := ite(0, 1, ite(1, 0, $previous_b_is_x_2))\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_2 if not($previous_a_is_x_2)\n[1] DUT.b := X; $previous_b_2 if not($previous_b_is_x_2)\n[1] done\n[1] $previous_a_2 := ite(1, $previous_a_2, $previous_a_2)\n[1] $previous_a_is_x_2 := ite(1, 1, ite(0, 0, $previous_a_is_x_2))\n[1] $previous_b_2 := ite(1, $previous_b_2, $previous_b_2)\n[1] $previous_b_is_x_2 := ite(1, 1, ite(0, 0, $previous_b_is_x_2))"];
 }
 
 == post-simplification ==
@@ -213,23 +199,10 @@ digraph "add_incorrect" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_incorrect" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := a; a\n[1] DUT.b := b; b\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -240,7 +213,7 @@ digraph "add_incorrect" {
   entry_marker -> node0;
   node0 [label="[1] $monitor_a_value_2 := DUT.a\n[1] $monitor_b_value_2 := DUT.b"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value_2, DUT.a)\n[1] assert_eq($monitor_b_value_2, DUT.b)\n[1] $monitor_s_value_2 := DUT.s"];
+  node1 [label="[1] assert_eq($monitor_a_value_2, DUT.a)\n[1] assert_eq($monitor_b_value_2, DUT.b)\n[1] fork\n[1] $monitor_s_value_2 := DUT.s"];
   node1 -> node2 [label="1 / step"];
   node2 [label="[1] done"];
 }
@@ -252,21 +225,25 @@ digraph "add_incorrect_implicit" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node8 [label="1"];
-  node8 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node10 [label="1"];
+  node10 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node10 -> node9 [label="1"];
+  node9 [label="[1] DUT.a := a"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.b := b"];
   node8 -> node7 [label="1"];
-  node7 [label="[1] DUT.a := a"];
-  node7 -> node6 [label="1"];
-  node6 [label="[1] DUT.b := b"];
+  node7 [label=""];
+  node7 -> node6 [label="1 / step"];
+  node6 [label=""];
   node6 -> node5 [label="1"];
-  node5 [label=""];
-  node5 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node5 [label="[1] assert_eq(s, DUT.s)"];
+  node5 -> node4 [label="1"];
+  node4 [label="[1] fork"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -276,11 +253,11 @@ digraph "add_incorrect_implicit" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork"];
-  node4 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a_3 := ite(1, a, $previous_a_3); ite(1, $previous_a_3, $previous_a_3)\n[1] $previous_a_is_x_3 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_3))\n[1] DUT.b := b\n[1] $previous_b_3 := ite(1, b, $previous_b_3); ite(1, $previous_b_3, $previous_b_3)\n[1] $previous_b_is_x_3 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_3))"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := X if $previous_a_is_x_3; $previous_a_3 if not($previous_a_is_x_3)\n[1] DUT.b := X if $previous_b_is_x_3; $previous_b_3 if not($previous_b_is_x_3)\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_3 if not($previous_a_is_x_3)\n[1] DUT.b := X; $previous_b_3 if not($previous_b_is_x_3)\n[1] done\n[1] $previous_a_3 := ite(1, $previous_a_3, $previous_a_3)\n[1] $previous_a_is_x_3 := ite(1, 1, ite(0, 0, $previous_a_is_x_3))\n[1] $previous_b_3 := ite(1, $previous_b_3, $previous_b_3)\n[1] $previous_b_is_x_3 := ite(1, 1, ite(0, 0, $previous_b_is_x_3))"];
 }
 
 == post-simplification ==
@@ -290,23 +267,10 @@ digraph "add_incorrect_implicit" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node4 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "add_incorrect_implicit" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node4 [label="1 / step"];
-  node4 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node4 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node6 [label="1 / step"];
+  node6 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node6 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -317,7 +281,7 @@ digraph "add_incorrect_implicit" {
   entry_marker -> node0;
   node0 [label="[1] $monitor_a_value_3 := DUT.a\n[1] $monitor_b_value_3 := DUT.b"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] fork\n[1] assert_eq($monitor_a_value_3, DUT.a)\n[1] assert_eq($monitor_b_value_3, DUT.b)\n[1] $monitor_s_value_3 := DUT.s"];
+  node1 [label="[1] assert_eq($monitor_a_value_3, DUT.a)\n[1] assert_eq($monitor_b_value_3, DUT.b)\n[1] fork\n[1] $monitor_s_value_3 := DUT.s"];
   node1 -> node2 [label="1 / step"];
   node2 [label="[1] done"];
 }
@@ -329,25 +293,33 @@ digraph "wait_and_add" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node10 -> node9 [label="1"];
+  node0 -> node14 [label="1"];
+  node14 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node14 -> node13 [label="1"];
+  node13 [label=""];
+  node13 -> node12 [label="1 / step"];
+  node12 [label=""];
+  node12 -> node11 [label="1"];
+  node11 [label="[1] fork"];
+  node11 -> node10 [label="1"];
+  node10 [label=""];
+  node10 -> node9 [label="1 / step"];
   node9 [label=""];
-  node9 -> node8 [label="1 / step"];
-  node8 [label="[1] fork"];
+  node9 -> node8 [label="1"];
+  node8 [label="[1] DUT.a := a"];
   node8 -> node7 [label="1"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a"];
-  node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := b"];
+  node7 [label="[1] DUT.b := b"];
+  node7 -> node6 [label="1"];
+  node6 [label=""];
+  node6 -> node5 [label="1 / step"];
+  node5 [label=""];
   node5 -> node4 [label="1"];
-  node4 [label=""];
-  node4 -> node3 [label="1 / step"];
-  node3 [label="[1] assert_eq(s, DUT.s)"];
-  node3 -> node2 [label="1"];
+  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 -> node3 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -357,15 +329,15 @@ digraph "wait_and_add" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node0 -> node8 [label="1 / step"];
-  node8 [label="[1] fork"];
-  node8 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node6 -> node3 [label="1 / step"];
-  node3 [label="[1] assert_eq(s, DUT.s)"];
-  node3 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := X\n[1] $previous_a_4 := ite(1, $previous_a_4, $previous_a_4)\n[1] $previous_a_is_x_4 := ite(1, 1, ite(0, 0, $previous_a_is_x_4))\n[1] DUT.b := X\n[1] $previous_b_4 := ite(1, $previous_b_4, $previous_b_4)\n[1] $previous_b_is_x_4 := ite(1, 1, ite(0, 0, $previous_b_is_x_4))"];
+  node0 -> node12 [label="1 / step"];
+  node12 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] fork"];
+  node12 -> node9 [label="1 / step"];
+  node9 [label="[1] DUT.a := a; $previous_a_4 if not($previous_a_is_x_4)\n[1] DUT.b := b; $previous_b_4 if not($previous_b_is_x_4)\n[1] $previous_a_4 := ite(1, a, $previous_a_4)\n[1] $previous_a_is_x_4 := ite(0, 1, ite(1, 0, $previous_a_is_x_4))\n[1] $previous_b_4 := ite(1, b, $previous_b_4)\n[1] $previous_b_is_x_4 := ite(0, 1, ite(1, 0, $previous_b_is_x_4))"];
+  node9 -> node5 [label="1 / step"];
+  node5 [label="[1] DUT.a := X if $previous_a_is_x_4; $previous_a_4 if not($previous_a_is_x_4)\n[1] DUT.b := X if $previous_b_is_x_4; $previous_b_4 if not($previous_b_is_x_4)\n[1] assert_eq(s, DUT.s)"];
+  node5 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_4 if not($previous_a_is_x_4)\n[1] DUT.b := X; $previous_b_4 if not($previous_b_is_x_4)\n[1] done\n[1] $previous_a_4 := ite(1, $previous_a_4, $previous_a_4)\n[1] $previous_a_is_x_4 := ite(1, 1, ite(0, 0, $previous_a_is_x_4))\n[1] $previous_b_4 := ite(1, $previous_b_4, $previous_b_4)\n[1] $previous_b_is_x_4 := ite(1, 1, ite(0, 0, $previous_b_is_x_4))"];
 }
 
 == post-simplification ==
@@ -375,31 +347,14 @@ digraph "wait_and_add" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node0 -> node8 [label="1 / step"];
-  node8 [label="[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node8 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node6 -> node3 [label="1 / step"];
-  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node3 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "wait_and_add" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node0 -> node8 [label="1 / step"];
-  node8 [label="[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node8 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node6 -> node3 [label="1 / step"];
-  node3 [label="[1] assert_eq(s, DUT.s)\n[1] DUT.a := a\n[1] DUT.b := b"];
-  node3 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node12 [label="1 / step"];
+  node12 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] fork"];
+  node12 -> node9 [label="1 / step"];
+  node9 [label="[1] DUT.a := a\n[1] DUT.b := b"];
+  node9 -> node5 [label="1 / step"];
+  node5 [label="[1] DUT.a := a\n[1] DUT.b := b\n[1] assert_eq(s, DUT.s)"];
+  node5 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -426,34 +381,38 @@ digraph "assign_after_observation" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node14 [label="1"];
-  node14 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node14 -> node13 [label="1"];
-  node13 [label="[1] DUT.a := a"];
-  node13 -> node12 [label="1"];
-  node12 [label=""];
-  node12 -> node10 [label="eq(DUT.a, 2)"];
-  node12 -> node11 [label="not(eq(DUT.a, 2))"];
-  node10 [label="[1] DUT.a := 0"];
-  node10 -> node9 [label="1"];
+  node0 -> node16 [label="1"];
+  node16 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node16 -> node15 [label="1"];
+  node15 [label="[1] DUT.a := a"];
+  node15 -> node14 [label="1"];
+  node14 [label=""];
+  node14 -> node12 [label="eq(DUT.a, 2)"];
+  node14 -> node13 [label="not(eq(DUT.a, 2))"];
+  node12 [label="[1] DUT.a := 0"];
+  node12 -> node11 [label="1"];
+  node13 [label=""];
+  node13 -> node11 [label="1"];
   node11 [label=""];
-  node11 -> node9 [label="1"];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.b := b"];
+  node10 -> node9 [label="1"];
   node9 [label=""];
-  node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := b"];
+  node9 -> node8 [label="1 / step"];
+  node8 [label=""];
   node8 -> node7 [label="1"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X"];
+  node7 [label="[1] DUT.a := X"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.b := X"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] assert_eq(s, DUT.s)"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] assert_eq(s, DUT.s)"];
+  node4 [label="[1] fork"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -463,11 +422,11 @@ digraph "assign_after_observation" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := 0 if eq(a, 2); a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := 0 if eq(a, 2); a\n[1] $previous_a_5 := ite(1, 0, a) if eq(a, 2); ite(1, a, $previous_a_5); ite(1, $previous_a_5, $previous_a_5)\n[1] $previous_a_is_x_5 := ite(0, 1, ite(1, 0, 0)) if eq(a, 2); ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_5))\n[1] DUT.b := b\n[1] $previous_b_5 := ite(1, b, $previous_b_5); ite(1, $previous_b_5, $previous_b_5)\n[1] $previous_b_is_x_5 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_5))"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X; $previous_a_5 if not($previous_a_is_x_5)\n[1] DUT.b := X; $previous_b_5 if not($previous_b_is_x_5)\n[1] $previous_a_5 := ite(1, $previous_a_5, $previous_a_5)\n[1] $previous_a_is_x_5 := ite(1, 1, ite(0, 0, $previous_a_is_x_5))\n[1] $previous_b_5 := ite(1, $previous_b_5, $previous_b_5)\n[1] $previous_b_is_x_5 := ite(1, 1, ite(0, 0, $previous_b_is_x_5))\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_5 if not($previous_a_is_x_5)\n[1] DUT.b := X; $previous_b_5 if not($previous_b_is_x_5)\n[1] done\n[1] $previous_a_5 := ite(1, $previous_a_5, $previous_a_5)\n[1] $previous_a_is_x_5 := ite(1, 1, ite(0, 0, $previous_a_is_x_5))\n[1] $previous_b_5 := ite(1, $previous_b_5, $previous_b_5)\n[1] $previous_b_is_x_5 := ite(1, 1, ite(0, 0, $previous_b_is_x_5))"];
 }
 
 == post-simplification ==
@@ -477,23 +436,10 @@ digraph "assign_after_observation" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := 0 if eq(a, 2); a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "assign_after_observation" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := 0 if eq(a, 2); a\n[1] DUT.b := b"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(s, DUT.s)\n[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(s, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == unsupported monitor ==
@@ -506,28 +452,32 @@ digraph "better_if_else" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node11 [label="1"];
-  node11 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node13 [label="1"];
+  node13 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node13 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := a"];
+  node12 -> node11 [label="1"];
+  node11 [label="[1] DUT.b := b"];
   node11 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := a"];
-  node10 -> node9 [label="1"];
-  node9 [label="[1] DUT.b := b"];
+  node10 [label=""];
+  node10 -> node9 [label="1 / step"];
+  node9 [label=""];
   node9 -> node8 [label="1"];
   node8 [label=""];
-  node8 -> node7 [label="1 / step"];
-  node7 [label=""];
-  node7 -> node5 [label="eq(DUT.s, 0)"];
-  node7 -> node6 [label="not(eq(DUT.s, 0))"];
-  node5 [label="[1] DUT.a := X"];
+  node8 -> node6 [label="eq(DUT.s, 0)"];
+  node8 -> node7 [label="not(eq(DUT.s, 0))"];
+  node6 [label="[1] DUT.a := X"];
+  node6 -> node5 [label="1"];
+  node7 [label="[1] DUT.a := 5"];
+  node7 -> node5 [label="1"];
+  node5 [label=""];
   node5 -> node4 [label="1"];
-  node6 [label="[1] DUT.a := 5"];
-  node6 -> node4 [label="1"];
-  node4 [label=""];
+  node4 [label="[1] fork"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -537,11 +487,11 @@ digraph "better_if_else" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node7 [label="1 / step"];
-  node7 [label="[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0))\n[1] fork"];
-  node7 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a\n[1] $previous_a_6 := ite(1, a, $previous_a_6); ite(1, $previous_a_6, $previous_a_6)\n[1] $previous_a_is_x_6 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_6))\n[1] DUT.b := b\n[1] $previous_b_6 := ite(1, b, $previous_b_6); ite(1, $previous_b_6, $previous_b_6)\n[1] $previous_b_is_x_6 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_6))"];
+  node0 -> node9 [label="1 / step"];
+  node9 [label="[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0)); $previous_a_6 if not($previous_a_is_x_6)\n[1] DUT.b := X if $previous_b_is_x_6; $previous_b_6 if not($previous_b_is_x_6)\n[1] $previous_a_6 := ite(1, $previous_a_6, $previous_a_6) if eq(DUT.s, 0); ite(1, 5, $previous_a_6) if not(eq(DUT.s, 0))\n[1] $previous_a_is_x_6 := ite(1, 1, ite(0, 0, $previous_a_is_x_6)) if eq(DUT.s, 0); ite(0, 1, ite(1, 0, $previous_a_is_x_6)) if not(eq(DUT.s, 0))\n[1] fork"];
+  node9 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_6 if not($previous_a_is_x_6)\n[1] DUT.b := X; $previous_b_6 if not($previous_b_is_x_6)\n[1] done\n[1] $previous_a_6 := ite(1, $previous_a_6, $previous_a_6)\n[1] $previous_a_is_x_6 := ite(1, 1, ite(0, 0, $previous_a_is_x_6))\n[1] $previous_b_6 := ite(1, $previous_b_6, $previous_b_6)\n[1] $previous_b_is_x_6 := ite(1, 1, ite(0, 0, $previous_b_is_x_6))"];
 }
 
 == post-simplification ==
@@ -551,23 +501,10 @@ digraph "better_if_else" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node7 [label="1 / step"];
-  node7 [label="[1] fork\n[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0))\n[1] DUT.b := b"];
-  node7 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "better_if_else" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a\n[1] DUT.b := b"];
-  node0 -> node7 [label="1 / step"];
-  node7 [label="[1] fork\n[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0))\n[1] DUT.b := b"];
-  node7 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node9 [label="1 / step"];
+  node9 [label="[1] DUT.a := X if eq(DUT.s, 0); 5 if not(eq(DUT.s, 0)); a\n[1] DUT.b := b\n[1] fork"];
+  node9 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
@@ -578,7 +515,7 @@ digraph "better_if_else" {
   entry_marker -> node0;
   node0 [label="[1] $monitor_a_value_6 := DUT.a\n[1] $monitor_b_value_6 := DUT.b"];
   node0 -> node1 [label="1 / step"];
-  node1 [label="[1] fork\n[not(eq(DUT.s, 0))] assert_eq(DUT.a, 5)\n[1] assert_eq($monitor_b_value_6, DUT.b)"];
+  node1 [label="[not(eq(DUT.s, 0))] assert_eq(DUT.a, 5)\n[1] assert_eq($monitor_b_value_6, DUT.b)\n[1] fork"];
   node1 -> node2 [label="1 / step"];
   node2 [label="[1] done"];
 }
@@ -590,29 +527,33 @@ digraph "if_else" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label=""];
-  node0 -> node13 [label="1"];
-  node13 [label="[1] DUT.a := X\n[1] DUT.b := X"];
-  node13 -> node12 [label="1"];
-  node12 [label=""];
-  node12 -> node10 [label="1"];
-  node10 [label="[1] DUT.a := a1"];
+  node0 -> node15 [label="1"];
+  node15 [label="[1] DUT.a := X\n[1] DUT.b := X"];
+  node15 -> node14 [label="1"];
+  node14 [label=""];
+  node14 -> node12 [label="1"];
+  node12 [label="[1] DUT.a := a1"];
+  node12 -> node11 [label="1"];
+  node11 [label=""];
+  node11 -> node10 [label="1"];
+  node10 [label="[1] DUT.b := 0"];
   node10 -> node9 [label="1"];
   node9 [label=""];
-  node9 -> node8 [label="1"];
-  node8 [label="[1] DUT.b := 0"];
+  node9 -> node8 [label="1 / step"];
+  node8 [label=""];
   node8 -> node7 [label="1"];
-  node7 [label=""];
-  node7 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X"];
+  node7 [label="[1] DUT.a := X"];
+  node7 -> node6 [label="1"];
+  node6 [label="[1] DUT.b := X"];
   node6 -> node5 [label="1"];
-  node5 [label="[1] DUT.b := X"];
+  node5 [label="[1] assert_eq(a1, DUT.s)"];
   node5 -> node4 [label="1"];
-  node4 [label="[1] assert_eq(a1, DUT.s)"];
+  node4 [label="[1] fork"];
   node4 -> node3 [label="1"];
-  node3 [label="[1] fork"];
-  node3 -> node2 [label="1"];
+  node3 [label=""];
+  node3 -> node2 [label="1 / step"];
   node2 [label=""];
-  node2 -> node1 [label="1 / step"];
+  node2 -> node1 [label="1"];
   node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
 }
 
@@ -622,11 +563,11 @@ digraph "if_else" {
   node [shape=box];
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
-  node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 [label="[1] DUT.a := a1\n[1] $previous_a_7 := ite(1, a1, $previous_a_7); ite(1, $previous_a_7, $previous_a_7)\n[1] $previous_a_is_x_7 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_a_is_x_7))\n[1] DUT.b := 0\n[1] $previous_b_7 := ite(1, 0, $previous_b_7); ite(1, $previous_b_7, $previous_b_7)\n[1] $previous_b_is_x_7 := ite(0, 1, ite(1, 0, 1)); ite(1, 1, ite(0, 0, $previous_b_is_x_7))"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X; $previous_a_7 if not($previous_a_is_x_7)\n[1] DUT.b := X; $previous_b_7 if not($previous_b_is_x_7)\n[1] $previous_a_7 := ite(1, $previous_a_7, $previous_a_7)\n[1] $previous_a_is_x_7 := ite(1, 1, ite(0, 0, $previous_a_is_x_7))\n[1] $previous_b_7 := ite(1, $previous_b_7, $previous_b_7)\n[1] $previous_b_is_x_7 := ite(1, 1, ite(0, 0, $previous_b_is_x_7))\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X; $previous_a_7 if not($previous_a_is_x_7)\n[1] DUT.b := X; $previous_b_7 if not($previous_b_is_x_7)\n[1] done\n[1] $previous_a_7 := ite(1, $previous_a_7, $previous_a_7)\n[1] $previous_a_is_x_7 := ite(1, 1, ite(0, 0, $previous_a_is_x_7))\n[1] $previous_b_7 := ite(1, $previous_b_7, $previous_b_7)\n[1] $previous_b_is_x_7 := ite(1, 1, ite(0, 0, $previous_b_is_x_7))"];
 }
 
 == post-simplification ==
@@ -636,23 +577,10 @@ digraph "if_else" {
   entry_marker [shape=plain,label="ENTRY"];
   entry_marker -> node0;
   node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(a1, DUT.s)\n[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
-}
-
-== post-normalize ==
-digraph "if_else" {
-  rankdir=LR;
-  node [shape=box];
-  entry_marker [shape=plain,label="ENTRY"];
-  entry_marker -> node0;
-  node0 [label="[1] DUT.a := a1\n[1] DUT.b := 0"];
-  node0 -> node6 [label="1 / step"];
-  node6 [label="[1] assert_eq(a1, DUT.s)\n[1] fork\n[1] DUT.a := X\n[1] DUT.b := X"];
-  node6 -> node1 [label="1 / step"];
-  node1 [label="[1] done\n[1] DUT.a := X\n[1] DUT.b := X"];
+  node0 -> node8 [label="1 / step"];
+  node8 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] assert_eq(a1, DUT.s)\n[1] fork"];
+  node8 -> node2 [label="1 / step"];
+  node2 [label="[1] DUT.a := X\n[1] DUT.b := X\n[1] done"];
 }
 
 == simplified monitor ==
