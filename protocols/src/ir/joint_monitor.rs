@@ -12,6 +12,7 @@ use crate::ir::joint_automaton::{
     build_joint_control_automaton, prepare_joint_protocols,
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
+use crate::ir::register_simplify::simplify_guarded;
 
 /// Parameter ownership includes both the protocol and its logical FIFO slot.
 pub type InstanceParameter = (ProtocolId, usize, SymbolId);
@@ -26,6 +27,8 @@ pub struct JointMonitorAutomaton {
     pub knownness_registers: FxHashMap<InstanceParameter, SymbolId>,
     pub live_registers: FxHashMap<InstanceId, SymbolId>,
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
+    /// All registers, including deterministic loop state, grouped by instance.
+    pub registers: FxHashMap<InstanceParameter, SymbolId>,
     /// (Node, action index) -> owning instance. Global Done actions have no owner.
     pub action_owners: FxHashMap<(NodeId, usize), InstanceId>,
 }
@@ -110,6 +113,7 @@ pub fn compose_joint_monitor_automaton(
         knownness_registers: FxHashMap::default(),
         live_registers: FxHashMap::default(),
         register_inits: FxHashMap::default(),
+        registers: FxHashMap::default(),
         action_owners: FxHashMap::default(),
     };
 
@@ -145,6 +149,7 @@ pub fn compose_joint_monitor_automaton(
                     .add_register(ctx, symbols, &base, width);
                 let expr = result.control.graph.symbol_expr(register).unwrap();
                 targets.insert(old, register);
+                result.registers.insert((protocol, slot, old), register);
                 substitutions.insert(monitor.graph.symbol_expr(old).unwrap(), expr);
                 // No transaction is active initially. Launching restores the
                 // template's live=true along with fresh parameter values/masks.
@@ -185,6 +190,7 @@ pub fn compose_joint_monitor_automaton(
         let mut ongoing = ctx.get_true();
         let mut any_launch = ctx.get_false();
         let mut launches = FxHashMap::default();
+        let mut edge_values = FxHashMap::default();
         for instance in result.control.instances[&node].clone() {
             // Use the register copies allocated for this protocol and slot.
             let owner = (instance.protocol, instance.slot);
@@ -199,8 +205,24 @@ pub fn compose_joint_monitor_automaton(
                     substitutions.insert(monitor.graph.symbol_expr(register).unwrap(), init);
                 }
             }
+            for (old, alias) in crate::ir::joint_automaton::joint_argument_substitutions(
+                ctx,
+                &monitor.graph,
+                &result.protocols[instance.protocol],
+                symbols,
+                instance.slot,
+            ) {
+                if let Some(&value) = substitutions.get(&old) {
+                    edge_values.insert(alias, value);
+                }
+            }
             // Copy this instance's actions and track which registers they update.
             let mut assigned = FxHashSet::default();
+            let mut survives = if instance.starts {
+                ctx.get_true()
+            } else {
+                live
+            };
             for action in &monitor.graph[instance.control].actions {
                 // Fork and completion are handled by the shared control graph.
                 if matches!(monitor.graph[action.op], Op::Fork | Op::Done) {
@@ -208,13 +230,22 @@ pub fn compose_joint_monitor_automaton(
                 }
                 let op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
                 let guard = remap_expr(ctx, action.guard, &substitutions);
-                if let Op::Assign(register, _) = &op {
+                if let Op::Assign(register, assignment) = &op {
                     assert_eq!(
                         guard,
                         ctx.get_true(),
                         "monitor assignment guards must be true"
                     );
                     assigned.insert(*register);
+                    if *register == live_register {
+                        let old = if instance.starts {
+                            ctx.get_true()
+                        } else {
+                            live
+                        };
+                        let x = ctx.get_false();
+                        survives = assignment.to_expr(ctx, x, old);
+                    }
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
@@ -239,10 +270,10 @@ pub fn compose_joint_monitor_automaton(
             }
             // Track new and ongoing instances' live flags after this node's assignments.
             if instance.starts {
-                any_launch = ctx.or(any_launch, live);
-                launches.insert(instance.protocol, live);
+                any_launch = ctx.or(any_launch, survives);
+                launches.insert(instance.protocol, survives);
             } else {
-                ongoing = ctx.and(ongoing, live);
+                ongoing = ctx.and(ongoing, survives);
             }
         }
         // Require all ongoing instances to survive, plus a candidate at choice nodes.
@@ -267,7 +298,8 @@ pub fn compose_joint_monitor_automaton(
                 JointTransitionKind::Continue => ctx.get_true(),
             };
             let survives = ctx.and(ongoing, selected);
-            edge.guard = ctx.and(edge.guard, survives);
+            let guard = remap_expr(ctx, edge.guard, &edge_values);
+            edge.guard = ctx.and(guard, survives);
         }
         // Enter the bad state if an ongoing instance dies or all choice candidates fail.
         let failed = ctx.not(required);
@@ -295,16 +327,13 @@ fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
         let mut failed = ctx.get_false();
         let mut actions = Vec::new();
         for action in graph[node].actions.clone() {
-            if let Op::AssertEq(lhs, rhs) = graph[action.op] {
-                let equal = ctx.equal(lhs, rhs);
-                let unequal = ctx.not(equal);
-                let failure = ctx.and(action.guard, unequal);
+            if let Some(failure) = graph[action.op].assertion_failure(ctx, action.guard) {
                 failed = ctx.or(failed, failure);
             } else {
                 actions.push(action);
             }
         }
-        let failed = graph.simplifier.simplify(ctx, failed);
+        let failed = simplify_guarded(ctx, &mut graph.simplifier, failed, ctx.get_true());
         let mut concretes = Vec::new();
         if failed != ctx.get_false() {
             concretes.push((failed, ctx.get_false()));

@@ -46,7 +46,21 @@ fn to_dot_string_with_node_labels_from_entry(
     ));
     out.push_str("  rankdir=LR;\n");
     out.push_str("  node [shape=box];\n");
-    out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
+    let mut entry_label = "ENTRY".to_string();
+    for (id, source) in protocol.loops.iter() {
+        let source = match source.source.argument {
+            Some(argument) => symbols[argument].name().to_string(),
+            None => format!(
+                "length {}",
+                format_expr(ctx, protocol, source.source.length.unwrap())
+            ),
+        };
+        entry_label.push_str(&format!("\\n{id}: {source}"));
+    }
+    out.push_str(&format!(
+        "  entry_marker [shape=plain,label=\"{}\"];\n",
+        escape_label(&entry_label)
+    ));
     out.push_str(&format!("  entry_marker -> {};\n", entry));
 
     for node_id in protocol.reachable_node_ids(ctx, entry) {
@@ -333,8 +347,13 @@ mod tests {
 
             assignment_normalized_ir.garbage_collect_unreachable(&ctx, false);
             let monitor =
-                convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
-                    .unwrap();
+                match convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols) {
+                    Ok(monitor) => monitor,
+                    Err(error) => {
+                        content += &format!("== unsupported monitor ==\n{error}\n\n");
+                        continue;
+                    }
+                };
             let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
             content += "== simplified monitor ==\n";
             content += &monitor.to_dot_string(&ctx, &symbols);
@@ -393,7 +412,12 @@ mod tests {
 
     #[test]
     fn test_counter_snapshot() {
-        snap("ir_graphviz_counter", "../tests/counters/counter.prot");
+        let (_, _, monitors) = snap("ir_graphviz_counter", "../tests/counters/counter.prot");
+        // Contraction replaces dut.a with parameter a in the loop conditions.
+        assert!(
+            monitors.is_empty(),
+            "parameter-dependent conditions must be rejected"
+        );
     }
 
     #[test]

@@ -10,12 +10,11 @@ use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::edge_contract::{
-    append_action, append_action_disjoint, contract_edges, guard_assignment,
-    merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch,
-    same_assignment_target,
+    append_action, append_action_disjoint, guard_assignment, merge_disjoint_guarded_assignments,
+    merge_unordered_assignment, same_assignment_target,
 };
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
 
 impl<'a> Lowerer<'a> {
     /// Build the per-copy argument substitution and lower one transaction body.
@@ -24,7 +23,6 @@ impl<'a> Lowerer<'a> {
         ctx: &mut Context,
         ast: &Protocol,
         values: &[Value],
-        keep_done: bool,
     ) -> LoweredFragmentInfo {
         assert_eq!(
             ast.args.len(),
@@ -44,7 +42,7 @@ impl<'a> Lowerer<'a> {
 
         // set the arg substitution to the current transaction's args
         self.trace_arg_subst = subst;
-        self.lower_protocol_fragment(ctx, ast, keep_done, false)
+        self.lower_protocol_fragment(ctx, ast, true, false)
     }
 
     /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.
@@ -146,20 +144,21 @@ impl<'a> Lowerer<'a> {
                         if same_assignment_target(self.symbols, prior_symbol_id, symbol_id)
                 )
             });
+            let assignment = merge_disjoint_guarded_assignments(ctx, &mut self.ir, grouped);
             let assignment = if let Some(idx) = existing_idx {
                 let existing = match self.ir[actions[idx].op].clone() {
                     Op::Assign(_, assignment) => assignment,
                     _ => unreachable!(),
                 };
-                merge_unordered_assignment_with_disjoint_batch(
+                merge_unordered_assignment(
                     ctx,
                     &mut self.ir,
                     &mut internal_assert_guard,
                     existing,
-                    grouped,
+                    assignment,
                 )
             } else {
-                merge_disjoint_guarded_assignments(ctx, &mut self.ir, grouped).0
+                assignment
             };
             let op = self.ir.o(Op::Assign(symbol_id, assignment));
             let true_id = ctx.get_true();
@@ -265,9 +264,8 @@ impl<'a> Lowerer<'a> {
         let ast = *protos_by_name
             .get(name.as_str())
             .unwrap_or_else(|| panic!("unknown protocol {name}"));
-        let keep_done = rest.is_empty();
 
-        let fragment = self.lower_transaction(ctx, ast, values, keep_done);
+        let fragment = self.lower_transaction(ctx, ast, values);
 
         // TODO: we're applying these passes to the entire IR, but technically
         // this is a bit wasteful since we only need to postprocess this
@@ -285,7 +283,6 @@ impl<'a> Lowerer<'a> {
                 guard,
             );
         }
-        contract_edges(ctx, &mut self.ir, self.symbols);
 
         self.append_trace_transactions(ctx, next, rest, protos_by_name);
     }
@@ -309,14 +306,9 @@ pub fn lower_trace_to_ir(
 
     // set up the lowerer and lower the initial transaction
     let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
-    let first = lowerer.lower_transaction(ctx, first_ast, first_values, trace.len() == 1);
-    let entry_node = lowerer.ir.entry;
-    let true_id = ctx.get_true();
-    lowerer
-        .ir
-        .push_transition(entry_node, Transition::new(true_id, first.entry, false));
+    let first = lowerer.lower_transaction(ctx, first_ast, first_values);
+    lowerer.ir.entry = first.entry;
     lowerer.postprocess_trace_fragment(ctx, &first);
-    contract_edges(ctx, &mut lowerer.ir, lowerer.symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.graft_points(ctx, &first);

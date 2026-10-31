@@ -31,25 +31,22 @@ fn bank_fields(monitor: &JointMonitorAutomaton) -> Vec<Vec<Vec<SymbolId>>> {
         .protocols
         .iter()
         .enumerate()
-        .map(|(protocol, proto)| {
+        .map(|(protocol, _)| {
             let count = monitor.control.bank_counts[protocol];
-            let mut fields = Vec::new();
-            for arg in &proto.args {
-                for registers in [&monitor.value_registers, &monitor.knownness_registers] {
-                    if registers.contains_key(&(protocol, 0, arg.symbol())) {
-                        fields.push(
-                            (0..count)
-                                .map(|slot| registers[&(protocol, slot, arg.symbol())])
-                                .collect::<Vec<_>>(),
-                        );
-                    }
-                }
-            }
-            fields.push(
-                (0..count)
-                    .map(|slot| monitor.live_registers[&(protocol, slot)])
-                    .collect(),
-            );
+            let mut registers = monitor
+                .registers
+                .keys()
+                .filter_map(|&(p, slot, r)| (p == protocol && slot == 0).then_some(r))
+                .collect::<Vec<_>>();
+            registers.sort();
+            let fields = registers
+                .into_iter()
+                .map(|r| {
+                    (0..count)
+                        .map(|slot| monitor.registers[&(protocol, slot, r)])
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
             for field in &fields {
                 for &register in field {
                     assert!(
@@ -153,23 +150,14 @@ pub fn into_monitor_transition_system(
     for node in nodes {
         let node_id = ctx.bit_vec_val(node.as_u32(), node_width);
         let at_node = ctx.equal(node_symbol, node_id);
-        let mut updates = FxHashMap::default();
         for action in &graph[node].actions {
             match &graph[action.op] {
                 Op::Assign(register, assignment) => {
                     assert_eq!(action.guard, ctx.get_true());
                     assert_eq!(assignment.dont_care, ctx.get_false());
                     let old = graph.symbol_expr(*register).unwrap();
-                    // Concrete alternatives have first-applicable priority.
-                    let value = assignment
-                        .concretes
-                        .iter()
-                        .rev()
-                        .fold(old, |held, &(guard, value)| ctx.ite(guard, value, held));
-                    assert!(
-                        updates.insert(old, value).is_none(),
-                        "multiple updates to a monitor register"
-                    );
+                    let x = ctx.get_false();
+                    let value = assignment.to_expr(ctx, x, old);
                     let value = remap_expr(ctx, value, &reads);
                     let (protocol, field, slot) = owners[register];
                     let count = monitor.control.bank_counts[protocol];
@@ -193,8 +181,7 @@ pub fn into_monitor_transition_system(
         // Reverse traversal = first enabled edge priority (though we assume edges are mutex).
         for edge in graph[node].transitions.iter().rev() {
             assert!(edge.consumes_step, "monitor edges must consume one sample");
-            let guard = remap_expr(ctx, edge.guard, &updates);
-            let guard = remap_expr(ctx, guard, &reads);
+            let guard = remap_expr(ctx, edge.guard, &reads);
             let taken = ctx.and(at_node, guard);
             let target = ctx.bit_vec_val(edge.target.as_u32(), node_width);
             node_next = ctx.ite(taken, target, node_next);
