@@ -5,9 +5,9 @@
 //! # Verilog Monitors from Graph-based IR
 
 use crate::frontend::Module;
-use crate::frontend::symbol::{SymbolId, SymbolTable};
+use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolTable};
 use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
-use crate::ir::proto_graph::{NodeId, ProtoGraph};
+use crate::ir::proto_graph::ProtoGraph;
 use baa::{BitVecOps, WidthInt};
 use patronus::expr::{Context, Expr, ExprRef};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -20,11 +20,16 @@ pub fn monitor_to_verilog(
     monitor: &JointMonitorAutomaton,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let vgen = VerilogGen::new(st, monitor);
+    let vgen = VerilogGen::new(st, monitor, monitor_pin_dir);
 
     vgen.registers(st, ctx, out)?;
 
     Ok(())
+}
+
+/// for a monitor, both outputs and inputs of the dut are treated as inputs
+fn monitor_pin_dir(_pin: &Field) -> Dir {
+    Dir::In
 }
 
 struct VerilogGen {
@@ -36,12 +41,14 @@ struct VerilogGen {
     state_reg: String,
     state_width: WidthInt,
     regs: Vec<(SymbolId, InstanceParameter, ExprRef)>,
+    pin_dir: fn(&Field) -> Dir,
 }
 
 const NEXT_PREFIX: &str = "next_";
+const MONITOR_PREFIX: &str = "$monitor_";
 
 impl VerilogGen {
-    fn new(st: &SymbolTable, mon: &JointMonitorAutomaton) -> Self {
+    fn new(st: &SymbolTable, mon: &JointMonitorAutomaton, pin_dir: fn(&Field) -> Dir) -> Self {
         let pg = mon.control.graph.clone();
         let keywords = FxHashSet::from_iter(VERILOG_KEYWORDS.iter().cloned());
 
@@ -68,17 +75,19 @@ impl VerilogGen {
             state_reg,
             state_width,
             regs: regs.clone(),
+            pin_dir,
         };
 
         // compute Verilog compatible names for all automaton registers
-
         for &(reg, ..) in &regs {
             let reg_name = st[reg].name().to_string();
-            if let Some(name) = reg_name.strip_prefix("$monitor_") {
+            if let Some(name) = reg_name.strip_prefix(MONITOR_PREFIX) {
                 let new_name = format!("_{name}");
                 out.insert_symbol_name(reg, new_name);
             }
         }
+
+        // register dut pins
 
         out
     }
@@ -104,12 +113,12 @@ impl VerilogGen {
             .collect();
         writeln!(out, "{}", entries.join(",\n"))?;
         writeln!(out, "  }} state_t;\n")?;
-        writeln!(out, "  state_t state, next_state;")?;
+        writeln!(out, "  state_t state, {NEXT_PREFIX}state;")?;
         for (reg, ..) in &self.regs {
             let name = &self.symbol_names[reg];
             writeln!(
                 out,
-                "  {} {}, next_{};",
+                "  {} {}, {NEXT_PREFIX}{};",
                 logic(st[reg].tpe().bitwidth()),
                 name,
                 name,
@@ -133,10 +142,10 @@ impl VerilogGen {
             )?;
         }
         writeln!(out, "    end else begin",)?;
-        writeln!(out, "      state <= next_state;",)?;
+        writeln!(out, "      state <= {NEXT_PREFIX}state;",)?;
         for (reg, _, _) in &self.regs {
             let name = &self.symbol_names[reg];
-            writeln!(out, "      {name} <= next_{name};",)?;
+            writeln!(out, "      {name} <= {NEXT_PREFIX}{name};",)?;
         }
         writeln!(out, "    end",)?;
         writeln!(out, "  end\n",)?;
