@@ -7,9 +7,9 @@
 use crate::frontend::Module;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
-use crate::ir::proto_graph::ProtoGraph;
-use baa::WidthInt;
-use patronus::expr::{Context, ExprRef};
+use crate::ir::proto_graph::{NodeId, ProtoGraph};
+use baa::{BitVecOps, WidthInt};
+use patronus::expr::{Context, Expr, ExprRef};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub fn monitor_to_verilog(
@@ -20,14 +20,9 @@ pub fn monitor_to_verilog(
     monitor: &JointMonitorAutomaton,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let vgen = VerilogGen::new(
-        monitor.control.graph.clone(),
-        st,
-        &monitor.registers,
-        &monitor.register_inits,
-    );
+    let vgen = VerilogGen::new(st, monitor);
 
-    todo!();
+    vgen.registers(st, ctx, out)?;
 
     Ok(())
 }
@@ -37,27 +32,46 @@ struct VerilogGen {
     pg: ProtoGraph,
     symbol_names: FxHashMap<SymbolId, String>,
     expr_names: FxHashMap<ExprRef, String>,
+    state_labels: Vec<String>,
+    state_reg: String,
+    state_width: WidthInt,
+    regs: Vec<(SymbolId, InstanceParameter, ExprRef)>,
 }
 
+const NEXT_PREFIX: &str = "next_";
+
 impl VerilogGen {
-    fn new(
-        pg: ProtoGraph,
-        st: &SymbolTable,
-        regs: &FxHashMap<InstanceParameter, SymbolId>,
-        reg_inits: &FxHashMap<SymbolId, ExprRef>,
-    ) -> Self {
+    fn new(st: &SymbolTable, mon: &JointMonitorAutomaton) -> Self {
+        let pg = mon.control.graph.clone();
         let keywords = FxHashSet::from_iter(VERILOG_KEYWORDS.iter().cloned());
+
+        let num_states = pg.nodes().count();
+        let state_width = usize::BITS - num_states.leading_zeros();
+        let mut state_labels: Vec<_> = (0..num_states).map(|ii| format!("ST_{ii}")).collect();
+        state_labels[pg.entry.as_u32() as usize] = "ST_ENTRY".to_string();
+        state_labels[mon.bad_state.as_u32() as usize] = "ST_BAD".to_string();
+        let state_reg = "state".to_string();
+
+        let mut regs: Vec<_> = mon
+            .registers
+            .iter()
+            .map(|(k, v)| (*v, *k, mon.register_inits[v]))
+            .collect();
+        regs.sort();
 
         let mut out = Self {
             keywords,
             symbol_names: FxHashMap::default(),
             expr_names: FxHashMap::default(),
             pg,
+            state_labels,
+            state_reg,
+            state_width,
+            regs: regs.clone(),
         };
 
         // compute Verilog compatible names for all automaton registers
-        let mut regs: Vec<_> = regs.iter().map(|(k, v)| (*v, *k, reg_inits[v])).collect();
-        regs.sort();
+
         for &(reg, ..) in &regs {
             let reg_name = st[reg].name().to_string();
             if let Some(name) = reg_name.strip_prefix("$monitor_") {
@@ -74,6 +88,83 @@ impl VerilogGen {
         self.symbol_names.insert(sym, name.clone());
         self.expr_names.insert(expr, name);
     }
+
+    fn registers(
+        &self,
+        st: &SymbolTable,
+        ctx: &Context,
+        out: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        writeln!(out, "  typedef enum logic [{}:0] {{", self.state_width - 1)?;
+        let entries: Vec<_> = self
+            .state_labels
+            .iter()
+            .enumerate()
+            .map(|(idx, lbl)| format!("    {lbl}  = {}'d{idx}", self.state_width))
+            .collect();
+        writeln!(out, "{}", entries.join(",\n"))?;
+        writeln!(out, "  }} state_t;\n")?;
+        writeln!(out, "  state_t state, next_state;")?;
+        for (reg, ..) in &self.regs {
+            let name = &self.symbol_names[reg];
+            writeln!(
+                out,
+                "  {} {}, next_{};",
+                logic(st[reg].tpe().bitwidth()),
+                name,
+                name,
+            )?;
+        }
+        writeln!(out)?;
+        // registers
+        writeln!(out, "  always_ff @(posedge clk) begin")?;
+        writeln!(out, "    if (reset) begin",)?;
+        writeln!(
+            out,
+            "      state <= {};",
+            self.state_labels[self.pg.entry.as_u32() as usize]
+        )?;
+        for (reg, _, value) in &self.regs {
+            writeln!(
+                out,
+                "      {} <= {};",
+                self.symbol_names[reg],
+                self.expr_to_verilog(ctx, *value)
+            )?;
+        }
+        writeln!(out, "    end else begin",)?;
+        writeln!(out, "      state <= next_state;",)?;
+        for (reg, _, _) in &self.regs {
+            let name = &self.symbol_names[reg];
+            writeln!(out, "      {name} <= next_{name};",)?;
+        }
+        writeln!(out, "    end",)?;
+        writeln!(out, "  end\n",)?;
+
+        Ok(())
+    }
+
+    fn expr_to_verilog(&self, ctx: &Context, expr: ExprRef) -> String {
+        patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| {
+            if let Some(s) = self.expr_names.get(&expr) {
+                s.to_string()
+            } else {
+                match &ctx[expr] {
+                    Expr::BVSymbol { name, .. } => ctx[*name].to_string(),
+                    Expr::BVLiteral(value) => format!(
+                        "{}'b{}",
+                        value.get(ctx).width(),
+                        value.get(ctx).to_bit_str()
+                    ),
+                    Expr::BVNot(..) => format!("~({})", children[0]),
+                    Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
+                    Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
+                    Expr::BVEqual(..) => format!("({}) == ({})", children[0], children[1]),
+                    other => todo!("{:?}", other),
+                }
+            }
+        })
+    }
 }
 
 fn logic(width: WidthInt) -> String {
@@ -85,7 +176,7 @@ fn logic(width: WidthInt) -> String {
     }
 }
 
-/// Totally LLM generate :cry:
+/// Totally LLM generated _maybe_ Verilog keywords :cry:
 const VERILOG_KEYWORDS: &[&str] = &[
     "accept_on",
     "alias",
