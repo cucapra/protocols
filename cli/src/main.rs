@@ -5,12 +5,14 @@
 use std::path::Path;
 
 use clap::*;
-use protocols::backends::{PinAnnotation, to_verilog};
+use patronus::expr::Context;
+use protocols::backends::{PinAnnotation, monitor_to_verilog, to_verilog};
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::serialize::serialize_modules;
 use protocols::frontend::symbol::SymbolTable;
-use protocols::frontend::{Module, require_single_module};
+use protocols::frontend::{Module, pick_module, require_single_module};
+use protocols::ir::joint_monitor::build_joint_monitor_automaton;
 use protocols::{Value, frontend, transaction_frontend};
 use rustc_hash::FxHashSet;
 
@@ -62,6 +64,15 @@ enum Cmds {
         /// Paths to one or more Verilog (.v) files
         #[arg(long, value_name = "VERILOG_FILES", value_delimiter = ' ', num_args = 1..)]
         verilog: Vec<String>,
+    },
+    /// Build a Verilog monitor from the protocols.
+    VerilogMonitor {
+        /// name of the Verilog module generated
+        #[arg(long)]
+        name: String,
+        /// the module the monitor should be generated from
+        #[arg(long)]
+        module: Option<String>,
     },
 }
 
@@ -204,6 +215,14 @@ fn show(st: &SymbolTable, modules: &[Module], include: &[String]) {
     }
 }
 
+fn verilog_monitor(st: &mut SymbolTable, m: &Module, name: &str) -> Result<(), String> {
+    let mut ctx = Context::default();
+    let monitor =
+        build_joint_monitor_automaton(&mut ctx, m.protos.clone(), st).map_err(|e| e.to_string())?;
+    monitor_to_verilog(&mut ctx, name, m, st, &monitor, &mut std::io::stdout()).unwrap();
+    Ok(())
+}
+
 fn main() {
     // Parse CLI args
     let args = Args::parse();
@@ -258,6 +277,11 @@ fn main() {
         }) => {
             let module = require_single_module(modules, &args.protocol).unwrap();
             run_verilog_tb(&st, &module, run_dir, transactions, clock, verilog);
+        }
+        Some(Cmds::VerilogMonitor { name, module }) => {
+            let module = pick_module(module.as_deref(), modules, &args.protocol).unwrap();
+            let mut st = st;
+            verilog_monitor(&mut st, &module, &name).unwrap();
         }
     }
 }

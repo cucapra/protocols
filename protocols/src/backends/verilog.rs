@@ -2,6 +2,8 @@
 // released under MIT License
 // author: Kevin Laeufer <laeufer@cornell.edu>
 
+//! # Verilog Drivers directly from Protocol ASTs
+
 use baa::{BitVecOps, BitVecValue};
 use rustc_hash::FxHashMap;
 
