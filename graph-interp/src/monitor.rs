@@ -6,22 +6,37 @@ use bi::signal_trace::{
 use patronus::expr::Context;
 use patronus::sim::{InitKind, Interpreter, Simulator};
 use protocols::backends::monitor_transition_system::into_monitor_transition_system;
-use protocols::frontend::Module;
 use protocols::frontend::ast::Clock;
 use protocols::frontend::diagnostic::DiagnosticHandler;
+use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::{Module, require_single_module};
 use protocols::ir::joint_monitor::build_joint_monitor_automaton;
 
 use super::Cli;
 
-pub fn run(cli: &Cli) -> Result<bool, String> {
+fn load_protocols(cli: &Cli) -> Result<(SymbolTable, Vec<Module>), String> {
     let mut diagnostics = DiagnosticHandler::new(clap::ColorChoice::Never, false, false, false);
-    let (mut symbols, modules) = protocols::frontend(
+    protocols::frontend(
         &cli.protocol,
         &mut diagnostics,
         cli.skip_static_step_fork_checks,
         false,
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())
+}
+
+pub fn print_graph(cli: &Cli) -> Result<(), String> {
+    let (mut symbols, modules) = load_protocols(cli)?;
+    let module = require_single_module(modules, &cli.protocol).map_err(|e| e.to_string())?;
+    let mut ctx = Context::default();
+    let monitor = build_joint_monitor_automaton(&mut ctx, module.protos, &mut symbols)
+        .map_err(|e| e.to_string())?;
+    println!("{}", monitor.to_dot_string(&ctx, &symbols));
+    Ok(())
+}
+
+pub fn run(cli: &Cli) -> Result<bool, String> {
+    let (mut symbols, modules) = load_protocols(cli)?;
     let instances = cli
         .instances
         .iter()
@@ -38,6 +53,9 @@ pub fn run(cli: &Cli) -> Result<bool, String> {
             let monitor =
                 build_joint_monitor_automaton(&mut ctx, module.protos.clone(), &mut symbols)
                     .map_err(|e| e.to_string())?;
+            if cli.graphout {
+                println!("{}", monitor.to_dot_string(&ctx, &symbols));
+            }
             let lowered = into_monitor_transition_system(&mut ctx, &monitor, module, &symbols);
             Ok((ctx, lowered))
         })

@@ -131,6 +131,16 @@ $ cargo interp --verilog tests/adders/adder_d1/add_d1.v \
         --verbose
 ```
 
+## Monitor graph output
+
+Generate the final joint-monitor Graphviz graph directly from a protocol file:
+
+```sh
+cargo run -p graph-interp -- --flow unbounded-monitor \
+  --protocol tests/alus/alu_d1.prot --graphout > monitor.dot
+dot -Tpdf monitor.dot -o monitor.pdf
+```
+
 ## Syntax highlighting
 This repository contains a TextMate Bundle, which provides syntax highlighting for `.prot` and `.tx` files 
 (the `.tx` file format is used to supply a list of transactions to be executed for the interpreter).

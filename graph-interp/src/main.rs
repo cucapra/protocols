@@ -71,6 +71,7 @@ struct Cli {
     skip_static_step_fork_checks: bool,
 
     /// Print the final graph used by the selected flow.
+    /// With unbounded-monitor, omit --wave and --instances to only print the graph.
     #[arg(long)]
     graphout: bool,
 
@@ -89,13 +90,16 @@ struct Cli {
 
 fn validate_cli(cli: &Cli) -> Result<(), String> {
     if cli.flow == Flow::UnboundedMonitor {
-        if cli.wave.is_none() || cli.instances.is_empty() {
-            return Err("--flow unbounded-monitor requires --wave and --instances".to_string());
+        let graph_only = cli.graphout && cli.wave.is_none() && cli.instances.is_empty();
+        if !graph_only && (cli.wave.is_none() || cli.instances.is_empty()) {
+            return Err(
+                "--flow unbounded-monitor requires --wave and --instances, or --graphout alone"
+                    .to_string(),
+            );
         }
         if cli.transactions.is_some()
             || !cli.verilog.is_empty()
             || cli.module.is_some()
-            || cli.graphout
             || cli.ascii_waveform
         {
             return Err(
@@ -169,9 +173,21 @@ fn main() {
     }
 
     if cli.flow == Flow::UnboundedMonitor {
+        if cli.graphout && cli.wave.is_none() {
+            if let Err(error) = monitor::print_graph(&cli) {
+                eprintln!("{error}");
+                std::process::exit(2);
+            }
+            return;
+        }
         match monitor::run(&cli) {
             Ok(failed) => {
-                println!("{}", if failed { "Fail" } else { "Pass" });
+                let status = if failed { "Fail" } else { "Pass" };
+                if cli.graphout {
+                    eprintln!("{status}");
+                } else {
+                    println!("{status}");
+                }
                 std::process::exit(i32::from(failed));
             }
             Err(error) => {
