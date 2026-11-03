@@ -25,7 +25,6 @@ pub struct JointMonitorAutomaton {
     pub protocols: Vec<Protocol>,
     pub value_registers: FxHashMap<InstanceParameter, SymbolId>,
     pub knownness_registers: FxHashMap<InstanceParameter, SymbolId>,
-    pub live_registers: FxHashMap<InstanceId, SymbolId>,
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
     /// All registers, including deterministic loop state, grouped by instance.
     pub registers: FxHashMap<InstanceParameter, SymbolId>,
@@ -87,9 +86,10 @@ pub fn compose_joint_monitor_automaton(
     symbols: &mut SymbolTable,
 ) -> Result<JointMonitorAutomaton, JointMonitorError> {
     // set up the monitor ProtoGraphs, build the control automaton
-    for monitor in &mut monitors {
-        lower_constraints(ctx, monitor);
-    }
+    let validity = monitors
+        .iter_mut()
+        .map(|monitor| lower_constraints(ctx, monitor))
+        .collect::<Vec<_>>();
     let sources = monitors
         .iter()
         .map(|monitor| monitor.graph.clone())
@@ -111,7 +111,6 @@ pub fn compose_joint_monitor_automaton(
         protocols,
         value_registers: FxHashMap::default(),
         knownness_registers: FxHashMap::default(),
-        live_registers: FxHashMap::default(),
         register_inits: FxHashMap::default(),
         registers: FxHashMap::default(),
         action_owners: FxHashMap::default(),
@@ -151,14 +150,9 @@ pub fn compose_joint_monitor_automaton(
                 targets.insert(old, register);
                 result.registers.insert((protocol, slot, old), register);
                 substitutions.insert(monitor.graph.symbol_expr(old).unwrap(), expr);
-                // No transaction is active initially. Launching restores the
-                // template's live=true along with fresh parameter values/masks.
-                let init = if old == monitor.live_register {
-                    ctx.get_false()
-                } else {
-                    monitor.register_inits[&old]
-                };
-                result.register_inits.insert(register, init);
+                result
+                    .register_inits
+                    .insert(register, monitor.register_inits[&old]);
             }
             for (&argument, &register) in &monitor.value_registers {
                 result
@@ -170,9 +164,6 @@ pub fn compose_joint_monitor_automaton(
                     .knownness_registers
                     .insert((protocol, slot, argument), targets[&register]);
             }
-            result
-                .live_registers
-                .insert((protocol, slot), targets[&monitor.live_register]);
             instance_targets.insert((protocol, slot), targets);
             instance_exprs.insert((protocol, slot), substitutions);
         }
@@ -196,8 +187,6 @@ pub fn compose_joint_monitor_automaton(
             let owner = (instance.protocol, instance.slot);
             let monitor = &monitors[instance.protocol];
             let targets = &instance_targets[&owner];
-            let live_register = result.live_registers[&owner];
-            let live = result.control.graph.symbol_expr(live_register).unwrap();
             let mut substitutions = instance_exprs[&owner].clone();
             if instance.starts {
                 // Fresh candidates read initial values, even when their slots are reused.
@@ -218,11 +207,11 @@ pub fn compose_joint_monitor_automaton(
             }
             // Copy this instance's actions and track which registers they update.
             let mut assigned = FxHashSet::default();
-            let mut survives = if instance.starts {
-                ctx.get_true()
-            } else {
-                live
-            };
+            let survives = remap_expr(
+                ctx,
+                validity[instance.protocol][&instance.control],
+                &substitutions,
+            );
             for action in &monitor.graph[instance.control].actions {
                 // Fork and completion are handled by the shared control graph.
                 if matches!(monitor.graph[action.op], Op::Fork | Op::Done) {
@@ -230,22 +219,13 @@ pub fn compose_joint_monitor_automaton(
                 }
                 let op = monitor.graph[action.op].remap(ctx, &substitutions, targets);
                 let guard = remap_expr(ctx, action.guard, &substitutions);
-                if let Op::Assign(register, assignment) = &op {
+                if let Op::Assign(register, _) = &op {
                     assert_eq!(
                         guard,
                         ctx.get_true(),
                         "monitor assignment guards must be true"
                     );
                     assigned.insert(*register);
-                    if *register == live_register {
-                        let old = if instance.starts {
-                            ctx.get_true()
-                        } else {
-                            live
-                        };
-                        let x = ctx.get_false();
-                        survives = assignment.to_expr(ctx, x, old);
-                    }
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
@@ -255,7 +235,7 @@ pub fn compose_joint_monitor_automaton(
                 registers.sort_by_key(|(register, _)| **register);
                 for (&old, &init) in registers {
                     let register = targets[&old];
-                    if old != monitor.live_register && !assigned.contains(&register) {
+                    if !assigned.contains(&register) {
                         let assignment =
                             Assignment::concrete(ctx.get_false(), ctx.get_true(), init);
                         push_owned_action(
@@ -268,7 +248,7 @@ pub fn compose_joint_monitor_automaton(
                     }
                 }
             }
-            // Track new and ongoing instances' live flags after this node's assignments.
+            // Require each instance's constraints to hold on the current sample
             if instance.starts {
                 any_launch = ctx.or(any_launch, survives);
                 launches.insert(instance.protocol, survives);
@@ -291,7 +271,7 @@ pub fn compose_joint_monitor_automaton(
             .iter_mut()
             .enumerate()
         {
-            // Select launches by liveness; completion uses Done rather than a stop edge.
+            // Select launches by their constraints; completion uses Done rather than a stop edge.
             let selected = match result.control.transition_kinds[&(node, index)] {
                 JointTransitionKind::Launch(protocol) => launches[&protocol],
                 JointTransitionKind::Stop => ctx.get_false(),
@@ -317,12 +297,15 @@ pub fn compose_joint_monitor_automaton(
     Ok(result)
 }
 
-/// lower constraints in each individual monitor, before unbounded composition.
-/// `[guard] assert_eq(lhs, rhs)` --> reason to set liveness to 0 (`guard && !(lhs == rhs)`).
-fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
+/// Remove monitor assertions and collect the validity condition for each source node.
+/// A failed constraint takes the joint monitor to the bad state
+fn lower_constraints(
+    ctx: &mut Context,
+    monitor: &mut MonitorAutomaton,
+) -> FxHashMap<NodeId, ExprRef> {
     let graph = &mut monitor.graph;
-    let live = graph.symbol_expr(monitor.live_register).unwrap();
     let nodes = graph.nodes().map(|(node, _)| node).collect::<Vec<_>>();
+    let mut validity = FxHashMap::default();
     for node in nodes {
         let mut failed = ctx.get_false();
         let mut actions = Vec::new();
@@ -334,23 +317,11 @@ fn lower_constraints(ctx: &mut Context, monitor: &mut MonitorAutomaton) {
             }
         }
         let failed = simplify_guarded(ctx, &mut graph.simplifier, failed, ctx.get_true());
-        let mut concretes = Vec::new();
-        if failed != ctx.get_false() {
-            concretes.push((failed, ctx.get_false()));
-        }
-        // The kill alternative has priority; otherwise preserve liveness.
-        concretes.push((ctx.get_true(), live));
-        let op = graph.o(Op::Assign(
-            monitor.live_register,
-            Assignment {
-                dont_care: ctx.get_false(),
-                concretes,
-            },
-        ));
-        actions.push(Action::new(ctx.get_true(), op));
+        validity.insert(node, ctx.not(failed));
         graph.node_mut(node).actions = actions;
     }
-    graph.garbage_collect_unreachable(ctx, false);
+
+    validity
 }
 
 fn push_owned_action(

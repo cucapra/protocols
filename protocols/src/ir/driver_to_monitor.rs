@@ -21,8 +21,6 @@ pub struct MonitorAutomaton {
     /// (For the naive monitor, value, and knownness registers all start 0,
     /// and the live register starts at 1, but as we optimize these can change).
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
-    /// the symbol that is true if a constraint hasn't failed yet.
-    pub live_register: SymbolId,
 }
 
 impl MonitorAutomaton {
@@ -38,13 +36,11 @@ pub fn simplify_monitor(
     symbols: &mut SymbolTable,
 ) -> MonitorAutomaton {
     // Parameter values are captured results, even when no later check reads them.
-    // Joint construction adds liveness reads after this simplification.
-    let mut preserved = monitor
+    let preserved = monitor
         .value_registers
         .values()
         .copied()
         .collect::<FxHashSet<_>>();
-    preserved.insert(monitor.live_register);
     let entry = monitor.graph.entry;
     let dead = simplify_registers(
         ctx,
@@ -235,10 +231,6 @@ fn convert_driver(
         register_inits.extend([(value, zero), (known, zero)]);
     }
 
-    // allocate liveness register, set it to 1.
-    let live_register = graph.add_register(ctx, symbols, "$monitor_live", 1);
-    register_inits.insert(live_register, ctx.get_true());
-
     // Cache pin expressions, including pins used only as assignment targets.
     let pins: Vec<_> = graph.dut_pins(symbols).collect();
     let mut sampled_x = FxHashMap::default();
@@ -302,7 +294,6 @@ fn convert_driver(
         value_registers,
         knownness_registers,
         register_inits,
-        live_register,
     })
 }
 
