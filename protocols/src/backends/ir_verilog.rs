@@ -9,7 +9,7 @@ use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolKind, SymbolTable};
 use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use baa::{BitVecOps, WidthInt};
-use patronus::expr::{Context, Expr, ExprRef};
+use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub fn monitor_to_verilog(
@@ -228,6 +228,7 @@ impl VerilogGen {
                 }
 
                 if tran.guard != ctx.get_true() {
+                    writeln!(out, "      // {}", tran.guard.serialize_to_str(ctx))?;
                     writeln!(out, "      if ({})", self.expr_to_verilog(ctx, tran.guard))?;
                     write!(out, "  ")?;
                 }
