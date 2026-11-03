@@ -9,10 +9,10 @@ use baa::WidthInt;
 use clap::{ColorChoice, Parser};
 use patronus::expr::{Context, ExprRef};
 use protocols::frontend;
-use protocols::frontend::Module;
 use protocols::frontend::ast::Protocol;
 use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{SymbolId, SymbolTable};
+use protocols::frontend::{Module, pick_module};
 use protocols::ir::driver_to_monitor::{
     MonitorAutomaton, convert_driver_to_capturing_driver, simplify_monitor,
 };
@@ -452,19 +452,7 @@ fn main() {
     )
     .unwrap();
 
-    let available_modules: Vec<_> = modules.iter().map(|m| m.name.clone()).collect();
-    let module = modules
-        .iter()
-        .find(|m| m.name == args.module)
-        .unwrap_or_else(|| {
-            panic!(
-                "Module {} not found. Available modules: {}",
-                args.module,
-                available_modules.join(", ")
-            )
-        });
-
+    let module = pick_module(Some(&args.module), modules, &args.protocol).unwrap();
     let name = args.name.unwrap_or_else(|| format!("{}Bind", module.name));
-
-    gen_driver(&mut st, module, &name);
+    gen_driver(&mut st, &module, &name);
 }
