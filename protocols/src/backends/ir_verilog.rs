@@ -5,9 +5,9 @@
 //! # Verilog Monitors from Graph-based IR
 
 use crate::frontend::Module;
-use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolTable};
+use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolKind, SymbolTable};
 use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
-use crate::ir::proto_graph::ProtoGraph;
+use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use baa::{BitVecOps, WidthInt};
 use patronus::expr::{Context, Expr, ExprRef};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -20,9 +20,10 @@ pub fn monitor_to_verilog(
     monitor: &JointMonitorAutomaton,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let vgen = VerilogGen::new(st, monitor, monitor_pin_dir);
+    let vgen = VerilogGen::new(st, m, monitor, monitor_pin_dir);
 
     vgen.registers(st, ctx, out)?;
+    vgen.state_machine(st, ctx, out)?;
 
     Ok(())
 }
@@ -41,14 +42,20 @@ struct VerilogGen {
     state_reg: String,
     state_width: WidthInt,
     regs: Vec<(SymbolId, InstanceParameter, ExprRef)>,
-    pin_dir: fn(&Field) -> Dir,
+    pins: Vec<(String, Dir, WidthInt)>,
 }
 
 const NEXT_PREFIX: &str = "next_";
 const MONITOR_PREFIX: &str = "$monitor_";
+const DUT_PREFIX: &str = "dut_";
 
 impl VerilogGen {
-    fn new(st: &SymbolTable, mon: &JointMonitorAutomaton, pin_dir: fn(&Field) -> Dir) -> Self {
+    fn new(
+        st: &SymbolTable,
+        m: &Module,
+        mon: &JointMonitorAutomaton,
+        pin_dir: fn(&Field) -> Dir,
+    ) -> Self {
         let pg = mon.control.graph.clone();
         let keywords = FxHashSet::from_iter(VERILOG_KEYWORDS.iter().cloned());
 
@@ -65,6 +72,17 @@ impl VerilogGen {
             .map(|(k, v)| (*v, *k, mon.register_inits[v]))
             .collect();
         regs.sort();
+        let pins: Vec<_> = m
+            .pins
+            .iter()
+            .map(|p| {
+                (
+                    format!("{DUT_PREFIX}{}", p.name()),
+                    pin_dir(p),
+                    p.bitwidth(),
+                )
+            })
+            .collect();
 
         let mut out = Self {
             keywords,
@@ -75,7 +93,7 @@ impl VerilogGen {
             state_reg,
             state_width,
             regs: regs.clone(),
-            pin_dir,
+            pins: pins.clone(),
         };
 
         // compute Verilog compatible names for all automaton registers
@@ -88,6 +106,12 @@ impl VerilogGen {
         }
 
         // register dut pins
+        for (pin_idx, (pin_name, ..)) in pins.into_iter().enumerate() {
+            for syms in &m.proto_pin_map {
+                let sym = syms[pin_idx];
+                out.insert_symbol_name(sym, pin_name.clone());
+            }
+        }
 
         out
     }
@@ -153,6 +177,69 @@ impl VerilogGen {
         Ok(())
     }
 
+    fn state_machine(
+        &self,
+        st: &SymbolTable,
+        ctx: &Context,
+        out: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        writeln!(out, "  always_comb begin")?;
+        writeln!(out, "    // register default to their previous values")?;
+        writeln!(out, "    next_state = state;")?;
+        for (reg, _, _) in &self.regs {
+            let name = &self.symbol_names[reg];
+            writeln!(out, "    {NEXT_PREFIX}{name} = {name};",)?;
+        }
+        writeln!(out)?;
+        writeln!(out, "    // default values for dut inputs")?;
+        for (pin_name, pin_dir, pin_width) in &self.pins {
+            if *pin_dir == Dir::Out {
+                // TODO: we need to know all the symbols that this pin maps to
+                writeln!(
+                    out,
+                    "    // TODO: find all the assignments to this particular pin for a better default assignment!"
+                )?;
+                writeln!(out, "    {pin_name} = {pin_width}'d0;",)?;
+            }
+        }
+        writeln!(out)?;
+
+        // states
+        writeln!(out, "    unique case (state)")?;
+        for (idx, lbl) in self.state_labels.iter().enumerate() {
+            writeln!(out, "      {lbl}: begin")?;
+            let node_id = NodeId::from_u32(idx as u32);
+            for act in &self.pg[node_id].actions {
+                self.action_to_verilog(ctx, st, act, "      ", out)?;
+            }
+            for tran in &self.pg[node_id].transitions {
+                if tran.guard == ctx.get_false() || tran.target == node_id {
+                    continue;
+                }
+
+                if tran.guard != ctx.get_true() {
+                    writeln!(
+                        out,
+                        "        if ({})",
+                        self.expr_to_verilog(ctx, tran.guard)
+                    )?;
+                    write!(out, "  ")?;
+                }
+
+                writeln!(
+                    out,
+                    "        next_state = {};",
+                    self.state_labels[tran.target.as_u32() as usize]
+                )?;
+            }
+            writeln!(out, "    end")?;
+        }
+        writeln!(out, "    endcase")?;
+
+        writeln!(out, "  end")?;
+        Ok(())
+    }
+
     fn expr_to_verilog(&self, ctx: &Context, expr: ExprRef) -> String {
         patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| {
             if let Some(s) = self.expr_names.get(&expr) {
@@ -173,6 +260,94 @@ impl VerilogGen {
                 }
             }
         })
+    }
+
+    fn action_to_verilog(
+        &self,
+        ctx: &Context,
+        st: &SymbolTable,
+        act: &Action,
+        indent: &str,
+        out: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        if matches!(&self.pg[act.op], Op::InternalAssertFalse) {
+            writeln!(
+                out,
+                "{indent}// assert_false({})",
+                self.expr_to_verilog(ctx, act.guard)
+            )?;
+            return Ok(()); // ignore internal asserts
+        }
+        if act.guard != ctx.get_true() {
+            writeln!(out, "{indent}if ({})", self.expr_to_verilog(ctx, act.guard))?;
+            write!(out, "  ")?; // extra indent
+        }
+        match &self.pg[act.op] {
+            // ignore don't care
+            Op::Assign(lhs, rhs) => {
+                let lhs = self.lhs_symbol_name(st, *lhs);
+                if rhs.dont_care == ctx.get_true() {
+                    writeln!(out, "{indent}// {lhs} = DontCare")?;
+                } else {
+                    if rhs.concretes.len() == 1 {
+                        writeln!(
+                            out,
+                            "{indent}{lhs} = {};",
+                            self.expr_to_verilog(ctx, rhs.concretes[0].1)
+                        )?;
+                    } else {
+                        let false_assign = rhs
+                            .concretes
+                            .iter()
+                            .find(|(_, e)| *e == ctx.get_false())
+                            .cloned();
+                        let true_assign = rhs
+                            .concretes
+                            .iter()
+                            .find(|(_, e)| *e == ctx.get_true())
+                            .cloned();
+                        if let Some((tg, _)) = true_assign
+                            && let Some((fg, _)) = false_assign
+                            && rhs.concretes.len() == 2
+                        {
+                            let tg = self.expr_to_verilog(ctx, tg);
+                            let fg = self.expr_to_verilog(ctx, fg);
+                            if tg.len() < fg.len() {
+                                writeln!(out, "{indent}{lhs} = {tg};")?;
+                            } else {
+                                writeln!(out, "{indent}{lhs} = ~({fg});")?;
+                            }
+                        } else {
+                            todo!("deal with multiple options {rhs:?}")
+                        }
+                    }
+                }
+            }
+            Op::AssertEq(a, b) => {
+                writeln!(
+                    out,
+                    "{indent}// TODO: assert_eq({}, {});",
+                    self.expr_to_verilog(ctx, *a),
+                    self.expr_to_verilog(ctx, *b)
+                )?;
+            }
+            Op::Fork => unreachable!("all forks should be gone!"),
+            Op::InternalAssertFalse => {}
+            Op::Done => writeln!(out, "{indent}// WARN: ignoring done")?,
+        }
+        Ok(())
+    }
+
+    fn lhs_symbol_name(&self, st: &SymbolTable, sym: SymbolId) -> String {
+        // all symbols that appear on the lhs should be defined in the name table
+        let name = &self.symbol_names[&sym];
+        let sym = &st[sym];
+        if sym.kind() == SymbolKind::AutomatonState {
+            // on the lhs, we want to refer to the next state
+            format!("next_{name}")
+        } else {
+            name.to_string()
+        }
     }
 }
 
