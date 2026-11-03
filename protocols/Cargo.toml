@@ -24,6 +24,7 @@ thiserror = "2.0.19"
 codespan-reporting = "0.11.1"
 lazy_static = "1.5.0"
 tempfile = "3.23.0"
+boolean_expression = "0.4.4"
 
 [dev-dependencies]
 insta = { version = "1.44.1", features = ["yaml"] }

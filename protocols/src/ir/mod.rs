@@ -1,3 +1,4 @@
+mod bdd;
 pub mod bounded_lowering;
 pub mod determinize;
 pub mod driver_to_monitor;
