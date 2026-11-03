@@ -117,6 +117,7 @@ impl VerilogGen {
     }
 
     fn insert_symbol_name(&mut self, sym: SymbolId, name: String) {
+        assert!(!self.keywords.contains(name.as_str()));
         let expr = self.pg.symbol_expr[&sym];
         self.symbol_names.insert(sym, name.clone());
         self.expr_names.insert(expr, name);
@@ -137,7 +138,11 @@ impl VerilogGen {
             .collect();
         writeln!(out, "{}", entries.join(",\n"))?;
         writeln!(out, "  }} state_t;\n")?;
-        writeln!(out, "  state_t state, {NEXT_PREFIX}state;")?;
+        writeln!(
+            out,
+            "  state_t {}, {NEXT_PREFIX}{};",
+            self.state_reg, self.state_reg
+        )?;
         for (reg, ..) in &self.regs {
             let name = &self.symbol_names[reg];
             writeln!(
@@ -154,7 +159,8 @@ impl VerilogGen {
         writeln!(out, "    if (reset) begin",)?;
         writeln!(
             out,
-            "      state <= {};",
+            "      {} <= {};",
+            self.state_reg,
             self.state_labels[self.pg.entry.as_u32() as usize]
         )?;
         for (reg, _, value) in &self.regs {
@@ -166,7 +172,11 @@ impl VerilogGen {
             )?;
         }
         writeln!(out, "    end else begin",)?;
-        writeln!(out, "      state <= {NEXT_PREFIX}state;",)?;
+        writeln!(
+            out,
+            "      {} <= {NEXT_PREFIX}{};",
+            self.state_reg, self.state_reg
+        )?;
         for (reg, _, _) in &self.regs {
             let name = &self.symbol_names[reg];
             writeln!(out, "      {name} <= {NEXT_PREFIX}{name};",)?;
