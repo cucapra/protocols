@@ -9,7 +9,7 @@ use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolKind, SymbolTable};
 use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use baa::{BitVecOps, WidthInt};
-use patronus::expr::{Context, Expr, ExprRef};
+use patronus::expr::{Context, Expr, ExprRef, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub fn monitor_to_verilog(
@@ -99,12 +99,27 @@ impl VerilogGen {
         };
 
         // compute Verilog compatible names for all automaton registers
+        let mut names = FxHashSet::default();
         for &(reg, ..) in &regs {
-            let reg_name = st[reg].name().to_string();
-            if let Some(name) = reg_name.strip_prefix(MONITOR_PREFIX) {
-                let new_name = format!("_{name}");
-                out.insert_symbol_name(reg, new_name);
+            let reg_name = st[reg].name();
+            let name = reg_name.strip_prefix(MONITOR_PREFIX).unwrap_or(reg_name);
+            let base = format!(
+                "_{}",
+                name.chars()
+                    .map(|c| if c.is_ascii_alphanumeric() || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    })
+                    .collect::<String>()
+            );
+            let mut name = base.clone();
+            let mut suffix = 0;
+            while !names.insert(name.clone()) {
+                suffix += 1;
+                name = format!("{base}_{suffix}");
             }
+            out.insert_symbol_name(reg, name);
         }
 
         // register dut pins
@@ -303,6 +318,27 @@ impl VerilogGen {
                         maybe_parens(&children[0], &ctx[*a], &ctx[expr]),
                         maybe_parens(&children[1], &ctx[*b], &ctx[expr])
                     ),
+                    Expr::BVAdd(..) => format!(
+                        "{}'(({}) + ({}))",
+                        expr.get_bv_type(ctx).unwrap(),
+                        children[0],
+                        children[1]
+                    ),
+                    Expr::BVSub(..) => format!(
+                        "{}'(({}) - ({}))",
+                        expr.get_bv_type(ctx).unwrap(),
+                        children[0],
+                        children[1]
+                    ),
+                    Expr::BVConcat(..) => format!("{{{}, {}}}", children[0], children[1]),
+                    Expr::BVSlice { lo, .. } => format!(
+                        "{}'(({}) >> {lo})",
+                        expr.get_bv_type(ctx).unwrap(),
+                        children[0]
+                    ),
+                    Expr::BVGreaterEqual(..) => {
+                        format!("$unsigned({}) >= $unsigned({})", children[0], children[1])
+                    }
                     Expr::BVIte { .. } => {
                         format!(
                             "(({}) ? ({}) : ({}))",
