@@ -14,7 +14,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 pub fn monitor_to_verilog(
     ctx: &mut Context,
-    name: &str,
+    _name: &str,
     m: &Module,
     st: &SymbolTable,
     monitor: &JointMonitorAutomaton,
