@@ -24,7 +24,7 @@ pub struct MonitorTransitionSystemResult {
     pub register_reads: FxHashMap<SymbolId, ExprRef>,
 }
 
-/// set up the monitor ring-buffers with value, knownness registers and the liveness register
+/// set up the monitor ring-buffers with value, knownness registers, any other state.
 fn bank_fields(monitor: &JointMonitorAutomaton) -> Vec<Vec<Vec<SymbolId>>> {
     let mut owned = FxHashSet::default();
     let fields = monitor
@@ -172,7 +172,7 @@ pub fn into_monitor_transition_system(
                     }
                 }
                 Op::AssertEq(..) => {
-                    panic!("monitor constraints must be lowered into liveness updates")
+                    panic!("monitor constraints must be lowered into edge guards")
                 }
                 Op::Fork | Op::Done | Op::InternalAssertFalse => {}
             }
