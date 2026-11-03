@@ -248,7 +248,7 @@ impl VerilogGen {
     }
 
     fn expr_to_verilog(&self, ctx: &Context, expr: ExprRef) -> String {
-        patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| {
+        patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children: &[String]| {
             if let Some(s) = self.expr_names.get(&expr) {
                 s.to_string()
             } else {
@@ -259,10 +259,24 @@ impl VerilogGen {
                         value.get(ctx).width(),
                         value.get(ctx).to_bit_str()
                     ),
-                    Expr::BVNot(..) => format!("~({})", children[0]),
-                    Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
-                    Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
-                    Expr::BVEqual(..) => format!("({}) == ({})", children[0], children[1]),
+                    Expr::BVNot(a, ..) => {
+                        format!("~{}", maybe_parens(&children[0], &ctx[*a], &ctx[expr]))
+                    }
+                    Expr::BVAnd(a, b, ..) => format!(
+                        "{} & {}",
+                        maybe_parens(&children[0], &ctx[*a], &ctx[expr]),
+                        maybe_parens(&children[1], &ctx[*b], &ctx[expr])
+                    ),
+                    Expr::BVOr(a, b, ..) => format!(
+                        "{} | {}",
+                        maybe_parens(&children[0], &ctx[*a], &ctx[expr]),
+                        maybe_parens(&children[1], &ctx[*b], &ctx[expr])
+                    ),
+                    Expr::BVEqual(a, b, ..) => format!(
+                        "{} == {}",
+                        maybe_parens(&children[0], &ctx[*a], &ctx[expr]),
+                        maybe_parens(&children[1], &ctx[*b], &ctx[expr])
+                    ),
                     other => todo!("{:?}", other),
                 }
             }
@@ -355,6 +369,25 @@ impl VerilogGen {
         } else {
             name.to_string()
         }
+    }
+}
+
+/// try to only add parenthesis if necessary
+fn maybe_parens(s: &str, e: &Expr, parent: &Expr) -> String {
+    match (e, parent) {
+        // simple leaf node do not need parens
+        (
+            Expr::BVSymbol { .. }
+            | Expr::ArraySymbol { .. }
+            | Expr::BVLiteral(..)
+            | Expr::BVNot(..),
+            _,
+        ) => s.to_string(),
+        // if we have an op where the order does not matter
+        (Expr::BVAnd(..), Expr::BVAnd(..))
+        | (Expr::BVOr(..), Expr::BVOr(..))
+        | (Expr::BVXor(..), Expr::BVXor(..)) => s.to_string(),
+        _ => format!("({s})"),
     }
 }
 
