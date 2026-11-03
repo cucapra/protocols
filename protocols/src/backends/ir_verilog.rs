@@ -217,7 +217,7 @@ impl VerilogGen {
         // states
         writeln!(out, "    unique case (state)")?;
         for (idx, lbl) in self.state_labels.iter().enumerate() {
-            writeln!(out, "      {lbl}: begin")?;
+            writeln!(out, "    {lbl}: begin")?;
             let node_id = NodeId::from_u32(idx as u32);
             for act in &self.pg[node_id].actions {
                 self.action_to_verilog(ctx, st, act, "      ", out)?;
@@ -228,17 +228,14 @@ impl VerilogGen {
                 }
 
                 if tran.guard != ctx.get_true() {
-                    writeln!(
-                        out,
-                        "        if ({})",
-                        self.expr_to_verilog(ctx, tran.guard)
-                    )?;
+                    writeln!(out, "      if ({})", self.expr_to_verilog(ctx, tran.guard))?;
                     write!(out, "  ")?;
                 }
 
                 writeln!(
                     out,
-                    "        next_state = {};",
+                    "      next_{} = {};",
+                    self.state_reg,
                     self.state_labels[tran.target.as_u32() as usize]
                 )?;
             }
