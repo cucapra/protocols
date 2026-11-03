@@ -9,12 +9,12 @@ use crate::frontend::symbol::{Dir, Field, SymbolId, SymbolKind, SymbolTable};
 use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
 use crate::ir::proto_graph::{Action, NodeId, Op, ProtoGraph};
 use baa::{BitVecOps, WidthInt};
-use patronus::expr::{Context, Expr, ExprRef};
+use patronus::expr::{Context, Expr, ExprRef, TypeCheck};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub fn monitor_to_verilog(
     ctx: &mut Context,
-    _name: &str,
+    name: &str,
     m: &Module,
     st: &SymbolTable,
     monitor: &JointMonitorAutomaton,
@@ -22,8 +22,10 @@ pub fn monitor_to_verilog(
 ) -> std::io::Result<()> {
     let vgen = VerilogGen::new(st, m, monitor, monitor_pin_dir);
 
+    vgen.module_header(name, out)?;
     vgen.registers(st, ctx, out)?;
     vgen.state_machine(st, ctx, out)?;
+    writeln!(out, "endmodule")?;
 
     Ok(())
 }
@@ -97,12 +99,27 @@ impl VerilogGen {
         };
 
         // compute Verilog compatible names for all automaton registers
+        let mut names = FxHashSet::default();
         for &(reg, ..) in &regs {
-            let reg_name = st[reg].name().to_string();
-            if let Some(name) = reg_name.strip_prefix(MONITOR_PREFIX) {
-                let new_name = format!("_{name}");
-                out.insert_symbol_name(reg, new_name);
+            let reg_name = st[reg].name();
+            let name = reg_name.strip_prefix(MONITOR_PREFIX).unwrap_or(reg_name);
+            let base = format!(
+                "_{}",
+                name.chars()
+                    .map(|c| if c.is_ascii_alphanumeric() || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    })
+                    .collect::<String>()
+            );
+            let mut name = base.clone();
+            let mut suffix = 0;
+            while !names.insert(name.clone()) {
+                suffix += 1;
+                name = format!("{base}_{suffix}");
             }
+            out.insert_symbol_name(reg, name);
         }
 
         // register dut pins
@@ -121,6 +138,21 @@ impl VerilogGen {
         let expr = self.pg.symbol_expr[&sym];
         self.symbol_names.insert(sym, name.clone());
         self.expr_names.insert(expr, name);
+    }
+
+    fn module_header(&self, name: &str, out: &mut impl std::io::Write) -> std::io::Result<()> {
+        writeln!(out, "module {name} (")?;
+        writeln!(out, "  input logic clk,")?;
+        writeln!(out, "  input logic reset,")?;
+        for (pin_name, pin_dir, width) in &self.pins {
+            let direction = match pin_dir {
+                Dir::In => "input",
+                Dir::Out => "output",
+            };
+            writeln!(out, "  {direction} {} {pin_name},", logic(*width))?;
+        }
+        writeln!(out, "  output logic bad")?;
+        writeln!(out, ");\n")
     }
 
     fn registers(
@@ -153,6 +185,7 @@ impl VerilogGen {
                 name,
             )?;
         }
+        writeln!(out, "  assign bad = (state == ST_BAD);")?;
         writeln!(out)?;
         // registers
         writeln!(out, "  always_ff @(posedge clk) begin")?;
@@ -190,7 +223,7 @@ impl VerilogGen {
     fn state_machine(
         &self,
         st: &SymbolTable,
-        ctx: &Context,
+        ctx: &mut Context,
         out: &mut impl std::io::Write,
     ) -> std::io::Result<()> {
         writeln!(out, "  always_comb begin")?;
@@ -220,7 +253,9 @@ impl VerilogGen {
             writeln!(out, "    {lbl}: begin")?;
             let node_id = NodeId::from_u32(idx as u32);
             for act in &self.pg[node_id].actions {
-                self.action_to_verilog(ctx, st, act, "      ", out)?;
+                if !matches!(self.pg[act.op], Op::InternalAssertFalse) {
+                    self.action_to_verilog(ctx, st, act, "      ", out)?;
+                }
             }
             for tran in &self.pg[node_id].transitions {
                 if tran.guard == ctx.get_false() || tran.target == node_id {
@@ -238,6 +273,12 @@ impl VerilogGen {
                     self.state_reg,
                     self.state_labels[tran.target.as_u32() as usize]
                 )?;
+            }
+            // Internal failures take precedence over ordinary transitions.
+            for act in &self.pg[node_id].actions {
+                if matches!(self.pg[act.op], Op::InternalAssertFalse) {
+                    self.action_to_verilog(ctx, st, act, "      ", out)?;
+                }
             }
             writeln!(out, "    end")?;
         }
@@ -277,6 +318,33 @@ impl VerilogGen {
                         maybe_parens(&children[0], &ctx[*a], &ctx[expr]),
                         maybe_parens(&children[1], &ctx[*b], &ctx[expr])
                     ),
+                    Expr::BVAdd(..) => format!(
+                        "{}'(({}) + ({}))",
+                        expr.get_bv_type(ctx).unwrap(),
+                        children[0],
+                        children[1]
+                    ),
+                    Expr::BVSub(..) => format!(
+                        "{}'(({}) - ({}))",
+                        expr.get_bv_type(ctx).unwrap(),
+                        children[0],
+                        children[1]
+                    ),
+                    Expr::BVConcat(..) => format!("{{{}, {}}}", children[0], children[1]),
+                    Expr::BVSlice { lo, .. } => format!(
+                        "{}'(({}) >> {lo})",
+                        expr.get_bv_type(ctx).unwrap(),
+                        children[0]
+                    ),
+                    Expr::BVGreaterEqual(..) => {
+                        format!("$unsigned({}) >= $unsigned({})", children[0], children[1])
+                    }
+                    Expr::BVIte { .. } => {
+                        format!(
+                            "(({}) ? ({}) : ({}))",
+                            children[0], children[1], children[2]
+                        )
+                    }
                     other => todo!("{:?}", other),
                 }
             }
@@ -285,7 +353,7 @@ impl VerilogGen {
 
     fn action_to_verilog(
         &self,
-        ctx: &Context,
+        ctx: &mut Context,
         st: &SymbolTable,
         act: &Action,
         indent: &str,
@@ -294,55 +362,48 @@ impl VerilogGen {
         if matches!(&self.pg[act.op], Op::InternalAssertFalse) {
             writeln!(
                 out,
-                "{indent}// assert_false({})",
+                "{indent}if ({}) next_state = ST_BAD;",
                 self.expr_to_verilog(ctx, act.guard)
             )?;
-            return Ok(()); // ignore internal asserts
+            return Ok(());
         }
         if act.guard != ctx.get_true() {
             writeln!(out, "{indent}if ({})", self.expr_to_verilog(ctx, act.guard))?;
             write!(out, "  ")?; // extra indent
         }
         match &self.pg[act.op] {
-            // ignore don't care
-            Op::Assign(lhs, rhs) => {
-                let lhs = self.lhs_symbol_name(st, *lhs);
-                if rhs.dont_care == ctx.get_true() {
-                    writeln!(out, "{indent}// {lhs} = DontCare")?;
-                } else {
-                    if rhs.concretes.len() == 1 {
-                        writeln!(
-                            out,
-                            "{indent}{lhs} = {};",
-                            self.expr_to_verilog(ctx, rhs.concretes[0].1)
-                        )?;
+            Op::Assign(register, rhs) => {
+                let lhs = self.lhs_symbol_name(st, *register);
+                let false_assign = rhs
+                    .concretes
+                    .iter()
+                    .find(|(_, e)| *e == ctx.get_false())
+                    .copied();
+                let true_assign = rhs
+                    .concretes
+                    .iter()
+                    .find(|(_, e)| *e == ctx.get_true())
+                    .copied();
+                let value = if let Some((tg, _)) = true_assign
+                    && let Some((fg, _)) = false_assign
+                    && rhs.concretes.len() == 2
+                    && rhs.dont_care == ctx.get_false()
+                    && ctx.not(tg) == fg
+                {
+                    let tg = self.expr_to_verilog(ctx, tg);
+                    let fg = self.expr_to_verilog(ctx, fg);
+                    if tg.len() < fg.len() {
+                        tg
                     } else {
-                        let false_assign = rhs
-                            .concretes
-                            .iter()
-                            .find(|(_, e)| *e == ctx.get_false())
-                            .cloned();
-                        let true_assign = rhs
-                            .concretes
-                            .iter()
-                            .find(|(_, e)| *e == ctx.get_true())
-                            .cloned();
-                        if let Some((tg, _)) = true_assign
-                            && let Some((fg, _)) = false_assign
-                            && rhs.concretes.len() == 2
-                        {
-                            let tg = self.expr_to_verilog(ctx, tg);
-                            let fg = self.expr_to_verilog(ctx, fg);
-                            if tg.len() < fg.len() {
-                                writeln!(out, "{indent}{lhs} = {tg};")?;
-                            } else {
-                                writeln!(out, "{indent}{lhs} = ~({fg});")?;
-                            }
-                        } else {
-                            todo!("deal with multiple options {rhs:?}")
-                        }
+                        format!("~({fg})")
                     }
-                }
+                } else {
+                    let old = self.pg.symbol_expr(*register).unwrap();
+                    // Keeping the old value is a valid choice for don't-care alternatives.
+                    let value = rhs.to_expr(ctx, old, old);
+                    self.expr_to_verilog(ctx, value)
+                };
+                writeln!(out, "{indent}{lhs} = {value};")?;
             }
             Op::AssertEq(a, b) => {
                 writeln!(
