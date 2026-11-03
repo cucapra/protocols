@@ -248,7 +248,7 @@ impl VerilogGen {
     }
 
     fn expr_to_verilog(&self, ctx: &Context, expr: ExprRef) -> String {
-        patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children| {
+        patronus::expr::traversal::bottom_up(ctx, expr, |ctx, expr, children: &[String]| {
             if let Some(s) = self.expr_names.get(&expr) {
                 s.to_string()
             } else {
@@ -259,10 +259,22 @@ impl VerilogGen {
                         value.get(ctx).width(),
                         value.get(ctx).to_bit_str()
                     ),
-                    Expr::BVNot(..) => format!("~({})", children[0]),
-                    Expr::BVAnd(..) => format!("({}) & ({})", children[0], children[1]),
-                    Expr::BVOr(..) => format!("({}) | ({})", children[0], children[1]),
-                    Expr::BVEqual(..) => format!("({}) == ({})", children[0], children[1]),
+                    Expr::BVNot(a, ..) => format!("~{}", maybe_parens(&children[0], &ctx[*a])),
+                    Expr::BVAnd(a, b, ..) => format!(
+                        "{} & {}",
+                        maybe_parens(&children[0], &ctx[*a]),
+                        maybe_parens(&children[0], &ctx[*b])
+                    ),
+                    Expr::BVOr(a, b, ..) => format!(
+                        "{} | {}",
+                        maybe_parens(&children[0], &ctx[*a]),
+                        maybe_parens(&children[0], &ctx[*b])
+                    ),
+                    Expr::BVEqual(a, b, ..) => format!(
+                        "{} == {}",
+                        maybe_parens(&children[0], &ctx[*a]),
+                        maybe_parens(&children[0], &ctx[*b])
+                    ),
                     other => todo!("{:?}", other),
                 }
             }
@@ -355,6 +367,17 @@ impl VerilogGen {
         } else {
             name.to_string()
         }
+    }
+}
+
+/// try to only add parenthesis if necessary
+fn maybe_parens(s: &str, e: &Expr) -> String {
+    match e {
+        Expr::BVSymbol { .. }
+        | Expr::ArraySymbol { .. }
+        | Expr::BVLiteral(..)
+        | Expr::BVNot(..) => s.to_string(),
+        _ => format!("({s})"),
     }
 }
 
