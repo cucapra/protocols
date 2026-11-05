@@ -1,3 +1,12 @@
+// In this file we make a best-effort attempt to translate Zonta-Roudes et al's (eXpect, Xray)
+// AXI security properties to Wishbone. See the comments beginning with `NEW: ...`.
+
+// Note: Wishbone doesn't have a "burst length" signal like AXI's WLEN, 
+// so AXI security properties related to burst length (e.g., "the claimed no. of burst transfers
+// is the same as the actual no. of transfers", Xray P11) aren't applicable to Wishbone.
+// (Wishbone's BTE signal is about how addresses are incremented during bursts, 
+// and do not mean the length of the burst.)
+
 // Wishbone pins for this project from the server (the one servicing requests) perspective
 interface Wishbone {
     // high active RST pin (the wishbone spec requires all signals to be high active)
