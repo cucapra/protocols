@@ -86,7 +86,23 @@ def load_bi_cases() -> list[dict]:
         else:
             case["paths"] = c["protocols"]
         out.append(case)
+    # For every existing Wishbone BI test case, add a corresponding Wishbone security test case
+    out += [
+        wishbone_security_test_case(case)
+        for case in out
+        if case["paths"][0] == "examples/wishbone/wishbone.prot"
+    ]
     return out
+
+# Helper function to create Wishbone security test case
+def wishbone_security_test_case(case: dict) -> dict:
+    return {
+        "id": case["id"].replace("examples.wishbone.", "examples.wishbone.security.", 1),
+        "wave": case["wave"],
+        "instances": case["instances"],
+        "extra_args": case["extra_args"],
+        "paths": ["examples/wishbone/wishbone_security.prot", *case["paths"][1:]],
+    }
 
 
 # helper function to escape globs in places
