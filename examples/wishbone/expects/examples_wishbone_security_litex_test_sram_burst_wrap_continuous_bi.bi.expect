@@ -1,0 +1,11 @@
+// trace 0
+trace {
+}
+error: [write_burst_increment_wrap_4@1] executing step 1 of the transaction: 00000100 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:518:9
+    │
+518 │         assert_eq(self.DAT_I, 32'b0);
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@1] executing step 1 of the transaction: 00000100 != 00000000
+
+---CODE---
+1

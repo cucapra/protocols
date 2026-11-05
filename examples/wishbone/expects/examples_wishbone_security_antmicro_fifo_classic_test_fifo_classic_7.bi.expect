@@ -1,0 +1,379 @@
+// trace 0
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+    read(0xf, 0xd0000000, 0x8414d033); [23 .. 24]
+    read(0xf, 0xd0000000, 0x819dad2a); [25 .. 26]
+    read(0xf, 0xd0000000, 0xdce91770); [27 .. 28]
+    read(0xf, 0xd0000000, 0xc93625f9); [29 .. 30]
+    read(0xf, 0xd0000000, 0xe962abc8); [31 .. 32]
+    read(0xf, 0xd0000000, 0x96c7d626); [33 .. 34]
+    read(0xf, 0xd0000000, 0x98039675); [35 .. 36]
+}
+error: [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:731:5
+    │
+731 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:730:5
+    │
+730 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 3
+    ┌─ examples/wishbone/wishbone_security.prot:727:5
+    │
+727 │     self.BTE := 2'b11; // wrap 16
+    │     ^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 3
+
+error: [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:726:5
+    │
+726 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:686:5
+    │
+686 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:683:5
+    │
+683 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:682:5
+    │
+682 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 3
+    ┌─ examples/wishbone/wishbone_security.prot:679:5
+    │
+679 │     self.BTE := 2'b11; // wrap 16
+    │     ^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 3
+
+error: [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:678:5
+    │
+678 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_16@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:634:5
+    │
+634 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:633:5
+    │
+633 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:630:5
+    │
+630 │     self.BTE := 2'b10; // wrap 8
+    │     ^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+
+error: [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:629:5
+    │
+629 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:588:5
+    │
+588 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:585:5
+    │
+585 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:584:5
+    │
+584 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:581:5
+    │
+581 │     self.BTE := 2'b10; // wrap 8
+    │     ^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+
+error: [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:580:5
+    │
+580 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_8@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:536:5
+    │
+536 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:535:5
+    │
+535 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:532:5
+    │
+532 │     self.BTE := 2'b01; // wrap 4
+    │     ^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:531:5
+    │
+531 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:490:5
+    │
+490 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:487:5
+    │
+487 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:486:5
+    │
+486 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:483:5
+    │
+483 │     self.BTE := 2'b01; // wrap 4
+    │     ^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:482:5
+    │
+482 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [read_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:438:5
+    │
+438 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:437:5
+    │
+437 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_increment_linear@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:433:5
+    │
+433 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [read_burst_increment_linear@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:393:5
+    │
+393 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:390:5
+    │
+390 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:389:5
+    │
+389 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 2
+    ┌─ examples/wishbone/wishbone_security.prot:385:5
+    │
+385 │     self.CTI := 3'b010;
+    │     ^^^^^^^^^^^^^^^^^^^ [write_burst_increment_linear@37] executing step 0 of the transaction: 0 != 2
+
+
+error: [read_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:343:5
+    │
+343 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:342:5
+    │
+342 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:338:5
+    │
+338 │     self.CTI := 3'b001;
+    │     ^^^^^^^^^^^^^^^^^^^ [read_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+
+error: [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:298:5
+    │
+298 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:295:5
+    │
+295 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:294:5
+    │
+294 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:290:5
+    │
+290 │     self.CTI := 3'b001;
+    │     ^^^^^^^^^^^^^^^^^^^ [write_burst_const@37] executing step 0 of the transaction: 0 != 1
+
+
+error: [read_burst_single@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:255:5
+    │
+255 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_single@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_single@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:254:5
+    │
+254 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read_burst_single@37] executing step 0 of the transaction: 0 != 1
+
+error: [read_burst_single@37] executing step 0 of the transaction: 0 != 7
+    ┌─ examples/wishbone/wishbone_security.prot:250:5
+    │
+250 │     self.CTI := 3'b111;
+    │     ^^^^^^^^^^^^^^^^^^^ [read_burst_single@37] executing step 0 of the transaction: 0 != 7
+
+
+error: [write_burst_single@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:217:5
+    │
+217 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write_burst_single@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_single@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:214:5
+    │
+214 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_single@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_single@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:213:5
+    │
+213 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write_burst_single@37] executing step 0 of the transaction: 0 != 1
+
+error: [write_burst_single@37] executing step 0 of the transaction: 0 != 7
+    ┌─ examples/wishbone/wishbone_security.prot:209:5
+    │
+209 │     self.CTI := 3'b111;
+    │     ^^^^^^^^^^^^^^^^^^^ [write_burst_single@37] executing step 0 of the transaction: 0 != 7
+
+
+error: [read@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:170:5
+    │
+170 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read@37] executing step 0 of the transaction: 0 != 1
+
+error: [read@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:169:5
+    │
+169 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [read@37] executing step 0 of the transaction: 0 != 1
+
+
+error: [write@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:129:5
+    │
+129 │     self.WE := 1'b1;
+    │     ^^^^^^^^^^^^^^^^ [write@37] executing step 0 of the transaction: 0 != 1
+
+error: [write@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:126:5
+    │
+126 │     self.STB := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write@37] executing step 0 of the transaction: 0 != 1
+
+error: [write@37] executing step 0 of the transaction: 0 != 1
+    ┌─ examples/wishbone/wishbone_security.prot:125:5
+    │
+125 │     self.CYC := 1'b1;
+    │     ^^^^^^^^^^^^^^^^^ [write@37] executing step 0 of the transaction: 0 != 1
+
+
+error: [idle_continue_cycle@37] executing step 0 of the transaction: 34000000 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:104:5
+    │
+104 │     self.ADR := 32'b0;
+    │     ^^^^^^^^^^^^^^^^^^ [idle_continue_cycle@37] executing step 0 of the transaction: 34000000 != 00000000
+
+error: [idle_continue_cycle@37] executing step 0 of the transaction: 0 != 1
+   ┌─ examples/wishbone/wishbone_security.prot:99:5
+   │
+99 │     self.CYC := 1'b1;
+   │     ^^^^^^^^^^^^^^^^^ [idle_continue_cycle@37] executing step 0 of the transaction: 0 != 1
+
+
+error: [idle_no_cycle@37] executing step 0 of the transaction: 34000000 != 00000000
+   ┌─ examples/wishbone/wishbone_security.prot:78:5
+   │
+78 │     self.ADR := 32'b0;
+   │     ^^^^^^^^^^^^^^^^^^ [idle_no_cycle@37] executing step 0 of the transaction: 34000000 != 00000000
+
+
+error: [reset@37] executing step 0 of the transaction: 34000000 != 00000000
+   ┌─ examples/wishbone/wishbone_security.prot:61:5
+   │
+61 │     self.ADR := 32'd0;
+   │     ^^^^^^^^^^^^^^^^^^ [reset@37] executing step 0 of the transaction: 34000000 != 00000000
+
+error: [reset@37] executing step 0 of the transaction: 1 != 0
+   ┌─ examples/wishbone/wishbone_security.prot:53:5
+   │
+53 │     self.RST := 1'b1;
+   │     ^^^^^^^^^^^^^^^^^ [reset@37] executing step 0 of the transaction: 1 != 0
+
+---CODE---
+1

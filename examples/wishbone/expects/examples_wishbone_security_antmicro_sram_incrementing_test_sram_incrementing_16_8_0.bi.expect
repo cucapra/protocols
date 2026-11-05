@@ -1,0 +1,127 @@
+// trace 0
+trace {
+    reset(); [2]
+    reset(); [3]
+    reset(); [4]
+    read_burst_increment_linear(0xf, 0x10000008, [0x837cd375, 0x1d00515f, 0xf463131c, 0x238fadc6, 0xd09ce0f2, 0x8c87d423, 0x7c5ddf4d, 0x15b36188, 0x0c8ea433, 0x5d6ae507, 0x3700cbb1, 0xf8a7f80b, 0x2c1e745b, 0x34025f22, 0x2445e157, 0x3e921a43]); [41 .. 57]
+}
+error: [read_burst_increment_wrap_16@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:755:13
+    │
+755 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_16@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write_burst_increment_wrap_16@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:704:13
+    │
+704 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_16@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [read_burst_increment_wrap_8@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:658:13
+    │
+658 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_8@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write_burst_increment_wrap_8@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:607:13
+    │
+607 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_8@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [read_burst_increment_wrap_4@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:560:13
+    │
+560 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_wrap_4@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write_burst_increment_wrap_4@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:509:13
+    │
+509 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_wrap_4@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [read_burst_increment_linear@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:461:13
+    │
+461 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_increment_linear@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write_burst_increment_linear@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:411:13
+    │
+411 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_increment_linear@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [read_burst_const@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:365:13
+    │
+365 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_const@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write_burst_const@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:316:13
+    │
+316 │             assert_eq(self.DAT_I, 32'b0);
+    │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_const@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [read_burst_single@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:271:9
+    │
+271 │         assert_eq(self.DAT_I, 32'b0);
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read_burst_single@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write_burst_single@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:228:9
+    │
+228 │         assert_eq(self.DAT_I, 32'b0);
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write_burst_single@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [read@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:185:9
+    │
+185 │         assert_eq(self.DAT_I, 32'b0);
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [read@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [write@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:145:9
+    │
+145 │         assert_eq(self.DAT_I, 32'b0);
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [write@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [idle_continue_cycle@58] executing step 0 of the transaction: 3e921a43 != 00000000
+    ┌─ examples/wishbone/wishbone_security.prot:110:5
+    │
+110 │     assert_eq(self.DAT_I, 32'b0);
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle_continue_cycle@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [idle_no_cycle@58] executing step 0 of the transaction: 3e921a43 != 00000000
+   ┌─ examples/wishbone/wishbone_security.prot:90:5
+   │
+90 │     assert_eq(self.DAT_I, 32'b0);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [idle_no_cycle@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+
+error: [reset@58] executing step 0 of the transaction: 3e921a43 != 00000000
+   ┌─ examples/wishbone/wishbone_security.prot:62:5
+   │
+62 │     assert_eq(self.DAT_I, 32'b0);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ [reset@58] executing step 0 of the transaction: 3e921a43 != 00000000
+
+---CODE---
+1

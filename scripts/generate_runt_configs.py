@@ -105,6 +105,8 @@ def case_stem(case: dict) -> str:
     # names to identify a particular test, otherwise we use the `.prot` file's stem
     # to identify a test
     wave = case.get("wave")
+    if case["paths"][0].endswith("wishbone_security.prot"):
+        return case["id"]
     if wave and (
         "antmicro" in wave
         or "fpga-debugging" in wave
