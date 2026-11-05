@@ -214,8 +214,14 @@ prot write_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
 
     // wait for ack
     while self.ACK == 1'b0 {
+        // NEW: during writes, the read data should be zeroed out, 
+        // (inspired by eXpect / Xray properties)
+        assert_eq(self.DAT_I, 32'b0);
         step();
     }
+
+    // NEW: continue to zero out read data
+    assert_eq(self.DAT_I, 32'b0);
 
     // acknowledge is now true for one cycle
     step();
@@ -285,8 +291,14 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
 
         // wait for ack
         while self.ACK == 1'b0 {
+            // NEW: during writes, the read data should be zeroed out, 
+            // (inspired by eXpect / Xray properties)
+            assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: continue to zero out read data
+        assert_eq(self.DAT_I, 32'b0);
 
         // acknowledge is now true for one cycle
         step();
@@ -362,8 +374,14 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
 
         // wait for ack
         while self.ACK == 1'b0 {
+            // NEW: during writes, the read data should be zeroed out, 
+            // (inspired by eXpect / Xray properties)
+            assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: continue to zero out read data
+        assert_eq(self.DAT_I, 32'b0);
 
         // acknowledge is now true for one cycle
         step();
@@ -442,8 +460,14 @@ prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, dat
 
         // wait for ack
         while self.ACK == 1'b0 {
+            // NEW: during writes, the read data should be zeroed out, 
+            // (inspired by eXpect / Xray properties)
+            assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: continue to zero out read data
+        assert_eq(self.DAT_I, 32'b0);
 
         // acknowledge is now true for one cycle
         step();
@@ -522,8 +546,14 @@ prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, dat
 
         // wait for ack
         while self.ACK == 1'b0 {
+            // NEW: during writes, the read data should be zeroed out, 
+            // (inspired by eXpect / Xray properties)
+            assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: continue to zero out read data
+        assert_eq(self.DAT_I, 32'b0);
 
         // acknowledge is now true for one cycle
         step();
@@ -601,8 +631,14 @@ prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, da
 
         // wait for ack
         while self.ACK == 1'b0 {
+            // NEW: during writes, the read data should be zeroed out, 
+            // (inspired by eXpect / Xray properties)
+            assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: continue to zero out read data
+        assert_eq(self.DAT_I, 32'b0);
 
         // acknowledge is now true for one cycle
         step();
