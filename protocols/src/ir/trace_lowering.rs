@@ -10,12 +10,11 @@ use crate::Value;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::edge_contract::{
-    append_action, append_action_disjoint, contract_edges, guard_assignment,
-    merge_disjoint_guarded_assignments, merge_unordered_assignment_with_disjoint_batch,
-    same_assignment_target,
+    append_action, append_action_disjoint, guard_assignment, merge_disjoint_guarded_assignments,
+    merge_unordered_assignment, same_assignment_target,
 };
 use crate::ir::lowering::{LoweredFragmentInfo, Lowerer, TraceArgSubst};
-use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph, Transition};
+use crate::ir::proto_graph::{Action, Assignment, NodeId, Op, ProtoGraph};
 
 impl<'a> Lowerer<'a> {
     /// Build the per-copy argument substitution and lower one transaction body.
@@ -24,7 +23,6 @@ impl<'a> Lowerer<'a> {
         ctx: &mut Context,
         ast: &Protocol,
         values: &[Value],
-        keep_done: bool,
     ) -> LoweredFragmentInfo {
         assert_eq!(
             ast.args.len(),
@@ -44,19 +42,22 @@ impl<'a> Lowerer<'a> {
 
         // set the arg substitution to the current transaction's args
         self.trace_arg_subst = subst;
-        self.lower_protocol_fragment(ctx, ast, keep_done, false)
+        self.lower_protocol_fragment(ctx, ast, true, false)
     }
 
     /// Merge a contracted entry node directly into a graft_points node using an unordered node merge.
     pub fn graft_contracted_entry(
-        &mut self,
+        symbols: &SymbolTable,
         ctx: &mut Context,
+        ir: &mut ProtoGraph,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
     ) {
-        self.graft_contracted_entry_with_mode(
+        Self::graft_contracted_entry_with_mode(
+            symbols,
             ctx,
+            ir,
             graft_points_node_id,
             entry_node_id,
             graft_guard,
@@ -67,14 +68,17 @@ impl<'a> Lowerer<'a> {
     /// Graft an entry whose guard is mutually exclusive with the other entries
     /// being accumulated into the same node.
     pub fn graft_disjoint_contracted_entry(
-        &mut self,
+        symbols: &SymbolTable,
         ctx: &mut Context,
+        ir: &mut ProtoGraph,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
     ) {
-        self.graft_contracted_entry_with_mode(
+        Self::graft_contracted_entry_with_mode(
+            symbols,
             ctx,
+            ir,
             graft_points_node_id,
             entry_node_id,
             graft_guard,
@@ -140,20 +144,21 @@ impl<'a> Lowerer<'a> {
                         if same_assignment_target(self.symbols, prior_symbol_id, symbol_id)
                 )
             });
+            let assignment = merge_disjoint_guarded_assignments(ctx, &mut self.ir, grouped);
             let assignment = if let Some(idx) = existing_idx {
                 let existing = match self.ir[actions[idx].op].clone() {
                     Op::Assign(_, assignment) => assignment,
                     _ => unreachable!(),
                 };
-                merge_unordered_assignment_with_disjoint_batch(
+                merge_unordered_assignment(
                     ctx,
                     &mut self.ir,
                     &mut internal_assert_guard,
                     existing,
-                    grouped,
+                    assignment,
                 )
             } else {
-                merge_disjoint_guarded_assignments(ctx, &mut self.ir, grouped).0
+                assignment
             };
             let op = self.ir.o(Op::Assign(symbol_id, assignment));
             let true_id = ctx.get_true();
@@ -176,48 +181,42 @@ impl<'a> Lowerer<'a> {
     }
 
     fn graft_contracted_entry_with_mode(
-        &mut self,
+        symbols: &SymbolTable,
         ctx: &mut Context,
+        ir: &mut ProtoGraph,
         graft_points_node_id: NodeId,
         entry_node_id: NodeId,
         graft_guard: ExprRef,
         disjoint: bool,
     ) {
-        let mut actions = self.ir[graft_points_node_id].actions.clone();
-        let entry_actions = self.ir[entry_node_id].actions.clone();
+        let mut actions = ir[graft_points_node_id].actions.clone();
+        let entry_actions = ir[entry_node_id].actions.clone();
         let mut internal_assert_guard = None;
 
         for action in entry_actions {
-            let guarded_action = match self.ir[action.op].clone() {
+            let guarded_action = match ir[action.op].clone() {
                 Op::Assign(symbol_id, assignment) => {
                     assert_eq!(
                         action.guard,
                         ctx.get_true(),
                         "assignment action guards must be 1; path conditions belong in Assignment"
                     );
-                    let guarded_assignment =
-                        guard_assignment(ctx, &mut self.ir, assignment, graft_guard);
-                    let guarded_op = self.ir.o(Op::Assign(symbol_id, guarded_assignment));
+                    let guarded_assignment = guard_assignment(ctx, ir, assignment, graft_guard);
+                    let guarded_op = ir.o(Op::Assign(symbol_id, guarded_assignment));
                     Action::new(ctx.get_true(), guarded_op)
                 }
                 _ => {
-                    let guard = self.ir.and_guard(ctx, graft_guard, action.guard);
+                    let guard = ir.and_guard(ctx, graft_guard, action.guard);
                     action.with_guard(guard)
                 }
             };
             if disjoint {
-                append_action_disjoint(
-                    ctx,
-                    &mut self.ir,
-                    self.symbols,
-                    &mut actions,
-                    guarded_action,
-                );
+                append_action_disjoint(ctx, ir, symbols, &mut actions, guarded_action);
             } else {
                 append_action(
                     ctx,
-                    &mut self.ir,
-                    self.symbols,
+                    ir,
+                    symbols,
                     &mut actions,
                     &mut internal_assert_guard,
                     guarded_action,
@@ -227,17 +226,17 @@ impl<'a> Lowerer<'a> {
         }
 
         if let Some(internal_assert_guard) = internal_assert_guard {
-            let internal_assert_op = self.ir.o(Op::InternalAssertFalse);
+            let internal_assert_op = ir.o(Op::InternalAssertFalse);
             actions.push(Action::new(internal_assert_guard, internal_assert_op));
         }
 
-        let mut transitions = self.ir[graft_points_node_id].transitions.clone();
-        for transition in self.ir[entry_node_id].transitions.clone() {
-            let guard = self.ir.and_guard(ctx, graft_guard, transition.guard);
+        let mut transitions = ir[graft_points_node_id].transitions.clone();
+        for transition in ir[entry_node_id].transitions.clone() {
+            let guard = ir.and_guard(ctx, graft_guard, transition.guard);
             transitions.push(transition.with_guard(guard));
         }
 
-        let graft_points_node = self.ir.node_mut(graft_points_node_id);
+        let graft_points_node = ir.node_mut(graft_points_node_id);
         graft_points_node.actions = actions;
         graft_points_node.transitions = transitions;
     }
@@ -265,9 +264,8 @@ impl<'a> Lowerer<'a> {
         let ast = *protos_by_name
             .get(name.as_str())
             .unwrap_or_else(|| panic!("unknown protocol {name}"));
-        let keep_done = rest.is_empty();
 
-        let fragment = self.lower_transaction(ctx, ast, values, keep_done);
+        let fragment = self.lower_transaction(ctx, ast, values);
 
         // TODO: we're applying these passes to the entire IR, but technically
         // this is a bit wasteful since we only need to postprocess this
@@ -276,9 +274,15 @@ impl<'a> Lowerer<'a> {
         let next = self.graft_points(ctx, &fragment);
 
         for (node, guard) in graft_points {
-            self.graft_contracted_entry(ctx, node, fragment.entry, guard);
+            Self::graft_contracted_entry(
+                self.symbols,
+                ctx,
+                &mut self.ir,
+                node,
+                fragment.entry,
+                guard,
+            );
         }
-        contract_edges(ctx, &mut self.ir, self.symbols);
 
         self.append_trace_transactions(ctx, next, rest, protos_by_name);
     }
@@ -291,7 +295,7 @@ pub fn lower_trace_to_ir(
     ctx: &mut Context,
     trace: &[(String, Vec<Value>)],
     protos_by_name: &FxHashMap<&str, &Protocol>,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> ProtoGraph {
     assert!(!trace.is_empty(), "cannot lower an empty trace");
 
@@ -302,14 +306,9 @@ pub fn lower_trace_to_ir(
 
     // set up the lowerer and lower the initial transaction
     let mut lowerer = Lowerer::new(first_ast.ctx.clone(), symbols);
-    let first = lowerer.lower_transaction(ctx, first_ast, first_values, trace.len() == 1);
-    let entry_node = lowerer.ir.entry;
-    let true_id = ctx.get_true();
-    lowerer
-        .ir
-        .push_transition(entry_node, Transition::new(true_id, first.entry, false));
+    let first = lowerer.lower_transaction(ctx, first_ast, first_values);
+    lowerer.ir.entry = first.entry;
     lowerer.postprocess_trace_fragment(ctx, &first);
-    contract_edges(ctx, &mut lowerer.ir, symbols);
 
     // pass in the initial IR with the first transaction and its graft points, and append_trace_transactions will lower the rest of the trace from here.
     let graft_points = lowerer.graft_points(ctx, &first);

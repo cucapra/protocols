@@ -9,8 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::backends::protocol_banks::{mod_add, read_bank};
 use crate::frontend::Module;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
-use crate::ir::joint_monitor::{InstanceParameter, JointMonitorAutomaton};
-use crate::ir::propagate_assigns::reachable_node_ids;
+use crate::ir::joint_monitor::JointMonitorAutomaton;
 use crate::ir::proto_graph::{Op, remap_expr};
 
 pub struct MonitorTransitionSystemResult {
@@ -23,35 +22,31 @@ pub struct MonitorTransitionSystemResult {
     pub heads: Vec<ExprRef>,
     /// reads of FIFO registers, using the current bank heads.
     pub register_reads: FxHashMap<SymbolId, ExprRef>,
-    pub knownness_outputs: FxHashMap<InstanceParameter, ExprRef>,
 }
 
-/// set up the monitor ring-buffers with value, knownness registers and the liveness register
+/// set up the monitor ring-buffers with value, knownness registers, any other state.
 fn bank_fields(monitor: &JointMonitorAutomaton) -> Vec<Vec<Vec<SymbolId>>> {
     let mut owned = FxHashSet::default();
     let fields = monitor
         .protocols
         .iter()
         .enumerate()
-        .map(|(protocol, proto)| {
+        .map(|(protocol, _)| {
             let count = monitor.control.bank_counts[protocol];
-            let mut fields = Vec::new();
-            for arg in &proto.args {
-                for registers in [&monitor.value_registers, &monitor.knownness_registers] {
-                    if registers.contains_key(&(protocol, 0, arg.symbol())) {
-                        fields.push(
-                            (0..count)
-                                .map(|slot| registers[&(protocol, slot, arg.symbol())])
-                                .collect::<Vec<_>>(),
-                        );
-                    }
-                }
-            }
-            fields.push(
-                (0..count)
-                    .map(|slot| monitor.live_registers[&(protocol, slot)])
-                    .collect(),
-            );
+            let mut registers = monitor
+                .registers
+                .keys()
+                .filter_map(|&(p, slot, r)| (p == protocol && slot == 0).then_some(r))
+                .collect::<Vec<_>>();
+            registers.sort();
+            let fields = registers
+                .into_iter()
+                .map(|r| {
+                    (0..count)
+                        .map(|slot| monitor.registers[&(protocol, slot, r)])
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
             for field in &fields {
                 for &register in field {
                     assert!(
@@ -150,29 +145,19 @@ pub fn into_monitor_transition_system(
     let bad_id = ctx.bit_vec_val(monitor.bad_state.as_u32(), node_width);
     let bad = ctx.equal(node_symbol, bad_id);
     let mut node_next = internal_state;
-    let mut knownness_outputs = FxHashMap::default();
-    let mut nodes = reachable_node_ids(ctx, graph, graph.entry);
+    let mut nodes = graph.reachable_node_ids(ctx, graph.entry);
     nodes.sort();
     for node in nodes {
         let node_id = ctx.bit_vec_val(node.as_u32(), node_width);
         let at_node = ctx.equal(node_symbol, node_id);
-        let mut updates = FxHashMap::default();
         for action in &graph[node].actions {
             match &graph[action.op] {
                 Op::Assign(register, assignment) => {
                     assert_eq!(action.guard, ctx.get_true());
                     assert_eq!(assignment.dont_care, ctx.get_false());
                     let old = graph.symbol_expr(*register).unwrap();
-                    // Concrete alternatives have first-applicable priority.
-                    let value = assignment
-                        .concretes
-                        .iter()
-                        .rev()
-                        .fold(old, |held, &(guard, value)| ctx.ite(guard, value, held));
-                    assert!(
-                        updates.insert(old, value).is_none(),
-                        "multiple updates to a monitor register"
-                    );
+                    let x = ctx.get_false();
+                    let value = assignment.to_expr(ctx, x, old);
                     let value = remap_expr(ctx, value, &reads);
                     let (protocol, field, slot) = owners[register];
                     let count = monitor.control.bank_counts[protocol];
@@ -187,7 +172,7 @@ pub fn into_monitor_transition_system(
                     }
                 }
                 Op::AssertEq(..) => {
-                    panic!("monitor constraints must be lowered into liveness updates")
+                    panic!("monitor constraints must be lowered into edge guards")
                 }
                 Op::Fork | Op::Done | Op::InternalAssertFalse => {}
             }
@@ -196,8 +181,7 @@ pub fn into_monitor_transition_system(
         // Reverse traversal = first enabled edge priority (though we assume edges are mutex).
         for edge in graph[node].transitions.iter().rev() {
             assert!(edge.consumes_step, "monitor edges must consume one sample");
-            let guard = remap_expr(ctx, edge.guard, &updates);
-            let guard = remap_expr(ctx, guard, &reads);
+            let guard = remap_expr(ctx, edge.guard, &reads);
             let taken = ctx.and(at_node, guard);
             let target = ctx.bit_vec_val(edge.target.as_u32(), node_width);
             node_next = ctx.ite(taken, target, node_next);
@@ -222,12 +206,6 @@ pub fn into_monitor_transition_system(
                 let failed = ctx.and(at_node, guard);
                 node_next = ctx.ite(failed, internal_state, node_next);
             }
-        }
-        for (&parameter, &expr) in &monitor.knownness_outputs[&node] {
-            let value = remap_expr(ctx, expr, &reads);
-            let zero = ctx.zero(value.get_bv_type(ctx).unwrap());
-            let held = *knownness_outputs.entry(parameter).or_insert(zero);
-            knownness_outputs.insert(parameter, ctx.ite(at_node, value, held));
         }
     }
 
@@ -274,6 +252,5 @@ pub fn into_monitor_transition_system(
         internal_error,
         heads,
         register_reads,
-        knownness_outputs,
     }
 }

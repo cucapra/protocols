@@ -7,11 +7,19 @@ use crate::frontend::symbol::SymbolTable;
 use crate::ir::proto_graph::{Assignment, NodeId, Op, ProtoGraph};
 use baa::BitVecValue;
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use std::collections::{BTreeSet, VecDeque};
 
 /// generate a DOT file for graphviz from the IR
 pub fn to_dot_string(ctx: &Context, protocol: &ProtoGraph, symbols: &SymbolTable) -> String {
     to_dot_string_with_node_labels(ctx, protocol, symbols, &[])
+}
+
+pub fn to_dot_string_from_entry(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    entry: NodeId,
+) -> String {
+    to_dot_string_with_node_labels_from_entry(ctx, protocol, symbols, &[], entry)
 }
 
 /// Add descriptive labels to distinguished states, such as a monitor's bad state.
@@ -21,6 +29,16 @@ pub fn to_dot_string_with_node_labels(
     symbols: &SymbolTable,
     labels: &[(NodeId, &str)],
 ) -> String {
+    to_dot_string_with_node_labels_from_entry(ctx, protocol, symbols, labels, protocol.entry)
+}
+
+fn to_dot_string_with_node_labels_from_entry(
+    ctx: &Context,
+    protocol: &ProtoGraph,
+    symbols: &SymbolTable,
+    labels: &[(NodeId, &str)],
+    entry: NodeId,
+) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "digraph \"{}\" {{\n",
@@ -28,13 +46,24 @@ pub fn to_dot_string_with_node_labels(
     ));
     out.push_str("  rankdir=LR;\n");
     out.push_str("  node [shape=box];\n");
-    out.push_str("  entry_marker [shape=plain,label=\"ENTRY\"];\n");
-    out.push_str(&format!("  entry_marker -> {};\n", protocol.entry));
+    let mut entry_label = "ENTRY".to_string();
+    for (id, source) in protocol.loops.iter() {
+        let source = match source.source.argument {
+            Some(argument) => symbols[argument].name().to_string(),
+            None => format!(
+                "length {}",
+                format_expr(ctx, protocol, source.source.length.unwrap())
+            ),
+        };
+        entry_label.push_str(&format!("\\n{id}: {source}"));
+    }
+    out.push_str(&format!(
+        "  entry_marker [shape=plain,label=\"{}\"];\n",
+        escape_label(&entry_label)
+    ));
+    out.push_str(&format!("  entry_marker -> {};\n", entry));
 
-    let mut seen: BTreeSet<NodeId> = BTreeSet::new();
-    seen.insert(protocol.entry);
-    let mut q = VecDeque::from([protocol.entry]);
-    while let Some(node_id) = q.pop_front() {
+    for node_id in protocol.reachable_node_ids(ctx, entry) {
         let node = protocol[node_id].clone();
 
         let mut label_parts = vec![];
@@ -90,9 +119,6 @@ pub fn to_dot_string_with_node_labels(
                 transition.target,
                 escape_label(&edge_label)
             ));
-            if seen.insert(transition.target) {
-                q.push_back(transition.target);
-            }
         }
     }
 
@@ -124,25 +150,59 @@ fn format_op(
     }
 }
 
+/// Text view of the prepared DUT assignments, used by the legacy CLI flag.
+pub fn format_assignments(ctx: &Context, graph: &ProtoGraph, symbols: &SymbolTable) -> String {
+    let mut out = String::new();
+    for (id, node) in graph.nodes() {
+        out.push_str(&format!("{id}:\n"));
+        let mut assignments = node
+            .actions
+            .iter()
+            .filter_map(|a| match &graph[a.op] {
+                Op::Assign(pin, assignment) if symbols[*pin].is_in_port() => {
+                    Some((symbols[*pin].full_name(symbols), assignment))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assignments.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, assignment) in assignments {
+            out.push_str(&format!(
+                "  {name}: {}\n",
+                format_assignment(ctx, graph, assignment)
+            ));
+        }
+    }
+    out
+}
+
 fn format_assignment(ctx: &Context, protocol: &ProtoGraph, assignment: &Assignment) -> String {
     let mut parts = Vec::new();
     if assignment.dont_care != ctx.get_false() {
         parts.push(format!(
-            "X if {}",
-            format_expr(ctx, protocol, assignment.dont_care)
+            "X{}",
+            format_guard(ctx, protocol, assignment.dont_care)
         ));
     }
     for (guard, rhs) in &assignment.concretes {
         parts.push(format!(
-            "{} if {}",
+            "{}{}",
             format_expr(ctx, protocol, *rhs),
-            format_expr(ctx, protocol, *guard)
+            format_guard(ctx, protocol, *guard)
         ));
     }
     if parts.is_empty() {
         "internal_assert_false".to_string()
     } else {
         parts.join("; ")
+    }
+}
+
+fn format_guard(ctx: &Context, protocol: &ProtoGraph, guard: ExprRef) -> String {
+    if guard == ctx.get_true() {
+        "".to_string()
+    } else {
+        format!(" if {}", format_expr(ctx, protocol, guard))
     }
 }
 
@@ -239,14 +299,15 @@ mod tests {
     use crate::frontend;
     use crate::frontend::diagnostic::DiagnosticHandler;
     use crate::frontend::require_single_module;
-    use crate::ir::driver_to_monitor::{MonitorAutomaton, convert_driver_to_monitor};
-    use crate::ir::edge_contract::{contract_edges, normalize_assignments};
+    use crate::ir::driver_to_monitor::{
+        MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
+        simplify_monitor,
+    };
+    use crate::ir::edge_contract::contract_edges;
     use crate::ir::joint_driver::build_joint_driver_automaton;
     use crate::ir::joint_monitor::build_joint_monitor_automaton;
     use crate::ir::lowering::lower_ast_to_ir;
-    use crate::ir::propagate_assigns::propagate_assignments;
-    use crate::ir::reaching_defs::reaching_definitions;
-    use crate::ir::simplify_monitor::simplify_monitor;
+    use crate::ir::propagate_assigns::{insert_assignment_registers, simplify_assignments};
     use insta::Settings;
 
     fn snap(name: &str, filename: &str) -> (Context, SymbolTable, Vec<MonitorAutomaton>) {
@@ -257,36 +318,34 @@ mod tests {
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         for proto_ast in module.protos {
-            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &symbols);
+            let ir: ProtoGraph = lower_ast_to_ir(&mut ctx, proto_ast, &mut symbols);
             content += "== pre-contract ==\n";
             content += &to_dot_string(&ctx, &ir, &symbols);
             content += "\n";
 
             let mut contracted_ir = ir.clone();
+            let entry = contracted_ir.entry;
+            let initial =
+                insert_assignment_registers(&mut ctx, &mut contracted_ir, &mut symbols, entry);
             contract_edges(&mut ctx, &mut contracted_ir, &symbols);
+
             content += "== post-contract ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            // run the reaching definitions analysis
-            let reaching_defs = reaching_definitions(&mut ctx, &mut contracted_ir, &symbols);
-
-            // print post-propagation of assignments
-            propagate_assignments(&mut ctx, &mut contracted_ir, &symbols, &reaching_defs);
-            content += "== post-propagation ==\n";
+            simplify_assignments(&mut ctx, &mut contracted_ir, &symbols, &initial);
+            content += "== post-simplification ==\n";
             content += &to_dot_string(&ctx, &contracted_ir, &symbols);
             content += "\n";
 
-            let mut assignment_normalized_ir = contracted_ir.clone();
-            normalize_assignments(&mut ctx, &mut assignment_normalized_ir, &symbols);
-            content += "== post-normalize ==\n";
-            content += &to_dot_string(&ctx, &assignment_normalized_ir, &symbols);
-            content += "\n";
-
-            assignment_normalized_ir.garbage_collect_unreachable(&ctx);
-            let monitor =
-                convert_driver_to_monitor(&mut ctx, assignment_normalized_ir, &mut symbols)
-                    .unwrap();
+            contracted_ir.garbage_collect_unreachable(&ctx, false);
+            let monitor = match convert_driver_to_monitor(&mut ctx, contracted_ir, &mut symbols) {
+                Ok(monitor) => monitor,
+                Err(error) => {
+                    content += &format!("== unsupported monitor ==\n{error}\n\n");
+                    continue;
+                }
+            };
             let monitor = simplify_monitor(&mut ctx, monitor, &mut symbols);
             content += "== simplified monitor ==\n";
             content += &monitor.to_dot_string(&ctx, &symbols);
@@ -301,6 +360,29 @@ mod tests {
         });
         (ctx, symbols, monitors)
     }
+    #[test]
+    fn test_capturing_driver_snapshot() {
+        let filename = "../tests/adders/adder_d1/add_d1.prot";
+        let mut handler = DiagnosticHandler::default();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let module = require_single_module(modules, &[filename]).unwrap();
+        let ast = module.protos.into_iter().next().unwrap();
+        let mut ctx = Context::default();
+        let mut graph = lower_ast_to_ir(&mut ctx, ast, &mut symbols);
+        let entry = graph.entry;
+        let initial = insert_assignment_registers(&mut ctx, &mut graph, &mut symbols, entry);
+        contract_edges(&mut ctx, &mut graph, &symbols);
+
+        simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
+        graph.garbage_collect_unreachable(&ctx, false);
+        let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
+        let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
+        let dot = driver.to_dot_string(&ctx, &symbols);
+        let mut settings = Settings::clone_current();
+        settings.set_snapshot_path(Path::new("../tests/snapshots"));
+        settings.bind(|| insta::assert_snapshot!("ir_graphviz_capturing_driver", dot));
+    }
+
     #[test]
     fn test_add_d1_dot_snapshot() {
         snap("ir_graphviz_add_d1", "../tests/adders/adder_d1/add_d1.prot");
@@ -321,7 +403,12 @@ mod tests {
 
     #[test]
     fn test_counter_snapshot() {
-        snap("ir_graphviz_counter", "../tests/counters/counter.prot");
+        let (_, _, monitors) = snap("ir_graphviz_counter", "../tests/counters/counter.prot");
+        // Contraction replaces dut.a with parameter a in the loop conditions.
+        assert!(
+            monitors.is_empty(),
+            "parameter-dependent conditions must be rejected"
+        );
     }
 
     #[test]
@@ -377,7 +464,8 @@ mod tests {
             .collect::<Vec<_>>();
         let mut ctx = Context::default();
         let driver =
-            build_joint_driver_automaton(&mut ctx, &module, protocols.clone(), &symbols).unwrap();
+            build_joint_driver_automaton(&mut ctx, &module, protocols.clone(), &mut symbols)
+                .unwrap();
         let monitor = build_joint_monitor_automaton(&mut ctx, protocols, &mut symbols).unwrap();
         let driver_dot = to_dot_string(&ctx, &driver.graph, &symbols);
         let monitor_dot = monitor.to_dot_string(&ctx, &symbols);

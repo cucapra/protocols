@@ -64,6 +64,24 @@ expect_name = "ip_apb_0.bi.expect"
 cmd = "cd ../.. && target/debug/bi --color never --protocol examples/apb/apb.prot --wave examples/apb/ip_apb_0.fst --instances dut:APB --show-steps 2>&1"
 
 [[tests]]
+name = "bi.examples_axis_axis_packetize_bytestream.axis_packetize_bytestream_bi"
+paths = [
+  "../../examples/axis/axis_packetize_bytestream.prot",
+]
+expect_dir = "../../examples/axis/expects"
+expect_name = "axis_packetize_bytestream.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/axis/axis_packetize_bytestream.prot --wave examples/axis/axis_bytes_0.fst --instances dut:Axis --show-steps 2>&1"
+
+[[tests]]
+name = "bi.examples_axis_axis_stream_data.axis_stream_data_bi"
+paths = [
+  "../../examples/axis/axis_stream_data.prot",
+]
+expect_dir = "../../examples/axis/expects"
+expect_name = "axis_stream_data.bi.expect"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/axis/axis_stream_data.prot --wave examples/axis/axis_data_0.fst --instances dut:Axis --show-steps 2>&1"
+
+[[tests]]
 name = "bi.examples_enginev_enginev_regfile.enginev_regfile_bi"
 paths = [
   "../../examples/enginev/enginev_regfile.prot",

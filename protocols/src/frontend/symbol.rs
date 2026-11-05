@@ -56,11 +56,11 @@ pub enum SymbolKind {
     AutomatonState,
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct SeqId(u32);
 entity_impl!(SeqId, "seq");
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct TupleId(u32);
 entity_impl!(TupleId, "tuple");
 
@@ -101,7 +101,7 @@ impl Tuple {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct StructId(u32);
 entity_impl!(StructId, "struct");
 
@@ -173,7 +173,7 @@ impl Field {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Type {
     /// Non-negative integer with no upper bound.
     UnsignedInt,

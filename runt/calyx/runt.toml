@@ -1,0 +1,11 @@
+# Note: unlike our other runt files, this one is not auto-generated
+ver = "0.4.1"
+
+[[tests]]
+name = "calyx-bind.fifo"
+paths = [
+  "../../tests/fifo/fifo.prot",
+]
+expect_dir = "../../tests/fifo/expects"
+expect_name = "fifo.calyx-bind.expect"
+cmd = "cd ../.. && target/debug/calyx-bind --protocol tests/fifo/fifo.prot --protocol tests/fifo/fifo_wrapper.prot --verilog tests/fifo/*.v --module=fifo_wrapper --name Fifo 2>&1"

@@ -29,7 +29,7 @@ pub fn build_joint_driver_automaton(
     ctx: &mut Context,
     module: &Module,
     protocols: Vec<Protocol>,
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> Result<JointDriverAutomaton, JointDriverError> {
     let sources = prepare_joint_protocols(ctx, &protocols, symbols)?;
     let control = build_joint_control_automaton(ctx, &protocols, &sources, symbols)?;
@@ -75,7 +75,11 @@ pub fn build_joint_driver_automaton(
         .proto_pin_map
         .iter()
         .flat_map(|pins| pins.iter().zip(&module.proto_pin_map[first]))
-        .filter_map(|(&symbol, &target)| symbols[symbol].is_in_port().then_some((symbol, target)))
+        .filter_map(|(&symbol, &target)| {
+            lowerer.symbols[symbol]
+                .is_in_port()
+                .then_some((symbol, target))
+        })
         .collect::<FxHashMap<_, _>>();
 
     let nodes = lowerer.ir.nodes().map(|(id, _)| id).collect::<Vec<_>>();
@@ -114,7 +118,7 @@ pub fn build_joint_driver_automaton(
                 ctx,
                 source,
                 &protocols[instance.protocol],
-                symbols,
+                lowerer.symbols,
                 instance.slot,
             );
             let mut actions = Vec::new();
@@ -134,14 +138,21 @@ pub fn build_joint_driver_automaton(
             if instance.starts {
                 choices.push((copied, launches[instance.protocol]));
             } else {
-                lowerer.graft_contracted_entry(ctx, node, copied, ctx.get_true());
+                Lowerer::graft_contracted_entry(
+                    lowerer.symbols,
+                    ctx,
+                    &mut lowerer.ir,
+                    node,
+                    copied,
+                    ctx.get_true(),
+                );
             }
         }
         if !choices.is_empty() {
             lowerer.graft_disjoint_contracted_entries(ctx, node, &choices);
         }
     }
-    lowerer.ir.garbage_collect_unreachable(ctx);
+    lowerer.ir.garbage_collect_unreachable(ctx, false);
     lowerer.ir.simplify_all_exprs(ctx);
     Ok(JointDriverAutomaton {
         graph: lowerer.ir,

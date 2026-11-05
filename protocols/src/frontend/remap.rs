@@ -255,6 +255,7 @@ impl<'a> Remapper<'a> {
             .collect();
 
         out.is_idle = orig.is_idle;
+        out.is_reset = orig.is_reset;
 
         Self {
             st,

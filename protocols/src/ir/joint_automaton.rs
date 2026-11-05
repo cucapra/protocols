@@ -5,7 +5,6 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::SymbolTable;
 use crate::ir::lowering::Lowerer;
-use crate::ir::propagate_assigns::reachable_node_ids;
 use crate::ir::proto_graph::{
     Action, Node, NodeId, Op, ProtoGraph, Transition, TransitionRotation, remap_expr,
 };
@@ -57,13 +56,13 @@ pub struct JointControlAutomaton {
 }
 
 #[derive(Clone)]
-struct ProtocolShape {
-    entry: NodeId,
+pub struct ProtocolShape {
+    pub entry: NodeId,
     /// if there is a fork, the *unique* location of the forking node
-    fork: Option<NodeId>,
-    done: NodeId,
+    pub fork: Option<NodeId>,
+    pub done: NodeId,
     /// the straight-line post-phase.
-    post: Vec<NodeId>,
+    pub post: Vec<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -105,14 +104,14 @@ fn unsupported(protocol: &Protocol, reason: impl Into<String>) -> JointAutomaton
     }
 }
 
-fn analyze_shape(
+pub fn analyze_shape(
     ctx: &Context,
     graph: &ProtoGraph,
     protocol: &Protocol,
 ) -> Result<ProtocolShape, JointAutomatonError> {
     let mut forks = Vec::new();
     let mut dones = Vec::new();
-    for node in reachable_node_ids(ctx, graph, graph.entry) {
+    for node in graph.reachable_node_ids(ctx, graph.entry) {
         for action in &graph[node].actions {
             match graph[action.op] {
                 Op::Fork => {
@@ -172,7 +171,7 @@ fn analyze_shape(
     })
 }
 
-// arguments need to be renamed for the specific transaction instance to
+// Arguments and state need to be renamed for the specific transaction instance to
 // prevent collisions between concurrently running protocols
 pub fn joint_argument_substitutions(
     ctx: &mut Context,
@@ -181,16 +180,17 @@ pub fn joint_argument_substitutions(
     symbols: &SymbolTable,
     slot: usize,
 ) -> FxHashMap<ExprRef, ExprRef> {
-    // give this transaction's arguments names that cannot collide with other slots.
+    // Give arguments and retained state distinct names for each transaction slot.
     protocol
         .args
         .iter()
-        .filter_map(|arg| {
-            let symbol = arg.symbol();
+        .map(|arg| arg.symbol())
+        .chain(graph.register_inits.keys().copied())
+        .filter_map(|symbol| {
             let old = graph.symbol_expr(symbol)?;
             let width = old
                 .get_bv_type(ctx)
-                .expect("protocol arguments must be bit vectors");
+                .expect("protocol arguments and state must be bit vectors");
             let name = symbols[symbol].name();
             let new = ctx.bv_symbol(&format!("joint.{name}#{slot}_{}", protocol.name), width);
             Some((old, new))
@@ -366,7 +366,7 @@ fn successor_after_frontier_step(
 pub fn prepare_joint_protocols(
     ctx: &mut Context,
     protocols: &[Protocol],
-    symbols: &SymbolTable,
+    symbols: &mut SymbolTable,
 ) -> Result<Vec<ProtoGraph>, JointAutomatonError> {
     if protocols.is_empty() {
         return Err(JointAutomatonError::EmptyProtocolSet);
@@ -378,7 +378,7 @@ pub fn prepare_joint_protocols(
             let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
-            lowerer.ir.garbage_collect_unreachable(ctx);
+            lowerer.ir.garbage_collect_unreachable(ctx, false);
             lowerer.ir
         })
         .collect())
@@ -641,7 +641,7 @@ pub fn build_joint_control_automaton(
 
     // remove unreachable nodes and update choice-node metadata after compaction.
     graph.entry = entry;
-    let node_map = graph.garbage_collect_unreachable(ctx);
+    let node_map = graph.garbage_collect_unreachable(ctx, false);
     graph.simplify_all_exprs(ctx);
     let choice_slots = choice_slots
         .into_iter()
@@ -683,7 +683,7 @@ mod tests {
         selected: &[&str],
     ) -> (JointDriverAutomaton, SymbolTable, Context) {
         let mut handler = DiagnosticHandler::default();
-        let (symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
+        let (mut symbols, modules) = frontend(&[filename], &mut handler, false, false).unwrap();
         let module = require_single_module(modules, &[filename]).unwrap();
         let mut ctx = Context::default();
         let protocols = module
@@ -692,7 +692,8 @@ mod tests {
             .filter(|protocol| selected.contains(&protocol.name.as_str()))
             .cloned()
             .collect();
-        let driver = build_joint_driver_automaton(&mut ctx, &module, protocols, &symbols).unwrap();
+        let driver =
+            build_joint_driver_automaton(&mut ctx, &module, protocols, &mut symbols).unwrap();
         (driver, symbols, ctx)
     }
 

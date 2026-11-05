@@ -1,0 +1,10 @@
+module fifo_wrapper : Fifo {
+  in clk_i : clock @posedge,
+  in data_i: u32 = Fifo.data_i,
+  in v_i: u1 = Fifo.v_i,
+  in enq_not_deq_i: u1 = Fifo.enq_not_deq_i,
+  in reset_i: u1 = Fifo.reset_i,
+  out full_o: u1 = Fifo.full_o,
+  out empty_o: u1 = Fifo.empty_o,
+  out data_o: u32 = Fifo.data_o,
+}

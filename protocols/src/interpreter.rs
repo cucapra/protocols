@@ -828,8 +828,7 @@ impl<'a> Evaluator<'a> {
                         .to_u64()
                         .expect("Expected no. of loop iterations in a bounded loop to be an unsigned integer");
 
-                    // If the user wrote `repeat 0 iterations { ... }`,
-                    // skip the loop and proceed to the next stmt
+                    // A zero repeat count skips the loop.
                     if num_iterations == 0 {
                         Ok(self.next_stmt_map[&bounded_loop_id])
                     } else {

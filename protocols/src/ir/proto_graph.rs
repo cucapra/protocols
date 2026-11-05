@@ -3,14 +3,14 @@
 // author: Nikil Shyamunder <nvs26@cornell.edu>
 
 use crate::frontend::ast::ProtocolContext;
-use crate::frontend::symbol::SymbolId;
+use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
     Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
-use std::ops::{Deref, DerefMut, Index};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
 pub struct NodeId(u32);
@@ -21,6 +21,30 @@ entity_impl!(NodeId, "node");
 // if we want debug info on expressions and transitions, we'll need a way to do this with or without Ids
 pub struct OpId(u32);
 entity_impl!(OpId, "op");
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Default, Ord, PartialOrd)]
+pub struct LoopId(u32);
+entity_impl!(LoopId, "l");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoopSource {
+    /// Sequence argument supplying items
+    pub argument: Option<SymbolId>,
+    /// Exact loop length expression (used for repeat loops, where we need to
+    /// match the argument to the parameter used in the loop)
+    pub length: Option<ExprRef>,
+    pub min_len: u64,
+}
+
+/// Loop metadata + the expressions that map to l.data(), l.last(), l.valid()
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loop {
+    pub source: LoopSource,
+    pub uses_last: bool,
+    pub data: ExprRef,
+    pub last: ExprRef,
+    pub valid: ExprRef,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// an Action is a guard and an operation to perform when the guard is true
@@ -77,7 +101,6 @@ impl Transition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-// A node is a (logically) unordered set of actions and transitions
 pub struct Node {
     pub actions: Vec<Action>,
     pub transitions: Vec<Transition>,
@@ -99,6 +122,18 @@ pub struct Assignment {
 }
 
 impl Assignment {
+    pub fn to_expr(&self, ctx: &mut Context, dont_care: ExprRef, default: ExprRef) -> ExprRef {
+        let mut value = default;
+        for &(guard, rhs) in self.concretes.iter().rev() {
+            value = ctx.ite(guard, rhs, value);
+        }
+        if self.dont_care == ctx.get_false() {
+            value
+        } else {
+            ctx.ite(self.dont_care, dont_care, value)
+        }
+    }
+
     pub fn concrete(false_id: ExprRef, guard: ExprRef, rhs: ExprRef) -> Self {
         Self {
             dont_care: false_id,
@@ -149,6 +184,15 @@ pub fn remap_expr(
 }
 
 impl Op {
+    pub fn assertion_failure(&self, ctx: &mut Context, guard: ExprRef) -> Option<ExprRef> {
+        let Self::AssertEq(lhs, rhs) = *self else {
+            return None;
+        };
+        let equal = ctx.equal(lhs, rhs);
+        let unequal = ctx.not(equal);
+        Some(ctx.and(guard, unequal))
+    }
+
     /// Remap assignment targets together with every expression that reads them.
     pub fn remap(
         &self,
@@ -200,6 +244,12 @@ pub struct ProtoGraph {
     /// symbol expressions representing DontCare
     pub dont_cares: FxHashSet<ExprRef>,
 
+    /// LoopIds -> their metadata
+    pub loops: PrimaryMap<LoopId, Loop>,
+
+    /// Initial values of automaton registers.
+    pub register_inits: FxHashMap<SymbolId, ExprRef>,
+
     nodes: PrimaryMap<NodeId, Node>,
 
     ops: PrimaryMap<OpId, Op>,
@@ -217,6 +267,8 @@ impl Clone for ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: self.symbol_expr.clone(),
             dont_cares: self.dont_cares.clone(),
+            register_inits: self.register_inits.clone(),
+            loops: self.loops.clone(),
             nodes: self.nodes.clone(),
             ops: self.ops.clone(),
             op_loc: self.op_loc.clone(),
@@ -239,10 +291,26 @@ impl ProtoGraph {
             simplifier: Simplifier::new(SparseExprMap::default()),
             symbol_expr: FxHashMap::default(),
             dont_cares: FxHashSet::default(),
+            register_inits: FxHashMap::default(),
+            loops: PrimaryMap::new(),
             nodes,
             ops,
             op_loc,
         }
+    }
+
+    pub fn dont_care_input(
+        &mut self,
+        ctx: &mut Context,
+        symbols: &SymbolTable,
+        pin: SymbolId,
+    ) -> ExprRef {
+        let expr = ctx.bv_symbol(
+            &format!("dont_care.{}", symbols[pin].name()),
+            symbols[pin].tpe().bitwidth(),
+        );
+        self.dont_cares.insert(expr);
+        expr
     }
 
     pub fn symbol_expr(&self, symbol_id: SymbolId) -> Option<ExprRef> {
@@ -251,6 +319,49 @@ impl ProtoGraph {
 
     pub fn cache_symbol_expr(&mut self, symbol_id: SymbolId, expr: ExprRef) {
         self.symbol_expr.insert(symbol_id, expr);
+    }
+
+    pub fn add_register(
+        &mut self,
+        ctx: &mut Context,
+        symbols: &mut SymbolTable,
+        base: &str,
+        width: u32,
+    ) -> SymbolId {
+        let mut suffix = 0;
+        let name = loop {
+            let name = if suffix == 0 {
+                base.to_string()
+            } else {
+                format!("{base}_{suffix}")
+            };
+            if symbols.symbol_id_from_name_in_active_scope(&name).is_none() {
+                break name;
+            }
+            suffix += 1;
+        };
+        let symbol =
+            symbols.add_without_parent(name, Type::BitVec(width), SymbolKind::AutomatonState);
+        let expr = ctx.bv_symbol(&symbols[symbol].full_name(symbols), width);
+        self.cache_symbol_expr(symbol, expr);
+        symbol
+    }
+
+    /// Visit nodes in breadth-first order from `entry`, skipping false edges
+    /// Each node appears once in resulting vector, including `entry` itself
+    pub fn reachable_node_ids(&self, ctx: &Context, entry: NodeId) -> Vec<NodeId> {
+        let mut nodes = Vec::new();
+        let mut seen = FxHashSet::from_iter([entry]);
+        let mut pending = VecDeque::from([entry]);
+        while let Some(node) = pending.pop_front() {
+            nodes.push(node);
+            for edge in &self[node].transitions {
+                if edge.guard != ctx.get_false() && seen.insert(edge.target) {
+                    pending.push_back(edge.target);
+                }
+            }
+        }
+        nodes
     }
 
     /// convenience methods for construction simplified
@@ -321,15 +432,15 @@ impl ProtoGraph {
         self.ops.push(op)
     }
 
-    pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> + '_ {
+    pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &Node)> {
         self.nodes.iter()
     }
 
-    pub fn nodes_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut Node)> + '_ {
+    pub fn nodes_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut Node)> {
         self.nodes.iter_mut()
     }
 
-    pub fn ops_mut(&mut self) -> impl Iterator<Item = (OpId, &mut Op)> + '_ {
+    pub fn ops_mut(&mut self) -> impl Iterator<Item = (OpId, &mut Op)> {
         self.ops.iter_mut()
     }
 
@@ -347,24 +458,42 @@ impl ProtoGraph {
         self.nodes[node_id].transitions.push(t);
     }
 
-    /// Rebuild the graph from the subgraph reachable from `entry`.
-    /// This compacts both node IDs and op IDs.
-    pub fn garbage_collect_unreachable(&mut self, ctx: &Context) -> FxHashMap<NodeId, NodeId> {
-        let mut reachable_old_nodes = Vec::new();
-        let mut seen = FxHashSet::default();
-        let mut q = VecDeque::from([self.entry]);
-
-        while let Some(node_id) = q.pop_front() {
-            if !seen.insert(node_id) {
-                continue;
-            }
-            reachable_old_nodes.push(node_id);
-            for transition in &self.nodes[node_id].transitions {
-                if transition.guard != ctx.get_false() {
-                    q.push_back(transition.target);
+    /// Remove unused operations without changing node IDs or action positions.
+    pub fn garbage_collect_ops(&mut self) {
+        let used = self
+            .nodes
+            .iter()
+            .flat_map(|(_, n)| n.actions.iter().map(|a| a.op))
+            .collect::<FxHashSet<_>>();
+        let mut mapping = FxHashMap::default();
+        let mut ops = PrimaryMap::new();
+        let mut locations = SecondaryMap::new();
+        for (old, op) in self.ops.iter() {
+            if used.contains(&old) {
+                let new = ops.push(op.clone());
+                mapping.insert(old, new);
+                if let Some(&location) = self.op_loc.get(old) {
+                    locations[new] = location;
                 }
             }
         }
+        for (_, node) in self.nodes.iter_mut() {
+            for action in &mut node.actions {
+                action.op = mapping[&action.op];
+            }
+        }
+        self.ops = ops;
+        self.op_loc = locations;
+    }
+
+    /// Rebuild the graph from the subgraph reachable from `entry`.
+    /// Node IDs are compacted; operation IDs are preserved when `keep_all_ops` is true.
+    pub fn garbage_collect_unreachable(
+        &mut self,
+        ctx: &Context,
+        keep_all_ops: bool,
+    ) -> FxHashMap<NodeId, NodeId> {
+        let reachable_old_nodes = self.reachable_node_ids(ctx, self.entry);
 
         let mut node_map: FxHashMap<NodeId, NodeId> = FxHashMap::default();
         let mut new_nodes = PrimaryMap::new();
@@ -378,40 +507,16 @@ impl ProtoGraph {
                 .retain(|transition| transition.guard != ctx.get_false());
         }
 
-        let mut reachable_old_ops = Vec::new();
-        let mut seen_ops = FxHashSet::default();
-        for (_, node) in new_nodes.iter() {
-            for action in &node.actions {
-                if seen_ops.insert(action.op) {
-                    reachable_old_ops.push(action.op);
-                }
-            }
-        }
-
-        let mut op_map: FxHashMap<OpId, OpId> = FxHashMap::default();
-        let mut new_ops = PrimaryMap::new();
-        let mut new_op_loc = SecondaryMap::new();
-        for old_op_id in reachable_old_ops {
-            let new_op_id = new_ops.push(self.ops[old_op_id].clone());
-            op_map.insert(old_op_id, new_op_id);
-            if let Some(loc) = self.op_loc.get(old_op_id).copied() {
-                new_op_loc[new_op_id] = loc;
-            }
-        }
-
         for (_, node) in new_nodes.iter_mut() {
-            for action in &mut node.actions {
-                action.op = op_map[&action.op];
-            }
             for transition in &mut node.transitions {
                 transition.target = node_map[&transition.target];
             }
         }
-
         self.entry = node_map[&self.entry];
         self.nodes = new_nodes;
-        self.ops = new_ops;
-        self.op_loc = new_op_loc;
+        if !keep_all_ops {
+            self.garbage_collect_ops();
+        }
 
         node_map
     }
@@ -439,6 +544,12 @@ impl Index<NodeId> for ProtoGraph {
     }
 }
 
+impl IndexMut<NodeId> for ProtoGraph {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        &mut self.nodes[index]
+    }
+}
+
 impl Index<&NodeId> for ProtoGraph {
     type Output = Node;
 
@@ -452,6 +563,12 @@ impl Index<OpId> for ProtoGraph {
 
     fn index(&self, index: OpId) -> &Self::Output {
         &self.ops[index]
+    }
+}
+
+impl IndexMut<OpId> for ProtoGraph {
+    fn index_mut(&mut self, index: OpId) -> &mut Self::Output {
+        &mut self.ops[index]
     }
 }
 
@@ -486,7 +603,7 @@ mod tests {
     ) -> (Context, ProtoGraph) {
         let mut handler = DiagnosticHandler::default();
         let skip_static_step_fork_checks = true;
-        let (st, modules) =
+        let (mut st, modules) =
             frontend(&[&path], &mut handler, skip_static_step_fork_checks, false).unwrap();
         let module = require_single_module(modules, &[&path]).unwrap();
         let proto = match protocol_name {
@@ -501,7 +618,7 @@ mod tests {
             }
         };
         let mut ctx = Context::default();
-        let graph = lower_ast_to_ir(&mut ctx, proto, &st);
+        let graph = lower_ast_to_ir(&mut ctx, proto, &mut st);
         (ctx, graph)
     }
 
@@ -524,7 +641,7 @@ mod tests {
 
         assert_eq!(ir.name, "pipe");
         assert_eq!(ir.args.len(), 2);
-        assert_eq!(ir.nodes.len(), 6);
+        assert_eq!(ir.nodes.len(), 7);
         assert_eq!(ir.ops.len(), 5);
 
         let entry = &ir.nodes[ir.entry];
@@ -534,18 +651,32 @@ mod tests {
             entry.transitions[0],
             Transition {
                 guard: ctx.get_true(),
-                target: NodeId(5),
+                target: NodeId(6),
                 consumes_step: false,
                 rotations: vec![],
             }
         );
 
-        let init = &ir.nodes[NodeId(5)];
+        let init = &ir.nodes[NodeId(6)];
         assert_eq!(init.actions.len(), 1);
         assert_eq!(init.actions[0].guard, ctx.get_true());
         assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
         assert_eq!(
             init.transitions,
+            vec![Transition {
+                guard: ctx.get_true(),
+                target: NodeId(5),
+                consumes_step: false,
+                rotations: vec![],
+            }]
+        );
+
+        let assign = &ir.nodes[NodeId(5)];
+        assert_eq!(assign.actions.len(), 1);
+        assert_eq!(assign.actions[0].guard, ctx.get_true());
+        assert!(matches!(ir.ops[assign.actions[0].op], Op::Assign(_, _)));
+        assert_eq!(
+            assign.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
                 target: NodeId(4),
@@ -554,30 +685,23 @@ mod tests {
             }]
         );
 
-        let assign = &ir.nodes[NodeId(4)];
-        assert_eq!(assign.actions.len(), 1);
-        assert_eq!(assign.actions[0].guard, ctx.get_true());
-        assert!(matches!(ir.ops[assign.actions[0].op], Op::Assign(_, _)));
-        assert_eq!(
-            assign.transitions,
-            vec![Transition {
-                guard: ctx.get_true(),
-                target: NodeId(3),
-                consumes_step: false,
-                rotations: vec![],
-            }]
-        );
-
-        let step = &ir.nodes[NodeId(3)];
+        let step = &ir.nodes[NodeId(4)];
         assert!(step.actions.is_empty());
         assert_eq!(
             step.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
-                target: NodeId(2),
+                target: NodeId(3),
                 consumes_step: true,
                 rotations: vec![],
             }]
+        );
+
+        let restore = &ir.nodes[NodeId(3)];
+        assert!(restore.actions.is_empty());
+        assert_eq!(
+            restore.transitions,
+            vec![Transition::new(ctx.get_true(), NodeId(2), false)]
         );
 
         let assert_node = &ir.nodes[NodeId(2)];
@@ -662,7 +786,7 @@ mod tests {
 
         assert_eq!(ir.name, "add");
         assert_eq!(ir.args.len(), 3);
-        assert_eq!(ir.nodes.len(), 11);
+        assert_eq!(ir.nodes.len(), 13);
         assert_eq!(ir.ops.len(), 11);
 
         let entry = &ir.nodes[ir.entry];
@@ -671,13 +795,13 @@ mod tests {
             entry.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
-                target: NodeId(10),
+                target: NodeId(12),
                 consumes_step: false,
                 rotations: vec![],
             }]
         );
 
-        let init = &ir.nodes[NodeId(10)];
+        let init = &ir.nodes[NodeId(12)];
         assert_eq!(init.actions.len(), 2);
         assert!(matches!(ir.ops[init.actions[0].op], Op::Assign(_, _)));
         assert!(matches!(ir.ops[init.actions[1].op], Op::Assign(_, _)));
@@ -685,47 +809,61 @@ mod tests {
             init.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
-                target: NodeId(9),
+                target: NodeId(11),
                 consumes_step: false,
                 rotations: vec![],
             }]
         );
 
-        let step = &ir.nodes[NodeId(7)];
+        let step = &ir.nodes[NodeId(9)];
         assert!(step.actions.is_empty());
         assert_eq!(
             step.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
-                target: NodeId(6),
+                target: NodeId(8),
                 consumes_step: true,
                 rotations: vec![],
             }]
         );
 
-        let fork = &ir.nodes[NodeId(3)];
+        let restore = &ir.nodes[NodeId(8)];
+        assert!(restore.actions.is_empty());
+        assert_eq!(
+            restore.transitions,
+            vec![Transition::new(ctx.get_true(), NodeId(7), false)]
+        );
+
+        let fork = &ir.nodes[NodeId(4)];
         assert_eq!(fork.actions.len(), 1);
         assert!(matches!(ir.ops[fork.actions[0].op], Op::Fork));
         assert_eq!(
             fork.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
-                target: NodeId(2),
+                target: NodeId(3),
                 consumes_step: false,
                 rotations: vec![],
             }]
         );
 
-        let last_step = &ir.nodes[NodeId(2)];
+        let last_step = &ir.nodes[NodeId(3)];
         assert!(last_step.actions.is_empty());
         assert_eq!(
             last_step.transitions,
             vec![Transition {
                 guard: ctx.get_true(),
-                target: NodeId(1),
+                target: NodeId(2),
                 consumes_step: true,
                 rotations: vec![],
             }]
+        );
+
+        let restore = &ir.nodes[NodeId(2)];
+        assert!(restore.actions.is_empty());
+        assert_eq!(
+            restore.transitions,
+            vec![Transition::new(ctx.get_true(), NodeId(1), false)]
         );
 
         let exit = &ir.nodes[NodeId(1)];
@@ -757,7 +895,7 @@ mod tests {
         assert_eq!(pg.nodes.len(), 3);
         assert_eq!(pg.ops.len(), 2);
 
-        pg.garbage_collect_unreachable(&ctx);
+        pg.garbage_collect_unreachable(&ctx, false);
 
         assert_eq!(pg.nodes.len(), 2);
         assert_eq!(pg.ops.len(), 1);
