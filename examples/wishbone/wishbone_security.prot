@@ -244,6 +244,10 @@ prot read_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     // we are reading
     self.WE := 1'b0;
 
+    // NEW: During a read transaction, write data should be zeroed out 
+    // (inspired by eXpect / Xray properties)
+    self.DAT_O := 32'b0;
+
     // apply parameters
     self.ADR := addr;
     self.SEL := mask;
@@ -320,6 +324,10 @@ prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
 
     // we are reading
     self.WE := 1'b0;
+
+    // NEW: During a read transaction, write data should be zeroed out 
+    // (inspired by eXpect / Xray properties)
+    self.DAT_O := 32'b0;
 
     // apply parameters
     self.ADR := addr;
@@ -403,6 +411,10 @@ prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data
 
     // we are reading
     self.WE := 1'b0;
+
+    // NEW: During a read transaction, write data should be zeroed out 
+    // (inspired by eXpect / Xray properties)
+    self.DAT_O := 32'b0;
 
     // apply parameters
     self.SEL := mask;
@@ -490,6 +502,10 @@ prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data
     // we are reading
     self.WE := 1'b0;
 
+    // NEW: During a read transaction, write data should be zeroed out 
+    // (inspired by eXpect / Xray properties)
+    self.DAT_O := 32'b0;
+
     // apply parameters
     self.SEL := mask;
 
@@ -576,6 +592,10 @@ prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data
     // we are reading
     self.WE := 1'b0;
 
+    // NEW: During a read transaction, write data should be zeroed out 
+    // (inspired by eXpect / Xray properties)
+    self.DAT_O := 32'b0;
+
     // apply parameters
     self.SEL := mask;
 
@@ -660,6 +680,10 @@ prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, dat
 
     // we are writing
     self.WE := 1'b0;
+
+    // NEW: During a read transaction, write data should be zeroed out 
+    // (inspired by eXpect / Xray properties)
+    self.DAT_O := 32'b0;
 
     // apply parameters
     self.SEL := mask;
