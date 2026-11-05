@@ -220,6 +220,10 @@ prot write_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
         step();
     }
 
+    // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+    assert_eq(self.ERR, 1'b0);
+    assert_eq(self.RTY, 1'b0);
+
     // NEW: continue to zero out read data
     assert_eq(self.DAT_I, 32'b0);
 
@@ -252,13 +256,16 @@ prot read_burst_single<self: Wishbone>(mask: u4, addr: u32, data: u32) {
     self.ADR := addr;
     self.SEL := mask;
 
-
     // wait for ack
     while self.ACK == 1'b0 {
         // NEW: data must be zeroed out when ACK is 0 (eXpect P16)
         assert_eq(self.DAT_I, 32'b0);
         step();
     }
+
+    // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+    assert_eq(self.ERR, 1'b0);
+    assert_eq(self.RTY, 1'b0);
 
     // acknowledge is now true for one cycle and we get the data
     assert_eq(self.DAT_I, data); // TODO: take mask into account
@@ -300,6 +307,10 @@ prot write_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
             assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
 
         // NEW: continue to zero out read data
         assert_eq(self.DAT_I, 32'b0);
@@ -346,6 +357,10 @@ prot read_burst_const<self: Wishbone>(mask: u4, addr: u32, data: [u32]++) {
             step();
         }
 
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
+
         // acknowledge is now true for one cycle and we get the data
         assert_eq(self.DAT_I, d); // TODO: take mask into account
         step();
@@ -387,6 +402,10 @@ prot write_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, dat
             assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
 
         // NEW: continue to zero out read data
         assert_eq(self.DAT_I, 32'b0);
@@ -434,6 +453,10 @@ prot read_burst_increment_linear<self: Wishbone>(mask: u4, start_addr: u32, data
             step();
         }
 
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
+
         // acknowledge is now true for one cycle and we get the data
         assert_eq(self.DAT_I, d); // TODO: take mask into account
         step();
@@ -477,6 +500,10 @@ prot write_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, dat
             assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
 
         // NEW: continue to zero out read data
         assert_eq(self.DAT_I, 32'b0);
@@ -525,6 +552,10 @@ prot read_burst_increment_wrap_4<self: Wishbone>(mask: u4, start_addr: u32, data
             step();
         }
 
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
+
         // acknowledge is now true for one cycle and we get the data
         assert_eq(self.DAT_I, d); // TODO: take mask into account
         step();
@@ -567,6 +598,10 @@ prot write_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, dat
             assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
 
         // NEW: continue to zero out read data
         assert_eq(self.DAT_I, 32'b0);
@@ -615,6 +650,10 @@ prot read_burst_increment_wrap_8<self: Wishbone>(mask: u4, start_addr: u32, data
             step();
         }
 
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
+
         // acknowledge is now true for one cycle and we get the data
         assert_eq(self.DAT_I, d); // TODO: take mask into account
         step();
@@ -656,6 +695,10 @@ prot write_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, da
             assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
 
         // NEW: continue to zero out read data
         assert_eq(self.DAT_I, 32'b0);
@@ -703,6 +746,10 @@ prot read_burst_increment_wrap_16<self: Wishbone>(mask: u4, start_addr: u32, dat
             assert_eq(self.DAT_I, 32'b0);
             step();
         }
+
+        // NEW: when ACK is asserted, ERR and RTY must both be 0 (Rule 3.45)
+        assert_eq(self.ERR, 1'b0);
+        assert_eq(self.RTY, 1'b0);
 
         // acknowledge is now true for one cycle and we get the data
         assert_eq(self.DAT_I, d); // TODO: take mask into account
