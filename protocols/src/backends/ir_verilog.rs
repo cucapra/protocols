@@ -74,6 +74,7 @@ impl VerilogGen {
             .map(|(k, v)| (*v, *k, mon.register_inits[v]))
             .collect();
         regs.sort();
+        regs.dedup_by_key(|(register, ..)| *register);
         let pins: Vec<_> = m
             .pins
             .iter()

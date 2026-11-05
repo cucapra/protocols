@@ -29,7 +29,8 @@ pub struct JointMonitorAutomaton {
     pub register_inits: FxHashMap<SymbolId, ExprRef>,
     /// All registers, including deterministic loop state, grouped by instance.
     pub registers: FxHashMap<InstanceParameter, SymbolId>,
-    /// (Node, action index) -> owning instance. Global Done actions have no owner.
+    /// (Node, action index) -> owning instance. Global Done and shared register
+    /// assignments have no single owner.
     pub action_owners: FxHashMap<(NodeId, usize), InstanceId>,
 }
 
@@ -75,7 +76,140 @@ pub fn build_joint_monitor_automaton(
         opt_iter_count(ctx, &mut monitor, symbols);
         monitors.push(monitor);
     }
-    compose_joint_monitor_automaton(ctx, protocols, monitors, symbols)
+    let share = checking_only
+        && monitors.len() > 1
+        && !monitors.iter().any(|monitor| {
+            monitor.graph.nodes().any(|(_, node)| {
+                node.actions
+                    .iter()
+                    .any(|action| matches!(monitor.graph[action.op], Op::Fork))
+            })
+        });
+    let mut monitor = compose_joint_monitor_automaton(ctx, protocols, monitors, symbols)?;
+    if share {
+        share_registers(ctx, &mut monitor, symbols);
+    }
+    Ok(monitor)
+}
+
+/// Without forks, protocols can reuse the same storage. Candidate first-cycle
+/// reads already use their own initial values; only the selected launch writes.
+fn share_registers(
+    ctx: &mut Context,
+    monitor: &mut JointMonitorAutomaton,
+    symbols: &mut SymbolTable,
+) {
+    let graph = &mut monitor.control.graph;
+    let mut registers = monitor
+        .registers
+        .iter()
+        .map(|(k, r)| (*k, *r))
+        .collect::<Vec<_>>();
+    registers.sort();
+    let mut counts = FxHashMap::default();
+    let mut pool = FxHashMap::default();
+    let mut targets = FxHashMap::default();
+    let mut replacements = FxHashMap::default();
+    let mut initial = FxHashMap::default();
+    for ((protocol, slot, _), old) in registers {
+        let width = graph.symbol_expr(old).unwrap().get_bv_type(ctx).unwrap();
+        let ordinal = counts.entry((protocol, slot, width)).or_insert(0usize);
+        let shared = *pool.entry((width, *ordinal)).or_insert_with(|| {
+            graph.add_register(
+                ctx,
+                symbols,
+                &format!("$monitor_shared_{width}_{ordinal}"),
+                width,
+            )
+        });
+        *ordinal += 1;
+        targets.insert(old, shared);
+        replacements.insert(
+            graph.symbol_expr(old).unwrap(),
+            graph.symbol_expr(shared).unwrap(),
+        );
+        initial
+            .entry(shared)
+            .or_insert(monitor.register_inits[&old]);
+    }
+
+    let nodes = graph.nodes().map(|(n, _)| n).collect::<Vec<_>>();
+    let mut owners = FxHashMap::default();
+    for node in nodes {
+        let mut launches = FxHashMap::default();
+        for (index, edge) in graph[node].transitions.iter().enumerate() {
+            if let JointTransitionKind::Launch(protocol) =
+                monitor.control.transition_kinds[&(node, index)]
+            {
+                let guard = launches.entry(protocol).or_insert(ctx.get_false());
+                *guard = ctx.or(*guard, edge.guard);
+            }
+        }
+        let actions = std::mem::take(&mut graph.node_mut(node).actions);
+        let mut writes = FxHashMap::<SymbolId, Assignment>::default();
+        for (index, action) in actions.into_iter().enumerate() {
+            let owner = monitor.action_owners.get(&(node, index)).copied();
+            let guard = remap_expr(ctx, action.guard, &replacements);
+            if let Op::Assign(old, assignment) = &graph[action.op] {
+                assert_eq!(assignment.dont_care, ctx.get_false());
+                let owner = owner.expect("register update needs an owning instance");
+                let starts = monitor.control.instances[&node]
+                    .iter()
+                    .any(|i| i.starts && (i.protocol, i.slot) == owner);
+                let default = if starts {
+                    monitor.register_inits[old]
+                } else {
+                    graph.symbol_expr(*old).unwrap()
+                };
+                let rhs = assignment.to_expr(ctx, default, default);
+                let rhs = remap_expr(ctx, rhs, &replacements);
+                let selected = if starts {
+                    launches[&owner.0]
+                } else {
+                    ctx.get_true()
+                };
+                let selected = remap_expr(ctx, selected, &replacements);
+                let guard = ctx.and(guard, selected);
+                writes
+                    .entry(targets[old])
+                    .or_insert_with(|| Assignment {
+                        dont_care: ctx.get_false(),
+                        concretes: Vec::new(),
+                    })
+                    .concretes
+                    .push((guard, rhs));
+            } else {
+                let op = graph[action.op].remap(ctx, &replacements, &targets);
+                let op = graph.o(op);
+                if let Some(owner) = owner {
+                    owners.insert((node, graph[node].actions.len()), owner);
+                }
+                graph.push_action(node, Action::new(guard, op));
+            }
+        }
+        let mut writes = writes.into_iter().collect::<Vec<_>>();
+        writes.sort_by_key(|(register, _)| *register);
+        for (register, assignment) in writes {
+            let op = graph.o(Op::Assign(register, assignment));
+            graph.push_action(node, Action::new(ctx.get_true(), op));
+        }
+        for edge in &mut graph.node_mut(node).transitions {
+            edge.guard = remap_expr(ctx, edge.guard, &replacements);
+        }
+    }
+    for register in monitor
+        .registers
+        .values_mut()
+        .chain(monitor.value_registers.values_mut())
+        .chain(monitor.knownness_registers.values_mut())
+    {
+        *register = targets[register];
+    }
+    monitor.register_inits = initial;
+    monitor.action_owners = owners;
+    graph.register_inits = monitor.register_inits.clone();
+    graph.simplify_all_exprs(ctx);
+    graph.garbage_collect_ops();
 }
 
 /// Assumptions: at a choice node, every protocol tries its first cycle on the current sample.
@@ -339,4 +473,162 @@ fn push_owned_action(
     let op = graph.o(op);
     graph.push_action(node, Action::new(guard, op));
     monitor.action_owners.insert((node, index), owner);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::{diagnostic::DiagnosticHandler, require_single_module};
+    use baa::{BitVecOps, BitVecValue};
+    use patronus::expr::{Expr, SymbolValueStore, eval_expr};
+
+    fn build(source: &str, checking: bool) -> (Context, SymbolTable, JointMonitorAutomaton) {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), source).unwrap();
+        let (mut symbols, modules) = crate::frontend(
+            &[file.path()],
+            &mut DiagnosticHandler::default(),
+            false,
+            false,
+        )
+        .unwrap();
+        let module = require_single_module(modules, &[file.path()]).unwrap();
+        let mut ctx = Context::default();
+        let monitor = build_monitor(&mut ctx, module.protos, &mut symbols, checking).unwrap();
+        (ctx, symbols, monitor)
+    }
+
+    const TWO_PROTOCOLS: &str = r#"
+        interface Bus { in kind: u1, in x: u8, out ack: u1 }
+        prot a<DUT: Bus>(v: u8) {
+            DUT.kind := 1'b0; DUT.x := v; step();
+            DUT.x := v;
+            while !DUT.ack { step(); }
+            step();
+        }
+        prot b<DUT: Bus>(v: u8) {
+            DUT.kind := 1'b1; DUT.x := v + 8'b00000001; step();
+            DUT.x := v;
+            while !DUT.ack { step(); }
+            step();
+        }
+    "#;
+
+    fn value(ctx: &Context, store: &SymbolValueStore, e: ExprRef) -> BitVecValue {
+        eval_expr(ctx, store, e).try_into().unwrap()
+    }
+
+    #[test]
+    fn shared_first_cycle_commits_only_the_selected_candidate() {
+        let (_, _, capturing) = build(TWO_PROTOCOLS, false);
+        assert_eq!(capturing.register_inits.len(), 2);
+        let (mut ctx, symbols, monitor) = build(TWO_PROTOCOLS, true);
+        assert_eq!(monitor.register_inits.len(), 1);
+        assert_eq!(
+            monitor
+                .registers
+                .values()
+                .copied()
+                .collect::<FxHashSet<_>>()
+                .len(),
+            1
+        );
+        let graph = &monitor.control.graph;
+        // Repeated protocol switches must ignore the previous transaction's data.
+        for corrupt in [false, true] {
+            let mut store = SymbolValueStore::default();
+            let mut defined = FxHashSet::default();
+            for &e in graph.symbol_expr.values() {
+                if matches!(ctx[e], Expr::BVSymbol { .. }) && defined.insert(e) {
+                    store.define_bv(e, &BitVecValue::zero(e.get_bv_type(&ctx).unwrap()));
+                }
+            }
+            for (&register, &init) in &monitor.register_inits {
+                store.update(
+                    graph.symbol_expr(register).unwrap(),
+                    eval_expr(&ctx, &store, init),
+                );
+            }
+            let mut node = graph.entry;
+            for transaction in 0..12 {
+                let kind = transaction % 2;
+                let first = 17 + transaction;
+                for cycle in 0..2 {
+                    for (&symbol, &e) in &graph.symbol_expr {
+                        if !symbols[symbol].is_port() {
+                            continue;
+                        }
+                        let input = match symbols[symbol].name() {
+                            "kind" => kind,
+                            "x" => {
+                                if cycle == 0 {
+                                    first
+                                } else {
+                                    let expected =
+                                        if kind == 0 { first } else { (first - 1) & 255 };
+                                    if corrupt { expected ^ 1 } else { expected }
+                                }
+                            }
+                            "ack" => 1,
+                            _ => continue,
+                        };
+                        store.update_bv(
+                            e,
+                            &BitVecValue::from_u64(input, e.get_bv_type(&ctx).unwrap()),
+                        );
+                    }
+                    let edges = graph[node]
+                        .transitions
+                        .iter()
+                        .filter(|edge| !value(&ctx, &store, edge.guard).is_zero())
+                        .collect::<Vec<_>>();
+                    assert_eq!(edges.len(), 1);
+                    let next = edges[0].target;
+                    let mut writes = Vec::new();
+                    for action in &graph[node].actions {
+                        if value(&ctx, &store, action.guard).is_zero() {
+                            continue;
+                        }
+                        if let Op::Assign(register, assignment) = &graph[action.op] {
+                            let held = graph.symbol_expr(*register).unwrap();
+                            let rhs = assignment.to_expr(&mut ctx, held, held);
+                            writes.push((held, eval_expr(&ctx, &store, rhs)));
+                        }
+                    }
+                    for (register, value) in writes {
+                        store.update(register, value);
+                    }
+                    node = next;
+                    assert_eq!(node == monitor.bad_state, corrupt && cycle == 1);
+                }
+                if corrupt {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn checking_monitor_with_forks_keeps_separate_registers() {
+        let source = TWO_PROTOCOLS.replace(
+            "while !DUT.ack { step(); }\n            step();",
+            "fork(); step();\n            DUT.x := v; step();",
+        );
+        let (_, symbols, monitor) = build(&source, true);
+        assert!(
+            monitor
+                .registers
+                .values()
+                .all(|r| !symbols[*r].name().starts_with("$monitor_shared_"))
+        );
+        assert_eq!(
+            monitor.register_inits.len(),
+            monitor
+                .registers
+                .values()
+                .copied()
+                .collect::<FxHashSet<_>>()
+                .len()
+        );
+    }
 }
