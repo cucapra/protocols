@@ -1,12 +1,13 @@
-use patronus::expr::{Context, Expr, ExprRef, ForEachChild, TypeCheck};
-use rustc_hash::{FxHashMap, FxHashSet};
-use thiserror::Error;
-
 use crate::frontend::symbol::{SymbolId, SymbolTable, Type};
 use crate::ir::proto_graph::{
     Action, Assignment, LoopId, Node, NodeId, Op, ProtoGraph, remap_expr,
 };
 use crate::ir::register_simplify::{simplify_guarded, simplify_registers};
+use patronus::expr::{
+    Context, Expr, ExprRef, ForEachChild, TypeCheck, find_symbols, simple_transform_expr,
+};
+use rustc_hash::{FxHashMap, FxHashSet};
+use thiserror::Error;
 
 #[derive(Clone)]
 /// wrap an owned ProtoGraph in extra metadata (which is useful to simplify
@@ -29,18 +30,31 @@ impl MonitorAutomaton {
     }
 }
 
-/// Simplify register state and remove metadata for eliminated registers.
+/// Keep only register state needed by subsequent monitor checks.
 pub fn simplify_monitor(
+    ctx: &mut Context,
+    monitor: MonitorAutomaton,
+    symbols: &mut SymbolTable,
+) -> MonitorAutomaton {
+    simplify_register_state(ctx, monitor, symbols, &FxHashSet::default())
+}
+
+/// Capturing drivers return parameter values to their caller (e.g. Calyx).
+pub fn simplify_capturing_driver(
+    ctx: &mut Context,
+    monitor: MonitorAutomaton,
+    symbols: &mut SymbolTable,
+) -> MonitorAutomaton {
+    let preserved = monitor.value_registers.values().copied().collect();
+    simplify_register_state(ctx, monitor, symbols, &preserved)
+}
+
+fn simplify_register_state(
     ctx: &mut Context,
     mut monitor: MonitorAutomaton,
     symbols: &mut SymbolTable,
+    preserved: &FxHashSet<SymbolId>,
 ) -> MonitorAutomaton {
-    // Parameter values are captured results, even when no later check reads them.
-    let preserved = monitor
-        .value_registers
-        .values()
-        .copied()
-        .collect::<FxHashSet<_>>();
     let entry = monitor.graph.entry;
     let dead = simplify_registers(
         ctx,
@@ -48,7 +62,7 @@ pub fn simplify_monitor(
         symbols,
         entry,
         &monitor.register_inits,
-        &preserved,
+        preserved,
     );
     monitor.register_inits.retain(|r, _| !dead.contains(r));
     monitor.value_registers.retain(|_, r| !dead.contains(r));
@@ -130,7 +144,7 @@ fn convert_driver(
                 }
             }
             for expression in expressions {
-                reads.extend(patronus::expr::find_symbols(ctx, expression));
+                reads.extend(find_symbols(ctx, expression));
             }
         }
     }
@@ -359,7 +373,7 @@ impl Converter<'_> {
             .chain(node.actions.iter().filter_map(|a| {
                 matches!(self.graph[a.op], Op::Done | Op::InternalAssertFalse).then_some(a.guard)
             }))
-            .filter(|&g| patronus::expr::find_symbols(self.ctx, g).contains(&valid))
+            .filter(|&g| find_symbols(self.ctx, g).contains(&valid))
             .collect::<Vec<_>>();
         if guards.is_empty() {
             return None;
@@ -996,4 +1010,211 @@ impl Converter<'_> {
         // frozen: substituting later updates could erase an observation conflict.
         self.emit(actions, guard, Op::AssertEq(lhs, rhs));
     }
+}
+
+pub fn opt_iter_count(
+    ctx: &mut Context,
+    monitor: &mut MonitorAutomaton,
+    symbols: &mut SymbolTable,
+) {
+    // Match  base[31:2] == observed_word_address - counter.
+    let mut candidates = Vec::new();
+    for (_, node) in monitor.graph.nodes() {
+        for action in &node.actions {
+            let Op::AssertEq(a, b) = monitor.graph[action.op] else {
+                continue;
+            };
+            for (lhs, rhs) in [(a, b), (b, a)] {
+                let Expr::BVSlice {
+                    e: base,
+                    hi: 31,
+                    lo: 2,
+                } = ctx[lhs]
+                else {
+                    continue;
+                };
+                let Expr::BVSub(_, index, 30) = ctx[rhs] else {
+                    continue;
+                };
+                if base.get_bv_type(ctx) != Some(32) || !matches!(ctx[index], Expr::BVSymbol { .. })
+                {
+                    continue;
+                }
+                let base_register = monitor
+                    .value_registers
+                    .values()
+                    .copied()
+                    .find(|r| monitor.graph.symbol_expr(*r) == Some(base));
+                let index_register = monitor
+                    .register_inits
+                    .keys()
+                    .copied()
+                    .find(|r| monitor.graph.symbol_expr(*r) == Some(index));
+                if let (Some(base), Some(index)) = (base_register, index_register)
+                    && base != index {
+                        candidates.push((base, index));
+                    
+                }
+            }
+        }
+    }
+    candidates.sort();
+    candidates.dedup();
+    for (base_register, index_register) in candidates {
+        let base = monitor.graph.symbol_expr(base_register).unwrap();
+        let index = monitor.graph.symbol_expr(index_register).unwrap();
+        let zero = ctx.zero(30);
+        if monitor.register_inits.get(&index_register) != Some(&zero) {
+            continue;
+        }
+        let one = ctx.bit_vec_val(1, 30);
+        let index_next = ctx.add(index, one);
+        let entry = monitor.graph.entry;
+        let mut captures = Vec::new();
+        let mut supported = true;
+        for (node, body) in monitor.graph.nodes() {
+            for action in &body.actions {
+                if let Op::Assign(register, assignment) = &monitor.graph[action.op] {
+                    if *register != base_register && *register != index_register {
+                        continue;
+                    }
+                    if action.guard != ctx.get_true()
+                        || assignment.dont_care != ctx.get_false()
+                        || assignment.concretes.len() != 1
+                        || assignment.concretes[0].0 != ctx.get_true()
+                    {
+                        supported = false;
+                        break;
+                    }
+                    if *register == base_register {
+                        captures.push((node, assignment.concretes[0].1));
+                    } else if assignment.concretes[0].1 != index_next {
+                        supported = false;
+                        break;
+                    }
+                }
+            }
+        }
+        if !supported || captures.len() != 1 || captures[0].0 != entry {
+            continue;
+        }
+        let mut graph = monitor.graph.clone();
+        graph.garbage_collect_ops();
+        let capture = captures[0].1;
+        let low = ctx.slice(capture, 1, 0);
+        if graph.simplifier.simplify(ctx, low) != ctx.zero(2) {
+            continue;
+        }
+        let captured_word = ctx.slice(capture, 31, 2);
+        let captured_word = graph.simplifier.simplify(ctx, captured_word);
+        if find_symbols(ctx, captured_word).contains(&index)
+            || find_symbols(ctx, captured_word).contains(&base)
+        {
+            continue;
+        }
+        let expected_register = graph.add_register(ctx, symbols, "$monitor_expected_address", 30);
+        let expected = graph.symbol_expr(expected_register).unwrap();
+        let expected_next = ctx.add(expected, one);
+        let word_base = ctx.slice(base, 31, 2);
+        let low_base = ctx.slice(base, 1, 0);
+        // Rewrite only comparisons produced by this loop's supported address.
+        let rewrite = |ctx: &mut Context, expr| {
+            simple_transform_expr(ctx, expr, |ctx, original, _| {
+                if original == low_base {
+                    return Some(ctx.zero(2));
+                }
+                let Expr::BVEqual(a, b) = ctx[original] else {
+                    return None;
+                };
+                for (lhs, rhs) in [(a, b), (b, a)] {
+                    if lhs != word_base {
+                        continue;
+                    }
+                    if let Expr::BVSub(sample, offset, 30) = ctx[rhs] {
+                        if offset == index {
+                            return Some(ctx.equal(expected, sample));
+                        }
+                        if offset == index_next {
+                            return Some(ctx.equal(expected_next, sample));
+                        }
+                    }
+                }
+                None
+            })
+        };
+        for (_, op) in graph.ops_mut() {
+            match op {
+                Op::Assign(register, assignment) => {
+                    if *register == base_register {
+                        *register = expected_register;
+                        assignment.concretes[0].1 = captured_word;
+                    } else if *register == index_register {
+                        *register = expected_register;
+                        assignment.concretes[0].1 = expected_next;
+                    }
+                    for (guard, rhs) in &mut assignment.concretes {
+                        *guard = rewrite(ctx, *guard);
+                        *rhs = rewrite(ctx, *rhs);
+                    }
+                }
+                Op::AssertEq(a, b) => {
+                    let equal = ctx.equal(*a, *b);
+                    let equal = rewrite(ctx, equal);
+                    if let Expr::BVEqual(lhs, rhs) = ctx[equal] {
+                        *a = lhs;
+                        *b = rhs;
+                    }
+                }
+                _ => {}
+            }
+        }
+        for (_, node) in graph.nodes_mut() {
+            for action in &mut node.actions {
+                action.guard = rewrite(ctx, action.guard);
+            }
+            for edge in &mut node.transitions {
+                edge.guard = rewrite(ctx, edge.guard);
+            }
+        }
+        // Reject all the complicated stuff
+        for (_, node) in graph.nodes() {
+            let mut roots = node.transitions.iter().map(|e| e.guard).collect::<Vec<_>>();
+            for action in &node.actions {
+                roots.push(action.guard);
+                match &graph[action.op] {
+                    Op::Assign(_, a) => {
+                        roots.push(a.dont_care);
+                        roots.extend(a.concretes.iter().flat_map(|(g, v)| [*g, *v]));
+                    }
+                    Op::AssertEq(a, b) => roots.extend([*a, *b]),
+                    _ => {}
+                }
+            }
+            if roots.into_iter().any(|e| {
+                let s = find_symbols(ctx, e);
+                s.contains(&base) || s.contains(&index)
+            }) {
+                supported = false;
+                break;
+            }
+        }
+        if !supported {
+            continue;
+        }
+        monitor.register_inits.insert(expected_register, zero);
+        monitor.graph = graph;
+    }
+    let entry = monitor.graph.entry;
+    let dead = simplify_registers(
+        ctx,
+        &mut monitor.graph,
+        symbols,
+        entry,
+        &monitor.register_inits,
+        &FxHashSet::default(),
+    );
+    monitor.register_inits.retain(|r, _| !dead.contains(r));
+    monitor.value_registers.retain(|_, r| !dead.contains(r));
+    monitor.knownness_registers.retain(|_, r| !dead.contains(r));
+    monitor.graph.register_inits = monitor.register_inits.clone();
 }

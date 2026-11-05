@@ -14,7 +14,7 @@ use protocols::frontend::diagnostic::DiagnosticHandler;
 use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::frontend::{Module, pick_module};
 use protocols::ir::driver_to_monitor::{
-    MonitorAutomaton, convert_driver_to_capturing_driver, simplify_monitor,
+    MonitorAutomaton, convert_driver_to_capturing_driver, simplify_capturing_driver,
 };
 use protocols::ir::joint_automaton::analyze_shape;
 use protocols::ir::lowering::Lowerer;
@@ -421,7 +421,7 @@ fn lower_proto(st: &mut SymbolTable, ctx: &mut Context, p: &Protocol) -> Monitor
     lowerer.ir.entry = fragment.entry;
     lowerer.ir.garbage_collect_unreachable(ctx, false);
     let auto = convert_driver_to_capturing_driver(ctx, lowerer.ir, st).unwrap();
-    simplify_monitor(ctx, auto, st)
+    simplify_capturing_driver(ctx, auto, st)
 }
 
 fn get_single_cycle(ctx: &mut Context, pg: &mut ProtoGraph, entry: NodeId) -> Option<NodeId> {

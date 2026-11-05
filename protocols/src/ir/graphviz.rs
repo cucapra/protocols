@@ -301,7 +301,7 @@ mod tests {
     use crate::frontend::require_single_module;
     use crate::ir::driver_to_monitor::{
         MonitorAutomaton, convert_driver_to_capturing_driver, convert_driver_to_monitor,
-        simplify_monitor,
+        simplify_capturing_driver, simplify_monitor,
     };
     use crate::ir::edge_contract::contract_edges;
     use crate::ir::joint_driver::build_joint_driver_automaton;
@@ -376,7 +376,7 @@ mod tests {
         simplify_assignments(&mut ctx, &mut graph, &symbols, &initial);
         graph.garbage_collect_unreachable(&ctx, false);
         let driver = convert_driver_to_capturing_driver(&mut ctx, graph, &mut symbols).unwrap();
-        let driver = simplify_monitor(&mut ctx, driver, &mut symbols);
+        let driver = simplify_capturing_driver(&mut ctx, driver, &mut symbols);
         let dot = driver.to_dot_string(&ctx, &symbols);
         let mut settings = Settings::clone_current();
         settings.set_snapshot_path(Path::new("../tests/snapshots"));

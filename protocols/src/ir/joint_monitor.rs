@@ -5,7 +5,8 @@ use thiserror::Error;
 use crate::frontend::ast::Protocol;
 use crate::frontend::symbol::{SymbolId, SymbolTable};
 use crate::ir::driver_to_monitor::{
-    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, simplify_monitor,
+    MonitorAutomaton, MonitorConversionError, convert_driver_to_monitor, opt_iter_count,
+    simplify_monitor,
 };
 use crate::ir::joint_automaton::{
     JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
@@ -70,7 +71,9 @@ pub fn build_joint_monitor_automaton(
                 source,
             }
         })?;
-        monitors.push(simplify_monitor(ctx, monitor, symbols));
+        let mut monitor = simplify_monitor(ctx, monitor, symbols);
+        opt_iter_count(ctx, &mut monitor, symbols);
+        monitors.push(monitor);
     }
     compose_joint_monitor_automaton(ctx, protocols, monitors, symbols)
 }
