@@ -1276,7 +1276,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_3_10_standard_block_read_cycle.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.10_standard_block_read_cycle.wave --instances :Wishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.10_standard_block_read_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_3_14_rmw_cycle_bi"
@@ -1285,7 +1285,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_3_14_rmw_cycle.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.14_rmw_cycle.wave --instances :Wishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.14_rmw_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_3_5_classic_standard_single_read_cycle_bi"
@@ -1294,7 +1294,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_3_5_classic_standard_single_read_cycle.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.5_classic_standard_single_read_cycle.wave --instances :Wishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.5_classic_standard_single_read_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_3_7_standard_single_write_cycle_bi"
@@ -1303,7 +1303,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_3_7_standard_single_write_cycle.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.7_standard_single_write_cycle.wave --instances :Wishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/3.7_standard_single_write_cycle.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_4_8_constant_address_burst_bi"
@@ -1312,7 +1312,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_4_8_constant_address_burst.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/4.8_constant_address_burst.wave --instances :Wishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/4.8_constant_address_burst.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_4_8_constant_address_burst_no_stb_rate_limit_bi"
@@ -1321,7 +1321,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_4_8_constant_address_burst_no_stb_rate_limit.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/4.8_constant_address_burst_no_stb_rate_limit.wave --instances :Wishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --wave examples/wishbone/4.8_constant_address_burst_no_stb_rate_limit.wave --instances :Wishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_1_bi"
@@ -1330,7 +1330,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_2_bi"
@@ -1339,7 +1339,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_3_bi"
@@ -1348,7 +1348,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_4_bi"
@@ -1357,7 +1357,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_5_bi"
@@ -1366,7 +1366,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_5.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_5.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_5.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_6_bi"
@@ -1375,7 +1375,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_6.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_6.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_6.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_7_bi"
@@ -1384,7 +1384,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_7.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_7.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_7.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_8_bi"
@@ -1393,7 +1393,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_classic_test_fifo_classic_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_classic/test_fifo_classic_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_1_bi"
@@ -1402,7 +1402,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_2_bi"
@@ -1411,7 +1411,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_3_bi"
@@ -1420,7 +1420,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_4_bi"
@@ -1429,7 +1429,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_5_bi"
@@ -1438,7 +1438,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_5.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_5.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_5.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_6_bi"
@@ -1447,7 +1447,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_6.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_6.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_6.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_7_bi"
@@ -1456,7 +1456,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_7.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_7.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_7.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_8_bi"
@@ -1465,7 +1465,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_fifo_constant_test_fifo_constant_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/fifo_constant/test_fifo_constant_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_0_bi"
@@ -1474,7 +1474,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_12_bi"
@@ -1483,7 +1483,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_4_bi"
@@ -1492,7 +1492,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_8_bi"
@@ -1501,7 +1501,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_16_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_16_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_0_bi"
@@ -1510,7 +1510,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_12_bi"
@@ -1519,7 +1519,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_4_bi"
@@ -1528,7 +1528,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_8_bi"
@@ -1537,7 +1537,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_1_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_1_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_0_bi"
@@ -1546,7 +1546,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_12_bi"
@@ -1555,7 +1555,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_4_bi"
@@ -1564,7 +1564,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_8_bi"
@@ -1573,7 +1573,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_2_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_2_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_0_bi"
@@ -1582,7 +1582,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_12_bi"
@@ -1591,7 +1591,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_4_bi"
@@ -1600,7 +1600,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_8_bi"
@@ -1609,7 +1609,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_4_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_4_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_0_bi"
@@ -1618,7 +1618,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_12_bi"
@@ -1627,7 +1627,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_12.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_12.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_4_bi"
@@ -1636,7 +1636,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_4.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_4.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_8_bi"
@@ -1645,7 +1645,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_classic_test_sram_classic_8_8.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_classic/test_sram_classic_8_8.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_0_bi"
@@ -1654,7 +1654,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_1_bi"
@@ -1663,7 +1663,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_2_bi"
@@ -1672,7 +1672,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_3_bi"
@@ -1681,7 +1681,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_0_bi"
@@ -1690,7 +1690,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_1_bi"
@@ -1699,7 +1699,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_2_bi"
@@ -1708,7 +1708,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_3_bi"
@@ -1717,7 +1717,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_0_bi"
@@ -1726,7 +1726,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_1_bi"
@@ -1735,7 +1735,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_2_bi"
@@ -1744,7 +1744,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_3_bi"
@@ -1753,7 +1753,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_0_bi"
@@ -1762,7 +1762,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_1_bi"
@@ -1771,7 +1771,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_2_bi"
@@ -1780,7 +1780,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_3_bi"
@@ -1789,7 +1789,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_16_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_16_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_0_bi"
@@ -1798,7 +1798,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_1_bi"
@@ -1807,7 +1807,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_2_bi"
@@ -1816,7 +1816,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_3_bi"
@@ -1825,7 +1825,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_0_bi"
@@ -1834,7 +1834,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_1_bi"
@@ -1843,7 +1843,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_2_bi"
@@ -1852,7 +1852,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_3_bi"
@@ -1861,7 +1861,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_0_bi"
@@ -1870,7 +1870,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_1_bi"
@@ -1879,7 +1879,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_2_bi"
@@ -1888,7 +1888,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_3_bi"
@@ -1897,7 +1897,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_0_bi"
@@ -1906,7 +1906,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_1_bi"
@@ -1915,7 +1915,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_2_bi"
@@ -1924,7 +1924,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_3_bi"
@@ -1933,7 +1933,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_1_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_1_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_0_bi"
@@ -1942,7 +1942,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_1_bi"
@@ -1951,7 +1951,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_2_bi"
@@ -1960,7 +1960,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_3_bi"
@@ -1969,7 +1969,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_0_bi"
@@ -1978,7 +1978,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_1_bi"
@@ -1987,7 +1987,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_2_bi"
@@ -1996,7 +1996,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_3_bi"
@@ -2005,7 +2005,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_0_bi"
@@ -2014,7 +2014,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_1_bi"
@@ -2023,7 +2023,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_2_bi"
@@ -2032,7 +2032,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_3_bi"
@@ -2041,7 +2041,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_0_bi"
@@ -2050,7 +2050,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_1_bi"
@@ -2059,7 +2059,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_2_bi"
@@ -2068,7 +2068,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_3_bi"
@@ -2077,7 +2077,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_2_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_2_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_0_bi"
@@ -2086,7 +2086,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_1_bi"
@@ -2095,7 +2095,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_2_bi"
@@ -2104,7 +2104,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_3_bi"
@@ -2113,7 +2113,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_0_bi"
@@ -2122,7 +2122,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_1_bi"
@@ -2131,7 +2131,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_2_bi"
@@ -2140,7 +2140,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_3_bi"
@@ -2149,7 +2149,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_0_bi"
@@ -2158,7 +2158,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_1_bi"
@@ -2167,7 +2167,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_2_bi"
@@ -2176,7 +2176,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_3_bi"
@@ -2185,7 +2185,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_0_bi"
@@ -2194,7 +2194,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_1_bi"
@@ -2203,7 +2203,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_2_bi"
@@ -2212,7 +2212,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_3_bi"
@@ -2221,7 +2221,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_4_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_4_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_0_bi"
@@ -2230,7 +2230,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_1_bi"
@@ -2239,7 +2239,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_2_bi"
@@ -2248,7 +2248,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_3_bi"
@@ -2257,7 +2257,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_0_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_0_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_0_bi"
@@ -2266,7 +2266,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_1_bi"
@@ -2275,7 +2275,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_2_bi"
@@ -2284,7 +2284,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_3_bi"
@@ -2293,7 +2293,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_12_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_12_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_0_bi"
@@ -2302,7 +2302,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_1_bi"
@@ -2311,7 +2311,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_2_bi"
@@ -2320,7 +2320,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_3_bi"
@@ -2329,7 +2329,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_4_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_4_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_0_bi"
@@ -2338,7 +2338,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_0.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_0.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_1_bi"
@@ -2347,7 +2347,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_1.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_1.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_2_bi"
@@ -2356,7 +2356,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_2.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_2.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_3_bi"
@@ -2365,7 +2365,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_antmicro_sram_incrementing_test_sram_incrementing_8_8_3.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/antmicro_litex.prot --wave tests/antmicro/sram_incrementing/test_sram_incrementing_8_8_3.fst --instances tb.dut:LitexWishbone --show-steps --display-hex 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_ethmac_first_62us_bi_bi"
@@ -2374,7 +2374,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_ethmac_first_62us_bi.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/ethmac.prot --wave examples/wishbone/ethmac_first_62us.fst --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/ethmac.prot --wave examples/wishbone/ethmac_first_62us.fst --instances tb_ethernet.wb_master.wbm_low_level:Tb_ethernetWb_masterWbm_low_level --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_litex_test_sram_burst_wrap_continuous_bi_bi"
@@ -2383,7 +2383,7 @@ paths = [
 ]
 expect_dir = "../../examples/wishbone/expects"
 expect_name = "examples_wishbone_security_litex_test_sram_burst_wrap_continuous_bi.bi.expect"
-cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/litex_unittest.prot --wave examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd --instances :LitexWishbone --display-hex --show-steps --force-x-to-zero 2>&1"
+cmd = "cd ../.. && target/debug/bi --color never --protocol examples/wishbone/wishbone_security.prot --protocol examples/wishbone/litex_unittest.prot --wave examples/wishbone/litex_test_sram_burst_wrap_continuous.vcd --instances :LitexWishbone --display-hex --show-steps 2>&1"
 
 [[tests]]
 name = "bi.examples_wishbone_wishbone_security.examples_wishbone_security_wb_stream_reader_bi_bi"
