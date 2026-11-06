@@ -94,10 +94,13 @@ def load_bi_cases() -> list[dict]:
     ]
     return out
 
+
 # Helper function to create Wishbone security test case
 def wishbone_security_test_case(case: dict) -> dict:
     return {
-        "id": case["id"].replace("examples.wishbone.", "examples.wishbone.security.", 1),
+        "id": case["id"].replace(
+            "examples.wishbone.", "examples.wishbone.security.", 1
+        ),
         "wave": case["wave"],
         "instances": case["instances"],
         "extra_args": case["extra_args"],
