@@ -251,8 +251,6 @@ fn graph_bi(
     let monitor = build_joint_monitor_automaton(&mut ctx, bi_protos.pop().unwrap(), st)
         .map_err(|e| e.to_string())?;
 
-    let mut bi = GraphBi::new(st, monitor);
-
     // try to parse FST, VCD or GHW file
     if let Ok(mut trace) = WaveSignalTrace::open(
         &cli.wave,
@@ -262,11 +260,13 @@ fn graph_bi(
         sampling_mode,
         cli.force_x_to_zero,
     ) {
+        let mut bi = GraphBi::new(st, &ctx, trace.port_map(), monitor);
         run_graph_bi_with_trace(&mut trace, &mut bi, d, cli.print_time_every_n_cycles)
     } else {
         // otherwise, we might be dealing with our own custom ASCI format
         let mut trace =
             AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
+        let mut bi = GraphBi::new(st, &ctx, trace.port_map(), monitor);
         run_graph_bi_with_trace(&mut trace, &mut bi, d, cli.print_time_every_n_cycles)
     }
 }
