@@ -20,7 +20,7 @@ use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_monitor::JointMonitorAutomaton;
-use protocols::ir::proto_graph::{Node, NodeId, Op, ProtoGraph};
+use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct GraphBi {
@@ -33,7 +33,7 @@ pub struct GraphBi {
 impl GraphBi {
     pub fn new(
         st: &SymbolTable,
-        ctx: &Context,
+        ctx: &mut Context,
         port_map: &PortMap,
         monitor: JointMonitorAutomaton,
     ) -> Self {
@@ -88,10 +88,27 @@ struct Compiler {
     // TODO: this could be handled by an index map!
     expr_ids: FxHashMap<ExecExpr, ExecExprId>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
+    reg_symbol_to_index: FxHashMap<SymbolId, usize>,
 }
 
 impl Compiler {
-    fn compile(&mut self, st: &SymbolTable, ctx: &Context, auto: &JointMonitorAutomaton) {
+    fn clear(&mut self) {
+        self.states.clear();
+        self.expr.clear();
+        self.expr_ids.clear();
+        self.port_symbol_to_index.clear();
+        self.reg_symbol_to_index.clear();
+    }
+
+    fn compile(&mut self, st: &SymbolTable, ctx: &mut Context, auto: &JointMonitorAutomaton) {
+        self.clear();
+
+        // allocate space for registers
+        for (_, &reg) in &auto.registers {
+            self.reg_symbol_to_index
+                .insert(reg, self.reg_symbol_to_index.len());
+        }
+
         // TODO: make sure that all nodes are reachable
         for (idx, (node_id, _)) in auto.control.graph.nodes().enumerate() {
             assert_eq!(idx, node_id.as_u32() as usize);
@@ -104,14 +121,12 @@ impl Compiler {
     fn compile_state(
         &mut self,
         st: &SymbolTable,
-        ctx: &Context,
+        ctx: &mut Context,
         pg: &ProtoGraph,
         node: NodeId,
     ) -> ExecState {
         // first we collect all guards and dedup them
-        let mut guards: Vec<_> = all_guards(ctx, pg, &pg[node]).collect();
-        guards.sort_unstable();
-        guards.dedup();
+        let mut guards: Vec<_> = all_guards(ctx, pg, &pg[node]);
         // add a static "true" guard to the front
         guards.insert(0, ctx.get_true());
 
@@ -134,24 +149,36 @@ impl Compiler {
             match &pg[act.op] {
                 Op::Assign(lhs, rhs) => {
                     assert_eq!(act.guard, ctx.get_true());
-                    let lhs = match st[lhs].kind() {
-                        SymbolKind::Dut => unreachable!("should never encounter dut!"),
+                    let (lhs, port_not_reg) = match st[lhs].kind() {
                         SymbolKind::InPort | SymbolKind::OutPort => {
                             let Some(lhs) = self.port_symbol_to_index.get(lhs).cloned() else {
                                 panic!("{} is not found!", st[lhs].full_name(st))
                             };
-                            lhs
+                            (lhs, true)
+                        }
+                        SymbolKind::AutomatonState => {
+                            let Some(lhs) = self.reg_symbol_to_index.get(lhs).cloned() else {
+                                panic!("{} is not found!", st[lhs].full_name(st))
+                            };
+                            (lhs, false)
                         }
                         SymbolKind::Arg(_) => unreachable!("arg is immutable"),
                         SymbolKind::LoopVar => unreachable!("loopvar is immutable"),
-                        SymbolKind::AutomatonState => todo!("automaton var"),
+                        SymbolKind::Dut => unreachable!("should never encounter dut!"),
                     };
 
                     // we only translate concrete assignments
-                    for (guard, value) in &rhs.concretes {
+                    let concrete_full_guards = parallel_assignment_guards(ctx, rhs);
+                    assert_eq!(rhs.concretes.len(), concrete_full_guards.len());
+                    for ((_, value), guard) in rhs.concretes.iter().zip(concrete_full_guards.iter())
+                    {
                         let guard_id = guard_to_index[guard];
                         let value = self.compile_expr(ctx, &guard_to_index, *value);
-                        let act = ExecAct::Assign(lhs, value);
+                        let act = if port_not_reg {
+                            ExecAct::AssignPort(lhs, value)
+                        } else {
+                            ExecAct::AssignReg(lhs, value)
+                        };
                         act_by_guard
                             .entry(guard_id)
                             .or_insert_with(|| vec![])
@@ -205,6 +232,10 @@ impl Compiler {
         } else {
             match &ctx[e] {
                 Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).into()),
+                Expr::BVSymbol { .. } => unreachable!(
+                    "Symbols should be handled earlier: {}",
+                    e.serialize_to_str(ctx)
+                ),
                 _ => todo!("{}", e.serialize_to_str(ctx)),
             }
         };
@@ -219,19 +250,80 @@ impl Compiler {
     }
 }
 
-fn all_guards(ctx: &Context, pg: &ProtoGraph, node: &Node) -> impl Iterator<Item = ExprRef> {
-    node.actions
+fn all_guards(ctx: &mut Context, pg: &ProtoGraph, node: &Node) -> Vec<ExprRef> {
+    let mut all: Vec<_> = node
+        .actions
         .iter()
         .flat_map(|a| match &pg[a.op] {
-            Op::Assign(_, a) => [a.dont_care]
-                .into_iter()
-                .chain(a.concretes.iter().map(|(g, _)| *g))
-                .collect(),
+            Op::Assign(_, a) => parallel_assignment_guards(ctx, a),
             _ => vec![],
         })
         .chain(node.transitions.iter().map(|t| t.guard))
         .chain(node.actions.iter().map(|a| a.guard))
-        .filter(|g| *g != ctx.get_false() && *g != ctx.get_true())
+        .collect();
+    all.sort_unstable();
+    all.dedup();
+    all.retain(|g| *g != ctx.get_true() && *g != ctx.get_false());
+    all
+}
+
+/// returns mutually exclusive guards for each concrete assignment
+/// TODO: merge this functionality with the BDD based simplification code
+fn parallel_assignment_guards(ctx: &mut Context, assignment: &Assignment) -> Vec<ExprRef> {
+    let mut path = ctx.get_true();
+    assignment
+        .concretes
+        .iter()
+        .map(|&(cond, _)| {
+            let full_cond = and(ctx, path, cond);
+            let not_cond = not(ctx, cond);
+            path = and(ctx, path, not_cond);
+            full_cond
+        })
+        .collect()
+}
+
+/// optimizing or TODO:dedup
+fn or(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
+    if a == ctx.get_true() || b == ctx.get_true() {
+        ctx.get_true()
+    } else if b == ctx.get_false() {
+        a
+    } else if a == ctx.get_false() {
+        b
+    } else if a == b {
+        a
+    } else {
+        ctx.or(a, b)
+    }
+}
+
+/// optimizing not TODO:dedup
+fn not(ctx: &mut Context, a: ExprRef) -> ExprRef {
+    if a == ctx.get_true() {
+        ctx.get_false()
+    } else if a == ctx.get_false() {
+        ctx.get_true()
+    } else if let Expr::BVNot(inner, _) = &ctx[a] {
+        *inner
+    } else {
+        ctx.not(a)
+    }
+}
+
+/// optimizing and TODO: dedup
+fn and(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
+    if a == ctx.get_false() || b == ctx.get_false() {
+        ctx.get_false()
+    } else if b == ctx.get_true() {
+        a
+    } else if a == ctx.get_true() {
+        b
+    } else if a == b {
+        a
+    } else {
+        ctx.and(a, b)
+    }
 }
 
 #[derive(Debug)]
@@ -248,7 +340,8 @@ enum ExecAct {
     InternalAssertFalse,
     Fork,
     // target, expr
-    Assign(usize, ExecExprId),
+    AssignPort(usize, ExecExprId),
+    AssignReg(usize, ExecExprId),
     AssertEq(ExecExprId, ExecExprId),
 }
 
