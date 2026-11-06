@@ -11,6 +11,7 @@ use rand::{Rng, SeedableRng};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::io::BufReader;
+use std::ops::Index;
 use wellen::stream::StreamError;
 use wellen::{Hierarchy, ItemRef, SignalRef, SignalValueRef, Time, Timescale, TimescaleUnit};
 
@@ -18,7 +19,7 @@ use wellen::{Hierarchy, ItemRef, SignalRef, SignalValueRef, Time, Timescale, Tim
 /// Used in `stream_time_steps`.
 #[derive(Debug, Clone)]
 pub struct SignalValues<'a> {
-    port_map: &'a FxHashMap<PortKey, usize>,
+    port_map: &'a PortMap,
     values: &'a [BitVecValue],
 }
 
@@ -31,6 +32,16 @@ impl<'a> SignalValues<'a> {
         };
         let index = self.port_map[&key];
         (&self.values[index]).into()
+    }
+}
+
+/// Raw indexing into the signal values. This is useful for when the PortMap is resolved statically
+/// instead of dynamically, once for every lookup.
+impl<'a> Index<usize> for SignalValues<'a> {
+    type Output = BitVecValue;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.values[index]
     }
 }
 
@@ -77,7 +88,7 @@ enum SamplingMode {
 #[allow(dead_code)]
 pub struct WaveSignalTrace {
     wave: wellen::stream::StreamingWaveform<BufReader<std::fs::File>>,
-    port_map: FxHashMap<PortKey, usize>,
+    port_map: PortMap,
     signal_ref_to_idx: FxHashMap<SignalRef, usize>,
     /// signals to stream
     signals: Vec<SignalRef>,
@@ -99,12 +110,21 @@ pub struct WaveSignalTrace {
     force_x_to_zero: bool,
 }
 
+impl WaveSignalTrace {
+    pub fn port_map(&self) -> &PortMap {
+        &self.port_map
+    }
+}
+
 /// A `PortKey` is just a pair consisting of an `instance_id` and a `symbol_id` for a pin
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct PortKey {
     pub instance_id: u32,
     pub pin_id: SymbolId,
 }
+
+/// maps the port of an instance to the position of the corresponding value.
+pub type PortMap = FxHashMap<PortKey, usize>;
 
 fn load_time_table(filename: &impl AsRef<std::path::Path>) -> Vec<Time> {
     wellen::simple::read(filename)
@@ -517,6 +537,12 @@ pub struct AsciWaveTrace {
     values: Vec<Vec<BitVecValue>>,
     pins: Vec<(String, WidthInt)>,
     port_map: FxHashMap<PortKey, usize>,
+}
+
+impl AsciWaveTrace {
+    pub fn port_map(&self) -> &PortMap {
+        &self.port_map
+    }
 }
 
 impl AsciWaveTrace {
