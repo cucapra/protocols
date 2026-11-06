@@ -7,6 +7,8 @@ mod bi;
 mod constraints;
 mod proto_trace;
 
+mod graph;
+
 use crate::bi::*;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
