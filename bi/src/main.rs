@@ -18,8 +18,9 @@ use clap::{ColorChoice, Parser};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use protocols::frontend;
 use protocols::frontend::Module;
-use protocols::frontend::ast::Clock;
+use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
+use protocols::frontend::symbol::SymbolTable;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Args for the monitor CLI
@@ -116,7 +117,7 @@ fn add_inst_name(i: &Instance, name: &str) -> String {
 fn get_clock(
     modules: &[Module],
     instances: &[Instance],
-    cli_sample_posedge: Option<String>,
+    cli_sample_posedge: Option<&str>,
 ) -> WaveSamplingMode {
     let mut clocks: Vec<Clock> = instances
         .iter()
@@ -128,7 +129,7 @@ fn get_clock(
         .collect();
 
     if let Some(name) = cli_sample_posedge {
-        clocks.push(Clock::PosEdge(name));
+        clocks.push(Clock::PosEdge(name.to_string()));
     }
     clocks.sort();
     clocks.dedup();
@@ -149,7 +150,7 @@ fn main() {
     // Parse CLI args
     let cli = Cli::parse();
 
-    if let Some(tu) = cli.time_unit
+    if let Some(tu) = cli.time_unit.as_deref()
         && tu != "ns"
     {
         eprintln!(
@@ -184,19 +185,46 @@ fn main() {
         .map(|arg| parse_instance(&modules, arg))
         .collect();
 
-    let sampling_mode = get_clock(&modules, &instances, cli.sample_posedge);
+    let sampling_mode = get_clock(&modules, &instances, cli.sample_posedge.as_deref());
 
     let bi_protos: Vec<Vec<_>> = instances
         .iter()
         .map(|inst| modules[inst.module_id].protos.clone())
         .collect();
 
+    let at_least_one_has_failed = classic_bi(
+        &st,
+        &mut d,
+        &cli,
+        &instances,
+        &modules,
+        sampling_mode,
+        bi_protos,
+    );
+
+    if at_least_one_has_failed {
+        std::process::exit(1);
+    } else {
+        std::process::exit(0);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn classic_bi(
+    st: &SymbolTable,
+    d: &mut DiagnosticHandler,
+    cli: &Cli,
+    instances: &[Instance],
+    modules: &[Module],
+    sampling_mode: WaveSamplingMode,
+    bi_protos: Vec<Vec<Protocol>>,
+) -> bool {
     let mut bis: Vec<_> = instances
         .iter()
         .enumerate()
         .zip(bi_protos.iter())
-        .map(|((inst_id, inst), protos)| {
-            BackwardsInterpreter::new(&st, protos, inst_id as u32, cli.include_in_progress)
+        .map(|((inst_id, _), protos)| {
+            BackwardsInterpreter::new(st, protos, inst_id as u32, cli.include_in_progress)
         })
         .collect();
 
@@ -204,9 +232,9 @@ fn main() {
         // try to parse FST, VCD or GHW file
         if let Ok(mut trace) = WaveSignalTrace::open(
             &cli.wave,
-            &st,
-            &modules,
-            &instances,
+            st,
+            modules,
+            instances,
             sampling_mode,
             cli.force_x_to_zero,
         ) {
@@ -218,7 +246,7 @@ fn main() {
         } else {
             // otherwise, we might be dealing with our own custom ASCI format
             let mut trace =
-                AsciWaveTrace::open(&cli.wave, &modules, &instances, cli.force_x_to_zero).unwrap();
+                AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
             run_bis(
                 bis.as_mut_slice(),
                 &mut trace,
@@ -320,11 +348,7 @@ fn main() {
         }
     }
 
-    if at_least_one_has_failed {
-        std::process::exit(1);
-    } else {
-        std::process::exit(0);
-    }
+    at_least_one_has_failed
 }
 
 fn run_bis(
