@@ -13,3 +13,14 @@
 // - different than the existing bi, we should be able to never allocate during execution
 // - we could define an array that contains all relevant values from the trace
 //   and then compile expressions to byte code that contains the concrete indices
+
+use protocols::frontend::symbol::SymbolTable;
+use protocols::ir::joint_monitor::JointMonitorAutomaton;
+
+pub struct GraphBi {}
+
+impl GraphBi {
+    pub fn new(st: &SymbolTable, monitor: JointMonitorAutomaton) -> Self {
+        todo!()
+    }
+}

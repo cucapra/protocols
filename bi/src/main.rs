@@ -10,6 +10,7 @@ mod proto_trace;
 mod graph;
 
 use crate::bi::*;
+use crate::graph::GraphBi;
 use crate::proto_trace::*;
 use crate::signal_trace::*;
 use ::bi::{Instance, signal_trace};
@@ -21,6 +22,7 @@ use protocols::frontend::Module;
 use protocols::frontend::ast::{Clock, Protocol};
 use protocols::frontend::diagnostic::{DiagnosticHandler, Level};
 use protocols::frontend::symbol::SymbolTable;
+use protocols::ir::joint_monitor::build_joint_monitor_automaton;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Args for the monitor CLI
@@ -104,6 +106,12 @@ struct Cli {
     /// measurements to stderr once the BI finishes
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
     print_time_every_n_cycles: Option<u32>,
+
+    #[arg(
+        long,
+        help = "Use the graph IR lowering to build a monitor and execute it."
+    )]
+    graph: bool,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -164,7 +172,7 @@ fn main() {
     let show_warnings = false;
     let skip_static_step_fork_checks = false;
     let mut d = DiagnosticHandler::new(cli.color, false, show_warnings, false);
-    let (st, modules) = frontend(
+    let (mut st, modules) = frontend(
         &cli.protocol,
         &mut d,
         skip_static_step_fork_checks,
@@ -192,21 +200,84 @@ fn main() {
         .map(|inst| modules[inst.module_id].protos.clone())
         .collect();
 
-    let at_least_one_has_failed = classic_bi(
-        &st,
-        &mut d,
-        &cli,
-        &instances,
-        &modules,
-        sampling_mode,
-        bi_protos,
-    );
+    let at_least_one_has_failed = if cli.graph {
+        graph_bi(
+            &mut st,
+            &mut d,
+            &cli,
+            &instances,
+            &modules,
+            sampling_mode,
+            bi_protos,
+        )
+    } else {
+        classic_bi(
+            &st,
+            &mut d,
+            &cli,
+            &instances,
+            &modules,
+            sampling_mode,
+            bi_protos,
+        )
+    };
 
-    if at_least_one_has_failed {
+    if at_least_one_has_failed.unwrap() {
         std::process::exit(1);
     } else {
         std::process::exit(0);
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn graph_bi(
+    st: &mut SymbolTable,
+    d: &mut DiagnosticHandler,
+    cli: &Cli,
+    instances: &[Instance],
+    modules: &[Module],
+    sampling_mode: WaveSamplingMode,
+    mut bi_protos: Vec<Vec<Protocol>>,
+) -> Result<bool, String> {
+    // only one instance
+    let [instance] = instances else {
+        todo!("the graph bi currently only supports a single instance!")
+    };
+    if bi_protos.len() != 1 {
+        todo!("the graph bi currently only supports a single instance!")
+    };
+
+    let mut ctx = patronus::expr::Context::default();
+    let monitor = build_joint_monitor_automaton(&mut ctx, bi_protos.pop().unwrap(), st)
+        .map_err(|e| e.to_string())?;
+
+    let mut bi = GraphBi::new(st, monitor);
+
+    // try to parse FST, VCD or GHW file
+    if let Ok(mut trace) = WaveSignalTrace::open(
+        &cli.wave,
+        st,
+        modules,
+        instances,
+        sampling_mode,
+        cli.force_x_to_zero,
+    ) {
+        run_graph_bi_with_trace(&mut trace, &mut bi, d, cli.print_time_every_n_cycles)
+    } else {
+        // otherwise, we might be dealing with our own custom ASCI format
+        let mut trace =
+            AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
+        run_graph_bi_with_trace(&mut trace, &mut bi, d, cli.print_time_every_n_cycles)
+    }
+}
+
+fn run_graph_bi_with_trace(
+    trace: &mut impl SignalTrace,
+    bi: &mut GraphBi,
+    d: &mut DiagnosticHandler,
+    print_time_every_n_cycles: Option<u32>,
+) -> Result<bool, String> {
+    todo!()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -218,7 +289,7 @@ fn classic_bi(
     modules: &[Module],
     sampling_mode: WaveSamplingMode,
     bi_protos: Vec<Vec<Protocol>>,
-) -> bool {
+) -> Result<bool, String> {
     let mut bis: Vec<_> = instances
         .iter()
         .enumerate()
@@ -348,7 +419,7 @@ fn classic_bi(
         }
     }
 
-    at_least_one_has_failed
+    Ok(at_least_one_has_failed)
 }
 
 fn run_bis(
