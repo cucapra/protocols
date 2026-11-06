@@ -14,10 +14,10 @@
 // - we could define an array that contains all relevant values from the trace
 //   and then compile expressions to byte code that contains the concrete indices
 
-use baa::BitVecValue;
+use baa::{BitVecOps, BitVecValue};
 use bi::signal_trace::PortMap;
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use protocols::frontend::symbol::SymbolTable;
+use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_monitor::JointMonitorAutomaton;
 use protocols::ir::proto_graph::{Node, NodeId, Op, ProtoGraph};
@@ -40,7 +40,7 @@ impl GraphBi {
         println!("{}", monitor.to_dot_string(ctx, st));
 
         let mut c = Compiler::default();
-        c.compile(ctx, &monitor);
+        c.compile(st, ctx, &monitor);
 
         todo!()
     }
@@ -52,7 +52,8 @@ impl GraphBi {
         // first we evaluate all unique guards
         let mut guard_bits = 0u64;
         for guard in &state.guards {
-            let value = self.eval_bool(guard) as u64;
+            let value = self.eval(*guard).to_u64().unwrap();
+            debug_assert_eq!(value, value & 1);
             guard_bits = guard_bits << 1 | value;
         }
 
@@ -73,7 +74,7 @@ impl GraphBi {
         todo!()
     }
 
-    fn eval_bool(&self, e: &ExecExpr) -> bool {
+    fn eval(&self, e: ExecExprId) -> BitVecValue {
         match e {
             _ => todo!(),
         }
@@ -84,20 +85,29 @@ impl GraphBi {
 struct Compiler {
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
+    // TODO: this could be handled by an index map!
+    expr_ids: FxHashMap<ExecExpr, ExecExprId>,
+    port_symbol_to_index: FxHashMap<SymbolId, usize>,
 }
 
 impl Compiler {
-    fn compile(&mut self, ctx: &Context, auto: &JointMonitorAutomaton) {
+    fn compile(&mut self, st: &SymbolTable, ctx: &Context, auto: &JointMonitorAutomaton) {
         // TODO: make sure that all nodes are reachable
         for (idx, (node_id, _)) in auto.control.graph.nodes().enumerate() {
             assert_eq!(idx, node_id.as_u32() as usize);
-            let state = self.compile_state(ctx, &auto.control.graph, node_id);
+            let state = self.compile_state(st, ctx, &auto.control.graph, node_id);
             assert_eq!(idx, self.states.len());
             self.states.push(state);
         }
     }
 
-    fn compile_state(&mut self, ctx: &Context, pg: &ProtoGraph, node: NodeId) -> ExecState {
+    fn compile_state(
+        &mut self,
+        st: &SymbolTable,
+        ctx: &Context,
+        pg: &ProtoGraph,
+        node: NodeId,
+    ) -> ExecState {
         // first we collect all guards and dedup them
         let mut guards: Vec<_> = all_guards(ctx, pg, &pg[node]).collect();
         guards.sort_unstable();
@@ -118,16 +128,62 @@ impl Compiler {
             .collect();
 
         // group actions by guards
-        let mut act_by_guard = FxHashMap::default();
+        let mut act_by_guard = FxHashMap::<usize, Vec<ExecAct>>::default();
         for act in &pg[node].actions {
+            let guard_id = guard_to_index[&act.guard];
             match &pg[act.op] {
-                Op::Assign(_, _) => {
+                Op::Assign(lhs, rhs) => {
                     assert_eq!(act.guard, ctx.get_true());
+                    let lhs = match st[lhs].kind() {
+                        SymbolKind::Dut => unreachable!("should never encounter dut!"),
+                        SymbolKind::InPort | SymbolKind::OutPort => {
+                            let Some(lhs) = self.port_symbol_to_index.get(lhs).cloned() else {
+                                panic!("{} is not found!", st[lhs].full_name(st))
+                            };
+                            lhs
+                        }
+                        SymbolKind::Arg(_) => unreachable!("arg is immutable"),
+                        SymbolKind::LoopVar => unreachable!("loopvar is immutable"),
+                        SymbolKind::AutomatonState => todo!("automaton var"),
+                    };
+
+                    // we only translate concrete assignments
+                    for (guard, value) in &rhs.concretes {
+                        let guard_id = guard_to_index[guard];
+                        let value = self.compile_expr(ctx, &guard_to_index, *value);
+                        let act = ExecAct::Assign(lhs, value);
+                        act_by_guard
+                            .entry(guard_id)
+                            .or_insert_with(|| vec![])
+                            .push(act);
+                    }
                 }
-                Op::AssertEq(_, _) => {}
-                Op::Fork => {}
-                Op::InternalAssertFalse => {}
-                Op::Done => {}
+                Op::AssertEq(a, b) => {
+                    let a = self.compile_expr(ctx, &guard_to_index, *a);
+                    let b = self.compile_expr(ctx, &guard_to_index, *b);
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(|| vec![])
+                        .push(ExecAct::AssertEq(a, b));
+                }
+                Op::Fork => {
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(|| vec![])
+                        .push(ExecAct::Fork);
+                }
+                Op::InternalAssertFalse => {
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(|| vec![])
+                        .push(ExecAct::InternalAssertFalse);
+                }
+                Op::Done => {
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(|| vec![])
+                        .push(ExecAct::Done);
+                }
             }
         }
 
@@ -139,18 +195,26 @@ impl Compiler {
     }
 
     fn compile_expr(
-        &self,
+        &mut self,
         ctx: &Context,
         guard_to_index: &FxHashMap<ExprRef, usize>,
         e: ExprRef,
-    ) -> ExecExpr {
-        if let Some(guard_idx) = guard_to_index.get(&e) {
+    ) -> ExecExprId {
+        let expr = if let Some(guard_idx) = guard_to_index.get(&e) {
             ExecExpr::Guard(*guard_idx)
         } else {
             match &ctx[e] {
                 Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).into()),
                 _ => todo!("{}", e.serialize_to_str(ctx)),
             }
+        };
+        if let Some(id) = self.expr_ids.get(&expr) {
+            *id
+        } else {
+            let id = self.expr.len().into();
+            self.expr_ids.insert(expr.clone(), id);
+            self.expr.push(expr);
+            id
         }
     }
 }
@@ -172,18 +236,34 @@ fn all_guards(ctx: &Context, pg: &ProtoGraph, node: &Node) -> impl Iterator<Item
 
 #[derive(Debug)]
 struct ExecState {
-    guards: Vec<ExecExpr>,
+    guards: Vec<ExecExprId>,
     acts: Vec<(usize, ExecAct)>,
     // indexed by bits of guard evaluation
     trans: Vec<u16>,
 }
 
 #[derive(Debug)]
-struct ExecAct {}
+enum ExecAct {
+    Done,
+    InternalAssertFalse,
+    Fork,
+    // target, expr
+    Assign(usize, ExecExprId),
+    AssertEq(ExecExprId, ExecExprId),
+}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 enum ExecExpr {
     Lit(BitVecValue),
     /// look up local guard expression which must have already been computed
     Guard(usize),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct ExecExprId(usize);
+
+impl From<usize> for ExecExprId {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
 }
