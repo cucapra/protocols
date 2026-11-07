@@ -240,9 +240,7 @@ fn graph_bi(
     mut bi_protos: Vec<Vec<Protocol>>,
 ) -> Result<bool, String> {
     // only one instance
-    let [instance] = instances else {
-        todo!("the graph bi currently only supports a single instance!")
-    };
+    assert_eq!(instances.len(), bi_protos.len());
     if bi_protos.len() != 1 {
         todo!("the graph bi currently only supports a single instance!")
     };
@@ -274,7 +272,7 @@ fn graph_bi(
 fn run_graph_bi_with_trace(
     trace: &mut impl SignalTrace,
     bi: &mut GraphBi,
-    d: &mut DiagnosticHandler,
+    _d: &mut DiagnosticHandler,
     print_time_every_n_cycles: Option<u32>,
 ) -> Result<bool, String> {
     let start = std::time::Instant::now();

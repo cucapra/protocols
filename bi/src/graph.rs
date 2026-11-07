@@ -19,10 +19,9 @@ use baa::{BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
-use protocols::ir::graphviz::to_dot_string;
 use protocols::ir::joint_monitor::JointMonitorAutomaton;
 use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 pub struct GraphBi {
     current_state: usize,
@@ -61,7 +60,9 @@ impl GraphBi {
     }
 
     pub fn exec_step(&mut self, values: SignalValues) -> std::result::Result<(), Failures> {
+        print!("{} --> ", self.current_state);
         self.current_state = self.exec_state(self.current_state, values);
+        println!("{}", self.current_state);
         Ok(())
     }
 }
@@ -75,7 +76,6 @@ impl GraphBi {
             let value = self.eval(*guard, guard_bits, &pin_values).to_u64().unwrap();
             debug_assert_eq!(value, value & 1);
             guard_bits |= value << guard_idx;
-            println!("guard({guard_idx}): {}", value);
         }
 
         // eval actions based on guards
@@ -85,7 +85,6 @@ impl GraphBi {
                     ExecAct::InternalAssertFalse => {
                         panic!("Internal assertion failed! State {}", self.current_state)
                     }
-                    ExecAct::AssignPort(_, _) => todo!("assign port"),
                     ExecAct::AssignReg(idx, value) => {
                         let value = self.eval(*value, guard_bits, &pin_values);
                         self.regs[*idx] = value;
@@ -115,8 +114,8 @@ impl GraphBi {
     fn eval(&self, e: ExecExprId, guard_bits: u64, pin_values: &SignalValues) -> BitVecValue {
         match self.expr[e.0].clone() {
             ExecExpr::Lit(v) => v,
-            ExecExpr::Guard(idx) => todo!("guard"),
-            ExecExpr::Reg(idx) => todo!("register"),
+            ExecExpr::Guard(idx) => BitVecValue::from_bool((guard_bits >> idx) & 1 == 1),
+            ExecExpr::Reg(idx) => self.regs[idx].clone(),
             ExecExpr::DutPin(idx) => pin_values[idx].clone(),
         }
     }
@@ -232,18 +231,15 @@ impl Compiler {
             match &pg[act.op] {
                 Op::Assign(lhs, rhs) => {
                     assert_eq!(act.guard, ctx.get_true());
-                    let (lhs, port_not_reg) = match st[lhs].kind() {
+                    let lhs = match st[lhs].kind() {
                         SymbolKind::InPort | SymbolKind::OutPort => {
-                            let Some(lhs) = self.port_symbol_to_index.get(lhs).cloned() else {
-                                panic!("{} is not found!", st[lhs].full_name(st))
-                            };
-                            (lhs, true)
+                            unreachable!("monitors should not write to ports")
                         }
                         SymbolKind::AutomatonState => {
                             let Some(lhs) = self.reg_symbol_to_index.get(lhs).cloned() else {
                                 panic!("{} is not found!", st[lhs].full_name(st))
                             };
-                            (lhs, false)
+                            lhs
                         }
                         SymbolKind::Arg(_) => unreachable!("arg is immutable"),
                         SymbolKind::LoopVar => unreachable!("loopvar is immutable"),
@@ -257,11 +253,7 @@ impl Compiler {
                     {
                         let guard_id = guard_to_index[guard];
                         let value = self.compile_expr(ctx, &guard_to_index, *value);
-                        let act = if port_not_reg {
-                            ExecAct::AssignPort(lhs, value)
-                        } else {
-                            ExecAct::AssignReg(lhs, value)
-                        };
+                        let act = ExecAct::AssignReg(lhs, value);
                         act_by_guard
                             .entry(guard_id)
                             .or_insert_with(|| vec![])
@@ -363,6 +355,7 @@ fn parallel_assignment_guards(ctx: &mut Context, assignment: &Assignment) -> Vec
 }
 
 /// optimizing or TODO:dedup
+#[allow(dead_code)]
 fn or(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
     if a == ctx.get_true() || b == ctx.get_true() {
         ctx.get_true()
@@ -415,8 +408,6 @@ struct ExecState {
 #[derive(Debug, Clone)]
 enum ExecAct {
     InternalAssertFalse,
-    // target, expr
-    AssignPort(usize, ExecExprId),
     AssignReg(usize, ExecExprId),
     AssertEq(ExecExprId, ExecExprId),
 }
