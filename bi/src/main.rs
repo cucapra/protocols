@@ -277,7 +277,30 @@ fn run_graph_bi_with_trace(
     d: &mut DiagnosticHandler,
     print_time_every_n_cycles: Option<u32>,
 ) -> Result<bool, String> {
-    todo!()
+    let start = std::time::Instant::now();
+    let mut num_cycles_till_snapshot = 0u32;
+    if print_time_every_n_cycles.is_some() {
+        eprintln!("step,elapsed_us");
+    }
+    trace.stream_steps(|step_id, values| {
+        let _ = bi.exec_step(values.clone());
+
+        if let Some(n) = print_time_every_n_cycles {
+            if num_cycles_till_snapshot == 0 {
+                eprintln!("{step_id},{}", start.elapsed().as_micros());
+                num_cycles_till_snapshot = n;
+            }
+            num_cycles_till_snapshot -= 1;
+        }
+
+        if bi.has_failed() {
+            CallbackResult::Stop
+        } else {
+            CallbackResult::Continue
+        }
+    })?;
+
+    Ok(bi.has_failed())
 }
 
 #[allow(clippy::too_many_arguments)]
