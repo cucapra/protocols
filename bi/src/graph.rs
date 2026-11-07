@@ -25,10 +25,10 @@ use rustc_hash::FxHashMap;
 
 pub struct GraphBi {
     current_state: usize,
+    bad_state: usize,
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
     regs: Vec<BitVecValue>,
-    has_failed: bool,
 }
 
 impl GraphBi {
@@ -38,10 +38,6 @@ impl GraphBi {
         port_map: &PortMap,
         mut monitor: JointMonitorAutomaton,
     ) -> Self {
-        monitor
-            .control
-            .graph
-            .garbage_collect_unreachable(ctx, false);
         println!("{}", monitor.to_dot_string(ctx, st));
         let mut c = Compiler::default();
         c.compile(st, ctx, &monitor, port_map);
@@ -51,18 +47,20 @@ impl GraphBi {
             states: c.states,
             expr: c.expr,
             regs: c.regs,
-            has_failed: false,
+            bad_state: monitor.bad_state.as_u32() as usize,
         }
     }
 
     pub fn has_failed(&self) -> bool {
-        self.has_failed
+        self.current_state == self.bad_state
     }
 
     pub fn exec_step(&mut self, values: SignalValues) -> std::result::Result<(), Failures> {
-        print!("{} --> ", self.current_state);
-        self.current_state = self.exec_state(self.current_state, values);
-        println!("{}", self.current_state);
+        if self.current_state != self.bad_state {
+            print!("{} --> ", self.current_state);
+            self.current_state = self.exec_state(self.current_state, values);
+            println!("{}", self.current_state);
+        }
         Ok(())
     }
 }
@@ -287,7 +285,10 @@ impl Compiler {
         let trans = pg[node]
             .transitions
             .iter()
-            .map(|t| (guard_to_index[&t.guard], t.target.as_u32() as u8))
+            .map(|t| {
+                assert!(t.consumes_step);
+                (guard_to_index[&t.guard], t.target.as_u32() as u8)
+            })
             .collect();
 
         ExecState {
