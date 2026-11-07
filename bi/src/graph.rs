@@ -14,8 +14,9 @@
 // - we could define an array that contains all relevant values from the trace
 //   and then compile expressions to byte code that contains the concrete indices
 
+use crate::bi::Failures;
 use baa::{BitVecOps, BitVecValue};
-use bi::signal_trace::PortMap;
+use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use protocols::ir::graphviz::to_dot_string;
@@ -24,10 +25,11 @@ use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct GraphBi {
-    pg: ProtoGraph,
-
     current_state: usize,
     states: Vec<ExecState>,
+    expr: Vec<ExecExpr>,
+    regs: Vec<BitVecValue>,
+    has_failed: bool,
 }
 
 impl GraphBi {
@@ -35,48 +37,87 @@ impl GraphBi {
         st: &SymbolTable,
         ctx: &mut Context,
         port_map: &PortMap,
-        monitor: JointMonitorAutomaton,
+        mut monitor: JointMonitorAutomaton,
     ) -> Self {
+        monitor
+            .control
+            .graph
+            .garbage_collect_unreachable(ctx, false);
         println!("{}", monitor.to_dot_string(ctx, st));
-
         let mut c = Compiler::default();
         c.compile(st, ctx, &monitor, port_map);
 
-        todo!()
+        Self {
+            current_state: monitor.control.graph.entry.as_u32() as usize,
+            states: c.states,
+            expr: c.expr,
+            regs: c.regs,
+            has_failed: false,
+        }
+    }
+
+    pub fn has_failed(&self) -> bool {
+        self.has_failed
+    }
+
+    pub fn exec_step(&mut self, values: SignalValues) -> std::result::Result<(), Failures> {
+        self.current_state = self.exec_state(self.current_state, values);
+        Ok(())
     }
 }
 
 impl GraphBi {
-    fn exec_state(&mut self, state_id: usize) -> usize {
+    fn exec_state(&mut self, state_id: usize, pin_values: SignalValues) -> usize {
         let state = &self.states[state_id];
         // first we evaluate all unique guards
         let mut guard_bits = 0u64;
-        for guard in &state.guards {
-            let value = self.eval(*guard).to_u64().unwrap();
+        for (guard_idx, guard) in state.guards.iter().enumerate() {
+            let value = self.eval(*guard, guard_bits, &pin_values).to_u64().unwrap();
             debug_assert_eq!(value, value & 1);
-            guard_bits = guard_bits << 1 | value;
+            guard_bits |= value << guard_idx;
+            println!("guard({guard_idx}): {}", value);
         }
 
         // eval actions based on guards
         for (act_guard_idx, act) in &state.acts {
             if (guard_bits >> act_guard_idx) & 1 == 1 {
-                self.exec_act(act);
+                match act {
+                    ExecAct::InternalAssertFalse => {
+                        panic!("Internal assertion failed! State {}", self.current_state)
+                    }
+                    ExecAct::AssignPort(_, _) => todo!("assign port"),
+                    ExecAct::AssignReg(idx, value) => {
+                        let value = self.eval(*value, guard_bits, &pin_values);
+                        self.regs[*idx] = value;
+                    }
+                    ExecAct::AssertEq(lhs, rhs) => {
+                        let lhs = self.eval(*lhs, guard_bits, &pin_values);
+                        let rhs = self.eval(*rhs, guard_bits, &pin_values);
+                        let is_ok = lhs.is_equal(&rhs);
+                        if !is_ok {
+                            panic!("assertion failed");
+                        }
+                    }
+                }
             }
         }
 
         // calc next state based in guards:
-        let next_state = state.trans[guard_bits as usize] as usize;
-        debug_assert!(next_state < self.states.len());
-        next_state
+        state
+            .trans
+            .iter()
+            .find(|(g, _)| (guard_bits >> g) & 1 == 1)
+            .cloned()
+            .unwrap()
+            .1 as usize
     }
 
-    fn exec_act(&self, act: &ExecAct) {
-        todo!()
-    }
-
-    fn eval(&self, e: ExecExprId) -> BitVecValue {
-        match e {
-            _ => todo!(),
+    fn eval(&self, e: ExecExprId, guard_bits: u64, pin_values: &SignalValues) -> BitVecValue {
+        match self.expr[e.0].clone() {
+            ExecExpr::Lit(v) => v,
+            ExecExpr::Guard(idx) => todo!("guard"),
+            ExecExpr::Reg(idx) => todo!("register"),
+            ExecExpr::DutPin(idx) => pin_values[idx].clone(),
         }
     }
 }
@@ -85,6 +126,7 @@ impl GraphBi {
 struct Compiler {
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
+    regs: Vec<BitVecValue>,
     // TODO: this could be handled by an index map!
     expr_ids: FxHashMap<ExecExpr, ExecExprId>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
@@ -121,6 +163,12 @@ impl Compiler {
     ) {
         self.clear();
 
+        let num_states = auto.control.graph.nodes().count();
+        assert!(
+            num_states < u8::MAX as usize,
+            "Can only represent up to 256 states!"
+        );
+
         // allocate space for registers
         for &reg in auto.registers.values() {
             let index = self.reg_symbol_to_index.len();
@@ -128,6 +176,10 @@ impl Compiler {
             let expr = self.add_expr(ExecExpr::Reg(index));
             self.patronus_expr_map
                 .insert(auto.control.graph.symbol_expr[&reg], expr);
+            let Expr::BVLiteral(init_value) = &ctx[auto.register_inits[&reg]] else {
+                panic!("Failed to find init value for {}", st[reg].full_name(st));
+            };
+            self.regs.push(init_value.get(ctx).into());
         }
 
         // create mappings for dut pins
@@ -163,7 +215,7 @@ impl Compiler {
 
         // compile guards
         let mut guard_to_index = FxHashMap::default();
-        let guards = guards
+        let guards: Vec<_> = guards
             .into_iter()
             .enumerate()
             .map(|(idx, g)| {
@@ -224,31 +276,32 @@ impl Compiler {
                         .or_insert_with(|| vec![])
                         .push(ExecAct::AssertEq(a, b));
                 }
-                Op::Fork => {
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(|| vec![])
-                        .push(ExecAct::Fork);
-                }
+                Op::Fork => unreachable!("forks should have been resolved!"),
                 Op::InternalAssertFalse => {
                     act_by_guard
                         .entry(guard_id)
                         .or_insert_with(|| vec![])
                         .push(ExecAct::InternalAssertFalse);
                 }
-                Op::Done => {
-                    act_by_guard
-                        .entry(guard_id)
-                        .or_insert_with(|| vec![])
-                        .push(ExecAct::Done);
-                }
+                Op::Done => {} // TODO: is it ok to ignore done?
             }
         }
 
+        let acts = act_by_guard
+            .iter()
+            .flat_map(|(g, acts)| acts.iter().map(|a| (*g, a.clone())))
+            .collect();
+
+        let trans = pg[node]
+            .transitions
+            .iter()
+            .map(|t| (guard_to_index[&t.guard], t.target.as_u32() as u8))
+            .collect();
+
         ExecState {
             guards,
-            acts: vec![],
-            trans: vec![],
+            acts,
+            trans,
         }
     }
 
@@ -356,15 +409,12 @@ fn and(ctx: &mut Context, a: ExprRef, b: ExprRef) -> ExprRef {
 struct ExecState {
     guards: Vec<ExecExprId>,
     acts: Vec<(usize, ExecAct)>,
-    // indexed by bits of guard evaluation
-    trans: Vec<u16>,
+    trans: Vec<(usize, u8)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ExecAct {
-    Done,
     InternalAssertFalse,
-    Fork,
     // target, expr
     AssignPort(usize, ExecExprId),
     AssignReg(usize, ExecExprId),
