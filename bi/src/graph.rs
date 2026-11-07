@@ -40,7 +40,7 @@ impl GraphBi {
         println!("{}", monitor.to_dot_string(ctx, st));
 
         let mut c = Compiler::default();
-        c.compile(st, ctx, &monitor);
+        c.compile(st, ctx, &monitor, port_map);
 
         todo!()
     }
@@ -89,6 +89,7 @@ struct Compiler {
     expr_ids: FxHashMap<ExecExpr, ExecExprId>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
     reg_symbol_to_index: FxHashMap<SymbolId, usize>,
+    patronus_expr_map: FxHashMap<ExprRef, ExecExprId>,
 }
 
 impl Compiler {
@@ -100,13 +101,43 @@ impl Compiler {
         self.reg_symbol_to_index.clear();
     }
 
-    fn compile(&mut self, st: &SymbolTable, ctx: &mut Context, auto: &JointMonitorAutomaton) {
+    fn add_expr(&mut self, expr: ExecExpr) -> ExecExprId {
+        if let Some(id) = self.expr_ids.get(&expr) {
+            *id
+        } else {
+            let id = self.expr.len().into();
+            self.expr_ids.insert(expr.clone(), id);
+            self.expr.push(expr);
+            id
+        }
+    }
+
+    fn compile(
+        &mut self,
+        st: &SymbolTable,
+        ctx: &mut Context,
+        auto: &JointMonitorAutomaton,
+        port_map: &PortMap,
+    ) {
         self.clear();
 
         // allocate space for registers
-        for (_, &reg) in &auto.registers {
-            self.reg_symbol_to_index
-                .insert(reg, self.reg_symbol_to_index.len());
+        for &reg in auto.registers.values() {
+            let index = self.reg_symbol_to_index.len();
+            self.reg_symbol_to_index.insert(reg, index);
+            let expr = self.add_expr(ExecExpr::Reg(index));
+            self.patronus_expr_map
+                .insert(auto.control.graph.symbol_expr[&reg], expr);
+        }
+
+        // create mappings for dut pins
+        for (port, index) in port_map.iter() {
+            assert_eq!(port.instance_id, 0);
+            let sym = port.pin_id;
+            self.port_symbol_to_index.insert(sym, *index);
+            let expr = self.add_expr(ExecExpr::DutPin(*index));
+            self.patronus_expr_map
+                .insert(auto.control.graph.symbol_expr[&sym], expr);
         }
 
         // TODO: make sure that all nodes are reachable
@@ -227,25 +258,20 @@ impl Compiler {
         guard_to_index: &FxHashMap<ExprRef, usize>,
         e: ExprRef,
     ) -> ExecExprId {
-        let expr = if let Some(guard_idx) = guard_to_index.get(&e) {
-            ExecExpr::Guard(*guard_idx)
+        if let Some(guard_idx) = guard_to_index.get(&e) {
+            self.add_expr(ExecExpr::Guard(*guard_idx))
+        } else if let Some(expr) = self.patronus_expr_map.get(&e) {
+            *expr
         } else {
-            match &ctx[e] {
+            let expr = match &ctx[e] {
                 Expr::BVLiteral(v) => ExecExpr::Lit(v.get(ctx).into()),
                 Expr::BVSymbol { .. } => unreachable!(
                     "Symbols should be handled earlier: {}",
                     e.serialize_to_str(ctx)
                 ),
                 _ => todo!("{}", e.serialize_to_str(ctx)),
-            }
-        };
-        if let Some(id) = self.expr_ids.get(&expr) {
-            *id
-        } else {
-            let id = self.expr.len().into();
-            self.expr_ids.insert(expr.clone(), id);
-            self.expr.push(expr);
-            id
+            };
+            self.add_expr(expr)
         }
     }
 }
@@ -350,6 +376,10 @@ enum ExecExpr {
     Lit(BitVecValue),
     /// look up local guard expression which must have already been computed
     Guard(usize),
+    /// look up register value
+    Reg(usize),
+    /// look up dut pin value
+    DutPin(usize),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
