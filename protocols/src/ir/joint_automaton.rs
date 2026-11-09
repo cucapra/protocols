@@ -395,6 +395,15 @@ pub fn prepare_joint_protocols(
 
 /// Adds a signaling op to indicate when a particular cycle is the last one during which a protocol is active
 fn add_finish_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
+    let predecessors = find_finish_nodes(ctx, pg);
+    let op = pg.o(Op::Finish((proto_id, 0)));
+    for (src, cond) in predecessors {
+        pg[src].actions.push(Action::new(cond, op));
+    }
+}
+
+/// Identifies all nodes and conditions under which the protocol is finishing in the current step.
+pub(crate) fn find_finish_nodes(ctx: &Context, pg: &ProtoGraph) -> Vec<(NodeId, ExprRef)> {
     let mut done_nodes = pg.find_done_nodes(ctx);
     assert_eq!(
         done_nodes.len(),
@@ -407,11 +416,7 @@ fn add_finish_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
         pg[done_node].transitions.is_empty(),
         "at this point the node with the done action should not have any further transitions"
     );
-    let predecessors = pg.find_prev_nodes(ctx, done_node);
-    let op = pg.o(Op::Finish((proto_id, 0)));
-    for (src, cond) in predecessors {
-        pg[src].actions.push(Action::new(cond, op));
-    }
+    pg.find_prev_nodes(ctx, done_node)
 }
 
 /// build a joint control automaton, agnostic to whether it's a driver or a monitor

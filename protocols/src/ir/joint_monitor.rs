@@ -10,7 +10,7 @@ use crate::ir::driver_to_monitor::{
 use crate::ir::graphviz::to_dot_string;
 use crate::ir::joint_automaton::{
     JointAutomatonError, JointControlAutomaton, JointTransitionKind, ProtocolId,
-    build_joint_control_automaton, prepare_joint_protocols,
+    build_joint_control_automaton, find_finish_nodes, prepare_joint_protocols,
 };
 use crate::ir::proto_graph::{Action, Assignment, Node, NodeId, Op, Transition, remap_expr};
 use crate::ir::register_simplify::simplify_guarded;
@@ -90,6 +90,11 @@ pub fn compose_joint_monitor_automaton(
     mut monitors: Vec<MonitorAutomaton>,
     symbols: &mut SymbolTable,
 ) -> Result<JointMonitorAutomaton, JointMonitorError> {
+    // compute the finish states and conditions for all protocols
+    let finish_states: Vec<_> = monitors
+        .iter()
+        .map(|m| find_finish_nodes(ctx, &m.graph))
+        .collect();
     // set up the monitor ProtoGraphs, build the control automaton
     let validity = monitors
         .iter_mut()
@@ -188,6 +193,11 @@ pub fn compose_joint_monitor_automaton(
         let mut launches = FxHashMap::default();
         let mut edge_values = FxHashMap::default();
         for instance in result.control.instances[&node].clone() {
+            println!(
+                "{}_{}: {:?} into -> {node:?}",
+                result.protocols[instance.protocol].name, instance.slot, instance.control
+            );
+
             // Use the register copies allocated for this protocol and slot.
             let owner = (instance.protocol, instance.slot);
             let monitor = &monitors[instance.protocol];
@@ -234,10 +244,21 @@ pub fn compose_joint_monitor_automaton(
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
-            // mark the start of the instance
+            // mark the start/end of the instance
+            // TODO: it would be neat to move this to `joint_automaton`.
+            //       But, we do need to know the guard that tells us whether the node starts
             if instance.starts {
-                let guard = survives; // TODO: is this correct?
+                // the protocol starts iff it survives this cycle (because of single cycle distinguishability)
+                let guard = survives;
                 let op = Op::Start((&instance).into());
+                push_owned_action(&mut result, node, owner, guard, op);
+            }
+            if let Some((_, finishes)) = finish_states[instance.protocol]
+                .iter()
+                .find(|(n, _)| *n == instance.control)
+            {
+                let guard = *finishes;
+                let op = Op::Finish((&instance).into());
                 push_owned_action(&mut result, node, owner, guard, op);
             }
 
