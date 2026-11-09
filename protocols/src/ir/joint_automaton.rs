@@ -373,15 +373,38 @@ pub fn prepare_joint_protocols(
     }
     Ok(protocols
         .iter()
-        .map(|protocol| {
+        .enumerate()
+        .map(|(proto_id, protocol)| {
             let mut lowerer = Lowerer::new(protocol.ctx.clone(), symbols);
             let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
+            add_last_cycle_op(ctx, &mut lowerer.ir, proto_id);
             lowerer.ir.garbage_collect_unreachable(ctx, false);
             lowerer.ir
         })
         .collect())
+}
+
+/// Adds a signaling op to indicate when a particular cycle is the last one during which a protocol is active
+fn add_last_cycle_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
+    let mut done_nodes = pg.find_done_nodes(ctx);
+    assert_eq!(
+        done_nodes.len(),
+        1,
+        "there always should be exactly one done node"
+    );
+    let (done_cond, done_node) = done_nodes.pop().unwrap();
+    assert_eq!(done_cond, ctx.get_true(), "done should always be active");
+    assert!(
+        pg[done_node].transitions.is_empty(),
+        "at this point the node with the done action should not have any further transitions"
+    );
+    let predecessors = pg.find_prev_nodes(ctx, done_node);
+    let op = pg.o(Op::LastCycle((proto_id, 0)));
+    for (src, cond) in predecessors {
+        pg[src].actions.push(Action::new(cond, op));
+    }
 }
 
 /// build a joint control automaton, agnostic to whether it's a driver or a monitor
