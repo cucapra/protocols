@@ -114,6 +114,8 @@ fn replace_proto_graph_exprs(
                 *rhs = replace_expr(ctx, *rhs, old_expr, new_expr);
             }
             Op::Fork | Op::InternalAssertFalse | Op::Done => {}
+            Op::LearnedParam(..) => todo!("learned param"),
+            Op::LastCycle(..) => todo!("last cycle"),
         }
     }
 
@@ -376,6 +378,8 @@ pub fn lower_proto_graph_to_transition_system(
                     });
                 }
                 Op::Assign(_, _) | Op::Fork | Op::Done => {}
+                Op::LearnedParam(..) => todo!("learned param"),
+                Op::LastCycle(..) => todo!("last cycle"),
             }
         }
     }

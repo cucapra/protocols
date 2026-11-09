@@ -175,6 +175,8 @@ pub fn into_monitor_transition_system(
                     panic!("monitor constraints must be lowered into edge guards")
                 }
                 Op::Fork | Op::Done | Op::InternalAssertFalse => {}
+                Op::LearnedParam(..) => todo!("learned param"),
+                Op::LastCycle(..) => todo!("last cycle"),
             }
         }
 
