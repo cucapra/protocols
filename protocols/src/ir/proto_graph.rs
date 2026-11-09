@@ -4,6 +4,7 @@
 
 use crate::frontend::ast::ProtocolContext;
 use crate::frontend::symbol::{SymbolId, SymbolKind, SymbolTable, Type};
+use crate::ir::joint_monitor::InstanceId;
 use cranelift_entity::{PrimaryMap, SecondaryMap, entity_impl};
 use patronus::expr::{
     Context, ExprRef, Simplifier, SparseExprMap, TypeCheck, simple_transform_expr,
@@ -170,6 +171,10 @@ pub enum Op {
     Fork,
     InternalAssertFalse,
     Done,
+    /// Marks the last cycle of the protocol instance.
+    LastCycle(InstanceId),
+    /// Indicates that a protocol parameter is fully known now.
+    LearnedParam(InstanceId, usize, ExprRef),
 }
 
 /// Substitute expression references when copying a transaction instance.
@@ -405,7 +410,10 @@ impl ProtoGraph {
                     *rhs = self.simplifier.simplify(ctx, *rhs);
                     debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 }
-                Op::Fork | Op::InternalAssertFalse | Op::Done => {}
+                Op::LearnedParam(_, _, expr) => {
+                    *expr = self.simplifier.simplify(ctx, *expr);
+                }
+                Op::Fork | Op::InternalAssertFalse | Op::Done | Op::LastCycle(_) => {}
             }
         }
     }

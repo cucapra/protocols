@@ -367,7 +367,7 @@ impl VerilogGen {
             )?;
             return Ok(());
         }
-        if act.guard != ctx.get_true() {
+        if act.guard != ctx.get_true() && !is_ignore_op(&self.pg[act.op]) {
             writeln!(out, "{indent}if ({})", self.expr_to_verilog(ctx, act.guard))?;
             write!(out, "  ")?; // extra indent
         }
@@ -414,8 +414,8 @@ impl VerilogGen {
                 )?;
             }
             Op::Fork => unreachable!("all forks should be gone!"),
-            Op::InternalAssertFalse => {}
             Op::Done => writeln!(out, "{indent}// WARN: ignoring done")?,
+            other => assert!(is_ignore_op(other)),
         }
         Ok(())
     }
@@ -431,6 +431,13 @@ impl VerilogGen {
             name.to_string()
         }
     }
+}
+
+fn is_ignore_op(op: &Op) -> bool {
+    matches!(
+        op,
+        Op::InternalAssertFalse | Op::LastCycle(_) | Op::LearnedParam(..)
+    )
 }
 
 /// try to only add parenthesis if necessary

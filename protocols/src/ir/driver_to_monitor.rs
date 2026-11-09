@@ -692,6 +692,8 @@ impl Converter<'_> {
                 op @ (Op::Fork | Op::Done | Op::InternalAssertFalse) => {
                     self.emit(&mut actions, action.guard, op);
                 }
+                Op::LearnedParam(..) => todo!("learned param"),
+                Op::LastCycle(..) => todo!("last cycle"),
             }
         }
         for (guard, lhs, rhs) in checks {

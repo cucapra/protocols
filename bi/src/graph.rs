@@ -274,6 +274,8 @@ impl Compiler {
                         .push(ExecAct::InternalAssertFalse);
                 }
                 Op::Done => {} // TODO: is it ok to ignore done?
+                Op::LastCycle(..) => todo!("last cycle"),
+                Op::LearnedParam(..) => todo!("learned param"),
             }
         }
 

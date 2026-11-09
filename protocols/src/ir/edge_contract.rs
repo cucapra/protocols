@@ -421,6 +421,8 @@ fn append_action_with_mode(
         Op::InternalAssertFalse => {
             actions.push(action);
         }
+        Op::LearnedParam(..) => todo!("learned param"),
+        Op::LastCycle(..) => todo!("last cycle"),
     }
 }
 
