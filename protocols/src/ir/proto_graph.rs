@@ -356,16 +356,7 @@ impl ProtoGraph {
     /// Each node appears once in resulting vector, including `entry` itself
     pub fn reachable_node_ids(&self, ctx: &Context, entry: NodeId) -> Vec<NodeId> {
         let mut nodes = Vec::new();
-        let mut seen = FxHashSet::from_iter([entry]);
-        let mut pending = VecDeque::from([entry]);
-        while let Some(node) = pending.pop_front() {
-            nodes.push(node);
-            for edge in &self[node].transitions {
-                if edge.guard != ctx.get_false() && seen.insert(edge.target) {
-                    pending.push_back(edge.target);
-                }
-            }
-        }
+        self.visit_nodes_from(ctx, entry, |node| nodes.push(node));
         nodes
     }
 
@@ -527,6 +518,48 @@ impl ProtoGraph {
         }
 
         node_map
+    }
+
+    pub fn find_prev_nodes(&self, ctx: &Context, target: NodeId) -> Vec<(NodeId, ExprRef)> {
+        let mut out = vec![];
+        let false_id = ctx.get_false();
+        self.visit_nodes_from(ctx, self.entry, |node| {
+            for edge in &self.nodes[node].transitions {
+                if edge.guard != false_id && edge.target == target {
+                    out.push((node, edge.guard));
+                }
+            }
+        });
+        out
+    }
+
+    pub fn visit_nodes_from(&self, ctx: &Context, entry: NodeId, mut visit: impl FnMut(NodeId)) {
+        let mut seen = FxHashSet::from_iter([entry]);
+        let mut pending = VecDeque::from([entry]);
+        let false_id = ctx.get_false();
+        while let Some(node) = pending.pop_front() {
+            visit(node);
+            for edge in &self[node].transitions {
+                if edge.guard != false_id && seen.insert(edge.target) {
+                    pending.push_back(edge.target);
+                }
+            }
+        }
+    }
+
+    /// finds all nodes with done action and the condition under which done is true
+    pub fn find_done_nodes(&self, ctx: &Context) -> Vec<(ExprRef, NodeId)> {
+        let mut out = vec![];
+        self.visit_nodes_from(ctx, self.entry, |node| {
+            if let Some(done) = self[node]
+                .actions
+                .iter()
+                .find(|a| matches!(self[a.op], Op::Done))
+            {
+                out.push((done.guard, node));
+            }
+        });
+        out
     }
 }
 

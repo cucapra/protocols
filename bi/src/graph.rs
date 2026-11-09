@@ -36,7 +36,7 @@ impl GraphBi {
         st: &SymbolTable,
         ctx: &mut Context,
         port_map: &PortMap,
-        mut monitor: JointMonitorAutomaton,
+        monitor: JointMonitorAutomaton,
     ) -> Self {
         println!("{}", monitor.to_dot_string(ctx, st));
         let mut c = Compiler::default();
