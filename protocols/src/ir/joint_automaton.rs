@@ -401,7 +401,7 @@ fn add_last_cycle_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
         "at this point the node with the done action should not have any further transitions"
     );
     let predecessors = pg.find_prev_nodes(ctx, done_node);
-    let op = pg.o(Op::LastCycle((proto_id, 0)));
+    let op = pg.o(Op::Finish((proto_id, 0)));
     for (src, cond) in predecessors {
         pg[src].actions.push(Action::new(cond, op));
     }

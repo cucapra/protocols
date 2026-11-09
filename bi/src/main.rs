@@ -244,10 +244,10 @@ fn graph_bi(
     if bi_protos.len() != 1 {
         todo!("the graph bi currently only supports a single instance!")
     };
+    let protos = bi_protos.pop().unwrap();
 
     let mut ctx = patronus::expr::Context::default();
-    let monitor = build_joint_monitor_automaton(&mut ctx, bi_protos.pop().unwrap(), st)
-        .map_err(|e| e.to_string())?;
+    let monitor = build_joint_monitor_automaton(&mut ctx, protos, st).map_err(|e| e.to_string())?;
 
     // try to parse FST, VCD or GHW file
     if let Ok(mut trace) = WaveSignalTrace::open(

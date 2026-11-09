@@ -422,7 +422,8 @@ fn append_action_with_mode(
             actions.push(action);
         }
         Op::LearnedParam(..) => todo!("learned param"),
-        Op::LastCycle(..) => todo!("last cycle"),
+        Op::Finish(..) => todo!("finish op"),
+        Op::Start(..) => todo!("start op"),
     }
 }
 

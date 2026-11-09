@@ -176,7 +176,8 @@ pub fn into_monitor_transition_system(
                 }
                 Op::Fork | Op::Done | Op::InternalAssertFalse => {}
                 Op::LearnedParam(..) => todo!("learned param"),
-                Op::LastCycle(..) => todo!("last cycle"),
+                Op::Finish(..) => todo!("finish op"),
+                Op::Start(..) => todo!("start op"),
             }
         }
 
