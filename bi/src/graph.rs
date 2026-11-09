@@ -19,7 +19,7 @@ use baa::{BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
-use protocols::ir::joint_monitor::JointMonitorAutomaton;
+use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
 use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
 use rustc_hash::FxHashMap;
 
@@ -94,6 +94,18 @@ impl GraphBi {
                         if !is_ok {
                             panic!("assertion failed");
                         }
+                    }
+                    ExecAct::Finish(instance) => {
+                        println!(
+                            "TODO: protocol {}, instance {} finished!",
+                            instance.0, instance.1
+                        );
+                    }
+                    ExecAct::Start(instance) => {
+                        println!(
+                            "TODO: protocol {}, instance {} started!",
+                            instance.0, instance.1
+                        );
                     }
                 }
             }
@@ -274,7 +286,18 @@ impl Compiler {
                         .push(ExecAct::InternalAssertFalse);
                 }
                 Op::Done => {} // TODO: is it ok to ignore done?
-                Op::LastCycle(..) => todo!("last cycle"),
+                Op::Finish(inst_id) => {
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(|| vec![])
+                        .push(ExecAct::Finish(inst_id.clone()));
+                }
+                Op::Start(inst_id) => {
+                    act_by_guard
+                        .entry(guard_id)
+                        .or_insert_with(|| vec![])
+                        .push(ExecAct::Start(inst_id.clone()));
+                }
                 Op::LearnedParam(..) => todo!("learned param"),
             }
         }
@@ -417,6 +440,10 @@ enum ExecAct {
     InternalAssertFalse,
     AssignReg(usize, ExecExprId),
     AssertEq(ExecExprId, ExecExprId),
+    /// indicates that a particular transaction finishes at the end of the cycle
+    Finish(InstanceId),
+    /// indicates that a particular transaction started at the beginning of the cycle
+    Start(InstanceId),
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]

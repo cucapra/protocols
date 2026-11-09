@@ -153,7 +153,8 @@ fn format_op(
             inst.1,
             format_expr(ctx, protocol, *value)
         ),
-        Op::LastCycle(inst) => format!("last_cycle({}_{})", inst.0, inst.1),
+        Op::Finish(inst) => format!("finish({}_{})", inst.0, inst.1),
+        Op::Start(inst) => format!("start({}_{})", inst.0, inst.1),
     }
 }
 

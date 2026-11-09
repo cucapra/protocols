@@ -476,7 +476,8 @@ pub fn interpret(
                     }
                     Op::Done => done_triggered = true,
                     Op::LearnedParam(..) => todo!("learned param"),
-                    Op::LastCycle(..) => todo!("last cycle"),
+                    Op::Finish(..) => todo!("finish op"),
+                    Op::Start(..) => todo!("start op"),
                 }
             }
         }

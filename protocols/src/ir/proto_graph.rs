@@ -171,8 +171,10 @@ pub enum Op {
     Fork,
     InternalAssertFalse,
     Done,
-    /// Marks the last cycle of the protocol instance.
-    LastCycle(InstanceId),
+    /// Marks the first cycle of a protocol instance, i.e., the cycle in which it starts executing.
+    Start(InstanceId),
+    /// Marks the last cycle of the protocol instance, i.e., the cycle in which it finishes.
+    Finish(InstanceId),
     /// Indicates that a protocol parameter is fully known now.
     LearnedParam(InstanceId, usize, ExprRef),
 }
@@ -404,7 +406,7 @@ impl ProtoGraph {
                 Op::LearnedParam(_, _, expr) => {
                     *expr = self.simplifier.simplify(ctx, *expr);
                 }
-                Op::Fork | Op::InternalAssertFalse | Op::Done | Op::LastCycle(_) => {}
+                Op::Fork | Op::InternalAssertFalse | Op::Done | Op::Finish(_) | Op::Start(_) => {}
             }
         }
     }

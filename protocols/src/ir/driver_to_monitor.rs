@@ -689,11 +689,14 @@ impl Converter<'_> {
                     self.observe_equality(node, action.guard, lhs, rhs, &mut env, &mut actions)?;
                 }
                 // retain all other ops as is.
-                op @ (Op::Fork | Op::Done | Op::InternalAssertFalse) => {
+                op @ (Op::Fork
+                | Op::Done
+                | Op::InternalAssertFalse
+                | Op::Finish(..)
+                | Op::Start(..)) => {
                     self.emit(&mut actions, action.guard, op);
                 }
                 Op::LearnedParam(..) => todo!("learned param"),
-                Op::LastCycle(..) => todo!("last cycle"),
             }
         }
         for (guard, lhs, rhs) in checks {

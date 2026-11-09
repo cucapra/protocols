@@ -436,7 +436,7 @@ impl VerilogGen {
 fn is_ignore_op(op: &Op) -> bool {
     matches!(
         op,
-        Op::InternalAssertFalse | Op::LastCycle(_) | Op::LearnedParam(..)
+        Op::InternalAssertFalse | Op::Finish(_) | Op::LearnedParam(..)
     )
 }
 
