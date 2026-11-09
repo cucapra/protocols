@@ -25,6 +25,7 @@ pub struct MonitorTransitionSystemResult {
 }
 
 /// set up the monitor ring-buffers with value, knownness registers, any other state.
+/// ProtocolId -> RegisterIdx -> Slot -> Corresponding Register Symbol Id
 fn bank_fields(monitor: &JointMonitorAutomaton) -> Vec<Vec<Vec<SymbolId>>> {
     let mut owned = FxHashSet::default();
     let fields = monitor
