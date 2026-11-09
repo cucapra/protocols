@@ -284,9 +284,13 @@ impl Compiler {
             .flat_map(|(g, acts)| acts.iter().map(|a| (*g, a.clone())))
             .collect();
 
+        // let transition_guards: Vec<_> = pg[node].transitions.iter().map(|t| format!("{:?}: {}", t.guard, t.guard.serialize_to_str(ctx))).collect();
+        // println!("Transition Guards: {}", transition_guards.join(", "));
+
         let trans = pg[node]
             .transitions
             .iter()
+            .filter(|t| t.guard != ctx.get_false())
             .map(|t| {
                 assert!(t.consumes_step);
                 (guard_to_index[&t.guard], t.target.as_u32() as u8)
