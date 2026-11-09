@@ -20,6 +20,7 @@ pub enum JointAutomatonError {
     UnsupportedProtocol { protocol: String, reason: String },
 }
 
+use crate::ir::joint_monitor::InstanceId;
 pub use JointAutomatonError as JointDriverError;
 
 /// One transaction contributing actions to a joint control node.
@@ -31,6 +32,12 @@ pub struct JointInstance {
     pub control: NodeId,
     /// This cycle starts a fresh transaction in the slot.
     pub starts: bool,
+}
+
+impl From<&JointInstance> for InstanceId {
+    fn from(value: &JointInstance) -> Self {
+        (value.protocol, value.slot)
+    }
 }
 
 /// Annotate Transitions with a meta-type that is agnostic of how it is implemented
@@ -379,7 +386,7 @@ pub fn prepare_joint_protocols(
             let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
-            add_last_cycle_op(ctx, &mut lowerer.ir, proto_id);
+            // add_finish_op(ctx, &mut lowerer.ir, proto_id);
             lowerer.ir.garbage_collect_unreachable(ctx, false);
             lowerer.ir
         })
@@ -387,7 +394,7 @@ pub fn prepare_joint_protocols(
 }
 
 /// Adds a signaling op to indicate when a particular cycle is the last one during which a protocol is active
-fn add_last_cycle_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
+fn add_finish_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
     let mut done_nodes = pg.find_done_nodes(ctx);
     assert_eq!(
         done_nodes.len(),
