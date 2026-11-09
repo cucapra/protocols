@@ -234,6 +234,13 @@ pub fn compose_joint_monitor_automaton(
                 }
                 push_owned_action(&mut result, node, owner, guard, op);
             }
+            // mark the start of the instance
+            if instance.starts {
+                let guard = survives; // TODO: is this correct?
+                let op = Op::Start((&instance).into());
+                push_owned_action(&mut result, node, owner, guard, op);
+            }
+
             if instance.starts {
                 // Reset registers whose entry assignments were removed by simplification.
                 let mut registers = monitor.register_inits.iter().collect::<Vec<_>>();
