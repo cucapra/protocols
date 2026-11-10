@@ -232,6 +232,10 @@ impl Op {
                 debug_assert_eq!(lhs.get_type(ctx), rhs.get_type(ctx));
                 Self::AssertEq(lhs, rhs)
             }
+            Self::LearnedParam(idx, e) => {
+                let e = remap_expr(ctx, *e, substitutions);
+                Self::LearnedParam(*idx, e)
+            }
             other => other.clone(),
         }
     }
