@@ -372,6 +372,7 @@ fn reads(op: &Op) -> Vec<ExprRef> {
             .chain(a.concretes.iter().flat_map(|&(g, v)| [g, v]))
             .collect(),
         Op::AssertEq(a, b) => vec![*a, *b],
+        Op::LearnedParam(_, expr) => vec![*expr],
         _ => vec![],
     }
 }
@@ -459,6 +460,10 @@ pub fn rewrite_registers(
                         Expr::BVEqual(a, b) => Op::AssertEq(a, b),
                         _ => Op::AssertEq(a, b),
                     }
+                }
+                Op::LearnedParam(arg, expr) => {
+                    let expr = simplify(ctx, &mut simplifier, expr, &replacements);
+                    Op::LearnedParam(arg, expr)
                 }
                 op => op,
             };

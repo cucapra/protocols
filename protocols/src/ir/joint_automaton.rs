@@ -381,26 +381,15 @@ pub fn prepare_joint_protocols(
     }
     Ok(protocols
         .iter()
-        .enumerate()
-        .map(|(proto_id, protocol)| {
+        .map(|protocol| {
             let mut lowerer = Lowerer::new(protocol.ctx.clone(), symbols);
             let fragment = lowerer.lower_protocol_fragment(ctx, protocol, true, false);
             lowerer.postprocess_trace_fragment(ctx, &fragment);
             lowerer.ir.entry = fragment.entry;
-            // add_finish_op(ctx, &mut lowerer.ir, proto_id);
             lowerer.ir.garbage_collect_unreachable(ctx, false);
             lowerer.ir
         })
         .collect())
-}
-
-/// Adds a signaling op to indicate when a particular cycle is the last one during which a protocol is active
-fn add_finish_op(ctx: &Context, pg: &mut ProtoGraph, proto_id: ProtocolId) {
-    let predecessors = find_finish_nodes(ctx, pg);
-    let op = pg.o(Op::Finish((proto_id, 0)));
-    for (src, cond) in predecessors {
-        pg[src].actions.push(Action::new(cond, op));
-    }
 }
 
 /// Identifies all nodes and conditions under which the protocol is finishing in the current step.
