@@ -113,6 +113,12 @@ struct Cli {
         help = "Use the graph IR lowering to build a monitor and execute it."
     )]
     graph: bool,
+
+    #[arg(
+        long,
+        help = "Show monitor IR before executing. Only has an effect with `--graph`"
+    )]
+    show_graph: bool,
 }
 
 fn add_inst_name(i: &Instance, name: &str) -> String {
@@ -259,13 +265,27 @@ fn graph_bi(
         sampling_mode,
         cli.force_x_to_zero,
     ) {
-        let bi = GraphBi::new(st, &mut ctx, trace.port_map(), monitor, std::io::stdout());
+        let bi = GraphBi::new(
+            st,
+            &mut ctx,
+            trace.port_map(),
+            monitor,
+            cli.show_graph,
+            std::io::stdout(),
+        );
         run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
     } else {
         // otherwise, we might be dealing with our own custom ASCI format
         let mut trace =
             AsciWaveTrace::open(&cli.wave, modules, instances, cli.force_x_to_zero).unwrap();
-        let bi = GraphBi::new(st, &mut ctx, trace.port_map(), monitor, std::io::stdout());
+        let bi = GraphBi::new(
+            st,
+            &mut ctx,
+            trace.port_map(),
+            monitor,
+            cli.show_graph,
+            std::io::stdout(),
+        );
         run_graph_bi_with_trace(&mut trace, bi, d, cli.print_time_every_n_cycles)
     }
 }

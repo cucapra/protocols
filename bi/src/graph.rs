@@ -13,11 +13,10 @@
 // - we could define an array that contains all relevant values from the trace
 //   and then compile expressions to byte code that contains the concrete indices
 
-use crate::bi::Failures;
 use baa::{BitVecMutOps, BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
-use protocols::frontend::ast::{BinOp, Protocol};
+use protocols::frontend::ast::Protocol;
 use protocols::frontend::symbol::SymbolKind::AutomatonState;
 use protocols::frontend::symbol::{SymbolId, SymbolTable};
 use protocols::ir::joint_automaton::ProtocolId;
@@ -47,10 +46,14 @@ impl<O: Write> GraphBi<O> {
         ctx: &mut Context,
         port_map: &PortMap,
         monitor: JointMonitorAutomaton,
+        show_graph: bool,
         out: O,
     ) -> Self {
         let mut c = Compiler::default();
         c.compile(st, ctx, &monitor, port_map);
+        if show_graph {
+            println!("{}", monitor.to_dot_string(ctx, st));
+        }
         let max_instances = monitor.control.bank_counts.iter().cloned().max().unwrap();
         let mon = TraceMonitor::new(st, &monitor.protocols, max_instances, out).unwrap();
 
@@ -337,7 +340,7 @@ impl Compiler {
         let mut registers: Vec<_> = auto.registers.iter().map(|(k, v)| (*k, *v)).collect();
         // group by protocol and argument, then sort by slot
         registers.sort_by_key(|((prot, slot, arg), _)| (*prot, *arg, *slot));
-        for ((proto_id, slot, arg_sym), reg) in registers {
+        for ((proto_id, slot, _arg_sym), reg) in registers {
             let instance: InstanceId = (proto_id, slot);
             let base_index = self.reg_symbol_to_index_and_instance.len() - slot;
             self.reg_symbol_to_index_and_instance
