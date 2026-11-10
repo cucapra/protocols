@@ -18,6 +18,7 @@ use crate::bi::Failures;
 use baa::{BitVecOps, BitVecValue};
 use bi::signal_trace::{PortMap, SignalValues};
 use patronus::expr::{Context, Expr, ExprRef, SerializableIrNode};
+use protocols::frontend::symbol::SymbolKind::AutomatonState;
 use protocols::frontend::symbol::{SymbolId, SymbolKind, SymbolTable};
 use protocols::ir::joint_automaton::ProtocolId;
 use protocols::ir::joint_monitor::{InstanceId, JointMonitorAutomaton};
@@ -25,10 +26,12 @@ use protocols::ir::proto_graph::{Assignment, Node, NodeId, Op, ProtoGraph};
 use rustc_hash::FxHashMap;
 
 pub struct GraphBi {
-    current_state: usize,
+    // static during execution
     bad_state: usize,
     states: Vec<ExecState>,
     expr: Vec<ExecExpr>,
+    // updated during execution
+    current_state: usize,
     regs: Vec<BitVecValue>,
     /// per protocol head counters
     heads: Vec<(usize, usize)>,
@@ -87,9 +90,10 @@ impl GraphBi {
                     ExecAct::InternalAssertFalse => {
                         panic!("Internal assertion failed! State {}", self.current_state)
                     }
-                    ExecAct::AssignReg(idx, value) => {
-                        let value = self.eval(*value, guard_bits, &pin_values);
-                        self.regs[*idx] = value;
+                    &ExecAct::AssignReg(idx, instance, value) => {
+                        let value = self.eval(value, guard_bits, &pin_values);
+                        let idx = self.reg_idx(idx, instance);
+                        self.regs[idx] = value;
                     }
                     ExecAct::AssertEq(lhs, rhs) => {
                         let lhs = self.eval(*lhs, guard_bits, &pin_values);
@@ -131,6 +135,7 @@ impl GraphBi {
             .1 as usize
     }
 
+    #[inline]
     fn eval_instance_id(&self, id: InstanceId) -> InstanceId {
         let (proto_id, base_instance) = id;
         let (head, count) = self.heads[proto_id];
@@ -142,9 +147,15 @@ impl GraphBi {
         match self.expr[e.0].clone() {
             ExecExpr::Lit(v) => v,
             ExecExpr::Guard(idx) => BitVecValue::from_bool((guard_bits >> idx) & 1 == 1),
-            ExecExpr::Reg(idx) => self.regs[idx].clone(),
+            ExecExpr::Reg(idx, instance) => self.regs[self.reg_idx(idx, instance)].clone(),
             ExecExpr::DutPin(idx) => pin_values[idx].clone(),
         }
+    }
+
+    #[inline]
+    fn reg_idx(&self, idx: usize, instance: InstanceId) -> usize {
+        let instance = self.eval_instance_id(instance);
+        idx + instance.0
     }
 }
 
@@ -157,7 +168,7 @@ struct Compiler {
     // TODO: this could be handled by an index map!
     expr_ids: FxHashMap<ExecExpr, ExecExprId>,
     port_symbol_to_index: FxHashMap<SymbolId, usize>,
-    reg_symbol_to_index: FxHashMap<SymbolId, usize>,
+    reg_symbol_to_index_and_instance: FxHashMap<SymbolId, (usize, InstanceId)>,
     patronus_expr_map: FxHashMap<ExprRef, ExecExprId>,
 }
 
@@ -165,9 +176,12 @@ impl Compiler {
     fn clear(&mut self) {
         self.states.clear();
         self.expr.clear();
+        self.regs.clear();
+        self.heads.clear();
         self.expr_ids.clear();
         self.port_symbol_to_index.clear();
-        self.reg_symbol_to_index.clear();
+        self.reg_symbol_to_index_and_instance.clear();
+        self.patronus_expr_map.clear();
     }
 
     fn add_expr(&mut self, expr: ExecExpr) -> ExecExprId {
@@ -204,10 +218,15 @@ impl Compiler {
         );
 
         // allocate space for registers
-        for &reg in auto.registers.values() {
-            let index = self.reg_symbol_to_index.len();
-            self.reg_symbol_to_index.insert(reg, index);
-            let expr = self.add_expr(ExecExpr::Reg(index));
+        let mut registers: Vec<_> = auto.registers.iter().map(|(k, v)| (*k, *v)).collect();
+        // group by protocol and argument, then sort by slot
+        registers.sort_by_key(|((prot, slot, arg), _)| (*prot, *arg, *slot));
+        for ((proto_id, slot, arg_sym), reg) in registers {
+            let instance: InstanceId = (proto_id, slot);
+            let base_index = self.reg_symbol_to_index_and_instance.len() - slot;
+            self.reg_symbol_to_index_and_instance
+                .insert(reg, (base_index, instance));
+            let expr = self.add_expr(ExecExpr::Reg(base_index, instance));
             self.patronus_expr_map
                 .insert(auto.control.graph.symbol_expr[&reg], expr);
             let Expr::BVLiteral(init_value) = &ctx[auto.register_inits[&reg]] else {
@@ -266,19 +285,11 @@ impl Compiler {
             match &pg[act.op] {
                 Op::Assign(lhs, rhs) => {
                     assert_eq!(act.guard, ctx.get_true());
-                    let lhs = match st[lhs].kind() {
-                        SymbolKind::InPort | SymbolKind::OutPort => {
-                            unreachable!("monitors should not write to ports")
-                        }
-                        SymbolKind::AutomatonState => {
-                            let Some(lhs) = self.reg_symbol_to_index.get(lhs).cloned() else {
-                                panic!("{} is not found!", st[lhs].full_name(st))
-                            };
-                            lhs
-                        }
-                        SymbolKind::Arg(_) => unreachable!("arg is immutable"),
-                        SymbolKind::LoopVar => unreachable!("loopvar is immutable"),
-                        SymbolKind::Dut => unreachable!("should never encounter dut!"),
+                    assert_eq!(st[lhs].kind(), AutomatonState);
+                    let Some((base_index, instance)) =
+                        self.reg_symbol_to_index_and_instance.get(lhs).cloned()
+                    else {
+                        panic!("{} is not found!", st[lhs].full_name(st))
                     };
 
                     // we only translate concrete assignments
@@ -288,10 +299,10 @@ impl Compiler {
                     {
                         let guard_id = guard_to_index[guard];
                         let value = self.compile_expr(ctx, &guard_to_index, *value);
-                        let act = ExecAct::AssignReg(lhs, value);
+                        let act = ExecAct::AssignReg(base_index, instance, value);
                         act_by_guard
                             .entry(guard_id)
-                            .or_insert_with(|| vec![])
+                            .or_insert_with(Vec::new)
                             .push(act);
                     }
                 }
@@ -472,7 +483,7 @@ struct ExecState {
 #[derive(Debug, Clone)]
 enum ExecAct {
     InternalAssertFalse,
-    AssignReg(usize, ExecExprId),
+    AssignReg(usize, InstanceId, ExecExprId),
     AssertEq(ExecExprId, ExecExprId),
     /// indicates that a particular transaction finishes at the end of the cycle
     Finish(InstanceId),
@@ -488,7 +499,7 @@ enum ExecExpr {
     /// look up local guard expression which must have already been computed
     Guard(usize),
     /// look up register value
-    Reg(usize),
+    Reg(usize, InstanceId),
     /// look up dut pin value
     DutPin(usize),
 }
